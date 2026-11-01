@@ -1,3 +1,4 @@
+import { createMutationQueue, type MutationQueueLimits } from "./mutation-queue";
 import { createWorkHttp, validateWorkRepositories, type WorkRepositoryConfig } from "./work/http";
 import {remoteBudgets,remoteBudgetsFromEnv} from './remote-v2/budgets';
 import { createRemoteControl, type RemoteSocketData } from "./remote-v2";
@@ -10,7 +11,7 @@ import { deliverRevision } from "./git-delivery";
 import { openHubStore } from "./store";
 import { webAssets } from "./web";
 import { authorizeAgentRequest, resolveNamedAgent, validateAgentCredentialsConfiguration } from "./agent-credentials";
-export type HubServerConfig = HubConfig & { workManagement?: { enabled: boolean; repositories?:WorkRepositoryConfig[]; observerFetch?:(request:Request)=>Promise<Response> }; publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
+export type HubServerConfig = HubConfig & { mutationQueue?: Partial<MutationQueueLimits>; workManagement?: { enabled: boolean; repositories?:WorkRepositoryConfig[]; observerFetch?:(request:Request)=>Promise<Response> }; publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
 const MAX_BODY = 32 * 1024 * 1024;
 function json(value: unknown, status = 200, headers?: HeadersInit): Response {
   const h = new Headers(headers); h.set("Content-Type", "application/json; charset=utf-8"); h.set("Cache-Control", "no-store");
@@ -60,10 +61,8 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   store.deliveries.markInterrupted();
   const access = config.cloudflareAccess ? createAccessVerifier(config.cloudflareAccess, config.accessDependencies) : undefined;
   const now = config.accessDependencies?.now ?? Date.now;
-  let queue: Promise<unknown> = Promise.resolve();
-  function serialized<T>(operation: () => Promise<T>): Promise<T> {
-    const result = queue.then(operation); queue = result.catch(() => undefined); return result;
-  }
+  const mutationQueue = createMutationQueue(config.mutationQueue);
+  const serialized = mutationQueue.serialized;
   const inFlightDeliveries = new Set<string>();
   const deliverySettlers = new Set<() => void>();
   const cookieName = "keryx_hub_session";
@@ -297,18 +296,18 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   }
   const application: HubApplication = {
     async fetch(request: Request) {
-      try { return await handle(request); } catch (error) {
-        if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status);
+      try { return await mutationQueue.request(request, () => handle(request)); } catch (error) {
+        if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status, error.status === 503 ? {"Retry-After":"1"} : undefined);
         console.error("Hub request failed", error instanceof Error ? error.name : "UnknownError");
         return json({ error: { code: "internal-error", message: "Hub request failed" } }, 500);
       }
     },
-    async upgrade(request, server) { try { return await remote.upgrade(request, server); } catch (error) { if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status); return json({ error: { code: "internal-error", message: "Hub upgrade failed" } }, 500); } },
+    async upgrade(request, server) { try { return await remote.upgrade(request, server); } catch (error) { if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status, error.status === 503 ? {"Retry-After":"1"} : undefined); return json({ error: { code: "internal-error", message: "Hub upgrade failed" } }, 500); } },
     websocket: remote.websocket,
     closeTransports() { remote.close(); },
     transportsClosed() { return remote.transportsClosed(); },
-    async settle() { await queue; if (inFlightDeliveries.size) await new Promise<void>(resolve => deliverySettlers.add(resolve)); await queue; },
-    close() { if (!closed) { closed = true; work.close(); remote.close(); store.close(); } },
+    async settle() { await mutationQueue.settle(); if (inFlightDeliveries.size) await new Promise<void>(resolve => deliverySettlers.add(resolve)); await mutationQueue.settle(); },
+    close() { if (!closed) { closed = true; mutationQueue.close(); work.close(); remote.close(); store.close(); } },
   };
   return application;
 }
