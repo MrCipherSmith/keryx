@@ -119,9 +119,18 @@ export const createGitDelivery = (git: HubGitRunner): GitDeliveryAdapter => asyn
             throw Error("Snapshot quota exceeded");
         // Build the exact selected tree in the index, including deletions; no filesystem path traversal or filters.
         await git(work, ["read-tree", "--empty"]);
-        for (const file of revision.files) {
-            const blob = String(await git(work, ["hash-object", "-w", "--stdin"], Buffer.from(file.contentBase64, "base64"))).trim();
-            await git(work, ["update-index", "--add", "--cacheinfo", file.mode, blob, file.path]);
+        // Private numbered files avoid repository symlinks, filters and filename quoting.
+        // At most 32 writes are open, and Git is spawned once per batch rather than twice per file.
+        const blobs = join(workspace, 'blobs');
+        await mkdir(blobs, { mode: 0o700 });
+        for (let start = 0; start < revision.files.length; start += 32)
+            await Promise.all(revision.files.slice(start, start + 32).map((file, offset) => writeFile(join(blobs, String(start + offset)), Buffer.from(file.contentBase64, 'base64'), { mode: 0o600 })));
+        if (revision.files.length) {
+            const paths = revision.files.map((_file, index) => '../blobs/' + index).join('\n') + '\n';
+            const hashes = String(await git(work, ['hash-object', '-w', '--no-filters', '--stdin-paths'], paths)).trim().split('\n');
+            if (hashes.length !== revision.files.length || hashes.some(hash => !/^[a-f0-9]{40,64}$/.test(hash))) throw Error('Invalid Git blob batch result');
+            const index = revision.files.map((file, position) => `${file.mode} ${hashes[position]}\t${file.path}\0`).join('');
+            await git(work, ['update-index', '-z', '--index-info'], index);
         }
         const tree = String(await git(work, ["write-tree"])).trim();
         const candidate = String(await git(work, ["commit-tree", tree, "-p", revision.gitBaseSha], "Hub selected snapshot\n")).trim();

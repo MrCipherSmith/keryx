@@ -1,3 +1,4 @@
+import { deliveryJobs } from "./delivery-jobs";
 import { fail } from "./domain";
 import { Database } from "bun:sqlite";
 import { migrateWork, workRepository } from "./work/storage";
@@ -33,6 +34,7 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   db.exec('CREATE TABLE IF NOT EXISTS hub_sessions(id TEXT PRIMARY KEY,body TEXT NOT NULL)');
   const remote = remoteRepository(db,budgetConfig);
   const work = workRepository(db);
+  const deliveries = deliveryJobs(db);
   const withConversionProjection = (state: HubState): HubState => {
     delete state.legacyConversions;
     const conversions = new Proxy<Record<string, {projectId:string;managedFlowId:string}>>({}, {
@@ -169,6 +171,6 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
       fsyncSync(descriptor);
     } finally { closeSync(descriptor); rmSync(temporaryDirectory, { recursive: true, force: true }); }
   };
-  return { load, save, remote, work, project, session, workLegacyContext, workTransaction, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
+  return { load, save, remote, work, deliveries, project, session, workLegacyContext, workTransaction, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
 }
 export type HubStore = ReturnType<typeof openHubStore>;

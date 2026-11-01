@@ -212,3 +212,15 @@ test("three-way conflict fails visibly without publishing or moving base", async
         await rm(root, { recursive: true, force: true });
     }
 });
+test('builds selected file trees using one bounded blob batch and one index batch', async () => {
+    const root=await mkdtemp(join(tmpdir(),'hub-git-batch-'));
+    try {
+        const {remoteUrl,base}=await seedRemote(root), calls:string[][]=[];
+        const revision=selected(base);
+        revision.files=Array.from({length:30},(_,index)=>({path:'src/file-'+index+'.txt',mode:'100644' as const,contentBase64:Buffer.from('file '+index).toString('base64'),contentDigest:''}));
+        const result=await createGitDelivery(recordingGit(calls))({dataDir:join(root,'data'),projectId:'p',operationId:'batch',revision,remoteUrl,baseBranch:'main'});
+        expect(result.status).toBe('published');
+        expect(calls.filter(args=>args[0]==='hash-object')).toHaveLength(1);
+        expect(calls.filter(args=>args[0]==='update-index')).toHaveLength(1);
+    } finally { await rm(root,{recursive:true,force:true}); }
+});

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { canTransition } from "../flow/machine";
-import type { CodeRevision, GitDeliveryAdapter, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
+import type { CodeRevision, GitDeliveryAdapter, GitDeliveryRequest, GitDeliveryResult, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
 import type { HubState } from "./store";
 export class HubFailure extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -220,17 +220,31 @@ export async function hubMutate(state: HubState, actor: Principal, path: string[
     p.lineRevisionId = r.id; p.lineVersion++; event(state, actor, p.id, "line-selected", r.id); return p;
   }
   if (path.length === 3 && path[2] === "deliveries") {
-    human(actor); version(body.expectedLineVersion, p.lineVersion); const r = scopedRevision(state, p, body.revisionId);
-    deliverableRevision(r);
-    if (p.lineRevisionId !== r.id) fail(409, "line-conflict", "Revision is not the selected integration line");
-    const remoteUrl = text(body.remoteUrl, "remoteUrl"); const baseBranch = text(body.baseBranch, "baseBranch", 200);
-    let result;
-    try { result = await deliveryAdapter({ dataDir: config.dataDir, projectId: p.id, operationId, revision: r, remoteUrl, baseBranch }); }
-    catch { result = { status: "failed" as const, error: "Git delivery failed; inspect managed repository state before retry" }; }
-    const delivery = { id: operationId, projectId: p.id, revisionId: r.id, remoteUrl, baseBranch, ...result, receipt: receipt(actor) };
-    state.deliveries.push(delivery); event(state, actor, p.id, `delivery-${result.status}`, delivery.id); return delivery;
+    const request = prepareGitDelivery(state, actor, p.id, body, config.dataDir, operationId);
+    let result: GitDeliveryResult;
+    try { result = await deliveryAdapter(request); }
+    catch { result = { status: 'failed', error: 'Git delivery failed; inspect managed repository state before retry' }; }
+    return completeGitDelivery(state, actor, request, result, Number(body.expectedLineVersion));
   }
   fail(404, "not-found", "Route not found");
+}
+
+/** Pure reservation checks; the caller must run Git outside its authority transaction. */
+export function prepareGitDelivery(state: HubState, actor: Principal, projectId: string, input: unknown, dataDir: string, operationId: string): GitDeliveryRequest {
+  const body = object(input), p = found(state.projects.find(project => project.id === projectId));
+  human(actor); version(body.expectedLineVersion, p.lineVersion);
+  const revision = scopedRevision(state, p, body.revisionId); deliverableRevision(revision);
+  if (p.lineRevisionId !== revision.id) fail(409, 'line-conflict', 'Revision is not the selected integration line');
+  return { dataDir, projectId, operationId, revision, remoteUrl: text(body.remoteUrl,'remoteUrl'), baseBranch: text(body.baseBranch,'baseBranch',200) };
+}
+/** Finalize against current authority state, never the pre-network legacy snapshot. */
+export function completeGitDelivery(state: HubState, actor: Principal, request: GitDeliveryRequest, result: GitDeliveryResult, expectedLineVersion: number) {
+  const p = found(state.projects.find(project => project.id === request.projectId));
+  human(actor); version(expectedLineVersion, p.lineVersion);
+  if (p.lineRevisionId !== request.revision.id) fail(409,'line-conflict','Selected integration line changed during Git delivery; inspect the recorded external result');
+  const delivery = { id: request.operationId, projectId: p.id, revisionId: request.revision.id, remoteUrl: request.remoteUrl, baseBranch: request.baseBranch, ...result, receipt: receipt(actor) };
+  state.deliveries.push(delivery); event(state, actor, p.id, `delivery-${result.status}`, delivery.id);
+  return delivery;
 }
 
 /** Shared synchronous revision construction; callers supply their own authority and transaction. */

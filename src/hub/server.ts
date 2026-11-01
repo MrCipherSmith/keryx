@@ -5,7 +5,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import type { HubApplication, HubConfig, Principal } from "./contracts";
 import { createAccessVerifier, readAccessRoles, validateAccessConfig, type AccessDependencies, type CloudflareAccessConfig, type VerifiedAccessIdentity } from "./cloudflare-access";
-import { assertLegacyFlowWritable, fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
+import { completeGitDelivery, prepareGitDelivery, fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
 import { deliverRevision } from "./git-delivery";
 import { openHubStore } from "./store";
 import { webAssets } from "./web";
@@ -57,12 +57,14 @@ function validateConfig(config: HubServerConfig) {
 }
 export function createHubApplication(config: HubServerConfig): HubApplication {
   validateConfig(config); const store = openHubStore(config.dataDir,config.remoteBudgets); let closed = false;
+  store.deliveries.markInterrupted();
   const access = config.cloudflareAccess ? createAccessVerifier(config.cloudflareAccess, config.accessDependencies) : undefined;
   const now = config.accessDependencies?.now ?? Date.now;
   let queue: Promise<unknown> = Promise.resolve();
   function serialized<T>(operation: () => Promise<T>): Promise<T> {
     const result = queue.then(operation); queue = result.catch(() => undefined); return result;
   }
+  const inFlightDeliveries = new Set<string>();
   const cookieName = "keryx_hub_session";
   function sessionKey(request: Request): string | undefined {
     return request.headers.get("cookie")?.split(";").map((p) => p.trim()).find((p) => p.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
@@ -119,6 +121,66 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     },
   });
   const work = createWorkHttp({store, enabled: config.workManagement?.enabled === true, repositories:config.workManagement?.repositories??[], ...(config.workManagement?.observerFetch?{observerFetch:config.workManagement.observerFetch}:{}), protectedValues:(request)=>[config.operatorToken,config.agentToken,config.reviewerToken??"",...(config.workManagement?.repositories??[]).map(r=>r.github?.token??""),request.headers.get("authorization")?.replace(/^Bearer /,"")??"",sessionKey(request)??""], authenticate, checkOrigin, serialized, now});
+  async function externalDelivery(request: Request, path: string[], url: URL, body: unknown, key: string, bodyDigest: string): Promise<Response> {
+    const prepared = await serialized(async () => {
+      const identity = await authenticate(request);
+      authorizeAgentRequest(identity.actor, path, request.method);
+      const replayKey = sha256(JSON.stringify([identity.actor.id, request.method, url.pathname, key]));
+      return store.workTransaction(() => {
+        const state = store.load(), replay = state.replays[replayKey];
+        if (replay) {
+          if (replay.digest !== bodyDigest) fail(409,'idempotency-conflict','Idempotency key was already used for another payload');
+          return { response: json(replay.body,replay.status) };
+        }
+        const id = 'delivery-' + replayKey.slice(0,32), existing = store.deliveries.get(id);
+        if (existing) {
+          if (existing.actorId !== identity.actor.id || existing.requestDigest !== bodyDigest) fail(409,'idempotency-conflict','Delivery operation payload changed');
+          if (existing.status === 'completed') return { response: json(existing.response,existing.httpStatus ?? 200) };
+          if (existing.status === 'pending' || existing.status === 'uncertain') {
+            if (inFlightDeliveries.has(id)) return { response: json({operationId:id,status:'pending'},202,{'Retry-After':'1'}) };
+            existing.status = 'uncertain'; store.deliveries.save(existing);
+            return { response: json({error:{code:'delivery-uncertain',message:'Delivery may have affected Git before interruption; inspect the managed branch and recorded operation before starting another'}},409) };
+          }
+          const revision = state.revisions.find(revision => revision.projectId === existing.projectId && revision.id === existing.revisionId);
+          if (!revision) fail(409,'delivery-revision-unavailable','Reserved immutable revision is unavailable');
+          return { job: existing, deliveryRequest: { dataDir: config.dataDir, projectId: existing.projectId, operationId: existing.id, revision, remoteUrl: existing.remoteUrl, baseBranch: existing.baseBranch } };
+        }
+        const deliveryRequest = prepareGitDelivery(state,identity.actor,path[1]!,body,config.dataDir,id);
+        const job: import('./delivery-jobs').DeliveryJob = { id, replayKey, actorId: identity.actor.id, projectId: path[1]!, requestDigest: bodyDigest, expectedLineVersion: Number(object(body).expectedLineVersion), revisionId: deliveryRequest.revision.id, remoteUrl: deliveryRequest.remoteUrl, baseBranch: deliveryRequest.baseBranch, status: 'pending' };
+        store.deliveries.reserve(job); inFlightDeliveries.add(id);
+        return { job, deliveryRequest };
+      });
+    });
+    if ('response' in prepared && prepared.response) return prepared.response;
+    if (!prepared.job || !prepared.deliveryRequest) fail(503,'delivery-unavailable','Delivery reservation unavailable');
+    const { job, deliveryRequest } = prepared;
+    try {
+      if (!job.result) {
+        try { job.result = await (config.gitDelivery ?? deliverRevision)(deliveryRequest); }
+        catch { job.result = {status:'failed',error:'Git delivery failed; inspect managed repository state before retry'}; }
+        job.status = 'result';
+        store.workTransaction(() => store.deliveries.save(job));
+      }
+      return await serialized(async () => {
+        const identity = await authenticate(request);
+        authorizeAgentRequest(identity.actor,path,request.method);
+        if (identity.actor.id !== job.actorId) fail(403,'identity-changed','Current delivery authority changed');
+        return store.writeTransaction(state => {
+          const replay = state.replays[job.replayKey];
+          if (replay) return json(replay.body,replay.status);
+          let response: unknown, status = 200;
+          try { response = completeGitDelivery(state,identity.actor,deliveryRequest,job.result!,job.expectedLineVersion); }
+          catch (error) {
+            if (!(error instanceof HubFailure)) throw error;
+            status = error.status; response = {error:{code:error.code,message:error.message}};
+          }
+          job.status='completed'; job.response=response; job.httpStatus=status; store.deliveries.save(job);
+          state.replays[job.replayKey]={digest:job.requestDigest,body:response,status};
+          return json(response,status);
+        });
+      });
+    } finally { inFlightDeliveries.delete(job.id); }
+  }
   async function handle(request: Request): Promise<Response> {
     if (closed) fail(503, "closed", "Hub is closed");
     const url = new URL(request.url);
@@ -218,11 +280,12 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
         if (typeof value === "string") evidenceBody[field] = value.replaceAll(incomingToken, "[REDACTED]");
       }
     }
+    if (path.length === 3 && path[2] === 'deliveries') return externalDelivery(request,path,url,body,key,bodyDigest);
     return serialized(async () => {
       const currentIdentity = await authenticate(request);
       authorizeAgentRequest(currentIdentity.actor, path, request.method);
       const replayKey = sha256(JSON.stringify([currentIdentity.actor.id, request.method, url.pathname, key]));
-      const state = store.load(); if(path[2]==="flows"&&path[3])assertLegacyFlowWritable(state,path[1]!,path[3]); const replay = state.replays[replayKey];
+      const state = store.load(); const replay = state.replays[replayKey];
       if (replay) { if (replay.digest !== bodyDigest) fail(409, "idempotency-conflict", "Idempotency key was already used for another payload"); return json(replay.body, replay.status); }
       const result = await hubMutate(state, currentIdentity.actor, path, body, config, config.gitDelivery ?? deliverRevision, `delivery-${replayKey.slice(0, 32)}`);
       state.replays[replayKey] = { digest: bodyDigest, body: result, status: 200 }; store.save(state); return json(result);
