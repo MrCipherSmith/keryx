@@ -1,3 +1,4 @@
+import { createWorkExecution } from "./work/execution";
 import { createMutationQueue, type MutationQueueLimits } from "./mutation-queue";
 import { createWorkHttp, validateWorkRepositories, type WorkRepositoryConfig } from "./work/http";
 import {remoteBudgets,remoteBudgetsFromEnv} from './remote-v2/budgets';
@@ -105,7 +106,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     const secure = new URL(config.publicOrigin ?? request.url).protocol === "https:" ? "; Secure" : "";
     return `${cookieName}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
   }
-  const remote = createRemoteControl({ store, serialized, checkOrigin,workManagementEnabled:config.workManagement?.enabled===true,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
+  const remote = createRemoteControl({ store, managedExecution:createWorkExecution(store), serialized, checkOrigin,workManagementEnabled:config.workManagement?.enabled===true,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
     transportAllowed(request) { const origin = new URL(config.publicOrigin ?? request.url); return origin.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]", "::1"].includes(origin.hostname); },
     async human(request) { const identity = await authenticate(request); if (!identity.cookie || identity.actor.kind !== "human") fail(403, "human-session-required", "Current human browser session required"); const key = sessionKey(request); if (!key) fail(401, "unauthorized", "Session required"); return { actor: identity.actor, sessionDigest: sha256(key) }; },
     authorityValid(auth, projectId, readOnly = false) {

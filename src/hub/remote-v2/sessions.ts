@@ -1,12 +1,12 @@
 import { releasedControllerAlias, verifiedControllerRecovery } from "./controller-recovery";
-import { canonicalDigest, criteriaDigest, type Control } from "../../remote-control/protocol";
+import { canonicalDigest, criteriaDigest, type Control, type FrameOf } from "../../remote-control/protocol";
 import { assertLegacyFlowWritable, fail } from "../domain";
 import type { HubState } from "../store";
 import type { RemoteRepository } from "./storage";
-import type { HumanAuthority, Projection, QueueRow, RunRow, SessionRow } from "./model";
+import type { HumanAuthority, Projection, QueueRow, RunRow, SessionRow, StoredCommand } from "./model";
 import { control, held, id, idleFence, iso, machine, projectionKey, saveSession, version } from "./guards";
 import { runCommand, sessionCommand } from "./commands";
-export type SessionDependencies = { online(machineId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean; beforeAdmission?(auth:HumanAuthority,row:SessionRow,operationId:string):void; admitted?(run:RunRow,operationId:string):void };
+export type SessionDependencies = { online(machineId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean; beforeAdmission?(auth:HumanAuthority,row:SessionRow,operationId:string,state:HubState):void; admitted?(run:RunRow,operationId:string,state:HubState):void; admissionRefused?(operationId:string):void };
 export function completeProjection(repo: RemoteRepository, row: SessionRow): Projection {
   const p = repo.get<Projection>("remote_projection", projectionKey(row.record.machineId, row.record.projectId, row.record.checkoutId, row.record.agentProfileId));
   const current = machine(repo, row.record.machineId);
@@ -29,7 +29,7 @@ export function createSession(state: HubState, repo: RemoteRepository, deps: Ses
   const m = machine(repo, body.machineId);
   if (!m.projectIds.includes(projectId)) fail(404, "not-found", "Machine not found");
   if (!deps.online(m.machineId) || m.recoveryRequired) fail(409, "machine-offline", "Machine is unavailable or requires recovery");
-  const inventory = repo.get<{ inventoryVersion: number; checkouts: { projectId: string; checkoutId: string; headSha: string; clean: boolean; available: boolean; busy: boolean; agentProfiles: { profileId: string; readiness: string; capabilityDigest: string; policyDigest: string }[] }[] }>("remote_inventory", m.machineId);
+  const inventory = repo.get<FrameOf<"inventory">["payload"]>("remote_inventory", m.machineId);
   const checkout = inventory?.checkouts.find((c) => c.projectId === projectId && c.checkoutId === body.checkoutId);
   const profile = checkout?.agentProfiles.find((p) => p.profileId === body.agentProfileId);
   if (!inventory || inventory.inventoryVersion !== body.expectedInventoryVersion || !checkout || checkout.headSha !== body.expectedHeadSha || !profile || profile.readiness !== "ready" || profile.capabilityDigest !== body.capabilityDigest || profile.policyDigest !== body.policyDigest) fail(409, "stale-reference", "Inventory or capability selection changed");
@@ -93,18 +93,28 @@ export function submitMessage(state: HubState, repo: RemoteRepository, deps: Ses
     sessionCommand(repo, machine(repo, row.record.machineId), row, auth, operationId, "submit-message", body);
     return { operationId, messageId: id(), sessionId: row.record.sessionId, sessionVersion: row.record.version, queueItemId: null, status: "queued", runId: null, turnId: null, turnOrdinal: null };
   }
-  return admitMessage(repo, auth, row, body, operationId, undefined, deps);
+  return admitMessage(state, repo, {auth, row, body, operationId, deps});
 }
-export function admitMessage(repo: RemoteRepository, auth: HumanAuthority, row: SessionRow, body: Control["MessageSubmit"], operationId: string, originalMessageId?: string, deps?:SessionDependencies): Control["TurnReceipt"] {
-  deps?.beforeAdmission?.(auth,row,operationId);
+function newRunSnapshot(row: SessionRow): Control["ConfigSnapshot"] {
+  return {config:structuredClone(row.record.config),configDigest:canonicalDigest(row.record.config),effectiveCandidateId:row.record.config.baselineCandidateId,routingDecision:"baseline",fallbackReason:"none",selectionReceiptId:id()};
+}
+type RunAllocation = {runId:string;turnId:string;snapshot:Control["ConfigSnapshot"];association:Control["FlowAssociation"];ordinal:number};
+function newRunRecord(row:SessionRow,command:StoredCommand,allocation:RunAllocation):RunRow {
+  return {runId:allocation.runId,turnId:allocation.turnId,sessionId:row.record.sessionId,projectId:row.record.projectId,checkoutId:row.record.checkoutId,machineId:row.record.machineId,version:1,state:"dispatching",lastLocalSeq:0,commandDigest:command.envelope.commandDigest,commandId:command.envelope.commandId,association:allocation.association,snapshot:allocation.snapshot,turnOrdinal:allocation.ordinal,partial:false};
+}
+
+type MessageAdmission = {auth:HumanAuthority; row:SessionRow; body:Control["MessageSubmit"]; operationId:string; originalMessageId?:string; deps?:SessionDependencies};
+export function admitMessage(state: HubState, repo: RemoteRepository, admission: MessageAdmission): Control["TurnReceipt"] {
+  const {auth,row,body,operationId,originalMessageId,deps}=admission;
+  deps?.beforeAdmission?.(auth,row,operationId,state);
   if(repo.activeRuns()>=repo.budgets.activeRuns)fail(413,'quota-exceeded','Active work budget exhausted; reconcile existing ownership');
   const m = machine(repo, row.record.machineId); const runId = id(), turnId = id(), ordinal = row.record.nextTurnOrdinal;
-  const snapshot: Control["ConfigSnapshot"] = { config: structuredClone(row.record.config), configDigest: canonicalDigest(row.record.config), effectiveCandidateId: row.record.config.baselineCandidateId, routingDecision: "baseline", fallbackReason: "none", selectionReceiptId: id() };
+  const snapshot = newRunSnapshot(row);
   const start: Control["StartTurnRequest"] = { sessionId: row.record.sessionId, expectedSessionVersion: row.record.version, controller: body.controller, expectedConfigVersion: body.expectedConfigVersion, expectedHistoryVersion: row.record.historyVersion, expectedWorkspaceBaseline: row.record.workspaceBaseline, association: body.association, messageId: originalMessageId ?? id(), text: body.text };
   const command = runCommand(repo, m, row, auth, operationId, runId, turnId, 1, "start-turn", { request: start, snapshot, turnOrdinal: ordinal }, body.controller);
-  const run: RunRow = { runId, turnId, sessionId: row.record.sessionId, projectId: row.record.projectId, checkoutId: row.record.checkoutId, machineId: m.machineId, version: 1, state: "dispatching", lastLocalSeq: 0, commandDigest: command.envelope.commandDigest, commandId: command.envelope.commandId, association: body.association, snapshot, turnOrdinal: ordinal, partial: false };
+  const run = newRunRecord(row, command, {runId, turnId, snapshot, association:body.association, ordinal:ordinal});
   repo.put("remote_run", runId, run, { projectId: row.record.projectId, machineId: m.machineId, sessionId: row.record.sessionId, runId }); saveSession(repo, row);
-  deps?.admitted?.(run,operationId);
+  deps?.admitted?.(run,operationId,state);
   return { operationId, messageId: id(), sessionId: row.record.sessionId, sessionVersion: row.record.version, queueItemId: null, status: "admitted", runId, turnId, turnOrdinal: ordinal };
 }
 
@@ -114,9 +124,9 @@ export function admitCommand(state: HubState, repo: RemoteRepository, auth: Huma
   if (row.record.activeRunId || row.pending || row.record.state !== "idle" || !row.baselineVerified) fail(409, "session-busy", "Executing command requires an idle verified workspace");
   if(repo.activeRuns()>=repo.budgets.activeRuns)fail(413,'quota-exceeded','Active work budget exhausted; reconcile existing ownership');
   const m = machine(repo, row.record.machineId), runId = id(), turnId = id();
-  const snapshot: Control["ConfigSnapshot"] = { config: structuredClone(row.record.config), configDigest: canonicalDigest(row.record.config), effectiveCandidateId: row.record.config.baselineCandidateId, routingDecision: "baseline", fallbackReason: "none", selectionReceiptId: id() };
+  const snapshot = newRunSnapshot(row);
   const command = sessionCommand(repo, m, row, auth, operationId, "invoke-command", request, { scope: "run", sessionId: row.record.sessionId, runId, turnId, expectedRunVersion: 1, expectedSessionVersion: row.record.version });
-  const run: RunRow = { runId, turnId, sessionId: row.record.sessionId, projectId: row.record.projectId, checkoutId: row.record.checkoutId, machineId: m.machineId, version: 1, state: "dispatching", lastLocalSeq: 0, commandDigest: command.envelope.commandDigest, commandId: command.envelope.commandId, association: request.association, snapshot, turnOrdinal: row.record.nextTurnOrdinal, partial: false };
+  const run = newRunRecord(row, command, {runId, turnId, snapshot, association:request.association, ordinal:row.record.nextTurnOrdinal});
   repo.put("remote_run", runId, run, { projectId: row.record.projectId, machineId: m.machineId, sessionId: row.record.sessionId, runId });
   return { operationId, sessionId: row.record.sessionId, commandName: request.commandName, status: "queued", sessionVersion: row.record.version, result: null, confirmationId: null, errorCode: null, confirmation: null, runId, turnId };
 }

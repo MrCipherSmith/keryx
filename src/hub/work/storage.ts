@@ -354,6 +354,8 @@ export function workRepository(db: Database) {
         string,
         string
     ]>('SELECT body FROM hub_work_execution_reservations WHERE project_id=? AND attempt_id=? ORDER BY rowid').all(projectId, attemptId).map(row => JSON.parse(row.body) as WorkExecutionReservation);
+    db.exec("CREATE INDEX IF NOT EXISTS hub_work_reservation_pending_session ON hub_work_execution_reservations(json_extract(body,'$.sessionId')) WHERE json_extract(body,'$.state')='reserved'");
+    const pendingReservationsForSession = (sessionId: string): WorkExecutionReservation[] => db.query<{body:string},[string]>("SELECT body FROM hub_work_execution_reservations WHERE json_extract(body,'$.sessionId')=? AND json_extract(body,'$.state')='reserved' ORDER BY rowid").all(sessionId).map(row => JSON.parse(row.body) as WorkExecutionReservation);
     const saveExecutionReservation = (reservation: WorkExecutionReservation): void => {
         const previous = executionReservation(reservation.operationId);
         if (previous) {
@@ -364,7 +366,7 @@ export function workRepository(db: Database) {
                 void unusedTurn;
                 return JSON.stringify(pins);
             };
-            if (immutable(previous) !== immutable(reservation) || previous.state === 'bound' && (previous.runId !== reservation.runId || previous.turnId !== reservation.turnId || reservation.state !== 'bound'))
+            if (immutable(previous) !== immutable(reservation) || previous.state !== 'reserved' && (previous.runId !== reservation.runId || previous.turnId !== reservation.turnId || reservation.state !== previous.state))
                 throw new TypeError('Immutable execution reservation conflict');
         }
         activateWriter();
@@ -407,6 +409,6 @@ export function workRepository(db: Database) {
         db.query('DELETE FROM hub_work_observation_jobs WHERE project_id=? AND actor_id=? AND operation_id=?').run(projectId, actorId, operationId);
     };
     return {
-        attentionPage, snapshotState, readState, record, recordState, commandState, operation, currentSequence, eventsAfter, nextRevisionNumber, gitObservations, saveGitObservation, nextObservationGeneration, observationJob, saveObservationJob, deleteObservationJob, executionReservation, reservationForRun, reservationsForAttempt, saveExecutionReservation, load, save, archiveDocument, documentVersion, cursorSecret, conversion, conversionForLegacy, conversions, markConverted, saveLegacyPreview, legacyPreview
+        attentionPage, snapshotState, readState, record, recordState, commandState, operation, currentSequence, eventsAfter, nextRevisionNumber, gitObservations, saveGitObservation, nextObservationGeneration, observationJob, saveObservationJob, deleteObservationJob, executionReservation, reservationForRun, reservationsForAttempt, pendingReservationsForSession, saveExecutionReservation, load, save, archiveDocument, documentVersion, cursorSecret, conversion, conversionForLegacy, conversions, markConverted, saveLegacyPreview, legacyPreview
     };
 }

@@ -183,3 +183,20 @@ test('backup copies committed WAL records without allocating a whole database se
     expect(() => store.backup(destination)).toThrow();
     backup.close();
 });
+
+test('released reservations survive restart and cannot be resurrected or allocated', () => {
+    const {store,dir}=fixture();
+    const reservation = {
+        operationId: 'dispatch', projectId: 'p', actorId: 'human:operator', sessionDigest: 'session-digest', sessionId: 's', machineId: 'm', checkoutId: 'c', attemptId: 'a', flowId: 'f', intentId: 'i', flowRevisionId: 'fr', intentRevisionId: 'ir', contextSnapshotId: 'ctx', flowRevisionDigest: 'f-digest', intentRevisionDigest: 'i-digest', contextDigest: 'ctx-digest', associationDigest: 'association', wireAssociationDigest: 'wire', createdAt: 'now', state: 'reserved' as const, runId: null, turnId: null
+    };
+
+    store.work.saveExecutionReservation(reservation);
+    expect(store.work.pendingReservationsForSession('s')).toEqual([reservation]);
+    const released={...reservation,state:'released' as const};
+    store.work.saveExecutionReservation(released);
+    expect(store.work.pendingReservationsForSession('s')).toEqual([]);
+    store.close();const restored=openHubStore(dir);stores.push(restored);
+    expect(restored.work.executionReservation('dispatch')).toEqual(released);
+    expect(()=>restored.work.saveExecutionReservation(reservation)).toThrow('Immutable execution reservation conflict');
+    expect(()=>restored.work.saveExecutionReservation({...released,state:'bound',runId:'r',turnId:'t'})).toThrow('Immutable execution reservation conflict');
+});

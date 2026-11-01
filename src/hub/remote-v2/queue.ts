@@ -26,7 +26,10 @@ export function drainSessionQueue(state: HubState, repo: RemoteRepository, deps:
     && replacementSource?.item.operationId === replacement.value.originalOperationId && replacementSource.sessionId === head.sessionId
     && replacementSource.machineId === head.machineId && replacementSource.projectId === head.projectId
     && head.item.position === replacementSource.item.position && head.item.kind === replacementSource.item.kind;
-  if ((status === "applied" && !reauthorized) || status === "admitted" || status === "confirmation-required") return;
+  const edit = operation && validateControl("QueueEdit",operation.request);
+  const editedSource = edit?.ok ? repo.get<QueueRow>("remote_queue",edit.value.queueItemId) : undefined;
+  const edited = edit?.ok === true && editedSource?.item.operationId === head.item.replacesOperationId && editedSource.sessionId === head.sessionId && editedSource.projectId === head.projectId && editedSource.machineId === head.machineId && editedSource.item.position === head.item.position && editedSource.item.kind === "message" && head.item.kind === "message" && head.item.text === edit.value.text;
+  if ((status === "applied" && !reauthorized && !edited) || status === "admitted" || status === "confirmation-required") return;
   try {
     if (!deps.authorityValid(head.authority)) fail(403, "forbidden", "Queued actor no longer authorized");
     held(row, head.authority, head.controller);
@@ -37,7 +40,7 @@ export function drainSessionQueue(state: HubState, repo: RemoteRepository, deps:
     head.admissionReceipt??=structuredClone(operation.response);
     if (head.item.kind === "message") {
       const request = control("MessageSubmit", head.request);
-      const receipt = admitMessage(repo, head.authority, row, { ...request, expectedSessionVersion: row.record.version, expectedConfigVersion: row.record.config.configVersion, controller: head.controller }, head.item.operationId, head.item.operationId, deps);
+      const receipt = admitMessage(state, repo, {auth:head.authority, row, body:{ ...request, expectedSessionVersion: row.record.version, expectedConfigVersion: row.record.config.configVersion, controller: head.controller }, operationId:head.item.operationId, originalMessageId:head.item.operationId, deps});
       operation.response = receipt;
     } else if (head.item.kind === "config") {
       const request = control("ConfigChange", head.request);
@@ -53,6 +56,7 @@ export function drainSessionQueue(state: HubState, repo: RemoteRepository, deps:
     repo.put("remote_queue", head.item.queueItemId, head, { projectId: head.projectId, machineId: head.machineId, sessionId, seq: head.item.position });
   } catch (error) {
     if (!(error instanceof HubFailure)) throw error;
+    deps.admissionRefused?.(head.item.operationId);
     // Refusal is not an observed native queue transition. A fresh machine
     // queue event owns suspension/version changes and any terminal receipt.
     return;
