@@ -4,6 +4,7 @@ import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach,expect,test,vi } from 'vitest';
 import { HubContext,type HubContextValue } from '../src/app/hub-context';
 import { MessageComposer } from '../src/features/remote/work';
+import {validNativeSubmission} from '../src/features/remote/work-pending';
 import { useController } from '../src/features/remote/shared';
 import { remoteMutate,type Control } from '../src/api/remote';
 import { resetClient } from '../src/api/client';
@@ -18,10 +19,11 @@ let records:WorkRecord[];
 let client:QueryClient;
 const sent:{body:string;headers:Headers;path:string}[]=[];
 let failFirst=false;
+let refuseRetry=false;
 let update:(scope:{record:Control['SessionRecord'];context:HubContextValue})=>void;
 const context:HubContextValue={projectId:'p',principal:{id:'human:test',kind:'human',role:'operator'},scopeKey:63,location:{projectId:'p',tab:'sessions',sessionId:'s'},navigate:()=>undefined,refresh:async()=>undefined};
 beforeEach(async()=>{
- resetClient();useDraftStore.getState().clearAll();sent.length=0;failFirst=false;await i18n.changeLanguage('en');
+ resetClient();useDraftStore.getState().clearAll();sent.length=0;failFirst=false;refuseRetry=false;await i18n.changeLanguage('en');
  records=(await demoWorkAdapter('p').snapshot()).records;
  for(const id of ['a-agent','a-manual']){const a=recordOf(records,'attempt',id)!;a.state='running';a.submissionId=null;a.executionOutcome='none';}
  recordOf(records,'intent','i1')!.state='in-progress';
@@ -33,7 +35,7 @@ beforeEach(async()=>{
   if(url.includes('/snapshot?'))return Response.json({records,nextCursor:null,eventCursor:'work-cursor'});
   if(url.includes('/events?'))return Response.json({events:[],nextCursor:'work-next'});
   if(url.endsWith('/flows'))return Response.json({flows:[]});
-  if(url.endsWith('/messages')){sent.push({body:String(init?.body),headers:new Headers(init?.headers),path:url});if(failFirst&&sent.length===1)throw new TypeError('lost response');return Response.json({operationId:'opaque-server-operation',messageId:'message',sessionId:'s',sessionVersion:4,queueItemId:null,status:'admitted',runId:'run',turnId:'turn',turnOrdinal:1});}
+  if(url.endsWith('/messages')){sent.push({body:String(init?.body),headers:new Headers(init?.headers),path:url});if(failFirst&&sent.length===1)throw new TypeError('lost response');if(refuseRetry&&sent.length>1)return Response.json({error:{code:'read-only',message:'Current authority refused before receipt lookup'}},{status:403});return Response.json({operationId:'opaque-server-operation',messageId:'message',sessionId:'s',sessionVersion:4,queueItemId:null,status:'admitted',runId:'run',turnId:'turn',turnOrdinal:1});}
   return Response.json({error:{code:'not-found'}},{status:404});
  });
 });
@@ -79,7 +81,7 @@ test('project/session switch clears selected binding and retains unresolved orig
  const nextRecord={...structuredClone(sessionFixture),projectId:'q',sessionId:'s2'};
  await act(async()=>update({record:nextRecord,context:{...context,projectId:'q',location:{projectId:'q',tab:'sessions',sessionId:'s2'}}}));
  expect(screen.getByRole('combobox',{name:'Work mode'})).toHaveValue('flow');expect(screen.queryByRole('button',{name:'Retry original message'})).not.toBeInTheDocument();
- const original=useDraftStore.getState().drafts['native-work-message:63:human:test:p:s'];expect(original).toMatchObject({phase:'unknown',hint:{attemptId:'a-agent',attemptVersion:1}});expect(sent).toHaveLength(1);
+ const original=JSON.parse(sessionStorage.getItem('keryx.pending.v1:'+JSON.stringify(['native','human:test','p','s']))!);expect(original.value).toMatchObject({phase:'unknown',hint:{attemptId:'a-agent',attemptVersion:1}});expect(sent).toHaveLength(1);
 });
 test('read-only principals cannot select a Managed Attempt or send execution',async()=>{
  show({...context,principal:{id:'human:reviewer',kind:'human',role:'reviewer'}});const option=await screen.findByRole('option',{name:'Managed Attempt'});expect(option).toBeDisabled();
@@ -89,4 +91,28 @@ test('transport refuses paired managed headers for legacy Flow association and n
  const transport={operationId:'original-key',workHint:{attemptId:'a-agent',attemptVersion:1}};
  expect(()=>remoteMutate('POST','/projects/p/sessions/s/messages',{association:{mode:'flow',flowId:'legacy'}},transport)).toThrow(/explicit consent/);
  expect(()=>remoteMutate('PUT','/projects/p/sessions/s/config',{association:{mode:'ad-hoc',profileConsentVersion:1}},transport)).toThrow(/explicit consent/);expect(fetch).not.toHaveBeenCalled();
+});
+
+test('reload recovers the exact native message without auto-sending or copying it into a new draft',async()=>{
+ failFirst=true;const view=show();await selectManaged();fireEvent.click(screen.getByRole('checkbox',{name:'I explicitly choose locally permitted ad-hoc work'}));fireEvent.click(screen.getByRole('button',{name:'Send message'}));await screen.findByRole('button',{name:'Retry original message'});
+ const key="keryx.pending.v1:"+JSON.stringify(["native","human:test","p","s"]);const pending=JSON.parse(sessionStorage.getItem(key)!);pending.value.phase="sending";sessionStorage.setItem(key,JSON.stringify(pending));
+ view.unmount();useDraftStore.getState().clearAll();resetClient();
+ useDraftStore.getState().put('remote-controller:64:p:s',{lease:structuredClone(sessionFixture.controller),renewals:[]});
+ show({...context,scopeKey:64});const retry=await screen.findByRole('button',{name:'Retry original message'});
+ expect(sent).toHaveLength(1);expect(screen.getByRole('textbox',{name:'Message'})).toHaveValue('');
+ fireEvent.click(retry);await waitFor(()=>expect(sent).toHaveLength(2));expect(sent[1].body).toBe(sent[0].body);expect(sent[1].headers.get('Idempotency-Key')).toBe(sent[0].headers.get('Idempotency-Key'));expect(sent[1].headers.get('X-Keryx-Work-Attempt')).toBe(sent[0].headers.get('X-Keryx-Work-Attempt'));expect(sent[1].headers.get('X-Keryx-Work-Version')).toBe(sent[0].headers.get('X-Keryx-Work-Version'));
+});
+
+test('an authorization refusal on native original retry preserves its uncertain envelope and prevents replacement',async()=>{
+ failFirst=true;refuseRetry=true;show();await selectManaged();fireEvent.click(screen.getByRole('checkbox',{name:'I explicitly choose locally permitted ad-hoc work'}));fireEvent.click(screen.getByRole('button',{name:'Send message'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Retry original message'}));await waitFor(()=>expect(sent).toHaveLength(2));
+ const retry=await screen.findByRole('button',{name:'Retry original message'});expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled();expect(sent[1].body).toBe(sent[0].body);expect(sent[1].headers.get('Idempotency-Key')).toBe(sent[0].headers.get('Idempotency-Key'));
+ expect(JSON.parse(sessionStorage.getItem('keryx.pending.v1:'+JSON.stringify(['native','human:test','p','s']))!).value.phase).toBe('unknown');
+ fireEvent.click(retry);await waitFor(()=>expect(sent).toHaveLength(3));expect(sent[2].headers.get('Idempotency-Key')).toBe(sent[0].headers.get('Idempotency-Key'));
+});
+
+test('native recovery accepts the printable Work Attempt ID contract while keeping envelope and body closed',()=>{
+ const scope=JSON.stringify(['native','human:test','p','s']),path='/projects/p/sessions/s/messages';
+ const envelope={scope,path,operationId:'original-key',phase:'unknown',hint:{attemptId:'attempt/custom #1',attemptVersion:1},body:{expectedSessionVersion:3,controller:{controllerLeaseId:'lease',expectedControllerVersion:1},expectedConfigVersion:1,text:'Original message',interpretation:'literal-message',association:{mode:'ad-hoc',profileConsentVersion:1},busyPolicy:'reject'}};
+ expect(validNativeSubmission(envelope,scope,path)).toBe(true);expect(validNativeSubmission({...envelope,hint:{...envelope.hint,attemptId:'bad\nheader'}},scope,path)).toBe(false);expect(validNativeSubmission({...envelope,Authorization:'forbidden'},scope,path)).toBe(false);
 });

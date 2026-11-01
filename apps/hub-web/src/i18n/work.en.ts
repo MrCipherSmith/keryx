@@ -200,6 +200,8 @@ const en = {
     "Requirements have changed. This attempt retains its historical pins; refresh the plan before continuing.",
   unknown:
     "The operation outcome is unknown. Check its status before making another decision.",
+  pendingStorageError: "Cannot safely save or recover the unresolved request in this tab. New requests are blocked until recovery is available. Enable session storage or sign out before continuing.",
+  retryOriginalOperation: "Retry original operation",
   checkOperation: "Check operation status",
   pending: "The server is still processing the operation.",
   committed: "The server confirmed the operation.",

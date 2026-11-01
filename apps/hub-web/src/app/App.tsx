@@ -1,3 +1,4 @@
+import { clearPending } from "../state/pending";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   QueryClient,
@@ -523,6 +524,7 @@ export function App() {
     void queryClient.cancelQueries();
     queryClient.clear();
     useDraftStore.getState().clearAll();
+    clearPending();
     resetNavigation();
     setPrincipal(null);
     setToken("");
