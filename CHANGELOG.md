@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-01
+
+### Fixed
+- **The release attaches the Team Hub install files again.** In 0.4.1 the image reached GHCR (`0.4.1`, `latest`), but the step that uploads the install bundle, `team-hub-install.sh`, the Hub binaries, `team-hub-image.txt` and `SHA256SUMS` failed: it runs outside the checkout, where `gh release upload` could not tell which repository to use. It now names the repository. Install and upgrade the Hub from 0.4.2; the 0.4.1 release has no Hub install files.
+
 ## [0.4.1] - 2026-10-31
 
 0.4.0 was tagged but never published: its release job failed on an order-dependent test, and the release tag rules do not let a tag move. 0.4.1 is the same release with the fixes below.
