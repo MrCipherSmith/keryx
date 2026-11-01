@@ -50,7 +50,7 @@
 //                           answered.
 
 import { createHash } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, renameSync, writeFileSync } from "node:fs";
 
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: Record<string, unknown> };
 
@@ -68,7 +68,11 @@ if (pidFile !== undefined && pidFile.length > 0) {
     reportVar !== undefined && reportVar.length > 0
       ? { reportedVarPresent: Object.prototype.hasOwnProperty.call(process.env, reportVar) }
       : {};
-  writeFileSync(pidFile, JSON.stringify({ pid: process.pid, probeSha256, ...reported }));
+  // Written beside it, then renamed into place: a test that waits only for the
+  // file to EXIST must never read it empty or half-written.
+  const partial = `${pidFile}.${process.pid}.tmp`;
+  writeFileSync(partial, JSON.stringify({ pid: process.pid, probeSha256, ...reported }));
+  renameSync(partial, pidFile);
 }
 
 const TOOLS: Record<string, unknown>[] = [
