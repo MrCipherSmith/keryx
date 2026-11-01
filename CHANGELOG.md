@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-01
+
+### Fixed
+- **A run the machine refuses now ends (PR #1109).** When a machine answered `rejected` to a run still being dispatched, the run stayed `dispatching`, held one of the machine's run slots and made the Hub treat its session as needing recovery. The Hub now marks it `rejected`, records when it ended, frees the slot and returns the machine's error.
+- **A run resolved as `lost` records when it ended.** After crash recovery, the controller release and log cleanup now treat a lost run as finished.
+- **The Hub web shows a run's result without a reload.** Uploading a result and resolving a run now notify open browsers.
+
+These are Hub-only fixes: upgrade the Hub image to 0.4.3; the CLI is unchanged.
+
 ## [0.4.2] - 2026-11-01
 
 ### Fixed
