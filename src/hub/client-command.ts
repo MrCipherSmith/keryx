@@ -3,6 +3,7 @@ import { validateWatchInterval, watchHubContext } from "../hub/context-watch";
 export const HUB_HELP = `keryx hub — Team Hub prototype
   serve                                      Start Hub from KERYX_HUB_* environment
   status                                     Show local binding; no network or credentials
+  work <command>                             Managed work metadata; use work --help
   mcp --url <http(s)://host/mcp> [--token-env <name>]
                                              Bridge remote Hub MCP over local stdio; no checkout needed
   connect --url <http(s)://host> --project <id> [--token-env <name>]
@@ -20,6 +21,11 @@ export function printHubHelp(help = HUB_HELP): void {
     console.log(help);
 }
 export async function hubCommand(args: string[], machineHandler?: (args: string[]) => Promise<void>, help = HUB_HELP): Promise<void> {
+    if (args[0] === "work") {
+        const { runWorkCommand } = await import("./work/cli");
+        await runWorkCommand(args.slice(1));
+        return;
+    }
     if (!args.length || args.includes("--help") || args.includes("-h")) {
         printHubHelp(help);
         return;

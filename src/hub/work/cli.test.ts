@@ -1,0 +1,33 @@
+import { expect, test } from "bun:test";
+import { runWorkCommand, WORK_HELP } from "./cli";
+
+const binding = { url: "https://hub.test", projectId: "p1", checkoutId: "checkout1", tokenEnv: "WORK_TEST_TOKEN" };
+const connector = { status: async () => ({ ok: true as const, connection: binding }), binding: async () => binding };
+test("managed work CLI reads bound project with token env and safe output", async () => {
+    const outputs: string[] = []; const calls: Request[] = [];
+    await runWorkCommand(["flow", "list"], { connector, env: { WORK_TEST_TOKEN: "private-token" }, write: value => outputs.push(value), fetch: async request => { calls.push(request); return Response.json({ records: [], nextCursor: null, eventCursor: "opaque" }); } });
+    expect(calls[0]?.url).toBe("https://hub.test/hub/work/v1/projects/p1/flows");
+    expect(calls[0]?.headers.get("authorization")).toBe("Bearer private-token");
+    expect(outputs.join("\n")).not.toContain("private-token");
+    expect(JSON.parse(outputs[0]!)).toEqual({ records: [], nextCursor: null, eventCursor: "opaque" });
+});
+test("CLI preserves user-supplied idempotency envelope from stdin and never prints credentials", async () => {
+    const envelope = { operationId: "original-operation", expectedVersions: { a1: 1 }, command: "attempt.report", payload: { attemptId: "a1", event: "progress", report: "Working" } };
+    let sent = ""; let key: string | null = null;
+    await runWorkCommand(["attempt", "report", "--input", "-"], { connector, env: { WORK_TEST_TOKEN: "private-token" }, readInput: async () => JSON.stringify(envelope), write: () => {}, fetch: async request => { sent = await request.text(); key = request.headers.get("Idempotency-Key"); return Response.json({ operationId: envelope.operationId, entities: [], receiptId: "receipt", eventCursor: "opaque" }); } });
+    expect(JSON.parse(sent)).toEqual(envelope); expect(String(key)).toBe(envelope.operationId);
+});
+test("CLI refuses human transitions, extras and missing tokens before network", async () => {
+    let calls = 0;
+    const options = { connector, env: {}, write: () => {}, readInput: async () => JSON.stringify({ operationId: "op", expectedVersions: {}, command: "requirements.approve", payload: {} }), fetch: async () => { calls++; return Response.json({}); } };
+    await expect(runWorkCommand(["command", "--input", "-"], options)).rejects.toThrow();
+    await expect(runWorkCommand(["flow", "list", "--unexpected", "secret"], options)).rejects.toThrow();
+    await expect(runWorkCommand(["flow", "list"], options)).rejects.toThrow("token environment variable is empty");
+    expect(calls).toBe(0);
+});
+test("CLI status and help do not need tokens or network", async () => {
+    const outputs: string[] = [];
+    const options = { connector, env: {}, write: (value: string) => outputs.push(value), fetch: async () => { throw Error("network"); } };
+    await runWorkCommand(["status"], options); await runWorkCommand(["--help"], options);
+    expect(outputs[0]).not.toContain("WORK_TEST_TOKEN"); expect(outputs[1]).toBe(WORK_HELP);
+});

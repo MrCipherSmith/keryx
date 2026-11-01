@@ -1,5 +1,6 @@
 import type { Principal } from "./contracts";
 import { listHubMcpTools, resolveHubMcpOperation } from "./mcp-tools";
+import { listWorkMcpTools, resolveWorkMcpOperation, validWorkMcpResponse } from "./work/client";
 
 export type HubMcpContext = { actor: Principal; apiFetch: (request: Request) => Promise<Response> };
 const MAX_BODY = 32 * 1024 * 1024;
@@ -64,21 +65,23 @@ export async function handleHubMcp(request: Request, context: HubMcpContext): Pr
     if (!sdk) return response(503, "mcp-sdk-unavailable");
     const [{ Server }, { WebStandardStreamableHTTPServerTransport }, { ListToolsRequestSchema, CallToolRequestSchema }] = sdk;
     const server = new Server({ name: "keryx-team-hub", version: "0.1.0" }, { capabilities: { tools: {} } });
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: listHubMcpTools() }));
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [...listHubMcpTools(), ...listWorkMcpTools()] }));
     server.setRequestHandler(CallToolRequestSchema, async message => {
-        const resolved = resolveHubMcpOperation(message.params.name, message.params.arguments ?? {});
+        const workTool = message.params.name.startsWith("hub_work_");
+        const resolved = workTool ? resolveWorkMcpOperation(message.params.name, message.params.arguments ?? {}) : resolveHubMcpOperation(message.params.name, message.params.arguments ?? {});
         if ("error" in resolved) return toolError(resolved.error);
         try {
             const headers = new Headers({ Authorization: request.headers.get("authorization")! });
             const { operation, operationId } = resolved;
             if (operation.body !== undefined) { headers.set("Content-Type", "application/json"); headers.set("Idempotency-Key", operationId!); }
-            const result = await context.apiFetch(new Request(new URL(`/hub/v1${operation.path}`, request.url), { method: operation.body === undefined ? "GET" : "POST", headers, ...(operation.body === undefined ? {} : { body: JSON.stringify(operation.body) }) }));
+            const result = await context.apiFetch(new Request(new URL(workTool ? operation.path : `/hub/v1${operation.path}`, request.url), { method: operation.body === undefined ? "GET" : "POST", headers, ...(operation.body === undefined ? {} : { body: JSON.stringify(operation.body) }) }));
             const value: unknown = await result.json();
             if (!result.ok) {
                 const error = value && typeof value === "object" && "error" in value ? value.error : undefined;
                 const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[a-z0-9-]{1,80}$/.test(error.code) ? error.code : "operation-failed";
                 return toolError(code, result.status);
             }
+            if (workTool && !validWorkMcpResponse(message.params.name, value, result.status, operationId)) return toolError("invalid-response", result.status);
             return { content: [{ type: "text" as const, text: serialize(value, request) }] };
         } catch { return toolError("operation-failed"); }
     });

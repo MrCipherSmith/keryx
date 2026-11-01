@@ -1,0 +1,646 @@
+{
+  "valid": [
+    {
+      "schema": "command",
+      "name": "manual-attempt",
+      "value": {
+        "operationId": "op1",
+        "expectedVersions": {
+          "intent1": 1
+        },
+        "command": "attempt.create",
+        "payload": {
+          "intentRevisionId": "ir1",
+          "contextSnapshotId": "ctx1",
+          "participantId": "human:alice",
+          "method": "human",
+          "summary": "Implement via Git PR",
+          "supersedesAttemptId": null
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "git-only-result",
+      "value": {
+        "operationId": "op2",
+        "expectedVersions": {
+          "a1": 2
+        },
+        "command": "subject.create",
+        "payload": {
+          "attemptId": "a1",
+          "artifacts": [
+            {
+              "kind": "git",
+              "repositoryId": "repo1",
+              "commitOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "treeOid": null,
+              "pullRequestNumber": 12
+            }
+          ],
+          "report": "Implemented on exact commit; no source upload."
+        }
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "exact-human-decision",
+      "value": {
+        "id": "d1",
+        "projectId": "p1",
+        "createdBy": "human:alice",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "decision",
+        "targetType": "intent-review",
+        "targetId": "i1",
+        "targetDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decision": "accept",
+        "reason": "Reviewed exact evidence and commit",
+        "actorKind": "human",
+        "operationId": "op3",
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "schema": "event",
+      "name": "project-event",
+      "value": {
+        "protocolVersion": 1,
+        "projectId": "p1",
+        "sequence": 1,
+        "eventId": "e1",
+        "operationId": "op3",
+        "actorId": "human:alice",
+        "actorKind": "human",
+        "occurredAt": "2026-11-01T00:00:00Z",
+        "type": "decision-recorded",
+        "entityType": "decision",
+        "entityId": "d1",
+        "entityVersion": null,
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "causationId": null
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "context-missing-content-is-explicit",
+      "value": {
+        "id": "id1",
+        "projectId": "projectId1",
+        "createdBy": "createdBy1",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "context",
+        "flowRevisionId": "fr1",
+        "intentRevisionId": "ir1",
+        "entries": [
+          {
+            "entryId": "wiki1",
+            "role": "wiki",
+            "reference": null,
+            "required": true,
+            "resolution": "unavailable",
+            "contentDigest": null,
+            "provenance": "hub"
+          }
+        ],
+        "gitBases": [],
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "report-only-subject",
+      "value": {
+        "id": "s1",
+        "projectId": "p1",
+        "createdBy": "agent:a",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "subject",
+        "attemptId": "a1",
+        "artifacts": [
+          {
+            "kind": "report",
+            "text": "No implementation needed, documented investigation.",
+            "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "report": "Investigation result.",
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "schema": "command",
+      "name": "declared-context-no-trust-input",
+      "value": {
+        "operationId": "op-context",
+        "expectedVersions": {
+          "intent1": 1
+        },
+        "command": "context.create",
+        "payload": {
+          "flowRevisionId": "fr1",
+          "intentRevisionId": "ir1",
+          "entries": [
+            {
+              "entryId": "spec",
+              "role": "spec",
+              "reference": {
+                "documentId": "doc1",
+                "version": 1,
+                "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              "required": true,
+              "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ],
+          "gitBases": [
+            {
+              "repositoryId": "repo1",
+              "commitOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "exact-amendment-replacements",
+      "value": {
+        "operationId": "op-amend",
+        "expectedVersions": {
+          "flow1": 3,
+          "intent1": 2
+        },
+        "command": "requirements.amend",
+        "payload": {
+          "flowId": "flow1",
+          "sourceFlowRevisionId": "fr1",
+          "affectedIntentIds": [
+            "intent1"
+          ],
+          "replacements": [
+            {
+              "targetType": "flow",
+              "targetId": "flow1",
+              "revisionId": "fr2",
+              "contentDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            },
+            {
+              "targetType": "intent",
+              "targetId": "intent1",
+              "revisionId": "ir2",
+              "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ],
+          "reason": "Updated intended behavior"
+        }
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "aggregate-flow-coverage",
+      "value": {
+        "id": "manifest1",
+        "projectId": "p1",
+        "createdBy": "human:alice",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "flow-submission",
+        "flowId": "flow1",
+        "flowRevisionId": "fr1",
+        "acceptedIntents": [
+          {
+            "intentId": "i1",
+            "intentRevisionId": "ir1",
+            "decisionId": "d1",
+            "submissionId": "sub1",
+            "subjectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "knowledgeProposalIds": [],
+        "criterionCoverage": [
+          {
+            "flowCriterionId": "fc1",
+            "intentId": "i1",
+            "intentCriterionId": "ic1",
+            "submissionId": "sub1",
+            "decisionId": "d1"
+          }
+        ],
+        "contentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "amendment-whole-set-manifest",
+      "value": {
+        "id": "manifest1",
+        "projectId": "p1",
+        "createdBy": "human:alice",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "amendment",
+        "flowId": "flow1",
+        "sourceFlowRevisionId": "fr1",
+        "affectedIntentIds": [
+          "i1"
+        ],
+        "replacements": [
+          {
+            "targetType": "flow",
+            "targetId": "flow1",
+            "revisionId": "fr2",
+            "contentDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "targetType": "intent",
+            "targetId": "i1",
+            "revisionId": "ir2",
+            "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "reason": "New requirements",
+        "contentDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "human-waiver-overlay-decision",
+      "value": {
+        "id": "d1",
+        "projectId": "p1",
+        "createdBy": "human:alice",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "decision",
+        "targetType": "criterion-waiver",
+        "targetId": "ic1",
+        "targetDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decision": "waive",
+        "reason": "Reviewed exact evidence and commit",
+        "actorKind": "human",
+        "operationId": "op3",
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "schema": "command",
+      "name": "spoofed-server-actor",
+      "value": {
+        "operationId": "op1",
+        "expectedVersions": {
+          "intent1": 1
+        },
+        "command": "attempt.create",
+        "payload": {
+          "intentRevisionId": "ir1",
+          "contextSnapshotId": "ctx1",
+          "participantId": "human:alice",
+          "method": "human",
+          "summary": "Implement via Git PR",
+          "supersedesAttemptId": null,
+          "createdBy": "human:admin"
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "missing-parent",
+      "value": {
+        "operationId": "op1",
+        "expectedVersions": {
+          "intent1": 1
+        },
+        "command": "attempt.create",
+        "payload": {
+          "contextSnapshotId": "ctx1",
+          "participantId": "human:alice",
+          "method": "human",
+          "summary": "Implement via Git PR",
+          "supersedesAttemptId": null
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "zero-version",
+      "value": {
+        "operationId": "op1",
+        "expectedVersions": {
+          "intent1": 0
+        },
+        "command": "attempt.create",
+        "payload": {
+          "intentRevisionId": "ir1",
+          "contextSnapshotId": "ctx1",
+          "participantId": "human:alice",
+          "method": "human",
+          "summary": "Implement via Git PR",
+          "supersedesAttemptId": null
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "unknown-command",
+      "value": {
+        "operationId": "op1",
+        "expectedVersions": {
+          "intent1": 1
+        },
+        "command": "flow.accept-all",
+        "payload": {
+          "intentRevisionId": "ir1",
+          "contextSnapshotId": "ctx1",
+          "participantId": "human:alice",
+          "method": "human",
+          "summary": "Implement via Git PR",
+          "supersedesAttemptId": null
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "branch-only-subject",
+      "value": {
+        "operationId": "op2",
+        "expectedVersions": {
+          "a1": 2
+        },
+        "command": "subject.create",
+        "payload": {
+          "attemptId": "a1",
+          "artifacts": [
+            {
+              "kind": "git",
+              "repositoryId": "repo1",
+              "commitOid": "main",
+              "treeOid": null,
+              "pullRequestNumber": 12
+            }
+          ],
+          "report": "Implemented on exact commit; no source upload."
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "credential-url-instead-of-id",
+      "value": {
+        "operationId": "op2",
+        "expectedVersions": {
+          "a1": 2
+        },
+        "command": "subject.create",
+        "payload": {
+          "attemptId": "a1",
+          "artifacts": [
+            {
+              "kind": "git",
+              "repositoryId": "repo1",
+              "commitOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "treeOid": null,
+              "url": "https://user:secret@example.invalid",
+              "pullRequestNumber": 12
+            }
+          ],
+          "report": "Implemented on exact commit; no source upload."
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "empty-artifacts",
+      "value": {
+        "operationId": "op2",
+        "expectedVersions": {
+          "a1": 2
+        },
+        "command": "subject.create",
+        "payload": {
+          "attemptId": "a1",
+          "artifacts": [],
+          "report": "Implemented on exact commit; no source upload."
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "missing-subject-report",
+      "value": {
+        "operationId": "op2",
+        "expectedVersions": {
+          "a1": 2
+        },
+        "command": "subject.create",
+        "payload": {
+          "attemptId": "a1",
+          "artifacts": [
+            {
+              "kind": "git",
+              "repositoryId": "repo1",
+              "commitOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "treeOid": null,
+              "pullRequestNumber": 12
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "agent-cannot-author-human-decision",
+      "value": {
+        "id": "d1",
+        "projectId": "p1",
+        "createdBy": "human:alice",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "decision",
+        "targetType": "intent-review",
+        "targetId": "i1",
+        "targetDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decision": "accept",
+        "reason": "Reviewed exact evidence and commit",
+        "actorKind": "agent",
+        "operationId": "op3",
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "missing-decision-digest",
+      "value": {
+        "id": "d1",
+        "projectId": "p1",
+        "createdBy": "human:alice",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "decision",
+        "targetType": "intent-review",
+        "targetId": "i1",
+        "decision": "accept",
+        "reason": "Reviewed exact evidence and commit",
+        "actorKind": "human",
+        "operationId": "op3",
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "schema": "event",
+      "name": "wrong-event-version",
+      "value": {
+        "protocolVersion": 2,
+        "projectId": "p1",
+        "sequence": 1,
+        "eventId": "e1",
+        "operationId": "op3",
+        "actorId": "human:alice",
+        "actorKind": "human",
+        "occurredAt": "2026-11-01T00:00:00Z",
+        "type": "decision-recorded",
+        "entityType": "decision",
+        "entityId": "d1",
+        "entityVersion": null,
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "causationId": null
+      }
+    },
+    {
+      "schema": "event",
+      "name": "raw-prompt-in-event",
+      "value": {
+        "protocolVersion": 1,
+        "projectId": "p1",
+        "sequence": 1,
+        "eventId": "e1",
+        "operationId": "op3",
+        "actorId": "human:alice",
+        "actorKind": "human",
+        "occurredAt": "2026-11-01T00:00:00Z",
+        "type": "decision-recorded",
+        "entityType": "decision",
+        "entityId": "d1",
+        "entityVersion": null,
+        "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "causationId": null,
+        "prompt": "do something"
+      }
+    },
+    {
+      "schema": "command",
+      "name": "cannot-spoof-observed-provenance",
+      "value": {
+        "operationId": "op2",
+        "expectedVersions": {
+          "a1": 2
+        },
+        "command": "subject.create",
+        "payload": {
+          "attemptId": "a1",
+          "artifacts": [
+            {
+              "kind": "git",
+              "repositoryId": "repo1",
+              "commitOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "treeOid": null,
+              "pullRequestNumber": 12,
+              "verification": "observed"
+            }
+          ],
+          "report": "Implemented on exact commit; no source upload."
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "spoofed-runtime-context",
+      "value": {
+        "operationId": "op-context",
+        "expectedVersions": {
+          "intent1": 1
+        },
+        "command": "context.create",
+        "payload": {
+          "flowRevisionId": "fr1",
+          "intentRevisionId": "ir1",
+          "entries": [
+            {
+              "entryId": "spec",
+              "role": "spec",
+              "reference": {
+                "documentId": "doc1",
+                "version": 1,
+                "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              "required": true,
+              "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "provenance": "runtime-observed"
+            }
+          ],
+          "gitBases": [
+            {
+              "repositoryId": "repo1",
+              "commitOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "schema": "command",
+      "name": "amendment-requires-exact-replacement-digest",
+      "value": {
+        "operationId": "op-amend",
+        "expectedVersions": {
+          "flow1": 3,
+          "intent1": 2
+        },
+        "command": "requirements.amend",
+        "payload": {
+          "flowId": "flow1",
+          "sourceFlowRevisionId": "fr1",
+          "affectedIntentIds": [
+            "intent1"
+          ],
+          "replacements": [
+            {
+              "targetType": "flow",
+              "targetId": "flow1",
+              "revisionId": "fr2"
+            },
+            {
+              "targetType": "intent",
+              "targetId": "intent1",
+              "revisionId": "ir2",
+              "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ],
+          "reason": "Updated intended behavior"
+        }
+      }
+    },
+    {
+      "schema": "domain",
+      "name": "aggregate-cannot-omit-coverage",
+      "value": {
+        "id": "manifest1",
+        "projectId": "p1",
+        "createdBy": "human:alice",
+        "createdAt": "2026-11-01T00:00:00Z",
+        "kind": "flow-submission",
+        "flowId": "flow1",
+        "flowRevisionId": "fr1",
+        "acceptedIntents": [
+          {
+            "intentId": "i1",
+            "intentRevisionId": "ir1",
+            "decisionId": "d1",
+            "submissionId": "sub1",
+            "subjectDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "knowledgeProposalIds": [],
+        "contentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  ]
+}
