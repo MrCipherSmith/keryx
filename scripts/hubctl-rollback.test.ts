@@ -104,3 +104,63 @@ for (const wal of ['157286401', 'unreadable']) {
     expect(() => readFileSync(join(directory, 'serialize-called'))).toThrow();
   });
 }
+
+test('upgrade rechecks installed version under the acquired lock before staging', () => {
+  const { result } = libraryFixture(`
+mkdir -p "$ROOT/releases/current"
+printf '0.4.4' > "$ROOT/releases/current/VERSION"
+current_release() { printf '%s/releases/current' "$ROOT"; }
+need_install() { :; }; need_docker() { :; }; need() { :; }
+lock() { printf '0.4.6' > "$ROOT/releases/current/VERSION"; }
+cmd_upgrade 0.4.5 --yes
+`);
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain('v0.4.5 is not newer than v0.4.6');
+});
+
+test('frequent safety backups are count bounded while retaining the explicit restore pointer', () => {
+  const { directory, result } = libraryFixture(`
+mkdir -p "$ROOT/backups"
+for n in 1 2 3 4 5 6 7 8; do mkdir "$ROOT/backups/upgrade-$n"; done
+state_get() { printf '%s/backups/upgrade-1' "$ROOT"; }
+prune_safety_backups
+find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d > "$ROOT/remaining"
+`);
+  expect(result.exitCode).toBe(0);
+  const remaining = readFileSync(join(directory, 'remaining'), 'utf8').trim().split('\n');
+  expect(remaining.length).toBeLessThanOrEqual(4);
+  expect(remaining).toContain(join(directory, 'backups/upgrade-1'));
+});
+
+test('rollback refuses to silently drop a legacy per-release Access overlay', () => {
+  const program = rollbackPorts.replace('cmd_rollback --yes', 'printf access > "$ROOT/releases/v2/compose.access.yaml"\ncmd_rollback --yes');
+  const { directory, result } = libraryFixture(program, { HUB_STATE: 'stopped', COMPATIBLE: 'yes' });
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain('previous release lacks the current Access overlay');
+  expect(readFileSync(join(directory, 'selected'), 'utf8')).toBe('v2');
+  expect(() => readFileSync(join(directory, 'stopped'))).toThrow();
+});
+
+test('stale adoption marker names the exact files requiring inspection', () => {
+  const { result } = libraryFixture(`
+mkdir -p "$ROOT/state"
+ln -s 999999999 "$ROOT/state/legacy-adoption.lock"
+need_install
+`);
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain('stale legacy adoption');
+  expect(result.stderr.toString()).toContain('legacy-adoption.token');
+});
+
+test('online preflight excludes changing SQLite files and tolerates tar file-changed status', () => {
+  const program = preflightPorts.replace('docker_locked() { printf archive; }', `docker_locked() {
+    case "$*" in *--exclude=./hub.sqlite*--exclude=./hub.sqlite-wal*--exclude=./hub.sqlite-shm*) printf archive; return 1 ;; *) return 92 ;; esac
+  }`);
+  const { result } = libraryFixture(program, { DATABASE_BYTES: '4096', WAL_BYTES: '0' });
+  expect(result.exitCode).toBe(0);
+});
+
+test('new Hub runtime settings cannot override installation configuration through the caller environment', () => {
+  const { result } = libraryFixture('test -z "${KERYX_HUB_FUTURE_RUNTIME_SETTING:-}"\n', { KERYX_HUB_FUTURE_RUNTIME_SETTING: 'external-override' });
+  expect(result.exitCode).toBe(0);
+});

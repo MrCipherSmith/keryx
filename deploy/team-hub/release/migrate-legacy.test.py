@@ -33,6 +33,7 @@ class MigrationSafety(unittest.TestCase):
         files = self.root / "bundle/team-hub-install"
         files.mkdir(parents=True)
         for name in m.REQUIRED:
+            (files / name).parent.mkdir(parents=True, exist_ok=True)
             (files / name).write_text("fixture\n")
         (files / "hubctl").write_text("#!/bin/sh\n# keryx-hub-update-protocol: 1\n")
         (files / "VERSION").write_text("0.4.4\n")

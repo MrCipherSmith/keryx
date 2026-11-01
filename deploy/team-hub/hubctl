@@ -28,11 +28,13 @@ export PATH
 # The shell must not be able to override the env file this install was made from. KERYX_HUB_PROJECT
 # is in the list on purpose: a variable left over from another install must never choose which
 # volume a destructive command acts on. The project is read from secrets/hub.env and nowhere else.
-unset KERYX_HUB_OPERATOR_TOKEN KERYX_HUB_AGENT_TOKEN KERYX_HUB_REVIEWER_TOKEN \
-  KERYX_HUB_PUBLIC_ORIGIN KERYX_HUB_MODE HUB_PORT HUB_DOMAIN ACME_EMAIL \
-  CF_TUNNEL_ID CF_ACCESS_TEAM CF_ACCESS_AUD KERYX_HUB_PROJECT \
-  KERYX_HUB_WORK_ENABLED KERYX_HUB_WORK_REPOSITORIES \
-  KERYX_HUB_ACCESS_ENABLED KERYX_HUB_ACCESS_ISSUER KERYX_HUB_ACCESS_AUDIENCE KERYX_HUB_ACCESS_ROLES_FILE \
+for _external_key in $(env | sed -n 's/^\(KERYX_HUB_[A-Za-z0-9_]*\)=.*/\1/p'); do
+  case $_external_key in
+    KERYX_HUB_RELEASE_BASE_URL|KERYX_HUB_VERIFY_SECONDS|KERYX_HUB_ADOPTION_TOKEN|KERYX_HUB_ALLOW_UNPINNED_IMAGE) ;;
+    *) unset "$_external_key" ;;
+  esac
+done
+unset HUB_PORT HUB_DOMAIN ACME_EMAIL CF_TUNNEL_ID CF_ACCESS_TEAM CF_ACCESS_AUD \
   COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES COMPOSE_PATH_SEPARATOR 2>/dev/null || true
 
 # --- where am I -------------------------------------------------------------
@@ -145,9 +147,18 @@ adoption_delegated() {
   [ "$(cat "$ROOT/state/legacy-adoption.token")" = "$KERYX_HUB_ADOPTION_TOKEN" ]
 }
 
+adoption_blocked() {
+  _owner=$(readlink "$ROOT/state/legacy-adoption.lock" 2>/dev/null || true)
+  case $_owner in ''|*[!0-9]*) _alive=0 ;; *) if kill -0 "$_owner" 2>/dev/null; then _alive=1; else _alive=0; fi ;; esac
+  if [ "$_alive" = 0 ]; then
+    die "stale legacy adoption; inspect $ROOT/state/legacy-adoption.lock, $ROOT/state/legacy-adoption.token and $ROOT/state/lock before retrying (nothing removed automatically)"
+  fi
+  die "legacy adoption is in progress; inspect $ROOT/state/legacy-adoption.lock before retrying"
+}
+
 need_install() {
   if [ -L "$ROOT/state/legacy-adoption.lock" ]; then
-    adoption_delegated || die "legacy adoption is in progress (or its lock needs inspection)"
+    adoption_delegated || adoption_blocked
   fi
   [ -f "$ENV_FILE" ] || die "no install found at $ROOT (secrets/hub.env is missing): run install.sh first"
   [ -L "$ROOT/current" ] || die "no current release at $ROOT/current"
@@ -547,7 +558,7 @@ download_release() {
   valid_image_ref "$_ref" || die "team-hub-image.txt does not hold an image reference"
   require_pinned "$_ref"
   for _required in install.sh hubctl compose.base.yaml compose.local.yaml compose.https.yaml compose.cloudflare.yaml \
-    compose.access.example.yaml Caddyfile.in edge.https.conf.in edge.cloudflare.conf.in tunnel.yml.in; do
+    compose.access.example.yaml Caddyfile.in edge.https.conf.in edge.cloudflare.conf.in tunnel.yml.in release/trial-settings.js release/migrate-probe.js; do
     [ -f "$2/bundle/$_required" ] || die "the install bundle has no $_required"
   done
 }
@@ -661,6 +672,14 @@ cmd__stage() {
     chmod 644 "$_stage/$_f"
   done
   chmod 755 "$_stage/hubctl"
+  mkdir -p "$_stage/release"
+  for _helper in trial-settings.js migrate-probe.js; do
+    if [ -f "$_src/release/$_helper" ]; then
+      cp "$_src/release/$_helper" "$_stage/release/$_helper"
+    elif [ -f "$ROOT/current/release/$_helper" ]; then
+      cp "$ROOT/current/release/$_helper" "$_stage/release/$_helper"
+    fi
+  done
   # A custom Access overlay is installation configuration, not a release default.
   if [ -L "$ROOT/current" ]; then
     _current=$(current_release)
@@ -793,15 +812,13 @@ rotate() { # rotate <dir> <keep>
 }
 
 # Safety backups (taken by upgrade, restore and rollback) hold the whole database, and the newest
-# one can be the only copy of the newest data. Keep the three newest, and never remove one younger
-# than 14 days however many newer ones there are; the one `rollback --restore-data` needs is never
-# removed. manual-* backups are the operator's and are never pruned.
+# one can be the only copy of the newest data. Keep the three newest plus the one
+# `rollback --restore-data` needs: at most four, even during frequent operations. manual-* backups are the operator's and are never pruned.
 prune_safety_backups() {
   _keep=$(state_get last-upgrade-backup)
   # shellcheck disable=SC2012 # modification time orders these; the names are ours
   ls -1td "$ROOT"/backups/upgrade-* "$ROOT"/backups/pre-restore-* "$ROOT"/backups/pre-rollback-* 2>/dev/null | awk 'NR > 3' | while read -r _d; do
     [ "$_d" = "$_keep" ] && continue
-    [ -n "$(find "$_d" -maxdepth 0 -mtime +14 2>/dev/null)" ] || continue
     rm -rf "$_d"
   done
 }
@@ -920,23 +937,12 @@ cmd_restore() {
 # --- trial start ---------------------------------------------------------------------------
 # Extract only non-secret runtime settings and the configured read-only Access mount.
 # The normalized Compose config reaches this parser by a private file/stdin, never a log.
-TRIAL_SETTINGS_JS='const config = JSON.parse(await Bun.stdin.text());
-const hub = config.services?.hub;
-if (!hub || typeof hub.environment !== "object") throw new Error("Missing Hub trial configuration");
-const env = hub.environment;
-for (const key of ["KERYX_HUB_WORK_ENABLED", "KERYX_HUB_WORK_REPOSITORIES", "KERYX_HUB_ACCESS_ENABLED", "KERYX_HUB_ACCESS_ISSUER", "KERYX_HUB_ACCESS_AUDIENCE", "KERYX_HUB_ACCESS_ROLES_FILE"]) {
-  if (env[key] === undefined || env[key] === null) continue;
-  const value = String(env[key]);
-  if (/[\r\n]/.test(value)) throw new Error("Multiline Hub trial settings are unsupported");
-  console.log("E|" + key + "=" + value);
+trial_settings_program() {
+  for _parser in "$1/release/trial-settings.js" "$ROOT/current/release/trial-settings.js" "$ROOT/release/trial-settings.js"; do
+    if [ -f "$_parser" ]; then cat "$_parser"; return 0; fi
+  done
+  die "trial-settings.js is missing; use a verified complete install bundle"
 }
-if (String(env.KERYX_HUB_ACCESS_ENABLED) === "true") {
-  const file = env.KERYX_HUB_ACCESS_ROLES_FILE;
-  const mounts = Array.isArray(hub.volumes) ? hub.volumes : [];
-  const mount = mounts.find(v => v.type === "bind" && typeof v.target === "string" && typeof file === "string" && (file === v.target || file.startsWith(v.target + "/")));
-  if (!mount || !/^\/[A-Za-z0-9._/-]+$/.test(mount.source) || !/^\/[A-Za-z0-9._/-]+$/.test(mount.target)) throw new Error("Unsupported Access role mount in trial configuration");
-  console.log("M|" + mount.source + "|" + mount.target);
-}'
 
 # Optional fourth argument replaces the copied SQLite/WAL with a consistent online image.
 trial_start() { # trial_start <image> <tar of data> [release dir] [online db]
@@ -952,7 +958,8 @@ trial_start() { # trial_start <image> <tar of data> [release dir] [online db]
   fi
   new_tmp; _trial_tmp=$NEW_TMP; _envf=$_trial_tmp/trial.env
   compose_for "$_trial_rel" config --format json > "$_trial_tmp/compose.json" || return 1
-  docker_locked -i --entrypoint bun "$_trial_image" -e "$TRIAL_SETTINGS_JS" < "$_trial_tmp/compose.json" > "$_trial_tmp/settings" || return 1
+  _trial_parser=$(trial_settings_program "$_trial_rel")
+  docker_locked -i --entrypoint bun "$_trial_image" -e "$_trial_parser" < "$_trial_tmp/compose.json" > "$_trial_tmp/settings" || return 1
   {
     printf 'KERYX_HUB_OPERATOR_TOKEN=%s\n' "$(openssl rand -hex 32)"
     printf 'KERYX_HUB_AGENT_TOKEN=%s\n' "$(openssl rand -hex 32)"
@@ -1013,21 +1020,20 @@ cmd_upgrade() {
       *) [ -z "$_want" ] || die "upgrade: one version at a time"; _want=$_a ;;
     esac
   done
-  [ -n "$_want" ] || die "usage: hubctl upgrade <version|latest> [--yes]"
+  [ -n "$_want" ] || die "usage: hubctl upgrade <version|latest> [--yes] [--dry-run]"
   # Upgrade must never be an unguarded downgrade path. This is read-only and
   # precedes Docker access, the installation lock and any service/data mutation.
   need_install
   _want=$(upgrade_target "$_want")
   if [ "$_dry_run" = 1 ]; then
     cmd_update_check "$_want"
-    say "dry-run: release artifacts verified; no services, installation state or data changed"
+    say "dry-run: release artifacts verified only; Compose staging, image pull and data compatibility are not checked; no services, installation state or data changed"
     return 0
   fi
-  need_install; need_docker; need curl; need openssl; lock
-  [ "$_want" != latest ] || _want=$(resolve_latest)
-  _version=$(norm_version "$_want"); _tag=v$_version
+  need_docker; need curl; need openssl; lock
+  # Another updater may have advanced current while this process waited for the lock.
+  _version=$(upgrade_target "$_want"); _tag=v$_version
   _old_rel=$(current_release); _old_tag=$(basename -- "$_old_rel"); _old_image=$(cat "$_old_rel/image.ref")
-  [ "$_tag" != "$_old_tag" ] || die "already on $_tag"
   _prev_before=$(state_get previous-release)
   _vol=$(data_volume)
   confirm "Upgrade project $(project) (volume $_vol) from $_old_tag to $_tag? The Hub is stopped for about a minute while its data is backed up."
@@ -1048,7 +1054,8 @@ cmd_upgrade() {
   _stopped=0; _switched=0
 
   # Runs from the exit trap if anything below fails (die, a failing command, a signal):
-  # puts the old release back and leaves the Hub running, whatever stage it got to.
+  # Restarts the original release before candidate startup; afterwards preserves latest
+  # data and starts the old release only if it passes a compatibility trial.
   upgrade_recover() {
     if [ "$_switched" = 1 ]; then
       warn "upgrade verification failed; preserving all current data before recovery"
@@ -1117,6 +1124,10 @@ cmd_rollback() {
   _vol=$(data_volume)
   _cur_image=$(cat "$_cur_rel/image.ref")
   _image=$(cat "$_prev_rel/image.ref")
+  # A legacy per-release Access overlay must never disappear on rollback.
+  if [ -f "$_cur_rel/compose.access.yaml" ] && [ ! -f "$_prev_rel/compose.access.yaml" ]; then
+    die "previous release lacks the current Access overlay; migrate it to install-owned compose.override.yaml or stage the target with equivalent Access settings before rollback"
+  fi
   # Everything the previous release needs is here before anything is stopped.
   pull_release_images "$_prev_rel"
   if [ "$_restore" = 1 ]; then

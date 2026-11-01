@@ -420,12 +420,10 @@ eq "automatic rollback: current is back on v0.0.1" "$(readlink "$hub/current")" 
 assert "the Hub is healthy after the automatic rollback" curl -fsS --max-time 10 "$base/healthz"
 eq "automatic recovery preserved all current data" "$(project_count)" 4
 
-# A writer3 database must reject the old-writer image BEFORE stopping the live Hub.
+# A writer3 database must reject the simulated old-writer image BEFORE stopping the live Hub.
 hubctl upgrade 0.0.2 --yes >>"$steps" 2>&1 || fail "upgrade for writer compatibility test failed"
 bearer_header "$operator"
-cat > "$E/work-command.json" <<'WORKCOMMAND'
-{"operationId":"release-e2e-work-activation","command":"flow.create","expectedVersions":{},"payload":{"title":"Release upgrade proof","problem":"Verify persistence","expectedOutcome":"Safe release update","scope":"Synthetic deployment proof","outOfScope":"Production","ownerId":null,"specification":null,"criteria":[{"criterionId":"c1","text":"Retained","waivable":false}]}}
-WORKCOMMAND
+cp "$here/work-command.json" "$E/work-command.json"
 assert "managed write succeeds through released settings" curl -fsS --max-time 10 -H "@$E/.header" -H 'Content-Type: application/json' -H 'Idempotency-Key: release-e2e-work-activation' --data-binary "@$E/work-command.json" "$base/hub/work/v1/projects/$first/commands"
 mkdir "$E/old-reader-bundle"
 tar -xzf "$E/releases/v0.0.5/team-hub-install.tar.gz" -C "$E/old-reader-bundle" --strip-components=1

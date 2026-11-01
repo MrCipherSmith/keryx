@@ -6,6 +6,7 @@ credentials, environment values, cookies, role mappings or container logs.
 """
 import argparse
 from contextlib import contextmanager, nullcontext
+from typing import NamedTuple
 import hashlib
 import json
 import os
@@ -29,8 +30,11 @@ IMAGE = re.compile(r"ghcr\.io/mrciphersmith/keryx-team-hub@sha256:[a-f0-9]{64}")
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
 REQUIRED = ("hubctl", "VERSION", "compose.base.yaml", "compose.cloudflare.yaml",
             "compose.local.yaml", "compose.https.yaml", "compose.access.example.yaml",
-            "Caddyfile.in", "edge.https.conf.in", "edge.cloudflare.conf.in", "tunnel.yml.in")
+            "Caddyfile.in", "edge.https.conf.in", "edge.cloudflare.conf.in", "tunnel.yml.in",
+            "release/trial-settings.js", "release/migrate-probe.js")
 TERMINAL = {"succeeded", "failed", "cancelled", "rejected", "lost", "completed"}
+SERIALIZE_JS = 'import{Database}from"bun:sqlite";const db=new Database("/data/hub.sqlite",{readonly:true});process.stdout.write(db.serialize());db.close();'
+HEALTH_JS = 'const r=await fetch("http://127.0.0.1:8787/healthz");process.exit(r.ok?0:1)'
 _ADOPTION_TOKEN = None
 
 
@@ -70,7 +74,9 @@ def private_write(path, value, mode=0o600, hub_owner=False):
 
 
 def restore_file(source, destination):
-    private_write(Path(destination), Path(source).read_bytes(), Path(source).stat().st_mode & 0o777)
+    source, destination = Path(source), Path(destination)
+    owner = destination.stat().st_uid if destination.exists() else source.stat().st_uid
+    private_write(destination, source.read_bytes(), source.stat().st_mode & 0o777, hub_owner=owner == 1000)
     return str(destination)
 
 
@@ -192,7 +198,7 @@ def bind_installation(root, current, hub, tunnel, edge):
 
 def configuration(hub, tunnel, edge=None):
     env = environment(hub)
-    require(env.get("KERYX_HUB_PUBLIC_ORIGIN") == ORIGIN, "This helper only adopts the known geekom Hub origin")
+    require(env.get("KERYX_HUB_PUBLIC_ORIGIN") == ORIGIN, "This helper only adopts the configured legacy Hub origin")
     require(env.get("KERYX_HUB_ACCESS_ENABLED") == "true", "Existing Cloudflare SSO must be explicitly configured")
     issuer = env.get("KERYX_HUB_ACCESS_ISSUER", "")
     require(re.fullmatch(r"https://[a-z0-9-]+\.cloudflareaccess\.com", issuer), "Unexpected Access issuer")
@@ -298,9 +304,11 @@ def info_for(database):
 
 def snapshot(container, path):
     size = int(docker("exec", container, "stat", "-c", "%s", "/data/hub.sqlite").stdout)
-    require(size <= 64 * 1024 * 1024, "Database exceeds bounded online rehearsal size; use a separately planned offline migration")
+    wal_size = int(docker("exec", container, "sh", "-c", 'if [ -e /data/hub.sqlite-wal ]; then stat -c %s /data/hub.sqlite-wal; elif [ -r /data ] && [ -x /data ]; then printf 0; else exit 1; fi').stdout)
+    require(0 <= size and 0 <= wal_size and size + wal_size <= 64 * 1024 * 1024,
+            "Database plus WAL exceeds bounded online rehearsal size; use a separately planned offline migration")
     with path.open("wb") as output:
-        docker("exec", container, "bun", "-e", 'import { Database } from "bun:sqlite";const db=new Database("/data/hub.sqlite",{readonly:true});process.stdout.write(db.serialize());db.close();', output=output)
+        docker("exec", container, "bun", "-e", SERIALIZE_JS, output=output)
     return info_for(path)
 
 
@@ -313,10 +321,18 @@ def volume_archive(volume, image, path):
     private_write(path.with_suffix(path.suffix + ".sha256"), sha(path) + "  " + path.name + "\n")
 
 
-def prepare(root, stage, bundle, version, image, config, enable_work):
+class ReleaseInputs(NamedTuple):
+    bundle: Path
+    version: str
+    image: str
+
+
+def prepare(stage, release, config, *, enable_work):
+    bundle, version, image = release
     (stage / "releases").mkdir(parents=True)
-    for name in ("hubctl",):
-        private_write(stage / name, (bundle / name).read_bytes(), 0o755)
+    private_write(stage / "hubctl", (bundle / "hubctl").read_bytes(), 0o755)
+    for name in ("trial-settings.js", "migrate-probe.js"):
+        private_write(stage / "release" / name, (bundle / "release" / name).read_bytes(), 0o644)
     values = {key: value for key, value in config["env"].items() if key.startswith("KERYX_HUB_")}
     values.update(KERYX_HUB_MODE="cloudflare", KERYX_HUB_PROJECT=PROJECT, HUB_DOMAIN=urlsplit(ORIGIN).hostname,
                   HUB_PORT=config["port"], CF_TUNNEL_ID=config["tunnelId"], CF_ACCESS_TEAM=config["team"],
@@ -365,7 +381,7 @@ def trial(workspace, image, archive, database, stage, config, expected):
                "--mount", f'type=bind,source={mount["Source"]},target={mount["Destination"]},readonly', image)
         healthy = False
         for _ in range(60):
-            result = docker("exec", name, "bun", "-e", 'const r=await fetch("http://127.0.0.1:8787/healthz");process.exit(r.ok?0:1)', allow_failure=True, timeout=10)
+            result = docker("exec", name, "bun", "-e", HEALTH_JS, allow_failure=True, timeout=10)
             if result.returncode == 0:
                 healthy = True
                 break
@@ -381,18 +397,8 @@ def trial(workspace, image, archive, database, stage, config, expected):
         require(isinstance(projects, list) and projects and isinstance(projects[0].get("id"), str), "No existing project is available for authenticated rehearsal")
         project = projects[0]["id"]
         require(len(project) <= 200, "Unsupported existing project identifier")
-        probe = r'''const headers={Authorization:"Bearer "+process.env.KERYX_HUB_OPERATOR_TOKEN};
-const base="http://127.0.0.1:8787";
-const old=await fetch(base+"/hub/v1/projects",{headers});if(!old.ok)process.exit(1);
-if(process.env.KERYX_HUB_WORK_ENABLED==="true"){
- const p=encodeURIComponent(PROJECT_ID);
- const caps=await fetch(base+"/hub/work/v1/projects/"+p+"/capabilities",{headers});
- if(!caps.ok || !(await caps.json()).enabled)process.exit(2);
- const body={operationId:"legacy-adoption-rehearsal",command:"flow.create",expectedVersions:{},payload:{title:"Legacy adoption rehearsal",problem:"Verify metadata retention",expectedOutcome:"Safe release adoption",scope:"Disposable copy only",outOfScope:"Production",ownerId:null,specification:null,criteria:[{criterionId:"c1",text:"Retained",waivable:false}]}};
- const write=await fetch(base+"/hub/work/v1/projects/"+p+"/commands",{method:"POST",headers:{...headers,"Content-Type":"application/json","Idempotency-Key":body.operationId},body:JSON.stringify(body)});
- if(!write.ok)process.exit(3);
-}'''
-        docker("exec", name, "bun", "-e", "const PROJECT_ID=" + json.dumps(project) + ";" + probe)
+        probe = (Path(__file__).parent / "release/migrate-probe.js").read_bytes()
+        docker("exec", "-i", name, "bun", "-", project, input=probe)
         after = snapshot(name, workspace / "trial.sqlite")
         require(after["stateDigest"] == expected["stateDigest"], "Legacy project/document/Flow state changed during rehearsal")
         require(after["remoteHistoryDigest"] == expected["remoteHistoryDigest"], "Remote machine/session/run history changed during rehearsal")
@@ -441,6 +447,44 @@ def interrupted(_signum, _frame):
     raise MigrationError("Adoption interrupted")
 
 
+def backup_configuration(root, fingerprint, config):
+    backup = root / "backups" / ("legacy-adoption-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()))
+    backup.mkdir(mode=0o700, parents=True, exist_ok=False)
+    shutil.copy2(root / "hubctl", backup / "hubctl")
+    shutil.copytree(root / "secrets", backup / "secrets", symlinks=True)
+    if (root / "compose.override.yaml").exists():
+        shutil.copy2(root / "compose.override.yaml", backup / "compose.override.yaml")
+    private_write(backup / "original.json", json.dumps(fingerprint))
+    private_write(backup / "access-roles.json", config["roles"].read_bytes())
+    private_write(backup / "tunnel.json", config["tunnelFile"].read_bytes())
+    if config["agents"]:
+        private_write(backup / "agent-credentials.json", config["agents"].read_bytes())
+    return backup
+
+
+def install_candidate(root, stage, version):
+    shutil.copytree(stage / "releases" / f"v{version}", root / "releases" / f"v{version}")
+    # Install-owned configuration, credentials and roles are preserved privately.
+    for name in ("hubctl", "compose.override.yaml"):
+        shutil.copy2(stage / name, root / name)
+    for name in ("hub.env", "agents/agents.json", "tunnel.json"):
+        source = stage / "secrets" / name
+        private_write(root / "secrets" / name, source.read_bytes(), source.stat().st_mode & 0o777, name != "hub.env")
+    (root / "current.new").symlink_to(f"releases/v{version}")
+    os.replace(root / "current.new", root / "current")
+
+
+def healthy_candidate():
+    new_hub = inspect_service("hub")
+    for _ in range(90):
+        if docker("exec", new_hub["Id"], "bun", "-e", HEALTH_JS, allow_failure=True).returncode == 0:
+            break
+        time.sleep(1)
+    else:
+        raise MigrationError("New Hub health verification failed; retain latest data for a forward repair")
+    return new_hub
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.home() / "keryx-team-hub")
@@ -479,8 +523,8 @@ def main():
             before = snapshot(hub["Id"], workspace / "before.sqlite")
             volume_archive(config["volume"], hub["Image"], workspace / "data.tar")
             stage = workspace / "stage"
-            prepare(root, stage, bundle, args.version, image, config, args.enable_work)
-            trial(workspace, image, workspace / "data.tar", workspace / "before.sqlite", stage, config, before)
+            prepare(stage, ReleaseInputs(bundle, args.version, image), config, enable_work=args.enable_work)
+            trial(workspace, image, workspace / "data.tar", workspace / "before.sqlite", stage, config, expected=before)
             require(snapshot(hub["Id"], workspace / "unchanged.sqlite")["stateDigest"] == before["stateDigest"], "Production changed during rehearsal; rerun while quiet")
             require(inspect_service("hub")["Id"] == hub["Id"] and inspect_service("edge")["Id"] == edge["Id"] and
                     inspect_service("tunnel")["Id"] == tunnel["Id"] and (root / "current").resolve() == current and
@@ -494,17 +538,7 @@ def main():
             # Rebind the global Compose project immediately before the first mutation.
             bind_installation(root, current, inspect_service("hub"), inspect_service("tunnel"), inspect_service("edge"))
             # The old tool is preserved and used only for its exact known Compose project.
-            backup = root / "backups" / ("legacy-adoption-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()))
-            backup.mkdir(mode=0o700, parents=True, exist_ok=False)
-            shutil.copy2(root / "hubctl", backup / "hubctl")
-            shutil.copytree(root / "secrets", backup / "secrets", symlinks=True)
-            if (root / "compose.override.yaml").exists():
-                shutil.copy2(root / "compose.override.yaml", backup / "compose.override.yaml")
-            private_write(backup / "original.json", json.dumps(fingerprint))
-            private_write(backup / "access-roles.json", config["roles"].read_bytes())
-            private_write(backup / "tunnel.json", config["tunnelFile"].read_bytes())
-            if config["agents"]:
-                private_write(backup / "agent-credentials.json", config["agents"].read_bytes())
+            backup = backup_configuration(root, fingerprint, config)
             candidate_started = False
             try:
                 run([str(root / "hubctl"), "stop", "edge", "tunnel"])
@@ -514,32 +548,25 @@ def main():
                 volume_archive(config["volume"], hub["Image"], backup / "hub-data.tar")
                 with (backup / "hub.sqlite").open("wb") as final:
                     docker("run", "--rm", "--network", "none", "--user", "1000:1000", "-v", f'{config["volume"]}:/data:ro', "--entrypoint", "bun", hub["Image"],
-                           "-e", 'import{Database}from"bun:sqlite";const db=new Database("/data/hub.sqlite",{readonly:true});process.stdout.write(db.serialize());db.close();',
+                           "-e", SERIALIZE_JS,
                            output=final)
                 final_info = info_for(backup / "hub.sqlite")
                 require(final_info["unresolvedWork"] == 0, "Work raced with shutdown; original Hub will be resumed")
-                trial(workspace, image, backup / "hub-data.tar", backup / "hub.sqlite", stage, config, final_info)
-                shutil.copytree(stage / "releases" / f"v{args.version}", root / "releases" / f"v{args.version}")
-                # Install-owned configuration, credentials and roles are preserved privately.
-                for name in ("hubctl", "compose.override.yaml"):
-                    shutil.copy2(stage / name, root / name)
-                for name in ("hub.env", "agents/agents.json", "tunnel.json"):
-                    source = stage / "secrets" / name
-                    private_write(root / "secrets" / name, source.read_bytes(), source.stat().st_mode & 0o777, name != "hub.env")
-                (root / "current.new").symlink_to(f"releases/v{args.version}")
-                os.replace(root / "current.new", root / "current")
+                trial(workspace, image, backup / "hub-data.tar", backup / "hub.sqlite", stage, config, expected=final_info)
+                install_candidate(root, stage, args.version)
                 candidate_started = True  # From this boundary no automatic database rewind is allowed.
                 run([str(root / "hubctl"), "up", "hub"])
                 # Only the Hub first; external ingress remains stopped until it passes health.
-                new_hub = inspect_service("hub")
-                for _ in range(90):
-                    if docker("exec", new_hub["Id"], "bun", "-e", 'const r=await fetch("http://127.0.0.1:8787/healthz");process.exit(r.ok?0:1)', allow_failure=True).returncode == 0:
-                        break
-                    time.sleep(1)
-                else:
-                    raise MigrationError("New Hub health verification failed; retain latest data for a forward repair")
+                new_hub = healthy_candidate()
                 live_info = snapshot(new_hub["Id"], workspace / "live.sqlite")
-                require(live_info["stateDigest"] == final_info["stateDigest"] and live_info["remoteHistoryDigest"] == final_info["remoteHistoryDigest"], "Final legacy/remote metadata verification failed")
+                if live_info["stateDigest"] != final_info["stateDigest"] or live_info["remoteHistoryDigest"] != final_info["remoteHistoryDigest"]:
+                    # Same-host clients can write while public ingress is stopped. Preserve that
+                    # healthy writer and its latest data instead of treating valid new work as loss.
+                    report.update(result="LIVE_METADATA_CHANGED_REVIEW_REQUIRED", backup=str(backup), finalState=final_info)
+                    private_write(backup / "receipt.json", json.dumps(report))
+                    print("Live metadata changed after startup. Hub remains running with latest data; external ingress remains stopped. Inspect the private receipt before resuming ingress.", file=sys.stderr)
+                    print(json.dumps(report))
+                    return
                 run([str(root / "hubctl"), "up", "edge", "tunnel"])
                 run([str(root / "hubctl"), "_wait", "180"], timeout=200)
                 report.update(result="ADOPTED", backup=str(backup), finalState=final_info)

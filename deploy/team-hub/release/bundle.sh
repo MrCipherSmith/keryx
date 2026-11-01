@@ -34,6 +34,11 @@ mkdir "$tree"
 cp "$deploy/install.sh" "$tree/install.sh"
 cp "$deploy/hubctl" "$tree/hubctl"
 cp "$deploy/migrate-legacy.py" "$tree/migrate-legacy.py"
+mkdir "$tree/release"
+for helper in trial-settings.js migrate-probe.js; do
+  cp "$here/$helper" "$tree/release/$helper"
+  chmod 644 "$tree/release/$helper"
+done
 chmod 755 "$tree/migrate-legacy.py"
 chmod 755 "$tree/install.sh" "$tree/hubctl"
 for f in compose.base.yaml compose.local.yaml compose.https.yaml compose.cloudflare.yaml compose.access.example.yaml \

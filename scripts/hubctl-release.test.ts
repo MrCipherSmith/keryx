@@ -56,7 +56,10 @@ test('check and dry-run refuse incomplete, tampered or mutable release data befo
   expect(result.exitCode).not.toBe(0);
   expect(result.stderr.toString()).toContain('checksum mismatch');
   expect(f.snapshot()).toEqual(before);
-  expect(f.run('update-check', '0.0.3').exitCode).not.toBe(0);
+  const missing = f.run('update-check', '0.0.3');
+  expect(missing.exitCode).not.toBe(0);
+  expect(missing.stderr.toString()).toContain('could not download');
+  expect(missing.stderr.toString()).toContain('v0.0.3/SHA256SUMS');
   expect(f.snapshot()).toEqual(before);
 });
 
@@ -81,13 +84,10 @@ test('an explicit downgrade through upgrade is refused before Docker or any inst
 });
 
 test('configured trial settings preserve Work and SSO but exclude authentication credentials', () => {
-  const source = readFileSync('deploy/team-hub/hubctl', 'utf8');
-  const parser = source.split("TRIAL_SETTINGS_JS='")[1]?.split("'\n\n")[0];
-  expect(parser).toBeDefined();
-  if (!parser) throw new Error("Missing production trial parser");
-  const result = Bun.spawnSync(['bun', '--no-env-file', '-e', parser], { stdin: Buffer.from(JSON.stringify({ services: { hub: {
+  const result = Bun.spawnSync(['bun', '--no-env-file', 'deploy/team-hub/release/trial-settings.js'], { stdin: Buffer.from(JSON.stringify({ services: { hub: {
     environment: {
       KERYX_HUB_WORK_ENABLED: 'true', KERYX_HUB_WORK_REPOSITORIES: '[]',
+      KERYX_HUB_FUTURE_RUNTIME_SETTING: 'new-setting',
       KERYX_HUB_ACCESS_ENABLED: 'true', KERYX_HUB_ACCESS_ROLES_FILE: '/run/access/roles.json',
       KERYX_HUB_ACCESS_ISSUER: 'https://fixture.cloudflareaccess.com', KERYX_HUB_ACCESS_AUDIENCE: 'fixture',
       KERYX_HUB_OPERATOR_TOKEN: 'never-retain-this-authentication-secret',
@@ -96,6 +96,7 @@ test('configured trial settings preserve Work and SSO but exclude authentication
   expect(result.exitCode).toBe(0);
   const output = result.stdout.toString();
   expect(output).toContain('E|KERYX_HUB_WORK_ENABLED=true');
+  expect(output).toContain('E|KERYX_HUB_FUTURE_RUNTIME_SETTING=new-setting');
   expect(output).toContain('E|KERYX_HUB_ACCESS_ROLES_FILE=/run/access/roles.json');
   expect(output).toContain('M|/install/secrets/access|/run/access');
   expect(output).not.toContain('never-retain');
@@ -103,12 +104,40 @@ test('configured trial settings preserve Work and SSO but exclude authentication
 });
 
 test('trial parser rejects a missing Access role mount rather than disabling SSO silently', () => {
-  const parser = readFileSync('deploy/team-hub/hubctl', 'utf8').split("TRIAL_SETTINGS_JS='")[1]?.split("'\n\n")[0];
-  expect(parser).toBeDefined();
-  if (!parser) throw new Error("Missing production trial parser");
-  const result = Bun.spawnSync(['bun', '--no-env-file', '-e', parser], { stdin: Buffer.from(JSON.stringify({ services: { hub: {
+  const result = Bun.spawnSync(['bun', '--no-env-file', 'deploy/team-hub/release/trial-settings.js'], { stdin: Buffer.from(JSON.stringify({ services: { hub: {
     environment: { KERYX_HUB_ACCESS_ENABLED: 'true', KERYX_HUB_ACCESS_ROLES_FILE: '/run/access/roles.json' }, volumes: [],
   } } })) });
   expect(result.exitCode).not.toBe(0);
   expect(result.stderr.toString()).toContain('Unsupported Access role mount');
+});
+
+for (const [installed, target, newer] of [
+  ['0.4.4-rc.2', '0.4.4-rc.10', true],
+  ['0.4.4-rc.1', '0.4.4-rc.2', true],
+  ['0.4.4-alpha', '0.4.4-rc.1', true],
+  ['0.4.4-rc.1', '0.4.4-rc.1.1', true],
+  ['0.4.4-rc.10', '0.4.4-rc.2', false],
+  ['0.4.4-rc.1', '0.4.4', true],
+  ['0.4.4', '0.4.4-rc.1', false],
+  ['0.4.4-alpha.1', '0.4.4-beta.1', true],
+  ['0.4.4-alpha', '0.4.4-alpha.1', true],
+  ['0.4.4', '0.4.4', false],
+] as const) {
+  test(`semantic version ordering: ${target} newer than ${installed} is ${newer}`, () => {
+    const directory = mkdtempSync(join(tmpdir(), 'hub-semver-')); fixtures.push(directory);
+    const library = readFileSync('deploy/team-hub/hubctl', 'utf8').replace(/^main "\$@"\s*$/m, '');
+    writeFileSync(join(directory, 'library.sh'), library);
+    writeFileSync(join(directory, 'probe.sh'), '. "$(dirname "$0")/library.sh"\nversion_newer "$1" "$2"\n');
+    const result = Bun.spawnSync(['sh', join(directory, 'probe.sh'), target, installed]);
+    expect(result.exitCode).toBe(newer ? 0 : 1);
+  });
+}
+
+test('release bundle ships the directly tested runtime probe programs', () => {
+  const f = fixture();
+  const contents = Bun.spawnSync(['tar', '-tzf', join(f.target, 'team-hub-install.tar.gz')]);
+  expect(contents.exitCode).toBe(0);
+  for (const name of ['trial-settings.js', 'migrate-probe.js']) {
+    expect(contents.stdout.toString()).toContain('team-hub-install/release/' + name);
+  }
 });

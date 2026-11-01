@@ -47,7 +47,7 @@ python3 verified-install/migrate-legacy.py \
 
 Apply repeats the rehearsal, takes an exclusive adoption lock, preserves original configuration/credentials/tooling, pauses edge/tunnel ingress, rechecks active work, stops the Hub and takes a final full-volume backup. It checks the stopped snapshot again and repeats the trial before switching. The new release keeps the original volume, credentials, recovery port and role mapping. It starts the Hub first, verifies retained state, then resumes ingress and checks the complete stack.
 
-The private backup is under `~/keryx-team-hub/backups/legacy-adoption-<UTC timestamp>/`: original configuration, SQLite image, full volume tar and checksum, role/agent/tunnel configuration, original pointer and final receipt. Retain it. Before candidate startup a failure restores original configuration and resumes the legacy service on untouched data. After candidate startup a failure stops the candidate and preserves the latest data for a forward repair; it never automatically rewinds the database.
+The private backup is under `~/keryx-team-hub/backups/legacy-adoption-<UTC timestamp>/`: original configuration, SQLite image, full volume tar and checksum, role/agent/tunnel configuration, original pointer and final receipt. Retain it. Before candidate startup recovery attempts each original configuration component independently and always attempts to resume the legacy service on untouched data. Any failed recovery steps are named without printing private exception values; inspect the retained backup if recovery is incomplete. After candidate startup a failure stops the candidate and preserves the latest data for a forward repair; it never automatically rewinds the database.
 
 Open [the Hub](https://hub.mrciphersmith.com/), sign in through existing Cloudflare Access and inspect Keryx documents, existing Flows, machines and Work. New Work records do not convert old Flows automatically. Product acceptance remains a separate human action.
 
@@ -62,3 +62,5 @@ keryx hub update <next-version>
 ```
 
 The lower-level `~/keryx-team-hub/hubctl` remains available. The helper refuses a second adoption; upgrades now follow the release mechanism. After managed writes activate writer3, original writer2 binaries cannot read the current database: use a compatible release or forward fix. An explicit restore of older data is a separate decision and can discard newer work.
+
+If a same-host client writes after candidate startup, the helper returns `LIVE_METADATA_CHANGED_REVIEW_REQUIRED`: the healthy Hub keeps running with the latest data, while edge/tunnel ingress stays stopped. Compare the private receipt and retained snapshot before explicitly resuming ingress with `~/keryx-team-hub/hubctl up edge tunnel`. This is a manual verification state, not a failed health check or an automatic database rewind.
