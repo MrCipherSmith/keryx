@@ -58,7 +58,12 @@ function data(result: Awaited<ReturnType<InstanceType<typeof Client>["callTool"]
 
 test("official SDK initializes, discovers a fixed annotated catalogue, and reads real Hub data", async () => {
   const { project, spec } = await fixture(); const c = await client();
-  const list = await c.listTools(); expect(list.tools.filter(tool => !tool.name.startsWith("hub_work_"))).toHaveLength(15);
+  const list = await c.listTools();
+  expect(list.tools.filter(tool => !tool.name.startsWith('hub_work_')).map(tool => tool.name).sort()).toEqual([
+    'hub_list_projects', 'hub_get_project', 'hub_list_flows', 'hub_get_flow', 'hub_list_documents',
+    'hub_get_document', 'hub_list_revisions', 'hub_get_revision', 'hub_get_evidence', 'hub_get_events',
+    'hub_get_context', 'hub_start_flow', 'hub_create_revision', 'hub_add_evidence', 'hub_submit_for_review',
+  ].sort());
   expect(list.tools.find(t => t.name === "hub_get_document")?.annotations?.readOnlyHint).toBe(true);
   expect(list.tools.find(t => t.name === "hub_create_revision")?.annotations?.readOnlyHint).toBe(false);
   expect(list.tools.map(t => t.name)).not.toContain("hub_accept_flow");
@@ -132,7 +137,12 @@ test("tool invocation retains cross-project domain scope and sanitizes unexpecte
   const denied = await c.callTool({ name: "hub_get_document", arguments: { projectId: project.id, documentId: other.spec.id } }); expect(denied.isError).toBe(true); expect(JSON.stringify(denied)).toContain("not-found");
   const request = new Request("http://hub.test/mcp", { method: "POST", headers: { Authorization: `Bearer ${agent}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "hub_list_projects", arguments: {} } }) });
   const r = await handleHubMcp(request, { actor: { id: "agent:test", kind: "agent", role: "agent" }, apiFetch: async () => { throw Error("SECRET_INTERNAL_PATH " + agent); } });
-  expect(await r.text()).not.toContain("SECRET_INTERNAL_PATH");
+  expect(r.status).toBe(200);
+  const failure = await r.json();
+  expect(failure).toMatchObject({ jsonrpc: '2.0', id: 1, result: { isError: true } });
+  expect(JSON.parse(failure.result.content[0].text)).toEqual({ error: { code: 'operation-failed', message: 'Hub operation failed.' } });
+  expect(JSON.stringify(failure)).not.toContain('SECRET_INTERNAL_PATH');
+  expect(JSON.stringify(failure)).not.toContain(agent);
 });
 
 test("HTTP adapter bounds malformed bodies and gives explicit stateless notification/method outcomes", async () => {
