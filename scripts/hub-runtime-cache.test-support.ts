@@ -1,3 +1,4 @@
+import { createServer } from 'node:net';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import { dirname, basename, join, relative, isAbsolute } from 'node:path';
 
@@ -22,4 +23,19 @@ export async function assertPreparedRuntimeCache(cache: string, lockfile: string
   }
   if(!found)throw new Error('Pinned runtime dependency is not cached: '+name+'@'+version);
  }
+}
+
+/** Deny every attempted proxy connection, including HTTPS CONNECT before any HTTP parsing. */
+export async function createOfflineInstallGuard() {
+ let connections=0;
+ const server=createServer(socket=>{connections++;socket.destroy();});
+ await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',()=>{server.off('error',reject);resolve();});});
+ const address=server.address();
+ if(!address||typeof address==='string')throw new Error('Offline proxy did not acquire a loopback port');
+ const url='http://127.0.0.1:'+address.port;
+ return {
+  environment:{HTTP_PROXY:url,http_proxy:url,HTTPS_PROXY:url,https_proxy:url,ALL_PROXY:url,all_proxy:url,NO_PROXY:'',no_proxy:''},
+  connections:()=>connections,
+  close:()=>new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve())),
+ };
 }

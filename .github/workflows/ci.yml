@@ -697,12 +697,18 @@ jobs:
         with:
           bun-version: latest
 
-      # This job already requires the registry for the image. Keep network preparation
-      # here; ordinary bun test remains offline and independent of host Bun caches.
-      - name: Prepare isolated pinned runtime cache and run offline extracted-runtime proof
+      # Network preparation is explicit and isolated from the following offline proof.
+      - name: Prepare private pinned runtime cache and matching Bun image
         run: |
           bun scripts/prepare-team-hub-runtime-cache.ts --allow-network --cache "$RUNNER_TEMP/hub-runtime-cache"
-          KERYX_HUB_RUNTIME_CACHE="$RUNNER_TEMP/hub-runtime-cache" bun test scripts/package-team-hub.test.ts --test-name-pattern 'extracted allowlisted source'
+          docker pull "oven/bun:$(bun --version)"
+
+      - name: Prove extracted runtime offline with no container network
+        run: |
+          docker run --rm --pull=never --network none --user "$(id -u):$(id -g)" \
+            -v "$PWD:/workspace:ro" -v "$RUNNER_TEMP/hub-runtime-cache:/runtime-cache:ro" \
+            -w /workspace -e KERYX_HUB_RUNTIME_CACHE=/runtime-cache \
+            "oven/bun:$(bun --version)" bun test scripts/package-team-hub.test.ts --test-name-pattern 'extracted allowlisted source'
 
       - name: Shell scripts parse and lint
         run: |
