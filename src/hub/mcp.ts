@@ -1,4 +1,5 @@
 import type { Principal } from "./contracts";
+import { HubFailure } from "./domain";
 import { listHubMcpTools, resolveHubMcpOperation } from "./mcp-tools";
 import { listWorkMcpTools, resolveWorkMcpOperation, validWorkMcpResponse } from "./work/client";
 
@@ -21,7 +22,11 @@ async function body(request: Request): Promise<{ value: unknown } | { error: Res
             parts.push(part.value);
         }
         return { value: JSON.parse(Buffer.concat(parts).toString("utf8")) as unknown };
-    } catch { return { error: response(400, "invalid-json") }; }
+    } catch (error) {
+        // Admission refusals and read deadlines raised by the body stream keep their own status.
+        if (error instanceof HubFailure) throw error;
+        return { error: response(400, "invalid-json") };
+    }
     finally { reader.releaseLock(); }
 }
 function toolError(code: string, status?: number) {

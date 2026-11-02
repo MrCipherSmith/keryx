@@ -364,7 +364,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   }
   const application: HubApplication = {
     async fetch(request: Request) {
-      try { return await mutationQueue.request(request, () => handle(request)); } catch (error) {
+      try { return await mutationQueue.request(request, admitted => handle(admitted)); } catch (error) {
         if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status, error.status === 503 ? {"Retry-After":"1"} : undefined);
         console.error("Hub request failed", error instanceof Error ? error.name : "UnknownError");
         return json({ error: { code: "internal-error", message: "Hub request failed" } }, 500);

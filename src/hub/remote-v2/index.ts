@@ -25,7 +25,7 @@ import { resultUpload } from "./results";
 import { runCommand, sessionCommand } from "./commands";
 export type RemoteSocketData = { kind: "machine"; machineId: string; credentialDigest: string; projectScopeDigest: string; epoch: number; daemonId: string | null; lastHeartbeat: number } | { kind: "browser"; authority: HumanAuthority; request: Request; projectId: string; lastHeartbeat: number };
 export type RemoteTransportObservation={peer:"machine"|"browser";frameBytes:number;bufferedBytes:number;result:number;closeReason:string|null};
-export type RemotePorts = { managedExecution?:ManagedExecutionPort; workManagementEnabled?:boolean; observeTransport?:(observation:RemoteTransportObservation)=>void; store: HubStore; human(request: Request): Promise<HumanAuthority>; authorityValid(auth: HumanAuthority, projectId?: string, readOnly?: boolean): boolean; checkOrigin(request: Request): void; transportAllowed(request: Request): boolean; serialized<T>(action: () => Promise<T>): Promise<T> };
+export type RemotePorts = { managedExecution?:ManagedExecutionPort; workManagementEnabled?:boolean; observeTransport?:(observation:RemoteTransportObservation)=>void; store: HubStore; human(request: Request): Promise<HumanAuthority>; authorityValid(auth: HumanAuthority, projectId?: string, readOnly?: boolean): boolean; checkOrigin(request: Request): void; transportAllowed(request: Request): boolean; serialized<T>(action: () => Promise<T>, options?: { internal?: boolean }): Promise<T> };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 const mutationKey = (request: Request) => { const key = request.headers.get("idempotency-key"); if (!key || key.length > 200 || [...key].some((char) => char.charCodeAt(0) < 32)) fail(400, "idempotency-key-required", "Bounded operation key required"); return key; };
 async function body(request: Request): Promise<unknown> {
@@ -367,7 +367,7 @@ export function createRemoteControl(ports: RemotePorts) {
             delete current.connectedEpoch;current.notificationVersion=(current.notificationVersion??0)+1;repo.put("remote_machine",current.machineId,current);return current;
           });
           if(updated)invalidateMachine(updated);
-        }).catch((error:unknown)=>console.error("Hub disconnect persistence failed",error instanceof Error?error.name:"UnknownError"));
+        },{internal:true}).catch((error:unknown)=>console.error("Hub disconnect persistence failed",error instanceof Error?error.name:"UnknownError"));
       }else browsers.delete(socket);
     },
     message(socket, raw) {
@@ -418,7 +418,7 @@ export function createRemoteControl(ports: RemotePorts) {
         if (frame.type === "command-receipt") { const command = store.remote.get<StoredCommand>("remote_command", frame.payload.commandId); const run = store.remote.get<RunRow>("remote_run", frame.payload.runId); if (command?.envelope.kind === "answer-approval" && run) invalidate(run.projectId, "approval", run.runId, run.notificationVersion ?? run.lastLocalSeq); }
         if (frame.type === "session-event") { const row = store.remote.get<SessionRow>("remote_session", frame.payload.sessionId); if (row) invalidate(frame.payload.projectId, frame.payload.kind === "config-receipt" ? "config" : frame.payload.kind === "controller-changed" ? "controller" : frame.payload.kind === "message" ? "history" : frame.payload.kind === "queue-changed" ? "queue" : "session", row.record.sessionId, row.notificationVersion??0); }
         if (frame.type === "run-event") { const run = store.remote.get<RunRow>("remote_run", frame.payload.runId); if (run) invalidate(run.projectId, frame.payload.kind === "approval-request" || frame.payload.kind === "approval-outcome" ? "approval" : "run", run.runId, run.notificationVersion ?? frame.payload.localSeq); }
-      }).catch((error: unknown) => {
+      }, { internal: true }).catch((error: unknown) => {
         const code = error instanceof HubFailure ? error.code : "internal-error";
         const response = { v: 2, type: "error", messageId: id(), epoch: socket.data.kind === "machine" ? socket.data.epoch : 0, payload: { code, relatedMessageId: frame.messageId } };
         // HTTP domain errors are broader than the frozen native error union.
@@ -433,7 +433,7 @@ export function createRemoteControl(ports: RemotePorts) {
   const timer = setInterval(() => {
     for (const socket of machines.values()) { const data = socket.data; if (data.kind !== "machine") continue; const m = store.remote.get<MachineRecord>("remote_machine", data.machineId); if (!m || !socketAuthorityCurrent(m, data) || Date.now() - data.lastHeartbeat > LIMITS.heartbeatTimeoutMs) socket.close(1008, "Authorization or heartbeat changed"); }
     for (const socket of browsers) { const data = socket.data; if (data.kind !== "browser") continue; void ports.human(data.request).then((auth) => { if (!ports.authorityValid(auth, data.projectId, true)) socket.close(1008, "Authorization changed"); }).catch(() => socket.close(1008, "Authorization changed")); }
-    if (!maintenancePending && !transportsClosed) { maintenancePending = true; void ports.serialized(async () => { store.writeTransaction((state, repo) => { retireRunLogs(repo); for(const sessionId of repo.retryableSessions(Date.now()))drainSessionQueue(state,repo,deps,sessionId); }); dispatch(); }).catch((error: unknown) => console.error("Hub maintenance failed", error instanceof Error ? error.name : "UnknownError")).finally(() => { maintenancePending = false; }); }
+    if (!maintenancePending && !transportsClosed) { maintenancePending = true; void ports.serialized(async () => { store.writeTransaction((state, repo) => { retireRunLogs(repo); for(const sessionId of repo.retryableSessions(Date.now()))drainSessionQueue(state,repo,deps,sessionId); }); dispatch(); }, { internal: true }).catch((error: unknown) => console.error("Hub maintenance failed", error instanceof Error ? error.name : "UnknownError")).finally(() => { maintenancePending = false; }); }
   }, LIMITS.heartbeatMs); timer.unref();
   function machineRead(request: Request, path: string[], url: URL): Response | undefined {
     const m = resolveMachine(request); if (!m) return undefined;
