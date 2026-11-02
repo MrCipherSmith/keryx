@@ -1,0 +1,3499 @@
+[
+  {
+    "id": "review-architecture-w1:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "live overview events refresh attention without discarded per-record requests"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/cache.ts",
+    "line": 30
+  },
+  {
+    "id": "review-architecture-w1:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 133
+  },
+  {
+    "id": "review-architecture-w1:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 55
+  },
+  {
+    "id": "review-architecture-w10:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Indexed resolving Decision included in scoped command state; existing guard rejects both repeated approve and withdraw",
+    "tests": [
+      "durable amendment resolution %s cannot be followed by %s under a fresh operation/version (4 matrix cases)"
+    ],
+    "red": "/tmp/pr1113-r02-group2-red.log",
+    "green": "/tmp/pr1113-r02-group2-green.log",
+    "commits": [
+      "8d2a0eef981af05d64bc657a0097e67a2a0ee2e1"
+    ],
+    "file": "src/hub/work/handlers-requirements.ts",
+    "line": 181
+  },
+  {
+    "id": "review-architecture-w10:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 294
+  },
+  {
+    "id": "review-architecture-w10:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/execution.ts",
+    "line": 82
+  },
+  {
+    "id": "review-architecture-w10:F-004",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/execution.ts",
+    "line": 216
+  },
+  {
+    "id": "review-architecture-w11:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 230
+  },
+  {
+    "id": "review-architecture-w11:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 205
+  },
+  {
+    "id": "review-architecture-w11:F-003",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/observation.ts",
+    "line": 22
+  },
+  {
+    "id": "review-architecture-w13:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/remote-v2/continuing-authority.network.test.ts",
+    "line": 38
+  },
+  {
+    "id": "review-architecture-w13:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/delivery-queue.test.ts",
+    "line": 65
+  },
+  {
+    "id": "review-architecture-w13:F-003",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/remote-v2/results.network.test.ts",
+    "line": 45
+  },
+  {
+    "id": "review-architecture-w2:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Indexed resolving Decision included in scoped command state; existing guard rejects both repeated approve and withdraw",
+    "tests": [
+      "durable amendment resolution %s cannot be followed by %s under a fresh operation/version (4 matrix cases)"
+    ],
+    "red": "/tmp/pr1113-r02-group2-red.log",
+    "green": "/tmp/pr1113-r02-group2-green.log",
+    "commits": [
+      "8d2a0eef981af05d64bc657a0097e67a2a0ee2e1"
+    ],
+    "file": "src/hub/work/handlers-requirements.ts",
+    "line": 181
+  },
+  {
+    "id": "review-architecture-w2:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/execution.ts",
+    "line": 71
+  },
+  {
+    "id": "review-architecture-w2:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 294
+  },
+  {
+    "id": "review-architecture-w3:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/validation.ts",
+    "line": 3
+  },
+  {
+    "id": "review-architecture-w6:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 133
+  },
+  {
+    "id": "review-architecture-w6:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 160
+  },
+  {
+    "id": "review-architecture-w6:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/work-panels.tsx",
+    "line": 19
+  },
+  {
+    "id": "review-architecture-w6:F-004",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/work-panels.tsx",
+    "line": 107
+  },
+  {
+    "id": "review-architecture-w7:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 679
+  },
+  {
+    "id": "review-architecture-w7:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 28
+  },
+  {
+    "id": "review-architecture-w7:F-003",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 412
+  },
+  {
+    "id": "review-architecture-w7:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 352
+  },
+  {
+    "id": "review-architecture-w8:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "3173ac8e8614374b8b5201b6301c122f94aadb62"
+    ],
+    "tests": [
+      "safety backups retain every young copy plus the newest three and the explicit restore pointer",
+      "frequent young safety backups are never pruned by count"
+    ],
+    "red": "/tmp/pr1113-r02-ops-cli-retention-red.log",
+    "green": "/tmp/pr1113-r02-ops-cli-retention-green.log",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-architecture-w8:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/requirements/hub-work-management/openapi.json",
+    "line": 8076
+  },
+  {
+    "id": "review-architecture-w9:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/server.ts",
+    "line": 134
+  },
+  {
+    "id": "review-architecture-w9:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/legacy-artifacts.ts",
+    "line": 5
+  },
+  {
+    "id": "review-architecture-w9:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/server.ts",
+    "line": 116
+  },
+  {
+    "id": "review-architecture-w9:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/legacy-artifacts.ts",
+    "line": 24
+  },
+  {
+    "id": "review-backend-w1:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 1004
+  },
+  {
+    "id": "review-backend-w1:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 152
+  },
+  {
+    "id": "review-backend-w1:F-003",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "scripts/package-team-hub.test.ts",
+    "line": 129
+  },
+  {
+    "id": "review-backend-w10:BE-W10-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/server.ts",
+    "line": 182
+  },
+  {
+    "id": "review-backend-w2:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Indexed resolving Decision included in scoped command state; existing guard rejects both repeated approve and withdraw",
+    "tests": [
+      "durable amendment resolution %s cannot be followed by %s under a fresh operation/version (4 matrix cases)"
+    ],
+    "red": "/tmp/pr1113-r02-group2-red.log",
+    "green": "/tmp/pr1113-r02-group2-green.log",
+    "commits": [
+      "8d2a0eef981af05d64bc657a0097e67a2a0ee2e1"
+    ],
+    "file": "src/hub/work/handlers-requirements.ts",
+    "line": 181
+  },
+  {
+    "id": "review-backend-w2:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "queued configuration drift retains its reservation and admits after native configuration recovery"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.test.ts --test-name-pattern 'queued configuration drift'",
+      "test": "queued configuration drift retains its reservation and admits after native configuration recovery",
+      "result": "fail: released instead of reserved after stale native config check",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-11-025Z-c341c4_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "file": "src/hub/remote-v2/queue.ts",
+    "line": 68
+  },
+  {
+    "id": "review-backend-w3:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "tests": [
+      "live attention Evidence response satisfies the closed API schema and Work client",
+      "live attention accepts and opens late Evidence with its cached Attempt without parent requests",
+      "live Overview renders Evidence roots and resolves their Attempt only when opened",
+      "live Evidence parent lookup failure remains visible and never navigates"
+    ],
+    "red": "/tmp/pr1113-r02-ui-attention-red.log",
+    "green": "/tmp/pr1113-r02-ui-attention-green.log",
+    "commits": [
+      "a0e20ad7fd9a76e7ba7fead9723c790ca306c51a",
+      "da9ee774e60cd4ec942c23a28641517df0696361"
+    ],
+    "file": "apps/hub-web/src/features/managed-work/adapter.ts",
+    "line": 287
+  },
+  {
+    "id": "review-backend-w6:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-backend-w7:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/delivery-jobs.ts",
+    "line": 23
+  },
+  {
+    "id": "review-backend-w7:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "b56f115bf16fb3e8a705659aa800e065e2c09c44",
+      "a856efcff3bdc7e2964d0ea259d856d2d912c186"
+    ],
+    "tests": [
+      "revision browser follows opaque continuation and opens an exact deep link outside the first fifty",
+      "delivery resolves its selected immutable line exactly instead of assuming first-page membership",
+      "revision MCP forwards exclusive pagination so more than fifty revisions remain reachable",
+      "more than fifty revisions page newest-first with stable exclusive continuation and exact selected-line summary"
+    ],
+    "red": "/tmp/pr1113-r02-ui-revisions-red.log",
+    "green": "/tmp/pr1113-r02-ui-revisions-green.log",
+    "proof": ".metaproject/data/gdctx/raw/2026-11-02T04-16-25-104Z-223487_run.log",
+    "file": "src/hub/domain.ts",
+    "line": 116
+  },
+  {
+    "id": "review-backend-w7:F-003",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Actual-byte admission plus portable native HTTP reader cleanup verified on pinned Bun and extracted runtime.",
+    "commits": [
+      "b3d94fc4db0975738c8387994e88586195a2703d",
+      "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6"
+    ],
+    "tests": [
+      "WebSocket mutation lane full uses recoverable overload rather than authorization loss",
+      "WebSocket mutation lane expired uses recoverable overload rather than authorization loss",
+      "protected /hub/v1/projects authenticates before pulling an unauthenticated body",
+      "protected /hub/v2/machines/pairings authenticates before pulling an unauthenticated body",
+      "HTTP admits seven concurrent small project mutations under the default memory budget",
+      "HTTP MCP nested legacy write reuses the one admitted root request slot",
+      "HTTP four public login trickles expire with408 without starving an authenticated mutation",
+      "tiny concurrent mutations retain their actual bytes instead of a full parser allowance",
+      "nested MCP mutations share one root request slot and charge only actual bodies",
+      "real TCP MCP initialization and tool listing survive native incoming-body cleanup"
+    ],
+    "proof": {
+      "red": "/tmp/pr1113-r02-admission-corrected-red.log",
+      "green": "/tmp/pr1113-r02-admission-broad-green.log"
+    },
+    "file": "src/hub/mutation-queue.ts",
+    "line": 51
+  },
+  {
+    "id": "review-backend-w7:F-004",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "queued configuration drift retains its reservation and admits after native configuration recovery"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.test.ts --test-name-pattern 'queued configuration drift'",
+      "test": "queued configuration drift retains its reservation and admits after native configuration recovery",
+      "result": "fail: released instead of reserved after stale native config check",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-11-025Z-c341c4_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "file": "src/hub/remote-v2/queue.ts",
+    "line": 68
+  },
+  {
+    "id": "review-backend-w8:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Indexed resolving Decision included in scoped command state; existing guard rejects both repeated approve and withdraw",
+    "tests": [
+      "durable amendment resolution %s cannot be followed by %s under a fresh operation/version (4 matrix cases)"
+    ],
+    "red": "/tmp/pr1113-r02-group2-red.log",
+    "green": "/tmp/pr1113-r02-group2-green.log",
+    "commits": [
+      "8d2a0eef981af05d64bc657a0097e67a2a0ee2e1"
+    ],
+    "file": "src/hub/work/handlers-requirements.ts",
+    "line": 181
+  },
+  {
+    "id": "review-backend-w9:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 286
+  },
+  {
+    "id": "review-clean-code-w1:CC-R2-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 76
+  },
+  {
+    "id": "review-clean-code-w1:CC-R2-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 38
+  },
+  {
+    "id": "review-clean-code-w1:CC-R2-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 352
+  },
+  {
+    "id": "review-clean-code-w1:CC-R2-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 375
+  },
+  {
+    "id": "review-clean-code-w1:CC-R2-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 55
+  },
+  {
+    "id": "review-clean-code-w1:CC-R2-006",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 316
+  },
+  {
+    "id": "review-clean-code-w1:CC-R2-007",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/requirements/hub-work-management/verification.md",
+    "line": 44
+  },
+  {
+    "id": "review-clean-code-w10:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Capabilities publishes the original six public limits while internal storage quotas stay private",
+    "tests": [
+      "live capabilities expose the published closed limit contract to the Work client"
+    ],
+    "red": "/tmp/pr1113-r02-projections-red.log",
+    "green": "gdctx1744d5",
+    "commits": [
+      "a0e20ad7fd9a76e7ba7fead9723c790ca306c51a"
+    ],
+    "file": "src/hub/work/http.ts",
+    "line": 17
+  },
+  {
+    "id": "review-clean-code-w10:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 173
+  },
+  {
+    "id": "review-clean-code-w10:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 115
+  },
+  {
+    "id": "review-clean-code-w10:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 232
+  },
+  {
+    "id": "review-clean-code-w10:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 238
+  },
+  {
+    "id": "review-clean-code-w10:F-006",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.fixture.test-support.ts",
+    "line": 10
+  },
+  {
+    "id": "review-clean-code-w10:F-007",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 313
+  },
+  {
+    "id": "review-clean-code-w10:F-008",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/legacy.ts",
+    "line": 51
+  },
+  {
+    "id": "review-clean-code-w11:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/store.ts",
+    "line": 91
+  },
+  {
+    "id": "review-clean-code-w11:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/domain.ts",
+    "line": 257
+  },
+  {
+    "id": "review-clean-code-w11:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/store.ts",
+    "line": 24
+  },
+  {
+    "id": "review-clean-code-w2:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 294
+  },
+  {
+    "id": "review-clean-code-w2:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 299
+  },
+  {
+    "id": "review-clean-code-w2:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/execution.ts",
+    "line": 147
+  },
+  {
+    "id": "review-clean-code-w2:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/execution.ts",
+    "line": 116
+  },
+  {
+    "id": "review-clean-code-w2:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 170
+  },
+  {
+    "id": "review-clean-code-w2:F-006",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 43
+  },
+  {
+    "id": "review-clean-code-w4:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/adapter.ts",
+    "line": 268
+  },
+  {
+    "id": "review-clean-code-w4:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/operation.tsx",
+    "line": 36
+  },
+  {
+    "id": "review-clean-code-w5:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 160
+  },
+  {
+    "id": "review-clean-code-w5:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 59
+  },
+  {
+    "id": "review-clean-code-w5:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 38
+  },
+  {
+    "id": "review-clean-code-w5:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/tests/hub-render.tsx",
+    "line": 7
+  },
+  {
+    "id": "review-clean-code-w6:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-clean-code-w6:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 29
+  },
+  {
+    "id": "review-clean-code-w6:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 791
+  },
+  {
+    "id": "review-clean-code-w6:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 371
+  },
+  {
+    "id": "review-clean-code-w6:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/migrate-legacy.test.py",
+    "line": 27
+  },
+  {
+    "id": "review-clean-code-w7:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "23a11ba5ffd0391b496e0497f5855e1ac39ff886"
+    ],
+    "tests": [
+      "full docs/requirements/hub-work-management/verify.cjs"
+    ],
+    "red": "/tmp/pr1113-r02-docs-full-red-t29.log",
+    "green": "/tmp/pr1113-r02-docs-full-green.log",
+    "file": "docs/requirements/hub-work-management/plan.md",
+    "line": 3
+  },
+  {
+    "id": "review-clean-code-w7:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "scripts/sync-hub-work-schemas.ts",
+    "line": 19
+  },
+  {
+    "id": "review-clean-code-w8:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/server.ts",
+    "line": 134
+  },
+  {
+    "id": "review-clean-code-w8:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/domain.ts",
+    "line": 239
+  },
+  {
+    "id": "review-clean-code-w8:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/remote-v2/queue.ts",
+    "line": 32
+  },
+  {
+    "id": "review-clean-code-w8:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/mutation-queue.ts",
+    "line": 51
+  },
+  {
+    "id": "review-clean-code-w8:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/legacy-artifacts.ts",
+    "line": 69
+  },
+  {
+    "id": "review-clean-code-w8:F-006",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/client-main.ts",
+    "line": 4
+  },
+  {
+    "id": "review-clean-code-w9:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 294
+  },
+  {
+    "id": "review-clean-code-w9:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/handlers-requirements.ts",
+    "line": 181
+  },
+  {
+    "id": "review-clean-code-w9:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/handlers-reviews.ts",
+    "line": 90
+  },
+  {
+    "id": "review-clean-code-w9:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": null
+  },
+  {
+    "id": "review-clean-code-w9:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/store.ts",
+    "line": 87
+  },
+  {
+    "id": "review-clean-code-w9:F-006",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/store.ts",
+    "line": 182
+  },
+  {
+    "id": "review-degradation-w1:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "matching live events still invalidate attention after a receipt already merged the version"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 59
+  },
+  {
+    "id": "review-degradation-w1:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 47
+  },
+  {
+    "id": "review-degradation-w1:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 961
+  },
+  {
+    "id": "review-degradation-w10:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "3173ac8e8614374b8b5201b6301c122f94aadb62"
+    ],
+    "tests": [
+      "safety backups retain every young copy plus the newest three and the explicit restore pointer",
+      "frequent young safety backups are never pruned by count"
+    ],
+    "red": "/tmp/pr1113-r02-ops-cli-retention-red.log",
+    "green": "/tmp/pr1113-r02-ops-cli-retention-green.log",
+    "file": "deploy/team-hub/hubctl",
+    "line": 820
+  },
+  {
+    "id": "review-degradation-w10:F-002",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 506
+  },
+  {
+    "id": "review-degradation-w11:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Actual-byte admission plus portable native HTTP reader cleanup verified on pinned Bun and extracted runtime.",
+    "commits": [
+      "b3d94fc4db0975738c8387994e88586195a2703d",
+      "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6"
+    ],
+    "tests": [
+      "WebSocket mutation lane full uses recoverable overload rather than authorization loss",
+      "WebSocket mutation lane expired uses recoverable overload rather than authorization loss",
+      "protected /hub/v1/projects authenticates before pulling an unauthenticated body",
+      "protected /hub/v2/machines/pairings authenticates before pulling an unauthenticated body",
+      "HTTP admits seven concurrent small project mutations under the default memory budget",
+      "HTTP MCP nested legacy write reuses the one admitted root request slot",
+      "HTTP four public login trickles expire with408 without starving an authenticated mutation",
+      "tiny concurrent mutations retain their actual bytes instead of a full parser allowance",
+      "nested MCP mutations share one root request slot and charge only actual bodies",
+      "real TCP MCP initialization and tool listing survive native incoming-body cleanup"
+    ],
+    "proof": {
+      "red": "/tmp/pr1113-r02-admission-corrected-red.log",
+      "green": "/tmp/pr1113-r02-admission-broad-green.log"
+    },
+    "file": "src/hub/mutation-queue.ts",
+    "line": 51
+  },
+  {
+    "id": "review-degradation-w11:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/handlers-attempts.ts",
+    "line": 41
+  },
+  {
+    "id": "review-degradation-w12:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/store.ts",
+    "line": 27
+  },
+  {
+    "id": "review-degradation-w13:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/delivery-jobs.ts",
+    "line": 23
+  },
+  {
+    "id": "review-degradation-w13:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "managed queue quota failure rolls back native allocation and retries the same queued operation",
+      "editing queued managed work with a released reservation acknowledges native facts without restoring released authority",
+      "native in-place edit then removal releases the original managed reservation"
+    ],
+    "red": [
+      {
+        "test": "managed queue quota failure rolls back native allocation and retries the same queued operation",
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-02-53-420Z-c8fd7e_run.log",
+        "result": "fail: reservation was released instead of reserved after work-history quota"
+      },
+      {
+        "test": "editing queued managed work with a released reservation acknowledges native facts without restoring released authority",
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-04-27-460Z-18f0a9_run.log",
+        "result": "fail: timed out waiting for session-event-ack"
+      },
+      {
+        "test": "native in-place edit then removal releases the original managed reservation",
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-05-06-490Z-515852_run.log",
+        "result": "fail: work.cancel returned execution-uncertain409"
+      }
+    ],
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts",
+      "result": "15 pass,0fail,602assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-07-41-286Z-e5c256_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c",
+      "f7c0f1a06aa4318749bbc0b1258cacb8bb0b1346"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts",
+      "result": "15 pass,0fail,602assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-07-41-286Z-e5c256_run.log"
+    },
+    "file": "src/hub/work/execution.ts",
+    "line": 97
+  },
+  {
+    "id": "review-degradation-w14:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Indexed resolving Decision included in scoped command state; existing guard rejects both repeated approve and withdraw",
+    "tests": [
+      "durable amendment resolution %s cannot be followed by %s under a fresh operation/version (4 matrix cases)"
+    ],
+    "red": "/tmp/pr1113-r02-group2-red.log",
+    "green": "/tmp/pr1113-r02-group2-green.log",
+    "commits": [
+      "8d2a0eef981af05d64bc657a0097e67a2a0ee2e1"
+    ],
+    "file": "src/hub/work/handlers-requirements.ts",
+    "line": 181
+  },
+  {
+    "id": "review-degradation-w14:F-002",
+    "severity": "minor",
+    "status": "fixed",
+    "reason": "Same verified indexed pending-reservation/reconciliation mechanism.",
+    "commits": [
+      "0c212c7ac67d595a46993c2b813418b167c27cb6"
+    ],
+    "tests": [
+      "reconcileSession with no pending managed reservations performs zero remote history reads",
+      "reconcileSession parses only the pending operation lineage and never cold session history"
+    ],
+    "file": "src/hub/work/execution.ts",
+    "line": 88
+  },
+  {
+    "id": "review-degradation-w14:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/store.ts",
+    "line": 52
+  },
+  {
+    "id": "review-degradation-w15:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Optional bounded history cache skips new unpinned versions at capacity; mandatory Work pins retain atomic strict quota; existing exact pins are idempotent and untouched",
+    "tests": [
+      "optional legacy archival cannot block unrelated writes while immutable pin quota stays strict; live legacy import remains writable at optional document archive capacity with Work disabled"
+    ],
+    "red": "gdctxc29d05",
+    "green": "gdctx7f3234",
+    "commits": [
+      "de89c8f747b6890881006dfa22ba6b8f6dc32718"
+    ],
+    "file": "src/hub/work/storage.ts",
+    "line": 283
+  },
+  {
+    "id": "review-degradation-w15:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Startup canonical body digest detects supported old-writer changes; atomically rebuilds records/sessions projection and saves digest with each new legacy commit",
+    "tests": [
+      "rollback writer changes rebuild legacy and session projections on reupgrade"
+    ],
+    "red": "gdctxcafc7d",
+    "green": "gdctx5494b9",
+    "commits": [
+      "ced30a7513258207b92d868e5c014a7152618ff2"
+    ],
+    "file": "src/hub/work/http.ts",
+    "line": 138
+  },
+  {
+    "id": "review-degradation-w16:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/delivery-jobs.ts",
+    "line": 23
+  },
+  {
+    "id": "review-degradation-w16:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/domain.ts",
+    "line": 260
+  },
+  {
+    "id": "review-degradation-w2:DEG-R2-W2-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "queued configuration drift retains its reservation and admits after native configuration recovery"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.test.ts --test-name-pattern 'queued configuration drift'",
+      "test": "queued configuration drift retains its reservation and admits after native configuration recovery",
+      "result": "fail: released instead of reserved after stale native config check",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-11-025Z-c341c4_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "file": "src/hub/remote-v2/queue.ts",
+    "line": 68
+  },
+  {
+    "id": "review-degradation-w4:DEG-R2-W4-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/flow.json",
+    "line": 486
+  },
+  {
+    "id": "review-degradation-w5:DEG-R2-W5-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 251
+  },
+  {
+    "id": "review-degradation-w7:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "69e9e91ef364ee18b7ebbc2633e58e9a0e0a5c7c"
+    ],
+    "tests": [
+      "live membership amendment includes a newly introduced unapproved Intent and its editable proposal target",
+      "live pending amendment resolution supplies versions for every manifest Intent including unapproved and cancelled",
+      "Flow-only amendment actually crosses the live command boundary with an empty affected set",
+      "cancelled required Intents do not disable Flow approval or appear in revision membership choices"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group8-red.log",
+    "green": "/tmp/pr1113-r02-ui-group8-green.log",
+    "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+    "line": 7
+  },
+  {
+    "id": "review-degradation-w7:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "69e9e91ef364ee18b7ebbc2633e58e9a0e0a5c7c"
+    ],
+    "tests": [
+      "live membership amendment includes a newly introduced unapproved Intent and its editable proposal target",
+      "live pending amendment resolution supplies versions for every manifest Intent including unapproved and cancelled",
+      "Flow-only amendment actually crosses the live command boundary with an empty affected set",
+      "cancelled required Intents do not disable Flow approval or appear in revision membership choices"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group8-red.log",
+    "green": "/tmp/pr1113-r02-ui-group8-green.log",
+    "file": "apps/hub-web/src/features/managed-work/amendments.tsx",
+    "line": 272
+  },
+  {
+    "id": "review-degradation-w8:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "live-shaped decision-only receipt immediately reconciles related Intent state without waiting for idle polling"
+    ],
+    "red": "/tmp/pr1113-r02-ui-own-receipt-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 160
+  },
+  {
+    "id": "review-degradation-w8:F-002",
+    "severity": "minor",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "4381b5ab6450583615eae4f50d298be06eef0766"
+    ],
+    "tests": [
+      "demo selection receipts expose only the live command result while canonical state contains side effects"
+    ],
+    "red": "/tmp/pr1113-r02-ui-demo-red.log",
+    "green": "/tmp/pr1113-r02-ui-demo-green.log",
+    "file": "apps/hub-web/src/features/managed-work/demo.ts",
+    "line": 381
+  },
+  {
+    "id": "review-degradation-w8:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/remote/machines.tsx",
+    "line": 450
+  },
+  {
+    "id": "review-degradation-w8:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/work-lists.tsx",
+    "line": 9
+  },
+  {
+    "id": "review-degradation-w9:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 506
+  },
+  {
+    "id": "review-degradation-w9:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 816
+  },
+  {
+    "id": "review-frontend-w1:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "f0e2fe1d75a92b06384d818b60c636fe0378b4cd"
+    ],
+    "tests": [
+      "collapsed machine sessions expose active-run approval attention without loading routing details",
+      "machine session lists load only active-run attention eagerly and routing on explicit expansion"
+    ],
+    "red": "/tmp/pr1113-r02-ui-machines-red.log",
+    "green": "/tmp/pr1113-r02-ui-machines-green.log",
+    "file": "apps/hub-web/src/features/remote/machines.tsx",
+    "line": 450
+  },
+  {
+    "id": "review-frontend-w1:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "live retention-gap resync refreshes attention and observations while exact documents stay immutable"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 71
+  },
+  {
+    "id": "review-frontend-w1:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 47
+  },
+  {
+    "id": "review-frontend-w1:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 160
+  },
+  {
+    "id": "review-frontend-w1:F-005",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 210
+  },
+  {
+    "id": "review-frontend-w2:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/attempt-artifacts.tsx",
+    "line": 58
+  },
+  {
+    "id": "review-frontend-w3:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "slow live snapshot refresh cannot overwrite a newer event already applied to the board"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 210
+  },
+  {
+    "id": "review-frontend-w3:F-002",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/work-lists.tsx",
+    "line": 9
+  },
+  {
+    "id": "review-highload-w1:HL-R2-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "live overview events refresh attention without discarded per-record requests",
+      "live burst catch-up uses one canonical snapshot instead of unbounded record fanout"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/cache.ts",
+    "line": 34
+  },
+  {
+    "id": "review-highload-w10:HL-W10-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 239
+  },
+  {
+    "id": "review-highload-w10:HL-W10-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 285
+  },
+  {
+    "id": "review-highload-w12:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/delivery-queue.test.ts",
+    "line": 25
+  },
+  {
+    "id": "review-highload-w2:HL-R2-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "reconcileSession with no pending managed reservations performs zero remote history reads",
+      "reconcileSession parses only the pending operation lineage and never cold session history"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.reconciliation.test.ts",
+      "result": "2fail: empty reservation scanned3tables; one relevant pending reservation parsed6000coldrows",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-08-12-238Z-dc3794_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts",
+      "result": "17pass,0fail,606assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-09-38-704Z-d71e99_run.log"
+    },
+    "commits": [
+      "0c212c7ac67d595a46993c2b813418b167c27cb6"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts",
+      "result": "17pass,0fail,606assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-09-38-704Z-d71e99_run.log"
+    },
+    "file": "src/hub/work/execution.ts",
+    "line": 89
+  },
+  {
+    "id": "review-highload-w2:HL-R2-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 53
+  },
+  {
+    "id": "review-highload-w7:HL-R2-W7-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "3173ac8e8614374b8b5201b6301c122f94aadb62"
+    ],
+    "tests": [
+      "safety backups retain every young copy plus the newest three and the explicit restore pointer",
+      "frequent young safety backups are never pruned by count"
+    ],
+    "red": "/tmp/pr1113-r02-ops-cli-retention-red.log",
+    "green": "/tmp/pr1113-r02-ops-cli-retention-green.log",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-highload-w8:HL-W8-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "b3d94fc4db0975738c8387994e88586195a2703d"
+    ],
+    "tests": [
+      "WebSocket mutation lane full uses recoverable overload rather than authorization loss",
+      "WebSocket mutation lane expired uses recoverable overload rather than authorization loss",
+      "protected /hub/v1/projects authenticates before pulling an unauthenticated body",
+      "protected /hub/v2/machines/pairings authenticates before pulling an unauthenticated body",
+      "HTTP admits seven concurrent small project mutations under the default memory budget",
+      "HTTP MCP nested legacy write reuses the one admitted root request slot",
+      "HTTP four public login trickles expire with408 without starving an authenticated mutation"
+    ],
+    "proof": {
+      "command": "bun test src/hub/remote-v2/auth-before-body.test.ts src/hub/remote-v2/overload.test.ts src/hub/mutation-queue-http.test.ts",
+      "passed": 7,
+      "failed": 0,
+      "assertions": 13,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-45-03-177Z-19b78a_run.log"
+    },
+    "file": "src/hub/remote-v2/index.ts",
+    "line": 426
+  },
+  {
+    "id": "review-highload-w8:HL-W8-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Actual-byte admission plus portable native HTTP reader cleanup verified on pinned Bun and extracted runtime.",
+    "commits": [
+      "b3d94fc4db0975738c8387994e88586195a2703d",
+      "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6"
+    ],
+    "tests": [
+      "WebSocket mutation lane full uses recoverable overload rather than authorization loss",
+      "WebSocket mutation lane expired uses recoverable overload rather than authorization loss",
+      "protected /hub/v1/projects authenticates before pulling an unauthenticated body",
+      "protected /hub/v2/machines/pairings authenticates before pulling an unauthenticated body",
+      "HTTP admits seven concurrent small project mutations under the default memory budget",
+      "HTTP MCP nested legacy write reuses the one admitted root request slot",
+      "HTTP four public login trickles expire with408 without starving an authenticated mutation",
+      "tiny concurrent mutations retain their actual bytes instead of a full parser allowance",
+      "nested MCP mutations share one root request slot and charge only actual bodies",
+      "real TCP MCP initialization and tool listing survive native incoming-body cleanup"
+    ],
+    "proof": {
+      "red": "/tmp/pr1113-r02-admission-corrected-red.log",
+      "green": "/tmp/pr1113-r02-admission-broad-green.log"
+    },
+    "file": "src/hub/mutation-queue.ts",
+    "line": 51
+  },
+  {
+    "id": "review-highload-w8:HL-W8-003",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/delivery-jobs.ts",
+    "line": 14
+  },
+  {
+    "id": "review-highload-w9:HL-W9-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Raw-body optimistic baselines, lazy legacy materialization, one prepared serialization per actual mutation shared with quota persistence, transactional returned-state snapshot",
+    "tests": [
+      "legacy reads do not serialize history and remote-only transactions do not materialize it; lazy legacy transactions roll back changes and preserve optimistic concurrency; returning the lazy transaction state preserves its original snapshot boundary; async legacy callback is refused and its synchronous changes roll back"
+    ],
+    "red": "gdctxcafc7d and65bb45",
+    "green": "gdctx294b5a",
+    "commits": [
+      "3e01c2c8e6950527805f082883b94b2f9e660651"
+    ],
+    "file": "src/hub/store.ts",
+    "line": 143
+  },
+  {
+    "id": "review-highload-w9:HL-W9-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Scoped reconciliation and lazy legacy materialization address the combined hot path.",
+    "commits": [
+      "0c212c7ac67d595a46993c2b813418b167c27cb6",
+      "3e01c2c8e6950527805f082883b94b2f9e660651"
+    ],
+    "tests": [
+      "reconcileSession with no pending managed reservations performs zero remote history reads",
+      "legacy reads do not serialize history and remote-only transactions do not materialize it"
+    ],
+    "file": "src/hub/work/execution.ts",
+    "line": 88
+  },
+  {
+    "id": "review-layout-w3:LY-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/remote/machines.tsx",
+    "line": 508
+  },
+  {
+    "id": "review-logic-w1:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "f0e2fe1d75a92b06384d818b60c636fe0378b4cd"
+    ],
+    "tests": [
+      "collapsed machine sessions expose active-run approval attention without loading routing details",
+      "machine session lists load only active-run attention eagerly and routing on explicit expansion"
+    ],
+    "red": "/tmp/pr1113-r02-ui-machines-red.log",
+    "green": "/tmp/pr1113-r02-ui-machines-green.log",
+    "file": "apps/hub-web/src/features/remote/machines.tsx",
+    "line": 450
+  },
+  {
+    "id": "review-logic-w1:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 47
+  },
+  {
+    "id": "review-logic-w11:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Known terminal queue history no longer blocks adoption; unknown legacy schemas and corrupt rows stay conservatively unresolved.",
+    "commits": [
+      "bf459556a96408b1a9f143f4666b56bb1f8ce930",
+      "4759009a1c12771fed8aea9dd4f4003d44e7a577"
+    ],
+    "tests": [
+      "MigrationSafety.test_queue_history_only_blocks_adoption_when_unsettled",
+      "test_queue_and_command_capacity_each_block_rehearsal",
+      "AdoptionBoundaries.test_old_queue_without_json_body_remains_conservatively_unresolved",
+      "AdoptionBoundaries.test_queue_json_history_distinguishes_known_terminal_from_unknown_work"
+    ],
+    "red": "/tmp/pr1113-r02-ops-queue-red.log",
+    "green": "/tmp/pr1113-r02-ops-queue-green.log",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 381
+  },
+  {
+    "id": "review-logic-w14:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/requirements/hub-work-management/specification.md",
+    "line": 29
+  },
+  {
+    "id": "review-logic-w2:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "queued configuration drift retains its reservation and admits after native configuration recovery"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.test.ts --test-name-pattern 'queued configuration drift'",
+      "test": "queued configuration drift retains its reservation and admits after native configuration recovery",
+      "result": "fail: released instead of reserved after stale native config check",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-11-025Z-c341c4_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "file": "src/hub/remote-v2/queue.ts",
+    "line": 68
+  },
+  {
+    "id": "review-logic-w2:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "managed queue quota failure rolls back native allocation and retries the same queued operation",
+      "editing queued managed work with a released reservation acknowledges native facts without restoring released authority",
+      "native in-place edit then removal releases the original managed reservation"
+    ],
+    "red": [
+      {
+        "test": "managed queue quota failure rolls back native allocation and retries the same queued operation",
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-02-53-420Z-c8fd7e_run.log",
+        "result": "fail: reservation was released instead of reserved after work-history quota"
+      },
+      {
+        "test": "editing queued managed work with a released reservation acknowledges native facts without restoring released authority",
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-04-27-460Z-18f0a9_run.log",
+        "result": "fail: timed out waiting for session-event-ack"
+      },
+      {
+        "test": "native in-place edit then removal releases the original managed reservation",
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-05-06-490Z-515852_run.log",
+        "result": "fail: work.cancel returned execution-uncertain409"
+      }
+    ],
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts",
+      "result": "15 pass,0fail,602assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-07-41-286Z-e5c256_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c",
+      "f7c0f1a06aa4318749bbc0b1258cacb8bb0b1346"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts",
+      "result": "15 pass,0fail,602assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-07-41-286Z-e5c256_run.log"
+    },
+    "file": "src/hub/work/execution.ts",
+    "line": 135
+  },
+  {
+    "id": "review-logic-w23:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "58502381aa47c9d79f1c04265a61f1e83ce6759e"
+    ],
+    "tests": [
+      "main CLI routes managed Work help for root and deep --help without credentials or network"
+    ],
+    "red": "/tmp/pr1113-r02-ops-cli-retention-red.log",
+    "green": "/tmp/pr1113-r02-ops-cli-retention-green.log",
+    "file": "src/commands/hub.ts",
+    "line": 4
+  },
+  {
+    "id": "review-logic-w24:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "tests": [
+      "live attention Evidence response satisfies the closed API schema and Work client",
+      "live attention accepts and opens late Evidence with its cached Attempt without parent requests",
+      "live Overview renders Evidence roots and resolves their Attempt only when opened",
+      "live Evidence parent lookup failure remains visible and never navigates"
+    ],
+    "red": "/tmp/pr1113-r02-ui-attention-red.log",
+    "green": "/tmp/pr1113-r02-ui-attention-green.log",
+    "commits": [
+      "a0e20ad7fd9a76e7ba7fead9723c790ca306c51a",
+      "da9ee774e60cd4ec942c23a28641517df0696361"
+    ],
+    "file": "src/hub/work/openapi.ts",
+    "line": 46
+  },
+  {
+    "id": "review-logic-w26:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/flow.json",
+    "line": 486
+  },
+  {
+    "id": "review-logic-w27:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 260
+  },
+  {
+    "id": "review-logic-w29:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "69e9e91ef364ee18b7ebbc2633e58e9a0e0a5c7c"
+    ],
+    "tests": [
+      "live membership amendment includes a newly introduced unapproved Intent and its editable proposal target",
+      "live pending amendment resolution supplies versions for every manifest Intent including unapproved and cancelled",
+      "Flow-only amendment actually crosses the live command boundary with an empty affected set",
+      "cancelled required Intents do not disable Flow approval or appear in revision membership choices"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group8-red.log",
+    "green": "/tmp/pr1113-r02-ui-group8-green.log",
+    "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+    "line": 19
+  },
+  {
+    "id": "review-logic-w30:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "69e9e91ef364ee18b7ebbc2633e58e9a0e0a5c7c"
+    ],
+    "tests": [
+      "live membership amendment includes a newly introduced unapproved Intent and its editable proposal target",
+      "live pending amendment resolution supplies versions for every manifest Intent including unapproved and cancelled",
+      "Flow-only amendment actually crosses the live command boundary with an empty affected set",
+      "cancelled required Intents do not disable Flow approval or appear in revision membership choices"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group8-red.log",
+    "green": "/tmp/pr1113-r02-ui-group8-green.log",
+    "file": "apps/hub-web/src/features/managed-work/work-panels.tsx",
+    "line": 107
+  },
+  {
+    "id": "review-logic-w30:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "slow live snapshot refresh cannot overwrite a newer event already applied to the board"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 35
+  },
+  {
+    "id": "review-logic-w31:F-001",
+    "severity": "major",
+    "status": "excluded-refuted",
+    "reason": "Verifier refuted Bun argv premise",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 506
+  },
+  {
+    "id": "review-logic-w32:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-logic-w34:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.test.ts",
+    "line": 137
+  },
+  {
+    "id": "review-logic-w35:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "b56f115bf16fb3e8a705659aa800e065e2c09c44",
+      "a856efcff3bdc7e2964d0ea259d856d2d912c186"
+    ],
+    "tests": [
+      "revision browser follows opaque continuation and opens an exact deep link outside the first fifty",
+      "delivery resolves its selected immutable line exactly instead of assuming first-page membership",
+      "revision MCP forwards exclusive pagination so more than fifty revisions remain reachable",
+      "more than fifty revisions page newest-first with stable exclusive continuation and exact selected-line summary"
+    ],
+    "red": "/tmp/pr1113-r02-ui-revisions-red.log",
+    "green": "/tmp/pr1113-r02-ui-revisions-green.log",
+    "proof": ".metaproject/data/gdctx/raw/2026-11-02T04-16-25-104Z-223487_run.log",
+    "file": "src/hub/domain.ts",
+    "line": 118
+  },
+  {
+    "id": "review-logic-w35:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/delivery-jobs.ts",
+    "line": 23
+  },
+  {
+    "id": "review-logic-w35:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/server.ts",
+    "line": 309
+  },
+  {
+    "id": "review-logic-w36:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "queued configuration drift retains its reservation and admits after native configuration recovery"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.test.ts --test-name-pattern 'queued configuration drift'",
+      "test": "queued configuration drift retains its reservation and admits after native configuration recovery",
+      "result": "fail: released instead of reserved after stale native config check",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-11-025Z-c341c4_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "file": "src/hub/work/execution.ts",
+    "line": 220
+  },
+  {
+    "id": "review-logic-w37:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Indexed incident Evidence plus deduplicated Attempt/submission/acceptance support in Flow/Intent read projection; max200 incident page with explicit overflow refusal",
+    "tests": [
+      "live Flow and Intent aggregates expose a late contradictory Evidence incident from indexed persistence; many incidents on one Attempt load its support once and overflow aggregates fail within a bounded incident page"
+    ],
+    "red": "/tmp/pr1113-r02-projections-red.log; gdctx09e9a9",
+    "green": "gdctx1744d5",
+    "commits": [
+      "d4365bc0987c095ad537894e5f3841cbddf6af65"
+    ],
+    "file": "src/hub/work/storage.ts",
+    "line": 197
+  },
+  {
+    "id": "review-logic-w38:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": [
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/server.test.ts src/hub/server.security.test.ts src/hub/revision-summary.test.ts src/hub/legacy-artifacts.test.ts",
+        "passed": 42,
+        "failed": 0,
+        "assertions": 349,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-21-558Z-ff194e_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts",
+        "passed": 9,
+        "failed": 0,
+        "assertions": 63,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-35-43-999Z-692e5a_run.log"
+      },
+      {
+        "command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+        "passed": 19,
+        "failed": 0,
+        "assertions": 117,
+        "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-40-38-422Z-a9c68d_run.log"
+      }
+    ],
+    "file": "src/hub/delivery-jobs.ts",
+    "line": 23
+  },
+  {
+    "id": "review-logic-w38:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Startup canonical body digest detects supported old-writer changes; atomically rebuilds records/sessions projection and saves digest with each new legacy commit",
+    "tests": [
+      "rollback writer changes rebuild legacy and session projections on reupgrade"
+    ],
+    "red": "gdctxcafc7d",
+    "green": "gdctx5494b9",
+    "commits": [
+      "ced30a7513258207b92d868e5c014a7152618ff2"
+    ],
+    "file": "src/hub/store.ts",
+    "line": 91
+  },
+  {
+    "id": "review-logic-w6:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "868c48f34e2b364df3aef2256b255c86719fc3c1"
+    ],
+    "tests": [
+      "live Evidence submits the visible current option when the saved subject no longer exists",
+      "live Evidence submits the visible current option when the saved criterion no longer exists",
+      "live Attempt creation uses the context currently displayed after a saved context disappears",
+      "live Intent creation maps to the displayed Flow criterion after the saved criterion disappears"
+    ],
+    "red": "/tmp/pr1113-r02-ui-choices-red.log",
+    "green": "/tmp/pr1113-r02-ui-choices-green.log",
+    "file": "apps/hub-web/src/features/managed-work/contribute.tsx",
+    "line": 323
+  },
+  {
+    "id": "review-logic-w7:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/overview-attention.tsx",
+    "line": 19
+  },
+  {
+    "id": "review-orchestrator-w1:O-101",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/requirements/hub-work-management/verification.md",
+    "line": 44
+  },
+  {
+    "id": "review-orchestrator-w14:SPEC-W14-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-orchestrator-w2:RO-W2-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/flow.json",
+    "line": 486
+  },
+  {
+    "id": "review-orchestrator-w3:RO-W3-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 53
+  },
+  {
+    "id": "review-orchestrator-w7:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-performance-w1:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "live overview events refresh attention without discarded per-record requests"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 47
+  },
+  {
+    "id": "review-performance-w1:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "f0e2fe1d75a92b06384d818b60c636fe0378b4cd"
+    ],
+    "tests": [
+      "collapsed machine sessions expose active-run approval attention without loading routing details",
+      "machine session lists load only active-run attention eagerly and routing on explicit expansion"
+    ],
+    "red": "/tmp/pr1113-r02-ui-machines-red.log",
+    "green": "/tmp/pr1113-r02-ui-machines-green.log",
+    "file": "apps/hub-web/src/features/remote/machines.tsx",
+    "line": 450
+  },
+  {
+    "id": "review-performance-w10:PERF-W10-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 136
+  },
+  {
+    "id": "review-performance-w10:PERF-W10-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 350
+  },
+  {
+    "id": "review-performance-w2:PERF-W2-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 53
+  },
+  {
+    "id": "review-performance-w4:PERF-W4-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "fed10a1619b0f9f6b8c95107044bac0aa179a491"
+    ],
+    "tests": [
+      "live overview events refresh attention without discarded per-record requests",
+      "live burst catch-up uses one canonical snapshot instead of unbounded record fanout"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group7-red.log",
+    "green": "/tmp/pr1113-r02-ui-group7-green.log",
+    "file": "apps/hub-web/src/features/managed-work/cache.ts",
+    "line": 35
+  },
+  {
+    "id": "review-performance-w6:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 342
+  },
+  {
+    "id": "review-performance-w7:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-performance-w8:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Actual-byte admission plus portable native HTTP reader cleanup verified on pinned Bun and extracted runtime.",
+    "commits": [
+      "b3d94fc4db0975738c8387994e88586195a2703d",
+      "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6"
+    ],
+    "tests": [
+      "WebSocket mutation lane full uses recoverable overload rather than authorization loss",
+      "WebSocket mutation lane expired uses recoverable overload rather than authorization loss",
+      "protected /hub/v1/projects authenticates before pulling an unauthenticated body",
+      "protected /hub/v2/machines/pairings authenticates before pulling an unauthenticated body",
+      "HTTP admits seven concurrent small project mutations under the default memory budget",
+      "HTTP MCP nested legacy write reuses the one admitted root request slot",
+      "HTTP four public login trickles expire with408 without starving an authenticated mutation",
+      "tiny concurrent mutations retain their actual bytes instead of a full parser allowance",
+      "nested MCP mutations share one root request slot and charge only actual bodies",
+      "real TCP MCP initialization and tool listing survive native incoming-body cleanup"
+    ],
+    "proof": {
+      "red": "/tmp/pr1113-r02-admission-corrected-red.log",
+      "green": "/tmp/pr1113-r02-admission-broad-green.log"
+    },
+    "file": "src/hub/mutation-queue.ts",
+    "line": 51
+  },
+  {
+    "id": "review-performance-w8:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/legacy-artifacts.ts",
+    "line": 24
+  },
+  {
+    "id": "review-performance-w9:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "reconcileSession with no pending managed reservations performs zero remote history reads",
+      "reconcileSession parses only the pending operation lineage and never cold session history"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.reconciliation.test.ts",
+      "result": "2fail: empty reservation scanned3tables; one relevant pending reservation parsed6000coldrows",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-08-12-238Z-dc3794_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts",
+      "result": "17pass,0fail,606assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-09-38-704Z-d71e99_run.log"
+    },
+    "commits": [
+      "0c212c7ac67d595a46993c2b813418b167c27cb6"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts",
+      "result": "17pass,0fail,606assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-09-38-704Z-d71e99_run.log"
+    },
+    "file": "src/hub/work/execution.ts",
+    "line": 88
+  },
+  {
+    "id": "review-performance-w9:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Raw-body optimistic baselines, lazy legacy materialization, one prepared serialization per actual mutation shared with quota persistence, transactional returned-state snapshot",
+    "tests": [
+      "legacy reads do not serialize history and remote-only transactions do not materialize it; lazy legacy transactions roll back changes and preserve optimistic concurrency; returning the lazy transaction state preserves its original snapshot boundary; async legacy callback is refused and its synchronous changes roll back"
+    ],
+    "red": "gdctxcafc7d and65bb45",
+    "green": "gdctx294b5a",
+    "commits": [
+      "3e01c2c8e6950527805f082883b94b2f9e660651"
+    ],
+    "file": "src/hub/store.ts",
+    "line": null
+  },
+  {
+    "id": "review-regression-w2:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "queued configuration drift retains its reservation and admits after native configuration recovery"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/execution.test.ts --test-name-pattern 'queued configuration drift'",
+      "test": "queued configuration drift retains its reservation and admits after native configuration recovery",
+      "result": "fail: released instead of reserved after stale native config check",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-11-025Z-c341c4_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "commits": [
+      "6c692b10788e72d9207ad9fe9a81b7bde466565c"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/execution.test.ts src/hub/work/execution.reconciliation.test.ts",
+      "passed": 17,
+      "failed": 0,
+      "assertions": 596,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-13-22-019Z-e254fa_run.log"
+    },
+    "file": "src/hub/remote-v2/queue.ts",
+    "line": 68
+  },
+  {
+    "id": "review-regression-w5:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "69e9e91ef364ee18b7ebbc2633e58e9a0e0a5c7c"
+    ],
+    "tests": [
+      "live membership amendment includes a newly introduced unapproved Intent and its editable proposal target",
+      "live pending amendment resolution supplies versions for every manifest Intent including unapproved and cancelled",
+      "Flow-only amendment actually crosses the live command boundary with an empty affected set",
+      "cancelled required Intents do not disable Flow approval or appear in revision membership choices"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group8-red.log",
+    "green": "/tmp/pr1113-r02-ui-group8-green.log",
+    "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+    "line": 7
+  },
+  {
+    "id": "review-regression-w8:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "3173ac8e8614374b8b5201b6301c122f94aadb62"
+    ],
+    "tests": [
+      "safety backups retain every young copy plus the newest three and the explicit restore pointer",
+      "frequent young safety backups are never pruned by count"
+    ],
+    "red": "/tmp/pr1113-r02-ops-cli-retention-red.log",
+    "green": "/tmp/pr1113-r02-ops-cli-retention-green.log",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-regression-w9:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "b56f115bf16fb3e8a705659aa800e065e2c09c44",
+      "a856efcff3bdc7e2964d0ea259d856d2d912c186"
+    ],
+    "tests": [
+      "revision browser follows opaque continuation and opens an exact deep link outside the first fifty",
+      "delivery resolves its selected immutable line exactly instead of assuming first-page membership",
+      "revision MCP forwards exclusive pagination so more than fifty revisions remain reachable"
+    ],
+    "red": "/tmp/pr1113-r02-ui-revisions-red.log",
+    "green": "/tmp/pr1113-r02-ui-revisions-green.log",
+    "file": "apps/hub-web/src/features/context.tsx",
+    "line": 242
+  },
+  {
+    "id": "review-security-code-w31:SEC-W31-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Actual-byte admission plus portable native HTTP reader cleanup verified on pinned Bun and extracted runtime.",
+    "commits": [
+      "b3d94fc4db0975738c8387994e88586195a2703d",
+      "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6"
+    ],
+    "tests": [
+      "WebSocket mutation lane full uses recoverable overload rather than authorization loss",
+      "WebSocket mutation lane expired uses recoverable overload rather than authorization loss",
+      "protected /hub/v1/projects authenticates before pulling an unauthenticated body",
+      "protected /hub/v2/machines/pairings authenticates before pulling an unauthenticated body",
+      "HTTP admits seven concurrent small project mutations under the default memory budget",
+      "HTTP MCP nested legacy write reuses the one admitted root request slot",
+      "HTTP four public login trickles expire with408 without starving an authenticated mutation",
+      "body read deadline rejects a trickling request and releases its request slot",
+      "header-only refusal never pulls a body and cancels its source on cleanup",
+      "real TCP MCP initialization and tool listing survive native incoming-body cleanup"
+    ],
+    "proof": {
+      "red": "/tmp/pr1113-r02-admission-corrected-red.log",
+      "green": "/tmp/pr1113-r02-admission-broad-green.log"
+    },
+    "file": "src/hub/mutation-queue.ts",
+    "line": 51
+  },
+  {
+    "id": "review-security-code-w32:SEC-W32-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified native state/event and participant authority regression.",
+    "tests": [
+      "<",
+      "c",
+      "o",
+      "m",
+      "a",
+      "n",
+      "d",
+      ">",
+      " ",
+      "r",
+      "e",
+      "q",
+      "u",
+      "i",
+      "s",
+      "t",
+      "h",
+      "A",
+      "p",
+      "(",
+      "/",
+      "k",
+      ")",
+      ",",
+      "l",
+      "x",
+      "×",
+      "3",
+      "v",
+      "y",
+      "attempt.start requires the authenticated Attempt participant and human method (other-human/human)",
+      "attempt.start requires the authenticated Attempt participant and human method (bot/agent)",
+      "attempt.start requires the authenticated Attempt participant and human method (h/agent)",
+      "attempt.report requires the authenticated Attempt participant and human method (other-human/human)",
+      "attempt.report requires the authenticated Attempt participant and human method (bot/agent)",
+      "attempt.report requires the authenticated Attempt participant and human method (h/agent)",
+      "subject.create requires the authenticated Attempt participant and human method (other-human/human)",
+      "subject.create requires the authenticated Attempt participant and human method (bot/agent)",
+      "subject.create requires the authenticated Attempt participant and human method (h/agent)",
+      "evidence.record requires the authenticated Attempt participant and human method (other-human/human)",
+      "evidence.record requires the authenticated Attempt participant and human method (bot/agent)",
+      "evidence.record requires the authenticated Attempt participant and human method (h/agent)",
+      "attempt.submit requires the authenticated Attempt participant and human method (other-human/human)",
+      "attempt.submit requires the authenticated Attempt participant and human method (bot/agent)",
+      "attempt.submit requires the authenticated Attempt participant and human method (h/agent)",
+      "attempt.withdraw requires the authenticated Attempt participant and human method (other-human/human)",
+      "attempt.withdraw requires the authenticated Attempt participant and human method (bot/agent)",
+      "attempt.withdraw requires the authenticated Attempt participant and human method (h/agent)"
+    ],
+    "red": {
+      "command": "bun test src/hub/work/participant.authorization.test.ts",
+      "result": "18 fail (all unauthorized mutations accepted)",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-02-10-851Z-bea49e_run.log"
+    },
+    "green": {
+      "command": "bun test src/hub/work/participant.authorization.test.ts src/hub/work/domain.test.ts src/hub/work/storage.scenarios.test.ts",
+      "result": "54 pass,0fail,180assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-02-19-956Z-211c59_run.log"
+    },
+    "commits": [
+      "b66c96421b2e72933ad68ea74297f0f8b2caf767"
+    ],
+    "proof": {
+      "command": "bun test src/hub/work/participant.authorization.test.ts src/hub/work/domain.test.ts src/hub/work/storage.scenarios.test.ts",
+      "result": "54 pass,0fail,180assertions",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-02-19-956Z-211c59_run.log"
+    },
+    "file": "src/hub/work/handlers-attempts.ts",
+    "line": 147
+  },
+  {
+    "id": "review-security-code-w35:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/cloudflare-access.test.ts",
+    "line": 43
+  },
+  {
+    "id": "review-style-w1:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/requirements/hub-work-management/verification.md",
+    "line": 44
+  },
+  {
+    "id": "review-style-w1:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 55
+  },
+  {
+    "id": "review-style-w1:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 352
+  },
+  {
+    "id": "review-style-w1:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 53
+  },
+  {
+    "id": "review-style-w1:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 59
+  },
+  {
+    "id": "review-style-w1:F-006",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/demo.ts",
+    "line": 235
+  },
+  {
+    "id": "review-style-w10:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "3173ac8e8614374b8b5201b6301c122f94aadb62"
+    ],
+    "tests": [
+      "safety backups retain every young copy plus the newest three and the explicit restore pointer",
+      "frequent young safety backups are never pruned by count"
+    ],
+    "red": "/tmp/pr1113-r02-ops-cli-retention-red.log",
+    "green": "/tmp/pr1113-r02-ops-cli-retention-green.log",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-style-w10:F-002",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "23a11ba5ffd0391b496e0497f5855e1ac39ff886"
+    ],
+    "tests": [
+      "full docs/requirements/hub-work-management/verify.cjs"
+    ],
+    "red": "/tmp/pr1113-r02-docs-full-red-t29.log",
+    "green": "/tmp/pr1113-r02-docs-full-green.log",
+    "file": "docs/requirements/hub-work-management/plan.md",
+    "line": null
+  },
+  {
+    "id": "review-style-w10:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "scripts/hubctl-rollback.test.ts",
+    "line": 14
+  },
+  {
+    "id": "review-style-w10:F-004",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 235
+  },
+  {
+    "id": "review-style-w11:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/domain.ts",
+    "line": 239
+  },
+  {
+    "id": "review-style-w11:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/mutation-queue.ts",
+    "line": 51
+  },
+  {
+    "id": "review-style-w11:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/client-main.ts",
+    "line": 4
+  },
+  {
+    "id": "review-style-w11:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/remote-v2/index.ts",
+    "line": 120
+  },
+  {
+    "id": "review-style-w11:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/legacy-artifacts.ts",
+    "line": 66
+  },
+  {
+    "id": "review-style-w11:F-006",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/legacy-artifacts.ts",
+    "line": 7
+  },
+  {
+    "id": "review-style-w12:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/handlers-requirements.ts",
+    "line": 181
+  },
+  {
+    "id": "review-style-w12:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 187
+  },
+  {
+    "id": "review-style-w12:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/execution.ts",
+    "line": 103
+  },
+  {
+    "id": "review-style-w12:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/store.ts",
+    "line": 87
+  },
+  {
+    "id": "review-style-w12:F-005",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/cli.ts",
+    "line": 105
+  },
+  {
+    "id": "review-style-w13:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 173
+  },
+  {
+    "id": "review-style-w13:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 205
+  },
+  {
+    "id": "review-style-w13:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 312
+  },
+  {
+    "id": "review-style-w13:F-004",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 367
+  },
+  {
+    "id": "review-style-w14:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/server.ts",
+    "line": 315
+  },
+  {
+    "id": "review-style-w14:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/remote-v2/sessions.ts",
+    "line": 15
+  },
+  {
+    "id": "review-style-w14:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 28
+  },
+  {
+    "id": "review-style-w2:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/http.ts",
+    "line": 239
+  },
+  {
+    "id": "review-style-w2:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.ts",
+    "line": 71
+  },
+  {
+    "id": "review-style-w2:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 187
+  },
+  {
+    "id": "review-style-w2:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/execution.ts",
+    "line": 147
+  },
+  {
+    "id": "review-style-w2:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/domain.ts",
+    "line": 294
+  },
+  {
+    "id": "review-style-w3:F-001",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/cli.test.ts",
+    "line": 23
+  },
+  {
+    "id": "review-style-w5:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 345
+  },
+  {
+    "id": "review-style-w5:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 346
+  },
+  {
+    "id": "review-style-w6:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 499
+  },
+  {
+    "id": "review-style-w6:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 422
+  },
+  {
+    "id": "review-style-w6:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md",
+    "line": 417
+  },
+  {
+    "id": "review-style-w6:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/independent-fix-check.md",
+    "line": 17
+  },
+  {
+    "id": "review-style-w6:F-005",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/independent-fix-check.md",
+    "line": 24
+  },
+  {
+    "id": "review-style-w7:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/attempt-artifacts.tsx",
+    "line": 6
+  },
+  {
+    "id": "review-style-w7:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/adapter.ts",
+    "line": 179
+  },
+  {
+    "id": "review-style-w7:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+    "line": 19
+  },
+  {
+    "id": "review-style-w7:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/cache.ts",
+    "line": 34
+  },
+  {
+    "id": "review-style-w8:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/view.tsx",
+    "line": 160
+  },
+  {
+    "id": "review-style-w8:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 59
+  },
+  {
+    "id": "review-style-w8:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+    "line": 27
+  },
+  {
+    "id": "review-style-w8:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/managed-work/work-lists.tsx",
+    "line": 93
+  },
+  {
+    "id": "review-style-w8:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/tests/work-incremental.case.tsx",
+    "line": 9
+  },
+  {
+    "id": "review-style-w8:F-006",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/i18n/remote.en.ts",
+    "line": 2
+  },
+  {
+    "id": "review-style-w9:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/hubctl",
+    "line": 791
+  },
+  {
+    "id": "review-style-w9:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/migrate-legacy.test.py",
+    "line": 128
+  },
+  {
+    "id": "review-style-w9:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/legacy-profile.test.py",
+    "line": 30
+  },
+  {
+    "id": "review-style-w9:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 10
+  },
+  {
+    "id": "review-style-w9:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/migrate-probe.js",
+    "line": 6
+  },
+  {
+    "id": "review-style-w9:F-006",
+    "severity": "info",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/migrate-legacy.py",
+    "line": 39
+  },
+  {
+    "id": "review-testing-practices-w1:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "commits": [
+      "69e9e91ef364ee18b7ebbc2633e58e9a0e0a5c7c"
+    ],
+    "tests": [
+      "live membership amendment includes a newly introduced unapproved Intent and its editable proposal target",
+      "live pending amendment resolution supplies versions for every manifest Intent including unapproved and cancelled",
+      "Flow-only amendment actually crosses the live command boundary with an empty affected set",
+      "cancelled required Intents do not disable Flow approval or appear in revision membership choices"
+    ],
+    "red": "/tmp/pr1113-r02-ui-group8-red.log",
+    "green": "/tmp/pr1113-r02-ui-group8-green.log",
+    "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+    "line": 19
+  },
+  {
+    "id": "review-testing-practices-w1:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/tests/managed-work-advanced.case.tsx",
+    "line": 626
+  },
+  {
+    "id": "review-testing-practices-w1:F-003",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Owner-approved operational behavior verified",
+    "commits": [
+      "86a949af3325721043e89f9377582ce32c740157"
+    ],
+    "tests": [
+      "missing isolated runtime cache is refused before any installer can use the network or host caches",
+      "runtime proof refuses URL or git lock sources before a registry override can be bypassed",
+      "extracted allowlisted source installs its frozen runtime offline and serves managed work plus MCP from an isolated process"
+    ],
+    "red": "/tmp/pr1113-r02-ops-package-network-red.log",
+    "green": "/tmp/pr1113-r02-ops-package-all-green.log; /tmp/pr1113-r02-ops-package-normal-offline-green.log",
+    "file": "scripts/package-team-hub.test.ts",
+    "line": 129
+  },
+  {
+    "id": "review-testing-practices-w1:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/tests/managed-work-advanced.case.tsx",
+    "line": 283
+  },
+  {
+    "id": "review-testing-practices-w1:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/legacy-profile.test.py",
+    "line": 38
+  },
+  {
+    "id": "review-testing-practices-w2:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/tests/managed-work-advanced.case.tsx",
+    "line": 277
+  },
+  {
+    "id": "review-testing-practices-w2:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/tests/work-incremental.case.tsx",
+    "line": 23
+  },
+  {
+    "id": "review-testing-practices-w2:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/tests/managed-work.case.tsx",
+    "line": 530
+  },
+  {
+    "id": "review-testing-practices-w2:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "apps/hub-web/src/features/remote/machines.tsx",
+    "line": 485
+  },
+  {
+    "id": "review-testing-practices-w3:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/migrate-legacy.test.py",
+    "line": 137
+  },
+  {
+    "id": "review-testing-practices-w3:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/e2e.sh",
+    "line": 436
+  },
+  {
+    "id": "review-testing-practices-w4:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "scripts/hubctl-rollback.test.ts",
+    "line": 131
+  },
+  {
+    "id": "review-testing-practices-w4:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "scripts/package-team-hub.test.ts",
+    "line": 129
+  },
+  {
+    "id": "review-testing-practices-w5:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified canonical HTTP delivery/reconciliation or admission/overload regression.",
+    "commits": [
+      "771c8a27eac64f3703ad9102e28747b139cc3564"
+    ],
+    "tests": [
+      "external Git delivery never holds the global mutation queue and same-key retry never starts it twice",
+      "delivery completion rechecks the current selected line without overwriting a newer selection",
+      "restart exposes interrupted effects and human no-effect reconciliation releases the fence without repeating Git",
+      "legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs",
+      "a publication survives authority expiry and current human reconciliation uses only server-recorded facts",
+      "operator archives completed jobs at the audit cap without losing exact reads replay or external facts",
+      "human inspection recovers the exact interrupted publication through the public API without a second push",
+      "restart finalizes an exact server-recorded result on original-key retries without invoking Git",
+      "read-only publication inspection verifies the exact operation marker without repeating Git publication",
+      "a throwing publication adapter leaves an uncertain fence instead of inventing definitive failure",
+      "a lost push reply remains uncertain and read-only inspection recovers the published commit",
+      "review bundles are evidence subjects, never integration snapshots > rejects bundle delivery before adapter side effects, even for an already selected malformed line",
+      "review bundles are evidence subjects, never integration snapshots > legacy revisions remain selectable and deliverable snapshots"
+    ],
+    "proof": {
+      "red": "evidence/delivery-flake-probe.json: reviewed30ms assertion falsely fails with completed server response +80ms client latency",
+      "green": "same probe passes current barrier-based test before Git release",
+      "productionSource": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6",
+      "sharedSourceEdited": false
+    },
+    "file": "src/hub/delivery-queue.test.ts",
+    "line": 34
+  },
+  {
+    "id": "review-testing-practices-w5:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/delivery-queue.test.ts",
+    "line": 88
+  },
+  {
+    "id": "review-testing-practices-w5:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/client-command.test.ts",
+    "line": 17
+  },
+  {
+    "id": "review-testing-practices-w6:F-001",
+    "severity": "major",
+    "status": "fixed",
+    "reason": "Verified live-adapter UI/MCP regression; ",
+    "tests": [
+      "live attention Evidence response satisfies the closed API schema and Work client",
+      "live attention accepts and opens late Evidence with its cached Attempt without parent requests",
+      "live Overview renders Evidence roots and resolves their Attempt only when opened",
+      "live Evidence parent lookup failure remains visible and never navigates"
+    ],
+    "red": "/tmp/pr1113-r02-ui-attention-red.log",
+    "green": "/tmp/pr1113-r02-ui-attention-green.log",
+    "commits": [
+      "a0e20ad7fd9a76e7ba7fead9723c790ca306c51a",
+      "da9ee774e60cd4ec942c23a28641517df0696361"
+    ],
+    "file": "src/hub/work/storage.ts",
+    "line": 230
+  },
+  {
+    "id": "review-testing-practices-w6:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.fixture.test-support.ts",
+    "line": 22
+  },
+  {
+    "id": "review-testing-practices-w6:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.test.ts",
+    "line": 137
+  },
+  {
+    "id": "review-testing-practices-w6:F-004",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.scenarios.test.ts",
+    "line": 14
+  },
+  {
+    "id": "review-testing-practices-w6:F-005",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/work/storage.lifecycle.test.ts",
+    "line": 4
+  },
+  {
+    "id": "review-testing-practices-w7:F-001",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "deploy/team-hub/release/e2e.sh",
+    "line": 436
+  },
+  {
+    "id": "review-testing-practices-w7:F-002",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "docs/docs/team-hub-deployment.md",
+    "line": 234
+  },
+  {
+    "id": "review-testing-practices-w7:F-003",
+    "severity": "minor",
+    "status": "left",
+    "reason": "Outside this round2 major-repair scope; retain as an explicit follow-up. No unrelated refactor added.",
+    "file": "src/hub/mcp.test.ts",
+    "line": 62
+  }
+]

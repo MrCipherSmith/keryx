@@ -1,0 +1,140 @@
+{
+  "task": {
+    "task_id": "task-27",
+    "task_name": "Native queue lifecycle participant authorization and bounded reconciliation",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Fix assigned round 2 PR1113 mechanisms. Exact file ownership and bounds are in parent dispatch; review suggestions are hypotheses. Reproduce RED then minimal fix GREEN per mechanism. Owner allows Flow-only empty affectedIntentIds in all layers. Do not edit original review input. No unrelated refactors.",
+    "target_files": [
+      "src/hub/work/execution.ts",
+      "src/hub/remote-v2/queue.ts",
+      "src/hub/work/handlers-attempts.ts",
+      "src/hub/work/handlers-reviews.ts"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "review-backend-w2:F-002",
+        "file": "src/hub/remote-v2/queue.ts",
+        "severity": "CRITICAL",
+        "message": "Fix for highload-w12:F-002 / logic-w21:F-002 (stuck reservations) over-releases. drainSessionQueue calls admissionRefused for every HubFailure from the queued admission, and admissionRefused (execution.ts) releases the reservation permanently. Many of those failures are transient and leave the item queued for a later drain: 'quota-exceeded' (Active work budget exhausted), 'execution-allocation-uncertain' from beforeAdmission, an expired controller lease in held(), or stale config. On the next drain beforeAdmission finds the reservation in state 'released' and fails with 409 'execution-already-allocated'; a reauthorized replacement fails with 'execution-reservation-released'.",
+        "suggested_fix": "Do not release in admissionRefused for refusals that leave the native item queued. Either drop the hook and rely on reconcileSession's terminal facts, or pass the HubFailure code and release only for permanent refusals (authority revoked, reservation authority mismatch). Add a network test: queue a managed message, refuse it once with active-run quota, free the budget, and expect it to be admitted and bound.",
+        "line": 68
+      },
+      {
+        "id": "review-backend-w7:F-004",
+        "file": "src/hub/remote-v2/queue.ts",
+        "severity": "CRITICAL",
+        "message": "drainSessionQueue releases the managed execution reservation on ANY HubFailure from the attempted admission, but many of those refusals are transient: beforeAdmission -> guard() 'pending-amendment' (until a human approves/withdraws), assertKnownExecutions/'execution-allocation-uncertain' (until another run of the Attempt reconciles), 'context-unavailable', and the 413 active-run budget in admitMessage/admitCommand. Release is irreversible ('released cannot be resurrected'), and the queued native item stays at the head of the FIFO.",
+        "suggested_fix": "Release only on refusals that are definitive for that operation (e.g. the original actor no longer authorized, work-binding-authority, work-association-stale pins changed, stale-catalogue/config for that item); for transient codes (pending-amendment, execution-allocation-uncertain, context-unavailable, quota-exceeded, hub-busy) keep the reservation 'reserved' and let the next drain retry. Encode the definitive set as an explicit allowlist next to admissionRefused and add a test: pending amendment withdrawn -> queued managed item admits.",
+        "line": 68
+      },
+      {
+        "id": "review-degradation-w13:F-002",
+        "file": "src/hub/work/execution.ts",
+        "severity": "CRITICAL",
+        "message": "The managed-queue edit support (events.ts QueueEdit lineage, execution.ts queueObserved/reconcileSession) and its regression test model a native edit as 'old item removed + new item with a new operationId and replacesOperationId'. The actual native executor edits in place: src/session/host.ts `item.text = operation.request.text; item.version++;` keeps the same queueItemId and operationId and emits one queue-changed for it. With the real shape, reconcileSession's pendingReplacement stays true forever: the applied QueueEdit operation targets the original queueItemId and no queue row ever carries the edit operation's id. If the operator later removes that queued item, `original.item.state === 'removed' && !liveReplacement && !pendingReplacement` is never satisfied, so the reservation is never released.",
+        "suggested_fix": "Treat an applied QueueEdit whose target queue item kept its operationId as a completed in-place edit (not a pending replacement) \u2014 e.g. only count it pending while its response is not yet applied, or when a row with replacesOperationId===original exists \u2014 and rewrite the edit test against the real host semantics (same queueItemId/operationId, version+1), adding edit-then-remove.",
+        "line": 97
+      },
+      {
+        "id": "review-degradation-w2:DEG-R2-W2-001",
+        "file": "src/hub/remote-v2/queue.ts",
+        "severity": "CRITICAL",
+        "message": "Fix for review-highload-w12:F-002 / review-logic-w21:F-002 (stuck 'reserved' reservations) over-corrects: drainSessionQueue now releases the managed reservation on ANY HubFailure during queued admission, including transient ones (hub-wide active-run budget 'quota-exceeded' thrown by admitMessage after beforeAdmission, 'machine-offline' from completeProjection, the work durable quota in admitted()). The native queue item is deliberately left 'queued' ('Refusal is not an observed native queue transition'), so the next drain of the same item calls beforeAdmission, finds the reservation 'released' and fails 409 'execution-already-allocated' (execution.ts beforeAdmission), which is again caught and swallowed. Reauthorizing the item cannot recover it either: beforeAdmission -> sourceReservation -> source.state 'released' -> 409 'execution-reservation-released'.",
+        "suggested_fix": "Release only on refusals that are terminal for that queue item (authority revoked, stale config/catalogue, work pins stale, explicit quota of the work history), or make release reversible: let beforeAdmission re-reserve a 'released' reservation for the same still-queued operationId after re-running guard(); alternatively move the active-run budget check ahead of beforeAdmission and do not call admissionRefused for 413 active-budget / machine-offline failures. Add a test that refuses one drain with the active-run budget, frees it, and asserts the SAME session's queued managed item is then admitted.",
+        "line": 68
+      },
+      {
+        "id": "review-highload-w2:HL-R2-001",
+        "file": "src/hub/work/execution.ts",
+        "severity": "CRITICAL",
+        "message": "reconcileSession(sessionId) reads remote_session, then ALL remote_queue rows, ALL remote_command rows and ALL remote_operation rows of the session (execution.ts:86-89), JSON-parsing every body, and only then loops over pendingReservationsForSession(sessionId). For the common case of zero pending reservations the loads are wasted. remote-v2/index.ts:402-403 calls it on every machine `session-command-receipt`/`command-receipt` frame and every `session-event` frame, including the per-message `kind: \"message\"` events. createWorkExecution is always wired (server.ts:116, no workManagementEnabled gate), so every Hub session pays this cost, not just managed ones. No code path deletes remote_command, remote_operation or remote_queue rows (the only remote deletes are capability pages, remote-v2/storage.ts:93-94, projection.ts:28/56). So the per-frame cost grows with the session's lifetime: every turn, queued message, controller renewal and config change adds rows. When reservations are pending, the loop also calls sourceReservation per queue row and per QueueReauthorize operation (execution.ts:93, 97), and each call runs another remote.all('remote_queue',{sessionId}) (execution.ts:77). That makes the pending case O(R x (Q + O) x Q). This code was added in this round by fa0a62e14 to answer the stuck-reservation findings (review-highload-w12:F-002, review-logic-w20:F-001, review-logic-w21:F-002), and the commit message gives no reason for loading everything up front.",
+        "suggested_fix": "Make reconcileSession pay only when there is something to reconcile. Read `const pending = store.work.pendingReservationsForSession(sessionId)` first (it is already served by the partial index hub_work_reservation_pending_session) and return before touching remote tables when it is empty. Load queue/commands/operations once, only when pending.length > 0. Narrow them to what the loop reads: commands filtered by the pending operationIds, operations of kind QueueReauthorize/QueueEdit, queue rows not in a terminal state. Pass the already-loaded queue into sourceReservation instead of re-querying it per call. Optionally call reconcileSession from session-event only for kinds that can change reservation state (queue-changed, session-state, command-outcome), not for `message`.",
+        "line": 89
+      },
+      {
+        "id": "review-highload-w9:HL-W9-002",
+        "file": "src/hub/work/execution.ts",
+        "severity": "CRITICAL",
+        "message": "reconcileSession loads and JSON-parses every remote_queue, remote_command and remote_operation row of the session, then iterates `store.work.pendingReservationsForSession(sessionId)` \u2014 an indexed, usually empty query \u2014 so the full-history scans run even when there is nothing to reconcile. It is invoked from remote-v2/index.ts on every `session-event` frame and every `command-receipt`/`session-command-receipt` frame, inside the frame's writeTransaction, and from hasPendingExecution on work commands. None of these tables is pruned (no DELETE for remote_command/remote_operation/remote_queue in src/hub). When a reservation is pending, sourceReservation adds a further `store.remote.all('remote_queue',{sessionId})` plus an O(queue) `queue.find` walk per queue row and per operation, i.e. O(Q\u00b2) per reservation.",
+        "suggested_fix": "Query pendingReservationsForSession first and return immediately when empty; then load only the rows that can matter (queue rows / operations / commands whose operationId is a reserved operation or a replacement of one \u2014 by indexed operationId lookups rather than whole-session scans). In sourceReservation, build one Map<operationId, QueueRow> per call (or reuse the caller's queue) instead of re-querying and linear `find` per step.",
+        "line": 88
+      },
+      {
+        "id": "review-logic-w2:F-001",
+        "file": "src/hub/remote-v2/queue.ts",
+        "severity": "CRITICAL",
+        "message": "drainSessionQueue catches every HubFailure raised while admitting the queue head and calls deps.admissionRefused, which releases the managed reservation (execution.ts admissionRefused -> release -> state 'released'). Many of those failures are transient, not a 'definitive pre-admission refusal' as execution.md describes: admitMessage's global active-run budget (413 'Active work budget exhausted; reconcile existing ownership'), an expired controller lease that is later renewed (held()), assertKnownExecutions' 'execution-allocation-uncertain' while another run is still unknown, and the durable work quota thrown from admitted()->store.work.save. The hub refusal leaves the native queue item 'queued' at the FIFO head, so the next drain re-admits the same operationId, beforeAdmission finds reservation.state==='released' and fails 409 'execution-already-allocated', and admissionRefused runs again. Reauthorize cannot recover it either: beforeAdmission's replacement path fails 'execution-reservation-released' because the source is released.",
+        "suggested_fix": "Release only on refusals that prove non-admission permanently (authority revoked, work association stale/terminal, stale-catalogue, closed session). For transient HubFailures (quota-exceeded budget, controller lease, execution-allocation-uncertain, machine-offline) leave the reservation 'reserved' so a later drain can admit it. Pass the HubFailure (code/status) to admissionRefused and decide there, with a test that a 413 budget refusal followed by budget recovery admits and binds the original reservation.",
+        "line": 68
+      },
+      {
+        "id": "review-logic-w2:F-002",
+        "file": "src/hub/work/execution.ts",
+        "severity": "CRITICAL",
+        "message": "queueObserved runs inside the machine 'session-event' frame transaction (remote-v2/index.ts: `ingestSessionEvent(...); managedExecution?.queueObserved(frame.payload,previousQueue); ...` inside store.writeTransaction). For a queue-changed event produced by an applied native edit of a managed item, it throws 409 whenever the source reservation is not 'reserved'. That is reachable: after F-001 (or any drain refusal) the reservation is 'released' while the native item is still an editable queued message (session-operations.ts queueMutation allows PATCH on any queued item without admissionCommandId). The throw rolls back the whole event ingest and the machine receives an error frame instead of a session-event-ack, although the edit already happened on the machine.",
+        "suggested_fix": "Never throw from queueObserved for a reservation that is no longer reserved: ingest the native event and simply do not transfer the reservation (the replacement then admits as non-managed or is refused at beforeAdmission/HTTP). Reject the edit earlier instead: in queueMutation (or a managed pre-check) refuse PATCH/reauthorize of an item whose managed reservation is released. Add a test: release a reservation, apply a native edit, and assert the session-event is acked.",
+        "line": 135
+      },
+      {
+        "id": "review-logic-w36:F-001",
+        "file": "src/hub/work/execution.ts",
+        "severity": "CRITICAL",
+        "message": "drainSessionQueue calls deps.admissionRefused for EVERY HubFailure raised during a queued admission, and admissionRefused releases the reservation (state 'released' is terminal: saveExecutionReservation refuses any later change). Many of those failures are transient \u2014 the global active-run budget (`repo.activeRuns()>=repo.budgets.activeRuns` in admitMessage/admitCommand, 413), `held()` controller checks, 'Queued configuration changed' \u2014 and the refusal deliberately does not change the native queue item ('Refusal is not an observed native queue transition'), so the item stays at the FIFO head and drain retries it. Every retry now reaches beforeAdmission, finds the reservation not 'reserved' and fails 'execution-already-allocated'/'execution-reservation-released', i.e. it can never succeed.",
+        "suggested_fix": "Release only on refusals that end the queued operation (authority revoked, association stale, reservation/attempt pins stale, recovery-required), and keep the reservation 'reserved' for retryable failures (quota-exceeded, hub-busy, controller/config version changes) so the queue retry can admit it; alternatively, when releasing, also issue the native queue removal/suspension so the FIFO is not fenced by an item that can never be admitted, and surface it to the operator.",
+        "line": 220
+      },
+      {
+        "id": "review-performance-w9:F-001",
+        "file": "src/hub/work/execution.ts",
+        "severity": "CRITICAL",
+        "message": "reconcileSession loads and JSON-parses every remote_queue, remote_command and remote_operation row of the session, then asks pendingReservationsForSession whether there is anything to reconcile. remote-v2/index.ts calls managedExecution?.reconcileSession(...) inside the machine writeTransaction for every session-event frame and every (session-)command-receipt frame, and server.ts always constructs the port (`managedExecution:createWorkExecution(store)`), so the scan also runs when KERYX_HUB_WORK_ENABLED=false and when the session has no managed reservation at all. remote_operation is the session's durable idempotency ledger and remote_command its command history; both grow with every message/turn of a long-lived session.",
+        "suggested_fix": "Query pendingReservationsForSession(sessionId) first and return when it is empty (the common case); only then load queue/commands/operations, and prefer targeted lookups (commands by operationId, the queue item of the reservation) over full-session scans. Optionally do not construct/inject the managed-execution port when work management is disabled.",
+        "line": 88
+      },
+      {
+        "id": "review-regression-w2:F-001",
+        "file": "src/hub/remote-v2/queue.ts",
+        "severity": "CRITICAL",
+        "message": "The fix for the stuck-reservation findings added admissionRefused (src/hub/work/execution.ts `admissionRefused` -> `release`) and calls it from drainSessionQueue's catch for every HubFailure. Several of those failures are transient and the queue keeps the item queued and retries it (the catch returns without touching the queue row; maintenance re-drains via repo.retryableSessions and every session-state event re-drains). In particular admitMessage (src/hub/remote-v2/sessions.ts) runs `deps?.beforeAdmission?.(auth,row,operationId,state)` and only then `if(repo.activeRuns()>=repo.budgets.activeRuns)fail(413,'quota-exceeded',...)`; the managed `admitted` hook can also fail 413 from the work durable quota in store.work.save. Either refusal rolls back the atomic admission but then permanently flips the reservation to 'released' outside the atomic block. On the next drain of the same head, beforeAdmission finds the reservation in state 'released' and fails `execution-already-allocated` (src/hub/work/execution.ts `if (reservation.state !== 'reserved')`), and a human reauthorization of that item fails `execution-reservation-released` via sourceReservation. Before this change the reservation stayed 'reserved' and the queued managed message was admitted once the budget freed.",
+        "suggested_fix": "Release only on refusals that end the logical operation (authority revoked, association/work stale, explicit rejection); for retryable HubFailures (413 quota-exceeded budget, machine-offline, stale projection) leave the reservation 'reserved'. Alternatively perform the budget check before beforeAdmission and let admissionRefused receive the failure code, and add a drain test: managed queued item, budget full -> refuse, budget freed -> admitted with the original binding.",
+        "line": 68
+      },
+      {
+        "id": "review-security-code-w32:SEC-W32-001",
+        "file": "src/hub/work/handlers-attempts.ts",
+        "severity": "CRITICAL",
+        "message": "The fix for round-1 review-security-code-w2:SEC-001 binds an Attempt to its author only in attemptCreate (`p.participantId !== actor.id` -> 403, agent + method human -> 403). attemptStart, attemptReport, subjectCreate, evidenceRecord, attemptSubmit and attemptWithdraw never compare the actor with a.participantId or actor.kind with a.method. allowedWorkCommands lets every non-read-only contributor (agents included) run all six, and workCommand's authorize() checks only project membership.",
+        "suggested_fix": "Add one transaction helper `participant(a)` that fails 403 'participant-mismatch' unless actor.id === a.participantId (and actor.kind !== 'agent' when a.method === 'human'), and call it in attemptStart, attemptReport, subjectCreate, evidenceRecord, attemptSubmit and attemptWithdraw; or, if collaborative contribution on another's Attempt is intended, render the submission/subject createdBy and actorKind next to the Attempt participant and flag a mismatch. Add a domain test where an agent submits a human-method Attempt created by another principal.",
+        "line": 147,
+        "premise_verdict": "owner-decision",
+        "premise_answer": "uphold"
+      }
+    ],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

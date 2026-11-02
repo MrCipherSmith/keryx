@@ -17,7 +17,7 @@ const clients: InstanceType<typeof Client>[] = [];
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "hub-mcp-"));
-  app = createHubApplication({ dataDir: dir, operatorToken: operator, agentToken: agent });
+  app = createHubApplication({ dataDir: dir, operatorToken: operator, agentToken: agent, workManagement: { enabled: true } });
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: async request => {
     if (new URL(request.url).pathname !== "/mcp") return app.fetch(request);
     const bearer = request.headers.get("authorization");
@@ -58,7 +58,12 @@ function data(result: Awaited<ReturnType<InstanceType<typeof Client>["callTool"]
 
 test("official SDK initializes, discovers a fixed annotated catalogue, and reads real Hub data", async () => {
   const { project, spec } = await fixture(); const c = await client();
-  const list = await c.listTools(); expect(list.tools).toHaveLength(15);
+  const list = await c.listTools();
+  expect(list.tools.filter(tool => !tool.name.startsWith('hub_work_')).map(tool => tool.name).sort()).toEqual([
+    'hub_list_projects', 'hub_get_project', 'hub_list_flows', 'hub_get_flow', 'hub_list_documents',
+    'hub_get_document', 'hub_list_revisions', 'hub_get_revision', 'hub_get_evidence', 'hub_get_events',
+    'hub_get_context', 'hub_start_flow', 'hub_create_revision', 'hub_add_evidence', 'hub_submit_for_review',
+  ].sort());
   expect(list.tools.find(t => t.name === "hub_get_document")?.annotations?.readOnlyHint).toBe(true);
   expect(list.tools.find(t => t.name === "hub_create_revision")?.annotations?.readOnlyHint).toBe(false);
   expect(list.tools.map(t => t.name)).not.toContain("hub_accept_flow");
@@ -66,6 +71,39 @@ test("official SDK initializes, discovers a fixed annotated catalogue, and reads
   expect(data(await c.callTool({ name: "hub_get_document", arguments: { projectId: project.id, documentId: spec.id } })).content).toBe("# MCP task");
   expect(data(await c.callTool({ name: "hub_get_context", arguments: { projectId: project.id } })).fullSnapshot).toBe(true);
   expect(Array.isArray(data(await c.callTool({ name: "hub_get_events", arguments: { projectId: project.id, after: 0 } })).events)).toBe(true);
+});
+
+test("managed work tools use authenticated work routes, exact replay and human authority boundaries", async () => {
+  const { project } = await fixture(); const c = await client();
+  const catalogue = await c.listTools();
+  expect(catalogue.tools.find(tool => tool.name === "hub_work_get_context")?.annotations?.readOnlyHint).toBe(true);
+  expect(catalogue.tools.find(tool => tool.name === "hub_work_intent_create")?.annotations?.readOnlyHint).toBe(false);
+  const create = { projectId: project.id, operationId: "managed-flow-one", expectedVersions: {}, payload: { title: "Managed flow", problem: "Problem", expectedOutcome: "Outcome", scope: "Scope", outOfScope: "Other", ownerId: null, specification: null, criteria: [{ criterionId: "criterion1", text: "Deliver work", waivable: false }] } };
+  const created = await c.callTool({ name: "hub_work_flow_create", arguments: create });
+  expect(created.isError).not.toBe(true);
+  const envelope = data(created);
+  expect(envelope.operationId).toBe("managed-flow-one");
+  expect(envelope.entities).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "flow", title: "Managed flow", createdBy: "agent:connector" })]));
+  expect(data(await c.callTool({ name: "hub_work_flow_create", arguments: create }))).toEqual(envelope);
+  const conflict = await c.callTool({ name: "hub_work_flow_create", arguments: { ...create, payload: { ...create.payload, title: "Changed" } } });
+  expect(conflict.isError).toBe(true); expect(JSON.stringify(conflict)).toContain("idempotency-conflict");
+  const flows = data(await c.callTool({ name: "hub_work_list_flows", arguments: { projectId: project.id } }));
+  expect(flows.records).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "flow", title: "Managed flow" })]));
+  expect(data(await c.callTool({ name: "hub_work_operation", arguments: { projectId: project.id, operationId: create.operationId } })).result).toEqual(envelope);
+  for (const name of ["hub_work_requirements_approve", "hub_work_attempt_select", "hub_work_review_decide", "hub_work_requirements_amend", "hub_work_execution_bind"]) expect((await c.callTool({ name, arguments: {} })).isError).toBe(true);
+});
+
+test("managed MCP rejects malformed response projections and forged contribution provenance", async () => {
+  let calls = 0;
+  const rpc = async (name: string, args: Record<string, unknown>) => {
+    const request = new Request("http://hub.test/mcp", { method: "POST", headers: { Authorization: `Bearer ${agent}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) });
+    const result = await handleHubMcp(request, { actor: { id: "agent:test", kind: "agent", role: "agent" }, apiFetch: async () => { calls++; return Response.json({ records: [{ kind: "unsupported-record" }], nextCursor: null, eventCursor: "opaque-cursor" }); } });
+    return result.json();
+  };
+  const invalid = await rpc("hub_work_list_flows", { projectId: "p1" });
+  expect(invalid.result.isError).toBe(true); expect(JSON.stringify(invalid)).toContain("invalid-response");
+  const forged = await rpc("hub_work_evidence_record", { projectId: "p1", operationId: "op1", expectedVersions: { a1: 1 }, payload: { attemptId: "a1", subjectId: "s1", subjectDigest: "a".repeat(64), criterionIds: ["c1"], result: "pass", method: "test", report: "OK", outputDigest: "b".repeat(64), sourceRunId: null, sourceObservationId: null, source: "ci-observation" } });
+  expect(forged.result.isError).toBe(true); expect(calls).toBe(1);
 });
 
 test("SDK mutations preserve replay/conflict, exact revision Evidence and human acceptance boundary", async () => {
@@ -78,6 +116,11 @@ test("SDK mutations preserve replay/conflict, exact revision Evidence and human 
   expect(data(await c.callTool({ name: "hub_create_revision", arguments: create }))).toEqual(revision);
   const conflict = await c.callTool({ name: "hub_create_revision", arguments: { ...create, message: "changed" } }); expect(conflict.isError).toBe(true); expect(JSON.stringify(conflict)).toContain("idempotency-conflict");
   const summary = data(await c.callTool({ name: "hub_list_revisions", arguments: { projectId: project.id } })); expect(JSON.stringify(summary)).not.toContain("contentBase64");
+  const newer = data(await c.callTool({ name: "hub_create_revision", arguments: { ...create, message: "newer", operationId: "revision-two" } }));
+  const head = data(await c.callTool({ name: "hub_list_revisions", arguments: { projectId: project.id, limit: 1 } }));
+  expect((head.revisions as CodeRevision[]).map(item => item.id)).toEqual([newer.id as string]); expect(head.nextCursor).toBe(newer.id as string);
+  const older = data(await c.callTool({ name: "hub_list_revisions", arguments: { projectId: project.id, afterId: head.nextCursor, limit: 1 } }));
+  expect((older.revisions as CodeRevision[]).map(item => item.id)).toEqual([revision.id as string]); expect(older.nextCursor).toBeUndefined();
   expect(data(await c.callTool({ name: "hub_get_revision", arguments: { projectId: project.id, revisionId: revision.id } })).id).toBe(revision.id);
   const evidence = data(await c.callTool({ name: "hub_add_evidence", arguments: { projectId: project.id, flowId: flow.id, subjectRevisionId: revision.id, checkId: "sdk", command: "test", exitCode: 0, output: "pass", operationId: "evidence-one" } })); expect(evidence.actorId).toBe("agent:connector");
   const submitted = data(await c.callTool({ name: "hub_submit_for_review", arguments: { projectId: project.id, flowId: flow.id, expectedVersion: started.version, subjectRevisionId: revision.id, operationId: "submit-one" } })); expect(submitted.status).toBe("implemented");
@@ -99,7 +142,12 @@ test("tool invocation retains cross-project domain scope and sanitizes unexpecte
   const denied = await c.callTool({ name: "hub_get_document", arguments: { projectId: project.id, documentId: other.spec.id } }); expect(denied.isError).toBe(true); expect(JSON.stringify(denied)).toContain("not-found");
   const request = new Request("http://hub.test/mcp", { method: "POST", headers: { Authorization: `Bearer ${agent}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "hub_list_projects", arguments: {} } }) });
   const r = await handleHubMcp(request, { actor: { id: "agent:test", kind: "agent", role: "agent" }, apiFetch: async () => { throw Error("SECRET_INTERNAL_PATH " + agent); } });
-  expect(await r.text()).not.toContain("SECRET_INTERNAL_PATH");
+  expect(r.status).toBe(200);
+  const failure = await r.json();
+  expect(failure).toMatchObject({ jsonrpc: '2.0', id: 1, result: { isError: true } });
+  expect(JSON.parse(failure.result.content[0].text)).toEqual({ error: { code: 'operation-failed', message: 'Hub operation failed.' } });
+  expect(JSON.stringify(failure)).not.toContain('SECRET_INTERNAL_PATH');
+  expect(JSON.stringify(failure)).not.toContain(agent);
 });
 
 test("HTTP adapter bounds malformed bodies and gives explicit stateless notification/method outcomes", async () => {
@@ -176,4 +224,25 @@ test("F-MCP-001: official SDK callTool parses structured results with escaped op
       expect(JSON.stringify(result)).not.toContain(secret);
     } finally { await c.close(); await endpoint.stop(true); }
   }
+});
+
+
+test("revision MCP forwards exclusive pagination so more than fifty revisions remain reachable", async () => {
+  const paths: string[] = [];
+  const call = async (args: Record<string, unknown>) => {
+    const request = new Request("http://hub.test/mcp", { method: "POST", headers: { Authorization: `Bearer ${agent}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "hub_list_revisions", arguments: args } }) });
+    const response = await handleHubMcp(request, { actor: { id: "agent:test", kind: "agent", role: "agent" }, apiFetch: async req => { paths.push(req.url); return Response.json(new URL(req.url).searchParams.has("afterId") ? { revisions: [{ id: "revision-old" }] } : { revisions: Array.from({length:50},(_,i)=>({id:"revision-"+i})), nextCursor: "revision-49" }); } });
+    return response.json();
+  };
+  const first = await call({ projectId: "p", limit: 50 });
+  expect(first.result.isError).not.toBe(true);
+  const page = JSON.parse(first.result.content[0].text);
+  expect(page.nextCursor).toBe("revision-49");
+  const second = await call({ projectId: "p", limit: 50, afterId: page.nextCursor });
+  expect(second.result.isError).not.toBe(true);
+  expect(JSON.parse(second.result.content[0].text).revisions).toEqual([{id:"revision-old"}]);
+  expect(new URL(paths[1]!).searchParams.get("afterId")).toBe("revision-49");
+  const invalid = await call({ projectId: "p", limit: 51 });
+  expect(invalid.result.isError).toBe(true);
+  expect(paths).toHaveLength(2);
 });

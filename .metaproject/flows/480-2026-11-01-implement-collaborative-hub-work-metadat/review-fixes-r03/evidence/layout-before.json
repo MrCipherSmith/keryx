@@ -1,0 +1,42 @@
+{
+  "phase": "before",
+  "command": "bun .metaproject/jobs/pr1113-r03-fixes/layout/measure.mjs before",
+  "cells": [
+    {
+      "lang": "en",
+      "viewport": {
+        "width": 392,
+        "height": 900
+      },
+      "cardWidth": 360,
+      "title": {
+        "x": 53,
+        "width": 150.5,
+        "right": 203.5
+      },
+      "disclosure": {
+        "x": 211.5,
+        "width": 150.5,
+        "right": 362
+      }
+    },
+    {
+      "lang": "ru",
+      "viewport": {
+        "width": 392,
+        "height": 900
+      },
+      "cardWidth": 360,
+      "title": {
+        "x": 53,
+        "width": 150.5,
+        "right": 203.5
+      },
+      "disclosure": {
+        "x": 211.5,
+        "width": 150.5,
+        "right": 362
+      }
+    }
+  ]
+}

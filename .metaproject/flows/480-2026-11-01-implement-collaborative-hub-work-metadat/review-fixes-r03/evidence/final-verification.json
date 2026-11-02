@@ -1,0 +1,84 @@
+{
+  "status": "DONE_WITH_CONCERNS",
+  "gate": "PASS_WITH_WARNINGS",
+  "scope": "full root lint/typechecks and focused Hub plus changed tests",
+  "base": "7e7179a8ab937703df49b6b14e89e5f9dd66eb96",
+  "checks": [
+    {
+      "name": "root lint",
+      "command": "bun run lint",
+      "status": "pass",
+      "result": "0 errors, 0 warnings",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-06-57-367Z-32c820_run.log"
+    },
+    {
+      "name": "root typecheck",
+      "command": "bun run typecheck",
+      "status": "pass",
+      "result": "0 errors",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-06-44-547Z-e9bfb6_run.log"
+    },
+    {
+      "name": "scripts typecheck",
+      "command": "bun run typecheck:scripts",
+      "status": "pass",
+      "result": "0 errors",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-06-03-614Z-666467_run.log"
+    },
+    {
+      "name": "health",
+      "command": "bun run src/cli.ts health run --source eslint,typescript",
+      "status": "pass",
+      "result": "0 findings; optional sources skipped; partial coverage",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-07-05-805Z-e5b71b_run.log"
+    },
+    {
+      "name": "changed tests",
+      "command": "bun run src/cli.ts test run --changed --strict",
+      "status": "pass",
+      "result": "254 passed, 0 failed, 0 skipped; 43 selected files",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-07-39-584Z-8b78bb_run.log"
+    },
+    {
+      "name": "hub web",
+      "command": "bun run check:hub-web",
+      "status": "pass",
+      "result": "43 files, 217 passed, 0 failed; typecheck, lint and generated assets freshness passed",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-06-30-557Z-9ee5a6_run.log"
+    },
+    {
+      "name": "hub backend",
+      "command": "bun test src/hub/",
+      "status": "pass",
+      "result": "96 files, 555 passed, 0 failed",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-07-01-804Z-7ddc04_run.log"
+    },
+    {
+      "name": "packaging and cache",
+      "command": "bun test scripts/package-team-hub.test.ts scripts/hub-runtime-cache.security.test.ts",
+      "status": "pass",
+      "result": "14 passed, 0 failed, 1 skipped (offline runtime cache integration)",
+      "raw_log": ".metaproject/data/gdctx/raw/2026-11-02T13-06-50-484Z-9c4e3a_run.log"
+    },
+    {
+      "name": "circular imports",
+      "command": "madge --circular --extensions ts,tsx src/",
+      "status": "skipped",
+      "result": "madge unavailable; not a devDependency",
+      "raw_log": null
+    }
+  ],
+  "findings": [],
+  "limitations": [
+    "One packaging integration test skipped because the offline runtime cache was not prepared; no network or install attempted.",
+    "Optional circular import check skipped because madge is unavailable.",
+    "Health was limited to eslint and typescript; other sources intentionally skipped.",
+    "Changed-test runner selects web .case files through Bun; the separate Vitest web suite is authoritative for those cases."
+  ],
+  "notes": [
+    "Commands were run through bun run src/cli.ts ctx run -- except availability discovery.",
+    "Packaging run temporarily unlinked apps/hub-web/node_modules and restored the original symlink target in EXIT trap; root node_modules untouched.",
+    "The parent committed the same working-tree bytes while verification ran.",
+    "Web asset digest: 8a23202fa242a709b9a993138c2b42151738535f00c3e0c95ab86e3d76a830a3."
+  ]
+}

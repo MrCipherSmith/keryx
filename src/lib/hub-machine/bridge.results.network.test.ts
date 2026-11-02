@@ -37,7 +37,15 @@ test('R9.3 a result upload whose receipt is lost replays the same operation once
 },40000);
 type Revision={id:string;message:string;files:Array<{path:string;contentBase64?:string}>};
 type Evidence={flowId:string;subjectRevisionId:string;command:string;exitCode:number;provenance:string};
-const hubAggregate=()=>h.hubState(db=>JSON.parse(db.query<{body:string},[]>('SELECT body FROM hub_state WHERE id=1').get()!.body) as {revisions:Revision[];evidence:Evidence[]});
+const hubAggregate=async()=>{
+ const f=h.hub();const base=`/hub/v1/projects/${f.project.id}`;
+ const {revisions,nextCursor}=await success<{revisions:Revision[];nextCursor?:string}>(await f.call(`${base}/revisions`,{cookie:f.cookie}));
+ // Fixture histories fit one page; do not silently ignore a future second page.
+ expect(nextCursor).toBeUndefined();
+ const {flows}=await success<{flows:Array<{id:string}>}>(await f.call(`${base}/flows`,{cookie:f.cookie}));
+ const pages=await Promise.all(flows.map(flow=>f.call(`${base}/flows/${flow.id}/evidence`,{cookie:f.cookie}).then(response=>success<{evidence:Evidence[]}>(response))));
+ return {revisions,evidence:pages.flatMap(page=>page.evidence)};
+};
 const runChecks=(runId:string)=>h.hubState(db=>db.query<{n:number},[string]>("SELECT count(*) n FROM remote_run_check WHERE json_extract(body,'$.checkId') IS NOT NULL AND id LIKE ?").get(`${runId}:%`)!.n);
 const resultEvents=async(s:Session,runId:string)=>(await s.events(runId)).filter((e):e is Extract<typeof e,{kind:'result-ready'}>=>e.kind==='result-ready');
 const providerError:Script=[{kind:'provider_error',error:{kind:'unknown',retryable:false,message:'upstream 503'}}];

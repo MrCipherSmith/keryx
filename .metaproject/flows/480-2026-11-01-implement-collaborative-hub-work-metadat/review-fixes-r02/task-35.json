@@ -1,0 +1,40 @@
+{
+  "task": {
+    "task_id": "task-35",
+    "task_name": "Final actual extracted runtime proof fails MCP POST500 Hub request failed TypeError after request body wrapping",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Final actual extracted runtime proof fails MCP POST500 Hub request failed TypeError after request body wrapping. Reproduce on actual pinned distribution Bun, inspect sanitized local stack/message only using disposable proof; no credentials/environment dumps or production. Fix portable admission wrapping/transport behavior without weakening actual-byte budgets, deadlines, auth or nested MCP leases. Add meaningful regression exercising real runtime boundary, rerun all related unit and HTTP behavior tests plus extracted artifact proof. Suggested Request constructor/stream compatibility cause is hypothesis, not confirmed. Standard test preloads retained.",
+    "target_files": [
+      "src/hub/mutation-queue.ts",
+      "src/hub/mutation-queue-http.test.ts",
+      "scripts/package-team-hub.test.ts"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

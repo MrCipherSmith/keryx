@@ -53,7 +53,7 @@ export function hubRun(dataDir: string, runId: string): { state: string; termina
     return row ? JSON.parse(row.body) as { state: string; terminalAt?: string; notificationVersion?: number } : undefined;
   });
 }
-export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'>={}) {
+export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'|'workManagement'>={}) {
   const dataDir = mkdtempSync(join(tmpdir(), "hub-remote-v2-"));
   const server = startHub({ dataDir, operatorToken, reviewerToken, agentToken, port: 0, host: "127.0.0.1",...overrides });
   const origin = server.url.origin;

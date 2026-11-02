@@ -1,0 +1,264 @@
+{
+  "gate": "PASS_WITH_WARNINGS",
+  "task": "task-40",
+  "head": "676783e55e01468fd1fdd7021ffbbad41cbdeae6",
+  "base": "d50652ac71030f955c94f84cc5c73589ecf7f02a",
+  "scope": "whole integration delta since reviewed base",
+  "readOnly": true,
+  "checks": {
+    "health": {
+      "status": "pass",
+      "exitCode": 0,
+      "command": "bun run keryx health run --changed --since d50652ac71030f955c94f84cc5c73589ecf7f02a --source eslint,typescript",
+      "findings": 0,
+      "log": "/tmp/pr1113-integration-final-health.log",
+      "normalized": "/tmp/pr1113-integration-final-health-report.json",
+      "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+      "reuseReason": "Only two test files changed; product source unchanged. Root file lint and UI types/lint passed under T41; reused health0 explicitly authorized by parent."
+    },
+    "strictChanged": {
+      "status": "pass",
+      "exitCode": 0,
+      "command": "/opt/homebrew/bin/bun run test apps/hub-web/tests/context.case.tsx apps/hub-web/tests/demo-receipt.case.ts apps/hub-web/tests/localization.case.ts apps/hub-web/tests/machine-cards.case.tsx apps/hub-web/tests/managed-native-message.case.tsx apps/hub-web/tests/managed-work-advanced.case.tsx apps/hub-web/tests/managed-work.case.tsx apps/hub-web/tests/pending-recovery.case.tsx apps/hub-web/tests/revision-pagination.case.tsx apps/hub-web/tests/session-run-context.case.tsx apps/hub-web/tests/work-incremental.case.tsx apps/hub-web/tests/work-live-amendments.case.tsx apps/hub-web/tests/work-live-attention.case.tsx apps/hub-web/tests/work-live-choices.case.tsx apps/hub-web/tests/work-live-updates.case.tsx apps/hub-web/tests/work-sequences.case.tsx apps/hub-web/tests/work-server-contract.case.ts apps/hub-web/tests/workflow.case.tsx scripts/hub-legacy-migration.test.ts scripts/hubctl-rollback.test.ts scripts/package-team-hub.test.ts src/commands/hub-machine.test.ts src/commands/hub-update.test.ts src/hub/agent-credentials.test.ts src/hub/connector.test.ts src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/legacy-artifacts.test.ts src/hub/legacy-flow-pins.test.ts src/hub/mcp-bridge.test.ts src/hub/mcp.test.ts src/hub/mutation-queue-http.test.ts src/hub/mutation-queue.http.test.ts src/hub/mutation-queue.test.ts src/hub/remote-v2/admission-limits.network.test.ts src/hub/remote-v2/admission-state.test.ts src/hub/remote-v2/auth-before-body.test.ts src/hub/remote-v2/backup.test.ts src/hub/remote-v2/budgets.test.ts src/hub/remote-v2/control-expiry.network.test.ts src/hub/remote-v2/delivery-expiry.network.test.ts src/hub/remote-v2/frame-admission.test.ts src/hub/remote-v2/migration-integrity.test.ts src/hub/remote-v2/migration.test.ts src/hub/remote-v2/outbox.network.test.ts src/hub/remote-v2/overload.test.ts src/hub/remote-v2/queue-admission.network.test.ts src/hub/remote-v2/queue-cas.network.test.ts src/hub/remote-v2/queue-replacement.network.test.ts src/hub/remote-v2/results.network.test.ts src/hub/remote-v2/retention.test.ts src/hub/remote-v2/transport.network.test.ts src/hub/review-bundle.test.ts src/hub/revision-summary.test.ts src/hub/server.security.test.ts src/hub/server.sso.test.ts src/hub/server.test.ts src/hub/store.incremental.test.ts src/hub/store.projections.test.ts src/hub/web.sso.test.ts src/hub/work/cli.test.ts src/hub/work/client.test.ts src/hub/work/domain.test.ts src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts src/hub/work/git-observer.test.ts src/hub/work/handlers-attempts.test.ts src/hub/work/http.contract.test.ts src/hub/work/http.projections.test.ts src/hub/work/http.test.ts src/hub/work/legacy.test.ts src/hub/work/observer-http.test.ts src/hub/work/openapi.test.ts src/hub/work/participant.authorization.test.ts src/hub/work/storage.amendment-resolution.test.ts src/hub/work/storage.incidents.test.ts src/hub/work/storage.incremental.test.ts src/hub/work/storage.lifecycle.test.ts src/hub/work/storage.scenarios.test.ts src/hub/work/storage.test.ts src/lib/hub-machine/bridge.lifecycle.network.test.ts src/lib/hub-machine/bridge.network.test.ts",
+      "selectedFiles": 82,
+      "durationMs": 97342,
+      "normalizedCounts": {
+        "passed": 452,
+        "failed": 0,
+        "skipped": 0,
+        "total": 452
+      },
+      "actualCounts": {
+        "passed": 452,
+        "failed": 0,
+        "skipped": 1,
+        "todo": 1,
+        "total": 454,
+        "files": 64,
+        "assertions": 8091
+      },
+      "log": "/tmp/pr1113-integration-retry-strict.log",
+      "raw": "/tmp/pr1113-integration-final-retry-tests.raw.log",
+      "normalized": "/tmp/pr1113-integration-final-retry-test-report.json",
+      "preloads": "standard project preloads retained",
+      "gitIsolation": "Only child test process core.hooksPath=/dev/null via GIT_CONFIG_COUNT",
+      "runtimeDependencies": "Entire run executed with UI node_modules link absent; no NODE_PATH or UI dependency injection."
+    },
+    "supplemental": [
+      {
+        "name": "scripts-types",
+        "command": [
+          "bun",
+          "run",
+          "typecheck:scripts"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-scripts-types.log",
+        "status": "pass",
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      },
+      {
+        "name": "ui",
+        "command": [
+          "bun",
+          "run",
+          "check:hub-web"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-ci-boundary-ui-full.log",
+        "status": "pass",
+        "counts": {
+          "passed": 198,
+          "failed": 0,
+          "files": 40,
+          "lint": "pass",
+          "types": "pass",
+          "assets": "pass"
+        },
+        "evidenceOwner": "fix_n_packaging task41",
+        "reuseReason": "Full UI198 ran on exact frozen two-test correction; UI product source unchanged.",
+        "supportingLogs": [
+          "/tmp/pr1113-integration-ci-boundary-types.log",
+          "/tmp/pr1113-integration-ci-boundary-lint.log",
+          "/tmp/pr1113-integration-ci-boundary-assets.log"
+        ]
+      },
+      {
+        "name": "fullhub",
+        "command": [
+          "bun",
+          "test",
+          "src/hub/"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-retry-fullhub.log",
+        "status": "pass",
+        "counts": {
+          "passed": 534,
+          "failed": 0,
+          "files": 95,
+          "assertions": 7745
+        },
+        "note": "Entire run executed with UI dependency link absent: root-only dependency boundary certified."
+      },
+      {
+        "name": "python-boundaries",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/migrate-legacy-boundaries.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-python-boundaries.log",
+        "status": "pass",
+        "tests": 29,
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      },
+      {
+        "name": "python-migration",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/migrate-legacy.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-python-migration.log",
+        "status": "pass",
+        "tests": 14,
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      },
+      {
+        "name": "python-profile",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/legacy-profile.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-python-profile.log",
+        "status": "pass",
+        "tests": 5,
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      },
+      {
+        "name": "docs",
+        "command": [
+          "node",
+          "docs/requirements/hub-work-management/verify.cjs"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-docs.log",
+        "status": "pass",
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      },
+      {
+        "name": "hubctl-parse",
+        "command": [
+          "sh",
+          "-n",
+          "deploy/team-hub/hubctl"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-hubctl-parse.log",
+        "status": "pass",
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      },
+      {
+        "name": "e2e-parse",
+        "command": [
+          "sh",
+          "-n",
+          "deploy/team-hub/release/e2e.sh"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-e2e-parse.log",
+        "status": "pass",
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      },
+      {
+        "name": "shellcheck",
+        "command": [
+          "shellcheck",
+          "-s",
+          "sh",
+          "deploy/team-hub/hubctl",
+          "deploy/team-hub/release/e2e.sh"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-shellcheck.log",
+        "status": "pass",
+        "reusedFromHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+        "reuseReason": "Unchanged source paths/dependencies in two-test-only correction; parent explicitly authorized reuse."
+      }
+    ],
+    "offlineRuntime": {
+      "status": "pass",
+      "command": "KERYX_HUB_RUNTIME_CACHE=/tmp/pr1113-r02-runtime-cache-t29-01 bun test scripts/package-team-hub.test.ts",
+      "passed": 9,
+      "failed": 0,
+      "assertions": 61,
+      "log": "/tmp/pr1113-integration-retry-package.log",
+      "network": "Only explicit existing private prepared cache; zero registry requests during extracted install",
+      "head": "676783e55e01468fd1fdd7021ffbbad41cbdeae6",
+      "note": "All9package tests incl actual frozen offline SDK proof passed with UI dependency link absent."
+    },
+    "circularImports": {
+      "status": "skipped",
+      "reason": "madge not a project devDependency; no installation performed"
+    },
+    "CI": {
+      "status": "not-run-by-verifier",
+      "reason": "Parent owns PR push/checks and separately confirmed same dependency failure in remote CI"
+    },
+    "DockerLifecycle": {
+      "status": "not-run",
+      "reason": "Actual extracted SDK/runtime checked; full container lifecycle remains CI job"
+    },
+    "rootCorrectedTestLint": {
+      "status": "pass",
+      "log": "/tmp/pr1113-integration-ci-boundary-root-lint.log",
+      "evidenceOwner": "fix_n_packaging task41"
+    }
+  },
+  "findings": [
+    {
+      "severity": "INFO",
+      "message": "Ordinary test gate intentionally skips explicit prepared-cache runtime integration; that exact integration passed independently in the final9-test package/runtime proof."
+    },
+    {
+      "severity": "INFO",
+      "message": "Existing R10.1 rewind TODO remains unimplemented and is not claimed delivered by this review-fix work."
+    },
+    {
+      "severity": "INFO",
+      "message": "Normalized TestingModule omits skip/todo counts; actual Bun summary452pass1skip1todo454total is recorded alongside normalized452/0."
+    }
+  ],
+  "environment": "UI dependency symlink absent for entire final strict/fullHub/package sequence and restored in finally. No UI dependency injection/copy/install; no source changes.",
+  "sourceEdits": false,
+  "followUp": "No blocking work remains in local verifier. CI after PR push remains parent-owned.",
+  "routingAudit": {
+    "graph_used": "parent rebuilt integrated graph; changed selection routed through Keryx",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "previousFailedHead": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+  "testOnlyDelta": [
+    "apps/hub-web/tests/work-server-contract.case.ts",
+    "src/hub/work/http.contract.test.ts"
+  ],
+  "resolvedBlockers": [
+    {
+      "file": "src/hub/work/http.contract.test.ts",
+      "resolution": "Browser adapter assertion moved to apps/hub-web/tests/work-server-contract.case.ts; production handler\u2192browser validator coverage retained in UI framework; root schema/WorkClient tests retained.",
+      "commit": "676783e55e01468fd1fdd7021ffbbad41cbdeae6",
+      "verifiedBy": "Whole strict452pass and fullHub534pass while UI dependency link absent; fullUI198 evidence reused."
+    }
+  ],
+  "initialFailureReport": "/tmp/pr1113-initial-integration-verification.json"
+}

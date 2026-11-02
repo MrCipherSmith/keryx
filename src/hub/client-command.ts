@@ -3,6 +3,7 @@ import { validateWatchInterval, watchHubContext } from "../hub/context-watch";
 export const HUB_HELP = `keryx hub — Team Hub prototype
   serve                                      Start Hub from KERYX_HUB_* environment
   status                                     Show local binding; no network or credentials
+  work <command>                             Managed work metadata; use work --help
   mcp --url <http(s)://host/mcp> [--token-env <name>]
                                              Bridge remote Hub MCP over local stdio; no checkout needed
   connect --url <http(s)://host> --project <id> [--token-env <name>]
@@ -19,7 +20,12 @@ Run checkout commands from the intended checkout; mcp needs no checkout. Pull le
 export function printHubHelp(help = HUB_HELP): void {
     console.log(help);
 }
-export async function hubCommand(args: string[], machineHandler?: (args: string[]) => Promise<void>, help = HUB_HELP): Promise<void> {
+export async function hubCommand(args: string[], machineHandler?: (args: string[]) => Promise<void>, help = HUB_HELP, serveHandler?: () => Promise<void>): Promise<void> {
+    if (args[0] === "work") {
+        const { runWorkCommand } = await import("./work/cli");
+        await runWorkCommand(args.slice(1));
+        return;
+    }
     if (!args.length || args.includes("--help") || args.includes("-h")) {
         printHubHelp(help);
         return;
@@ -55,9 +61,8 @@ export async function hubCommand(args: string[], machineHandler?: (args: string[
     if (intervalText !== undefined && !/^\d+$/.test(intervalText)) throw Error("Invalid watch interval; use an integer from 5 through 3600");
     if (flags.has("--watch")) validateWatchInterval(intervalSeconds);
     if (command === "serve") {
-        const { startHub, loadHubConfig } = await import("../hub/server");
-        const server = startHub(loadHubConfig(process.env));
-        console.log(`Team Hub listening at ${server.url}`);
+        if (!serveHandler) throw new Error('Server commands require the full Keryx installation or the dedicated Team Hub server package.');
+        await serveHandler();
         return;
     }
     const required = (flag: string) => {

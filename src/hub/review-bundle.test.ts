@@ -13,7 +13,20 @@ function fixture() {
   const adapter: GitDeliveryAdapter = async () => { adapterCalls++; return { status: "published", branch: "managed", commitSha: "b".repeat(40), treeSha: "c".repeat(40) }; };
   const mutate = (route: string, body: unknown, actor = human) => hubMutate(state, actor, ["projects", project.id, route], body, config, adapter, "operation");
   const create = async (purpose?: unknown, baseRevisionId: string | null = null) => await mutate("revisions", { baseRevisionId, gitBaseSha: "a".repeat(40), message: "review candidate", ...(purpose === undefined ? {} : { purpose }), changes: [{ path: "changes.patch", contentBase64: Buffer.from("review only").toString("base64") }] }, agent) as CodeRevision;
-  return { project, state, mutate, create, adapterCalls: () => adapterCalls };
+  return { project, state, mutate, create, adapter, adapterCalls: () => adapterCalls };
+}
+
+/** Exercise publication through the real durable HTTP service, not the refused legacy domain shortcut. */
+async function deliver(f: ReturnType<typeof fixture>, payload: unknown) {
+  const {mkdtempSync,rmSync}=await import('node:fs'), {tmpdir}=await import('node:os'), {join}=await import('node:path');
+  const {openHubStore}=await import('./store'), {createHubApplication}=await import('./server');
+  const root=mkdtempSync(join(tmpdir(),'hub-bundle-delivery-')), store=openHubStore(root);
+  store.save(structuredClone(f.state));
+  const token='operator-'+'x'.repeat(64), app=createHubApplication({dataDir:root,operatorToken:token,agentToken:'agent-'+'y'.repeat(64),gitDelivery:f.adapter});
+  try {
+    const response=await app.fetch(new Request(`http://hub.test/hub/v1/projects/${f.project.id}/deliveries`,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json','idempotency-key':'bundle-delivery'},body:JSON.stringify(payload)}));
+    return {response,state:structuredClone(store.load())};
+  } finally {app.close();store.close();rmSync(root,{recursive:true,force:true});}
 }
 
 describe("review bundles are evidence subjects, never integration snapshots", () => {
@@ -38,9 +51,10 @@ describe("review bundles are evidence subjects, never integration snapshots", ()
     const f = fixture(); const revision = await f.create("review-bundle");
     f.project.lineRevisionId = revision.id;
     const before = structuredClone(f.state);
-    await expect(f.mutate("deliveries", { revisionId: revision.id, expectedLineVersion: 0, remoteUrl: "https://example.test/repo.git", baseBranch: "main" })).rejects.toMatchObject({ status: 409, code: "review-bundle-not-deliverable" });
+    const result=await deliver(f,{revisionId:revision.id,expectedLineVersion:0,remoteUrl:"https://example.test/repo.git",baseBranch:"main"});
+    expect(result.response.status).toBe(409);expect(await result.response.json()).toMatchObject({error:{code:"review-bundle-not-deliverable"}});
     expect(f.adapterCalls()).toBe(0);
-    expect(f.state).toEqual(before);
+    expect(result.state).toEqual(before);
   });
 
   test("legacy revisions remain selectable and deliverable snapshots", async () => {
@@ -48,9 +62,10 @@ describe("review bundles are evidence subjects, never integration snapshots", ()
     expect(revision).not.toHaveProperty("purpose");
     await f.mutate("line", { revisionId: revision.id, expectedVersion: 0 });
     expect(f.project.lineRevisionId).toBe(revision.id);
-    await f.mutate("deliveries", { revisionId: revision.id, expectedLineVersion: 1, remoteUrl: "https://example.test/repo.git", baseBranch: "main" });
+    const result=await deliver(f,{revisionId:revision.id,expectedLineVersion:1,remoteUrl:"https://example.test/repo.git",baseBranch:"main"});
+    expect(result.response.status).toBe(200);
     expect(f.adapterCalls()).toBe(1);
-    expect(f.state.deliveries[0]?.status).toBe("published");
+    expect(result.state.deliveries[0]?.status).toBe("published");
   });
 
   test("rejects unknown purpose values rather than treating them as snapshots", async () => {

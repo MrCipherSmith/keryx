@@ -1,0 +1,179 @@
+{
+  "task": "task-42",
+  "status": "DONE",
+  "frozen": true,
+  "cause": "Bun1.4.4 offline lookup depends on registry identity. Private cache prepared from default registry is complete and usable; changing only --registry to a random loopback URL makes all92pins appear missing. Keeping default registry identity and blocking network via local proxy succeeds. Same-cache controlled Linux --network none experiment rules out host-cache fallback, missing copy or internet fallback.",
+  "CI": {
+    "run": 41398386845,
+    "job": 125124613180,
+    "runtime": "Bun1.4.4 38afee6c8",
+    "originalFailure": "/tmp/pr1113-integrated-distribution-failure.log"
+  },
+  "controlledExperiments": [
+    {
+      "platform": "macOS",
+      "file": "/tmp/pr1113-cache144-mac-red.log",
+      "rows": [
+        {
+          "version": "1.4.4",
+          "mode": "default",
+          "exitCode": 0
+        },
+        {
+          "version": "1.4.4",
+          "mode": "loopback",
+          "exitCode": 1
+        },
+        {
+          "version": "1.4.4",
+          "mode": "proxy",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "platform": "Linux network none",
+      "file": "/tmp/pr1113-cache144-linux-red.log",
+      "rows": [
+        {
+          "version": "1.4.4",
+          "mode": "default",
+          "exitCode": 0
+        },
+        {
+          "version": "1.4.4",
+          "mode": "loopback",
+          "exitCode": 1
+        },
+        {
+          "version": "1.4.4",
+          "mode": "proxy",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "platform": "Linux network none",
+      "file": "/tmp/pr1113-cache1314-linux-matrix.log",
+      "rows": [
+        {
+          "version": "1.3.14",
+          "mode": "default",
+          "exitCode": 0
+        },
+        {
+          "version": "1.3.14",
+          "mode": "loopback",
+          "exitCode": 0
+        },
+        {
+          "version": "1.3.14",
+          "mode": "proxy",
+          "exitCode": 0
+        }
+      ]
+    }
+  ],
+  "changes": [
+    {
+      "path": "scripts/package-team-hub.test.ts",
+      "change": "No --registry override; install child only receives rejecting proxy environment; retains frozen --offline install, complete privatecache validation and zero TCP-connection assertion. Added ordinary local-only CONNECT/bypass regression."
+    },
+    {
+      "path": "scripts/hub-runtime-cache.test-support.ts",
+      "change": "createOfflineInstallGuard uses loopback node:net TCP listener to reject every connection, including HTTPS CONNECT before HTTP parsing; sets uppercase/lowercase HTTP(S)/ALL proxy and clears both NO_PROXY variants."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "change": "Only team-hub-distribution changed. Explicit prep downloads frozen dependencies and pulls matching oven/bun:$(bun --version); offline proof runs --pull=never --network none with read-only checkout+seedcache mounts."
+    },
+    {
+      "path": "docs/docs/team-hub-deployment.md",
+      "change": "Document preserved registry namespace, rejecting proxy and network-disabled CI proof."
+    }
+  ],
+  "verification": [
+    {
+      "platform": "macOS arm64",
+      "runtime": "Bun1.3.14",
+      "result": "10PASS70assertions actualarchive+offlineSDK+guards",
+      "log": "/tmp/pr1113-cache-fixed-mac-1.3.14.log"
+    },
+    {
+      "platform": "macOS arm64",
+      "runtime": "Bun1.4.4",
+      "result": "10PASS70assertions actualarchive+offlineSDK+guards",
+      "log": "/tmp/pr1113-cache-fixed-mac-1.4.4.log"
+    },
+    {
+      "platform": "Linux amd64 Docker --network none --pull=never",
+      "runtime": "Bun1.4.4",
+      "result": "4PASS19assertions actualofflineSDK+missingcache/URL/TCPguards",
+      "log": "/tmp/pr1113-cache-fixed-linux144.log"
+    },
+    {
+      "platform": "Linux amd64 Docker --network none --pull=never",
+      "runtime": "Bun1.3.14",
+      "result": "4PASS19assertions actualofflineSDK+missingcache/URL/TCPguards",
+      "log": "/tmp/pr1113-cache-fixed-linux1314.log"
+    },
+    {
+      "check": "ordinary suite with additive deny-nonoffline-install preload",
+      "result": "9PASS1intentionalintegrationSKIP63assertions; no registry preparation invoked",
+      "log": "/tmp/pr1113-cache-default-hermetic-final.log"
+    },
+    {
+      "check": "scripts eslint",
+      "result": "PASS0findings",
+      "log": "/tmp/pr1113-cache-fix-lint.log"
+    },
+    {
+      "check": "configured scripts typecheck",
+      "result": "PASS",
+      "log": "/tmp/pr1113-cache-fix-types.log"
+    },
+    {
+      "check": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "REDactualRuntime": "/tmp/pr1113-cache144-runtime-red.log",
+  "linuxCommands": [
+    "docker run --rm --user <taskuid>:<taskgid> -v /tmp/pr1113-cache-ci.R8QIJl:/work -w /work oven/bun:1.4.4 bun probe.ts prepare",
+    "docker run --rm --network none --user <taskuid>:<taskgid> -v /tmp/pr1113-cache-ci.R8QIJl:/work -w /work oven/bun:1.4.4 bun probe.ts",
+    "docker run --rm --pull=never --network none --user <taskuid>:<taskgid> -v /tmp/pr1113-cache-ci.R8QIJl/repo:/workspace:ro -v /tmp/pr1113-cache-ci.R8QIJl/probe-1.4.4/cache:/runtime-cache:ro -w /workspace -e HOME=/tmp/hub-test-home -e KERYX_HUB_RUNTIME_CACHE=/runtime-cache oven/bun:1.4.4 bun test scripts/package-team-hub.test.ts --test-name-pattern \"extracted allowlisted source|proxy guard|missing isolated|URL or git\""
+  ],
+  "sourceFreeze": "Only four owned files changed. No production/server/data/credentials mounts or deployment. Containers ephemeral --rm; isolated /tmp code snapshots/cache only. No commits, staging or push. UI dependency symlink restored.",
+  "dependencyInvariant": "No host-global cache, public-registry proof traffic, skipped integration assertion or extra root dependency installation. Explicit preparation only has network.",
+  "routingAudit": {
+    "graph_used": "yes; latest parent graph predates metadata-only HEAD",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "complianceFollowup": {
+    "change": "Removed Docker -e HOME override; CI preserves normal image environment. No privileged mode, dependency writes, permission loosening or weakened read-only/network mounts.",
+    "uid": "1001:1001 (arbitrary GitHub-like UID, not geekom1000/image default)",
+    "proof": [
+      {
+        "runtime": "Bun1.4.4",
+        "command": "docker run --rm --pull=never --network none --user 1001:1001 -v /tmp/pr1113-cache-ci.R8QIJl/repo:/workspace:ro -v /tmp/pr1113-cache-ci.R8QIJl/probe-1.4.4/cache:/runtime-cache:ro -w /workspace -e KERYX_HUB_RUNTIME_CACHE=/runtime-cache oven/bun:1.4.4 bun test scripts/package-team-hub.test.ts --test-name-pattern \"extracted allowlisted source\"",
+        "result": "1PASS7assertions",
+        "log": "/tmp/pr1113-cache-fixed-linux144-uid1001-direct.log"
+      },
+      {
+        "runtime": "Bun1.3.14",
+        "command": "same direct command, oven/bun:1.3.14 and its matching preparedcache",
+        "result": "1PASS7assertions",
+        "log": "/tmp/pr1113-cache-fixed-linux1314-uid1001-direct.log"
+      },
+      {
+        "runtime": "Bun1.4.4 UID1001 diagnostic",
+        "result": "actualUID1001 printed;4PASS19assertions incl guards; no HOME assignment",
+        "log": "/tmp/pr1113-cache-fixed-linux144-uid1001.log"
+      }
+    ],
+    "fixturePolicy": "Existing isolated public source/cache fixture was readable; no cache copy/chmod or realdata changes needed.",
+    "sourceFreeze": "Same four paths final-frozen after CI HOME removal; git diff --check PASS."
+  }
+}

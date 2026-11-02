@@ -305,3 +305,11 @@ test("sync refuses a symlink index without altering the outside target", async (
         await rm(root, { recursive: true, force: true });
     }
 });
+test('connect refuses raw Hub URL whitespace and controls before reading checkout bindings', async () => {
+    const root=await mkdtemp(join(tmpdir(),'hub-connect-url-'));
+    try {
+        const connector=new HubConnector({cwd:root,token:'agent',cacheRoot:join(root,'cache')});
+        for(const url of [' https://hub.test','https://hub.test ','https://hu\nb.test','http://local\thost']) await expect(connector.connect(url,'p')).rejects.toThrow('Invalid Hub URL');
+        expect(await Bun.file(join(root,'.metaproject','hub.json')).exists()).toBe(false);
+    } finally { await rm(root,{recursive:true,force:true}); }
+});

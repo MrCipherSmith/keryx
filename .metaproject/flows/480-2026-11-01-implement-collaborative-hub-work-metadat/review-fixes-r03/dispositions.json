@@ -1,0 +1,605 @@
+{
+  "source_review": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx/.metaproject/reviews/2026-11-02-review-pr1113-r03-r02-fix-diff/findings.json",
+  "final_gate": "PASS_WITH_WARNINGS: independent lint/types, 555 Hub tests, 217 web tests, packaging/cache 14 passed and 1 integration skipped; madge unavailable. See evidence/final-verification.md.",
+  "findings": [
+    {
+      "id": "review-degradation-w4:DEG-W4-001",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-degradation-w4:DEG-W4-001",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Use the loaded summary and defer exact query until the list succeeds and the selected revision is absent; suppress stale exact errors for listed items.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/revision-pagination.case.tsx",
+          "name": "a listed revision loads its detail without a redundant exact-summary request"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/revision-mutations.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/peer-review.md"
+      ],
+      "commit_sha": "0b7403041fa70709fd6c22eb5ce8833fbaa7d290",
+      "qualification": null
+    },
+    {
+      "id": "review-highload-w5:HL-R03-W5-001",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-highload-w5:HL-R03-W5-001",
+      "severity": "major",
+      "status": "fixed",
+      "mechanism": "Batch distinct incident Attempts into one projection and deduplicate shared criterion-waiver lookups, preserving related records.",
+      "tests": [
+        {
+          "path": "src/hub/work/storage.incidents.test.ts",
+          "name": "aggregate incidents share flow criterion support across distinct accepted attempts"
+        },
+        {
+          "path": "src/hub/work/storage.incidents.test.ts",
+          "name": "incident support retains the exact accepted waiver and submission on Flow and attention reads"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-green.md"
+      ],
+      "commit_sha": "d7f0bd1e9dbf4c3f1052897d80b67d98028d5b53",
+      "qualification": null
+    },
+    {
+      "id": "review-layout-w1:LY-001",
+      "global_id": "2026-11-01-review-flow-github-com-mrciphersmith-keryx-pull-1113-r02#review-layout-w3:LY-001",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Restrict growth to the session name and keep disclosure compact.",
+      "tests": [],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/layout-before.json",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/layout-after.json",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/layout-measure.mjs"
+      ],
+      "commit_sha": "8d3b8af9e928611aaf200dcde590ed9bd4c0253e",
+      "qualification": "Chromium EN/RU measurement: disclosure width 150.5px before, 24px after at 392px viewport."
+    },
+    {
+      "id": "R03-L2-001",
+      "global_id": "2026-11-01-review-flow-github-com-mrciphersmith-keryx-pull-1113-r02#review-degradation-w4:DEG-R2-W4-001",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Reconcile T24 through the flow CLI with a current-timestamp audit attempt and links to existing remediation evidence.",
+      "tests": [],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/provenance.md"
+      ],
+      "commit_sha": "d79eb6160fc0eb5d8d5f26b2ec8d7e15b7a0fa4f",
+      "qualification": "This records a new audit, not a backdated implementation attempt; historical snapshot wording is qualified in provenance."
+    },
+    {
+      "id": "R03-L6-001",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#R03-L6-001",
+      "severity": "major",
+      "status": "fixed",
+      "mechanism": "Allow writable authorized humans to publish and reauthorize after Git; recovery remains operator-only.",
+      "tests": [
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "reviewer may publish while recovery routes remain operator-only and publication reauthorizes after Git"
+        },
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "reviewer authority is rechecked after publication and its result remains recoverable"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "83cfe3c1de7b9bbc3c04db0bfad40ab9d2fd85d1",
+      "qualification": null
+    },
+    {
+      "id": "review-security-code-w5:review-security-code-w31:SEC-W31-001",
+      "global_id": "2026-11-01-review-flow-github-com-mrciphersmith-keryx-pull-1113-r02#review-security-code-w31:SEC-W31-001",
+      "severity": "major",
+      "status": "fixed",
+      "mechanism": "Cap public readers while retaining global request and byte limits, deadlines, route classification and body cancellation.",
+      "tests": [
+        {
+          "path": "src/hub/admission-regression.test.ts",
+          "name": "slow public login bodies cannot exhaust authenticated mutation admission"
+        },
+        {
+          "path": "src/hub/admission-regression.test.ts",
+          "name": "public and protected traffic share the hard global request ceiling"
+        },
+        {
+          "path": "src/hub/admission-regression.test.ts",
+          "name": "protected routes reject unauthorized requests before reading their body"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/admission-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/admission-green.md"
+      ],
+      "commit_sha": "7b1c59765457a47af3c73bfda006376e4cd1ee57",
+      "qualification": "At maxRequests=1 the sole slot remains usable by public traffic; reservation applies when capacity permits."
+    },
+    {
+      "id": "review-style-w7:STYLE-W7-001",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-style-w7:STYLE-W7-001",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Remove unused steps accumulator and assignment; retain explicit fixture return fields.",
+      "tests": [],
+      "evidence": [
+        "src/hub/work/handlers-attempts.test.ts"
+      ],
+      "commit_sha": "d79eb6160fc0eb5d8d5f26b2ec8d7e15b7a0fa4f",
+      "qualification": "Mechanical test-fixture cleanup; no separate test required."
+    },
+    {
+      "id": "review-testing-practices-w1:W1-001",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-001",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin foreign revision ownership and approved-only affected-set boundaries.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/work-model-guards.case.ts",
+          "name": "amendment draft ignores another Intent's revision even when referenced as current"
+        },
+        {
+          "path": "apps/hub-web/tests/work-model-guards.case.ts",
+          "name": "Flow amendment requires replacements for approved Intents but not an unapproved unaffected Intent"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-model.md"
+      ],
+      "commit_sha": "2b23c2581ef487dfb316e3e5799c641b41778ca0",
+      "qualification": "The ownership fixture is referentially inconsistent; the approved-only fixture represents a partial cache, not a fully populated lifecycle."
+    },
+    {
+      "id": "review-testing-practices-w1:W1-002",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-002",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin referenced Attempt selection and reject a wrong-kind parent.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/work-model-guards.case.ts",
+          "name": "Evidence selects its referenced Attempt even with another cached first"
+        },
+        {
+          "path": "apps/hub-web/tests/work-model-guards.case.ts",
+          "name": "Evidence rejects a wrong-kind parent returned by the real demo adapter"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-model.md"
+      ],
+      "commit_sha": "2b23c2581ef487dfb316e3e5799c641b41778ca0",
+      "qualification": "Wrong-kind reference tests a defensive boundary not producible by valid evidence commands."
+    },
+    {
+      "id": "review-testing-practices-w1:W1-003",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-003",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin cancelled membership filtering at initialization and submission.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/work-revision-members.case.tsx",
+          "name": "filters cancelled required Intent at %s"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-live.md"
+      ],
+      "commit_sha": "a62b1fe3134d71fbbec19cb824952c9d381d1fa7",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-004",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-004",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin late snapshot merge and no-snapshot observation invalidation.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/work-live-updates.case.tsx",
+          "name": "late retention snapshot merges without replacing a newer cached record"
+        },
+        {
+          "path": "apps/hub-web/tests/work-live-updates.case.tsx",
+          "name": "overview gap refresh invalidates existing observations without snapshot ownership"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-live.md"
+      ],
+      "commit_sha": "a62b1fe3134d71fbbec19cb824952c9d381d1fa7",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-005",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-005",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin receipt wake during a pending poll in visible and hidden states, including immediate rescheduling.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/work-live-updates.case.tsx",
+          "name": "receipt wakes an in-flight poll promptly (hidden=%s)"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-live.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/peer-review.md"
+      ],
+      "commit_sha": "a62b1fe3134d71fbbec19cb824952c9d381d1fa7",
+      "qualification": "w1-events-inflight-wake survived: independent peer review found its guard unreachable by current callers and redundant. It was not killed; this is a static reachability argument."
+    },
+    {
+      "id": "review-testing-practices-w1:W1-006",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-006",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Exercise later-page selection independently in candidate and evidence forms.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/workflow-pagination.case.tsx",
+          "name": "%s form loads and selects a revision on a later page"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-live.md"
+      ],
+      "commit_sha": "a62b1fe3134d71fbbec19cb824952c9d381d1fa7",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-007",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-007",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin path confinement and package identity of prepared cache entries.",
+      "tests": [
+        {
+          "path": "scripts/hub-runtime-cache.security.test.ts",
+          "name": "prepared cache rejects a matching entry whose symlink escapes the private cache"
+        },
+        {
+          "path": "scripts/hub-runtime-cache.security.test.ts",
+          "name": "prepared cache rejects matching entry names with wrong package identity"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/runtime-cache.md"
+      ],
+      "commit_sha": "151c5ee4cbe5a60566db0856c290dbcea26dc6a1",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-008",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-008",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Exercise preparation CLI permission, private-cache refusal and installer failure.",
+      "tests": [
+        {
+          "path": "scripts/hub-runtime-cache.security.test.ts",
+          "name": "preparation CLI requires explicit network permission before installer invocation"
+        },
+        {
+          "path": "scripts/hub-runtime-cache.security.test.ts",
+          "name": "preparation CLI refuses a populated private cache before installer invocation"
+        },
+        {
+          "path": "scripts/hub-runtime-cache.security.test.ts",
+          "name": "preparation CLI reports a failed installer and never reports success"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/runtime-cache.md"
+      ],
+      "commit_sha": "151c5ee4cbe5a60566db0856c290dbcea26dc6a1",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-009",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-009",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Assert late event, snapshot and attention responses cannot update cache after unmount.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/work-live-updates.case.tsx",
+          "name": "late %s response after unmount cannot mutate old cache"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-live.md"
+      ],
+      "commit_sha": "a62b1fe3134d71fbbec19cb824952c9d381d1fa7",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-010",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-010",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Assert accepted Intent state, decision ID and canonical events via real demo adapter.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/demo-receipt.case.ts",
+          "name": "demo acceptance updates the Intent and emits the canonical intent change"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/ui-model.md"
+      ],
+      "commit_sha": "2b23c2581ef487dfb316e3e5799c641b41778ca0",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-011",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-011",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin explicit project override on revision pages.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/revision-pagination.case.tsx",
+          "name": "revision pages use the explicit project even when another Hub project is selected"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/revision-mutations.md"
+      ],
+      "commit_sha": "0b7403041fa70709fd6c22eb5ce8833fbaa7d290",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w1:W1-012",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w1:W1-012",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Pin exact-summary errors on missing deep-linked revision.",
+      "tests": [
+        {
+          "path": "apps/hub-web/tests/revision-pagination.case.tsx",
+          "name": "an exact revision lookup failure remains visible when list and project reads succeed"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/revision-mutations.md"
+      ],
+      "commit_sha": "0b7403041fa70709fd6c22eb5ce8833fbaa7d290",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:review-testing-practices-w5:F-002",
+      "global_id": "2026-11-01-review-flow-github-com-mrciphersmith-keryx-pull-1113-r02#review-testing-practices-w5:F-002",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Gate external Git and assert shutdown waits for durable completion.",
+      "tests": [
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "settle waits for an external Git delivery to persist its result before shutdown"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "a0a1d06c7f9afe906ef88916cbeab023d18834b8",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-002",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-002",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Gate two inspections and assert third is rejected.",
+      "tests": [
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "at most two independent publication inspections may run concurrently"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "a0a1d06c7f9afe906ef88916cbeab023d18834b8",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-003",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-003",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Send malformed archive request with fresh key and assert exact error and unchanged job.",
+      "tests": [
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "operator archives completed jobs at the audit cap without losing exact reads replay or external facts"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "a0a1d06c7f9afe906ef88916cbeab023d18834b8",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-004",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-004",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Simulate remote branch changing between observation and fetch and assert refusal without Git writes.",
+      "tests": [
+        {
+          "path": "src/hub/git-delivery.test.ts",
+          "name": "inspection refuses a managed branch that changes between remote observation and fetch"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "a0a1d06c7f9afe906ef88916cbeab023d18834b8",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-005",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-005",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Assert old reservation releases and replacement stays reserved.",
+      "tests": [
+        {
+          "path": "src/hub/work/execution.reconciliation.test.ts",
+          "name": "a successful managed replacement releases its original and reserves the replacement"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-green.md"
+      ],
+      "commit_sha": "dd001424e193fe60cb43fafc89208fe82945594a",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-006",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-006",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Retry same key while publication is gated and assert pending and one adapter call.",
+      "tests": [
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "external Git delivery never holds the global mutation queue and same-key retry never starts it twice"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "a0a1d06c7f9afe906ef88916cbeab023d18834b8",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-007",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-007",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Reject each mismatched native binding while preserving reservations.",
+      "tests": [
+        {
+          "path": "src/hub/work/execution.reconciliation.test.ts",
+          "name": "managed edit refuses mismatched session without changing reservations"
+        },
+        {
+          "path": "src/hub/work/execution.reconciliation.test.ts",
+          "name": "managed edit refuses mismatched project without changing reservations"
+        },
+        {
+          "path": "src/hub/work/execution.reconciliation.test.ts",
+          "name": "managed edit refuses mismatched machine without changing reservations"
+        },
+        {
+          "path": "src/hub/work/execution.reconciliation.test.ts",
+          "name": "managed edit refuses mismatched lineage without changing reservations"
+        },
+        {
+          "path": "src/hub/work/execution.reconciliation.test.ts",
+          "name": "managed edit refuses mismatched text without changing reservations"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-green.md"
+      ],
+      "commit_sha": "dd001424e193fe60cb43fafc89208fe82945594a",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-008",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-008",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Populate over fifty completed jobs and retain older active job.",
+      "tests": [
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "delivery list retains old active jobs ahead of more than fifty completed jobs"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "a0a1d06c7f9afe906ef88916cbeab023d18834b8",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-009",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-009",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Assert exact transition versions and stale CAS refusal.",
+      "tests": [
+        {
+          "path": "src/hub/delivery-queue.test.ts",
+          "name": "reconciliation advances the exact job version and rejects stale archive CAS"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/delivery-green.md"
+      ],
+      "commit_sha": "a0a1d06c7f9afe906ef88916cbeab023d18834b8",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-010",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-010",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Send oversized authenticated machine stream to real remote parser and assert cancellation and no mutation.",
+      "tests": [
+        {
+          "path": "src/hub/admission-regression.test.ts",
+          "name": "authenticated machine stream over remote parser limit is cancelled without mutating state"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/admission-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/admission-green.md"
+      ],
+      "commit_sha": "36149a9a278c7b6586c57de5e0ffeb9fc03f6799",
+      "qualification": null
+    },
+    {
+      "id": "review-testing-practices-w2:W2-011",
+      "global_id": "2026-11-02-review-pr1113-r03-r02-fix-diff#review-testing-practices-w2:W2-011",
+      "severity": "minor",
+      "status": "fixed",
+      "mechanism": "Exercise multi-hop lineage and session isolation.",
+      "tests": [
+        {
+          "path": "src/hub/work/execution.reconciliation.test.ts",
+          "name": "managed reconciliation follows multiple replacement hops only within the requested session"
+        }
+      ],
+      "evidence": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-red.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/evidence/storage-green.md"
+      ],
+      "commit_sha": "dd001424e193fe60cb43fafc89208fe82945594a",
+      "qualification": null
+    }
+  ]
+}

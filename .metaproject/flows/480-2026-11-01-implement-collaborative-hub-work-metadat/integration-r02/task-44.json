@@ -1,0 +1,39 @@
+{
+  "task": {
+    "task_id": "task-44",
+    "task_name": "Reproduce controller-generation queue CI stale-version race",
+    "task_type": "fix",
+    "complexity": "medium",
+    "description": "Exact final CI root suite onefailure R2.1 mixed queue controller generation at bridge.queue.network.test.ts30 -> bridge.test-support.ts87 claim success expected200 got409 stale-version. AC8 samehead passed alltests; inspect /tmp/pr1113-final-core-failure.log lines35275-35317. Reproduce deterministically by interleaving native session event between claim helper snapshot read and POST, distinguish fixture client race from product regression. Minimal fix in owned test files only if fixture defect proven; bounded fresh-pin retries must match only stale-version, never hide wrong-controller/conflict errors or weaken CAS tests. Add deterministic failing-before regression, run focused native queue/support suites, root/scripts types and lint. If product bug found report before expanding ownership. No sleeps/retry-whole-suite suppression, no commit/push.",
+    "target_files": [
+      "src/lib/hub-machine/bridge.test-support.ts",
+      "src/lib/hub-machine/bridge.queue.network.test.ts"
+    ],
+    "acceptance_criteria": [
+      "All owned conflicts resolved with chosen coherent contract and valuable tests from both sides preserved.",
+      "Newly combined behavior is covered by meaningful green focused regressions; report discarded duplicate/obsolete assertions explicitly.",
+      "No source modifications outside ownership, no Git index/commit/push or production."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx",
+    "branch": "feat-hub-1113-r02-integration"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 1
+  }
+}
