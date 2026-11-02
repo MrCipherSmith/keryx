@@ -60,6 +60,81 @@ describe.skipIf(!live)("OS-sandbox live containment (macOS)", () => {
     }
   });
 
+  // review-security-code-w2:F-001 (a): git reads `.git/commondir` for ANY git dir
+  // and takes config + hooks from where it points. The verifier's repro: a sibling
+  // dir with objects/refs linked back and an fsmonitor config, then commondir.
+  test("w2 F-001 (a): .git/commondir cannot be created, so the host's next git status runs nothing", () => {
+    const parent = mk("keryx-gitcd-");
+    const ws = path.join(parent, "ws");
+    const wsTmp = mk("keryx-gitcdtmp-");
+    const pwned = path.join(parent, "PWNED_FSMON");
+    try {
+      mkdirSync(ws);
+      expect(git(ws, "init", "-q").status).toBe(0);
+      const attack = contained(
+        ws,
+        wsTmp,
+        `mkdir x && ln -s ../.git/objects x/objects && ln -s ../.git/refs x/refs && cp .git/HEAD x/HEAD && printf '[core]\\n\\trepositoryformatversion = 0\\n\\tfsmonitor = "touch ${pwned}; false"\\n' > x/config && echo ../x > .git/commondir`,
+      );
+      expect(attack.status).not.toBe(0);
+      expect(existsSync(path.join(ws, ".git", "commondir"))).toBe(false);
+      expect(existsSync(path.join(ws, "x", "config"))).toBe(true); // allowed half: the working tree is writable
+      git(ws, "status");
+      expect(existsSync(pwned)).toBe(false);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+      rmSync(wsTmp, { recursive: true, force: true });
+    }
+  });
+
+  // review-logic-w3:F-002 (1): a repo with no hooks dir (`git init --template=`).
+  test("w3 F-002 (1): a missing .git/hooks cannot be created, and the host's checkout runs no hook", () => {
+    const parent = mk("keryx-gitnh-");
+    const ws = path.join(parent, "ws");
+    const wsTmp = mk("keryx-gitnhtmp-");
+    const pwned = path.join(parent, "PWNED_HOOK");
+    try {
+      mkdirSync(ws);
+      expect(git(ws, "init", "-q", "--template=").status).toBe(0);
+      expect(existsSync(path.join(ws, ".git", "hooks"))).toBe(false);
+      expect(git(ws, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "--allow-empty", "-q", "-m", "i").status).toBe(0);
+      const attack = contained(
+        ws,
+        wsTmp,
+        `mkdir .git/hooks && printf '#!/bin/sh\\ntouch ${pwned}\\n' > .git/hooks/post-checkout && chmod +x .git/hooks/post-checkout`,
+      );
+      expect(attack.status).not.toBe(0);
+      expect(existsSync(path.join(ws, ".git", "hooks"))).toBe(false);
+      expect(git(ws, "checkout", "-q", "-b", "other").status).toBe(0);
+      expect(existsSync(pwned)).toBe(false);
+      // Allowed half: a commit still works from inside (index, objects, refs, lock files).
+      const commit = contained(ws, wsTmp, "echo a > a.txt && git add a.txt && git -c user.email=a@b.c -c user.name=t commit -q -m a");
+      expect(commit.status).toBe(0);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+      rmSync(wsTmp, { recursive: true, force: true });
+    }
+  });
+
+  // review-regression-w2:F-002: the accepted cost of a read-only .git/config. Pinned
+  // so a change to it is a decision, not an accident (see os-sandbox.md).
+  test("w2 regression F-002 (accepted cost): git subcommands that write .git/config fail inside the sandbox", () => {
+    const ws = mk("keryx-gitcfg-");
+    const wsTmp = mk("keryx-gitcfgtmp-");
+    try {
+      expect(git(ws, "init", "-q").status).toBe(0);
+      const remote = contained(ws, wsTmp, "git remote add origin https://example.invalid/r.git");
+      expect(remote.status).not.toBe(0);
+      expect(remote.stderr).toContain("could not write config file");
+      // The workaround: per-command config needs no write to .git/config.
+      const perCommand = contained(ws, wsTmp, "git -c user.email=a@b.c -c user.name=t commit --allow-empty -q -m i");
+      expect(perCommand.status).toBe(0);
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+      rmSync(wsTmp, { recursive: true, force: true });
+    }
+  });
+
   test("F-002: a linked worktree's .git file cannot be repointed", () => {
     const main = mk("keryx-gitmain-");
     const wt = path.join(mk("keryx-gitwtp-"), "wt");

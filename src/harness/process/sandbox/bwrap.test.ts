@@ -2,8 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
-import { BWRAP_PROGRAM, buildBwrapArgs, hostBwrapOptions, inspectMaskTarget, wrapBwrap } from "./bwrap";
-import type { MaskTargetKind } from "./bwrap";
+import {
+  BWRAP_PROGRAM,
+  NO_GIT_PROTECTION,
+  buildBwrapArgs,
+  gitProtectBwrapArgs,
+  hostBwrapOptions,
+  inspectMaskTarget,
+  pathEntriesUnderHidden,
+  wrapBwrap,
+} from "./bwrap";
+import type { MaskTargetKind, PathBindProbe } from "./bwrap";
+import type { GitControlEntry, GitProtection } from "./git-protect";
 import type { SandboxProfile } from "./profile";
 import type { ContainedCommand } from "../executor";
 
@@ -107,11 +117,11 @@ describe("buildBwrapArgs", () => {
 });
 
 // review-security-code-w5:F-001 / F-002 — host IPC and repository control files.
-const noHost = { gitProtected: [], ipcDirs: [] };
+const noHost = { git: NO_GIT_PROTECTION, ipcDirs: [] };
 
 describe("buildBwrapArgs: host IPC services are unreachable (F-001)", () => {
   test("/run, /var/run and a runtime dir outside /run are hidden behind an empty tmpfs", () => {
-    const args = buildBwrapArgs(workspaceWrite, asDir, { gitProtected: [], ipcDirs: ["/run", "/var/run", "/xdg"] });
+    const args = buildBwrapArgs(workspaceWrite, asDir, { git: NO_GIT_PROTECTION, ipcDirs: ["/run", "/var/run", "/xdg"] });
     expect(hasPair(args, "--tmpfs", "/run")).toBe(true);
     expect(hasPair(args, "--tmpfs", "/var/run")).toBe(true);
     expect(hasPair(args, "--tmpfs", "/xdg")).toBe(true);
@@ -119,7 +129,7 @@ describe("buildBwrapArgs: host IPC services are unreachable (F-001)", () => {
 
   test("the hide comes after the root bind and before the writable binds, so a session tmp under /run still re-binds", () => {
     const args = buildBwrapArgs({ ...workspaceWrite, writableRoots: ["/run/user/1000/s"] }, asDir, {
-      gitProtected: [],
+      git: NO_GIT_PROTECTION,
       ipcDirs: ["/run"],
     });
     const hide = args.indexOf("/run");
@@ -136,7 +146,7 @@ describe("buildBwrapArgs: host IPC services are unreachable (F-001)", () => {
 
   test("network on binds the resolv.conf target back read-only after hiding /run", () => {
     const args = buildBwrapArgs({ ...workspaceWrite, network: "on" }, asDir, {
-      gitProtected: [],
+      git: NO_GIT_PROTECTION,
       ipcDirs: ["/run"],
       resolvConf: "/run/systemd/resolve/stub-resolv.conf",
     });
@@ -158,31 +168,140 @@ describe("buildBwrapArgs: host IPC services are unreachable (F-001)", () => {
   });
 });
 
+const ctl = (p: string, entry: GitControlEntry, kind: "dir" | "file" | "missing") => ({ path: p, real: p, entry, kind });
+
 describe("buildBwrapArgs: the git control files stay read-only inside the writable root (F-002)", () => {
   test("hooks and config are re-bound read-only AFTER the RW root bind", () => {
-    const guarded = ["/work/repo/.git/config", "/work/repo/.git/hooks"];
-    const args = buildBwrapArgs(workspaceWrite, asDir, { gitProtected: guarded, ipcDirs: [] });
+    const git: GitProtection = {
+      controls: [ctl("/work/repo/.git/config", "config", "file"), ctl("/work/repo/.git/hooks", "hooks", "dir")],
+      anchors: ["/work/repo/.git"],
+    };
+    const args = buildBwrapArgs(workspaceWrite, asDir, { git, ipcDirs: [] });
     const rw = args.indexOf("--bind");
-    for (const g of guarded) {
+    for (const g of ["/work/repo/.git/config", "/work/repo/.git/hooks"]) {
       expect(hasPair(args, "--ro-bind", g, g)).toBe(true);
       expect(args.indexOf(g)).toBeGreaterThan(rw);
     }
   });
 
-  test("a real repo on disk resolves to its control files through hostBwrapOptions", () => {
+  // review-security-code-w2:F-002 / review-logic-w3:F-002 (2): Linux refuses
+  // rename(2) only for a dentry that is itself a mount point, so `.git` must be one.
+  test("the git dir is bound onto itself (a mount point cannot be renamed), before the control binds inside it", () => {
+    const git: GitProtection = { controls: [ctl("/work/repo/.git/config", "config", "file")], anchors: ["/work/repo/.git"] };
+    const args = buildBwrapArgs(workspaceWrite, asDir, { git, ipcDirs: [] });
+    expect(hasPair(args, "--bind", "/work/repo/.git", "/work/repo/.git")).toBe(true);
+    const anchorAt = args.findIndex((a, i) => a === "--bind" && args[i + 1] === "/work/repo/.git");
+    expect(anchorAt).toBeGreaterThan(args.findIndex((a, i) => a === "--bind" && args[i + 1] === "/work/repo"));
+    expect(anchorAt).toBeLessThan(args.indexOf("/work/repo/.git/config"));
+  });
+
+  // review-security-code-w2:F-001 / review-logic-w3:F-002 (1): a missing path needs a mount point.
+  test("a missing hooks dir gets a read-only empty tmpfs; a missing config / config.worktree a /dev/null file", () => {
+    const git: GitProtection = {
+      controls: [
+        ctl("/work/repo/.git/config.worktree", "config.worktree", "missing"),
+        ctl("/work/repo/.git/hooks", "hooks", "missing"),
+      ],
+      anchors: ["/work/repo/.git"],
+    };
+    const args = buildBwrapArgs(workspaceWrite, asDir, { git, ipcDirs: [] });
+    expect(hasPair(args, "--tmpfs", "/work/repo/.git/hooks")).toBe(true);
+    expect(hasPair(args, "--remount-ro", "/work/repo/.git/hooks")).toBe(true);
+    expect(args.indexOf("--remount-ro")).toBeGreaterThan(args.indexOf("--tmpfs", args.indexOf("/work/repo")));
+    expect(hasPair(args, "--ro-bind", "/dev/null", "/work/repo/.git/config.worktree")).toBe(true);
+  });
+
+  test("a missing commondir gets NO mount point: an empty one would make git die, inside and on the host", () => {
+    const git: GitProtection = { controls: [ctl("/work/repo/.git/commondir", "commondir", "missing")], anchors: ["/work/repo/.git"] };
+    expect(gitProtectBwrapArgs(git)).toEqual(["--bind", "/work/repo/.git", "/work/repo/.git"]);
+  });
+
+  test("an existing control path is bound at its real path", () => {
+    const git: GitProtection = {
+      controls: [{ path: "/work/repo/.git/hooks", real: "/work/repo/githooks", entry: "hooks", kind: "dir" }],
+      anchors: [],
+    };
+    expect(gitProtectBwrapArgs(git)).toEqual(["--ro-bind", "/work/repo/githooks", "/work/repo/githooks"]);
+  });
+
+  test("a real repo on disk resolves to its control files and anchor through hostBwrapOptions", () => {
     const root = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "keryx-gitprot-")));
     try {
-      mkdirSync(nodePath.join(root, ".git", "hooks"), { recursive: true });
+      mkdirSync(nodePath.join(root, ".git"), { recursive: true }); // no hooks dir
       writeFileSync(nodePath.join(root, ".git", "config"), "[core]\n");
       const profile = { ...workspaceWrite, writableRoots: [root] };
       const args = buildBwrapArgs(profile, asDir, hostBwrapOptions(profile, {}));
-      const hooks = nodePath.join(root, ".git", "hooks");
-      const config = nodePath.join(root, ".git", "config");
-      expect(hasPair(args, "--ro-bind", hooks, hooks)).toBe(true);
+      const dotGit = nodePath.join(root, ".git");
+      const hooks = nodePath.join(dotGit, "hooks");
+      const config = nodePath.join(dotGit, "config");
+      expect(hasPair(args, "--bind", dotGit, dotGit)).toBe(true);
+      expect(hasPair(args, "--tmpfs", hooks)).toBe(true);
       expect(hasPair(args, "--ro-bind", config, config)).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+// review-logic-w2:F-003 — NixOS keeps the system PATH under /run.
+describe("pathEntriesUnderHidden: PATH entries the /run hide would remove are bound back", () => {
+  const nixProbe: PathBindProbe = {
+    realDir: (p) =>
+      ({
+        "/run/current-system/sw/bin": "/nix/store/abc-system-path/bin",
+        "/run/wrappers/bin": "/run/wrappers/wrappers.x1",
+        "/run/user/1000/fnm/bin": "/home/u/.fnm/v20/bin",
+        "/run/user/1000": "/run/user/1000",
+        "/run/via-link": "/run/user/1000",
+        "/run/dbus": "/run/dbus",
+        "/usr/bin": "/usr/bin",
+      })[p],
+    hasSocket: (dir) => dir === "/run/dbus",
+  };
+  const nixPath = [
+    "/run/wrappers/bin",
+    "/home/u/.nix-profile/bin",
+    "/run/current-system/sw/bin",
+    "/usr/bin",
+    "/run/user/1000/fnm/bin",
+    "/run/user/1000",
+    "/run/via-link",
+    "/run/dbus",
+    "/run",
+    "relative/bin",
+    "/run/missing/bin",
+    "/run/wrappers/bin",
+  ].join(":");
+
+  test("the NixOS system PATH and setuid wrappers come back; nothing outside a hidden dir is listed", () => {
+    expect(pathEntriesUnderHidden(nixPath, ["/run"], ["/run/user/1000"], nixProbe)).toEqual([
+      "/run/wrappers/bin",
+      "/run/current-system/sw/bin",
+      "/run/user/1000/fnm/bin",
+    ]);
+  });
+
+  test("never a socket home: not /run itself, not the runtime dir (by name or via a link), not a dir holding a socket", () => {
+    const out = pathEntriesUnderHidden(nixPath, ["/run"], ["/run/user/1000"], nixProbe);
+    for (const p of ["/run", "/run/user/1000", "/run/via-link", "/run/dbus"]) expect(out).not.toContain(p);
+  });
+
+  test("buildBwrapArgs binds them read-only after the tmpfs hide and before the writable roots", () => {
+    const args = buildBwrapArgs(workspaceWrite, asDir, {
+      git: NO_GIT_PROTECTION,
+      ipcDirs: ["/run"],
+      pathBinds: ["/run/current-system/sw/bin"],
+    });
+    const hide = args.findIndex((a, i) => a === "--tmpfs" && args[i + 1] === "/run");
+    const bind = args.findIndex((a, i) => a === "--ro-bind" && args[i + 1] === "/run/current-system/sw/bin");
+    expect(args[bind + 2]).toBe("/run/current-system/sw/bin");
+    expect(bind).toBeGreaterThan(hide);
+    expect(bind).toBeLessThan(args.findIndex((a, i) => a === "--bind" && args[i + 1] === "/work/repo"));
+  });
+
+  test("hostBwrapOptions feeds PATH through it (real host: nothing under a hidden dir on this machine is invented)", () => {
+    const opts = hostBwrapOptions(workspaceWrite, { PATH: "/usr/bin:/bin" });
+    expect(opts.pathBinds).toEqual([]);
   });
 });
 
