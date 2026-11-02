@@ -329,4 +329,77 @@ describe('legacy commented return HTTP contract', () => {
     expect(await success<FeedbackFlow>(await request(path))).toEqual(before);
   });
 
+  test('keeps returned comments readable to a contributor after resubmission and final acceptance', async () => {
+    const {p,f,body,path}=await fixture();
+    const receipt=await success<ReviewReceipt>(await request(path+'/request-changes',body,reviewer));
+    const next=await revision(p,'approved after changes');await evidence(p,f,next);
+    const submitted=await success<FeedbackFlow>(await request(path+'/submit-for-review',{expectedVersion:receipt.flowVersion,subjectRevisionId:next.id,afterReturnDecisionId:receipt.decision.id},agent));
+    const done=await success<FeedbackFlow>(await request(path+'/accept',{expectedVersion:submitted.version,subjectRevisionId:next.id,acknowledgeSelfReportedEvidence:true}));
+    expect(done.reviewFeedback).toBeNull();
+    expect(await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions',undefined,agent))).toEqual({decisions:[receipt.decision],nextAfter:null});
+    expect(await success<FeedbackFlow>(await request(path))).toEqual(done);
+    expect(await success<CodeRevision>(await request(`/projects/${p.id}/revisions/${next.id}`))).toEqual(next);
+  });
+
+  test('pages immutable return history newest-first with a same-Flow decision cursor and no duplicates', async () => {
+    const {p,f:initial,body:firstBody,path}=await fixture();let current=initial, subject=firstBody.subjectRevisionId;
+    const receipts:ReviewReceipt[]=[];
+    for(let index=0;index<3;index++) {
+      const receipt=await success<ReviewReceipt>(await request(path+'/request-changes',{...firstBody,expectedVersion:current.version,subjectRevisionId:subject,comment:'Return '+index},reviewer));receipts.push(receipt);
+      if(index<2) {const next=await revision(p,'candidate '+index);await evidence(p,current,next);current=await success<FeedbackFlow>(await request(path+'/submit-for-review',{expectedVersion:receipt.flowVersion,subjectRevisionId:next.id,afterReturnDecisionId:receipt.decision.id},agent));subject=next.id;}
+    }
+    const first=await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions?limit=1',undefined,agent));
+    expect(first).toEqual({decisions:[receipts[2]!.decision],nextAfter:receipts[2]!.decision.id});
+    const second=await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions?limit=1&after='+first.nextAfter,undefined,reviewer));
+    expect(second).toEqual({decisions:[receipts[1]!.decision],nextAfter:receipts[1]!.decision.id});
+    const last=await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions?limit=1&after='+second.nextAfter));
+    expect(last).toEqual({decisions:[receipts[0]!.decision],nextAfter:null});
+    expect(new Set([...first.decisions,...second.decisions,...last.decisions].map(d=>d.id)).size).toBe(3);
+    const secondFlow=await success<HubFlow>(await request(`/projects/${p.id}/flows`,{title:'Other Flow',specDocumentId:initial.specDocumentId,criteria:['Other criterion']},agent));
+    const foreignCursor=await request(flowPath(p,secondFlow)+'/review-decisions?after='+receipts[0]!.decision.id,undefined,agent);
+    expect(foreignCursor.status).toBe(400);expect(await foreignCursor.json()).toMatchObject({error:{code:'invalid-cursor'}});
+  });
+
+  test('validates a closed bounded history query and keeps all reads side-effect free', async () => {
+    const {body,path}=await fixture();await success<ReviewReceipt>(await request(path+'/request-changes',body,reviewer));
+    const before=await success<FeedbackFlow>(await request(path));
+    for(const query of ['limit=0','limit=51','limit=1.5','limit=no','limit=','limit=1&limit=2','after=','after=x&after=y','after='+ 'x'.repeat(201),'unknown=1']) {
+      const response=await request(path+'/review-decisions?'+query,undefined,agent);
+      expect(response.status).toBe(400);expect(await response.json()).toMatchObject({error:{code:'invalid-request'}});
+    }
+    expect((await request(path+'/review-decisions?after=unknown-decision',undefined,agent)).status).toBe(400);
+    expect((await success<{decisions:Decision[]}>(await request(path+'/review-decisions?limit=50',undefined,agent))).decisions).toHaveLength(1);
+    expect(await success<FeedbackFlow>(await request(path))).toEqual(before);
+  });
+
+  test('uses existing project-reader authority for history, including a read-only named agent', async () => {
+    const {writeFileSync}=await import('node:fs');const {p,f,body,path}=await fixture();
+    const receipt=await success<ReviewReceipt>(await request(path+'/request-changes',body,reviewer));
+    const token='readonly-history-'+ 'e'.repeat(64), file=join(dir,'history-agents.json');
+    writeFileSync(file,JSON.stringify({agents:[{id:'history-reader',tokenDigest:createHash('sha256').update(token).digest('hex'),projectIds:[p.id],readOnly:true}]}),{mode:0o600});config.agentCredentialsFile=file;
+    expect(await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions',undefined,token))).toEqual({decisions:[receipt.decision],nextAfter:null});
+    expect((await app.fetch(new Request('http://hub.test/hub/v1'+path+'/review-decisions'))).status).toBe(401);
+    const other=await success<Project>(await request('/projects',{name:'Not shared'}));
+    expect((await request(`/projects/${other.id}/flows/${f.id}/review-decisions`,undefined,token)).status).toBe(403);
+    expect((await request(`/projects/${other.id}/flows/${f.id}/review-decisions`)).status).toBe(404);
+    expect((await request(path+'/request-changes',body,token)).status).toBe(403);
+  });
+
+  test('reads a bounded history page without loading legacy aggregate or deserializing cold decisions', async () => {
+    const {p,f,path}=await fixture();const db=new Database(join(dir,'hub.sqlite'));
+    const old=db.query<{body:string},[]>('SELECT body FROM hub_state WHERE id=1').get()!.body;
+    db.transaction(()=>{for(let i=0;i<2000;i++) {
+      const decision:Decision={id:'history-'+i,flowId:f.id,subjectRevisionId:'subject-'+i,specContentDigest:f.specContentDigest,comment:'cold-history-'+i,criterionRefs:[],actorId:'human:reviewer',actorKind:'human',createdAt:'2026-01-01T00:00:00.000Z'};
+      db.query('INSERT INTO hub_legacy_review_decisions(id,project_id,flow_id,subject_revision_id,flow_version,body) VALUES(?,?,?,?,?,?)').run(decision.id,p.id,f.id,decision.subjectRevisionId,i+100,JSON.stringify(decision));
+    }})();
+    db.query('UPDATE hub_state SET body=? WHERE id=1').run(JSON.stringify('unexpected aggregate materialization'));
+    const parse=JSON.parse;let reads=0;
+    JSON.parse=(...args:Parameters<typeof JSON.parse>)=>{if(args[0].startsWith('{"id":"history-'))reads++;return parse(...args);};
+    try {
+      const page=await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions?limit=2',undefined,agent));
+      expect(page.decisions.map(decision=>decision.id)).toEqual(['history-1999','history-1998']);
+      expect(page.nextAfter).toBe('history-1998');expect(reads).toBeLessThanOrEqual(3);
+    } finally {JSON.parse=parse;db.query('UPDATE hub_state SET body=? WHERE id=1').run(old);db.close();}
+  });
+
 });
