@@ -1,0 +1,50 @@
+{
+  "task": {
+    "task_id": "task-31",
+    "task_name": "Native queue recoverable configuration refusal",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Close remaining reservation class: pre-admission guard errors alone are not observed native terminal evidence. Reproduce config recovery under same queued operation, retain reservation until actual native terminal transition; revise old stale-config expectation. Exact paths frozen group1 only.",
+    "target_files": [
+      "src/hub/work/execution.ts",
+      "src/hub/work/execution.test.ts",
+      "src/hub/remote-v2/queue.ts",
+      "src/hub/remote-v2/sessions.ts"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "review-logic-w36:F-001",
+        "file": "src/hub/work/execution.ts",
+        "severity": "CRITICAL",
+        "message": "drainSessionQueue calls deps.admissionRefused for EVERY HubFailure raised during a queued admission, and admissionRefused releases the reservation (state 'released' is terminal: saveExecutionReservation refuses any later change). Many of those failures are transient \u2014 the global active-run budget (`repo.activeRuns()>=repo.budgets.activeRuns` in admitMessage/admitCommand, 413), `held()` controller checks, 'Queued configuration changed' \u2014 and the refusal deliberately does not change the native queue item ('Refusal is not an observed native queue transition'), so the item stays at the FIFO head and drain retries it. Every retry now reaches beforeAdmission, finds the reservation not 'reserved' and fails 'execution-already-allocated'/'execution-reservation-released', i.e. it can never succeed.",
+        "suggested_fix": "Release only on refusals that end the queued operation (authority revoked, association stale, reservation/attempt pins stale, recovery-required), and keep the reservation 'reserved' for retryable failures (quota-exceeded, hub-busy, controller/config version changes) so the queue retry can admit it; alternatively, when releasing, also issue the native queue removal/suspension so the FIFO is not fenced by an item that can never be admitted, and surface it to the operator.",
+        "line": 220
+      }
+    ],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

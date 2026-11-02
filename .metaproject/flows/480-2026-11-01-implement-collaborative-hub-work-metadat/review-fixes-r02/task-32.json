@@ -1,0 +1,81 @@
+{
+  "task": {
+    "task_id": "task-32",
+    "task_name": "Actual-byte request admission and bounded body reads",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Own mutation-queue implementation/unit/HTTP tests only; server.ts+remote-v2/index.ts integration remains T28 worker. Preserve request<T>(request,action) with callback receiving admittedRequest. Meter streamed body chunks; actual retained bytes until action completes; bounded body read deadline only while body incomplete; no prebuffer before route authentication; reuse nested MCP root request slot via AsyncLocalStorage, account real memory without static32MiB reservations. Read-only GET exempt. Fair bounded requests/queue semantics preserved. Explicit finally cleanup for aborted/unconsumed body leases. Reproduce small request concurrency, nestedMCP slots, unauthorized slowbody deadline, oversized streams, abortcleanup, longGitbodyfinished no prematuredeadline, existing Work boundary exemptions. No unrelated refactor. Coordinate exactinterface with fix_deploy_d_m. Integrated fullHub also requires updating existing DOT-named mutation-queue.http.test.ts from obsolete flat32MiB expectations to deterministic actual-byte/slot boundary behavior; preserve assertions on bounded retained memory and deadlines.",
+    "target_files": [
+      "src/hub/mutation-queue.ts",
+      "src/hub/mutation-queue.test.ts",
+      "src/hub/mutation-queue.http.test.ts"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "review-backend-w7:F-003",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "Every POST/PUT/PATCH/DELETE outside /hub/work/v1 (legacy /hub/v1, remote /hub/v2 browser/machine HTTP, and /mcp) reserves 32 MiB of the 128 MiB budget for the entire request lifetime \u2014 including the up-to-10 s serialized-queue wait, the external Git push in externalDelivery, and MCP tool execution. MCP tools call application.fetch for their inner API request, which reserves again, so one MCP legacy write holds 64 MiB.",
+        "suggested_fix": "Reserve the parser allowance only while the body is being buffered (move accounting into readJson/body readers, or release the reservation once the body is parsed), size reservations per route actually parsed (/mcp has its own bound; GET-like JSON-RPC reads need none), and exempt in-process nested apiFetch calls (mark them, e.g. via AsyncLocalStorage) from a second reservation. Add a test: 5 concurrent MCP writes and 2 slow deliveries + 3 remote POSTs all succeed under defaults.",
+        "line": 51
+      },
+      {
+        "id": "review-degradation-w11:F-001",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "The new request memory admission (4bd296f54, round 2) reserves a flat 32 MiB for EVERY mutating request outside /hub/work/v1 \u2014 tiny legacy and /hub/v2 control POSTs (login, messages, approvals, controller actions, machine result/reconciliation uploads), every POST /mcp, and the Git delivery POST \u2014 against a 128 MiB default budget, and holds the reservation for the whole action, including the up-to-10 s wait in the serialized queue and the external git push of a delivery. The Hub therefore admits at most four concurrent non-work mutations and answers the fifth with 503 'hub-busy' instead of queueing it (maxPending:32 is unreachable for these routes). MCP is counted twice: server.ts routes /mcp through application.fetch (32 MiB) and handleHubMcp calls the inner API through application.fetch again (another 32 MiB for a /hub/v1 write), so two concurrent agent MCP writes consume the whole budget. On base there was no admission refusal: concurrent mutations queued.",
+        "suggested_fix": "Reserve by declared/route-specific body ceilings (a small allowance for JSON control routes, the 32 MiB allowance only for revision/result upload routes), release the reservation once the body has been read rather than after the action completes, and do not re-admit the inner apiFetch of an already-admitted /mcp request (pass a flag or call handle() directly). Keep queueing, not refusing, for requests whose bodies are already buffered.",
+        "line": 51
+      },
+      {
+        "id": "review-highload-w8:HL-W8-002",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "Every non-GET request outside /hub/work/v1/ reserves 32 MiB of a 128 MiB Hub-wide budget (and one of 32 request slots) for its entire lifetime: body parse, up to 10 s waiting in the serialized queue, and \u2014 for /hub/v1/.../deliveries \u2014 the whole out-of-queue Git delivery (clone/fetch/cherry-pick/push, each git step up to 30 s). The reservation is never reduced to the actual body size once parsed. MCP doubles it: POST /mcp reserves 32 MiB, and handleHubMcp calls `context.apiFetch(new Request(... method: 'POST' ...))` = application.fetch, which reserves another 32 MiB for the inner legacy route.",
+        "suggested_fix": "Reserve the parser allowance only around body buffering: release (or shrink to the actual buffered size) as soon as readJson/body() returns, before serialized wait and before Git delivery. Exempt the internal MCP apiFetch re-entry from a second reservation (e.g. a trusted internal-call marker via AsyncLocalStorage, or route the inner call to handle() directly), and size the /mcp reservation to the MCP parser's own cap. Add an HTTP test with 4 concurrent MCP mutation calls and with 2 in-flight deliveries + 1 browser POST.",
+        "line": 51
+      },
+      {
+        "id": "review-performance-w8:F-001",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "mutationQueue.request() reserves 32 MiB of the 128 MiB maxRequestBytes budget for every POST/PUT/PATCH/DELETE outside /hub/work/v1/ and releases it only when the whole action settles (finally after `await requests.run(...)`). application.fetch wraps every request in it, so the reservation is held (a) while the request waits up to maxWaitMs=10 s in the serialized queue, (b) for the entire Git clone/cherry-pick/push network operation in externalDelivery, which deliberately runs outside the global queue but still inside application.fetch, and (c) twice for MCP: the outer POST /mcp reserves 32 MiB and handleHubMcp's inner context.apiFetch(...) re-enters application.fetch, reserving another 32 MiB for any legacy /hub/v1 write. The effective concurrency for all legacy, remote-v2 browser/machine-HTTP and MCP mutations is therefore 4, or 2 for MCP legacy writes.",
+        "suggested_fix": "Account for parser memory only while the body is being buffered: take the reservation inside readJson/remote-v2 body()/mcp readBody and release it once the bytes are parsed (or size it from the bytes actually read, refusing when the running total would exceed the budget). Exempt the in-process MCP apiFetch re-entry from a second reservation (pass an internal marker or call handle() directly with the already-parsed body). At minimum, release before externalDelivery's Git step and before waiting in serialized().",
+        "line": 51
+      },
+      {
+        "id": "review-security-code-w31:SEC-W31-001",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "createMutationQueue().request(), which application.fetch wraps around every request, reserves 32 MiB of the 128 MiB aggregate budget (and 1 of 32 request slots) for any POST/PUT/PATCH/DELETE outside /hub/work/v1, before any authentication. The reservation is held until handle() returns. On the legacy /hub/v1 POST path readJson(request) streams the whole body before authenticate() runs (server.ts: body read, then serialized(... authenticate ...)). On the remote path remote-v2/index.ts reads body(request) before resolveMachine/ports.human. Neither reader has a total read deadline. Four concurrent unauthenticated non-work mutations that trickle their bodies therefore exhaust requestBytes, and every other mutation returns 503 'Request memory budget exhausted' while they stay open. That includes operator browser commands, machine HTTP result uploads, enrollment and work commands.",
+        "suggested_fix": "Authenticate from headers (bearer or session cookie) before reserving budget, and reserve per authenticated principal, keeping a small separate pre-auth allowance for the intrinsically unauthenticated session-login and machine-enroll bodies. Independently, add a total body-read deadline (for example AbortSignal.timeout of about 30 s) in readJson and remote-v2 body(), and set an explicit Bun.serve idleTimeout. Alternatively reserve bytes incrementally as chunks arrive instead of the route maximum up front. Add a test that holds 4 slow unauthenticated POSTs open and asserts an authenticated mutation still succeeds.",
+        "line": 51
+      }
+    ],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

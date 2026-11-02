@@ -1,0 +1,154 @@
+{
+  "task": {
+    "task_id": "task-25",
+    "task_name": "Scoped SQL storage and durable projections",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Fix assigned round 2 PR1113 mechanisms. Exact file ownership and bounds are in parent dispatch; review suggestions are hypotheses. Reproduce RED then minimal fix GREEN per mechanism. Owner allows Flow-only empty affectedIntentIds in all layers. Do not edit original review input. No unrelated refactors.",
+    "target_files": [
+      "src/hub/work/storage.ts",
+      "src/hub/store.ts",
+      "src/hub/work/http.ts",
+      "src/hub/work/openapi.ts",
+      "src/hub/work/handlers-requirements.ts"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "review-architecture-w10:F-001",
+        "file": "src/hub/work/handlers-requirements.ts",
+        "severity": "CRITICAL",
+        "message": "Hidden layer contract. The domain handlers (handlers-*.ts, run from domain.ts execute) query `state.records` as if WorkState were the whole project. The production path (work/http.ts `deps.store.work.commandState(projectId, command, ...)`, then workCommand) now passes a scoped subset whose contents depend on a per-command preload list in storage.ts commandState, which has to mirror every handler query by hand. requirementsResolveAmendment checks for an existing amendment resolution by scanning for a `decision` record whose targetId is the amendment. commandState loads only outgoing references, plus amendments that are still pending through hub_work_pending_amendment. The resolution decision has no outgoing reference to it, and the hub_work_amendment_resolved trigger deletes the pending row, so that decision is never loaded and the 'amendment-resolved' guard can never fire.",
+        "suggested_fix": "Make the contract explicit instead of implicit. Either (a) give the guard its own indexed port, e.g. WorkContext.isAmendmentResolved(projectId, amendmentId) backed by an `amendment_id` lookup (or reuse hub_work_pending_amendment: resolvable only while a pending row exists), or (b) have commandState load decisions with targetType='amendment' AND targetId IN (loaded amendment ids) for requirements.resolve-amendment. Then add a storage-backed regression test that resolves an amendment twice through commandState and expects 409. Longer term, declare each handler's read set beside the handler (or route all non-pin lookups through WorkContext ports), so the storage preload is not a second copy of every handler query.",
+        "line": 181
+      },
+      {
+        "id": "review-architecture-w2:F-001",
+        "file": "src/hub/work/handlers-requirements.ts",
+        "severity": "CRITICAL",
+        "message": "Repository/handler contract split by the scoped unit-of-work fix: storage.commandState decides which records enter a command by following outgoing *Id references from the payload plus per-command sibling queries, but the resolve-amendment handler still detects 'already resolved' by scanning state.records for a decision whose targetId is the amendment. Nothing loads that inbound decision: visit() only follows ids found in the payload and loaded records (amendmentId -> amendment -> flow/intents/revisions), and the per-flow query loads only rows still in hub_work_pending_amendment, which the hub_work_amendment_resolved trigger deletes on approve/withdraw. The guard therefore always sees no resolving decision.",
+        "suggested_fix": "Make 'is this amendment still pending' a repository fact instead of a scan of a partial unit: either have commandState for requirements.resolve-amendment add rowsWhere(kind='decision' AND targetType='amendment' AND targetId=?) for the payload amendmentId, or expose context.amendmentPending(projectId, amendmentId) backed by hub_work_pending_amendment and fail amendment-resolved when it is absent. Add a storage-path test: withdraw then approve, and approve twice for an Intent-only amendment, both must return 409.",
+        "line": 181
+      },
+      {
+        "id": "review-backend-w2:F-001",
+        "file": "src/hub/work/handlers-requirements.ts",
+        "severity": "CRITICAL",
+        "message": "Regression from fix A (scoped unit of work). The 'already resolved' guard scans state.records for a decision targeting the amendment, but workRepository.commandState (storage.ts) never loads that decision for requirements.resolve-amendment. It loads the amendment by id, its flow, revisions, affected Intents, the flow's Intents and only *pending* amendments (hub_work_pending_amendment). The resolving decision has targetId = amendment id and is reached by none of those visits, so the guard sees nothing. Before the fix the whole project was loaded and the guard worked.",
+        "suggested_fix": "In commandState, for requirements.resolve-amendment also load decisions with targetType 'amendment' and targetId equal to payload.amendmentId (indexed by hub_work_record_targetId), or make the handler require the amendment to be present in hub_work_pending_amendment (pass a context.isAmendmentPending callback). Add a scoped-storage test that resolves the same amendment twice with fresh operation ids and expects 409 amendment-resolved.",
+        "line": 181
+      },
+      {
+        "id": "review-backend-w8:F-001",
+        "file": "src/hub/work/handlers-requirements.ts",
+        "severity": "CRITICAL",
+        "message": "requirementsResolveAmendment refuses a second resolution by searching state.records for an existing approve/withdraw Decision on the amendment, but under the new scoped commandState that Decision is never loaded: commandState loads the amendment by its payload id and only PENDING amendments (hub_work_pending_amendment, from which the resolution trigger deletes the row), and nothing in the loaded graph references the resolution Decision by id. The remaining half of the guard (f.approvedRevisionId !== m.sourceFlowRevisionId) does not change when an amendment has only Intent replacements, so the guard no longer fires for that case.",
+        "suggested_fix": "Load resolution state explicitly: in commandState for 'requirements.resolve-amendment' add rowsWhere(kind='decision' AND targetType='amendment' AND targetId=<amendmentId>), or have the handler check store-backed pending status (amendment present in hub_work_pending_amendment) instead of scanning state.records. Add a test: approve an Intent-only amendment, accept the Intent, resolve the same amendment again -> 409 amendment-resolved and the Intent stays accepted.",
+        "line": 181
+      },
+      {
+        "id": "review-clean-code-w10:F-001",
+        "file": "src/hub/work/http.ts",
+        "severity": "CRITICAL",
+        "message": "workLimits gained seven keys (maxSnapshotCacheBytes, maxSnapshots, maxSnapshotsPerPrincipal, maxSnapshotBytesPerPrincipal, snapshotTtlMs, maxObservations, maxObservationsPerPrincipal) and capabilities() returns `limits: workLimits` verbatim, but the published schema `Capabilities.limits` in src/hub/work/openapi.ts is built with `object({...})`, which sets additionalProperties:false and lists only the original six keys.",
+        "suggested_fix": "Expose only the protocol limits: return a `publicWorkLimits` object with the six published keys from capabilities() and keep the internal quotas in a separate `workQuotas` constant; or extend Capabilities.limits with the new keys as consts. Add a test that runs WorkClient.read('capabilities') (or matchesWorkSchema on the live response) so the schema and payload cannot drift again.",
+        "line": 17
+      },
+      {
+        "id": "review-degradation-w14:F-001",
+        "file": "src/hub/work/handlers-requirements.ts",
+        "severity": "CRITICAL",
+        "message": "The 'already resolved' guard of requirements.resolve-amendment reads resolving decisions from state.records. Round-1 head built that state with store.work.load(projectId) (full history), so the guard saw them. This round the HTTP command path builds it with store.work.commandState (src/hub/work/http.ts: `const state = deps.store.work.commandState(projectId, command, current.actor.id)`), and commandState never loads a decision whose targetType is 'amendment': it follows *Id fields of loaded rows (no record points at an amendment decision), loads only UNRESOLVED amendments from hub_work_pending_amendment, and adds decisions only for first approval (requirements.approve) and criterion waivers (acceptance commands). The guard is now always false.",
+        "suggested_fix": "Check resolution against the durable projection instead of the scoped records: in requirementsResolveAmendment (or commandState for this command) require the amendment to be present in hub_work_pending_amendment, or load decisions with targetType='amendment' AND targetId=amendmentId into commandState for requirements.resolve-amendment. Add a test that approves an intent-only amendment, accepts the Intent, then re-sends resolve-amendment approve/withdraw and expects 409 amendment-resolved.",
+        "line": 181
+      },
+      {
+        "id": "review-degradation-w15:F-001",
+        "file": "src/hub/work/storage.ts",
+        "severity": "CRITICAL",
+        "message": "archiveDocument now refuses any newly inserted document version once the global archive passes 512 MiB or 100,000 versions. Its caller store.ts syncLegacy runs `for (const document of state.documents) work.archiveDocument(document); for (const change of state.documentChanges) work.archiveDocument(change.document);` inside every legacy persist, unconditionally (also with workManagement disabled), and the archive keeps every version ever written (PK project,document,version; never pruned), not only versions pinned by managed work.",
+        "suggested_fix": "Archive only versions a managed work record actually references (context entries, specifications, document artifacts) at the moment they are pinned, or skip archiving entirely when workManagement is disabled; and ship the explicit archival command the error message names before enforcing a hard refusal on legacy edits.",
+        "line": 283
+      },
+      {
+        "id": "review-degradation-w15:F-002",
+        "file": "src/hub/work/http.ts",
+        "severity": "CRITICAL",
+        "message": "Authority and context reads moved from the hub_state aggregate to projections (hub_legacy_records via store.project/workLegacyContext, hub_sessions via store.session) that are filled once by the 'legacy-projection-v1'/'session-projection-v1' bootstraps and afterwards only by syncLegacy, which upserts a record only when its body differs from the PREVIOUS hub_state load. A writer that updates hub_state without the projections leaves them stale forever, and the diff-against-previous design never repairs rows that already sit in hub_state.",
+        "suggested_fix": "Raise the database writer marker as soon as the projections are created (so a base image refuses the data, as writer3 already does for managed writes), or record a digest of the hub_state body in hub_work_settings on every persist and fully rebuild hub_legacy_records/hub_sessions at open when the stored digest differs from the current body.",
+        "line": 138
+      },
+      {
+        "id": "review-highload-w9:HL-W9-001",
+        "file": "src/hub/store.ts",
+        "severity": "CRITICAL",
+        "message": "writeTransaction, the transaction every remote-v2 machine frame and machine/browser HTTP mutation uses, now does per call: load() = JSON.parse of the whole hub_state aggregate + hydrate + `legacyBaselines.set(state, serializedLegacy(state))` (serialize #1); `JSON.parse(serializedLegacy(previous))` (serialize #2, parse #2) + hydrate again; then `serializedLegacy(state) !== serializedLegacy(previous)` (serialize #3 and #4) for change detection. Before this PR it was 2 parses + 1 stringify. Most callers ignore the legacy state entirely (`(_state, repo) =>`), so the work is pure overhead proportional to the legacy aggregate (documents with up to 1 MiB content each, 5,000 retained documentChanges carrying full document copies, evidence outputs, up to 100,000 replay bodies \u2014 quota-bounded at 64 MiB).",
+        "suggested_fix": "Give remote-v2 a transaction that does not materialize legacy state: pass a lazy state getter (load only when the action reads it) and persist only when it was materialized and changed. Where legacy is loaded, keep the serialized baseline from the single DB read (row.body) instead of re-serializing, and copy via one parse of that string; compare against row.body rather than serializing `previous` again. Add a test asserting a heartbeat frame performs no hub_state parse.",
+        "line": 143
+      },
+      {
+        "id": "review-logic-w24:F-001",
+        "file": "src/hub/work/openapi.ts",
+        "severity": "CRITICAL",
+        "message": "The attention read returns Evidence records for post-acceptance contradictory evidence (storage.ts readState attention clause `UNION SELECT evidence_id FROM hub_work_incidents`, served by http.ts attentionPage; domain.ts workRead includes `incidentIds.has(r.id)`), and domain.test.ts pins that behaviour (`attention.records.filter(r => r.kind === 'evidence')`). The published response schema AttentionPage only allows WorkFlow | WorkIntent | Attempt, so a page containing an Evidence record fails matchesWorkSchema.",
+        "suggested_fix": "Add ref(\"EvidenceRecord\") to the AttentionPage oneOf in src/hub/work/openapi.ts, regenerate docs/requirements/hub-work-management/openapi.json, and add a client/MCP test that reads attention while a contradictory-evidence incident exists (the domain.test.ts fixture already builds one).",
+        "line": 46
+      },
+      {
+        "id": "review-logic-w37:F-001",
+        "file": "src/hub/work/storage.ts",
+        "severity": "CRITICAL",
+        "message": "For GET /flows/{id} and /intents/{id}, readState builds the state from commandState('attempt.report', {entityId}) \u2014 a non-acceptance kind, so no evidence/submission rows are loaded \u2014 plus direct children matched by flowId/intentId. Evidence and ReviewSubmission records carry only attemptId/subjectId, so they never enter the state. workRead then computes `incidents = contradictoryAcceptedEvidence(records, byId)` over that state and adds each incident to the Flow/Intent aggregate; with no evidence loaded the list is always empty. The hub_work_incidents table (with flow_id/intent_id indexes) exists but readState only consults it for attention.",
+        "suggested_fix": "In readState's aggregate branch, add the incident Evidence (and the records contradictoryAcceptedEvidence needs: the evidence's attempt, its submissions and the accepting decisions) by querying hub_work_incidents on flow_id/intent_id/attempt_id, or have workRead take incident ids from the repository instead of recomputing them from a partial state. Add an HTTP-level test of the Flow and Intent aggregates for the post-acceptance contradiction scenario.",
+        "line": 197
+      },
+      {
+        "id": "review-logic-w38:F-002",
+        "file": "src/hub/store.ts",
+        "severity": "CRITICAL",
+        "message": "The authoritative session lookups were switched from store.load().sessions to store.session(), which reads the hub_sessions projection (server.ts authenticate and authorityValid, the removed '-' lines in the slice). The persist rewrite (syncLegacy(state, previous)) keeps that projection and hub_legacy_records up to date only by diffing previous against next state. Both projections are bootstrapped exactly once, guarded by the 'session-projection-v1' and 'legacy-projection-v1' markers. A writer-2 0.4.x release does not know these tables and writes only hub_state. The deployment doc explicitly allows rolling back to such a release while no managed-work write has happened, and a Hub with no revisions stays at marker 2. After a rollback and re-upgrade the markers are still set, so nothing rebuilds the projections. The incremental diff never repairs records that are the same in previous and next state.",
+        "suggested_fix": "Make the projections self-validating instead of marker-once. In persist, store a digest (or a monotonically increasing generation) of the hub_state body in hub_work_settings, for example 'legacy-projection-digest'. At open, if the stored digest differs from sha256 of the current hub_state body, some writer changed hub_state without updating the projections. In that case rebuild them in one transaction: DELETE FROM hub_sessions / hub_legacy_records, then syncLegacy(load()) with no previous. A test should open the store, change hub_state through a raw writer-2 style UPDATE (drop a session, add a project), reopen, and then show that store.session() rejects the dropped session and store.project() returns the new project.",
+        "line": 91
+      },
+      {
+        "id": "review-performance-w9:F-002",
+        "file": "src/hub/store.ts",
+        "severity": "CRITICAL",
+        "message": "load() now hydrates every revision file (defineProperty per file) and fully re-serialises the legacy aggregate (artifacts.serialize: metadata copies of all revisions + JSON.stringify of the whole state) solely to record an optimistic-concurrency baseline that only save() reads. Every read caller pays it: the legacy GET path in server.ts, remote-v2 read-model scoped(auth, projectId, store.load()) on each project-scoped remote read, session-operations/lifecycle, work legacy preview. writeTransaction then serialises again: `JSON.parse(serializedLegacy(previous))` (second), `serializedLegacy(state) !== serializedLegacy(previous)` (third and fourth), and on change artifacts.persist adds serialize(state) and serialize(previous) (fifth and sixth) although the baseline string for previous was already computed. The stored hub_state.body is already exactly serialize(previous).",
+        "suggested_fix": "Use the raw row text as the baseline: in load() keep `row.body` (it is the canonical serialize output written by persist) in legacyBaselines instead of re-serialising; in writeTransaction parse `row.body` once for the working copy and compare serializedLegacy(state) to that string; pass the known previous body/byte length into artifacts.persist instead of calling serialize(previous). Readers that never save could use a load variant that skips baseline bookkeeping."
+      },
+      {
+        "id": "review-testing-practices-w6:F-001",
+        "file": "src/hub/work/storage.ts",
+        "severity": "CRITICAL",
+        "message": "The served GET /hub/work/v1/projects/{p}/attention (http.ts -> store.work.attentionPage) returns raw rows matching the attention clause, which includes `SELECT evidence_id FROM hub_work_incidents`. So after a late contradictory Evidence on an accepted Intent (the scenario this PR designs for), the page carries a record of kind 'evidence'. The hub-web adapter `attention()` rejects any page with a record whose kind is not flow/intent/attempt (`![\"flow\", \"intent\", \"attempt\"].includes(r.kind)` -> invalid() -> ApiError 502 invalid-response), and openapi.ts `schemas.AttentionPage` allows only `oneOf: [WorkFlow, WorkIntent, Attempt]`.",
+        "suggested_fix": "Decide the contract once: either admit EvidenceRecord in AttentionPage (openapi oneOf + adapter kind list + overview-attention rendering of an incident item), or have attentionPage map incident evidence to its Intent/Attempt record. Then add an HTTP test that records post-acceptance failing evidence, GETs /attention, validates it with matchesWorkSchema(AttentionPage) and feeds it through liveWorkAdapter.attention.",
+        "line": 230
+      }
+    ],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

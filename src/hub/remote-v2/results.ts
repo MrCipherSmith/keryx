@@ -1,5 +1,6 @@
-import { canonicalDigest, criteriaDigest, type Control } from "../../remote-control/protocol";
-import { buildRevisionRecord, fail } from "../domain";
+import { canonicalDigest, type Control } from "../../remote-control/protocol";
+import { inspectLegacyFlowPins } from "../legacy-flow-pins";
+import { assertLegacyFlowWritable, buildRevisionRecord, fail } from "../domain";
 import type { HubState } from "../store";
 import type { RemoteRepository } from "./storage";
 import type { MachineRecord, RunRow } from "./model";
@@ -8,14 +9,7 @@ const secretPattern = /(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?
 /** The managed pins of a run that the current Flow no longer matches. The result keeps the run's original snapshot; drift is recorded, never repaired. */
 function pinDrift(state: HubState, association: Control["FlowAssociation"]): NonNullable<RunRow["pinDrift"]> {
   if (association.mode !== "flow") return [];
-  const flow = state.flows.find((entry) => entry.id === association.flowId);
-  if (!flow) return [];
-  const spec = state.documents.find((document) => document.id === flow.specDocumentId && document.projectId === flow.projectId);
-  const drift: NonNullable<RunRow["pinDrift"]> = [];
-  if (flow.version !== association.expectedFlowVersion) drift.push("flow-version");
-  if (!spec || spec.contentDigest !== association.specDigest || flow.specContentDigest !== association.specDigest) drift.push("spec");
-  if (criteriaDigest(flow.criteria) !== association.criteriaDigest) drift.push("criteria");
-  return drift;
+  return inspectLegacyFlowPins(state,association).drift;
 }
 export function resultUpload(state: HubState, repo: RemoteRepository, machine: MachineRecord, projectId: string, runId: string, body: Control["ResultUpload"], key: string): Control["ResultReceipt"] {
   const run = repo.get<RunRow>("remote_run", runId);
@@ -23,6 +17,7 @@ export function resultUpload(state: HubState, repo: RemoteRepository, machine: M
   const previous = repo.get<{ payloadDigest: string; key: string; receipt: Control["ResultReceipt"] }>("remote_result_receipt", runId);
   const payloadDigest = canonicalDigest(body);
   if (previous) { if (previous.payloadDigest !== payloadDigest) fail(409, "payload-conflict", "Immutable result changed"); return previous.receipt; }
+  if(run.association.mode==='flow')assertLegacyFlowWritable(state,projectId,run.association.flowId);
   version(run.version, body.expectedRunVersion);
   if (body.sessionId !== run.sessionId || body.turnId !== run.turnId || canonicalDigest(body.association) !== canonicalDigest(run.association)) fail(409, "stale-reference", "Result ownership or association changed");
   if (!["succeeded", "failed", "cancelled"].includes(run.state) || body.outcome !== run.state) fail(409, "stale-reference", "Result requires confirmed matching terminal observation");

@@ -1,0 +1,44 @@
+{
+  "task_id": "task-41",
+  "status": "DONE",
+  "files_modified": [
+    "src/hub/work/http.contract.test.ts"
+  ],
+  "files_created": [
+    "apps/hub-web/tests/work-server-contract.case.ts"
+  ],
+  "product_changes": false,
+  "cause": "Root Bun/CI runtime-only dependency install imported browser liveWorkAdapter which requires UI-only i18next. Local UI dependency symlink masked missing root dependency; installing more root deps would mask the boundary error.",
+  "preserved_assertions": [
+    "Real SQLite/scopedFixture served Flow/Intent aggregate incident tests unchanged",
+    "Real production createWorkHttp served attention schema and WorkClient validation unchanged",
+    "Real served capabilities publishedschema and WorkClient limit assertions unchanged",
+    "Browser adapter positive incidentEvidence assertion moved to UI Vitest, checks full Evidence equality (not justID) from actual production createWorkHttp response"
+  ],
+  "ui_fixture": "Local framework-independent production-handler port: project/currentSequence/attentionPage/cursorSecret only; existing valid demoEvidence supplies incident wiredata. SQL/postacceptance semantics remain covered by unchanged root tests. No Bun-specific runtime, testframework dependency, or productfixture extracted/shared.",
+  "verification": {
+    "RED": "/tmp/pr1113-integration-ci-boundary-red.log \u2014 UIdep symlink heldout, 3PASS1FAIL i18next, independently reproduced original CI boundary failure",
+    "root_GREEN": "/tmp/pr1113-integration-ci-boundary-root-green.log \u2014 UIdep symlink heldout,3PASS6assertions; restored finally",
+    "UI_focus": "/tmp/pr1113-integration-ci-boundary-ui-green.log1PASS4assertions",
+    "UI_full": "/tmp/pr1113-integration-ci-boundary-ui-full.log40files198testsPASS",
+    "UI_types": "/tmp/pr1113-integration-ci-boundary-types.logPASS",
+    "UI_lint": "/tmp/pr1113-integration-ci-boundary-lint.logPASS",
+    "root_file_lint": "/tmp/pr1113-integration-ci-boundary-root-lint.logPASS",
+    "assets": "/tmp/pr1113-integration-ci-boundary-assets.log freshnessPASS unchanged2bce6622c96196cbab25def45a5434d251a7b2121e05af5933278c70e9df799a",
+    "diff_check": "PASS"
+  },
+  "no_dependency_workaround": [
+    "No NODE_PATH injection",
+    "No root/UI dependency installation",
+    "Readonly shared node_modules untouched",
+    "Owned UI symlink heldout only around root proof; restored in finally after coordinating paused gates with A"
+  ],
+  "index_commit_push": false,
+  "frozen": true,
+  "routing_audit": {
+    "graph_used": "known scoped paths only; graphstale after integration, not relied on",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}

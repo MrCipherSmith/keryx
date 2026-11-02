@@ -1,0 +1,219 @@
+{
+  "task": {
+    "task_id": "task-26",
+    "task_name": "Live UI events forms and revision consumers",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Fix assigned round 2 PR1113 mechanisms. Exact file ownership and bounds are in parent dispatch; review suggestions are hypotheses. Reproduce RED then minimal fix GREEN per mechanism. Owner allows Flow-only empty affectedIntentIds in all layers. Do not edit original review input. No unrelated refactors.",
+    "target_files": [
+      "apps/hub-web/src/features/managed-work",
+      "apps/hub-web/src/features/remote/machines.tsx",
+      "apps/hub-web/src/features/context.tsx"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "review-architecture-w1:F-001",
+        "file": "apps/hub-web/src/features/managed-work/cache.ts",
+        "severity": "CRITICAL",
+        "message": "The new event path (answering review-performance-w1:F-001, review-performance-w3:F-001 and review-highload-w3:F-002) assumes every caller of useWorkEvents owns a populated snapshot cache entry. fetchEventRecords treats a missing snapshot as 'every record is missing', so it GETs /records/:id for every non-observation event. mergeWorkCache then drops the results, because its updater returns undefined when the snapshot key has no data. ManagedAttentionOverview calls useWorkEvents(adapter, attention cursor, project.id) and never loads the project snapshot. The hook is therefore coupled to a read model that this caller does not have.",
+        "suggested_fix": "Make record fetching depend on owning the read model. In useWorkEvents, read the snapshot once. If it is undefined, skip fetchEventRecords and only invalidate the exact attention key when page.events.length > 0. Alternatively, let fetchEventRecords return [] when snapshot is undefined. Add an Overview test that sends an event page and asserts that no /records/ request is made.",
+        "line": 30
+      },
+      {
+        "id": "review-backend-w3:F-001",
+        "file": "apps/hub-web/src/features/managed-work/adapter.ts",
+        "severity": "CRITICAL",
+        "message": "Response contract mismatch on GET /hub/work/v1/projects/{p}/attention. The server deliberately includes incident Evidence in the attention set: storage.ts readState's attention clause unions 'SELECT evidence_id FROM hub_work_incidents', and storage.scenarios.test.ts expects attention.records to contain the late evidence. The hub-web adapter's attention() then rejects any record whose kind is not flow/intent/attempt (the check directly after the pageOf call) and throws ApiError 502 'invalid-response'. The published OpenAPI AttentionPage (openapi.ts) is also oneOf WorkFlow/WorkIntent/Attempt, and the CLI/MCP client validates every read response against it (client.ts: !matchesWorkSchema(value, schemaRef(... responseSchema)) -> WorkClientError('invalid-response')).",
+        "suggested_fix": "Make one contract and enforce it on both sides: add EvidenceRecord to AttentionPage's oneOf in openapi.ts (and the docs openapi.json), and accept 'evidence' in adapter.ts attention() (render it as an incident row), or stop returning evidence from attention and expose incidents through a separate field or route. Add an HTTP-level test that reads attention after a post-acceptance failing Evidence and validates it with matchesWorkSchema(AttentionPage) and the web adapter.",
+        "line": 287
+      },
+      {
+        "id": "review-degradation-w1:F-001",
+        "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+        "severity": "CRITICAL",
+        "message": "The fix for perf-w1:F-001 / perf-w3:F-001 / highload-w3:F-002 replaced the prefix invalidation with record fetches, and now invalidates the Attention query only when fetchEventRecords returned records. After this tab commits a command, operation.tsx:60 merges receipt.entities into the snapshot first. When the event for that change arrives, cache.ts:27-31 filters it out because the cached version is already >= entityVersion, so records is [] and Attention is not invalidated. view.tsx:160 turned refresh into `() => undefined`, so onCommitted no longer refetches anything either. Round 1 invalidated the whole work prefix, Attention included, on every event page and on refresh().",
+        "suggested_fix": "Invalidate the exact Attention key (refetchType active) whenever the event page holds any non-observation WorkRecord event, not only when records were fetched. Or invalidate it in useWorkOperation after a committed receipt next to mergeWorkCache. Add a test: commit with receipt entities, then deliver the matching event, and expect the attention query to be invalidated.",
+        "line": 59
+      },
+      {
+        "id": "review-degradation-w7:F-001",
+        "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+        "severity": "CRITICAL",
+        "message": "The G fix (answering review-logic-w2:F-001) filters the amendment Intent list to approved Intents only, not just non-cancelled ones. The server makes an amendment the ONLY way to approve an Intent created after its Flow was approved: requirements.approve refuses it ('An Intent introduced after Flow approval requires a human membership amendment', handlers-requirements.ts introducedAfterFlowApproval), and requirements.amend explicitly supports it ('A new required Intent needs an exact Flow membership replacement'). With the new filter such an Intent (approvedRevisionId null, state draft) is never placed in `replacements`/`affectedIntentIds`, and because AmendmentsPanel reuses the same `intents` for the proposal-target <Select> (amendments.tsx `intents.map((intent) => <option ...>)`), it can no longer even be chosen for revision.propose \u2014 the only revision.propose UI in the app.",
+        "suggested_fix": "Exclude only cancelled Intents from amendmentDraft; include never-approved live Intents that were introduced after Flow approval (or let the human tick which unapproved drafts join the set, as round-1 suggested). Keep the proposal-target list as every non-cancelled Intent of the Flow, independent of the replacement set. Add a UI test where a draft Intent created after Flow approval is authorised through an amendment.",
+        "line": 7
+      },
+      {
+        "id": "review-degradation-w7:F-002",
+        "file": "apps/hub-web/src/features/managed-work/amendments.tsx",
+        "severity": "CRITICAL",
+        "message": "AmendmentDecision builds the requirements.resolve-amendment expectedVersions from the `intents` prop, which is now amendmentDraft's filtered list (approved and not cancelled) instead of every Intent of the Flow. The server cas()es EVERY id in manifest.affectedIntentIds (handlers-requirements.ts requirementsResolveAmendment `for (const id of m.affectedIntentIds) cas(find(id, 'intent'))`, and cas fails when expectedVersions[id] is missing). An affected Intent that leaves the filtered list while the manifest is pending is dropped from expectedVersions.",
+        "suggested_fix": "In AmendmentDecision derive versions from all Intents of the Flow (recordsOf(records, 'intent').filter(i => i.flowId === flow.id)) for manifest.affectedIntentIds, independent of the authoring filter; pass that list to PinTable for pending manifests too.",
+        "line": 272
+      },
+      {
+        "id": "review-degradation-w8:F-001",
+        "file": "apps/hub-web/src/features/managed-work/view.tsx",
+        "severity": "CRITICAL",
+        "message": "The B fix (answering review-performance-w1:F-001 / w3:F-001) turns every post-commit refresh into a no-op and pins the snapshot with staleTime: Infinity, relying on (a) receipt `entities` merged in operation.tsx and (b) the event poll. But the server's receipt `entities` is only the handler's return value (http.ts resultEnvelope -> resultEntities(receipt.result)): review.decide returns only the decision `d`, attempt.select and requirements.resolve-amendment return only `decision(...)`, while the Intent/Attempt/Flow they mutate (state, selectedSubmissionId, approvedRevisionId, version) are NOT in the receipt. Those arrive only through useWorkEvents, whose new idle backoff `ACTIVE_POLL_MS * 2 ** Math.min(failures || idlePages, 4)` grows the interval to 30 s after four empty polls (base polled every 2 s when healthy and refetched the snapshot right after each commit).",
+        "suggested_fix": "Either return every record a command changed in the receipt envelope (the transaction already tracks change()/add() \u2014 expose those as `entities`), or after a committed receipt trigger an immediate event poll (reset idlePages and poll now) instead of a no-op refresh. Keep the idle backoff off while the tab is visible and the user has just acted.",
+        "line": 160
+      },
+      {
+        "id": "review-degradation-w8:F-002",
+        "file": "apps/hub-web/src/features/managed-work/demo.ts",
+        "severity": "WARNING",
+        "message": "The demo adapter's receipt now returns every record as `entities`, while the live server returns only the handler's result record. Any UI test that commits through the demo adapter sees all side-effect records merged immediately, so it cannot detect the stale-state regression of F-001; work-incremental.case.tsx tests the event path in isolation and never asserts the post-commit Intent/Attempt state against a live-shaped receipt.",
+        "suggested_fix": "Make the demo receipt mirror the server (only the command result), and add a live-adapter test where review.decide's receipt carries only the decision and the UI must still show the accepted Intent.",
+        "line": 381,
+        "premise_verdict": "owner-decision",
+        "premise_answer": "uphold"
+      },
+      {
+        "id": "review-frontend-w1:F-001",
+        "file": "apps/hub-web/src/features/remote/machines.tsx",
+        "severity": "CRITICAL",
+        "message": "Answering review-degradation-w5:F-001 (Machines fan-out), commit 2755ae3a3 gates the per-session run query on a new detailsOpen toggle, which starts false. The always-visible header of MachineSessionRow still reads the run record for its state badge (`record?.state ?? session.state`), the needs-action highlight (`record?.state === \"waiting-approval\"`) and the Flow association link. With the row collapsed `record` is always undefined, so these silently fall back to the session state. The 'Details' button does not open a separate panel; it only turns the queries on.",
+        "suggested_fix": "Keep routing (the model label) lazy but keep the attention signal eager. Either fetch the run only for sessions with an activeRunId (bounded by the number of active runs, the A term the fan-out finding accepted), or have the session page carry the active run state. Otherwise render an explicit 'run state unknown, expand to load' marker instead of the session state. Restore a collapsed-card assertion for waiting-approval.",
+        "line": 450
+      },
+      {
+        "id": "review-frontend-w1:F-002",
+        "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+        "severity": "CRITICAL",
+        "message": "Answering review-highload-w3:F-003 and review-performance-w1:F-001, commit 83e569fc8 replaced the prefix invalidation with a targeted resync. On a 409/410 retention gap with a cached snapshot, the loop now replaces only the snapshot query and moves the cursor. The attention infinite query and the observations queries are no longer refreshed. Events lost in the gap are never delivered, and the next successful poll invalidates attention only when that page carries records (line 59). The old invalidate() covered both queries through the [scope, project, 'work', mode] prefix.",
+        "suggested_fix": "After a successful snapshot resync, also invalidate the attention query and the active observations queries: `client.invalidateQueries({queryKey:[hub.scopeKey,projectId,'work',adapter.mode,'attention'],exact:true})` and the observations prefix with refetchType 'active'. Exact document queries stay untouched. Add the attention assertion to the 410 resync test.",
+        "line": 71
+      },
+      {
+        "id": "review-frontend-w3:F-001",
+        "file": "apps/hub-web/src/features/managed-work/view.tsx",
+        "severity": "CRITICAL",
+        "message": "The new event poller in useWorkEvents keeps its own `cursor` inside the effect. The effect deliberately depends only on `hasCursor`, not on the snapshot's eventCursor. Any full snapshot refetch replaces the cached `records` with a snapshot that is consistent at the snapshot's own eventCursor, but the poller keeps its later cursor. Records that changed between the two cursors, and were already merged by the poller or by a receipt (operation.tsx mergeWorkCache), revert to their older versions. Their events are never delivered again, and nothing else invalidates the snapshot: the round-1 'any event invalidates' path was removed and staleTime is now Infinity. Three paths do this full replace: the Retry button, the remote WebSocket onopen refresh (which invalidates the whole [scopeKey, projectId] prefix, the work snapshot included), and the session refresh that invalidates every query.",
+        "suggested_fix": "Make a full snapshot replace and the poller agree on one cursor. Either (a) restart or reset the poller from the snapshot's eventCursor whenever a snapshot fetch completes (for example key the effect on snapshot dataUpdatedAt, or store the cursor in the query cache beside the records), so events after the snapshot cut are replayed and fetchEventRecords re-reads the reverted records; or (b) merge the fetched snapshot into the cached one version-aware (mergeWorkRecords semantics: keep the newer version per id) instead of replacing it. Also exclude the work snapshot and exact-document keys from the remote socket's [scopeKey, projectId] reconnect invalidation, since the work poller reconciles on its own. Add a test that resolves a slow snapshot refetch after an event merge and asserts the newer record survives.",
+        "line": 210
+      },
+      {
+        "id": "review-highload-w1:HL-R2-001",
+        "file": "apps/hub-web/src/features/managed-work/cache.ts",
+        "severity": "CRITICAL",
+        "message": "The fix for review-performance-w1:F-001 / review-performance-w3:F-001 / review-highload-w3:F-002 replaced prefix invalidation with fetchEventRecords: every non-observation event entity that is not already in the cached snapshot at the event's version is fetched with its own GET /projects/:id/records/:id, in sequential batches of 8, before the cursor advances. useWorkEvents (updates.tsx) always calls it, including when the snapshot key holds no data. ManagedAttentionOverview mounts up to 8 ProjectAttention components, and each one calls useWorkEvents(adapter, attention cursor, project.id) but never loads the [scope, project, 'work', 'live', 'snapshot'] query. There, `existing` is empty, so every entity in the event page is fetched. mergeWorkCache then drops the results because `snapshot ? merge : snapshot` returns undefined. The only useful effect is the attention invalidation that follows.",
+        "suggested_fix": "In useWorkEvents, skip fetchEventRecords when client.getQueryData(key) is undefined and only invalidate the exact attention key (the Overview case). When the deduplicated id count exceeds a small threshold (for example 50), refetch the snapshot once with adapter.snapshot + setQueryData, the same canonical resync the 410 path already uses, instead of N record GETs.",
+        "line": 34
+      },
+      {
+        "id": "review-logic-w1:F-001",
+        "file": "apps/hub-web/src/features/remote/machines.tsx",
+        "severity": "CRITICAL",
+        "message": "The fix for review-degradation-w5:F-001 gates the per-row run query (and the routing query) on `detailsOpen`, which starts as false. But the row's always-visible parts read that data: the state badge (`t(\"states.\" + (record?.state ?? session.state))`), the `needs-action` attention class (`record?.state === \"waiting-approval\" || session.state === \"recovery-required\"`), the active-flow link (`record?.association.mode === \"flow\"`) and the model label (`candidate` from routing.data). `detailsOpen` gates nothing else. No details section is rendered conditionally, so the chevron now only turns on fetching for fields that are shown in the collapsed row anyway.",
+        "suggested_fix": "Keep the fan-out reduction without hiding attention. Fetch the run eagerly only for rows with an activeRunId: these are bounded by active runs, which is the 'A' term round 1 accepted. Gate only the routing query on expansion. Alternatively, render the run-derived badge, flow link and model label only inside an expanded details region, and source the collapsed attention state from a field the session list already returns (or add one server-side).",
+        "line": 450
+      },
+      {
+        "id": "review-logic-w29:F-001",
+        "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+        "severity": "CRITICAL",
+        "message": "Answering round-1 review-logic-w2:F-002, amendmentDraft now treats a Flow-only amendment as complete (replacements.length > 0 instead of affected.length > 0), so for an approved Flow with no approved live Intent the Authorize button is enabled and AmendmentsPanel sends affectedIntentIds: []. Both the browser command schema and the canonical command schema declare affectedIntentIds with \"minItems\": 1, so useWorkOperation's validCommand (isWorkCommand -> matches(), which enforces minItems) rejects the command locally with status 'rejected' / code 'invalid-command', and the server's openapi.ts validator (built from docs/.../command.schema.json, also enforcing minItems) would refuse it too. The amendment record schema (domain-schema.json) carries the same minItems: 1.",
+        "suggested_fix": "Decide the contract once: if Flow-only amendments are allowed (the handler and the new UI say yes), drop minItems: 1 from affectedIntentIds in the canonical command.schema.json and domain.schema.json (and openapi.json), regenerate the browser copies with scripts/sync-hub-work-schemas.ts, and extend the UI test to click Authorize and assert the POST body with affectedIntentIds: [] plus a server test for a Flow-only amend+approve. If they are not allowed, revert complete to require at least one affected Intent and record review-logic-w2:F-002 as open.",
+        "line": 19
+      },
+      {
+        "id": "review-logic-w30:F-001",
+        "file": "apps/hub-web/src/features/managed-work/work-panels.tsx",
+        "severity": "CRITICAL",
+        "message": "FlowSummary computes the exact required-Intent set from every required Intent of the Flow, including cancelled ones. The server's requirements.approve (src/hub/work/handlers-requirements.ts) now compares the Flow revision's requiredIntentIds against required Intents with state !== 'cancelled'. The RevisionEditor checkbox list (revision-editor.tsx `.filter((i) => i.flowId === flow.id && i.required)`) likewise offers and pre-checks cancelled Intents, and ContributionPanel's requiredSetMatches (contribute.tsx) uses the same unfiltered set.",
+        "suggested_fix": "Exclude cancelled Intents wherever the client derives the required set: `i.flowId === flow.id && i.required && i.state !== \"cancelled\"` in work-panels.tsx FlowSummary, the revision-editor.tsx required-Intent checkbox list (and drop cancelled ids from the initial draft requiredIntentIds), and contribute.tsx requiredSetMatches. Better: export one `activeRequiredIntents(records, flowId)` helper from model.ts mirroring the server predicate and add a test with a cancelled required Intent.",
+        "line": 107
+      },
+      {
+        "id": "review-logic-w30:F-002",
+        "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+        "severity": "CRITICAL",
+        "message": "The event loop now merges per-record changes into the snapshot cache and keeps its own private cursor, captured once when the loop starts. A snapshot refetch (the Retry button `snapshot.refetch()` in view.tsx, or hub.refresh's global `queryClient.invalidateQueries()` in App.tsx) replaces the whole cached snapshot with the server export taken when its first page was read. The loop does not adopt the refetched snapshot's eventCursor and does not merge; it continues from a cursor already past any event it merged meanwhile.",
+        "suggested_fix": "Make a snapshot replacement resynchronise the loop: restart it from the new snapshot's eventCursor (e.g. include snapshot dataUpdatedAt / eventCursor in the effect identity, or have the loop read `client.getQueryData(key)?.eventCursor` and rewind when it is older than its own cursor) so events after the export are replayed and healed by the version guard. Alternatively, apply a refetched snapshot through mergeWorkRecords (newer versions win) instead of replacing the cache.",
+        "line": 35
+      },
+      {
+        "id": "review-logic-w6:F-001",
+        "file": "apps/hub-web/src/features/managed-work/contribute.tsx",
+        "severity": "CRITICAL",
+        "message": "choice() renders a controlled <Select> whose value is the persisted draft value, falling back to values[0] only when the draft key is absent. send() resolves the same field as `draft.X ?? list[0]`. When the draft holds an id that is no longer among the options (the option list is derived from the current revision), React's controlled select shows the first option, but send() submits the stale draft id. Because the displayed option is already 'selected', choosing it again fires no onChange, so with a single remaining option the user cannot correct the value; drafts are never cleared on cancel or refusal, so it persists until a page reload.",
+        "suggested_fix": "Resolve every choice against its current option list in one place: `const pick = (name, values) => values.some(v => v.id === draft[name]) ? draft[name] : values[0]?.id;` use pick() both as the Select value and in send() (context, criterion for intent and evidence, subject). Alternatively include the revision ids in the draft key so a revision change starts a fresh draft.",
+        "line": 323
+      },
+      {
+        "id": "review-performance-w1:F-001",
+        "file": "apps/hub-web/src/features/managed-work/updates.tsx",
+        "severity": "CRITICAL",
+        "message": "useWorkEvents always calls fetchEventRecords and only then mergeWorkCache. Overview's ProjectAttention (overview-attention.tsx:90, `useWorkEvents(adapter, attention.data?.pages.at(-1)?.eventCursor, project.id)`) never creates the `[scope, project, 'work', 'live', 'snapshot']` query. So `client.getQueryData(key)` is undefined, `existing` in cache.ts is an empty Map, and every non-observation event counts as a missing record. Each distinct entity is fetched with GET /projects/:id/records/:entityId in sequential batches of 8. mergeWorkCache then drops all of them, because setQueryData's updater returns `snapshot` when it is undefined. Only the attention invalidation that follows (updates.tsx:59) does useful work. This fix answered review-performance-w1:F-001, review-performance-w3:F-001 and review-highload-w3:F-002.",
+        "suggested_fix": "In useWorkEvents, read the snapshot first. If `client.getQueryData(key)` is undefined, skip fetchEventRecords, invalidate the exact attention key, and advance the cursor. Alternatively, take a `mode: 'snapshot' | 'attention'` option and have overview-attention pass 'attention'. Add a test asserting that Overview issues no /records/ request for an event page.",
+        "line": 47
+      },
+      {
+        "id": "review-performance-w1:F-002",
+        "file": "apps/hub-web/src/features/remote/machines.tsx",
+        "severity": "CRITICAL",
+        "message": "The fix for review-degradation-w5:F-001 made both per-row queries depend on expansion. That covers the routing query (S requests, one per row) and also the run query (A requests, only for active runs). The collapsed row still uses the run for its state: `attention = record?.state === \"waiting-approval\" || session.state === \"recovery-required\"`, and the state chip reads `record?.state ?? session.state`. The session state enum (opening|idle|busy|paused|closed|recovery-required) has no approval state. While collapsed, `record` is always undefined.",
+        "suggested_fix": "Leave routing gated on detailsOpen; that is most of the cost, one request per row. Restore `enabled: !!session.activeRunId` for the run query, which costs A requests, only for rows with an active run. Alternatively, add a needs-approval flag to the session list payload. Add a test where an active run in waiting-approval shows the needs-action marker on a collapsed row.",
+        "line": 450
+      },
+      {
+        "id": "review-performance-w4:PERF-W4-001",
+        "file": "apps/hub-web/src/features/managed-work/cache.ts",
+        "severity": "CRITICAL",
+        "message": "fetchEventRecords issues one GET /records/{id} per distinct changed entity in the event page (in sequential batches of 8) and does it whether or not a snapshot exists. With no cached snapshot, `existing` is empty, so every non-observation event entity counts as missing and is fetched. useWorkEvents then calls mergeWorkCache, which is a no-op when the snapshot is undefined (setQueryData returns the undefined snapshot), so the fetched records are discarded; their only effect is `records.length > 0`, which triggers the attention invalidation that page.events.length alone would have triggered. ManagedAttentionOverview runs useWorkEvents with the attention cursor and no snapshot query, once per project (workflow.tsx renders it for every project).",
+        "suggested_fix": "In useWorkEvents, skip fetchEventRecords when client.getQueryData(key) is undefined and invalidate attention on page.events.length instead of records.length. In fetchEventRecords, cap the per-page fan-out (for example when ids.length exceeds a small threshold, refetch the snapshot once instead of N record GETs), or add a batched records-by-ids read.",
+        "line": 35
+      },
+      {
+        "id": "review-regression-w5:F-001",
+        "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+        "severity": "CRITICAL",
+        "message": "The new amendmentDraft (extracted from AmendmentsPanel in amendments.tsx by 6fef25002, 'exclude cancelled intents from amendment replacements') also filters out every Intent with approvedRevisionId null. The round-1 AmendmentsPanel used all of the Flow's Intents, so a new Intent whose current revision differed from its null approved revision became an intent replacement and could be authorized as a membership amendment. The server still routes that case only through an amendment: requirementsApprove refuses it (src/hub/work/handlers-requirements.ts `if (introducedAfterFlowApproval(state.records, i, f)) fail(409, 'amendment-required', 'An Intent introduced after Flow approval requires a human membership amendment')`), and requirementsAmend explicitly accepts a new required Intent with a Flow membership replacement (`membership-amendment-required` branch). The code comment's reason, 'Only approved, live work can be replaced by a requirements amendment', is contradicted by both server handlers, and the commit's stated goal (cancelled Intents) does not need the approvedRevisionId filter.",
+        "suggested_fix": "Filter only cancelled Intents in amendmentDraft (keep unapproved live Intents as replacement candidates), or include an unapproved Intent when it was introduced after Flow approval. Add a hub-web case: approved Flow, a new required Intent with a proposed revision, so the Amendments panel offers a membership amendment that includes the Flow replacement.",
+        "line": 7
+      },
+      {
+        "id": "review-regression-w9:F-001",
+        "file": "apps/hub-web/src/features/context.tsx",
+        "severity": "CRITICAL",
+        "message": "In src/hub/domain.ts, hubRead's `revisions` list case now paginates. Without `limit` it returns only the first legacyStorageLimits.maxRevisionPageSize (50, in src/hub/legacy-limits.ts) revisions of state.revisions, plus a nextCursor; the change came from commit 6ce22b337. state.revisions is append-ordered (domain.ts buildRevisionRecord: `state.revisions.push(r)`), so the page holds the 50 OLDEST revisions. Every existing consumer of `GET /projects/:id/revisions?summary=1` still treats the response as the complete list and ignores nextCursor. None of them was updated in this PR: 6ce22b337 touches no hub-web or MCP file.",
+        "suggested_fix": "Keep the server bound, and make every list consumer page or ask for what it needs. Delivery/line view: read the selected revision directly (GET /revisions/:lineRevisionId summary, or embed the line revision's purpose in the project record) instead of searching the list. Revisions view and workflow selectors: use useInfiniteQuery over afterId/nextCursor with a 'load more' control, or return newest-first so the default page holds the relevant revisions. MCP: add optional afterId/limit to hub_list_revisions and surface nextCursor. Add a regression test with 51+ revisions for Delivery and the Flow submit form.",
+        "line": 242
+      },
+      {
+        "id": "review-testing-practices-w1:F-001",
+        "file": "apps/hub-web/src/features/managed-work/amendment-model.ts",
+        "severity": "CRITICAL",
+        "message": "Regression from the fix for review-logic-w2:F-002. The round-1 gate `affected.length > 0` became `replacements.length > 0`, so a Flow-only replacement set (approved Flow with a newer current revision, and no approved live Intent) now counts as `complete`. The premise of the round-1 finding (that the server accepts a Flow-only amendment) is false. `requirements.amend.payload.affectedIntentIds` has `minItems: 1` in docs/requirements/hub-work-management/schemas/command.schema.json and in the byte-identical web copy apps/hub-web/src/features/managed-work/command-schema.json. `AmendmentManifest.affectedIntentIds` in domain.schema.json also has `minItems: 1`. The client validator enforces minItems (apps/hub-web/src/features/managed-work/validation.ts: `value.length >= rule.minItems`), and so does the server (src/hub/work/openapi.ts matcher, used by validateWorkCommand).",
+        "suggested_fix": "Restore the non-empty affected-Intent requirement in amendmentDraft (`affected.length > 0 && ...`) and withdraw review-logic-w2:F-002 as resting on a false premise. Alternatively, if Flow-only amendments are wanted, change the command and domain schemas (minItems 0) and the domain rules together, regenerate the web copy with scripts/sync-hub-work-schemas.ts, and add a server test that commits one. Either way, the UI test must click submit and assert the request body or the receipt.",
+        "line": 19
+      }
+    ],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

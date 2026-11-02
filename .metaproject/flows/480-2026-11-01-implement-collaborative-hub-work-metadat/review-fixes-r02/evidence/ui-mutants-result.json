@@ -1,0 +1,71 @@
+{
+  "scratch": "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-ui-mutants-iwbby3q5",
+  "results": [
+    {
+      "id": "tp-w1-M-001b",
+      "status": "killed",
+      "exitCode": 1,
+      "log": "/tmp/pr1113-r02-mutant-tp-w1-M-001b.log"
+    },
+    {
+      "id": "tp-w1-M-002",
+      "status": "killed-after-regression-added",
+      "exitCode": 1,
+      "log": "/tmp/pr1113-r02-mutant-tp-w1-M-002-recheck.log",
+      "initial_status": "survived"
+    },
+    {
+      "id": "tp-w1-M-009",
+      "status": "killed",
+      "exitCode": 1,
+      "log": "/tmp/pr1113-r02-mutant-tp-w1-M-009.log"
+    },
+    {
+      "id": "tp-w1-M-011",
+      "status": "killed",
+      "exitCode": 1,
+      "log": "/tmp/pr1113-r02-mutant-tp-w1-M-011.log"
+    },
+    {
+      "id": "tp-w2-w2-m06",
+      "status": "killed",
+      "exitCode": 1,
+      "log": "/tmp/pr1113-r02-mutant-tp-w2-w2-m06.log"
+    }
+  ],
+  "not_run": [
+    "tp-w1-M-001",
+    "tp-w1-M-001c",
+    "tp-w1-M-001d",
+    "tp-w1-M-003",
+    "tp-w1-M-004",
+    "tp-w1-M-005",
+    "tp-w1-M-006",
+    "tp-w1-M-007",
+    "tp-w1-M-008",
+    "tp-w1-M-010",
+    "tp-w1-M-012",
+    "tp-w1-M-013",
+    "tp-w1-M-013b",
+    "tp-w1-M-014",
+    "tp-w1-M-030",
+    "tp-w2-w2-m01",
+    "tp-w2-w2-m02",
+    "tp-w2-w2-m03",
+    "tp-w2-w2-m04",
+    "tp-w2-w2-m05",
+    "tp-w2-w2-m07",
+    "tp-w2-w2-m08",
+    "tp-w2-w2-m09",
+    "tp-w2-w2-m10",
+    "tp-w2-w2-m11",
+    "tp-w2-w2-m12",
+    "tp-w2-w2-m13",
+    "tp-w2-w2-m14",
+    "tp-w2-w2-m15",
+    "tp-w2-w2-m16",
+    "tp-w2-w2-m17",
+    "tp-w2-w2-m18",
+    "tp-w2-w2-m19"
+  ]
+}

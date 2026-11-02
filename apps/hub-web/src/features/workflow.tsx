@@ -1,8 +1,13 @@
+import { useRevisionPages, MoreRevisions } from "./revisions-query";
+import {ManagedAttentionOverview} from "./managed-work/overview-attention";
+import { ProjectOverview } from './project-overview';
+export { GlobalFlowsView } from './global-flows';
+import { FlowRows } from './global-flows';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { getJson, postJson } from '../api/client';
-import type { CodeRevisionSummary, Evidence, HubDocument, HubFlow, Project, Proposal } from '../api/types';
+import type { CodeRevisionSummary, Evidence, HubDocument, HubFlow, Project } from '../api/types';
 import { useHub } from '../app/hub-context';
 import { useDraft } from '../state/drafts';
 import { Button, EmptyState, Field, Notice, PageHeading, Panel, StatusBadge } from '../components/ui';
@@ -51,7 +56,8 @@ export function ProjectsView() {
   return <div className="space-y-8">
     <PageHeading title={t('projectsTitle')} description={t('projectsDescription')} />
     <QueryFeedback query={projects} />
-    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="group min-w-0 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-teal-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
+    {projects.data && <ManagedAttentionOverview projects={projects.data.projects}/>}
+    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="hub-project-card group min-w-0 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-teal-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
       <span className="mb-5 flex size-11 items-center justify-center rounded-xl bg-teal-50 text-lg font-semibold text-teal-800">{project.name.slice(0, 1).toUpperCase()}</span>
       <span className="block break-words text-lg font-semibold text-slate-950">{project.name}</span><span className="mt-2 block text-sm text-slate-500">{t('openProject')} <span aria-hidden="true">→</span></span>
     </button>)}</div>}
@@ -65,24 +71,9 @@ export function ProjectsView() {
 }
 
 export function OverviewView() {
-  const hub = useHub(); const { t } = useTranslation('workflow'); const prefix = hub.projectId ? projectPath(hub.projectId) : null;
-  const overview = useQuery({ queryKey: [hub.scopeKey, hub.projectId, 'overview'], enabled: !!prefix, queryFn: async ({ signal }) => {
-    const [project, documents, flows, proposals, revisions] = await Promise.all([
-      getJson<Project>(prefix!, signal), getJson<{ documents: HubDocument[] }>(`${prefix}/documents`, signal), getJson<{ flows: HubFlow[] }>(`${prefix}/flows`, signal), getJson<{ proposals: Proposal[] }>(`${prefix}/proposals`, signal), getJson<{ revisions: CodeRevisionSummary[] }>(`${prefix}/revisions?summary=1`, signal),
-    ]);
-    return { project, counts: [documents.documents.length, flows.flows.filter(flow => flow.status !== 'done').length, proposals.proposals.filter(proposal => proposal.status === 'pending').length, revisions.revisions.length] };
-  } });
-  if (!hub.projectId) return <ProjectsView />;
-  const cards = [{ label: t('documents'), tab: 'documents' }, { label: t('activeFlows'), tab: 'flows' }, { label: t('pendingProposals'), tab: 'proposals' }, { label: t('revisions'), tab: 'code' }] as const;
-  return <div className="space-y-6"><PageHeading title={overview.data?.project.name ?? t('overviewTitle')} description={t('overviewDescription')} /><QueryFeedback query={overview} />
-    {overview.data && <>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{cards.map((card, index) => <button type="button" key={card.tab} onClick={() => hub.navigate({ tab: card.tab })} aria-label={t('openSection', { section: card.label })} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block text-sm text-slate-500">{card.label}</span><span className="mt-3 block text-3xl font-semibold tracking-tight text-slate-950">{overview.data.counts[index]}</span></button>)}</div>
-      <div className="grid gap-6 xl:grid-cols-2"><Panel title={t('integrationTitle')} description={t('integrationDescription')}><dl className="space-y-5"><Definition label={t('subjectRevision')}><span className={monoClass}>{overview.data.project.lineRevisionId ?? t('noSelectedRevision')}</span></Definition><Definition label={t('lineVersion')}>{overview.data.project.lineVersion}</Definition></dl></Panel><Panel title={t('approvalTitle')}><p className="text-sm leading-7 text-slate-600">{t('approvalDescription')}</p><p className="mt-4 text-sm leading-6 text-slate-500">{t('localEnvironment')}</p></Panel></div>
-      <Panel title={t('nextTitle')} description={t('nextDescription')}><div className="flex flex-wrap gap-3"><Button onClick={() => hub.navigate({ tab: 'documents' })}>{t('nextDocuments')}</Button><Button variant="secondary" onClick={() => hub.navigate({ tab: 'flows' })}>{t('nextFlows')}</Button><Button variant="secondary" onClick={() => hub.navigate({ tab: 'proposals' })}>{t('nextProposals')}</Button></div></Panel>
-    </>}
-  </div>;
+ const hub = useHub();
+ return hub.projectId ? <ProjectOverview key={hub.scopeKey + ':' + hub.projectId} /> : <ProjectsView />;
 }
-
 export function FlowsView() {
   const hub = useHub(); const { t } = useTranslation('workflow');
   if (!hub.projectId) return <ProjectsView />;
@@ -91,6 +82,7 @@ export function FlowsView() {
 
 function FlowsProject({ projectId, title }: { projectId: string; title: string }) {
   const hub = useHub(); const { t } = useTranslation('workflow'); const client = useQueryClient(); const prefix = projectPath(projectId);
+  const [layout, setLayout] = useState<'list' | 'board'>('list');
   const [creating, setCreating] = useState(false); const [search, setSearch] = useState(''); const [validation, setValidation] = useState('');
   const [draftKept, setDraftKept] = useState(false);
   const [draft, setDraft, clearDraft] = useDraft(`create-flow:${projectId}`, { title: '', specDocumentId: '', criteria: '' });
@@ -117,7 +109,8 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
     <QueryFeedback query={flows} /><QueryFeedback query={documents} />
     {flows.data && <><Field label={t('searchFlows')}><input className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('searchFlowsPlaceholder')} aria-label={t('flowSearchLabel')} /></Field>
       {flows.data.flows.length === 0 && <EmptyState>{t('noFlows')}</EmptyState>}
-      <div className="min-w-0 overflow-x-auto pb-3" aria-label={t('boardLabel')}><div className="grid min-w-[1320px] grid-cols-6 gap-3">{flowStatuses.map(status => <section key={status} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"><div className="mb-3 flex items-center justify-between gap-2 px-1"><h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t(statusKeys[status])}</h2><span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500">{filtered.filter(flow => flow.status === status).length}</span></div><div className="space-y-3">{filtered.filter(flow => flow.status === status).map(flow => <button key={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => hub.navigate({ tab: 'flows', flowId: flow.id })} className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block break-words text-sm font-semibold leading-6 text-slate-900">{flow.title}</span><span className="mt-4 block font-mono text-[11px] text-slate-400">{flow.specContentDigest.slice(0, 12)}</span><span className="mt-2 block text-xs text-slate-500">{t('criteriaCount', { count: flow.criteria.length })} · v{flow.version}</span></button>)}{filtered.every(flow => flow.status !== status) && <p className="px-1 py-4 text-xs text-slate-400">{t('noLaneItems')}</p>}</div></section>)}</div></div>
+      <div className="flex gap-2" role="group" aria-label={t('boardLabel')}><Button variant={layout === 'list' ? 'primary' : 'secondary'} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>{t('listView')}</Button><Button variant={layout === 'board' ? 'primary' : 'secondary'} aria-pressed={layout === 'board'} onClick={() => setLayout('board')}>{t('boardView')}</Button></div>
+      {layout === 'list' ? <FlowRows rows={filtered.map(flow => ({ flow }))} /> : <div className="min-w-0 overflow-x-auto pb-3" aria-label={t('boardLabel')}><div className="grid min-w-[1320px] grid-cols-6 gap-3">{flowStatuses.map(status => <section key={status} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"><div className="mb-3 flex items-center justify-between gap-2 px-1"><h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t(statusKeys[status])}</h2><span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500">{filtered.filter(flow => flow.status === status).length}</span></div><div className="space-y-3">{filtered.filter(flow => flow.status === status).map(flow => <button key={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => hub.navigate({ tab: 'flows', flowId: flow.id })} className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block break-words text-sm font-semibold leading-6 text-slate-900">{flow.title}</span><span className="mt-4 block font-mono text-[11px] text-slate-400">{flow.specContentDigest.slice(0, 12)}</span><span className="mt-2 block text-xs text-slate-500">{t('criteriaCount', { count: flow.criteria.length })} · v{flow.version}</span></button>)}{filtered.every(flow => flow.status !== status) && <p className="px-1 py-4 text-xs text-slate-400">{t('noLaneItems')}</p>}</div></section>)}</div></div>}
     </>}
   </div>;
 }
@@ -149,22 +142,18 @@ function FlowDetail({ projectId, flowId, documents }: { projectId: string; flowI
   </div>;
 }
 
-function useRevisions(projectId: string) {
-  const hub = useHub();
-  return useQuery({ queryKey: [hub.scopeKey, projectId, 'revisions'], queryFn: ({ signal }) => getJson<{ revisions: CodeRevisionSummary[] }>(`${projectPath(projectId)}/revisions?summary=1`, signal) });
-}
 function RevisionOptions({ revisions }: { revisions: CodeRevisionSummary[] }) {
   const { t } = useTranslation('workflow');
   return <>{revisions.map(revision => <option key={revision.id} value={revision.id}>{revision.message} · {revision.id.slice(0, 12)}{revision.purpose === 'review-bundle' ? ` · ${t('reviewBundle')}` : ''}</option>)}</>;
 }
 function SubmitCandidate({ flow, projectId, onSaved }: { flow: HubFlow; projectId: string; onSaved: () => void }) {
-  const { t } = useTranslation('workflow'); const revisions = useRevisions(projectId);
+  const { t } = useTranslation('workflow'); const revisions = useRevisionPages(projectId);
   const [draft, setDraft, clearDraft] = useDraft(`submit-flow:${projectId}:${flow.id}`, { subjectRevisionId: '', expectedVersion: flow.version });
   const [validation, setValidation] = useState('');
   const [draftKept, setDraftKept] = useState(false);
   const mutation = useMutation({ mutationFn: (submitted: typeof draft) => postJson<HubFlow>(`${projectPath(projectId)}/flows/${encodeURIComponent(flow.id)}/submit-for-review`, { expectedVersion: submitted.expectedVersion, subjectRevisionId: submitted.subjectRevisionId }), onSuccess: (_result, submitted) => { setDraftKept(!clearDraft(submitted)); onSaved(); } });
   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.subjectRevisionId || !revisions.data?.revisions.some(revision => revision.id === draft.subjectRevisionId)) { setValidation(t('required')); return; } mutation.mutate(draft); }
-  return <Panel title={t('submitTitle')} description={t('submitHint')}><form noValidate onSubmit={submit} className="space-y-4"><QueryFeedback query={revisions} /><Field label={t('candidateRevision')}><select className={inputClass} value={draft.subjectRevisionId} onChange={event => setDraft(old => ({ ...old, subjectRevisionId: event.target.value }))} required><option value="">{t('chooseRevision')}</option><RevisionOptions revisions={revisions.data?.revisions ?? []} /></select></Field><p className="text-xs text-slate-500">{t('preparedVersion', { version: draft.expectedVersion })}</p>
+  return <Panel title={t('submitTitle')} description={t('submitHint')}><form noValidate onSubmit={submit} className="space-y-4"><QueryFeedback query={revisions} /><MoreRevisions query={revisions} /><Field label={t('candidateRevision')}><select className={inputClass} value={draft.subjectRevisionId} onChange={event => setDraft(old => ({ ...old, subjectRevisionId: event.target.value }))} required><option value="">{t('chooseRevision')}</option><RevisionOptions revisions={revisions.data?.revisions ?? []} /></select></Field><p className="text-xs text-slate-500">{t('preparedVersion', { version: draft.expectedVersion })}</p>
     {draft.expectedVersion !== flow.version && <Notice tone="info"><p>{t('latestVersion', { version: flow.version })}</p><Button type="button" variant="ghost" onClick={() => setDraft(old => ({ ...old, expectedVersion: flow.version }))}>{t('reloadVersion')}</Button></Notice>}
     {draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{validation && <Notice tone="error"><span role="alert">{validation}</span></Notice>}{mutation.isError && <ErrorNotice error={mutation.error} />}<Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? t('loading') : t('submitForReview')}</Button></form></Panel>;
 }
@@ -175,10 +164,10 @@ function AcceptCandidate({ flow, projectId, onSaved }: { flow: HubFlow; projectI
   return <Panel title={t('acceptTitle')}><div className="space-y-5"><code className={monoClass}>{flow.subjectRevisionId}</code><label className="flex items-start gap-3 text-sm leading-6 text-slate-700"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} className="mt-1 size-4 shrink-0 accent-teal-700" /><span>{t('acknowledgment', { revision: flow.subjectRevisionId })}</span></label>{accept.isError && <ErrorNotice error={accept.error} />}<Button disabled={!acknowledged || !flow.subjectRevisionId || accept.isPending} onClick={() => { if (acknowledged) accept.mutate(); }}>{accept.isPending ? t('loading') : t('acceptExact')}</Button></div></Panel>;
 }
 function AddEvidence({ flow, projectId, onSaved }: { flow: HubFlow; projectId: string; onSaved: () => void }) {
-  const { t } = useTranslation('workflow'); const revisions = useRevisions(projectId); const [open, setOpen] = useState(false); const [validation, setValidation] = useState('');
+  const { t } = useTranslation('workflow'); const revisions = useRevisionPages(projectId); const [open, setOpen] = useState(false); const [validation, setValidation] = useState('');
   const [draftKept, setDraftKept] = useState(false);
   const [draft, setDraft, clearDraft] = useDraft(`evidence:${projectId}:${flow.id}`, { subjectRevisionId: '', checkId: '', command: '', exitCode: '0', output: '' });
   const create = useMutation({ mutationFn: (submitted: typeof draft) => postJson<Evidence>(`${projectPath(projectId)}/flows/${encodeURIComponent(flow.id)}/evidence`, { subjectRevisionId: submitted.subjectRevisionId, checkId: submitted.checkId.trim(), command: submitted.command, exitCode: Number(submitted.exitCode), output: submitted.output }), onSuccess: (_result, submitted) => { const cleared = clearDraft(submitted); setDraftKept(!cleared); if (cleared) setOpen(false); onSaved(); } });
   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.subjectRevisionId || !draft.checkId.trim() || !draft.command.trim() || draft.exitCode.trim() === '') { setValidation(t('required')); return; } if (!Number.isSafeInteger(Number(draft.exitCode)) || Number(draft.exitCode) < 0) { setValidation(t('invalidExit')); return; } create.mutate(draft); }
-  return <Panel><Button variant="secondary" onClick={() => setOpen(!open)}>{open ? t('cancel') : t('addEvidence')}</Button>{open && <form noValidate onSubmit={submit} className="mt-6 grid gap-5 lg:grid-cols-2"><div className="lg:col-span-2"><QueryFeedback query={revisions} /><Field label={t('evidenceSubject')}><select className={inputClass} value={draft.subjectRevisionId} onChange={event => setDraft(old => ({ ...old, subjectRevisionId: event.target.value }))} required><option value="">{t('chooseRevision')}</option><RevisionOptions revisions={revisions.data?.revisions ?? []} /></select></Field></div><Field label={t('checkId')}><input className={inputClass} value={draft.checkId} maxLength={200} onChange={event => setDraft(old => ({ ...old, checkId: event.target.value }))} required /></Field><Field label={t('exitCode')}><input className={inputClass} type="number" min="0" step="1" value={draft.exitCode} onChange={event => setDraft(old => ({ ...old, exitCode: event.target.value }))} required /></Field><div className="lg:col-span-2"><Field label={t('command')}><input className={inputClass} value={draft.command} onChange={event => setDraft(old => ({ ...old, command: event.target.value }))} required /></Field></div><div className="lg:col-span-2"><Field label={t('output')}><textarea className={`${inputClass} font-mono`} rows={6} value={draft.output} onChange={event => setDraft(old => ({ ...old, output: event.target.value }))} /></Field></div><div className="space-y-3 lg:col-span-2">{draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{validation && <Notice tone="error"><span role="alert">{validation}</span></Notice>}{create.isError && <ErrorNotice error={create.error} />}<Button type="submit" disabled={create.isPending}>{create.isPending ? t('loading') : t('save')}</Button></div></form>}</Panel>;
+  return <Panel><Button variant="secondary" onClick={() => setOpen(!open)}>{open ? t('cancel') : t('addEvidence')}</Button>{open && <form noValidate onSubmit={submit} className="mt-6 grid gap-5 lg:grid-cols-2"><div className="lg:col-span-2"><QueryFeedback query={revisions} /><MoreRevisions query={revisions} /><Field label={t('evidenceSubject')}><select className={inputClass} value={draft.subjectRevisionId} onChange={event => setDraft(old => ({ ...old, subjectRevisionId: event.target.value }))} required><option value="">{t('chooseRevision')}</option><RevisionOptions revisions={revisions.data?.revisions ?? []} /></select></Field></div><Field label={t('checkId')}><input className={inputClass} value={draft.checkId} maxLength={200} onChange={event => setDraft(old => ({ ...old, checkId: event.target.value }))} required /></Field><Field label={t('exitCode')}><input className={inputClass} type="number" min="0" step="1" value={draft.exitCode} onChange={event => setDraft(old => ({ ...old, exitCode: event.target.value }))} required /></Field><div className="lg:col-span-2"><Field label={t('command')}><input className={inputClass} value={draft.command} onChange={event => setDraft(old => ({ ...old, command: event.target.value }))} required /></Field></div><div className="lg:col-span-2"><Field label={t('output')}><textarea className={`${inputClass} font-mono`} rows={6} value={draft.output} onChange={event => setDraft(old => ({ ...old, output: event.target.value }))} /></Field></div><div className="space-y-3 lg:col-span-2">{draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{validation && <Notice tone="error"><span role="alert">{validation}</span></Notice>}{create.isError && <ErrorNotice error={create.error} />}<Button type="submit" disabled={create.isPending}>{create.isPending ? t('loading') : t('save')}</Button></div></form>}</Panel>;
 }

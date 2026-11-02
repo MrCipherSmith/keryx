@@ -1,0 +1,33 @@
+{
+  "task": {
+    "task_id": "task-1",
+    "task_name": "Domain lifecycle and immutable review",
+    "task_type": "service_api",
+    "complexity": "high",
+    "description": "Domain lifecycle and immutable review following docs/requirements/hub-work-management and prior explicit bounded dispatch. No deployment or self acceptance.",
+    "target_files": [
+      "src/hub/work/model.ts",
+      "src/hub/work/domain.ts",
+      "src/hub/work/validation.ts"
+    ],
+    "acceptance_criteria": [
+      "Full guarded Flow/Intent/Attempt lifecycle works over exact pins",
+      "Human-only review, complete criterion coverage and explicit amendments refuse stale/cross-project input"
+    ],
+    "existing_tests": [],
+    "existing_stories": [],
+    "context": "Reviewed 0.1.1 specification, current main0.4.1; shared state protocol with separate ownership lanes."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-work-management/keryx",
+    "branch": "feat-hub-work-management"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_tests": true,
+    "verify_types": true,
+    "verify_lint": true,
+    "max_self_fix_attempts": 3
+  }
+}

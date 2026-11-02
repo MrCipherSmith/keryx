@@ -1,0 +1,411 @@
+.session-workbench {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.session-workbench-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.session-identity {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  align-items: start;
+}
+.session-identity > svg {
+  margin-top: 2px;
+  color: var(--hub-accent);
+  flex-shrink: 0;
+}
+.session-identity h1 {
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.session-header-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--hub-muted);
+  margin-top: 3px;
+}
+.session-header-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.session-header-actions > button:first-child {
+  display: none;
+}
+.session-location {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--hub-muted);
+  font-size: 11px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hub-border);
+  overflow-wrap: anywhere;
+}
+.session-model {
+  margin-inline-start: auto;
+}
+.session-workbench-grid {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+.session-browser {
+  min-width: 0;
+  border-right: 1px solid var(--hub-border);
+  padding-right: 12px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100dvh - 36px);
+  overflow: auto;
+}
+.session-browser-title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.session-browser-title h2 {
+  font-size: 12px;
+  font-weight: 600;
+}
+.session-browser-title .hub-button {
+  font-size: 10px;
+  padding: 3px;
+}
+.session-browser .hub-input {
+  font-size: 12px;
+  min-height: 30px;
+}
+.session-browser-group {
+  margin-top: 18px;
+}
+.session-browser-group h3 {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--hub-muted);
+  font-size: 10px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+.session-browser-group h3 span {
+  width: 100%;
+  padding-left: 17px;
+  color: var(--hub-ink);
+}
+.session-browser-item {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: 9px 10px;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+  overflow-wrap: anywhere;
+}
+.session-browser-item span {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+}
+.session-browser-item small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--hub-muted);
+  font-size: 10px;
+  margin-top: 3px;
+}
+.session-browser-item.selected {
+  border-left-color: var(--hub-accent);
+  background: var(--hub-accent-soft);
+}
+.session-browser-item:hover {
+  background: var(--hub-subtle);
+}
+.session-conversation-column,
+.session-context-column {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.session-context-column {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 2px;
+}
+.session-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--hub-border);
+  overflow-x: auto;
+}
+.session-tabs button {
+  font-size: 11px;
+  white-space: nowrap;
+  padding: 10px 7px;
+  color: var(--hub-muted);
+  border-bottom: 2px solid transparent;
+}
+.session-tabs button[aria-selected="true"] {
+  color: var(--hub-accent);
+  border-bottom-color: var(--hub-accent);
+  font-weight: 600;
+}
+.session-context-column [hidden] {
+  display: none;
+}
+.session-configuration {
+  display: grid;
+  gap: 12px;
+}
+.session-attention {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 12px;
+  border: 1px solid var(--hub-warning);
+  color: var(--hub-warning);
+  border-radius: 6px;
+  background: var(--hub-surface);
+  font-size: 12px;
+  text-align: start;
+}
+.session-transcript {
+  border: 1px solid var(--hub-border);
+  background: var(--hub-surface);
+  border-radius: 7px;
+  min-width: 0;
+}
+.session-transcript-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hub-border);
+  font-size: 12px;
+  font-weight: 600;
+}
+.session-transcript-body {
+  padding: 14px;
+  min-height: 180px;
+  max-height: 60dvh;
+  overflow: auto;
+}
+.session-message {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.session-message:last-child {
+  margin-bottom: 0;
+}
+.session-avatar {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 650;
+  border: 1px solid var(--hub-border);
+  border-radius: 7px;
+  color: var(--hub-accent);
+  background: var(--hub-subtle);
+}
+.session-message-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--hub-muted);
+  margin-bottom: 5px;
+}
+.session-message-header strong {
+  color: var(--hub-ink);
+  font-weight: 600;
+}
+.session-message pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+}
+.session-message.human .session-message-content {
+  background: var(--hub-subtle);
+  padding: 9px 11px;
+  border-radius: 0 7px 7px 7px;
+}
+.session-message.tool-summary {
+  margin-block: 10px;
+}
+.session-message.tool-summary .session-message-content {
+  font-size: 12px;
+  color: var(--hub-muted);
+}
+.session-history-pages {
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--hub-border);
+}
+.session-composer .hub-panel-header {
+  display: none;
+}
+.session-composer .hub-panel {
+  border-color: var(--hub-border);
+}
+.session-composer .hub-panel-body {
+  padding: 12px;
+}
+.session-composer textarea {
+  min-height: 90px;
+}
+.composer-hint {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--hub-muted);
+}
+.composer-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.composer-controls label {
+  font-size: 11px;
+}
+.composer-controls select {
+  font-size: 12px;
+}
+.composer-footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+.composer-footer > div {
+  flex: 1;
+  max-width: 200px;
+}
+.composer-footer label {
+  font-size: 11px;
+}
+.composer-pins {
+  font-size: 11px;
+  color: var(--hub-muted);
+}
+.composer-pins summary {
+  cursor: pointer;
+}
+.composer-pins dd {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 1600px) {
+  .session-workbench-grid {
+    grid-template-columns: 220px minmax(0, 1fr) 360px;
+  }
+}
+@media (max-width: 1279px) {
+  .session-workbench-grid {
+    grid-template-columns: minmax(0, 1fr) 310px;
+  }
+  .session-browser {
+    display: none;
+    position: static;
+    max-height: 360px;
+    border: 1px solid var(--hub-border);
+    border-radius: 7px;
+    padding: 12px;
+  }
+  .session-browser-open {
+    display: block;
+    grid-column: 1/-1;
+  }
+  .session-header-actions > button:first-child {
+    display: inline-flex;
+  }
+}
+@media (max-width: 1023px) {
+  .session-workbench-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .session-context-column {
+    position: static;
+    max-height: none;
+  }
+  .session-transcript-body {
+    max-height: 55dvh;
+  }
+  .session-model {
+    margin-inline-start: 0;
+  }
+}
+@media (max-width: 480px) {
+  .session-workbench-header {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .session-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .session-identity h1 {
+    font-size: 15px;
+  }
+  .session-workbench-grid {
+    gap: 12px;
+  }
+  .session-tabs button {
+    font-size: 11px;
+    padding: 10px 5px;
+  }
+  .session-tabs {
+    justify-content: space-between;
+  }
+  .session-transcript-body {
+    padding: 12px;
+  }
+  .session-message {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 8px;
+  }
+  .session-avatar {
+    width: 20px;
+    height: 20px;
+  }
+  .session-message-header {
+    flex-wrap: wrap;
+    font-size: 10px;
+  }
+  .session-model {
+    width: 100%;
+  }
+  .composer-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .composer-controls select {
+    font-size: 16px;
+  }
+  .composer-footer select {
+    font-size: 16px;
+  }
+}

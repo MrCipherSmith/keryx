@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-11-01
+
+### Added
+- **Shared work management in Team Hub (beta).** Opt-in Flow → Intent → Attempt tracks exact requirement/context revisions, Git/document/report results, Evidence and explicit human selection and acceptance. Required/optional Intent coverage, waivers, requirement amendments and late contradictory evidence preserve the review history. Code transport stays in Git/GitHub; no automatic merge or agent self-acceptance.
+- **Managed-work UI in English and Russian.** Create and review work, inspect exact context and evidence, see project attention across authorized projects, and associate native session messages with a started Attempt. Both themes and mobile layouts remain available. Existing Flows stay under their original lifecycle unless explicitly converted.
+- **Contributor CLI and MCP access.** `keryx hub work` and scoped MCP tools read/report/submit work; protected human decisions are not exposed as agent tools. Native machine wire protocol remains v2; metadata association does not prove actual model consumption of context.
+- **Release-backed local Hub updates.** `keryx hub update [version] [--check|--dry-run] [--install-dir path] [--yes]` delegates to the installation-owned release tool, validates local executable/layout ownership and never uses project tokens or a remote HTTP update API. CI builds the image; the server downloads checked, digest-pinned artifacts rather than rebuilding a checkout.
+- **One-time adoption of the existing geekom prototype installation.** The verified install bundle includes a deliberately restricted `migrate-legacy.py` helper with a default isolated rehearsal and explicit owner-run apply. It preserves the named volume, credentials, Cloudflare SSO and recovery configuration; fresh installs continue to use the normal installer.
+
+### Fixed
+- **Uncertain browser requests survive a same-tab reload.** Work and managed native requests retain the exact original operation ID/body/header pins in bounded, identity-scoped session storage. Checking or retrying is explicit; a later permission refusal cannot erase an earlier unknown outcome. Logout clears pending envelopes; credentials and ordinary form drafts are excluded.
+- **Upgrade and rollback retain configured Work/Cloudflare settings.** Read-only update checks verify release assets without stopping services. Explicit version downgrades through `upgrade` are refused before changes; rollback trial-starts the old image on current copied data before stopping the live Hub. Failed-upgrade recovery does not silently rewind the database after candidate startup.
+
+### Upgrade notes
+- Managed work is disabled by default. Set `KERYX_HUB_WORK_ENABLED=true` deliberately after a full backup/rehearsal. Its first committed managed write activates minimum writer3: older writer2 binaries cannot read that database. Disabling the feature is not a down-migration; an explicit restore of older data can discard newer work.
+- Existing source-build installations need the documented one-time adoption before `keryx hub update` can operate. The CLI and Hub artifacts are released together; update the CLI to use the new command. Live-provider, real-team validation and product acceptance remain operator work.
+
 ## [0.4.3] - 2026-11-01
 
 ### Fixed

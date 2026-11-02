@@ -10,6 +10,8 @@ import { Markdown } from '../components/Markdown';
 import { formatDate } from '../i18n/format';
 import { decodeRevisionFile, mergeEvents, parseRevisionChanges, safeExternalUrl } from './context-model';
 
+import { useRevisionPages, useRevisionSummary, MoreRevisions } from "./revisions-query";
+
 const projectPath = (id: string | null) => `/projects/${encodeURIComponent(id ?? '')}`;
 const codeClass = 'max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-700';
 
@@ -166,14 +168,16 @@ function ProposalCard({ proposal, document: doc }: { proposal: Proposal; documen
 export function RevisionsView() {
   const { t } = useTranslation('context');
   const { scopeKey, projectId, location, navigate } = useHub();
-  const revisions = useResource<{ revisions: CodeRevisionSummary[] }>('revisions?summary=1');
+  const revisions = useRevisionPages();
   const project = useResource<Project>('project');
-  const selected = revisions.data?.revisions.find(item => item.id === location.revisionId);
+  const listed = revisions.data?.revisions.find(item => item.id === location.revisionId);
+  const exact = useRevisionSummary(location.revisionId, revisions.isSuccess && !listed);
+  const selected = listed ?? exact.data;
   return <><PageHeading title={t('revisions')} description={t('revisionsDescription')} />
     {revisions.data && project.data ? <RevisionForm key={`${scopeKey}:${projectId}`} revisions={revisions.data.revisions} /> : null}
-    <ReadState pending={revisions.isPending || project.isPending} error={revisions.error || project.error} retry={() => { void revisions.refetch(); void project.refetch(); }}>
+    <ReadState pending={revisions.isPending || project.isPending} error={revisions.error || project.error || (!listed && exact.error)} retry={() => { void revisions.refetch(); void project.refetch(); if (!listed) void exact.refetch(); }}>
       <div className="mt-6 grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(0,2fr)]"><Panel>
-        {(revisions.data?.revisions.length ?? 0) > 0 ? <div className="space-y-2">{revisions.data?.revisions.map(revision => <button key={revision.id} type="button" className={`w-full rounded-xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-emerald-700 ${selected?.id === revision.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`} onClick={() => navigate({ revisionId: revision.id })}><span className="block break-words text-sm font-semibold text-slate-900">{revision.message}</span><span className="mt-1 block break-all font-mono text-xs text-slate-500">{revision.id}</span><span className="mt-1 block text-xs text-slate-500">{t('files')}: {revision.fileCount}</span><span className={`mt-2 inline-block rounded px-2 py-1 text-[11px] font-medium ${revision.purpose === 'review-bundle' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{t(revision.purpose === 'review-bundle' ? 'reviewBundle' : 'snapshot')}</span></button>)}</div> : <EmptyState>{t('noRevisions')}</EmptyState>}
+        {(revisions.data?.revisions.length ?? 0) > 0 ? <div className="space-y-2">{revisions.data?.revisions.map(revision => <button key={revision.id} type="button" className={`w-full rounded-xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-emerald-700 ${selected?.id === revision.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`} onClick={() => navigate({ revisionId: revision.id })}><span className="block break-words text-sm font-semibold text-slate-900">{revision.message}</span><span className="mt-1 block break-all font-mono text-xs text-slate-500">{revision.id}</span><span className="mt-1 block text-xs text-slate-500">{t('files')}: {revision.fileCount}</span><span className={`mt-2 inline-block rounded px-2 py-1 text-[11px] font-medium ${revision.purpose === 'review-bundle' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{t(revision.purpose === 'review-bundle' ? 'reviewBundle' : 'snapshot')}</span></button>)}</div> : <EmptyState>{t('noRevisions')}</EmptyState>}<MoreRevisions query={revisions} />
       </Panel><div className="min-w-0">{selected && project.data ? <RevisionDetail key={`${scopeKey}:${projectId}:${selected.id}`} revision={selected} project={project.data} /> : <EmptyState>{t('selectRevision')}</EmptyState>}</div></div>
     </ReadState></>;
 }
@@ -238,10 +242,10 @@ export function DeliveryView() {
   const { principal } = useHub();
   const project = useResource<Project>('project');
   const deliveries = useResource<{ deliveries: Delivery[] }>('deliveries');
-  const revisions = useResource<{ revisions: CodeRevisionSummary[] }>('revisions?summary=1');
-  const selected = revisions.data?.revisions.find(item => item.id === project.data?.lineRevisionId);
+  const revisions = useRevisionSummary(project.data?.lineRevisionId);
+  const selected = revisions.data;
   return <><PageHeading title={t('delivery')} description={t('deliveryDescription')} />
-    <ReadState pending={project.isPending || revisions.isPending || deliveries.isPending} error={project.error || revisions.error || deliveries.error} retry={() => { void project.refetch(); void revisions.refetch(); void deliveries.refetch(); }}>
+    <ReadState pending={project.isPending || (!!project.data?.lineRevisionId && revisions.isPending) || deliveries.isPending} error={project.error || revisions.error || deliveries.error} retry={() => { void project.refetch(); void revisions.refetch(); void deliveries.refetch(); }}>
       {project.data ? <Panel title={t('selectedLine')}><p className="break-all font-mono text-sm text-slate-700">{project.data.lineRevisionId ?? t('noLine')}</p><p className="text-xs text-slate-500">{t('lineVersion')}: {project.data.lineVersion}</p></Panel> : null}
       <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>{t('deliveryUnavailable')}</Notice>}</div>
       <div className="space-y-4">{deliveries.data?.deliveries.length ? [...deliveries.data.deliveries].reverse().map(delivery => <Panel key={delivery.id} title={<span className="break-all">{delivery.baseBranch} · {delivery.revisionId.slice(0, 12)}</span>}>

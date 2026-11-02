@@ -61,7 +61,7 @@ export async function subscribeBrowser(fx: { origin: string; cookie: string; pro
   await new Promise<void>((resolve, reject) => { socket.addEventListener("open", () => resolve(), { once: true }); socket.addEventListener("error", () => reject(new Error("browser upgrade failed")), { once: true }); });
   return { socket, frames };
 }
-export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'>={}) {
+export async function fixture(overrides:Pick<HubServerConfig,'remoteBudgets'|'observeRemoteTransport'|'workManagement'>={}) {
   const dataDir = mkdtempSync(join(tmpdir(), "hub-remote-v2-"));
   const server = startHub({ dataDir, operatorToken, reviewerToken, agentToken, port: 0, host: "127.0.0.1",...overrides });
   const origin = server.url.origin;

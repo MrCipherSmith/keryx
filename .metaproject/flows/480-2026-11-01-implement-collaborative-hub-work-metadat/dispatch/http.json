@@ -1,0 +1,34 @@
+{
+  "task": {
+    "task_id": "task-2",
+    "task_name": "Durable managed-work HTTP and auth",
+    "task_type": "service_api",
+    "complexity": "high",
+    "description": "Durable managed-work HTTP and auth following docs/requirements/hub-work-management and prior explicit bounded dispatch. No deployment or self acceptance.",
+    "target_files": [
+      "src/hub/work/storage.ts",
+      "src/hub/work/http.ts",
+      "src/hub/server.ts",
+      "src/hub/store.ts"
+    ],
+    "acceptance_criteria": [
+      "SQLite transaction/restart/replay preserve state and receipt atomically",
+      "Feature-off compatibility and scoped origin/auth/quotas verified over real HTTP"
+    ],
+    "existing_tests": [],
+    "existing_stories": [],
+    "context": "Reviewed 0.1.1 specification, current main0.4.1; shared state protocol with separate ownership lanes."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-work-management/keryx",
+    "branch": "feat-hub-work-management"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_tests": true,
+    "verify_types": true,
+    "verify_lint": true,
+    "max_self_fix_attempts": 3
+  }
+}

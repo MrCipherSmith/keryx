@@ -1,0 +1,9 @@
+{
+  "reviewedHead": "d50652ac71030f955c94f84cc5c73589ecf7f02a",
+  "verifiedSourceHead": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6",
+  "inputPackage": "/Users/Goodea/goodea/keryx/.claude/worktrees/review-orchestrator-review-cc7bf8/.metaproject/reviews/2026-11-01-review-flow-github-com-mrciphersmith-keryx-pull-1113-r02",
+  "originalFindingsRawSha256": "87344621e485ad1579a8fe926cc681f2f864b4a3c88b6099f79cc06aec65b0b1",
+  "initialAndCurrentCanonicalFindingsEqual": true,
+  "canonicalCount": 273,
+  "countDiscrepancy": "Canonical JSON has171minor; report prose says172minor. No original data modified."
+}

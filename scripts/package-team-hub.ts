@@ -19,7 +19,7 @@ for (let index = 0; index < args.length; index++) {
 const freshness = Bun.spawn([process.execPath, "scripts/build-hub-web.ts", "--check"], { cwd: root, stdout: "inherit", stderr: "inherit" });
 if (await freshness.exited !== 0) throw new Error("Refusing to package stale frontend assets");
 // src/lib/git-revision.ts: the revision-operand guard src/hub/git-delivery.ts and src/hub/connector.ts import at runtime.
-const files: string[] = ["src/flow/machine.ts", "src/flow/types.ts", "src/lib/git-revision.ts", "scripts/package-team-hub.ts", "scripts/build-hub-web.ts", "scripts/smoke/team-hub.ts", "scripts/smoke/team-hub-remote.ts", "LICENSE"];
+const files: string[] = ["src/flow/machine.ts", "src/flow/types.ts", "src/lib/git-revision.ts", "scripts/package-team-hub.ts", "scripts/build-hub-web.ts", "scripts/smoke/team-hub.ts", "scripts/smoke/team-hub-remote.ts", "scripts/smoke/team-hub-work.ts", "docs/handoffs/hub-work-management-runbook.md", "LICENSE"];
 async function include(directory: string, allowed: (name: string) => boolean) {
   for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
     if (entry.isSymbolicLink()) throw new Error("Refusing symlink in release inputs: " + entry.name);
@@ -29,6 +29,7 @@ async function include(directory: string, allowed: (name: string) => boolean) {
 const productionSource = (name: string) => name.endsWith(".ts") && !name.endsWith(".test.ts") && !name.endsWith(".test-support.ts");
 await include("src/hub", productionSource);
 await include("src/hub/remote-v2", productionSource);
+await include("src/hub/work", productionSource);
 // Hub uses the neutral validator boundary, never the native host/tool runtime.
 await include("src/remote-control", name => ["protocol.ts", "owned-controls.ts"].includes(name));
 await include("src/remote-control/generated", name => ["validators.js", "validators.d.ts", "types.ts", "manifest.json"].includes(name));
@@ -46,6 +47,10 @@ await includeTree("apps/hub-web/public");
 await include("apps/hub-web", name => ["package.json", "bun.lock", "index.html", "tsconfig.json", "vite.config.ts", "eslint.config.js", "README.md", "CONTRACTS.md"].includes(name));
 await include("docs/requirements/hub-remote-sessions", name => name.endsWith(".md"));
 await include("docs/requirements/hub-remote-sessions/schemas", name => name.endsWith(".json"));
+// Managed work validates these closed domain/command/event schemas at runtime.
+// Keep the source contract reviewable without admitting unrelated job output or private JSON.
+await include("docs/requirements/hub-work-management", name => ["README.md","metadata-protocol.md","migration.md","specification.md","observer.md","openapi.json"].includes(name));
+await include("docs/requirements/hub-work-management/schemas", name => ["domain.schema.json","command.schema.json","event.schema.json"].includes(name));
 await include("docs/requirements/hub-mcp", name => name.endsWith(".md"));
 await include("docs/requirements/hub-context-watch", name => name.endsWith(".md"));
 await include("docs/requirements/hub-context-watch/schemas", name => name.endsWith(".json"));

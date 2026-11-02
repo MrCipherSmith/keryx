@@ -1,0 +1,1661 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "480",
+  "slug": "implement-collaborative-hub-work-metadat",
+  "title": "Implement collaborative Hub work metadata and UI",
+  "status": "in-progress",
+  "createdAt": "2026-11-01T10:18:40.722Z",
+  "updatedAt": "2026-11-02T12:58:20.568Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:65d61d7dee2cdfed16fb5b2f521386373d398bf17f63ca0ea786a2496eeb6786",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Reviewed package/baseline exactmain0.4.1 and scope boundaries, graph refreshed postcommit, existing164Hubtests pass"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Backend and three UI increments integrated; final reload recovery repaired/reviewed; candidate packaged and running on isolated Linux preview."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Meaningful domain/API/auth/native/Git/legacy/recovery regressions pass. Backend1783 retained unchanged,UI151 final,packaging6; independent probes RED before fixes and GREEN after."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Draft PR1113 exists on feat-hub-work-management. Reviewed head46982e50b is being corrected in a fresh worktree; merge and product acceptance remain the owner decision."
+    },
+    {
+      "id": "T5",
+      "title": "Domain lifecycle and immutable review",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T10:23:46.381Z",
+            "outcome": "started",
+            "detail": "Domain worker implements guarded immutable lifecycle"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Core domain commit239ba7229; exactpins/CAS/coverage/remediation independently approved round3; gate1777testspass"
+    },
+    {
+      "id": "T6",
+      "title": "Durable managed-work HTTP and auth",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T10:23:46.560Z",
+            "outcome": "started",
+            "detail": "Storage/HTTP worker implements additive SQLite and existing authentication"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "SameSQLite HTTP/auth/cursors/archive verified and committed239ba7229; finalindependentreviewapprove"
+    },
+    {
+      "id": "T7",
+      "title": "Managed work client OpenAPI and contributor MCP",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T10:23:46.746Z",
+            "outcome": "started",
+            "detail": "Contributor client MCP and OpenAPI worker started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "CLI MCP OpenAPI implemented; independent review remains T12; adapter commit11a776df1 and74testsgreen"
+    },
+    {
+      "id": "T8",
+      "title": "Integrate live RU/EN UI with API",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T10:23:46.931Z",
+            "outcome": "started",
+            "detail": "Existing UI session implementing managed-work view in separate worktree"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Three companion UI patches integrated; lifecycle and native browser proof passed. Reload recovery tracked separately as T15."
+    },
+    {
+      "id": "T9",
+      "title": "Bind existing session execution and Git observations safely",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Originalv2reservation and unknownqueueguard +configuredreadonlyGitobserver implemented and independentlyreviewed; explicitrefresh/noautoscheduler documented"
+    },
+    {
+      "id": "T10",
+      "title": "Verify legacy coexistence migration backup and restore",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Legacyconversion guards, schema3 oldwriter activation, backuprestore and races passed; commit239ba7229"
+    },
+    {
+      "id": "T11",
+      "title": "Run integrated domain storage HTTP MCP frontend regression gates",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Final post-fix gate PASS:151UI,6packaging,root/script/UItypes,lint,build,assets/docs;453measured files stable.1783backend retained byte-identical. output/work-quality-gate-reload.md."
+    },
+    {
+      "id": "T12",
+      "title": "Independent correctness security concurrency and UX review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-11-01T11:04:22.333Z",
+            "outcome": "started",
+            "detail": "Backend review round1 (backfilled): reproduced admission/coverage/cancellation/terminal-state defects; corrected before round2"
+          },
+          {
+            "at": "2026-11-01T11:04:22.574Z",
+            "outcome": "started",
+            "detail": "Backend review round2 (backfilled): queued unknown allocation and missing attention; corrected before round3"
+          },
+          {
+            "at": "2026-11-01T11:04:22.805Z",
+            "outcome": "started",
+            "detail": "Backend review round3 (backfilled): APPROVE,68tests/519assertions; UI review initial two majors handled in separate UI delta"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent backend reviews rounds3 and finaldelta APPROVE; UI review remaining tracked separately T14"
+    },
+    {
+      "id": "T13",
+      "title": "Deliver tested candidate with operator instructions",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Runbook/result/specification and exact quality/review evidence supplied; isolated geekom HTTP and official-SDK MCP PASS. Owner acceptance/public rollout remain pending."
+    },
+    {
+      "id": "T14",
+      "title": "Independent final UI delta review and behavioral regressions",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T11:20:18.768Z",
+            "outcome": "started",
+            "detail": "Independent UI delta: full revision visibility and target-context guards plus amendment/waiver/events/observer/legacy/Overview increment"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent final advanced UI and native delta APPROVE; reports output/work-ui-independent-review-round2.md and work-ui-independent-review-native.md. Reload recovery receives separate review."
+    },
+    {
+      "id": "T15",
+      "title": "Recover original pending work and native requests after browser reload",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T12:49:45.878Z",
+            "outcome": "started",
+            "detail": "Reproduced memory-only pending envelopes; bounded client recovery worker implements durable original request and manual reconciliation without automatic human actions."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Bounded original Work/native envelope survives reload; explicit check/retry only; uncertain retry4xx preserves original.151UI tests and independent RED-to-GREEN probe pass."
+    },
+    {
+      "id": "T16",
+      "title": "Independently review reload recovery and original-operation retry",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-11-01T12:56:28.475Z",
+            "outcome": "started",
+            "detail": "Independent review of bounded tab recovery, explicit original retry, principal/session scope and storage failures; earlier reviews exclude this delta."
+          },
+          {
+            "at": "2026-11-01T12:58:46.550Z",
+            "outcome": "failed",
+            "detail": "Independent RED probe R-001: uncertain original retry403 cleared original request even though current authority refusal cannot establish prior outcome; fix assigned T15."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent final reload review APPROVE: original R001 probe GREEN unchanged,15targeted tests pass, no unresolved findings. Report output/work-ui-independent-review-reload.md."
+    },
+    {
+      "id": "T17",
+      "title": "Integrate current main and remote lifecycle fixes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T13:25:33.977Z",
+            "outcome": "started",
+            "detail": "Merge current origin/main; preserve latest remote run lifecycle changes and managed work fixture overrides."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Merged origin/main in73e964a07; preserved both fixture additions;28network/work/lifecycle tests720assertionsPASS."
+    },
+    {
+      "id": "T18",
+      "title": "Implement release-backed Hub update command and safe deployment integration",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T13:25:34.203Z",
+            "outcome": "started",
+            "detail": "Release-backed local admin CLI and installer safety implementation; spec docs/requirements/hub-release-update/specification.md."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Local release updater and Hub tool integration implemented; independent CLI/controller review APPROVE and final affected gates PASS."
+    },
+    {
+      "id": "T19",
+      "title": "Rehearse production backup migration restore and verify release artifact",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Consistent full backup restored/integrity checked; real local-source candidate trial on copied production data preserves legacy and remote history. Official successor artifact check remains post-review/release gate."
+    },
+    {
+      "id": "T20",
+      "title": "Publish successor release and update production Hub without losing data",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Owner redirected final action to release publication plus instructions; owner will perform live cutover. No automatic production update."
+    },
+    {
+      "id": "T21",
+      "title": "Publish successor release and provide owner-run upgrade instructions",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by the owner: PR1113 must remain Draft for review; no release, merge or production cutover is part of this correction task."
+    },
+    {
+      "id": "T22",
+      "title": "Prepare PR1113 for owner review without merge release or production cutover",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Draft PR1113 is prepared with isolated-worktree correction commits, per-finding dispositions, independent audit and passing local quality gates. Final GitHub checks are authoritative for the published head; ready-for-review comment waits for green CI. No merge, release or product acceptance."
+    },
+    {
+      "id": "T23",
+      "title": "Fix and independently verify legacy adoption safety findings",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-01T16:05:14.705Z",
+            "outcome": "started",
+            "detail": "Repair five independent legacy adoption findings; keep PR1113 Draft and forbid merge/tag/production cutover until owner review."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All five legacy adoption findings repaired; original three and independent four guard probes GREEN; Python10 and Bun10 PASS; independent final APPROVE."
+    },
+    {
+      "id": "T24",
+      "title": "Fix PR1113 review root causes A-N and triage all linked findings",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T12:54:35.662Z",
+            "outcome": "started",
+            "detail": "R03 provenance reconciliation: attach existing R02 implementation and verification artifacts using current timestamps; this is an audit repair, not a retroactive claim of another R02 implementation run."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/provenance.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/report.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/dispositions.json"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "R03 provenance reconciliation only: retain prior R02 completion and attach its existing implementation/verification artifacts; new audit attempt timestamp is current, not backdated. Current R03 fixes remain a separate job."
+    },
+    {
+      "id": "T25",
+      "title": "R02 scoped storage aggregates projections and response contracts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T03:58:28.640Z",
+            "outcome": "started",
+            "detail": "Round 2 scoped storage regression fixes; fresh mechanism-specific RED tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Scoped resolving decisions, bounded Evidence projections, closed response contracts, lazy legacy serialization, rollback projection rebuild and archive-quota isolation committed;217tests+lint+types green."
+    },
+    {
+      "id": "T26",
+      "title": "R02 frontend event cache forms and revision consumers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T03:58:28.808Z",
+            "outcome": "started",
+            "detail": "Round 2 live frontend regression fixes with real adapter contracts"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All UI/MCP major mechanisms committed;181UI+14MCP tests, types/lint/assets green;five targeted reviewer mutants killed,33 explicitly unrun."
+    },
+    {
+      "id": "T27",
+      "title": "R02 native queue reconciliation and Attempt actor authorization",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T03:58:28.981Z",
+            "outcome": "started",
+            "detail": "Round 2 queue state-event regressions and upheld participant authorization"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Queue state-event regressions, participant authorization and scoped reconciliation fixed; 290 Work/remote tests, lint and global types green."
+    },
+    {
+      "id": "T28",
+      "title": "R02 delivery recovery and mutation admission",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:12:04.888Z",
+            "outcome": "started",
+            "detail": "Canonical delivery recovery and actual-byte admission repairs with production-path RED tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Durable delivery recovery/archival, external facts, unknown-push fencing, real delivery-path tests, revision paging, pre-auth and recoverable WS overload committed; final Hub512tests/7619assertions green plus types/lint."
+    },
+    {
+      "id": "T29",
+      "title": "R02 backup protection migration help and offline test gates",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:19:25.261Z",
+            "outcome": "started",
+            "detail": "Owner-decided14day backup protection, migration terminal queue classification, actual CLI help and deterministic offline packaging tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Owner14day backup policy, settled queue migration, doc metadata, real CLI help and hermetic default packaging committed; targeted suites and explicit runtime integration green."
+    },
+    {
+      "id": "T30",
+      "title": "R02 integrated verification mutation coverage and next review handoff",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-11-02T04:46:52.232Z",
+            "outcome": "started",
+            "detail": "Prepare final independent code-verifier gate; execute after parent finishes committing the now-frozen integrated source"
+          },
+          {
+            "at": "2026-11-02T04:57:28.309Z",
+            "outcome": "failed",
+            "detail": "Independent gate b3d94fc4d found two concrete failures: bodyless queue migration boundary and actual HTTP MCP Request TypeError; delegated T34 and T35 before rerun"
+          },
+          {
+            "at": "2026-11-02T05:03:29.696Z",
+            "outcome": "started",
+            "detail": "Post-fix verification retry: bodyless/malformed migration and actual TCP MCP cleanup repaired; rerun failed strict/runtime checks and health, reuse unchanged UI/docs evidence"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent post-fix gate passed:392changed/513Hub tests, runtime and migration; per-ID dispositions, mutation evidence and owner next-review handoff prepared. PR publication remains gated on GitHub CI; no merge/acceptance."
+    },
+    {
+      "id": "T31",
+      "title": "R02 verify queued configuration recovery without inferred terminal refusal",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:12:49.538Z",
+            "outcome": "started",
+            "detail": "Expand reservation regression to recoverable config/authority guard failures before native terminal evidence"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Config recovery RED then native authoritative terminal-only settlement; 290 native/Work regressions and lint green, no pre-admission release hook remains."
+    },
+    {
+      "id": "T32",
+      "title": "R02 actual-byte request admission and nested MCP body leases",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:32:26.517Z",
+            "outcome": "started",
+            "detail": "Actual retained request bytes, nested MCP slot reuse and bounded body deadlines with real streaming RED probes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Actual-byte admission, nested MCP lease reuse, body deadlines and legacy HTTP test compatibility committed in b3d94fc4d;39tests/329assertions, types/lint green; final integrated gate running."
+    },
+    {
+      "id": "T33",
+      "title": "R02 independently verify backup retention mutation boundaries",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:33:56.373Z",
+            "outcome": "started",
+            "detail": "Scratch-only targeted mutation verification of owner-approved young-backup and newest-three retention boundaries"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Both count-bound and14day-age protection mutants killed in isolated scratch; all-old minimum-three and young-fourth/reference-pointer cases verified without shared source edits."
+    },
+    {
+      "id": "T34",
+      "title": "R02 migration boundary compatibility for queue tables without JSON body",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:56:32.603Z",
+            "outcome": "started",
+            "detail": "Final independent gate reproduced migration legacy boundary failure; preserve conservative unresolved-work handling for unrecognized queue schema"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Conservative bodyless/malformed queue readiness handling verified RED3→GREEN migration14/boundaries29/profile5/Bun4; two paths committed."
+    },
+    {
+      "id": "T35",
+      "title": "R02 extracted pinned-runtime MCP request compatibility",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:56:32.850Z",
+            "outcome": "started",
+            "detail": "Final independent gate reproduced MCP500 TypeError in real extracted pinned Bun runtime after admission changes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Native TCP reader cleanup TypeError fixed without changing admission; actual pinned Bun1.3.14 SDK RED→GREEN, extracted offline runtime proof and40tests/types/lint pass."
+    },
+    {
+      "id": "T36",
+      "title": "Compare concurrent round2 implementations before owner integration decision",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T05:22:19.241Z",
+            "outcome": "started",
+            "detail": "Owner explicitly requested differences and recommendations before integration; read-only comparison of bb65652ca vs8dcb765f0"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Owner-requested read-only comparison of bb65652ca vs8dcb765f0 documented with concrete API/policy incompatibilities, complementary safeguards/tests and integration recommendation; no product or remote changes."
+    },
+    {
+      "id": "T37",
+      "title": "Integrate storage ops and contracts preserving both test suites",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T05:39:27.648Z",
+            "outcome": "started",
+            "detail": "Normal merge storage/ops/contracts integration with coherent archive polarity and retained regression cases"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Storage/ops/contracts resolved in normal merge9a0f4641e; both suites retained,68storage/197UIshared proof and9offline runtime/ops checks green."
+    },
+    {
+      "id": "T38",
+      "title": "Integrate delivery execution and admission policies preserving both histories",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T05:39:27.900Z",
+            "outcome": "started",
+            "detail": "Normal merge delivery/admission/native integration retaining chosen safety invariants"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Native delivery/admission merge committed;85focused+14final delivery tests, atomic recovery/archive replay preserved, types/lint pass."
+    },
+    {
+      "id": "T39",
+      "title": "Integrate UI MCP demo parity and regression coverage",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T05:39:28.134Z",
+            "outcome": "started",
+            "detail": "Normal merge frontend/MCP integration with remote demo event parity and SDK assertions"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "UI/MCP merge committed with remote demo events and SDK paging;197UI and18MCP/TCP tests, assets/types/lint green."
+    },
+    {
+      "id": "T40",
+      "title": "Verify integrated round2 candidate and publish draft PR update",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-11-02T05:51:48.714Z",
+            "outcome": "started",
+            "detail": "Independent full integration gate on normal merge9a0f4641e before PR publication"
+          },
+          {
+            "at": "2026-11-02T05:58:35.236Z",
+            "outcome": "failed",
+            "detail": "Combined strict gate reproduced real CI dependency-boundary defect: root HTTP contract imports UI i18next. Preserve regression by moving adapter assertion to UI suite; no NODE_PATH masking."
+          },
+          {
+            "at": "2026-11-02T06:05:31.152Z",
+            "outcome": "started",
+            "detail": "Post-CI-boundary retry on committed merged source; verify root without UI dependencies plus strict selection and preserved UI assertion"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent integrated gate passed452strict/534Hub/198UI/runtime9 with root UI dependencies absent; owner review handoff documented. Publish/checkGitHubCI remains final task action; no main merge or acceptance."
+    },
+    {
+      "id": "T41",
+      "title": "Place served browser-adapter contract in UI dependency suite",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T05:58:35.619Z",
+            "outcome": "started",
+            "detail": "Real CI and strict gate RED: i18next missing from root-only dependency install; retain adapter contract in correct UI suite"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "RealCI boundary RED corrected by moving served browser adapter assertion into UI suite; root3tests pass with UI link absent, fullUI198/types/lint/assets pass; no dependency workaround."
+    },
+    {
+      "id": "T42",
+      "title": "Make private-cache offline runtime proof portable in CI",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T06:17:00.344Z",
+            "outcome": "started",
+            "detail": "Published integrated CI distribution job failed actual offline install: all pinned packages reported not cached despite prepared cache; investigate without weakening network isolation"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Portable offline proof committed; registry identity preserved, rejectingproxy+Linuxnetworknone tested1.3.14/1.4.4 andUID1001 withoutHOMEoverride; ordinaryhermetic/lint/scriptstypes pass."
+    },
+    {
+      "id": "T43",
+      "title": "Fix CI duplicate proxy bypass keys without weakening offline proof",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T06:55:05.371Z",
+            "outcome": "started",
+            "detail": "Reproduce CI TS2783 and fix proxy guard test initialization only."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Exact root tsc reproduced TS2783 then passed with scripts types, guard regression1pass9assertions and focused lint; one-line initialization fix preserves bypass proof."
+    },
+    {
+      "id": "T44",
+      "title": "Reproduce and fix controller-generation queue CI stale-version race",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:22:12.084Z",
+            "outcome": "started",
+            "detail": "Investigate exact root-suite mixed queue controller claim stale-version; require deterministic RED and narrow fixture or product diagnosis."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Deterministic real-network stale claim RED; bounded fixture-only stale-version refresh GREEN;93relatedpass7775assertions1existingTODO;root/scripts types and lint green."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-01T10:18:40.722Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-01T10:22:09.832Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-01T10:22:28.564Z",
+      "event": "task-added",
+      "detail": "T5: Domain lifecycle and immutable review"
+    },
+    {
+      "at": "2026-11-01T10:22:28.925Z",
+      "event": "task-added",
+      "detail": "T6: Durable managed-work HTTP and auth"
+    },
+    {
+      "at": "2026-11-01T10:22:29.289Z",
+      "event": "task-added",
+      "detail": "T7: Managed work client OpenAPI and contributor MCP"
+    },
+    {
+      "at": "2026-11-01T10:22:29.652Z",
+      "event": "task-added",
+      "detail": "T8: Integrate live RU/EN UI with API"
+    },
+    {
+      "at": "2026-11-01T10:22:29.828Z",
+      "event": "task-added",
+      "detail": "T9: Bind existing session execution and Git observations safely"
+    },
+    {
+      "at": "2026-11-01T10:22:30.010Z",
+      "event": "task-added",
+      "detail": "T10: Verify legacy coexistence migration backup and restore"
+    },
+    {
+      "at": "2026-11-01T10:22:30.192Z",
+      "event": "task-added",
+      "detail": "T11: Run integrated domain storage HTTP MCP frontend regression gates"
+    },
+    {
+      "at": "2026-11-01T10:22:30.376Z",
+      "event": "task-added",
+      "detail": "T12: Independent correctness security concurrency and UX review"
+    },
+    {
+      "at": "2026-11-01T10:22:30.550Z",
+      "event": "task-added",
+      "detail": "T13: Deliver tested candidate with operator instructions"
+    },
+    {
+      "at": "2026-11-01T10:22:30.740Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-01T10:23:46.381Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Domain worker implements guarded immutable lifecycle"
+    },
+    {
+      "at": "2026-11-01T10:23:46.560Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — Storage/HTTP worker implements additive SQLite and existing authentication"
+    },
+    {
+      "at": "2026-11-01T10:23:46.746Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — Contributor client MCP and OpenAPI worker started"
+    },
+    {
+      "at": "2026-11-01T10:23:46.931Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — Existing UI session implementing managed-work view in separate worktree"
+    },
+    {
+      "at": "2026-11-01T10:32:42.946Z",
+      "event": "task-done",
+      "detail": "T7: Managed work client OpenAPI and contributor MCP"
+    },
+    {
+      "at": "2026-11-01T10:32:43.136Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-01T11:00:14.305Z",
+      "event": "task-done",
+      "detail": "T5: Domain lifecycle and immutable review"
+    },
+    {
+      "at": "2026-11-01T11:00:14.479Z",
+      "event": "task-done",
+      "detail": "T6: Durable managed-work HTTP and auth"
+    },
+    {
+      "at": "2026-11-01T11:00:14.656Z",
+      "event": "task-done",
+      "detail": "T9: Bind existing session execution and Git observations safely"
+    },
+    {
+      "at": "2026-11-01T11:00:14.828Z",
+      "event": "task-done",
+      "detail": "T10: Verify legacy coexistence migration backup and restore"
+    },
+    {
+      "at": "2026-11-01T11:04:22.333Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — Backend review round1 (backfilled): reproduced admission/coverage/cancellation/terminal-state defects; corrected before round2"
+    },
+    {
+      "at": "2026-11-01T11:04:22.574Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 2) — Backend review round2 (backfilled): queued unknown allocation and missing attention; corrected before round3"
+    },
+    {
+      "at": "2026-11-01T11:04:22.805Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 3) — Backend review round3 (backfilled): APPROVE,68tests/519assertions; UI review initial two majors handled in separate UI delta"
+    },
+    {
+      "at": "2026-11-01T11:04:23.045Z",
+      "event": "task-added",
+      "detail": "T14: Independent final UI delta review and behavioral regressions"
+    },
+    {
+      "at": "2026-11-01T11:13:26.671Z",
+      "event": "task-done",
+      "detail": "T12: Independent correctness security concurrency and UX review"
+    },
+    {
+      "at": "2026-11-01T11:20:18.768Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — Independent UI delta: full revision visibility and target-context guards plus amendment/waiver/events/observer/legacy/Overview increment"
+    },
+    {
+      "at": "2026-11-01T12:49:33.255Z",
+      "event": "task-added",
+      "detail": "T15: Recover original pending work and native requests after browser reload"
+    },
+    {
+      "at": "2026-11-01T12:49:45.381Z",
+      "event": "task-done",
+      "detail": "T8: Integrate live RU/EN UI with API"
+    },
+    {
+      "at": "2026-11-01T12:49:45.646Z",
+      "event": "task-done",
+      "detail": "T14: Independent final UI delta review and behavioral regressions"
+    },
+    {
+      "at": "2026-11-01T12:49:45.878Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — Reproduced memory-only pending envelopes; bounded client recovery worker implements durable original request and manual reconciliation without automatic human actions."
+    },
+    {
+      "at": "2026-11-01T12:54:34.234Z",
+      "event": "task-added",
+      "detail": "T16: Independently review reload recovery and original-operation retry"
+    },
+    {
+      "at": "2026-11-01T12:56:28.475Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — Independent review of bounded tab recovery, explicit original retry, principal/session scope and storage failures; earlier reviews exclude this delta."
+    },
+    {
+      "at": "2026-11-01T12:58:46.550Z",
+      "event": "task-attempt",
+      "detail": "T16: failed (attempt 2) — Independent RED probe R-001: uncertain original retry403 cleared original request even though current authority refusal cannot establish prior outcome; fix assigned T15."
+    },
+    {
+      "at": "2026-11-01T13:00:10.043Z",
+      "event": "task-done",
+      "detail": "T15: Recover original pending work and native requests after browser reload"
+    },
+    {
+      "at": "2026-11-01T13:00:10.276Z",
+      "event": "task-done",
+      "detail": "T16: Independently review reload recovery and original-operation retry"
+    },
+    {
+      "at": "2026-11-01T13:03:49.097Z",
+      "event": "task-done",
+      "detail": "T11: Run integrated domain storage HTTP MCP frontend regression gates"
+    },
+    {
+      "at": "2026-11-01T13:05:07.987Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-01T13:05:08.311Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-01T13:05:08.628Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-01T13:05:08.876Z",
+      "event": "task-done",
+      "detail": "T13: Deliver tested candidate with operator instructions"
+    },
+    {
+      "at": "2026-11-01T13:24:17.214Z",
+      "event": "task-added",
+      "detail": "T17: Integrate current main and remote lifecycle fixes"
+    },
+    {
+      "at": "2026-11-01T13:24:17.456Z",
+      "event": "task-added",
+      "detail": "T18: Implement release-backed Hub update command and safe deployment integration"
+    },
+    {
+      "at": "2026-11-01T13:24:17.702Z",
+      "event": "task-added",
+      "detail": "T19: Rehearse production backup migration restore and verify release artifact"
+    },
+    {
+      "at": "2026-11-01T13:24:17.950Z",
+      "event": "task-added",
+      "detail": "T20: Publish successor release and update production Hub without losing data"
+    },
+    {
+      "at": "2026-11-01T13:25:33.977Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — Merge current origin/main; preserve latest remote run lifecycle changes and managed work fixture overrides."
+    },
+    {
+      "at": "2026-11-01T13:25:34.203Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — Release-backed local admin CLI and installer safety implementation; spec docs/requirements/hub-release-update/specification.md."
+    },
+    {
+      "at": "2026-11-01T13:28:24.297Z",
+      "event": "task-done",
+      "detail": "T17: Integrate current main and remote lifecycle fixes"
+    },
+    {
+      "at": "2026-11-01T15:53:25.553Z",
+      "event": "task-added",
+      "detail": "T21: Publish successor release and provide owner-run upgrade instructions"
+    },
+    {
+      "at": "2026-11-01T15:53:25.803Z",
+      "event": "task-done",
+      "detail": "T20: Publish successor release and update production Hub without losing data"
+    },
+    {
+      "at": "2026-11-01T16:04:18.950Z",
+      "event": "task-added",
+      "detail": "T22: Prepare PR1113 for owner review without merge release or production cutover"
+    },
+    {
+      "at": "2026-11-01T16:04:19.179Z",
+      "event": "task-added",
+      "detail": "T23: Fix and independently verify legacy adoption safety findings"
+    },
+    {
+      "at": "2026-11-01T16:05:14.705Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — Repair five independent legacy adoption findings; keep PR1113 Draft and forbid merge/tag/production cutover until owner review."
+    },
+    {
+      "at": "2026-11-01T16:15:51.160Z",
+      "event": "task-done",
+      "detail": "T18: Implement release-backed Hub update command and safe deployment integration"
+    },
+    {
+      "at": "2026-11-01T16:15:51.391Z",
+      "event": "task-done",
+      "detail": "T19: Rehearse production backup migration restore and verify release artifact"
+    },
+    {
+      "at": "2026-11-01T16:15:51.673Z",
+      "event": "task-done",
+      "detail": "T23: Fix and independently verify legacy adoption safety findings"
+    },
+    {
+      "at": "2026-11-01T18:55:58.015Z",
+      "event": "task-added",
+      "detail": "T24: Fix PR1113 review root causes A-N and triage all linked findings"
+    },
+    {
+      "at": "2026-11-01T19:54:30.822Z",
+      "event": "task-done",
+      "detail": "T21: Publish successor release and provide owner-run upgrade instructions"
+    },
+    {
+      "at": "2026-11-01T19:54:31.025Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-01T20:17:38.194Z",
+      "event": "task-done",
+      "detail": "T22: Prepare PR1113 for owner review without merge release or production cutover"
+    },
+    {
+      "at": "2026-11-01T21:08:16.230Z",
+      "event": "task-done",
+      "detail": "T24: Fix PR1113 review root causes A-N and triage all linked findings"
+    },
+    {
+      "at": "2026-11-02T03:58:17.674Z",
+      "event": "task-added",
+      "detail": "T25: R02 scoped storage aggregates projections and response contracts"
+    },
+    {
+      "at": "2026-11-02T03:58:17.836Z",
+      "event": "task-added",
+      "detail": "T26: R02 frontend event cache forms and revision consumers"
+    },
+    {
+      "at": "2026-11-02T03:58:18.005Z",
+      "event": "task-added",
+      "detail": "T27: R02 native queue reconciliation and Attempt actor authorization"
+    },
+    {
+      "at": "2026-11-02T03:58:18.180Z",
+      "event": "task-added",
+      "detail": "T28: R02 delivery recovery and mutation admission"
+    },
+    {
+      "at": "2026-11-02T03:58:18.346Z",
+      "event": "task-added",
+      "detail": "T29: R02 backup protection migration help and offline test gates"
+    },
+    {
+      "at": "2026-11-02T03:58:18.539Z",
+      "event": "task-added",
+      "detail": "T30: R02 integrated verification mutation coverage and next review handoff"
+    },
+    {
+      "at": "2026-11-02T03:58:28.640Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — Round 2 scoped storage regression fixes; fresh mechanism-specific RED tests"
+    },
+    {
+      "at": "2026-11-02T03:58:28.808Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — Round 2 live frontend regression fixes with real adapter contracts"
+    },
+    {
+      "at": "2026-11-02T03:58:28.981Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — Round 2 queue state-event regressions and upheld participant authorization"
+    },
+    {
+      "at": "2026-11-02T04:12:04.521Z",
+      "event": "task-done",
+      "detail": "T27: R02 native queue reconciliation and Attempt actor authorization"
+    },
+    {
+      "at": "2026-11-02T04:12:04.888Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — Canonical delivery recovery and actual-byte admission repairs with production-path RED tests"
+    },
+    {
+      "at": "2026-11-02T04:12:49.099Z",
+      "event": "task-added",
+      "detail": "T31: R02 verify queued configuration recovery without inferred terminal refusal"
+    },
+    {
+      "at": "2026-11-02T04:12:49.538Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 1) — Expand reservation regression to recoverable config/authority guard failures before native terminal evidence"
+    },
+    {
+      "at": "2026-11-02T04:16:16.881Z",
+      "event": "task-done",
+      "detail": "T31: R02 verify queued configuration recovery without inferred terminal refusal"
+    },
+    {
+      "at": "2026-11-02T04:19:25.261Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — Owner-decided14day backup protection, migration terminal queue classification, actual CLI help and deterministic offline packaging tests"
+    },
+    {
+      "at": "2026-11-02T04:21:45.143Z",
+      "event": "task-done",
+      "detail": "T25: R02 scoped storage aggregates projections and response contracts"
+    },
+    {
+      "at": "2026-11-02T04:23:10.916Z",
+      "event": "task-added",
+      "detail": "T32: R02 actual-byte request admission and nested MCP body leases"
+    },
+    {
+      "at": "2026-11-02T04:32:26.171Z",
+      "event": "task-done",
+      "detail": "T26: R02 frontend event cache forms and revision consumers"
+    },
+    {
+      "at": "2026-11-02T04:32:26.518Z",
+      "event": "task-attempt",
+      "detail": "T32: started (attempt 1) — Actual retained request bytes, nested MCP slot reuse and bounded body deadlines with real streaming RED probes"
+    },
+    {
+      "at": "2026-11-02T04:33:38.981Z",
+      "event": "task-done",
+      "detail": "T29: R02 backup protection migration help and offline test gates"
+    },
+    {
+      "at": "2026-11-02T04:33:56.047Z",
+      "event": "task-added",
+      "detail": "T33: R02 independently verify backup retention mutation boundaries"
+    },
+    {
+      "at": "2026-11-02T04:33:56.373Z",
+      "event": "task-attempt",
+      "detail": "T33: started (attempt 1) — Scratch-only targeted mutation verification of owner-approved young-backup and newest-three retention boundaries"
+    },
+    {
+      "at": "2026-11-02T04:36:16.443Z",
+      "event": "task-done",
+      "detail": "T33: R02 independently verify backup retention mutation boundaries"
+    },
+    {
+      "at": "2026-11-02T04:46:52.232Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 1) — Prepare final independent code-verifier gate; execute after parent finishes committing the now-frozen integrated source"
+    },
+    {
+      "at": "2026-11-02T04:52:13.296Z",
+      "event": "task-done",
+      "detail": "T32: R02 actual-byte request admission and nested MCP body leases"
+    },
+    {
+      "at": "2026-11-02T04:53:26.806Z",
+      "event": "task-done",
+      "detail": "T28: R02 delivery recovery and mutation admission"
+    },
+    {
+      "at": "2026-11-02T04:56:31.565Z",
+      "event": "task-added",
+      "detail": "T34: R02 migration boundary compatibility for queue tables without JSON body"
+    },
+    {
+      "at": "2026-11-02T04:56:31.800Z",
+      "event": "task-added",
+      "detail": "T35: R02 extracted pinned-runtime MCP request compatibility"
+    },
+    {
+      "at": "2026-11-02T04:56:32.603Z",
+      "event": "task-attempt",
+      "detail": "T34: started (attempt 1) — Final independent gate reproduced migration legacy boundary failure; preserve conservative unresolved-work handling for unrecognized queue schema"
+    },
+    {
+      "at": "2026-11-02T04:56:32.850Z",
+      "event": "task-attempt",
+      "detail": "T35: started (attempt 1) — Final independent gate reproduced MCP500 TypeError in real extracted pinned Bun runtime after admission changes"
+    },
+    {
+      "at": "2026-11-02T04:57:28.309Z",
+      "event": "task-attempt",
+      "detail": "T30: failed (attempt 2) — Independent gate b3d94fc4d found two concrete failures: bodyless queue migration boundary and actual HTTP MCP Request TypeError; delegated T34 and T35 before rerun"
+    },
+    {
+      "at": "2026-11-02T05:00:37.752Z",
+      "event": "task-done",
+      "detail": "T34: R02 migration boundary compatibility for queue tables without JSON body"
+    },
+    {
+      "at": "2026-11-02T05:02:54.235Z",
+      "event": "task-done",
+      "detail": "T35: R02 extracted pinned-runtime MCP request compatibility"
+    },
+    {
+      "at": "2026-11-02T05:03:29.696Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 3) — Post-fix verification retry: bodyless/malformed migration and actual TCP MCP cleanup repaired; rerun failed strict/runtime checks and health, reuse unchanged UI/docs evidence"
+    },
+    {
+      "at": "2026-11-02T05:16:49.762Z",
+      "event": "task-done",
+      "detail": "T30: R02 integrated verification mutation coverage and next review handoff"
+    },
+    {
+      "at": "2026-11-02T05:22:19.052Z",
+      "event": "task-added",
+      "detail": "T36: Compare concurrent round2 implementations before owner integration decision"
+    },
+    {
+      "at": "2026-11-02T05:22:19.241Z",
+      "event": "task-attempt",
+      "detail": "T36: started (attempt 1) — Owner explicitly requested differences and recommendations before integration; read-only comparison of bb65652ca vs8dcb765f0"
+    },
+    {
+      "at": "2026-11-02T05:31:14.129Z",
+      "event": "task-done",
+      "detail": "T36: Compare concurrent round2 implementations before owner integration decision"
+    },
+    {
+      "at": "2026-11-02T05:39:15.662Z",
+      "event": "task-added",
+      "detail": "T37: Integrate storage ops and contracts preserving both test suites"
+    },
+    {
+      "at": "2026-11-02T05:39:15.929Z",
+      "event": "task-added",
+      "detail": "T38: Integrate delivery execution and admission policies preserving both histories"
+    },
+    {
+      "at": "2026-11-02T05:39:16.176Z",
+      "event": "task-added",
+      "detail": "T39: Integrate UI MCP demo parity and regression coverage"
+    },
+    {
+      "at": "2026-11-02T05:39:16.421Z",
+      "event": "task-added",
+      "detail": "T40: Verify integrated round2 candidate and publish draft PR update"
+    },
+    {
+      "at": "2026-11-02T05:39:27.648Z",
+      "event": "task-attempt",
+      "detail": "T37: started (attempt 1) — Normal merge storage/ops/contracts integration with coherent archive polarity and retained regression cases"
+    },
+    {
+      "at": "2026-11-02T05:39:27.900Z",
+      "event": "task-attempt",
+      "detail": "T38: started (attempt 1) — Normal merge delivery/admission/native integration retaining chosen safety invariants"
+    },
+    {
+      "at": "2026-11-02T05:39:28.134Z",
+      "event": "task-attempt",
+      "detail": "T39: started (attempt 1) — Normal merge frontend/MCP integration with remote demo event parity and SDK assertions"
+    },
+    {
+      "at": "2026-11-02T05:51:47.941Z",
+      "event": "task-done",
+      "detail": "T37: Integrate storage ops and contracts preserving both test suites"
+    },
+    {
+      "at": "2026-11-02T05:51:48.137Z",
+      "event": "task-done",
+      "detail": "T38: Integrate delivery execution and admission policies preserving both histories"
+    },
+    {
+      "at": "2026-11-02T05:51:48.329Z",
+      "event": "task-done",
+      "detail": "T39: Integrate UI MCP demo parity and regression coverage"
+    },
+    {
+      "at": "2026-11-02T05:51:48.714Z",
+      "event": "task-attempt",
+      "detail": "T40: started (attempt 1) — Independent full integration gate on normal merge9a0f4641e before PR publication"
+    },
+    {
+      "at": "2026-11-02T05:58:35.236Z",
+      "event": "task-attempt",
+      "detail": "T40: failed (attempt 2) — Combined strict gate reproduced real CI dependency-boundary defect: root HTTP contract imports UI i18next. Preserve regression by moving adapter assertion to UI suite; no NODE_PATH masking."
+    },
+    {
+      "at": "2026-11-02T05:58:35.432Z",
+      "event": "task-added",
+      "detail": "T41: Place served browser-adapter contract in UI dependency suite"
+    },
+    {
+      "at": "2026-11-02T05:58:35.620Z",
+      "event": "task-attempt",
+      "detail": "T41: started (attempt 1) — Real CI and strict gate RED: i18next missing from root-only dependency install; retain adapter contract in correct UI suite"
+    },
+    {
+      "at": "2026-11-02T06:05:00.944Z",
+      "event": "task-done",
+      "detail": "T41: Place served browser-adapter contract in UI dependency suite"
+    },
+    {
+      "at": "2026-11-02T06:05:31.152Z",
+      "event": "task-attempt",
+      "detail": "T40: started (attempt 3) — Post-CI-boundary retry on committed merged source; verify root without UI dependencies plus strict selection and preserved UI assertion"
+    },
+    {
+      "at": "2026-11-02T06:10:45.562Z",
+      "event": "task-done",
+      "detail": "T40: Verify integrated round2 candidate and publish draft PR update"
+    },
+    {
+      "at": "2026-11-02T06:17:00.146Z",
+      "event": "task-added",
+      "detail": "T42: Make private-cache offline runtime proof portable in CI"
+    },
+    {
+      "at": "2026-11-02T06:17:00.345Z",
+      "event": "task-attempt",
+      "detail": "T42: started (attempt 1) — Published integrated CI distribution job failed actual offline install: all pinned packages reported not cached despite prepared cache; investigate without weakening network isolation"
+    },
+    {
+      "at": "2026-11-02T06:45:16.681Z",
+      "event": "task-done",
+      "detail": "T42: Make private-cache offline runtime proof portable in CI"
+    },
+    {
+      "at": "2026-11-02T06:54:54.930Z",
+      "event": "task-added",
+      "detail": "T43: Fix CI duplicate proxy bypass keys without weakening offline proof"
+    },
+    {
+      "at": "2026-11-02T06:55:05.371Z",
+      "event": "task-attempt",
+      "detail": "T43: started (attempt 1) — Reproduce CI TS2783 and fix proxy guard test initialization only."
+    },
+    {
+      "at": "2026-11-02T06:57:51.791Z",
+      "event": "task-done",
+      "detail": "T43: Fix CI duplicate proxy bypass keys without weakening offline proof"
+    },
+    {
+      "at": "2026-11-02T07:21:49.124Z",
+      "event": "task-added",
+      "detail": "T44: Reproduce and fix controller-generation queue CI stale-version race"
+    },
+    {
+      "at": "2026-11-02T07:22:12.084Z",
+      "event": "task-attempt",
+      "detail": "T44: started (attempt 1) — Investigate exact root-suite mixed queue controller claim stale-version; require deterministic RED and narrow fixture or product diagnosis."
+    },
+    {
+      "at": "2026-11-02T07:31:57.702Z",
+      "event": "task-done",
+      "detail": "T44: Reproduce and fix controller-generation queue CI stale-version race"
+    },
+    {
+      "at": "2026-11-02T12:54:35.662Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — R03 provenance reconciliation: attach existing R02 implementation and verification artifacts using current timestamps; this is an audit repair, not a retroactive claim of another R02 implementation run."
+    },
+    {
+      "at": "2026-11-02T12:58:20.568Z",
+      "event": "task-done",
+      "detail": "T24: Fix PR1113 review root causes A-N and triage all linked findings"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "judged"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "judged"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "judged"
+    },
+    "AC12": {
+      "kind": "judged"
+    },
+    "AC13": {
+      "kind": "judged"
+    },
+    "AC14": {
+      "kind": "judged"
+    },
+    "AC15": {
+      "kind": "judged"
+    },
+    "AC16": {
+      "kind": "judged"
+    }
+  }
+}

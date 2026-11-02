@@ -2,7 +2,7 @@ import {expect,test} from 'bun:test';
 import path from 'node:path';
 import {bridgeHarness,wait,newFilePatch,type Session} from './bridge.test-support';
 import {okReply,callRound} from '../../commands/agent.test-helpers';
-import {success} from '../../hub/remote-v2/fixture.test-support';
+import {success,hubSessionPending} from '../../hub/remote-v2/fixture.test-support';
 import type {Control} from '../../remote-control/protocol';
 import type {NativeCommandContribution} from '../../session/commands/handlers';
 
@@ -14,6 +14,62 @@ function queuedWorkspaceCommand(log:string[]):NativeCommandContribution{return {
 async function reauthorize(s:Session,lease:Control['ControllerLease'],item:Control['QueueItem']){return settled(async()=>{const current=await s.read();const page=await s.queue();const now=page.items.find(i=>i.queueItemId===item.queueItemId)!;return s.post(`/queue/${item.queueItemId}/reauthorize`,{expectedSessionVersion:current.version,expectedQueueVersion:page.queueVersion,expectedItemVersion:now.version,queueItemId:item.queueItemId,originalOperationId:item.operationId,expectedConfigVersion:current.config.configVersion,controller:s.binding(lease),association:{mode:'ad-hoc',profileConsentVersion:1}});});}
 
 const states=async(s:Session)=>(await s.queue()).items.filter(i=>i.state!=='removed').sort((a,b)=>a.position-b.position).map(i=>[i.kind,i.state]);
+test('controller claim refreshes pins when an applied native release overtakes its captured snapshot',async()=>{
+ const m=await h.machine();const s=m.session,first=(await s.claim()).lease;
+ await wait(async()=>hubSessionPending(h.hub().dataDir,s.sessionId),v=>v===false);
+ const original=globalThis.fetch,extra:Record<string,unknown>={},statuses:number[]=[];let interleaved=false;
+ globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{
+  const request=new Request(input,init),url=new URL(request.url);
+  if(!interleaved&&request.method==='GET'&&url.pathname===s.path){
+   interleaved=true;
+   // Capture the real GET before the native release; return it only after the
+   // release has applied. The helper's ensuing CAS must now be stale.
+   const captured=await original(request),before=await captured.clone().json() as Control['SessionRecord'];
+   const released=await success<Control['ControllerReceipt']>(await s.post('/controller/release',{expectedSessionVersion:before.version,controller:s.binding(first)}));
+   extra.previousReleaseReceiptId=released.receiptId;
+   await wait(s.read,v=>v.controller?.state==='released');
+   await wait(async()=>hubSessionPending(h.hub().dataDir,s.sessionId),v=>v===false);
+   return captured;
+  }
+  const response=await original(request);
+  if(request.method==='POST'&&url.pathname===s.path+'/controller/claim')statuses.push(response.status);
+  return response;
+ }) as typeof globalThis.fetch;
+ try {
+  const second=(await s.claim(60,'takeover',extra)).lease;
+  expect(interleaved).toBe(true);expect(statuses).toEqual([409,200]);expect(second.controllerLeaseId).not.toBe(first.controllerLeaseId);
+  expect((await s.read()).controller?.controllerLeaseId).toBe(second.controllerLeaseId);
+ } finally {globalThis.fetch=original;}
+});
+
+test('controller claim does not retry a real controller conflict',async()=>{
+ const m=await h.machine(),s=m.session,first=(await s.claim()).lease;
+ await wait(async()=>hubSessionPending(h.hub().dataDir,s.sessionId),v=>v===false);
+ const before=await s.read();await success(await s.post('/controller/release',{expectedSessionVersion:before.version,controller:s.binding(first)}));
+ await wait(s.read,v=>v.controller?.state==='released');await wait(async()=>hubSessionPending(h.hub().dataDir,s.sessionId),v=>v===false);
+ const original=globalThis.fetch,codes:string[]=[];
+ globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{
+  const request=new Request(input,init),response=await original(request);
+  if(request.method==='POST'&&new URL(request.url).pathname===s.path+'/controller/claim')codes.push((await response.clone().json() as {error:{code:string}}).error.code);
+  return response;
+ }) as typeof globalThis.fetch;
+ try {await expect(s.claim(60,'takeover',{previousReleaseReceiptId:'not-the-accepted-release'})).rejects.toThrow();expect(codes).toEqual(['controller-conflict']);}
+ finally {globalThis.fetch=original;}
+});
+
+test('controller claim bounds repeated stale-version refusals to four fresh reads',async()=>{
+ const m=await h.machine(),s=m.session,original=globalThis.fetch,codes:string[]=[];let reads=0;
+ const staleVersion=(await s.read()).version+1;
+ globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{
+  const request=new Request(input,init),url=new URL(request.url),response=await original(request);
+  if(request.method==='GET'&&url.pathname===s.path)reads++;
+  if(request.method==='POST'&&url.pathname===s.path+'/controller/claim')codes.push((await response.clone().json() as {error:{code:string}}).error.code);
+  return response;
+ }) as typeof globalThis.fetch;
+ try {await expect(s.claim(60,'claim',{expectedSessionVersion:staleVersion})).rejects.toThrow();expect(codes).toEqual(Array(4).fill('stale-version'));expect(reads).toBe(4);expect((await s.read()).controller).toBeNull();}
+ finally {globalThis.fetch=original;}
+});
+
 test('R2.1 a mixed queue across a controller generation change keeps FIFO, suspends every item and applies each exactly once after fresh grants',async()=>{
  const log:string[]=[];
  const m=await h.machine({contributions:[queuedWorkspaceCommand(log)],scripts:[callRound('patch-waiting','apply_patch',newFilePatch('held.txt','held')),okReply,okReply]});const s=m.session;

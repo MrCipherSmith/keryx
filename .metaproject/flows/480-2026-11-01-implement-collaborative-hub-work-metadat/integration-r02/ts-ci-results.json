@@ -1,0 +1,56 @@
+{
+  "task": "task-43",
+  "status": "DONE",
+  "frozen": true,
+  "baseHead": "9dc913fc",
+  "filesModified": [
+    "scripts/package-team-hub.test.ts"
+  ],
+  "change": "Replace object literal known-key spread with Object.assign({NO_PROXY:\"*\",no_proxy:\"*\"},guard.environment). Both inherited wildcard keys and zero-length bypass assertions retained. No compiler suppression or weaker assertions.",
+  "checks": [
+    {
+      "name": "exact root typecheck RED",
+      "command": "bun run typecheck",
+      "exitCode": 2,
+      "result": "TS2783 for NO_PROXY and no_proxy at155",
+      "log": "/tmp/pr1113-integration-ts43-red.log",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T06-55-47-446Z-694490_run.log"
+    },
+    {
+      "name": "exact root typecheck GREEN",
+      "command": "bun run typecheck",
+      "exitCode": 0,
+      "log": "/tmp/pr1113-integration-ts43-root-green.log",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T06-56-54-184Z-4ccecf_run.log"
+    },
+    {
+      "name": "scripts typecheck GREEN",
+      "command": "bun run typecheck:scripts",
+      "exitCode": 0,
+      "log": "/tmp/pr1113-integration-ts43-scripts-green.log",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T06-56-58-971Z-4eff93_run.log"
+    },
+    {
+      "name": "guard runtime behavior",
+      "command": "bun test scripts/package-team-hub.test.ts --test-name-pattern \"offline proxy guard\"",
+      "passed": 1,
+      "failed": 0,
+      "assertions": 9,
+      "log": "/tmp/pr1113-integration-ts43-test-green.log"
+    },
+    {
+      "name": "targeted eslint",
+      "command": "bunx eslint scripts/package-team-hub.test.ts",
+      "exitCode": 0,
+      "log": "/tmp/pr1113-integration-ts43-lint-green.log"
+    }
+  ],
+  "gitActions": "No staging, commits or push",
+  "otherActions": "No dependency installs, workflow/cache/helper/application changes or production operations",
+  "routingAudit": {
+    "graph_used": "yes; file unchanged topology, graph predates metadata HEAD changes",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}
