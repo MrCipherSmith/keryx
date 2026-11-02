@@ -258,3 +258,17 @@ test('a lost push reply remains uncertain and read-only inspection recovers the 
         expect(proof.status).toBe('published');expect(pushes).toBe(1);
     } finally {await rm(root,{recursive:true,force:true});}
 });
+
+test('inspection refuses a managed branch that changes between remote observation and fetch', async()=>{
+    const root=await mkdtemp(join(tmpdir(),'hub-git-inspection-race-'));
+    try {
+        const {remoteUrl,base}=await seedRemote(root);
+        const request={dataDir:root,projectId:'p',operationId:'inspection-race',revision:selected(base),remoteUrl,baseBranch:'main'};
+        const published=await deliverRevision(request);expect(published.status).toBe('published');
+        if(published.status!=='published') throw Error('Expected publication');
+        const calls:string[][]=[];
+        const inspect=createGitPublicationInspector(recordingGit(calls,args=>args[0]==='rev-parse' && args.includes('FETCH_HEAD') ? Buffer.from('f'.repeat(40)+'\n') : undefined));
+        const result=await inspect(request);expect(result).toMatchObject({status:'failed',error:'Original managed publication could not be verified'});
+        expect(calls.some(args=>['push','commit-tree','update-ref'].includes(args[0]!))).toBe(false);
+    } finally {await rm(root,{recursive:true,force:true});}
+});

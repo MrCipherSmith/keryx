@@ -9,9 +9,10 @@ import type { HubApplication, GitDeliveryAdapter } from './contracts';
 const roots: string[] = [], apps: HubApplication[] = [];
 afterEach(() => { for (const app of apps.splice(0)) app.close(); for (const root of roots.splice(0)) rmSync(root,{recursive:true,force:true}); });
 const token = 'operator-' + 'x'.repeat(64);
+const reviewerToken = 'reviewer-' + 'r'.repeat(64);
 function fixture(adapter: GitDeliveryAdapter) {
     const dir = mkdtempSync(join(tmpdir(),'hub-delivery-queue-')); roots.push(dir);
-    const config = { dataDir:dir, operatorToken:token, agentToken:'agent-'+'y'.repeat(64), gitDelivery:adapter };
+    const config = { dataDir:dir, operatorToken:token, reviewerToken, agentToken:'agent-'+'y'.repeat(64), gitDelivery:adapter };
     const app = createHubApplication(config); apps.push(app);
     const request = (path: string, body?: unknown, key = 'key-'+Math.random()) => app.fetch(new Request('http://hub.test/hub/v1'+path,{method:body===undefined?'GET':'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json','idempotency-key':key},...(body===undefined?{}:{body:JSON.stringify(body)})}));
     return { app, config, request };
@@ -29,6 +30,8 @@ test('external Git delivery never holds the global mutation queue and same-key r
     const {p,body} = await selected(f.request);
     const pending = f.request('/projects/'+p.id+'/deliveries',body,'delivery-one');
     await started;
+    const retry = await f.request('/projects/'+p.id+'/deliveries',body,'delivery-one');
+    expect(retry.status).toBe(202); expect(await retry.json()).toMatchObject({status:'pending'}); expect(calls).toBe(1);
     // The adapter is already paused on an explicit gate. The unrelated request
     // must complete before that gate opens; abort bounds a broken serialized path.
     try {
@@ -93,8 +96,12 @@ test('settle waits for an external Git delivery to persist its result before shu
     const {p,body}=await selected(f.request);
     const delivery=f.request('/projects/'+p.id+'/deliveries',body,'drain-delivery');await started;
     const settling=f.app.settle!().then(()=>{settled=true;});
-    await Promise.resolve();await Promise.resolve();expect(settled).toBe(false);
-    release();expect((await delivery).status).toBe(200);await settling;expect(settled).toBe(true);
+    const probe=Bun.spawn(['git','--version'],{stdout:'ignore',stderr:'ignore'});
+    expect(await probe.exited).toBe(0);expect(settled).toBe(false);
+    release();await settling;
+    const store=openHubStore(f.config.dataDir);
+    try { expect(store.deliveries.list(p.id)[0]).toMatchObject({status:'completed',result:{status:'failed'}}); } finally {store.close();}
+    expect((await delivery).status).toBe(200);expect(settled).toBe(true);
 });
 
 test('legacy domain delivery entry refuses before any Git effect instead of bypassing durable delivery jobs', async () => {
@@ -146,6 +153,8 @@ test('operator archives completed jobs at the audit cap without losing exact rea
         const denied = await f.app.fetch(new Request('http://hub.test/hub/v1'+archivePath,{method:'POST',headers:{authorization:'Bearer '+f.config.agentToken,'content-type':'application/json','idempotency-key':'archive-agent'},body:JSON.stringify({expectedVersion:job.version,reason:'Not an operator'})}));
         expect(denied.status).toBe(403);
         const archiveBody={expectedVersion:job.version,reason:'Move reviewed completed history to preserved cold storage'};
+        const malformed=await f.request(archivePath,{...archiveBody,unexpected:true},'fresh-malformed-archive');
+        expect(malformed.status).toBe(400);expect(await malformed.json()).toMatchObject({error:{code:'invalid-arguments'}});expect(store.deliveries.get(job.id)).toEqual(job);
         const archived = await f.request(archivePath,archiveBody,'archive-job');
         expect(archived.status).toBe(200);const archivedReceipt=await archived.json();
         const archiveReplay=await f.request(archivePath,archiveBody,'archive-job');expect(archiveReplay.status).toBe(200);expect(await archiveReplay.json()).toEqual(archivedReceipt);
@@ -314,4 +323,75 @@ test('replayed publication inspection uses its durable receipt without a second 
         expect(await service.reconcile(input)).toEqual(completed);expect(inspections).toBe(1);
         expect(f.store.load().deliveries.filter(delivery=>delivery.id===f.id)).toHaveLength(1);
     } finally {f.store.close();}
+});
+
+
+test('reviewer may publish while recovery routes remain operator-only and publication reauthorizes after Git', async () => {
+    let release!:()=>void, entered!:()=>void, calls=0;
+    const gate=new Promise<void>(resolve=>release=resolve), started=new Promise<void>(resolve=>entered=resolve);
+    const f=fixture(async()=>{calls++;entered();await gate;return {status:'published',branch:'managed',commitSha:'b'.repeat(40),treeSha:'c'.repeat(40)};});
+    const {p,body}=await selected(f.request), path=`/projects/${p.id}`;
+    const request=(suffix:string,payload:unknown,bearer:string,key:string)=>f.app.fetch(new Request('http://hub.test/hub/v1'+path+suffix,{method:'POST',headers:{authorization:'Bearer '+bearer,'content-type':'application/json','idempotency-key':key},body:JSON.stringify(payload)}));
+    const pending=request('/deliveries',body,reviewerToken,'reviewer-publish');
+    try {
+        const first=await Promise.race([started.then(()=>null),pending.then(response=>response)]);
+        expect(first).toBeNull();
+        const jobs=await(await f.request(path+'/delivery-jobs')).json(); const job=jobs.jobs[0];
+        const get=await f.app.fetch(new Request('http://hub.test/hub/v1'+path+'/delivery-jobs/'+job.id,{headers:{authorization:'Bearer '+reviewerToken}}));expect(get.status).toBe(403);
+        expect((await request('/delivery-jobs/'+job.id+'/reconcile',{expectedVersion:job.version,decision:'confirm-no-effect',reason:'Review'},reviewerToken,'reviewer-reconcile')).status).toBe(403);
+        expect((await request('/delivery-jobs/'+job.id+'/archive',{expectedVersion:job.version,reason:'Review'},reviewerToken,'reviewer-archive')).status).toBe(403);
+    } finally {release();}
+    expect((await pending).status).toBe(200);expect(calls).toBe(1);
+    expect((await request('/deliveries',body,f.config.agentToken,'agent-publish')).status).toBe(403);
+});
+
+test('delivery list retains old active jobs ahead of more than fifty completed jobs', async()=>{
+    const f=fixture(async()=>({status:'failed',error:'No publication'}));
+    const {p,body}=await selected(f.request);const original=await(await f.request(`/projects/${p.id}/deliveries`,body,'list-seed')).json();
+    const store=openHubStore(f.config.dataDir);
+    try {
+        const job=store.deliveries.get(original.id)!;
+        store.workTransaction(()=>{store.deliveries.save({...job,id:'old-active',replayKey:'old-active',status:'uncertain'});for(let n=0;n<55;n++)store.deliveries.save({...job,id:'finished-'+n,replayKey:'finished-'+n});});
+        const page=await(await f.request(`/projects/${p.id}/delivery-jobs`)).json();
+        expect(page.jobs).toHaveLength(50);expect(page.jobs[0]).toMatchObject({id:'old-active',status:'uncertain'});
+    } finally {store.close();}
+});
+
+test('reconciliation advances the exact job version and rejects stale archive CAS', async()=>{
+    const f=await interruptedRecovery(async()=>{throw Error('must not publish');});
+    try {
+        const path=`/projects/${f.p.id}/delivery-jobs/${f.id}`, before=await(await f.request(path)).json();
+        const response=await f.request(path+'/reconcile',{expectedVersion:before.version,decision:'confirm-no-effect',reason:'Verified no publication'},'version-transition');
+        expect(response.status).toBe(200);const after=await response.json();expect(after.version).toBe(before.version+1);
+        const stale=await f.request(path+'/archive',{expectedVersion:before.version,reason:'Stale version'},'stale-version-archive');
+        expect(stale.status).toBe(409);expect((await stale.json()).error.code).toBe('version-conflict');expect(await(await f.request(path)).json()).toEqual(after);
+    } finally {f.store.close();}
+});
+
+test('at most two independent publication inspections may run concurrently', async()=>{
+    const {createDeliveryService}=await import('./delivery-service');
+    const f=await interruptedRecovery(async()=>{throw Error('must not publish');});
+    try {
+        const original=f.store.deliveries.get(f.id)!;
+        f.store.workTransaction(()=>{for(const id of ['inspection-two','inspection-three']) f.store.deliveries.save({...original,id,replayKey:id});});
+        let release!:()=>void, entered!:()=>void, count=0;
+        const gate=new Promise<void>(resolve=>release=resolve), both=new Promise<void>(resolve=>entered=resolve);
+        const actor={id:'human:operator',kind:'human' as const,role:'operator' as const};
+        const service=createDeliveryService({store:f.store,dataDir:f.config.dataDir,serialized:async action=>action(),deliver:async()=>{throw Error('must not publish');},inspect:async()=>{if(++count===2)entered();await gate;return {status:'failed',error:'No publication'};}});
+        const input=(id:string)=>{const job=f.store.deliveries.get(id)!;const body={expectedVersion:job.version,decision:'inspect-publication',reason:'Inspect original publication'};return {actor,reauthorize:async()=>actor,projectId:f.p.id,jobId:id,body,key:id,digest:createHash('sha256').update(JSON.stringify(body)).digest('hex')};};
+        const a=service.reconcile(input(f.id)).catch(error=>error), b=service.reconcile(input('inspection-two')).catch(error=>error);
+        try {await both;await expect(service.reconcile(input('inspection-three'))).rejects.toMatchObject({status:503,code:'hub-busy'});expect(count).toBe(2);} finally {release();await Promise.all([a,b]);}
+    } finally {f.store.close();}
+});
+
+
+test('reviewer authority is rechecked after publication and its result remains recoverable', async()=>{
+    let release!:()=>void, entered!:()=>void;
+    const gate=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>entered=resolve);
+    const f=fixture(async()=>{entered();await gate;return {status:'published',branch:'managed',commitSha:'b'.repeat(40),treeSha:'c'.repeat(40)};});
+    const {p,body}=await selected(f.request);
+    const pending=f.app.fetch(new Request(`http://hub.test/hub/v1/projects/${p.id}/deliveries`,{method:'POST',headers:{authorization:'Bearer '+reviewerToken,'content-type':'application/json','idempotency-key':'reviewer-revoke'},body:JSON.stringify(body)}));
+    try {const first=await Promise.race([started.then(()=>null),pending.then(response=>response)]);expect(first).toBeNull();f.config.reviewerToken='rotated-'+'q'.repeat(64);} finally {release();}
+    expect((await pending).status).toBe(401);
+    const jobs=await(await f.request(`/projects/${p.id}/delivery-jobs`)).json();expect(jobs.jobs[0]).toMatchObject({status:'result',result:{status:'published'}});
 });
