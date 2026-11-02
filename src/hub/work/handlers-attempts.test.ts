@@ -15,14 +15,12 @@ function attemptAt(stage: 'draft' | 'running' | 'subject' | 'evidence' | 'submit
     const { cmd, fr, ir, ctx, a, sub } = fixture;
     cmd('attempt.withdraw', { attemptId: a.id, submissionId: sub.id, submissionDigest: sub.contentDigest, reason: 'Retry' });
     const b = cmd('attempt.create', { intentRevisionId: ir.id, contextSnapshotId: ctx.id, participantId: 'h', method: 'human', summary: 'Second', supersedesAttemptId: null });
-    const steps: Record<string, unknown> = { attempt: b };
     const order = ['draft', 'running', 'subject', 'evidence', 'submitted'];
     const reach = (step: string) => order.indexOf(stage) >= order.indexOf(step);
     if (reach('running')) cmd('attempt.start', { attemptId: b.id, flowRevisionDigest: fr.contentDigest, intentRevisionDigest: ir.contentDigest, contextDigest: ctx.contentDigest });
     const subject = reach('subject') ? cmd('subject.create', { attemptId: b.id, artifacts: [{ kind: 'git', repositoryId: 'repo', commitOid: 'c'.repeat(40), treeOid: null, pullRequestNumber: null }], report: 'Done' }) : undefined;
     const evidence = reach('evidence') && subject ? cmd('evidence.record', { attemptId: b.id, subjectId: subject.id, subjectDigest: subject.contentDigest, criterionIds: ['ic'], result: 'pass', method: 'test', report: 'Pass', outputDigest: 'c'.repeat(64), sourceRunId: null, sourceObservationId: null }) : undefined;
     const submission = reach('submitted') && subject && evidence ? cmd('attempt.submit', { attemptId: b.id, subjectId: subject.id, subjectDigest: subject.contentDigest, evidenceIds: [evidence.id], coverage: [{ criterionId: 'ic', result: 'pass', evidenceIds: [evidence.id] }], knowledgeFollowup: { proposalIds: [], noUpdateReason: 'None' } }) : undefined;
-    Object.assign(steps, { subject, evidence, submission });
     return { ...fixture, b, subject, evidence, submission };
 }
 function refusal(run: () => unknown) {
