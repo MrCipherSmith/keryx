@@ -120,6 +120,38 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
         finally:
             db.close()
 
+    def test_offline_snapshot_accepts_reused_wal_generation_tail(self):
+        source = self.root / "reused-wal"
+        source.mkdir()
+        db = sqlite3.connect(source / "hub.sqlite")
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA wal_autocheckpoint=0")
+        db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY, body TEXT)")
+        db.execute("INSERT INTO hub_state VALUES(1, '{}')")
+        db.commit()
+        for count in range(1, 51):
+            db.execute("UPDATE hub_state SET body=? WHERE id=1", (json.dumps({"projects": list(range(count))}),))
+            db.commit()
+        self.assertEqual(db.execute("PRAGMA wal_checkpoint(FULL)").fetchone()[0], 0)
+        db.execute("UPDATE hub_state SET body=? WHERE id=1", (json.dumps({"projects": list(range(51))}),))
+        db.commit()
+        wal = (source / "hub.sqlite-wal").read_bytes()
+        page_size = int.from_bytes(wal[8:12], "big")
+        self.assertGreater(len(wal), 32 + 2 * (24 + page_size))
+        self.assertEqual(wal[16:24], wal[40:48])
+        self.assertNotEqual(wal[16:24], wal[32 + 24 + page_size + 8:32 + 24 + page_size + 16])
+        archive_path = self.root / "reused.tar"
+        with tarfile.open(archive_path, "w") as archive:
+            archive.add(source / "hub.sqlite", arcname="./hub.sqlite")
+            archive.add(source / "hub.sqlite-wal", arcname="./hub.sqlite-wal")
+        before = archive_path.read_bytes()
+        try:
+            result = m.offline_snapshot(archive_path, self.root / "reused-final.sqlite")
+            self.assertEqual(result["projects"], 51)
+            self.assertEqual(archive_path.read_bytes(), before)
+        finally:
+            db.close()
+
     def test_offline_archive_rejects_aliases_links_missing_and_invalid_database(self):
         for kind in ("missing", "duplicate", "alias", "symlink", "hardlink", "invalid", "oversized"):
             with self.subTest(kind=kind):
@@ -163,6 +195,65 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
         self.assertIn([str(fixture[0].resolve() / "hubctl"), "up", "-d"], fixture[5])
         backup = next((fixture[0] / "backups").iterdir())
         self.assertEqual(m.info_for(backup / "hub.sqlite")["projects"], 0)
+
+    def test_offline_snapshot_refuses_current_generation_salt_damage(self):
+        source = self.root / "salt-source"
+        source.mkdir()
+        db = sqlite3.connect(source / "hub.sqlite")
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA wal_autocheckpoint=0")
+        db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY, body TEXT)")
+        db.execute("INSERT INTO hub_state VALUES(1, '{}')")
+        db.commit()
+        self.assertEqual(db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0], 0)
+        for count in (1, 2):
+            db.execute("UPDATE hub_state SET body=? WHERE id=1", (json.dumps({"projects": list(range(count))}),))
+            db.commit()
+        wal = (source / "hub.sqlite-wal").read_bytes()
+        page_size = int.from_bytes(wal[8:12], "big")
+        frame_size = 24 + page_size
+        self.assertGreaterEqual(len(wal), 32 + 2 * frame_size)
+        try:
+            for frame in (0, 1):
+                with self.subTest(frame=frame):
+                    damaged = bytearray(wal)
+                    damaged[32 + frame * frame_size + 8] ^= 1
+                    archive_path = self.root / ("salt-%d.tar" % frame)
+                    with tarfile.open(archive_path, "w") as archive:
+                        archive.add(source / "hub.sqlite", arcname="./hub.sqlite")
+                        member = tarfile.TarInfo("./hub.sqlite-wal")
+                        member.size = len(damaged)
+                        archive.addfile(member, io.BytesIO(damaged))
+                    output = self.root / ("salt-%d.sqlite" % frame)
+                    with self.assertRaisesRegex(m.MigrationError, "Malformed SQLite WAL"):
+                        m.offline_snapshot(archive_path, output)
+                    self.assertFalse(output.exists())
+        finally:
+            db.close()
+
+    def test_offline_snapshot_refuses_current_generation_checksum_damage(self):
+        source = self.root / "checksum-source"
+        source.mkdir()
+        db = sqlite3.connect(source / "hub.sqlite")
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA wal_autocheckpoint=0")
+        db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY, body TEXT)")
+        db.execute("INSERT INTO hub_state VALUES(1, '{}')")
+        db.commit()
+        wal = bytearray((source / "hub.sqlite-wal").read_bytes())
+        wal[32 + 24 + 10] ^= 1
+        archive_path = self.root / "checksum-damage.tar"
+        with tarfile.open(archive_path, "w") as archive:
+            archive.add(source / "hub.sqlite", arcname="./hub.sqlite")
+            member = tarfile.TarInfo("./hub.sqlite-wal")
+            member.size = len(wal)
+            archive.addfile(member, io.BytesIO(wal))
+        try:
+            with self.assertRaisesRegex(m.MigrationError, "Malformed SQLite WAL"):
+                m.offline_snapshot(archive_path, self.root / "checksum-final.sqlite")
+            self.assertFalse((self.root / "checksum-final.sqlite").exists())
+        finally:
+            db.close()
 
     def test_offline_snapshot_refuses_corrupt_wal_and_leaves_no_artifact(self):
         source = self.root / "corrupt-source.sqlite"
