@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { legacyArtifacts } from "./legacy-artifacts";
 import { deliveryJobs } from "./delivery-jobs";
 import { fail } from "./domain";
@@ -114,11 +115,21 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     }
     return state;
   };
+  const projectionDigest = (body: string) => createHash('sha256').update(body).digest('hex');
+  const setProjectionDigest = (body: string) => db.query("INSERT OR REPLACE INTO hub_work_settings(key,value) VALUES('legacy-projection-digest',?)").run(projectionDigest(body));
+  const persisted = db.query<{body:string},[]>('SELECT body FROM hub_state WHERE id=1').get();
+  const projected = db.query<{value:string},[]>("SELECT value FROM hub_work_settings WHERE key='legacy-projection-digest'").get();
+  if (persisted && projected?.value !== projectionDigest(persisted.body)) db.transaction(() => {
+    db.exec('DELETE FROM hub_legacy_records; DELETE FROM hub_sessions');
+    syncLegacy(load());
+    setProjectionDigest(persisted.body);
+  })();
   const persist = db.transaction((state: HubState, previous?: HubState, allowExisting = false) => {
     syncProjectReferences(db, state.projects);
     syncLegacy(state, previous);
     const body = artifacts.persist(state, allowExisting, previous);
     db.query("INSERT INTO hub_state(id,body) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body WHERE body<>excluded.body").run(body);
+    setProjectionDigest(body);
   });
   const save = (state: HubState) => {
     let previous!: HubState;
