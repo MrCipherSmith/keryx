@@ -63,7 +63,20 @@ test('invalid comments, foreign or out-of-range criterion IDs and agents cannot 
  view.change(flow,{...context,principal:{id:'agent',kind:'agent',role:'agent'}});await act(async()=>{expect(await view.result.current.run(input)).toMatchObject({status:'rejected'});});expect(fetch).not.toHaveBeenCalled();
 });
 test('accept uses the existing acknowledgment and exact subject/version without inventing a legacy waiver',async()=>{
- const requests:Sent[]=[];vi.spyOn(globalThis,'fetch').mockImplementation(async(path,init)=>{const request=sent(path,init);requests.push(request);return json({...flow,status:'done',version:5,acceptedBy:context.principal.id,receipt:{actorId:context.principal.id,actorKind:'human',createdAt:'2026-11-03T00:00:00.000Z'}});});
+ const requests:Sent[]=[];vi.spyOn(globalThis,'fetch').mockImplementation(async(path,init)=>{const request=sent(path,init);requests.push(request);return json({...flow,status:'done',version:5,acceptedBy:context.principal.id,receipt:{id:'accept-receipt',actorId:context.principal.id,createdAt:'2026-11-03T00:00:00.000Z'}});});
  const view=mount();await act(async()=>{expect(await view.result.current.run({...input,decision:'accept',criterionIds:[],waivers:[]})).toEqual({status:'committed'});});
  expect(requests[0]).toMatchObject({url:'/hub/v1/projects/p/flows/flow/accept',body:{expectedVersion:4,subjectRevisionId:'subject',acknowledgeSelfReportedEvidence:true}});expect(view.onCommitted).toHaveBeenCalledOnce();
+});
+
+test('an unmounted review cannot receive an in-flight completion callback',async()=>{
+ let finish!:(response:Response)=>void;let request!:Sent;vi.spyOn(globalThis,'fetch').mockImplementation((path,init)=>{request=sent(path,init);return new Promise(resolve=>{finish=resolve;});});
+ const view=mount();let first!:ReturnType<typeof view.result.current.run>;act(()=>{first=view.result.current.run(input);});view.unmount();await act(async()=>{finish(json(receipt(request)));await first;});expect(view.onCommitted).not.toHaveBeenCalled();
+});
+test('a same-principal authority downgrade cannot receive the previous completion callback',async()=>{
+ let finish!:(response:Response)=>void;let request!:Sent;vi.spyOn(globalThis,'fetch').mockImplementation((path,init)=>{request=sent(path,init);return new Promise(resolve=>{finish=resolve;});});
+ const view=mount();let first!:ReturnType<typeof view.result.current.run>;act(()=>{first=view.result.current.run(input);});view.change(flow,{...context,principal:{...context.principal,readOnly:true}});await act(async()=>{finish(json(receipt(request)));await first;});expect(view.onCommitted).not.toHaveBeenCalled();
+});
+test('receipt recovery commits the original result without sending another mutation',async()=>{
+ const requests:Sent[]=[];vi.spyOn(globalThis,'fetch').mockImplementation(async(path,init)=>{requests.push(sent(path,init));if(requests.length===1)throw new TypeError('Reply lost');return json(receipt(requests[0]!));});
+ const view=mount();await act(()=>view.result.current.run(input));await act(async()=>{expect(await view.result.current.check()).toEqual({status:'committed'});});expect(requests.map(r=>r.method)).toEqual(['POST','GET']);expect(view.onCommitted).toHaveBeenCalledOnce();expect(view.result.current.pending).toBe(false);
 });
