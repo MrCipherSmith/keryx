@@ -36,17 +36,9 @@ test('served attention with an incident passes the published AttentionPage schem
     expect(ids(await client.read('attention', 'p'))).toContain(late.id as string);
 });
 
-test('the Team Hub adapter accepts the served attention page with incident Evidence', async () => {
-    const { fetch, late } = served();
-    const original = globalThis.fetch;
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => fetch(new Request(new URL(String(input), 'http://localhost'), init))) as typeof globalThis.fetch;
-    try {
-        // A computed specifier keeps the browser module under the hub-web compiler settings, not the root ones.
-        const adapterModule: string = '../../../apps/hub-web/src/features/managed-work/adapter';
-        const { liveWorkAdapter } = await import(adapterModule) as { liveWorkAdapter: (projectId: string) => { attention: () => Promise<unknown> } };
-        expect(ids(await liveWorkAdapter('p').attention())).toContain(late.id as string);
-    } finally { globalThis.fetch = original; }
-});
+// Browser-adapter validation of this production handler belongs to the hub-web
+// Vitest suite (tests/work-server-contract.case.ts), whose UI dependencies are
+// intentionally absent from root/runtime-only installs.
 
 test('served capabilities pass the published Capabilities schema', async () => {
     const { client, fetch } = served();
