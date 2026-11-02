@@ -54,6 +54,7 @@ export async function acceptanceFixture(language:'en'|'ru'='en'){
   if(path.endsWith('/flows'))return Response.json({flows:[{...fixture.legacyFlow,projectId:project}]});
   if(path.endsWith('/flows/legacy-flow'))return Response.json({...fixture.legacyFlow,projectId:project});
   if(path.endsWith('/evidence'))return Response.json({evidence:fixture.legacyEvidence});
+  if(path.endsWith('/review-decisions'))return Response.json({decisions:[],nextAfter:null});
   if(path.endsWith('/documents'))return Response.json({documents:[{...spec,projectId:project}]});
   if(path.endsWith('/revisions/legacy-result'))return Response.json({...fixture.legacyResult,projectId:project});
   if(path.endsWith('/revisions'))return Response.json({revisions:[{...fixture.legacyResult,fileCount:fixture.legacyResult.files.length}]});

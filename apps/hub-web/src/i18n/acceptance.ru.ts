@@ -1,4 +1,5 @@
 export default {
+ historyTitle:'История решений по проверке',historyLoading:'Загружается история проверки…',historyUnavailable:'История проверки недоступна',historyRetry:'Повторить загрузку истории',historyEmpty:'Решения о возврате не записаны',historyResult:'Проверенный результат',historyDecision:'Решение о возврате',historyCriterion:'Критерий {{position}}',historyMore:'Загрузить предыдущие решения',
  returnedReadonly:'Результат возвращён — ожидается новая подача',
  pendingOther:'Другой запрос проекта требует восстановления. Используйте исходные элементы проверки его статуса.',
  created:'Результат создал {{author}} · {{time}}',submittedUnknown:'Время передачи на проверку не записано',workContext:'Контекст работы проекта',
