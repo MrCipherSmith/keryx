@@ -80,6 +80,7 @@ describe("the parsed graph is cached by file signature", () => {
     });
     expect((await port.describeContext()).graphNodes).toBe(2);
     expect((await port.describeContext()).graphNodes).toBe(2);
+    if (port.graphSymbol === undefined) throw new Error("adapter exposes graphSymbol");
     await port.graphSymbol({ name: "x" });
     expect(loads).toBe(1);
     writeNodes(5, 5_000);
