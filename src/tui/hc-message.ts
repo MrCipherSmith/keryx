@@ -210,7 +210,7 @@ export function buildHerdrCoreSection(input: HerdrCoreSectionInput): string | un
   ];
   if (input.sandboxOn) {
     lines.push(
-      "- The shell sandbox is on. It may or may not reach the herdr-core socket, so do not rely on it as a boundary for hc. Never use hc to get around a sandbox refusal.",
+      "- The shell sandbox is on, but it does not contain hc: whatever hc starts runs outside the sandbox. Whether a sandboxed hc reaches herdr-core at all depends on the network profile, not on the mode alone. Never use hc to get around a sandbox refusal.",
     );
   }
   return lines.join("\n");

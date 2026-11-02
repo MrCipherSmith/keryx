@@ -315,12 +315,13 @@ describe("buildHerdrCoreSection", () => {
     const off = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t1" }, sandboxOn: false })!;
     const on = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t1" }, sandboxOn: true })!;
     expect(off).not.toContain("sandbox");
-    expect(on).toContain("may or may not reach the herdr-core socket");
-    expect(on).toContain("do not rely on it as a boundary");
+    expect(on).toContain("does not contain hc: whatever hc starts runs outside the sandbox");
+    expect(on).toContain("depends on the network profile, not on the mode alone");
     expect(on).toContain("Never use hc to get around a sandbox refusal");
-    // Reachability depends on the mode and on the allowed domains: the section promises neither way.
+    // Reachability depends on the network profile (allowed domains make every mode restricted):
+    // the section promises neither way and ties it to no single mode.
     expect(on).not.toContain("cannot reach");
-    expect(on).not.toContain("does not contain hc");
+    expect(on).not.toContain("in strict mode");
     expect(on).not.toMatch(/disable the sandbox|KERYX_DANGEROUSLY|allow.*socket/i);
   });
 
@@ -335,7 +336,7 @@ describe("herdrCoreSectionFromEnv", () => {
   test("reads the codebase's own sandbox switch", () => {
     const base = { HC_TERMINAL_ID: "t2", KERYX_DANGEROUSLY_DISABLE_SANDBOX: undefined };
     for (const mode of ["workspace", "strict"]) {
-      expect(herdrCoreSectionFromEnv({ ...base, KERYX_SANDBOX_SHELL: mode })).toContain("may or may not reach");
+      expect(herdrCoreSectionFromEnv({ ...base, KERYX_SANDBOX_SHELL: mode })).toContain("does not contain hc");
     }
     expect(herdrCoreSectionFromEnv({ ...base, KERYX_SANDBOX_SHELL: "off" })).not.toContain("sandbox");
     expect(herdrCoreSectionFromEnv({ KERYX_SANDBOX_SHELL: "workspace" })).toBeUndefined();
