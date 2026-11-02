@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { mergeWorkCache, workSnapshotKey } from "./cache";
+import { mergeWorkCache, requestWorkRefresh, workAttentionKey, workSnapshotKey } from "./cache";
 import { useTranslation } from "react-i18next";
 import { ApiError, getClientScope } from "../../api/client";
 import { useHub } from "../../app/hub-context";
@@ -58,6 +58,9 @@ export function useWorkOperation(
         if (!pending.put(null)) return;
         setOperation({ ...initial, lastReceipt: receipt });
         if (receipt.entities) mergeWorkCache(client, workSnapshotKey(hub.scopeKey, hub.projectId, adapter.mode), receipt.entities.filter((record) => record.projectId === hub.projectId));
+        // A receipt contains result records, not necessarily all changed aggregates.
+        requestWorkRefresh(client,workSnapshotKey(hub.scopeKey,hub.projectId,adapter.mode));
+        void client.invalidateQueries({queryKey:workAttentionKey(hub.scopeKey,hub.projectId,adapter.mode),exact:true,refetchType:"active"});
         onCommitted(receipt);
       }
     } catch (e) {

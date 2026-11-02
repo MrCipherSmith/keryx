@@ -6,7 +6,7 @@ import { useHub } from "../../app/hub-context";
 import { Button } from "../../components/ui";
 import type { WorkAdapter } from "./adapter";
 import type { WorkRecord, WorkSnapshot } from "./types";
-import { fetchEventRecords, mergeWorkCache, workSnapshotKey } from "./cache";
+import { fetchEventRecords, mergeWorkCache, mergeSnapshotCache, subscribeWorkRefresh, workSnapshotKey, workAttentionKey, workObservationsKey } from "./cache";
 
 const ACTIVE_POLL_MS = 2000;
 const HIDDEN_POLL_MS = 15000;
@@ -24,67 +24,90 @@ export function useWorkEvents(
   const [status, setStatus] = useState<"waiting" | "connected" | "retrying">(
     "waiting",
   );
-  const initialCursor = useRef(eventCursor);
-  initialCursor.current = eventCursor;
+  const latestCursor = useRef(eventCursor);
+  latestCursor.current = eventCursor;
   const hasCursor = !!eventCursor;
   useEffect(() => {
     if (adapter.mode === "demo" || !hasCursor) return;
     const controller = new AbortController();
     const key = workSnapshotKey(hub.scopeKey, projectId, adapter.mode);
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let cursor = initialCursor.current!;
+    let cursor = latestCursor.current!;
     let failures = 0;
     let idlePages = 0;
+    let running = false;
+    let requested = false;
+    const attentionKey = workAttentionKey(hub.scopeKey, projectId, adapter.mode);
+    const observationsKey = workObservationsKey(hub.scopeKey, projectId, adapter.mode);
+    const refreshRelated = (observations: boolean) => {
+      void client.invalidateQueries({queryKey:attentionKey,exact:true,refetchType:"active"});
+      if (observations) void client.invalidateQueries({queryKey:observationsKey,refetchType:"active"});
+    };
+    const applyEventPage = async (page: Awaited<ReturnType<WorkAdapter["events"]>>) => {
+      const snapshot = client.getQueryData<WorkSnapshot>(key);
+      const records = await fetchEventRecords(adapter, snapshot, page.events, controller.signal);
+      if (controller.signal.aborted) return;
+      mergeWorkCache(client, key, records);
+      if (page.events.length) refreshRelated(page.events.some((event) => event.entityType === "git-observation"));
+    };
+    const resyncAfterGap = async () => {
+      if (client.getQueryData(key)) {
+        const snapshot = await adapter.snapshot(controller.signal);
+        if (controller.signal.aborted) return;
+        mergeSnapshotCache(client, key, snapshot);
+        refreshRelated(true);
+        return snapshot.eventCursor;
+      }
+      const page = await adapter.attention(undefined, controller.signal);
+      if (controller.signal.aborted) return;
+      client.setQueryData(attentionKey, {pages:[page],pageParams:[""]});
+      void client.invalidateQueries({queryKey:observationsKey,refetchType:"active"});
+      return page.eventCursor;
+    };
     const poll = async () => {
       if (controller.signal.aborted) return;
-      if (document.visibilityState === "hidden") {
+      if (running) { requested = true; return; }
+      if (document.visibilityState === "hidden" && !requested) {
         timer = setTimeout(() => void poll(), HIDDEN_POLL_MS);
         return;
       }
+      running = true;
+      requested = false;
       try {
         const page = await adapter.events(cursor, controller.signal);
         if (controller.signal.aborted) return;
-        const records = await fetchEventRecords(adapter, client.getQueryData<WorkSnapshot>(key), page.events, controller.signal);
+        await applyEventPage(page);
         if (controller.signal.aborted) return;
-        mergeWorkCache(client, key, records);
-        if (page.events.some((event) => event.entityType === "git-observation")) {
-          // Observations have a separate read model, not a WorkRecord ID. Only
-          // active subject queries are refreshed; exact documents stay untouched.
-          void client.invalidateQueries({queryKey:[hub.scopeKey,projectId,"work",adapter.mode,"observations"],refetchType:"active"});
-        }
         cursor = page.nextCursor;
         failures = 0;
         idlePages = page.events.length ? 0 : idlePages + 1;
         setStatus("connected");
-        if (records.length || page.events.some((event) => event.entityType === "git-observation")) void client.invalidateQueries({queryKey:[hub.scopeKey, projectId,"work",adapter.mode,"attention"],exact:true});
       } catch (error) {
         if (controller.signal.aborted) return;
         failures++;
         setStatus("retrying");
-        if (error instanceof ApiError && [409, 410].includes(error.status)) {
+        if (error instanceof ApiError && [409,410].includes(error.status)) {
           try {
-            // Retention gaps require one canonical resync. Keep the loop alive even
-            // when the server returns the same opaque cursor or the resync fails.
-            if (client.getQueryData(key)) {
-              const snapshot = await adapter.snapshot(controller.signal);
-              if (controller.signal.aborted) return;
-              client.setQueryData(key, snapshot);
-              cursor = snapshot.eventCursor;
-            } else {
-              const page = await adapter.attention(undefined, controller.signal);
-              if (controller.signal.aborted) return;
-              client.setQueryData([hub.scopeKey, projectId, "work", adapter.mode, "attention"], {pages:[page],pageParams:[""]});
-              if (page.eventCursor) cursor = page.eventCursor;
-            }
+            const next = await resyncAfterGap();
+            if (next) cursor = next;
           } catch {
-            if (controller.signal.aborted) return;
+            // A failed canonical resync remains visibly retrying; keep its cursor.
           }
         }
+      } finally {
+        running = false;
+        if (!controller.signal.aborted) timer = setTimeout(() => void poll(), requested ? 0 : Math.min(MAX_POLL_MS, ACTIVE_POLL_MS * 2 ** Math.min(failures || idlePages,4)));
       }
-      timer = setTimeout(() => void poll(), Math.min(MAX_POLL_MS, ACTIVE_POLL_MS * 2 ** Math.min(failures || idlePages, 4)));
     };
+    const unsubscribe = subscribeWorkRefresh(client,key,() => {
+      idlePages = 0;
+      requested = true;
+      if (timer) clearTimeout(timer);
+      if (!running) void poll();
+    });
     void poll();
     return () => {
+      unsubscribe();
       controller.abort();
       if (timer) clearTimeout(timer);
     };
@@ -104,7 +127,7 @@ export function WorkAttention({
   const { t } = useTranslation("work");
   const hub = useHub();
   const query = useInfiniteQuery({
-    queryKey: [hub.scopeKey, hub.projectId, "work", adapter.mode, "attention"],
+    queryKey: workAttentionKey(hub.scopeKey, hub.projectId, adapter.mode),
     initialPageParam: "",
     queryFn: ({ pageParam, signal }) =>
       adapter.attention(pageParam || undefined, signal),

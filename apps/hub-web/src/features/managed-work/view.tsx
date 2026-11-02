@@ -1,3 +1,4 @@
+import { shareWorkSnapshot } from "./cache";
 import { FlowList, IntentColumn } from "./work-lists";
 import { WorkBadge, IntentApproval, FlowSummary } from "./work-panels";
 import { AttemptDetail, DecisionHistory } from "./attempt-detail";
@@ -134,6 +135,7 @@ function WorkBoard({
     queryFn: ({ signal }) => adapter.snapshot(signal),
     retry: false,
     staleTime: Infinity,
+    structuralSharing: shareWorkSnapshot,
   });
   const eventStatus = useWorkEvents(adapter, snapshot.data?.eventCursor);
   const records = snapshot.data?.records ?? [];

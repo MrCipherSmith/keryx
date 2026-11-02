@@ -1,3 +1,4 @@
+import { shareWorkSnapshot } from "./cache";
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +21,7 @@ export function useNativeWorkSelection(record:Control['SessionRecord'],mode:stri
  useEffect(()=>setSelection(null),[hub.scopeKey,hub.principal.id,record.projectId,record.sessionId,mode]);
  const capabilities=useQuery({queryKey:[hub.scopeKey,record.projectId,'work','live','capabilities'],queryFn:({signal})=>adapter.capabilities(signal),enabled:sameProject,retry:false});
  const available=capabilities.data?.enabled===true&&capabilities.data.features.managedExecution;
- const snapshot=useQuery({queryKey:[hub.scopeKey,record.projectId,'work','live','snapshot'],queryFn:({signal})=>adapter.snapshot(signal),enabled:sameProject&&available&&operator&&mode==='managed',retry:false});
+ const snapshot=useQuery({queryKey:[hub.scopeKey,record.projectId,'work','live','snapshot'],queryFn:({signal})=>adapter.snapshot(signal),enabled:sameProject&&available&&operator&&mode==='managed',retry:false,structuralSharing:shareWorkSnapshot});
  useWorkEvents(adapter,mode==='managed'?snapshot.data?.eventCursor:undefined);
  const records=snapshot.data?.records??[];
  const eligible=recordsOf(records,'attempt').filter((a)=>{
