@@ -490,6 +490,7 @@ function MachineSessionRow({
         <MessageSquare size={15} />
         <button
           type="button"
+          className="machine-session-name"
           onClick={() =>
             hub.navigate({
               projectId: session.projectId,
@@ -504,6 +505,7 @@ function MachineSessionRow({
         </button>
         <button
           type="button"
+          className="machine-session-disclosure"
           aria-expanded={detailsOpen}
           aria-label={t("sessionDetails") + ": " + session.title}
           onClick={() => setDetailsOpen((open) => !open)}

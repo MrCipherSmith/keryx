@@ -119,10 +119,20 @@
   font-size: 13px;
   font-weight: 650;
   text-align: left;
-  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--hub-ink, #20352b);
+}
+.machine-session-title .machine-session-name {
+  flex: 1;
+}
+.machine-session-title .machine-session-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
 }
 .machine-session-meta {
   display: flex;
