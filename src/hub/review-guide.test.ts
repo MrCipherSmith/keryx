@@ -1,13 +1,14 @@
+import {validateLegacyGuideStructure,validateLegacyGuideForSubmission} from './review-guide-validation';
 import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import type { CodeRevision, HubDocument } from './contracts';
 import type { DocumentRef, ResultSubject } from './work/model';
-import { legacyReviewCriterionId, parseReviewReport, validateReviewGuide } from './review-guide';
+import { type ReviewGuide, legacyReviewCriterionId, parseReviewReport, validateReviewGuide, validateReviewGuideStructure } from './review-guide';
 import { resolveCanonicalReviewGuide, resolveLegacyReviewGuide } from './review-guide-resolution';
 
 const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
 const criterionIds=['criterion-a','criterion-b'];
-function guide(){return {format:'review-guide/v1',summary:'Added understandable result review',userImpact:'A reviewer sees reproducible checks',limitations:['Manual browser check remains'],prerequisites:['Open the disposable project'],steps:[{stepId:'check-a',criterionIds:['criterion-a'],location:'Hub browser',instruction:'Open the review result',expectedResult:'The submitted result is visible'}]};}
+function guide():ReviewGuide{return {format:'review-guide/v1',summary:'Added understandable result review',userImpact:'A reviewer sees reproducible checks',limitations:['Manual browser check remains'],prerequisites:['Open the disposable project'],steps:[{stepId:'check-a',criterionIds:['criterion-a'],location:'Hub browser',instruction:'Open the review result',expectedResult:'The submitted result is visible'}]};}
 function canonical(){
  const content=JSON.stringify(guide());
  const reference:DocumentRef={documentId:'guide-document',version:1,contentDigest:digest(content)};
@@ -77,6 +78,7 @@ describe('immutable review-guide validation',()=>{
 describe('review-report envelope in the existing immutable report string',()=>{
  test('keeps an old plain report as submitted text without guessing a guide',()=>{
   expect(parseReviewReport('Existing contributor report')).toEqual({kind:'plain',text:'Existing contributor report'});
+  const ordinary='{"message":"review-report/v1",';expect(parseReviewReport(ordinary)).toEqual({kind:'plain',text:ordinary});
  });
  test('parses an explicit exact document selector and permits a null selector',()=>{
   const {subject,reference}=canonical();expect(parseReviewReport(subject.report)).toMatchObject({kind:'envelope',value:{format:'review-report/v1',reviewGuide:reference}});
@@ -93,69 +95,69 @@ describe('review-report envelope in the existing immutable report string',()=>{
  });
 });
 
-describe('canonical exact-manifest guide resolution',()=>{
- test('resolves the exact sealed document and retains contributor provenance',()=>{
+describe('canonical exact-manifest guide resolution',async()=>{
+ test('resolves the exact sealed document and retains contributor provenance',async()=>{
   const {subject,document,reference}=canonical();const before=structuredClone(subject);
-  const result=resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:(ref:DocumentRef)=>{expect(ref).toEqual(reference);return document;}});
+  const result=await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:(ref:DocumentRef)=>{expect(ref).toEqual(reference);return document;}});
   expect(result).toMatchObject({status:'available',guide:guide(),provenance:{kind:'contributor-authored',createdBy:subject.createdBy,createdAt:subject.createdAt}});expect(subject).toEqual(before);
  });
- test('a missing selector never scans document artifacts or filenames',()=>{
+ test('a missing selector never scans document artifacts or filenames',async()=>{
   const {subject}=canonical();subject.report='Ordinary report';
-  expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>{throw Error('Undesignated artifact must not be read');}})).toMatchObject({status:'missing'});
+  expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>{throw Error('Undesignated artifact must not be read');}})).toMatchObject({status:'missing'});
  });
- test('rejects a selector missing from the same immutable subject before resolving anything',()=>{
+ test('rejects a selector missing from the same immutable subject before resolving anything',async()=>{
   const {subject}=canonical();subject.artifacts=[];
-  expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>{throw Error('Foreign selector must not be resolved');}})).toMatchObject({status:'invalid'});
+  expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>{throw Error('Foreign selector must not be resolved');}})).toMatchObject({status:'invalid'});
  });
- test('does not substitute a newer version or another digest of the selected document',()=>{
+ test('does not substitute a newer version or another digest of the selected document',async()=>{
   const {subject,document}=canonical();
   for(const replacement of [{...document,id:'other-document'},{...document,version:2},{...document,contentDigest:'f'.repeat(64)}]){
-   expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>replacement})).toMatchObject({status:'invalid'});
+   expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>replacement})).toMatchObject({status:'invalid'});
   }
  });
- test('rejects duplicate designated artifacts rather than choosing the first valid guide',()=>{
+ test('rejects duplicate designated artifacts rather than choosing the first valid guide',async()=>{
   const {subject,document}=canonical();subject.artifacts.push({...subject.artifacts[0]!});
-  expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>document})).toMatchObject({status:'ambiguous'});
+  expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>document})).toMatchObject({status:'ambiguous'});
  });
- test('foreign project documents and foreign subjects cannot supply review guidance',()=>{
+ test('foreign project documents and foreign subjects cannot supply review guidance',async()=>{
   const {subject,document}=canonical();
-  expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>({...document,projectId:'foreign'})})).toMatchObject({status:'invalid'});
-  expect(resolveCanonicalReviewGuide({projectId:'foreign',subject,criterionIds,resolveDocument:()=>{throw Error('Foreign subject must not be resolved');}})).toMatchObject({status:'invalid'});
+  expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>({...document,projectId:'foreign'})})).toMatchObject({status:'invalid'});
+  expect(await resolveCanonicalReviewGuide({projectId:'foreign',subject,criterionIds,resolveDocument:()=>{throw Error('Foreign subject must not be resolved');}})).toMatchObject({status:'invalid'});
  });
- test('missing historical document is explicit and never falls back to an unpinned artifact',()=>{
-  const {subject}=canonical();expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>undefined})).toMatchObject({status:'unavailable'});
+ test('missing historical document is explicit and never falls back to an unpinned artifact',async()=>{
+  const {subject}=canonical();expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>undefined})).toMatchObject({status:'unavailable'});
  });
- test('checks actual document bytes and pinned criterion membership after reference resolution',()=>{
+ test('checks actual document bytes and pinned criterion membership after reference resolution',async()=>{
   const {subject,document}=canonical();
-  expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>({...document,content:document.content+' '})})).toMatchObject({status:'invalid'});
-  expect(resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds:['other'],resolveDocument:()=>document})).toMatchObject({status:'invalid'});
+  expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:()=>({...document,content:document.content+' '})})).toMatchObject({status:'invalid'});
+  expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds:['other'],resolveDocument:()=>document})).toMatchObject({status:'invalid'});
  });
 });
 
-describe('legacy exact immutable packet guide resolution',()=>{
- test('reads only attempt/review-guide.json and labels its original contributor',()=>{
-  const revision=legacy();expect(resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'available',guide:guide(),provenance:{kind:'contributor-authored',createdBy:revision.createdBy,createdAt:revision.createdAt}});
+describe('legacy exact immutable packet guide resolution',async()=>{
+ test('reads only attempt/review-guide.json and labels its original contributor',async()=>{
+  const revision=legacy();expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'available',guide:guide(),provenance:{kind:'contributor-authored',createdBy:revision.createdBy,createdAt:revision.createdAt}});
  });
- test('old packets and similarly named files remain honestly missing',()=>{
+ test('old packets and similarly named files remain honestly missing',async()=>{
   const revision=legacy();revision.files[0]!.path='review-guide.json';
-  expect(resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'missing'});
-  expect(resolveLegacyReviewGuide({projectId:'project',revision:{...revision,files:[]},criterionIds})).toMatchObject({status:'missing'});
+  expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'missing'});
+  expect(await resolveLegacyReviewGuide({projectId:'project',revision:{...revision,files:[]},criterionIds})).toMatchObject({status:'missing'});
  });
- test('ambiguous packet files are not resolved by picking a valid one',()=>{
-  const revision=legacy();revision.files.push({...revision.files[0]!});expect(resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'ambiguous'});
+ test('ambiguous packet files are not resolved by picking a valid one',async()=>{
+  const revision=legacy();revision.files.push({...revision.files[0]!});expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'ambiguous'});
  });
- test('rejects malformed, oversized or digest-mismatched packet guidance',()=>{
+ test('rejects malformed, oversized or digest-mismatched packet guidance',async()=>{
   for(const text of ['{','x'.repeat(32769)]){
    const revision=legacy();revision.files[0]!.contentBase64=Buffer.from(text).toString('base64');revision.files[0]!.contentDigest=digest(text);
-   expect(resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'invalid'});
+   expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'invalid'});
   }
-  const invalidEncoding=legacy();invalidEncoding.files[0]!.contentBase64='%%%=';expect(resolveLegacyReviewGuide({projectId:'project',revision:invalidEncoding,criterionIds})).toMatchObject({status:'invalid'});
-  const revision=legacy();revision.files[0]!.contentDigest='f'.repeat(64);expect(resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'invalid'});
+  const invalidEncoding=legacy();invalidEncoding.files[0]!.contentBase64='%%%=';expect(await resolveLegacyReviewGuide({projectId:'project',revision:invalidEncoding,criterionIds})).toMatchObject({status:'invalid'});
+  const revision=legacy();revision.files[0]!.contentDigest='f'.repeat(64);expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'invalid'});
  });
- test('rejects a foreign-project packet and foreign criterion mappings without modifying the revision',()=>{
+ test('rejects a foreign-project packet and foreign criterion mappings without modifying the revision',async()=>{
   const revision=legacy(),before=structuredClone(revision);
-  expect(resolveLegacyReviewGuide({projectId:'foreign',revision,criterionIds})).toMatchObject({status:'invalid'});
-  expect(resolveLegacyReviewGuide({projectId:'project',revision,criterionIds:['other']})).toMatchObject({status:'invalid'});expect(revision).toEqual(before);
+  expect(await resolveLegacyReviewGuide({projectId:'foreign',revision,criterionIds})).toMatchObject({status:'invalid'});
+  expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds:['other']})).toMatchObject({status:'invalid'});expect(revision).toEqual(before);
  });
 });
 
@@ -169,4 +171,31 @@ describe('legacy criterion presentation references',()=>{
  test('refuses invalid digests and out-of-range positions instead of inventing canonical IDs',()=>{
   for(const [hash,position] of [['bad',1],['a'.repeat(64),0],['a'.repeat(64),201],['a'.repeat(64),1.5]] as const)expect(()=>legacyReviewCriterionId(hash,position)).toThrow();
  });
+});
+
+test('legacy guide refuses noncanonical base64 and invalid UTF-8 instead of guessing content',async()=>{
+ const revision=legacy();let content=JSON.stringify(guide());while(Buffer.byteLength(content)%3===0)content+=' ';
+ const encoded=Buffer.from(content).toString('base64'),alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/',index=encoded.endsWith('==')?encoded.length-3:encoded.length-2;
+ const alias=encoded.slice(0,index)+alphabet[alphabet.indexOf(encoded[index]!)|1]+encoded.slice(index+1);
+ expect(Buffer.from(alias,'base64').equals(Buffer.from(content))).toBe(true);
+ revision.files[0]!.contentBase64=alias;revision.files[0]!.contentDigest=digest(content);
+ expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'invalid'});
+ const bytes=Buffer.from([255]);revision.files[0]!.contentBase64=bytes.toString('base64');revision.files[0]!.contentDigest=createHash('sha256').update(bytes).digest('hex');
+ expect(await resolveLegacyReviewGuide({projectId:'project',revision,criterionIds})).toMatchObject({status:'invalid'});
+});
+
+test('unavailable cryptographic verification returns an explicit fallback for either model',async()=>{
+ const {subject,document}=canonical(),unavailable=async()=>{throw Error('Cryptographic service unavailable');};
+ expect(await resolveCanonicalReviewGuide({projectId:'project',subject,criterionIds,resolveDocument:async()=>document,digest:unavailable})).toMatchObject({status:'unavailable'});
+ expect(await resolveLegacyReviewGuide({projectId:'project',revision:legacy(),criterionIds,digest:unavailable})).toMatchObject({status:'unavailable'});
+});
+
+
+test('unbound packet validation enforces structure while submission additionally binds pinned criterion IDs',()=>{
+ const revision=legacy();expect(validateLegacyGuideStructure(revision)).toMatchObject({ok:true});
+ expect(validateLegacyGuideForSubmission(revision,['foreign'])).toMatchObject({ok:false});
+ expect(validateLegacyGuideForSubmission(revision,criterionIds)).toMatchObject({ok:true});
+ expect(validateLegacyGuideStructure({...revision,files:[]})).toBeNull();
+ const value=guide();value.steps[0]!.criterionIds=['future-pinned-id'];expect(validateReviewGuideStructure(JSON.stringify(value))).toMatchObject({ok:true});
+ value.summary=' ';expect(validateReviewGuideStructure(JSON.stringify(value))).toMatchObject({ok:false});
 });
