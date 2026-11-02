@@ -11,7 +11,7 @@ try {
   peak = Math.max(peak, process.memoryUsage().rss);
   console.log(JSON.stringify({
     peakDelta: peak - baseline,
-    isError: result.isError ?? false,
+    isError: result.isError,
     spillLength: result.spill?.full.length ?? 0,
     output: result.output,
   }));
