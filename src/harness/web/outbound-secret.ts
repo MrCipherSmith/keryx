@@ -160,16 +160,50 @@ function outboundUrlComponents(text: string): string[] {
 }
 
 /**
- * The hostname labels, in the case the caller wrote them. `new URL` lowercases
- * the host, which would hide a mixed-case key from the entropy shape check, so
- * the labels come from the raw authority; a trailing `:port` and any userinfo
- * are dropped (a userinfo secret is scanned by the whole-text checks).
+ * The hostname labels of the URL the request will actually use. The host comes
+ * from the same WHATWG parse as the request (`new URL`), so a tab inside the
+ * scheme, a backslash ending the authority or a stray newline cannot make the
+ * check read a different host than the fetch. `new URL` lowercases the host,
+ * which would hide a mixed-case key from the shape check, so the case-preserving
+ * labels are read from the input after the parser's own normalisation (tabs and
+ * newlines removed, backslashes as slashes) and used only when they spell the
+ * parsed host; otherwise the parsed (lowercase) labels are used.
  */
 function outboundHostLabels(text: string): string[] {
-  const authority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(text.trim())?.[1];
-  if (authority === undefined) return [];
-  const host = safeDecodeComponent(authority.slice(authority.lastIndexOf("@") + 1)).replace(/:\d*$/, "");
-  return host.split(".").filter((label) => label.length > 0);
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return [];
+  }
+  const parsed = url.hostname.replace(/^\[|\]$/g, "");
+  const normalised = text.replace(/[\t\n\r]/g, "").trim().replace(/\\/g, "/");
+  const authority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(normalised)?.[1];
+  let labels = parsed.split(".");
+  if (authority !== undefined) {
+    const host = safeDecodeComponent(authority.slice(authority.lastIndexOf("@") + 1)).replace(/:\d*$/, "");
+    if (host.toLowerCase() === parsed) labels = host.split(".");
+  }
+  return labels.filter((label) => label.length > 0);
+}
+
+/** A host label (or hyphen-separated run) long enough to carry a key. */
+const HOST_LABEL_ENTROPY_MIN = 32;
+
+/**
+ * A hostname label that looks like a key. Ordinary platform names are made of
+ * plain words joined by hyphens plus a short id (`my-project-k3j9x2a1b-myteam`,
+ * `<deploy-id>--my-site`), so a hyphenated label made of several lowercase words
+ * is not judged as a whole; any single run of 32+ characters between hyphens
+ * still is, so a key glued into a word slug is caught.
+ */
+function hostLabelLooksSecret(label: string): boolean {
+  if (detectSecrets(label).length > 0) return true;
+  const runs = label.split(/[-_]+/).filter((run) => run.length > 0);
+  if (runs.some((run) => run.length >= HOST_LABEL_ENTROPY_MIN && looksSecretShapedIn(run))) return true;
+  if (label.length < HOST_LABEL_ENTROPY_MIN) return false;
+  const words = runs.filter((run) => /^[a-z]{2,}$/.test(run)).length;
+  return words < 3 && looksSecretShapedIn(label);
 }
 
 /** A secret in a subdomain leaves through DNS before any request is made. */
@@ -178,7 +212,7 @@ function hostLooksSecret(text: string): boolean {
   if (labels.length === 0) return false;
   if (detectSecrets(labels.join(".")).length > 0) return true;
   const entropyGateOpen = isEntropyBackendEnabled();
-  return labels.some((label) => detectSecrets(label).length > 0 || (entropyGateOpen && looksSecretShapedIn(label)));
+  return labels.some((label) => (entropyGateOpen ? hostLabelLooksSecret(label) : detectSecrets(label).length > 0));
 }
 
 function anyComponentLooksSecret(text: string): boolean {

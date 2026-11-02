@@ -245,3 +245,23 @@ test("a local-search endpoint carrying credentials is denied before the worker r
   }
   expect(calls).toBe(0);
 });
+
+// review-performance-w3:F-001: a DNS answer arriving after the deadline must not start a worker.
+test("a late DNS answer after the deadline never reaches the runner", async () => {
+  const calls: Array<{ aborted: boolean | undefined }> = [];
+  const runner: WebWorkerRunner = {
+    run: async (_request, signal) => {
+      calls.push({ aborted: signal?.aborted });
+      return { ok: false, reason: "fake" };
+    },
+  };
+  const slowLookup = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return [{ address: publicAddress }];
+  };
+  const transport = new SandboxedWebTransport({ lookup: slowLookup, runner, deadlineMs: 30 });
+  const result = await transport.fetchPage({ url: "https://example.com/", providerId: "web_fetch" });
+  expect(result.ok).toBe(false);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(calls).toEqual([]);
+});
