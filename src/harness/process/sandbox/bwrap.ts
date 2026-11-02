@@ -163,6 +163,14 @@ export function pathEntriesUnderHidden(
  *     directory `commondir` makes git die ("failed to read .git/commondir"),
  *     inside the sandbox and on the host afterwards. That one path stays
  *     creatable on Linux — see the wiki page (os-sandbox.md).
+ *
+ * Not expressible as a mount, so absent here (Seatbelt covers both):
+ *   - `links` — a bind follows a symlink, so binding a `.git -> elsewhere` link
+ *     would mount its TARGET read-write. Anchors are real directories inside a
+ *     writable root by construction (git-protect.ts), never a link;
+ *   - `sealed` — a new `modules/<name>` or `worktrees/<name>` does not exist at
+ *     launch, and there is no mount point to hold a rule on it. The existing
+ *     ones are covered through their controls and anchors.
  */
 export function gitProtectBwrapArgs(git: GitProtection): string[] {
   const args: string[] = [];

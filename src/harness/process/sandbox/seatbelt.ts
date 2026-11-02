@@ -27,6 +27,11 @@ function sbplString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+/** Escape every POSIX ERE metacharacter so `value` matches only itself. */
+function regexLiteral(value: string): string {
+  return value.replace(/[.[\]()*+?{}|^$\\]/g, "\\$&");
+}
+
 /** stdio / tty device writes every shell tool needs even under a write-deny. */
 const DEVICE_WRITE_LITERALS = [
   "/dev/null",
@@ -56,8 +61,9 @@ const LAUNCHER_BINARIES = ["/usr/bin/open", "/usr/bin/osascript"];
 /**
  * Build the Seatbelt (.sb) profile text for `profile`. Allow-default, then:
  *   - deny all writes, re-allow writable roots + stdio devices;
- *   - re-deny the git control paths inside those roots, existing or not, and
- *     pin the git dirs in place (see git-protect.ts);
+ *   - re-deny the git control paths inside those roots, existing or not, pin
+ *     the git dirs (and any symlink naming one) in place, and refuse new
+ *     submodule gitdirs and linked worktrees (see git-protect.ts);
  *   - deny the LaunchServices IPC that starts programs outside the sandbox;
  *   - deny reads of the secret deny-list;
  *   - deny all network when `profile.network === "off"`.
@@ -90,7 +96,9 @@ export function buildSeatbeltProfile(
   // the link cannot be replaced, the target cannot be written. The git dirs (and
   // their parents inside the root) are denied by name too, so they cannot be
   // renamed away and replaced by ones carrying a hook.
-  if (git.controls.length > 0 || git.anchors.length > 0) {
+  const links = git.links ?? [];
+  const sealed = git.sealed ?? [];
+  if (git.controls.length > 0 || git.anchors.length > 0 || links.length > 0 || sealed.length > 0) {
     lines.push("", ";; --- git control paths stay read-only inside the writable roots ---");
     const denied = new Set<string>();
     for (const control of git.controls) {
@@ -100,8 +108,17 @@ export function buildSeatbeltProfile(
         lines.push(`(deny file-write* (subpath ${sbplString(p)}))`);
       }
     }
-    for (const anchor of git.anchors) {
-      lines.push(`(deny file-write* (literal ${sbplString(anchor)}))`);
+    // A symlink to a git dir (`.git -> elsewhere`) is pinned by its name, like an
+    // anchor: replacing the link with a fresh git dir is the same swap.
+    for (const pinned of [...git.anchors, ...links]) {
+      lines.push(`(deny file-write* (literal ${sbplString(pinned)}))`);
+    }
+    // No new submodule gitdir or linked worktree during the run: a direct entry of
+    // `modules/` or `worktrees/` cannot be created, renamed or removed. A regex
+    // matches names that do not exist yet; writes deeper inside an existing one
+    // (its objects, refs, index) are not matched.
+    for (const dir of sealed) {
+      lines.push(`(deny file-write* (regex ${sbplString(`^${regexLiteral(dir)}/[^/]+$`)}))`);
     }
   }
 

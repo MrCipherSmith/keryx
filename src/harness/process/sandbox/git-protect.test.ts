@@ -35,7 +35,7 @@ describe("resolveGitProtection", () => {
   });
 
   test("no repository: nothing to protect, so a contained `git init` is not broken", () => {
-    expect(resolveGitProtection(["/r"], fake([]))).toEqual({ controls: [], anchors: [] });
+    expect(resolveGitProtection(["/r"], fake([]))).toEqual({ controls: [], anchors: [], links: [], sealed: [] });
   });
 
   test("a gitdir FILE is protected itself, and so is the gitdir it names when that lives inside a writable root", () => {
@@ -68,6 +68,8 @@ describe("resolveGitProtection", () => {
     expect(resolveGitProtection(["/r"], fs)).toEqual({
       controls: [{ path: "/r/.git", real: "/r/.git", entry: ".git", kind: "file" }],
       anchors: [],
+      links: [],
+      sealed: [],
     });
   });
 
@@ -91,6 +93,100 @@ describe("resolveGitProtection", () => {
   test("nested writable roots: anchors run up to the OUTERMOST root", () => {
     const fs = fake(["/r/a/b/.git"], {});
     expect(resolveGitProtection(["/r/a/b", "/r"], fs).anchors).toEqual(["/r/a", "/r/a/b", "/r/a/b/.git"]);
+  });
+
+  // review-logic-w3:F-001: an anchor becomes a read-write bwrap self-bind, and a
+  // bind follows symlinks. A link name is never an anchor; it is recorded in `links`.
+  test("a `.git` symlink to a git dir outside every root: no anchor, no control, the link is recorded", () => {
+    const fs: GitProtectFs = {
+      ...fake(["/r/.git", "/out/g.git", "/out/g.git/hooks"], { "/out/g.git/config": "" }),
+      real: (p) => (p === "/r/.git" ? "/out/g.git" : p.startsWith("/r/.git/") ? p.replace("/r/.git", "/out/g.git") : p),
+    };
+    expect(resolveGitProtection(["/r"], fs)).toEqual({ controls: [], anchors: [], links: ["/r/.git"], sealed: [] });
+  });
+
+  test("a `.git` symlink to a git dir inside the root: the REAL dir and its parents are anchored, the link is recorded", () => {
+    const fs: GitProtectFs = {
+      ...fake(["/r/.git", "/r/meta", "/r/meta/g.git"], { "/r/meta/g.git/config": "" }),
+      real: (p) => (p === "/r/.git" ? "/r/meta/g.git" : p),
+    };
+    const g = resolveGitProtection(["/r"], fs);
+    expect(g.anchors).toEqual(["/r/meta", "/r/meta/g.git"]);
+    expect(g.links).toEqual(["/r/.git"]);
+    expect(g.controls.map((c) => c.path)).toContain("/r/meta/g.git/config");
+  });
+
+  test("an entry of .git/worktrees that links outside every root is not anchored", () => {
+    const fs: GitProtectFs = {
+      ...fake(["/r/.git", "/r/.git/worktrees", "/r/.git/worktrees/a"], {}),
+      real: (p) => (p === "/r/.git/worktrees/a" ? "/out/a" : p),
+    };
+    const g = resolveGitProtection(["/r"], fs);
+    expect(g.anchors).toEqual(["/r/.git"]);
+    expect(g.links).toEqual(["/r/.git/worktrees/a"]);
+  });
+
+  test("anchors are never a missing directory (bwrap could not mount it)", () => {
+    const fs = fake(["/r/.git"], { "/r/.gitmodules": '[submodule "x"]\n\tpath = gone/x\n' });
+    const g = resolveGitProtection(["/r"], fs);
+    expect(g.anchors).toEqual(["/r/.git"]);
+    expect(g.controls.find((c) => c.path === "/r/gone/x/.git")?.kind).toBe("missing");
+  });
+
+  // review-security-code-w3:F-001: the superproject's submodule layout.
+  test("a superproject: .git/modules/** gitdirs (nested too), each gitlink file, sealed modules/ and worktrees/", () => {
+    const fs = fake(
+      [
+        "/r/.git",
+        "/r/.git/modules",
+        "/r/.git/modules/libs",
+        "/r/.git/modules/libs/lib",
+        "/r/.git/modules/libs/lib/modules",
+        "/r/.git/modules/libs/lib/modules/deep",
+        "/r/libs",
+        "/r/libs/lib",
+        "/r/libs/lib/deep",
+      ],
+      {
+        "/r/.gitmodules": '[submodule "libs/lib"]\n\tpath = libs/lib\n\turl = ../lib\n',
+        "/r/.git/modules/libs/lib/HEAD": "",
+        "/r/.git/modules/libs/lib/config": "[core]\n\tworktree = ../../../../libs/lib\n",
+        "/r/.git/modules/libs/lib/modules/deep/HEAD": "",
+        "/r/.git/modules/libs/lib/modules/deep/config": "[core]\n\tworktree = ../../../../../../libs/lib/deep\n",
+        "/r/libs/lib/.git": "gitdir: ../../.git/modules/libs/lib\n",
+        "/r/libs/lib/deep/.git": "gitdir: ../../../.git/modules/libs/lib/modules/deep\n",
+      },
+    );
+    const g = resolveGitProtection(["/r"], fs);
+    const out = g.controls.map((c) => c.path);
+    for (const gd of ["/r/.git/modules/libs/lib", "/r/.git/modules/libs/lib/modules/deep"]) {
+      for (const e of ["hooks", "config", "config.worktree", "commondir"]) expect(out).toContain(`${gd}/${e}`);
+    }
+    expect(out).toContain("/r/libs/lib/.git");
+    expect(out).toContain("/r/libs/lib/deep/.git");
+    expect(g.anchors).toContain("/r/.git/modules/libs/lib/modules/deep");
+    expect(g.anchors).toContain("/r/libs/lib/deep");
+    expect(g.sealed).toEqual([
+      "/r/.git/modules",
+      "/r/.git/modules/libs",
+      "/r/.git/modules/libs/lib/modules",
+      "/r/.git/modules/libs/lib/worktrees",
+      "/r/.git/modules/libs/lib/modules/deep/modules",
+      "/r/.git/modules/libs/lib/modules/deep/worktrees",
+      "/r/.git/worktrees",
+    ].sort());
+  });
+
+  test("an uninitialised submodule: its .git is protected before it exists", () => {
+    const fs = fake(["/r/.git", "/r/lib"], { "/r/.gitmodules": '[submodule "lib"]\n\tpath = "lib"\n' });
+    const g = resolveGitProtection(["/r"], fs);
+    expect(g.controls.find((c) => c.path === "/r/lib/.git")).toEqual({ path: "/r/lib/.git", real: "/r/lib/.git", entry: ".git", kind: "missing" });
+    expect(g.anchors).toContain("/r/lib");
+  });
+
+  test("a .gitmodules path that leaves the working tree is ignored", () => {
+    const fs = fake(["/r/.git", "/x"], { "/r/.gitmodules": "\tpath = ../x\n" });
+    expect(paths(["/r", "/x"], fs)).not.toContain("/x/.git");
   });
 
   test("real filesystem: a repo on disk, a symlinked hooks dir is protected under both names", () => {

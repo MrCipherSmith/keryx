@@ -19,16 +19,26 @@
 // files git creates beside them.
 //
 // Covers a normal checkout (`.git` is a directory), its linked worktrees
-// (`.git/worktrees/<name>`), and a linked worktree or submodule root (`.git` is a
-// FILE `gitdir: <path>`): the file itself is protected so it cannot be repointed,
-// and when the gitdir it names lives inside a writable root its control paths
-// are protected too, then those of the common dir it names via `commondir`. A
-// gitdir outside every writable root is already read-only.
+// (`.git/worktrees/<name>`), its submodules (`.git/modules/**`, nested ones
+// included, and each submodule's `<path>/.git` gitlink file), and a linked
+// worktree or submodule root (`.git` is a FILE `gitdir: <path>`): the file itself
+// is protected so it cannot be repointed, and when the gitdir it names lives
+// inside a writable root its control paths are protected too, then those of the
+// common dir it names via `commondir`. A gitdir outside every writable root is
+// already read-only.
 //
 // Anchors: each protected git dir, and every directory between it and the
 // writable root, must also stay where it is — renaming `.git` (or a parent of a
 // worktree's gitdir) away and creating a fresh one would otherwise sidestep every
-// rule on the old path.
+// rule on the old path. An anchor is always a REAL directory inside a writable
+// root: bwrap turns it into a read-write self-bind, and a bind follows symlinks,
+// so anchoring a link name would make its target writable (review-logic-w3:F-001).
+// A symlink on the way to a git dir is recorded in `links` instead.
+//
+// Sealed: a full repository's `modules/` and `worktrees/` (and the name
+// directories between `modules/` and a submodule gitdir) get no NEW entries, so a
+// submodule gitdir or linked worktree created during the run cannot carry its
+// own config, hooks or commondir.
 //
 // Impure by design (reads the host filesystem), so it sits in its own module and
 // the launcher builders take the result as an injectable parameter.
@@ -57,8 +67,24 @@ export interface GitControlPath {
 export interface GitProtection {
   /** Read-only, existing or not. Sorted by path. */
   controls: GitControlPath[];
-  /** Directories that must not be renamed or removed. Sorted, so a parent comes before its children. */
+  /**
+   * Real directories inside a writable root that must not be renamed or removed.
+   * Never a symlink. Sorted, so a parent comes before its children.
+   */
   anchors: string[];
+  /**
+   * Symlinks inside a writable root that lead to a git dir (`.git -> elsewhere`), or
+   * to a directory on the way to one: the link itself must not be replaced. Only a
+   * rule on the NAME can hold this (Seatbelt `literal`); a mount follows the link.
+   */
+  links?: string[];
+  /**
+   * Directories whose direct entries cannot be created, renamed or removed,
+   * whether or not they exist yet: a full repository's `modules/` and `worktrees/`,
+   * and the name directories under `modules/`. Needs a rule that matches a path
+   * that does not exist (Seatbelt `regex`); a mount cannot.
+   */
+  sealed?: string[];
 }
 
 export interface GitProtectFs {
@@ -104,11 +130,32 @@ function within(root: string, p: string): boolean {
   return p === root || p.startsWith(`${root}${path.sep}`);
 }
 
-/** Every git control path and anchor inside `writableRoots`. Deterministic for a given filesystem. */
+/** Deepest `modules/` name nesting walked; a submodule name rarely has more than a few segments. */
+const MAX_MODULE_DEPTH = 16;
+
+function unquote(value: string): string {
+  return value.length >= 2 && value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
+}
+
+/** `path = <p>` values of a `.gitmodules` file: where this working tree's submodules live. */
+function gitmodulePaths(text: string | undefined): string[] {
+  return [...(text ?? "").matchAll(/^\s*path\s*=\s*(.+?)\s*$/gm)].map((m) => unquote(m[1] ?? "")).filter((p) => p.length > 0);
+}
+
+/** A submodule gitdir's `core.worktree`: where its working tree (and so its `.git` gitlink file) lives. */
+function coreWorktree(config: string | undefined): string | undefined {
+  const value = /^\s*worktree\s*=\s*(.+?)\s*$/m.exec(config ?? "")?.[1];
+  return value === undefined ? undefined : unquote(value);
+}
+
+/** Every git control path, anchor, link and sealed dir inside `writableRoots`. Deterministic for a given filesystem. */
 export function resolveGitProtection(writableRoots: readonly string[], fs: GitProtectFs = realFs): GitProtection {
   const controls = new Map<string, GitControlPath>();
   const anchors = new Set<string>();
-  const seen = new Set<string>();
+  const links = new Set<string>();
+  const sealed = new Set<string>();
+  const seenGitDirs = new Set<string>();
+  const seenTrees = new Set<string>();
   const roots = writableRoots.map((r) => fs.real(r));
   // The OUTERMOST writable root holding `p`: with nested roots, a directory
   // between the inner and the outer root can still be renamed.
@@ -119,47 +166,101 @@ export function resolveGitProtection(writableRoots: readonly string[], fs: GitPr
     controls.set(p, { path: p, real: fs.real(p), entry, kind: fs.kind(p) });
   };
 
+  // Only a real, existing directory inside a root; its parents are then real too.
   const anchor = (dir: string): void => {
     const top = rootOf(dir);
-    if (top === undefined) return;
+    if (top === undefined || fs.kind(dir) !== "dir" || fs.real(dir) !== dir) return;
     for (let p = dir; p !== top && within(top, p); p = path.dirname(p)) anchors.add(p);
   };
 
+  /** Follow `p` (named inside a real directory); a link name inside a root is recorded, never anchored. */
+  const follow = (p: string): string => {
+    const real = fs.real(p);
+    if (real !== p && rootOf(p) !== undefined) links.add(p);
+    return real;
+  };
+
+  const seal = (dir: string): void => {
+    if (rootOf(dir) !== undefined) sealed.add(dir);
+  };
+
+  /** `gitDir` is a real path. A full repository (COMMON_DIR_ENTRIES) also brings its worktrees and submodules. */
   const protectGitDir = (gitDir: string, entries: readonly GitControlEntry[]): void => {
-    if (seen.has(gitDir) || rootOf(gitDir) === undefined) return;
-    seen.add(gitDir);
+    if (seenGitDirs.has(gitDir) || rootOf(gitDir) === undefined) return;
+    seenGitDirs.add(gitDir);
     anchor(gitDir);
     for (const entry of entries) addControl(path.join(gitDir, entry), entry);
-    // A common dir's linked worktrees take their commondir/config.worktree from here.
-    const worktrees = path.join(gitDir, "worktrees");
-    if (fs.kind(worktrees) === "dir") {
-      for (const name of [...fs.list(worktrees)].sort()) {
-        const wt = path.join(worktrees, name);
-        if (fs.kind(wt) === "dir") protectGitDir(wt, WORKTREE_GITDIR_ENTRIES);
+    if (entries === COMMON_DIR_ENTRIES) {
+      // Linked worktrees take their commondir/config.worktree from here.
+      const worktrees = follow(path.join(gitDir, "worktrees"));
+      seal(worktrees);
+      if (fs.kind(worktrees) === "dir") {
+        for (const name of [...fs.list(worktrees)].sort()) {
+          const wt = follow(path.join(worktrees, name));
+          if (fs.kind(wt) === "dir") protectGitDir(wt, WORKTREE_GITDIR_ENTRIES);
+        }
       }
+      walkModules(follow(path.join(gitDir, "modules")), 0);
     }
     const common = fs.readText(path.join(gitDir, "commondir"))?.trim();
     if (common) protectGitDir(fs.real(path.resolve(gitDir, common)), COMMON_DIR_ENTRIES);
   };
 
-  for (const root of roots) {
-    const dotGit = path.join(root, ".git");
+  // `modules/<name>` where a name may hold slashes: a directory with a HEAD is a
+  // submodule gitdir, any other directory is one more name segment.
+  const walkModules = (dir: string, depth: number): void => {
+    if (depth > MAX_MODULE_DEPTH || rootOf(dir) === undefined) return;
+    seal(dir);
+    if (fs.kind(dir) !== "dir") return;
+    for (const name of [...fs.list(dir)].sort()) {
+      const sub = follow(path.join(dir, name));
+      if (fs.kind(sub) !== "dir") continue;
+      if (fs.kind(path.join(sub, "HEAD")) === "missing") {
+        walkModules(sub, depth + 1);
+        continue;
+      }
+      protectGitDir(sub, COMMON_DIR_ENTRIES);
+      const worktree = coreWorktree(fs.readText(path.join(sub, "config")));
+      if (worktree !== undefined) protectWorkingTree(fs.real(path.resolve(sub, worktree)), true);
+    }
+  };
+
+  /**
+   * A working tree's `.git`, real `tree`. For a submodule's working tree the `.git`
+   * gitlink is protected even when it does not exist yet (an uninitialised
+   * submodule), and the tree itself is anchored so it cannot be swapped.
+   */
+  const protectWorkingTree = (tree: string, submodule: boolean): void => {
+    if (seenTrees.has(tree) || rootOf(tree) === undefined) return;
+    seenTrees.add(tree);
+    const dotGit = path.join(tree, ".git");
     const kind = fs.kind(dotGit);
+    if (kind === "missing" && !submodule) return; // no repository: a contained `git init` must still work
+    if (submodule) anchor(tree);
     if (kind === "dir") {
-      anchor(dotGit); // the name itself, even when it is a symlink to the real git dir
-      protectGitDir(fs.real(dotGit), COMMON_DIR_ENTRIES);
-    } else if (kind === "file") {
+      protectGitDir(follow(dotGit), COMMON_DIR_ENTRIES);
+    } else {
       addControl(dotGit, ".git");
       const match = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readText(dotGit) ?? "");
-      if (match?.[1] === undefined) continue;
-      const gitDir = fs.real(path.resolve(root, match[1]));
-      // A linked worktree's gitdir has a commondir; a submodule's gitdir is a full repository.
-      const isLinked = fs.kind(path.join(gitDir, "commondir")) === "file";
-      protectGitDir(gitDir, isLinked ? WORKTREE_GITDIR_ENTRIES : COMMON_DIR_ENTRIES);
+      if (match?.[1] !== undefined) {
+        const gitDir = fs.real(path.resolve(tree, match[1]));
+        // A linked worktree's gitdir has a commondir; a submodule's gitdir is a full repository.
+        const isLinked = fs.kind(path.join(gitDir, "commondir")) === "file";
+        protectGitDir(gitDir, isLinked ? WORKTREE_GITDIR_ENTRIES : COMMON_DIR_ENTRIES);
+      }
     }
-  }
+    // Submodules registered in this working tree, initialised or not.
+    for (const sub of gitmodulePaths(fs.readText(path.join(tree, ".gitmodules")))) {
+      const subTree = path.resolve(tree, sub);
+      if (subTree !== tree && within(tree, subTree)) protectWorkingTree(fs.real(subTree), true);
+    }
+  };
+
+  for (const root of roots) protectWorkingTree(root, false);
   return {
     controls: [...controls.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
     anchors: [...anchors].sort(),
+    links: [...links].sort(),
+    sealed: [...sealed].sort(),
   };
 }

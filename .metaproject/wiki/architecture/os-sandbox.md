@@ -1,6 +1,6 @@
 ---
 Title: OS Sandbox
-Version: 1.2.0
+Version: 1.3.0
 Type: architecture
 Status: accepted
 Summary: ""
@@ -8,7 +8,7 @@ Summary: ""
 ```markdown
 ---
 Title: OS Sandbox
-Version: 1.2.0
+Version: 1.3.0
 Type: architecture
 Status: accepted
 Summary: Kernel-enforced containment layer that constrains what a process can do after the policy engine approves it. Uses macOS Seatbelt or Linux bubblewrap to restrict filesystem access, network reach, and credential exposure. Containment is mandatory for autonomous runs and opt-in for interactive agent sessions. When containment cannot be applied, execution is refused rather than silently degraded.
@@ -172,17 +172,33 @@ them read-only again after the writable-root rules.
 | `config.worktree` | the same keys, per worktree, once `extensions.worktreeConfig` is on |
 | `commondir` | git reads it for **any** git dir and takes config and hooks from where it points |
 | the `.git` gitdir **file** of a linked worktree or submodule root | repointing it picks a different repository |
+| `<sub>/.git` of every registered submodule (initialised or not) | the same, for the submodule the host's `git status` recurses into |
 
 Each is protected **whether or not it exists yet**: creating `.git/hooks/post-checkout`
 in a repo that has no hooks dir, or a `.git/commondir` in an ordinary checkout, is as
 good as editing an existing one (both confirmed live on macOS in review round 2).
 The set follows the repository: a gitdir file into a writable root, that gitdir's
-`commondir`, a submodule gitdir, and each `.git/worktrees/<name>/` (its `commondir`
-and `config.worktree`).
+`commondir`, each `.git/worktrees/<name>/` (its `commondir` and `config.worktree`),
+and the submodules — every gitdir under `.git/modules/**` (a submodule name may hold
+slashes; nested submodules live under `.git/modules/<a>/modules/<b>`), plus the
+`.git` gitlink file of each working tree named by a submodule's `core.worktree` or a
+`.gitmodules` `path =`. A contained `core.fsmonitor` in `.git/modules/lib/config`
+ran on the host's next `git status` before this (confirmed live on macOS, review
+round 3).
+
+**Sealed.** A full repository's `modules/` and `worktrees/` (and the name directories
+between `modules/` and a submodule gitdir) accept no **new** entries, so a submodule
+gitdir or linked worktree created during the run cannot bring its own config, hooks or
+`commondir`.
 
 **Anchors.** Each protected git dir, and every directory between it and the
 outermost writable root, must also stay in place: renaming `.git` away and creating a
-fresh one sidesteps every rule on the old path.
+fresh one sidesteps every rule on the old path. An anchor is always a **real
+directory already inside a writable root**. A symlink on the way (`.git -> elsewhere`,
+the Android `repo` layout) is resolved first: its target is protected only if it lies
+inside a writable root, and the link name is recorded separately. Round 3 anchored the
+link name, and bwrap's read-write self-bind of it followed the link and made an
+outside git dir writable (review round 3, fixed in round 4).
 
 Not protected, on purpose: `info/` (`info/attributes` can only *name* a filter or
 diff driver; the command comes from config, and a working-tree `.gitattributes` can
@@ -193,9 +209,14 @@ git creates beside them — a contained `git add` / `git commit` needs those.
 
 `(deny file-write* (subpath <p>))` for every control path, existing or not — SBPL
 denies a missing path just as well. A symlinked entry is denied under its name and
-its target. Anchors get `(deny file-write* (literal <dir>))`, which blocks renaming
-or removing the directory but not writing inside it. Verified live
-(`containment.smoke.test.ts`, gated on `KERYX_ALLOW_REAL_SUBPROCESS=1`).
+its target. Anchors and symlinks leading to a git dir get
+`(deny file-write* (literal <p>))`, which blocks renaming, removing or replacing them
+but not writing inside them. A sealed dir gets
+`(deny file-write* (regex "^<dir>/[^/]+$"))`: a direct entry cannot be created,
+renamed or removed whether or not it exists, while writes deeper inside an existing
+one (a submodule's objects, refs, index) still work. Verified live
+(`containment.smoke.test.ts`, gated on `KERYX_ALLOW_REAL_SUBPROCESS=1`), including the
+round-3 submodule repro and a nested submodule.
 
 ### Linux (bubblewrap)
 
@@ -204,6 +225,19 @@ bwrap protects by mounting, and a mount needs an existing mount point.
 - **Anchors** are bound onto themselves (`--bind d d`). Linux refuses `rename(2)` of
   a dentry that is itself a mount point (`EBUSY`), so `mv .git x && git init` fails.
   Being only an ancestor of a mount point is not enough — that was the round-2 gap.
+  A read-write bind follows symlinks, which is why an anchor is never a link name.
+- **Symlinks** to a git dir get **no** mount: a mount on the name lands on the
+  target. A `.git -> elsewhere` link outside every root leaves the target under the
+  read-only `/` (unchanged from before round 3); the link itself stays replaceable.
+- **Existing submodule layouts** are covered like any other git dir: each
+  `.git/modules/**` gitdir's controls are bound read-only and the gitdir anchored,
+  each `<sub>/.git` gitlink file is bound read-only, each submodule working tree is
+  anchored.
+- **Sealed dirs are not covered.** A new `modules/<name>` or `worktrees/<name>`
+  does not exist at launch, so there is no mount point to hold a rule on it, and
+  making `modules/` read-only would break every write inside existing submodules. A
+  contained command can create a new submodule gitdir or linked worktree on Linux;
+  closing it needs the same post-run host check as `commondir`.
 - **Existing** control paths: `--ro-bind p p`.
 - **Missing** ones need a mount point, which bwrap creates through the writable bind,
   so it is **left behind on the host**. That is done only where the leftover is
@@ -218,9 +252,10 @@ bwrap protects by mounting, and a mount needs an existing mount point.
   as **new** entries at the top of `.git` and renames them into place; a read-only
   `.git` makes `git add` and `git commit` fail, and a lock file that does not exist
   yet cannot be pre-bound.
-- Closing `commondir` on Linux needs a check outside the sandbox after the run (the
-  contained process tree is gone once bwrap exits, so a "did a control path appear?"
-  check in the spawner is race-free). Not built yet.
+- Closing `commondir`, new `modules/<name>` and new `worktrees/<name>` on Linux needs
+  a check outside the sandbox after the run (the contained process tree is gone once
+  bwrap exits, so a "did a control path appear?" check in the spawner is race-free).
+  Not built yet.
 
 The Linux side is verified only by unit tests over the generated argv; no Linux
 kernel ran it in this change.
@@ -243,6 +278,25 @@ outside the sandbox with an approval. There is no sandbox-aware refusal message 
 the error is git's own. The cost is pinned by a live smoke test, so changing it is a
 decision, not an accident.
 
+### Accepted cost: worktrees and submodules are managed outside the sandbox
+
+From a sandboxed main checkout, each existing `.git/worktrees/<name>` is pinned and
+`.git/worktrees/` and `.git/modules/` are sealed (Seatbelt). Measured on macOS:
+
+| Command (inside the sandbox) | Result |
+|---|---|
+| `git worktree remove <wt>` | deletes the checkout, then fails with `failed to delete '.git/worktrees/<name>'`: the worktree stays registered with no checkout |
+| `git worktree prune` | prints the same error, **exits 0**, removes nothing |
+| `git worktree move` | works (it rewrites only `worktrees/<name>/gitdir`) |
+| `git worktree add` | fails: a new `worktrees/<name>` cannot be created |
+| `git submodule update --init` of a new submodule, `git submodule absorbgitdirs` | fail: a new `modules/<name>` cannot be created (`init` already failed on `.git/config`) |
+
+On Linux the pinned gitdir is a mount point (remove/prune are expected to fail with `EBUSY`; not run on a Linux kernel); `add` and new
+submodule gitdirs are not refused there (see above). The workaround is the same as for
+config: run the step outside the sandbox with an approval. A removed or recreated gitdir
+could carry a hostile `commondir`, so this protection is deliberate. Pinned by live
+smoke tests.
+
 ### Still open (not closable by protecting `.git`)
 
 - **Nested repositories registered as submodules.** A contained command can create
@@ -252,7 +306,8 @@ decision, not an accident.
 - **Hooks that run working-tree code** (husky, lefthook, pre-commit, `core.hooksPath`
   inside the repo): the hook itself may be protected, the scripts it runs are not.
 - **A gitdir symlinked from `.git`, or a symlinked control entry, on Linux**: a mount
-  follows the link, so the link itself can still be replaced.
+  follows the link, so the link itself can still be replaced (Seatbelt pins it by
+  name).
 - **`include.path` in `.git/config` naming a file in the working tree.**
 
 These need a host-side git policy (for example running host git with
@@ -335,6 +390,7 @@ Full documentation lives in `docs/requirements/keryx-os-sandbox/`:
 
 | Version | Changes |
 |---|---|
+| 1.3.0 | Repository control paths, review round 3: anchors are real directories only (a symlinked `.git` no longer gets a read-write bwrap bind of its target); submodule gitdirs under `.git/modules/**` (nested too) and each `<sub>/.git` gitlink are protected; `modules/` and `worktrees/` are sealed against new entries on macOS, not coverable on Linux; the worktree/submodule management cost table. |
 | 1.2.0 | Added repository control paths: what is protected (existing or not), anchors, the Seatbelt vs bubblewrap mechanics and why a missing `commondir` stays open on Linux, the read-only `.git/config` cost and its workarounds, vectors that protecting `.git` cannot close, and the NixOS PATH bind-back under the `/run` hide. |
 | 1.1.0 | Added the approval-gate / allowlist permission model and its limits: the page described containment but not the layer that is load-bearing when containment is off (the default) or unavailable. |
 | 1.0.0 | Documented the implemented OS sandbox: postures, restricted network, credential masking, TLS termination, platform matrix, fail-closed contract, and the documentation package. |
