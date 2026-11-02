@@ -40,7 +40,9 @@ describe("orphaned sessions", () => {
     expect(h.api.topic(reg.threadId)).toBeDefined();
 
     await h.clock.advance(ORPHAN_MS - SESSION_LEASE_HEARTBEAT_MS);
+    // The fake keeps a closed topic in topic(), so archiving shows only in closedTopics.
     expect(h.api.topic(reg.threadId)).toBeDefined();
+    expect(h.api.closedTopics).toEqual([]);
 
     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);
     await until(() => h.api.closedTopics.length === 1, "topic archived");
@@ -88,6 +90,8 @@ describe("orphaned sessions", () => {
     await keepAlive(hub, "sess-one-0001", ORPHAN_MS + 60_000);
     expect(h.api.topic(reg.threadId)).toBeDefined();
     expect(h.api.deletedTopics).toEqual([]);
+    expect(h.api.closedTopics).toEqual([]);
+    expect(hub.list()[0]?.status).toBe("live");
   });
 
   test("the same name returning with a new session reuses the stored topic", async () => {
@@ -106,6 +110,8 @@ describe("orphaned sessions", () => {
 
     await keepAlive(hub, "sess-two-0002", ORPHAN_MS + 60_000);
     expect(h.api.topic(first.threadId)).toBeDefined();
+    expect(h.api.closedTopics).toEqual([]);
+    expect(hub.list()[0]?.status).toBe("live");
   });
 
   test("after the topic is gone, the same name gets a fresh topic", async () => {

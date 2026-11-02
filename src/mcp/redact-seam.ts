@@ -1,6 +1,6 @@
 // Mandatory deterministic output floor. Advisory settings never authorize
 // disclosure of detected secrets. Keep all MCP security imports at this seam.
-import { validateOutputForTransport, type OutputRedaction } from "../security/guard";
+import { guardOutput, prepareOutputForPersistence, validateOutputForTransport, type OutputRedaction } from "../security/guard";
 import { validateSerializedOutput } from "../security/service";
 import type { JsonSchema } from "./types";
 
@@ -10,6 +10,15 @@ export function validateToolOutput(value: unknown, schema?: JsonSchema) {
 }
 export function validateTextOutput(value: string) {
   return validateOutputForTransport({ value, format: "text" });
+}
+
+// A note an MCP tool persists passes the same output guard as the CLI and
+// workspace_propose before any writer sees it (review-architecture-slice-12:F-001).
+export async function guardNoteForPersistence(cwd: string, note: string, notePath: string) {
+  return prepareOutputForPersistence(
+    await guardOutput({ cwd, content: note, target: "task", source: "generated", path: notePath }),
+    note,
+  );
 }
 
 // Compatibility wrapper for callers holding serialized content. The old

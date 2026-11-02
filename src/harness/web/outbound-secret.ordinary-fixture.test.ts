@@ -110,11 +110,12 @@ const ORDINARY_URLS: string[] = [
 
 // DOCUMENTED DECISION (not a bug): a Google Docs/Drive file id is
 // CAPABILITY-LIKE — whoever holds the id can open the file, the same shape of
-// risk as a presigned S3 URL's signature (round 1's own documented decision).
-// Refusing it outbound, and redacting it in tool output, is the same
-// deliberate, documented asymmetry: fetching a Drive link is out of scope for
-// `web_fetch`; the SAME id printed in a tool's OUTPUT (e.g. a `gh` or `gdrive`
-// CLI listing) is correctly redacted.
+// risk as a presigned S3 URL's signature (round 1's own documented decision) —
+// so `web_fetch` still refuses it outbound. Redaction in tool output does NOT
+// mask it any more (owner decision 2026-11-02, perimeter review regression-33
+// F-001): `entropy.ts` keeps a small allow-list of known document hosts whose
+// label-free path ids are not treated as secret-shaped, because masking them
+// made every question or message linking a shared document fail.
 const CAPABILITY_ID_URLS: string[] = [
   "https://docs.google.com/document/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit",
   "https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/view",
@@ -165,10 +166,10 @@ describe("ordinary outbound fixture (flow 355 review round 2): 60+ realistic url
     expect(redacted).toEqual([]);
   });
 
-  test("DOCUMENTED — a Google Docs/Drive capability id IS refused outbound and IS redacted", () => {
+  test("DOCUMENTED — a Google Docs/Drive capability id IS refused outbound and is NOT redacted", () => {
     for (const url of CAPABILITY_ID_URLS) {
       expect(containsOutboundSecret(url)).toBe(true);
-      expect(redactSensitiveText(url)).not.toBe(url);
+      expect(redactSensitiveText(url)).toBe(url);
     }
   });
 });

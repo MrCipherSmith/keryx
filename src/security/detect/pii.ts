@@ -888,6 +888,13 @@ function outsideUuid(content: string, start: number, end: number): boolean {
 const SSN_BREAK_EXTRA = /(?<![0-9])\d{3}(?:\r\n|[\t\r\n])\d{2}(?:\r\n|[\t\r\n])\d{4}(?![0-9])/g;
 const IPV4_EXTRA =
   /(?<![0-9.])(?<!\b[vV])\d{1,3}(?:[\t\r\n]{0,2}\.[\t\r\n]{0,2}\d{1,3}){3}(?![0-9])/g;
+// A `::`-compressed IPv6 address (`2001:db8::1`, `fe80::1ff:fe23:4567:890a`), which the main rule cannot
+// produce: it needs a hextet on both sides of every colon, so it masked only the `::1` tail or nothing. The
+// candidate must be a whole hex-and-colon run (lookarounds), which also keeps the scan linear: a run has one
+// start and the groups are bounded. A decimal digit is required, so `a::b`, `dead::beef` and a bare `::`
+// (`x :: Int`) are not addresses; isValidIp checks the structure.
+const IPV6_COMPRESSED =
+  /(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?(?![0-9A-Fa-f:])/g;
 
 const RULES: Rule[] = [
   {
@@ -969,7 +976,10 @@ const RULES: Rule[] = [
     severity: "low",
     confidence: 0.6,
     validate: isValidIp,
-    also: [{ regex: IPV4_EXTRA, validate: (value) => isValidIp(value.replace(/[\t\r\n]/g, "")) }],
+    also: [
+      { regex: IPV4_EXTRA, validate: (value) => isValidIp(value.replace(/[\t\r\n]/g, "")) },
+      { regex: IPV6_COMPRESSED, validate: (value) => /[0-9]/.test(value) && isValidIp(value) },
+    ],
   },
 ];
 

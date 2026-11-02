@@ -49,7 +49,26 @@ export function hashToolDefinition(tool: McpToolDef): string {
 // Tool-poisoning: hidden instruction-injection in a tool's description/param
 // docs. Imperative directives, "ignore previous", exfil verbs, embedded
 // credentials/URLs, HTML/markdown comment payloads.
-const POISONING_PATTERNS: Array<{ policyId: string; regex: RegExp; confidence: number }> = [
+// A paired opener/closer anywhere in the text: an HTML comment or an
+// `<important>` block. Searched with indexOf, not `<!--[\s\S]*?-->`: the lazy
+// regex re-scanned to the end of the text from every unclosed opener, so a
+// description of repeated `<!--` cost k*n (review-performance-slice-35:F-002).
+// Only the first opener needs checking: a closer after any opener is also
+// after the first one.
+function hasCommentPayload(text: string): boolean {
+  const lower = text.toLowerCase();
+  return [
+    ["<!--", "-->"],
+    ["<important>", "</important>"],
+  ].some(([open, close]) => {
+    const at = lower.indexOf(open as string);
+    return at !== -1 && lower.indexOf(close as string, at + (open as string).length) !== -1;
+  });
+}
+
+type Pattern = { policyId: string; regex: RegExp; confidence: number; test?: (text: string) => boolean };
+
+const POISONING_PATTERNS: Pattern[] = [
   {
     policyId: "mcp.poisoning.ignore-instructions",
     regex:
@@ -82,7 +101,8 @@ const POISONING_PATTERNS: Array<{ policyId: string; regex: RegExp; confidence: n
   },
   {
     policyId: "mcp.poisoning.comment-payload",
-    regex: /<!--[\s\S]*?-->|<important>[\s\S]*?<\/important>/i,
+    regex: /<!--|<important>/i,
+    test: hasCommentPayload,
     confidence: 0.7,
   },
 ];
@@ -90,7 +110,7 @@ const POISONING_PATTERNS: Array<{ policyId: string; regex: RegExp; confidence: n
 // Line-jumping: content that attempts to change how OTHER tools/context are
 // handled before invocation (cross-tool instruction, priority override,
 // tool-shadowing phrasing).
-const LINE_JUMPING_PATTERNS: Array<{ policyId: string; regex: RegExp; confidence: number }> = [
+const LINE_JUMPING_PATTERNS: Pattern[] = [
   {
     policyId: "mcp.line-jumping.cross-tool",
     regex:
@@ -169,23 +189,40 @@ function parseTools(manifest: unknown): McpToolDef[] {
 }
 
 // Concatenate every human-facing text surface of a tool: its description plus
-// all schema property descriptions/titles (where poisoned instructions hide).
-function toolText(tool: McpToolDef): string {
+// every description/title in its schema, and the string values a client also
+// shows the model (default, const, examples, enum). The whole schema is walked:
+// a depth cap let a payload hide one level below it. A node budget bounds the
+// walk instead, and running out of it is reported, not silently truncated.
+const SCHEMA_TEXT_KEYS = new Set(["description", "title", "default", "const", "examples", "enum"]);
+const SCHEMA_NODE_BUDGET = 10_000;
+
+function toolText(tool: McpToolDef): { text: string; truncated: boolean } {
   const parts: string[] = [tool.description ?? ""];
-  const collect = (value: unknown, depth: number): void => {
-    if (depth > 6 || !value || typeof value !== "object") {
-      return;
+  const stack: unknown[] = [tool.inputSchema];
+  let visited = 0;
+  while (stack.length > 0) {
+    const value = stack.pop();
+    if (!value || typeof value !== "object") {
+      continue;
+    }
+    visited += 1;
+    if (visited > SCHEMA_NODE_BUDGET) {
+      return { text: parts.join("\n"), truncated: true };
     }
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      if ((key === "description" || key === "title") && typeof nested === "string") {
-        parts.push(nested);
-      } else if (nested && typeof nested === "object") {
-        collect(nested, depth + 1);
+      if (SCHEMA_TEXT_KEYS.has(key)) {
+        if (typeof nested === "string") {
+          parts.push(nested);
+        } else if (Array.isArray(nested)) {
+          parts.push(...nested.filter((item): item is string => typeof item === "string"));
+        }
+      }
+      if (nested && typeof nested === "object") {
+        stack.push(nested);
       }
     }
-  };
-  collect(tool.inputSchema, 0);
-  return parts.join("\n");
+  }
+  return { text: parts.join("\n"), truncated: false };
 }
 
 // --- Public API ---------------------------------------------------------------
@@ -201,10 +238,22 @@ export function scanMcpManifest(
   const seenNames = new Map<string, number>();
 
   for (const tool of tools) {
-    const text = toolText(tool);
+    const { text, truncated } = toolText(tool);
+    if (truncated) {
+      matches.push(
+        makeMatch(
+          "prompt-injection",
+          "mcp.schema-too-large",
+          "medium",
+          0.5,
+          `tool:${tool.name}`,
+          `Tool "${tool.name}" input schema is too large to scan whole (over ${SCHEMA_NODE_BUDGET} nodes); review it by hand.`,
+        ),
+      );
+    }
 
     for (const pattern of POISONING_PATTERNS) {
-      if (pattern.regex.test(text)) {
+      if (pattern.test ? pattern.test(text) : pattern.regex.test(text)) {
         const category: SecurityCategory =
           pattern.policyId === "mcp.poisoning.embedded-credential"
             ? "secret"

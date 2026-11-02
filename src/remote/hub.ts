@@ -189,6 +189,11 @@ interface TrackedMessage {
 }
 
 const MAX_EVENTS = 50;
+/**
+ * Drop records kept for a tracked caller. It reads its own right after its flush, so only the latest matter;
+ * every other send's drops would otherwise stay for the life of the process (perimeter review, highload-22 F-001).
+ */
+const MAX_DROPPED_REASONS = 256;
 /** How long a callback acknowledgement may take before it is abandoned. It is never worth holding anything for. */
 const ANSWER_CALLBACK_TIMEOUT_MS = 5_000;
 /** Flow 403: a press whose handler is still running after this long is answered with an "accepted" toast. */
@@ -294,6 +299,10 @@ export class RemoteHub {
       now: this.now,
       onDrop: (entry, reason) => {
         this.droppedReasons.set(entry.id, reason);
+        if (this.droppedReasons.size > MAX_DROPPED_REASONS) {
+          const oldest = this.droppedReasons.keys().next().value;
+          if (oldest !== undefined) this.droppedReasons.delete(oldest);
+        }
         this.event("outbound-dropped", `${reason}${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`);
       },
       onFallback: (entry, fallback) => this.fallbackEvent(fallback, entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`, "sent"),

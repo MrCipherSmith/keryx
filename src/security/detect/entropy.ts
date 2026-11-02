@@ -28,11 +28,11 @@ import type { DetectorMatch } from "../types";
 //   F-SEC-F2 (major) — an allow-shape used to exempt a value even with an
 //   explicit label sitting right next to it: `'leaked token: <40-hex>'` was
 //   left unredacted, because the old code checked the allow-shape BEFORE
-//   the label and returned early. Fixed: the per-line scan no longer
-//   consults the allow-shape list AT ALL — a label is required to flag
-//   anything in that path regardless (unchanged), and once a label is
-//   present it OVERRIDES an allow-shape rather than being overridden by it.
-//   `isAllowShapedValue` still applies unconditionally for the two LABEL-FREE
+//   the label and returned early. Fixed: on the labelled path an allow-shape
+//   no longer exempts anything — once a label is present it OVERRIDES an
+//   allow-shape (`labelledPieceQualifies` treats an allow-shape as a reason
+//   TO flag, see SEC-F2 below) rather than being overridden by it.
+//   `isAllowShapedValue` still exempts unconditionally for the two LABEL-FREE
 //   callers (`looksSecretShaped`, the URL-component scan), where there is no
 //   label to override it with.
 //
@@ -129,9 +129,10 @@ import type { DetectorMatch } from "../types";
 //   requires `ADJACENT_LABEL` — the label word, its continuation, then only
 //   quotes/`:`/`=`/whitespace up to the value — for EVERY match, not only to
 //   override an allow-shape; and a `/`-bearing candidate is decomposed into
-//   its `/`-delimited pieces and scored piece by piece (`firstQualifyingSlashPiece`),
+//   its `/`-delimited pieces and scored piece by piece (`labelledValueQualifies`),
 //   the same decomposition principle a URL's own path segments already get,
-//   so a long ordinary path is never flagged on its TOTAL length alone.
+//   so a long ordinary path is never flagged on its TOTAL length alone. A
+//   qualifying value is masked whole, never just the piece that qualified.
 //
 //   SEC-F2 (major, residual of round 1's F-SEC-F2) — the label-overrides-
 //   allow-shape fix was correct, but `bareShapeQualifies`'s OWN entropy floor
@@ -242,6 +243,15 @@ import type { DetectorMatch } from "../types";
 //   still evaluated exactly as before.
 
 const SENSITIVE_LABEL_WORDS = "key|secret|token|password|passwd|api|credential|auth|bearer";
+// How far a label word's continuation (`_KEY`, `Key`, `_ACCOUNT_KEY`) may run
+// before its connector. Bounded so the label regexes stay linear: `_` and `-`
+// are both a leading boundary and part of the continuation, so an unbounded
+// `[A-Za-z0-9_-]*` restarted at every label inside one long `-key-key-…` run
+// and backtracked the rest of it each time — O(n²) on hostile tool output.
+// The same reach `ADJACENT_LABEL` already gets from its `LABEL_WINDOW` slice.
+const LABEL_CONTINUATION_MAX = 40;
+// The Shannon-entropy floor (bits per character) every shape decision uses.
+const ENTROPY_FLOOR_BITS = 3.6;
 // Boundary-aware (F-LOG-F1): a label word must sit at the start/end of the
 // text or against a non-alphanumeric character on EITHER side — `api_key`,
 // `token=`, `Bearer `, `(api)` all count; a bare concatenation with no
@@ -291,7 +301,7 @@ const caseless = (words: string): string =>
 // value still does not match, because none of ITS words are in this set.
 const FILLER_WORDS = "is|was|set|to|the|value|now";
 const ADJACENT_LABEL = new RegExp(
-  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*` +
+  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]{0,${LABEL_CONTINUATION_MAX}}` +
     `(?:\\s+(?:${caseless(FILLER_WORDS)})){0,2}` +
     `["']?\\s*[:=]?\\s*["']?$`,
 );
@@ -304,8 +314,12 @@ const ADJACENT_LABEL = new RegExp(
 // line" (which would reopen LOG-F1's own proximity-window class under a new
 // name). `isAdjacentLabel` below is the only caller.
 const CONTINUATION_LABEL_LINE_RE = new RegExp(
-  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*["']?\\s*[:=]?\\s*\\\\\\s*$`,
+  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]{0,${LABEL_CONTINUATION_MAX}}["']?\\s*[:=]?\\s*\\\\\\s*$`,
 );
+// Only this much of the previous line's end is tested: enough for a label,
+// its continuation and the marker, and it keeps the test bounded however long
+// that line is.
+const CONTINUATION_WINDOW = 2 * LABEL_CONTINUATION_MAX;
 
 /**
  * Whether the value starting at `start` in `content` is ADJACENT to a
@@ -322,13 +336,18 @@ function isAdjacentLabel(content: string, start: number): boolean {
   if (before.trim().length > 0) {
     return false;
   }
-  const lineStart = content.lastIndexOf("\n", start - 1);
-  if (lineStart < 0) {
+  // Walk back over this line's leading whitespace only: the walk stops at the
+  // first non-blank character, so across every value it touches each
+  // character once, where a `lastIndexOf` per value re-scanned the line.
+  let lineStart = start - 1;
+  while (lineStart >= 0 && content[lineStart] !== "\n" && /\s/.test(content[lineStart] as string)) {
+    lineStart -= 1;
+  }
+  if (lineStart < 0 || content[lineStart] !== "\n") {
     return false;
   }
-  const prevLineStart = content.lastIndexOf("\n", lineStart - 1) + 1;
-  const prevLine = content.slice(prevLineStart, lineStart);
-  return CONTINUATION_LABEL_LINE_RE.test(prevLine);
+  const prevTail = lastLineOf(content.slice(Math.max(0, lineStart - CONTINUATION_WINDOW), lineStart)).trimEnd();
+  return CONTINUATION_LABEL_LINE_RE.test(prevTail);
 }
 
 // LABEL=VALUE assignment shapes (review round 3): `=` sits inside `TOKEN`'s
@@ -340,13 +359,16 @@ function isAdjacentLabel(content: string, start: number): boolean {
 // satisfied by construction, so the caller applies `labelledPieceQualifies`
 // (SEC-F2 / SEC-F3 — no allow-shape exemption, no word-slug exemption
 // either) with the usual entropy floor. The
-// optional `[A-Za-z0-9_-]*` after the label word absorbs a continuation
-// (`_KEY` from `API_KEY`, `Key` from `apiKey`) up to the connector; an
-// optional quote on either side of `=` covers a JSON-ish `"api_key"= "…"`
-// oddity for free, though the common JSON shape (`"api_key": "…"`) already
-// works through `:` and the generic scan.
+// optional, bounded `[A-Za-z0-9_-]` run after the label word absorbs a
+// continuation (`_KEY` from `API_KEY`, `Key` from `apiKey`) up to the
+// connector; an optional quote on either side of `=` covers a JSON-ish
+// `"api_key"= "…"` oddity for free, though the common JSON shape
+// (`"api_key": "…"`) already works through `:` and the generic scan. The value
+// carries `TOKEN`'s `.`-joined continuation: a dotted composite key
+// (`<32 hex>.<16 alnum>`) is one value, and the gate judges its head only.
 const LABEL_ASSIGNMENT_RE = new RegExp(
-  `(?:^|[^A-Za-z0-9])(?:${SENSITIVE_LABEL_WORDS})[A-Za-z0-9_-]*"?\\s*=\\s*"?([A-Za-z0-9+/_=-]{6,})`,
+  `(?:^|[^A-Za-z0-9])(?:${SENSITIVE_LABEL_WORDS})[A-Za-z0-9_-]{0,${LABEL_CONTINUATION_MAX}}"?\\s*=\\s*"?` +
+    `([A-Za-z0-9+/_=-]{6,}(?:\\.[A-Za-z0-9+/_=-]{6,})*)`,
   "gi",
 );
 // A credential head (20+ token characters) plus any `.`-joined continuation
@@ -361,7 +383,7 @@ const TOKEN_HEAD = /^[A-Za-z0-9+/=_-]+/;
 const LABEL_WINDOW = 40;
 // A long pure-hex blob is a credential alphabet, not prose. 32 hex characters
 // carry ~3.7 bits of Shannon entropy, which sits barely above the 3.6 floor
-// below — so whether a given real key is redacted comes down to how its own
+// — so whether a given real key is redacted comes down to how its own
 // digits happen to repeat. Shape decides this case instead of luck; the
 // sensitive-label requirement is unchanged, so a bare SHA in ordinary output is
 // still not a secret.
@@ -374,9 +396,9 @@ function isHexBlob(value: string): boolean {
 
 // Allow-shapes (S-6 / flow 355 AC2): value SHAPES that must never be treated as
 // a secret PROVIDED no explicit label overrides them (F-SEC-F2; see header).
-// Checked on the candidate before the entropy gate, so `redactSensitiveText`
-// calling this detector on every tool output (S-6) never masks an UNLABELLED
-// git commit SHA, UUID, or npm/yarn integrity string — all three are printed
+// The label-free callers (`shapeQualifiesAsSecret`) check them before the
+// entropy gate, so `redactSensitiveText` calling this detector on every tool
+// output (S-6) never masks an UNLABELLED git commit SHA, UUID, or npm/yarn integrity string — all three are printed
 // constantly by ordinary `git`/`bun`/`npm` output this redactor now sees for
 // the first time. `SHORT_GIT_SHA_RE` removed — see header, F-LOG-F2.
 const FULL_GIT_SHA_RE = /^[0-9a-f]{40}$/i;
@@ -394,15 +416,6 @@ function lastLineOf(before: string): string {
   return newline < 0 ? before : before.slice(newline + 1);
 }
 
-// True for `word-word-word` / `word_word_word` slugs, e.g.
-// `ADR-0008-interactive-shell-delegate-risk-gate` or `108-security-eval-corpus`.
-// Every `-`/`_` segment must be pure (all letters, all digits, or a SINGLE
-// letters-then-digits or digits-then-letters tag — see below) and at least
-// two must be alphabetic words of 3+ characters. A UUID (`550e8400-e29b-…`)
-// or a prefixed token (`ghp_1234abcdEF…`) has MULTI-transition mixed segments
-// (letter-digit-letter-digit…) and is therefore still NOT a slug, so real
-// credentials keep flowing through this gate.
-//
 // A "plainly cased" letter run — all-lowercase, all-uppercase (an acronym
 // like `ADR`), or Capitalised (one leading uppercase letter, the rest
 // lowercase). Real language never hops between cases letter-by-letter; a
@@ -459,6 +472,16 @@ function isSlugHexTail(segment: string): boolean {
   return SLUG_HEX_TAIL_RE.test(segment);
 }
 
+// True for `word-word-word` / `word_word_word` slugs, e.g.
+// `ADR-0008-interactive-shell-delegate-risk-gate` or `108-security-eval-corpus`.
+// There must be at least three `-`/`_` segments, each pure (all letters, all
+// digits, or a SINGLE letters-then-digits or digits-then-letters tag — see
+// `isSingleTransitionTag`), except that the LAST may be a 10-16 hex id
+// (`isSlugHexTail`); at least one must be a plainly cased alphabetic word of
+// 3+ characters. A UUID (`550e8400-e29b-…`) or a prefixed token
+// (`ghp_1234abcdEF…`) has MULTI-transition mixed segments
+// (letter-digit-letter-digit…) and is therefore still NOT a slug, so real
+// credentials keep flowing through this gate.
 function isWordSlug(value: string): boolean {
   const segments = value.split(/[-_]/);
   if (segments.length < 3) {
@@ -505,8 +528,8 @@ function shannonEntropy(value: string): number {
  * The bare shape decision — digit gate, word-slug exclusion, then
  * hex-blob-or-entropy-floor. Deliberately carries NO allow-shape exemption:
  * whether an allow-shape should exempt a value depends on context a caller
- * decides (F-SEC-F2) — the per-line scan below never exempts once a label is
- * present, and would never reach this function at all without one.
+ * decides (F-SEC-F2). Reached only through `shapeQualifiesAsSecret`, from the
+ * label-free callers; the labelled scans use `labelledPieceQualifies`.
  */
 function bareShapeQualifies(head: string): { qualifies: boolean; entropy: number } {
   // Code identifiers (camelCase / PascalCase / snake_case) routinely exceed
@@ -531,7 +554,7 @@ function bareShapeQualifies(head: string): { qualifies: boolean; entropy: number
   }
   const entropy = shannonEntropy(head);
   const hexBlob = isHexBlob(head);
-  if (entropy < 3.6 && !hexBlob) {
+  if (entropy < ENTROPY_FLOOR_BITS && !hexBlob) {
     return { qualifies: false, entropy };
   }
   return { qualifies: true, entropy };
@@ -560,7 +583,7 @@ export function looksSecretShaped(value: string): boolean {
 function buildMatch(start: number, end: number, value: string, entropy: number): DetectorMatch {
   // Map entropy 3.6..5.0 into confidence 0.4..0.7. A hex blob that only
   // qualified on shape keeps the band's floor rather than a negative score.
-  const confidence = Math.max(0.4, Math.min(0.7, 0.4 + (entropy - 3.6) * 0.21));
+  const confidence = Math.max(0.4, Math.min(0.7, 0.4 + (entropy - ENTROPY_FLOOR_BITS) * 0.21));
   return {
     category: "secret",
     policyId: "secrets.high-entropy",
@@ -593,8 +616,54 @@ const URL_TRAILING_PUNCTUATION_RE = /[.,;:!?)\]}]$/;
  * floor the generic TOKEN scan already applies via its own 20-char minimum. */
 const URL_COMPONENT_MIN_LENGTH = 20;
 
-function findUrlSpans(content: string): Array<{ start: number; end: number; raw: string }> {
-  const spans: Array<{ start: number; end: number; raw: string }> = [];
+interface Span {
+  readonly start: number;
+  readonly end: number;
+}
+
+interface UrlSpan extends Span {
+  readonly raw: string;
+}
+
+interface UrlComponentSpan extends Span {
+  readonly kind: "path" | "query" | "fragment";
+}
+
+/** Half-open interval overlap. */
+function overlaps(a: Span, start: number, end: number): boolean {
+  return start < a.end && end > a.start;
+}
+
+// Known document hosts (owner decision, 2026-11-02): their URL PATH carries a
+// public document id — a Google Sheets/Docs/Drive file id (44 mixed-case
+// alphanumerics), a Notion page id (32 hex) — that is shaped exactly like a
+// credential, and label-free shape cannot tell the two apart. On these hosts
+// alone path segments are not evaluated. Query values and the fragment still
+// are (a `?access_token=…` on docs.google.com stays redacted), the labelled
+// scans never look inside a URL anyway, and the host must match EXACTLY: a
+// look-alike (`docs.google.com.evil.io`) or any userinfo in the authority
+// (`https://docs.google.com@evil.io/…`) is an ordinary host. Kept small and
+// explicit on purpose — every entry widens what passes unredacted.
+const DOCUMENT_HOSTS: ReadonlySet<string> = new Set([
+  "docs.google.com",
+  "sheets.google.com",
+  "drive.google.com",
+  "notion.so",
+  "www.notion.so",
+]);
+/** A Notion public site: exactly one workspace label before `.notion.site`. */
+const NOTION_SITE_HOST_RE = /^[a-z0-9-]+\.notion\.site$/;
+
+function isKnownDocumentHost(authority: string): boolean {
+  if (authority.includes("@")) {
+    return false;
+  }
+  const host = authority.replace(/:[0-9]*$/, "").toLowerCase();
+  return DOCUMENT_HOSTS.has(host) || NOTION_SITE_HOST_RE.test(host);
+}
+
+function findUrlSpans(content: string): UrlSpan[] {
+  const spans: UrlSpan[] = [];
   URL_SPAN_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = URL_SPAN_RE.exec(content)) !== null) {
@@ -612,9 +681,13 @@ function findUrlSpans(content: string): Array<{ start: number; end: number; raw:
   return spans;
 }
 
-/** Component spans (path segment / query value / fragment) RELATIVE to `raw`'s own start. */
-function urlComponentSpans(raw: string): Array<{ start: number; end: number }> {
-  const spans: Array<{ start: number; end: number }> = [];
+/**
+ * Component spans (path segment / query value / fragment) RELATIVE to `raw`'s
+ * own start. Path segments are left out on a known document host
+ * (`isKnownDocumentHost`).
+ */
+function urlComponentSpans(raw: string): UrlComponentSpan[] {
+  const spans: UrlComponentSpan[] = [];
   const schemeMatch = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.exec(raw);
   if (schemeMatch === null) {
     return spans;
@@ -625,6 +698,7 @@ function urlComponentSpans(raw: string): Array<{ start: number; end: number }> {
   while (i < raw.length && raw[i] !== "/" && raw[i] !== "?" && raw[i] !== "#") {
     i += 1;
   }
+  const documentHost = isKnownDocumentHost(raw.slice(schemeMatch[0].length, i));
   let pathEnd = i;
   while (pathEnd < raw.length && raw[pathEnd] !== "?" && raw[pathEnd] !== "#") {
     pathEnd += 1;
@@ -632,8 +706,8 @@ function urlComponentSpans(raw: string): Array<{ start: number; end: number }> {
   let segStart = i;
   for (let j = i; j <= pathEnd; j += 1) {
     if (j === pathEnd || raw[j] === "/") {
-      if (j > segStart) {
-        spans.push({ start: segStart, end: j });
+      if (j > segStart && !documentHost) {
+        spans.push({ start: segStart, end: j, kind: "path" });
       }
       segStart = j + 1;
     }
@@ -650,10 +724,10 @@ function urlComponentSpans(raw: string): Array<{ start: number; end: number }> {
         const pair = raw.slice(pairStart, j);
         const eq = pair.indexOf("=");
         if (eq !== -1 && eq + 1 < pair.length) {
-          spans.push({ start: pairStart + eq + 1, end: j });
+          spans.push({ start: pairStart + eq + 1, end: j, kind: "query" });
         } else if (eq === -1 && pair.length > 0) {
           // A valueless param — the whole pair is the only candidate there is.
-          spans.push({ start: pairStart, end: j });
+          spans.push({ start: pairStart, end: j, kind: "query" });
         }
         pairStart = j + 1;
       }
@@ -661,9 +735,24 @@ function urlComponentSpans(raw: string): Array<{ start: number; end: number }> {
     cursor = queryEnd;
   }
   if (cursor < raw.length && raw[cursor] === "#" && cursor + 1 < raw.length) {
-    spans.push({ start: cursor + 1, end: raw.length });
+    spans.push({ start: cursor + 1, end: raw.length, kind: "fragment" });
   }
   return spans;
+}
+
+const TOKEN_RUN = /[A-Za-z0-9+/=_-]+/g;
+
+/**
+ * A word (any casing: a query names identifiers like `TypeError`), a number or
+ * a short version tag (`v1`, `cp311`) — never a letter-digit-letter chunk.
+ */
+function isQueryWord(word: string): boolean {
+  return /^(?:[A-Za-z]*|[0-9]+)$/.test(word) || isSingleTransitionTag(word);
+}
+
+/** `bun+test+timeout+flaky`: a `+`-joined search query, not a base64 run. */
+function isQueryWordRun(run: string): boolean {
+  return run.includes("+") && run.split("+").every((piece) => piece.split(/[-_]/).every(isQueryWord));
 }
 
 export interface SecretShapedCandidate {
@@ -681,7 +770,11 @@ export interface SecretShapedCandidate {
  * `shapeQualifiesAsSecret`.
  *
  * `+` is swapped for a literal space first (review round 2, F-LOG-F1
- * follow-up): it is `application/x-www-form-urlencoded`'s space convention —
+ * follow-up) — but only inside a run whose `+`-joined pieces are all words,
+ * numbers or short version tags (`isQueryWordRun`): `+` is also a base64
+ * character, and splitting a base64 secret at every `+` left pieces under the
+ * 20-character floor, so the secret was never a candidate. It is
+ * `application/x-www-form-urlencoded`'s space convention —
  * `URLSearchParams` already decodes it for a query VALUE, but nothing decodes
  * it for a path segment or fragment, and `TOKEN`'s own character class
  * includes it while `isWordSlug` never learned to split on it. A `+`-joined
@@ -699,7 +792,7 @@ export interface SecretShapedCandidate {
  * to the same question caused.
  */
 export function secretShapedCandidatesIn(text: string): SecretShapedCandidate[] {
-  const normalized = text.replace(/\+/g, " ");
+  const normalized = text.replace(TOKEN_RUN, (run) => (isQueryWordRun(run) ? run.replace(/\+/g, " ") : run));
   const out: SecretShapedCandidate[] = [];
   TOKEN.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -773,38 +866,42 @@ function labelledPieceQualifies(piece: string): { entropy: number } | null {
   }
   const withoutSeparators = piece.replace(/[-_.+]/g, "");
   const entropy = shannonEntropy(withoutSeparators.length > 0 ? withoutSeparators : piece);
-  if (entropy >= 3.6) {
+  if (entropy >= ENTROPY_FLOOR_BITS) {
     return { entropy };
   }
   return null;
 }
 
-interface SlashPieceMatch {
-  readonly offset: number;
-  readonly length: number;
-  readonly entropy: number;
+/** A path component a person named: a plainly cased word of 3+ letters, or a word slug. */
+function isPathWordPiece(piece: string): boolean {
+  return (/^[A-Za-z]{3,}$/.test(piece) && isPlainCasedWord(piece)) || isWordSlug(piece);
 }
 
 /**
- * LOG-F1: a `/`-joined compound (a relative doc link, a filesystem path) is
- * decomposed into its `/`-delimited pieces and scored piece by piece — the
- * same decomposition principle a URL's own path segments already get (see
- * `urlComponentSpans`) — so a long ordinary path is never flagged purely
- * because its TOTAL length crosses the entropy floor; only a PIECE that is
- * itself secret-shaped narrows the eventual match down to itself.
+ * The labelled decision for a value head. A `/`-joined head is decomposed
+ * (LOG-F1) so a long ordinary path is never flagged on its TOTAL length: it
+ * qualifies when any `/`-piece does, or — since `/` is a base64 character and
+ * a base64 secret's pieces can each be too short to qualify — when no piece
+ * reads as a path word (`isPathWordPiece`) and the head with `/` removed
+ * does. The caller masks the WHOLE value either way: once a label has called
+ * a value a secret, masking one piece of it discloses the rest.
  */
-function firstQualifyingSlashPiece(head: string): SlashPieceMatch | null {
-  let offset = 0;
-  for (const piece of head.split("/")) {
-    if (piece.length > 0) {
-      const found = labelledPieceQualifies(piece);
-      if (found !== null) {
-        return { offset, length: piece.length, entropy: found.entropy };
-      }
-    }
-    offset += piece.length + 1; // +1 for the '/' separator itself.
+function labelledValueQualifies(head: string): { entropy: number } | null {
+  if (!head.includes("/")) {
+    return labelledPieceQualifies(head);
   }
-  return null;
+  let pathLike = false;
+  for (const piece of head.split("/")) {
+    if (piece.length === 0) {
+      continue;
+    }
+    const found = labelledPieceQualifies(piece);
+    if (found !== null) {
+      return found;
+    }
+    pathLike ||= isPathWordPiece(piece);
+  }
+  return pathLike ? null : labelledPieceQualifies(head.replace(/\//g, ""));
 }
 
 export function detectEntropy(content: string): DetectorMatch[] {
@@ -844,10 +941,11 @@ export function detectEntropy(content: string): DetectorMatch[] {
     // tracking (e.g. a `d`-flag `exec`) needed to locate it.
     const end = am.index + am[0].length;
     const start = end - value.length;
-    if (urlSpans.some((u) => start < u.end && end > u.start)) {
+    if (urlSpans.some((u) => overlaps(u, start, end))) {
       continue;
     }
-    const found = labelledPieceQualifies(value);
+    // The head judges, the dotted tail rides along — as in the scan below.
+    const found = labelledValueQualifies(value.split(".")[0] as string);
     if (found !== null) {
       matches.push(buildMatch(start, end, value, found.entropy));
     }
@@ -861,13 +959,13 @@ export function detectEntropy(content: string): DetectorMatch[] {
     const end = start + value.length;
     // Already handled above, component-by-component, inside a URL (F-LOG-F1)
     // — skip so the JOINED run is never scored here too.
-    if (urlSpans.some((u) => start < u.end && end > u.start)) {
+    if (urlSpans.some((u) => overlaps(u, start, end))) {
       continue;
     }
     // Already handled above by `LABEL_ASSIGNMENT_RE` when this run is a
     // `LABEL=VALUE` fusion (the whole run failed its OWN label lookback —
     // nothing precedes it — so it would otherwise silently drop through).
-    if (matches.some((existing) => start < existing.end && end > existing.start)) {
+    if (matches.some((existing) => overlaps(existing, start, end))) {
       continue;
     }
     // LOG-F1: the label must be genuinely ADJACENT — the label word, its
@@ -893,17 +991,7 @@ export function detectEntropy(content: string): DetectorMatch[] {
     // span but never earns the match, so `identifier.someMethodName` cannot pass
     // a gate its head would fail.
     const head = TOKEN_HEAD.exec(value)?.[0] ?? value;
-    if (head.includes("/")) {
-      const piece = firstQualifyingSlashPiece(head);
-      if (piece === null) {
-        continue;
-      }
-      const pieceStart = start + piece.offset;
-      const pieceEnd = pieceStart + piece.length;
-      matches.push(buildMatch(pieceStart, pieceEnd, content.slice(pieceStart, pieceEnd), piece.entropy));
-      continue;
-    }
-    const found = labelledPieceQualifies(head);
+    const found = labelledValueQualifies(head);
     if (found === null) {
       continue;
     }

@@ -43,12 +43,6 @@ import { sourceForFileRead as sourceForFileReadInternal } from "./read-source";
 import { filterSourceMatches } from "./source-context";
 
 /**
- * Validate serialized JSON structurally, or ordinary text without changing its format.
- * The rule itself lives with the floor in `output-validation.ts` so this adapter and the
- * MCP compatibility wrapper cannot drift apart again (T24 F-002): byte preservation is
- * decided there, after the structural walk, by canonical structural equivalence.
- */
-/**
  * Scrub secrets, PII and exfiltration spans from free text.
  *
  * Re-exported here because this is the security module's facade and callers
@@ -148,6 +142,13 @@ export { resolveImpactEvidenceConfig, resolveImpactEvidenceConfigTrusted, verify
 // under that same binding rather than a second `from "./config"` re-export,
 // which would collide with it as a duplicate identifier.
 export { loadSecurityConfig };
+
+/**
+ * Validate serialized JSON structurally, or ordinary text without changing its format.
+ * The rule itself lives with the floor in `output-validation.ts` so this adapter and the
+ * MCP compatibility wrapper cannot drift apart again (T24 F-002): byte preservation is
+ * decided there, after the structural walk, by canonical structural equivalence.
+ */
 export function validateSerializedOutput(
   content: string,
   exemptExfil?: ExfilExemption,
@@ -187,21 +188,31 @@ function ephemeralHashFn(): (value: string) => string {
   return (value: string) => hmacHash(value, key);
 }
 
-// Core analysis: run detectors, resolve the decision, and apply self-protection
-// (checksum/downgrade/disabled-policy). Persists incidents + state. Findings from
-// self-protection are folded into the decision so they gate.
-export async function analyze(
+// What one run needs before it looks at any content. A path scan loads it once
+// and reuses it for every file (review-backend-slice-36:F-001).
+type AnalysisContext = {
+  config: SecurityConfig;
+  hashFn: (value: string) => string;
+};
+
+async function loadAnalysisContext(cwd: string): Promise<AnalysisContext> {
+  const config = await loadSecurityConfig(cwd);
+  return { config, hashFn: await hashFnFor(cwd) };
+}
+
+// The per-content half of `analyze`: detectors and the decision, no state I/O.
+async function detectAndResolve(
   cwd: string,
   input: SecurityCheck,
-  opts: { filesystemSourceScan?: boolean } = {},
-): Promise<AnalysisResult> {
-  const config = await loadSecurityConfig(cwd);
+  context: AnalysisContext,
+  opts: { filesystemSourceScan?: boolean },
+): Promise<{ decision: SecurityDecision; warning?: string }> {
+  const { config, hashFn } = context;
   const original = await runDetectorsAsync(cwd, input.content, config);
   const contextual = opts.filesystemSourceScan && input.source === "trusted-project" && input.path
     ? await filterSourceMatches(input.content, input.path, original)
     : { matches: original };
   const matches = contextual.matches;
-  const hashFn = await hashFnFor(cwd);
 
   const buildOpts: BuildFindingOptions = {
     source: input.source,
@@ -216,7 +227,16 @@ export async function analyze(
   }
 
   const decision = resolveDecision(config, { ...buildOpts, matches });
+  return contextual.warning !== undefined ? { decision, warning: contextual.warning } : { decision };
+}
 
+// The per-run half of `analyze`: self-protection (checksum/downgrade/disabled
+// policy) is a fact about the config, not about a file, so it records its
+// incidents and state once per run.
+async function runSelfProtection(
+  cwd: string,
+  config: SecurityConfig,
+): Promise<{ findings: SecurityFinding[]; warnings: string[] }> {
   const previous = await readState(cwd);
   const selfProtection = evaluateSelfProtection(config, previous);
   if (selfProtection.incidents.length > 0) {
@@ -233,6 +253,21 @@ export async function analyze(
   if (!config.configUnreadable) {
     await writeState(cwd, currentState(config));
   }
+  return { findings: selfProtection.findings, warnings: selfProtection.warnings };
+}
+
+// Core analysis: run detectors, resolve the decision, and apply self-protection.
+// Persists incidents + state. Findings from self-protection are folded into the
+// decision so they gate.
+export async function analyze(
+  cwd: string,
+  input: SecurityCheck,
+  opts: { filesystemSourceScan?: boolean } = {},
+): Promise<AnalysisResult> {
+  const context = await loadAnalysisContext(cwd);
+  const { config } = context;
+  const { decision, warning } = await detectAndResolve(cwd, input, context, opts);
+  const selfProtection = await runSelfProtection(cwd, config);
 
   if (selfProtection.findings.length > 0) {
     decision.findings.push(...selfProtection.findings);
@@ -242,7 +277,7 @@ export async function analyze(
 
   return {
     decision,
-    warnings: [...selfProtection.warnings, ...(contextual.warning ? [contextual.warning] : [])],
+    warnings: [...selfProtection.warnings, ...(warning !== undefined ? [warning] : [])],
     config,
   };
 }
@@ -331,32 +366,49 @@ export async function runScanPath(
   });
   const findings: SecurityFinding[] = [];
   const warnings: string[] = [];
-  let config: SecurityConfig | undefined;
   const files = traversal.files.map((file) => ({ ...file }));
+  const markIncomplete = (): void => {
+    traversal.coverage.status = "incomplete";
+    if (!traversal.coverage.reasons.includes("security analysis unavailable")) {
+      traversal.coverage.reasons.push("security analysis unavailable");
+    }
+  };
+  // Loaded once for the whole scan; an unavailable context fails every file, as
+  // a per-file load that threw used to.
+  const context = await loadAnalysisContext(cwd).catch(() => undefined);
+  let analyzed = 0;
   for (const item of traversal.contents) {
     try {
-      const result = await analyze(cwd, {
+      if (context === undefined) throw new Error("security analysis unavailable");
+      const result = await detectAndResolve(cwd, {
         content: item.content,
         source: input.source,
         path: item.path,
         ...(input.target !== undefined ? { target: input.target } : {}),
-      }, { filesystemSourceScan: true });
-      config ??= result.config;
+      }, context, { filesystemSourceScan: true });
+      analyzed += 1;
       findings.push(...result.decision.findings);
-      warnings.push(...result.warnings);
+      if (result.warning !== undefined) warnings.push(result.warning);
     } catch {
       const file = files.find((entry) => entry.path === item.path && entry.status === "scanned");
       if (file !== undefined) {
         file.status = "failed";
         file.reason = "security analysis unavailable";
       }
-      traversal.coverage.status = "incomplete";
-      if (!traversal.coverage.reasons.includes("security analysis unavailable")) {
-        traversal.coverage.reasons.push("security analysis unavailable");
-      }
+      markIncomplete();
     }
   }
-  config ??= await loadSecurityConfig(cwd);
+  const config = context?.config ?? (await loadSecurityConfig(cwd));
+  // Self-protection runs once per scan that analyzed anything, never per file.
+  if (analyzed > 0) {
+    try {
+      const selfProtection = await runSelfProtection(cwd, config);
+      findings.push(...selfProtection.findings);
+      warnings.unshift(...selfProtection.warnings);
+    } catch {
+      markIncomplete();
+    }
+  }
   const computed = computeGate(findings, config);
   const gate = computed.gate === "pass" && traversal.coverage.status === "incomplete"
     ? "incomplete"

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectEntropy, looksSecretShaped } from "./entropy";
+import { detectEntropy, looksSecretShaped, secretShapedCandidatesIn } from "./entropy";
 
 test("does NOT flag a PascalCase identifier near an 'api' substring (the reported FP)", () => {
   // `...VariablesApi` puts "api" in the label window before `PipelineVariablesStore`,
@@ -418,5 +418,145 @@ describe("LOG-F2 (flow 355 review round 3): ADJACENT_LABEL tolerates a filler wo
   test("an arbitrary sentence between a label and an unrelated value is still NOT adjacent (filler stays a closed set)", () => {
     const content = "the password everyone always forgets is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz";
     expect(detectEntropy(content)).toEqual([]);
+  });
+});
+
+// --- perimeter review slice 33 ---------------------------------------------
+
+describe("logic-33:F-001: a dotted credential behind a LABEL=VALUE assignment is masked whole", () => {
+  test("lowercase `api_key = \"<hex>.<alnum>\"` yields one match covering the whole key", () => {
+    const key = "7ab31d0c62f94e8ab5c1739de28f406b.Kq3nZt7vXb1mR9wa";
+    const matches = detectEntropy(`api_key = "${key}"`);
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe(key);
+  });
+
+  test("camelCase `apiKey=<hex>.<alnum>` is masked whole too", () => {
+    const key = "7ab31d0c62f94e8ab5c1739de28f406b.Kq3nZt7vXb1mR9wa";
+    const matches = detectEntropy(`apiKey=${key}`);
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe(key);
+  });
+
+  test("dotted prose, version numbers and hostnames after a label stay unmasked", () => {
+    expect(detectEntropy("api_version=1.26.4")).toEqual([]);
+    expect(detectEntropy("auth_host=login.example.com")).toEqual([]);
+    expect(detectEntropy("token_file=secrets.production.json")).toEqual([]);
+    expect(detectEntropy("key=release.candidate.notes")).toEqual([]);
+  });
+});
+
+describe("security-code-33:SEC-33-1: a labelled `/`-bearing value is masked whole, never piece by piece", () => {
+  test("a base64 secret with one `/` after `secret:` is fully masked", () => {
+    const secret = "aB3dE5fG7hJ9kL2m/Np4Qr6St8Uv0Wx1Yz3==";
+    const matches = detectEntropy(`secret: "${secret}"`);
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe(secret);
+  });
+
+  test("a base64 secret whose `/`-pieces are each too short to qualify is still masked", () => {
+    const secret = "K7mDeNg/wJalrXUtnFEMI/bPxRfiCYEXAMPLEKEY";
+    const matches = detectEntropy(`password: ${secret}`);
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe(secret);
+  });
+
+  test("the same base64 value behind `=` is masked whole as well", () => {
+    const secret = "K7mDeNg/wJalrXUtnFEMI/bPxRfiCYEXAMPLEKEY";
+    const matches = detectEntropy(`password=${secret}`);
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe(secret);
+  });
+
+  test("an ordinary filesystem path after a label is still not flagged, in `:` or `=` form", () => {
+    expect(detectEntropy("key_path: /etc/ssl/private/keryx-prod-2024/server.pem")).toEqual([]);
+    expect(detectEntropy("KEY_PATH=/etc/ssl/private/keryx-prod-2024/server.pem")).toEqual([]);
+    expect(detectEntropy("AUTH_CACHE_DIR=/var/lib/keryx/cache1/sessions")).toEqual([]);
+  });
+});
+
+describe("highload-33:F-001: the label passes stay linear on pathological input", () => {
+  const time = (input: string): number => {
+    const started = performance.now();
+    detectEntropy(input);
+    return performance.now() - started;
+  };
+
+  test("a long label-dense identifier run with no connector", () => {
+    expect(time("-key".repeat(15_000))).toBeLessThan(250);
+    expect(time("_token".repeat(10_000))).toBeLessThan(250);
+  });
+
+  test("a very long label-dense previous line before a value", () => {
+    expect(time(`${"-key".repeat(15_000)}\nkd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz`)).toBeLessThan(250);
+    expect(time(`key${" ".repeat(60_000)}x\nkd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz`)).toBeLessThan(250);
+  });
+
+  test("the bounded continuation still recognises a long real label", () => {
+    const matches = detectEntropy("export SERVICE_ACCOUNT_API_KEY=\\\nkd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz");
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe("kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz");
+  });
+});
+
+describe("regression-33:F-001: known document hosts — label-free path ids are not secrets there", () => {
+  const sheetId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms";
+  const notionId = "8f3e2a1b4c5d6e7f8a9b0c1d2e3f4a5b";
+
+  test("a Google Sheets / Docs / Drive URL path id is not flagged", () => {
+    expect(detectEntropy(`https://docs.google.com/spreadsheets/d/${sheetId}/edit#gid=0`)).toEqual([]);
+    expect(detectEntropy(`see https://sheets.google.com/d/${sheetId}/edit.`)).toEqual([]);
+    expect(detectEntropy(`https://drive.google.com/file/d/${sheetId}/view`)).toEqual([]);
+    expect(detectEntropy(`https://DOCS.GOOGLE.COM:443/document/d/${sheetId}/edit`)).toEqual([]);
+  });
+
+  test("a Notion page URL with a 32-hex page id is not flagged", () => {
+    expect(detectEntropy(`https://www.notion.so/Keryx-Roadmap-${notionId}`)).toEqual([]);
+    expect(detectEntropy(`https://notion.so/${notionId}`)).toEqual([]);
+    expect(detectEntropy(`https://acme.notion.site/Roadmap-${notionId}`)).toEqual([]);
+  });
+
+  test("the same path segment on an unknown or look-alike host is still flagged", () => {
+    for (const host of [
+      "example.com",
+      "docs.google.com.evil.io",
+      "notion.so.attacker.net",
+      "evilnotion.so",
+      "notion.site",
+      "docs.google.com@evil.io",
+      "user:pw@docs.google.com",
+    ]) {
+      const matches = detectEntropy(`https://${host}/spreadsheets/d/${sheetId}/edit`);
+      expect(matches.map((match) => match.value)).toEqual([sheetId]);
+    }
+  });
+
+  test("a credential-named query value on a document host is still flagged", () => {
+    const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    for (const name of ["access_token", "key", "sig", "token"]) {
+      const matches = detectEntropy(`https://docs.google.com/spreadsheets/d/${sheetId}/edit?${name}=${secret}`);
+      expect(matches.map((match) => match.value)).toEqual([secret]);
+    }
+  });
+
+  test("a labelled value outside the URL on the same line is still flagged", () => {
+    const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    const matches = detectEntropy(`https://docs.google.com/spreadsheets/d/${sheetId} token: ${secret}`);
+    expect(matches.map((match) => match.value)).toEqual([secret]);
+  });
+});
+
+describe("backend-33:F-001: a literal `+` inside a base64 URL component no longer splits it below the floor", () => {
+  const secret = "K9dQnR2zVbT8pXeYf+WmC1oLaHsJtUvBg+Nq3rDcZk0AI";
+
+  test("a `+`-bearing base64 path segment or fragment is still caught whole", () => {
+    expect(detectEntropy(`https://x.example/cb/${secret}`).map((match) => match.value)).toEqual([secret]);
+    expect(detectEntropy(`https://x.example/cb#${secret}`).map((match) => match.value)).toEqual([secret]);
+    expect(secretShapedCandidatesIn(secret).map((candidate) => candidate.value)).toEqual([secret]);
+  });
+
+  test("a `+`-joined search query of words, numbers and version tags is still not a candidate", () => {
+    expect(detectEntropy("https://www.google.com/search?q=bun+test+timeout+flaky+v1+release")).toEqual([]);
+    expect(detectEntropy("https://example.com/search/numpy+cp311+manylinux+wheel+install")).toEqual([]);
   });
 });

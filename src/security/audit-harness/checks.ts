@@ -172,6 +172,10 @@ function foldFullWidth(ch: string): string {
   return code >= 0xff01 && code <= 0xff5e ? String.fromCodePoint(code - 0xfee0) : ch;
 }
 
+/** String.fromCodePoint throws RangeError outside 0..0x10FFFF; hostile text must not abort the audit. */
+function isCodePoint(code: number): boolean {
+  return Number.isInteger(code) && code >= 0 && code <= 0x10ffff;
+}
 /** Decodes exactly ONE entity at the very start of `text` (`^`-anchored), or returns undefined if `text` does not start with a recognized entity. */
 function decodeEntityStep(text: string): string | undefined {
   const match = HTML_ENTITY_AT_RE.exec(text);
@@ -179,11 +183,11 @@ function decodeEntityStep(text: string): string | undefined {
   const body = match[1]!;
   if (body.startsWith("#x")) {
     const code = Number.parseInt(body.slice(2), 16);
-    return Number.isFinite(code) ? String.fromCodePoint(code) : undefined;
+    return isCodePoint(code) ? String.fromCodePoint(code) : undefined;
   }
   if (body.startsWith("#")) {
     const code = Number.parseInt(body.slice(1), 10);
-    return Number.isFinite(code) ? String.fromCodePoint(code) : undefined;
+    return isCodePoint(code) ? String.fromCodePoint(code) : undefined;
   }
   return NAMED_HTML_ENTITIES[body];
 }
@@ -532,7 +536,7 @@ export function checkMissingDenyList(relativePath: string, settings: unknown): R
     return [];
   }
   const coversCredentials = deny.some((pattern) => touchesAgentCredentials(pattern));
-  if (coversCredentials && deny.length > 0) {
+  if (coversCredentials) {
     return [];
   }
   const pointer = "/permissions/deny";
@@ -590,9 +594,14 @@ export function checkBypassFlagPresent(relativePath: string, settings: unknown):
   const findings: RawFinding[] = [];
   const root = asRecord(settings);
   const permissions = asRecord(root?.permissions);
-  const defaultMode = root?.defaultMode ?? permissions?.defaultMode;
-  if (defaultMode === "bypassPermissions") {
-    const pointer = permissions?.defaultMode === "bypassPermissions" ? "/permissions/defaultMode" : "/defaultMode";
+  // Test each location on its own: a harmless value at one must not hide
+  // bypassPermissions at the other.
+  const modeLocations: Array<{ pointer: string; value: unknown }> = [
+    { pointer: "/permissions/defaultMode", value: permissions?.defaultMode },
+    { pointer: "/defaultMode", value: root?.defaultMode },
+  ];
+  for (const { pointer, value } of modeLocations) {
+    if (value !== "bypassPermissions") continue;
     findings.push({
       surface: "settings",
       check: "bypass-flag-present",
@@ -604,7 +613,7 @@ export function checkBypassFlagPresent(relativePath: string, settings: unknown):
       evidence: { category: "artifact-safety", matchedToken: "defaultMode:bypassPermissions" },
       internalProposal: {
         proposal: {
-          id: `reset-default-mode-${relativePath}`,
+          id: pointer === "/defaultMode" ? `reset-default-mode-root-${relativePath}` : `reset-default-mode-${relativePath}`,
           rationale: 'Set defaultMode back to "default" so the approval gate applies.',
           patch: '- "defaultMode": "bypassPermissions"\n+ "defaultMode": "default"',
         },
@@ -637,23 +646,22 @@ export function checkBypassFlagPresent(relativePath: string, settings: unknown):
 
 /**
  * Whether an npm-style package spec (`pkg`, `pkg@1.2.3`, `@scope/pkg`,
- * `@scope/pkg@1.2.3`, `pkg@latest`) is pinned to a real version. A scoped
- * package with no SECOND `@` is unpinned; `@latest` never counts as a pin.
+ * `@scope/pkg@1.2.3`) is pinned. Only an exact semver (prerelease/build
+ * allowed), a commit sha or an integrity hash counts: dist-tags (`@next`,
+ * `@latest`) and ranges (`@^1`, `@*`, `@1.x`) resolve to different code over
+ * time, which is the rug-pull the check exists to flag.
  */
+const EXACT_VERSION_RE = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const COMMIT_SHA_RE = /^[0-9a-f]{40}$/i;
+const INTEGRITY_HASH_RE = /^sha(?:256|384|512)[-:][A-Za-z0-9+/=_-]+$/;
 export function isPinnedPackageSpec(spec: string): boolean {
   if (spec.length === 0) return false;
-  if (spec.startsWith("@")) {
-    const secondAt = spec.indexOf("@", 1);
-    if (secondAt === -1) return false;
-    const version = spec.slice(secondAt + 1);
-    return version.length > 0 && version !== "latest";
-  }
-  const at = spec.indexOf("@");
+  // A scoped name starts with `@`, so its version separator is the second one.
+  const at = spec.indexOf("@", spec.startsWith("@") ? 1 : 0);
   if (at === -1) return false;
   const version = spec.slice(at + 1);
-  return version.length > 0 && version !== "latest";
+  return EXACT_VERSION_RE.test(version) || COMMIT_SHA_RE.test(version) || INTEGRITY_HASH_RE.test(version);
 }
-
 function packageArgFromLauncher(command: string, argv: string[]): { launcher: boolean; spec: string | undefined } {
   const base = command.split("/").pop() ?? command;
   const isPnpmDlx = base === "pnpm" && argv[0] === "dlx";

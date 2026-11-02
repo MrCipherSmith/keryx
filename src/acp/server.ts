@@ -26,6 +26,7 @@ import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import { listSessions, persistHistory } from "../session";
+import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
 import type { AcpFsReader } from "./capability-tools";
 import {
@@ -1214,6 +1215,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       };
       const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
       syncAcpArchive(archive, state.history);
+      if (!registry.canPersist(sessionId)) {
+        // Another instance took the lease over mid-turn: its transcript is not
+        // ours to rewrite. Said to the client instead of writing silently.
+        refuse({
+          code: JSON_RPC_ERROR_CODES.internalError,
+          message: describeLeaseLoss(state.lease).trim(),
+          data: { sessionId, reason: "session-lease-lost" },
+        });
+      }
       const updatedHandle = persistHistory(state.handle, state.history, {
         provider: providerId,
         model: modelId,
@@ -1431,6 +1441,21 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     try {
       state = registry.load(sessionId, cwd, clientCapabilities);
     } catch (cause) {
+      if (cause instanceof SessionLeasedError) {
+        // A live `keryx shell` (or another `keryx acp`) holds this session: loading
+        // it here would let both surfaces overwrite each other's transcript.
+        refuse({
+          code: JSON_RPC_ERROR_CODES.internalError,
+          message: `Cannot load session ${sessionId}: it is open in ${describeLeaseHolder(cause.holder)}`,
+          data: {
+            sessionId,
+            cwd,
+            reason: "session-leased",
+            leaseState: cause.state,
+            ...(cause.holder !== undefined ? { holder: { pid: cause.holder.pid, host: cause.holder.host } } : {}),
+          },
+        });
+      }
       if (!(cause instanceof AcpSessionTranscriptUnreadableError)) {
         throw cause;
       }
@@ -1662,6 +1687,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
   } finally {
     stopping = true;
+    // The connection is every session's only end (no `session/close`): give
+    // their leases back so a shell can resume them.
+    registry.releaseAll();
     // Flow 287, AC3: every MCP server process this connection started is
     // stopped, and AWAITED — on a clean end of input, on a read loop that
     // throws, and on `shutdown`. Returning first would orphan the children.

@@ -64,10 +64,10 @@ export interface RemoteQueueWiring {
   stopRemoteForSessionSwitch(): void;
   /** Remote control is going off: take the Telegram lines out of the queue and return their text. */
   dropQueuedTelegramLines(): string[];
-  /** A line from the topic while the shell is busy: queue it, labelled. */
-  enqueueTelegramLine(text: string): void;
+  /** A line from the topic while the shell is busy: queue it, labelled. `updateId` is the bridge's id for it. */
+  enqueueTelegramLine(text: string, updateId?: number): void;
   /** A line from the topic while the shell is idle: run it, labelled. */
-  runTelegramLine(text: string): void;
+  runTelegramLine(text: string, updateId?: number): void;
   /** Run a queued item the way it was queued (a Telegram line keeps its label and so its reply path). */
   runQueued(item: QueuedMainQuestion): void;
   /** A turn begins: the bridge learns whether it came from Telegram. */
@@ -82,6 +82,11 @@ export interface RemoteQueueWiring {
 
 export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueueWiring {
   let pendingEdit: PendingQueueEdit | undefined;
+  // Perimeter review (logic-24 F-001): the bridge pairs a Telegram turn and a removal with its line by the
+  // update id, never by text or queue order. The queue item id survives an edit, so it is the key here.
+  const updateIds = new Map<string, number>();
+  // The id of the Telegram line handed to `runLine` last; its turn takes it in `turnStarted`.
+  let startingUpdateId: number | undefined;
 
   return {
     removeMainQueue(index) {
@@ -90,7 +95,8 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
       // A Telegram line that is thrown away would leave its author waiting: tell the topic.
       const removed = queue[index];
       if (removed?.source === TG_SOURCE) {
-        deps.getBridge()?.queuedLineRemoved(removed.question);
+        deps.getBridge()?.queuedLineRemoved(removed.question, updateIds.get(removed.id));
+        updateIds.delete(removed.id);
       }
       deps.setQueue(removeMainQueueItem(queue, index));
       deps.paint();
@@ -139,28 +145,36 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
     dropQueuedTelegramLines() {
       const { kept, dropped } = dropQueuedBySource(deps.getQueue(), TG_SOURCE);
       if (dropped.length === 0) return [];
+      for (const item of dropped) updateIds.delete(item.id);
       deps.setQueue(kept);
       deps.paint();
       return dropped.map((item) => item.question);
     },
 
-    enqueueTelegramLine(text) {
+    enqueueTelegramLine(text, updateId) {
       const queue = deps.getQueue();
-      queue.push({ id: deps.nextId(), question: text, displayQuestion: deps.summarize(text), source: TG_SOURCE });
+      const id = deps.nextId();
+      if (updateId !== undefined) updateIds.set(id, updateId);
+      queue.push({ id, question: text, displayQuestion: deps.summarize(text), source: TG_SOURCE });
       deps.paint();
       deps.say(`◇ a line from Telegram is queued as q${queue.length}.\n`);
     },
 
-    runTelegramLine(text) {
+    runTelegramLine(text, updateId) {
+      startingUpdateId = updateId;
       deps.runLine(text, "operator", TG_SOURCE);
     },
 
     runQueued(item) {
+      startingUpdateId = item.source === TG_SOURCE ? updateIds.get(item.id) : undefined;
+      updateIds.delete(item.id);
       deps.runLine(item.question, "operator", item.source);
     },
 
     turnStarted(source) {
-      deps.getBridge()?.turnStarted(source);
+      const updateId = source === TG_SOURCE ? startingUpdateId : undefined;
+      startingUpdateId = undefined;
+      deps.getBridge()?.turnStarted(source, updateId);
     },
 
     assistantText(text) {

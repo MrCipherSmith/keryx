@@ -127,6 +127,22 @@ describe("readRenderingSetting / writeRenderingMode", () => {
     expect(loaded.ok && loaded.value.orphanMs).toBe(1234);
   });
 
+  // Perimeter review (regression-21 F-001): a load fills the flow-396 defaults in; saving the loaded
+  // value wrote them into the file, so a later change of the default no longer reached it.
+  test("saving a mode leaves the keys the file did not have out of it", () => {
+    const dir = freshDir();
+    // A file as Connect writes it: neither flow-396 key.
+    const { permissionMode: _mode, approvalTimeoutMs: _wait, ...connected } = testConfig();
+    saveRemoteConfig(connected, dir);
+    const file = remoteConfigPath(dir);
+    expect(readFileSync(file, "utf8")).not.toContain("permissionMode");
+    expect(writeRenderingMode("html", dir)).toEqual({ ok: true, value: "html" });
+    const doc = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    expect(doc.rendering).toBe("html");
+    expect("permissionMode" in doc).toBe(false);
+    expect("approvalTimeoutMs" in doc).toBe(false);
+  });
+
   test("a bad value is refused naming the valid ones, and the file is not touched", () => {
     const dir = freshDir();
     saveRemoteConfig(testConfig({ rendering: "rich" }), dir);
