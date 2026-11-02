@@ -447,7 +447,7 @@ function MachineSessionRow({
           encodeURIComponent(session.activeRunId ?? ""),
         signal,
       ),
-    enabled: detailsOpen && !!session.activeRunId,
+    enabled: !!session.activeRunId,
   });
   const routing = useQuery({
     enabled: detailsOpen,
