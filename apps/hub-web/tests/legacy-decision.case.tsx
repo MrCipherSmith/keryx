@@ -80,3 +80,10 @@ test('receipt recovery commits the original result without sending another mutat
  const requests:Sent[]=[];vi.spyOn(globalThis,'fetch').mockImplementation(async(path,init)=>{requests.push(sent(path,init));if(requests.length===1)throw new TypeError('Reply lost');return json(receipt(requests[0]!));});
  const view=mount();await act(()=>view.result.current.run(input));await act(async()=>{expect(await view.result.current.check()).toEqual({status:'committed'});});expect(requests.map(r=>r.method)).toEqual(['POST','GET']);expect(view.onCommitted).toHaveBeenCalledOnce();expect(view.result.current.pending).toBe(false);
 });
+
+test('lost accept recovery exposes the original decision for truthful restored confirmation',async()=>{
+ const requests:Sent[]=[];vi.spyOn(globalThis,'fetch').mockImplementation(async(path,init)=>{const request=sent(path,init);requests.push(request);if(requests.length===1)throw new TypeError('Reply lost');return json({...flow,status:'done',version:5,acceptedBy:context.principal.id,receipt:{id:'accepted',actorId:context.principal.id,createdAt:'2026-11-03T00:00:00.000Z'}});});
+ const first=mount();await act(()=>first.result.current.run({decision:'accept',comment:'',criterionIds:[],waivers:[]}));expect(first.result.current.pendingDecision).toBe('accept');const original=structuredClone(requests[0]);first.unmount();useDraftStore.getState().clearAll();
+ const recovered=mount();expect(recovered.result.current.pendingDecision).toBe('accept');expect(requests).toHaveLength(1);
+ await act(async()=>{expect(await recovered.result.current.retry()).toEqual({status:'committed'});});expect(requests[1]).toEqual(original);expect(recovered.onCommitted).toHaveBeenCalledOnce();expect(recovered.result.current.pendingDecision).toBeUndefined();
+});
