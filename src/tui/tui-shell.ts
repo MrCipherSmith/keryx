@@ -422,6 +422,8 @@ import { DECISION_SOURCES } from "../decisions/service";
 import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
+import { createAgentHostStatus } from "./agent-host-status";
+import { createHerdrCoreReporter, createStatusWriter, type HerdrCoreAttention } from "./herdr-core-status";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
@@ -4522,6 +4524,14 @@ export async function launchTuiAgentShell(opts: {
   // Surfaces this pane's lifecycle to a herdr workspace (working/idle/blocked).
   // No-op unless the shell was launched inside a herdr pane.
   const herdr = createHerdrReporter();
+  // herdr-core side (OSC 7501): inert unless `HC_TERMINAL_ID` is set. The writer goes through the live
+  // renderer's `writeOut` so a status sequence cannot interleave with a frame; once `onDestroy` has run
+  // (`destroyed`) the renderer is dead, so a late `clear` goes to stdout instead.
+  const hostStatus = createAgentHostStatus({
+    herdrCore: createHerdrCoreReporter({
+      write: createStatusWriter(() => (destroyed ? undefined : renderer)),
+    }),
+  });
   /** Session-scoped allow patterns (plus persisted permissions.json). */
   // Empty on purpose: `evaluateShellApproval` loads the saved list on every call, and tracks what it loaded so a removal reaches this set.
   const sessionShellAllow = new Set<string>();
@@ -5571,7 +5581,10 @@ export async function launchTuiAgentShell(opts: {
         },
         ask: async (request) => {
           chrome.hideMenu(); // release menuNav before the dock takes over
-          setMainAgent("blocked", "approval");
+          setMainAgent("blocked", "approval", {
+            kind: "permission",
+            text: `${request.agentId}: ${request.task}`,
+          });
           const preview = request.task.length > 80 ? `${request.task.slice(0, 77)}…` : request.task;
           const id = await chrome.withOverlay(() =>
             showComposerChoice(otui, r, chrome.dock, {
@@ -5664,6 +5677,7 @@ export async function launchTuiAgentShell(opts: {
     const setMainAgent = (
       status: "queued" | "running" | "done" | "failed" | "blocked",
       detail?: string,
+      attention?: HerdrCoreAttention,
     ): void => {
       debugEvent("main-agent", { status, detail });
       lastMainAgentStatus = status;
@@ -5676,6 +5690,7 @@ export async function launchTuiAgentShell(opts: {
         model: `${currentSel.provider}/${currentSel.model}`,
       });
       herdr.report(herdrStateFor(status));
+      hostStatus.status(status, attention);
     };
     // Idle main agent visible from launch.
     setMainAgent("queued", "ready");
@@ -6243,7 +6258,10 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
       chrome.hideMenu();
-      setMainAgent("blocked", "approval");
+      setMainAgent("blocked", "approval", {
+        kind: "permission",
+        text: cardTitle === undefined ? card[0] ?? dialog.title : card[card.length - 1] ?? dialog.title,
+      });
       const id = await chrome.withOverlay(() =>
         showComposerChoice(otui, r, chrome.dock, {
           title: dialog.title,
@@ -6284,7 +6302,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
       chrome.hideMenu();
-      setMainAgent("blocked", "approval");
+      setMainAgent("blocked", "approval", { kind: "permission", text: card[0] ?? "Send this message to the model?" });
       const id = await chrome.withOverlay(() =>
         showComposerChoice(otui, r, chrome.dock, {
           title: "Send this message to the model?",
@@ -6416,7 +6434,7 @@ export async function launchTuiAgentShell(opts: {
           return true;
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", { kind: "permission", text: `subagent (${mode}): ${taskPreview}` });
         addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
@@ -6489,7 +6507,7 @@ export async function launchTuiAgentShell(opts: {
           );
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", { kind: "permission", text: "apply_patch: review the diff" });
         addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
@@ -6570,7 +6588,10 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${dimChunk(otui, `  ${notice}`)}` }));
         }
         chrome.hideMenu();
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", {
+          kind: "permission",
+          text: `${described.server} wants to run ${described.tool}`,
+        });
         addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
@@ -6651,7 +6672,7 @@ export async function launchTuiAgentShell(opts: {
           );
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", { kind: "permission", text: described.command ?? described.message });
         const elicitationSubtitle =
           described.message.length > 80 ? `${described.message.slice(0, 77)}…` : described.message;
         addCauseLine(tool, meta);
@@ -6748,7 +6769,7 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${roleChunk(otui, "attention", `⚙ shell_exec needs approval`)} ${dimChunk(otui, "(menu above input)")}`,
         }),
       );
-      setMainAgent("blocked", "approval");
+      setMainAgent("blocked", "approval", { kind: "permission", text: cmd });
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       addCauseLine(tool, meta);
@@ -6876,7 +6897,7 @@ export async function launchTuiAgentShell(opts: {
         offer = judged.offer;
       }
       io.onSystem?.(`◇ approval for ${brief} sent to the Telegram topic; waiting for the answer there.\n`);
-      setMainAgent("blocked", "approval (telegram)");
+      setMainAgent("blocked", "approval (telegram)", { kind: "permission", text: `${brief} (Telegram)` });
       const answer = await bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), offer === undefined ? {} : { remember: offer.pattern });
       const decision = answer.decision;
       let rememberedNote = "";
@@ -6950,7 +6971,7 @@ export async function launchTuiAgentShell(opts: {
       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
     }): Promise<AskUserAnswer> => {
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      setMainAgent("blocked", "ask");
+      setMainAgent("blocked", "ask", { kind: "question", text: req.question });
       setBusyPhase("waiting for your answer (menu above input)");
       // Keep a short transcript breadcrumb; the interactive picker is at the input.
       const qShort = req.question.length > 100 ? `${req.question.slice(0, 97)}…` : req.question;
@@ -7557,6 +7578,9 @@ export async function launchTuiAgentShell(opts: {
       await done;
       return true;
     }
+    // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen
+    // any more: only now may herdr-core see `idle` (it types a template's first task on the first report).
+    hostStatus.markReady();
     bindSlateToLiveSession();
     splash = createSplashLifecycle({
       mount: () => mountEmptyTranscriptSplash(otui, r, transcript),
@@ -11444,6 +11468,7 @@ export async function launchTuiAgentShell(opts: {
       releaseLease: () => sessionLease.release(),
     });
     await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
+    hostStatus.exit(); // herdr-core: remove the status (no-op outside a herdr-core pane)
     try {
       renderer?.destroy();
     } catch {

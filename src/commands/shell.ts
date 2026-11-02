@@ -3860,7 +3860,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       stdinTTY: process.stdin.isTTY === true,
       stdoutTTY: process.stdout.isTTY === true,
       env: Object.fromEntries(
-        ["TERM", "TERM_PROGRAM", "COLORTERM", "TMUX", "HERDR_ENV", "HERDR_PANE_ID", "SSH_TTY", "LANG"].map((k) => [k, process.env[k]]),
+        ["TERM", "TERM_PROGRAM", "COLORTERM", "TMUX", "HERDR_ENV", "HERDR_PANE_ID", "HC_TERMINAL_ID", "SSH_TTY", "LANG"].map((k) => [k, process.env[k]]),
       ),
       watcherPid,
       dir: run.dir,
