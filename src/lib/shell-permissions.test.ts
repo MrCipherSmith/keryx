@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -29,6 +29,14 @@ function tempDir(): string {
   dirs.push(d);
   return d;
 }
+
+test("allowShellPattern reports a grant it could not store as not remembered", () => {
+  // The config dir is a regular file, so nothing can be written under it.
+  const blocker = path.join(tempDir(), "not-a-dir");
+  writeFileSync(blocker, "x");
+  expect(allowShellPattern("git status", blocker)).toBe("");
+  expect(allowShellPattern("git status", tempDir())).toBe("git status");
+});
 
 test("matchShellPattern: exact, and a trailing star", () => {
   expect(matchShellPattern("keryx wiki index", "keryx wiki index")).toBe(true);

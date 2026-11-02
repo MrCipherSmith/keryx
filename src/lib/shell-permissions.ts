@@ -387,14 +387,17 @@ export function allowShellPattern(pattern: string, dir?: string): string {
   try {
     const file = shellPermissionsPath(dir);
     ensureKeryxConfigDir(path.dirname(file));
-    updateConfigFile(file, (read) => {
+    const outcome = updateConfigFile(file, (read) => {
       const raw = parsePermissionsFile(read) ?? {};
       const allowRaw: unknown[] = Array.isArray(raw.allow) ? raw.allow : [];
       if (allowRaw.some((entry) => typeof entry === "string" && entry.trim() === trimmed)) return undefined;
       return `${JSON.stringify({ ...raw, allow: [...allowRaw, trimmed] }, null, 2)}\n`;
     });
+    // Not stored means not remembered: telling the operator otherwise is the
+    // grant they will rely on next time and not find.
+    if (outcome === "failed") return "";
   } catch {
-    // best-effort
+    return "";
   }
   return trimmed;
 }
