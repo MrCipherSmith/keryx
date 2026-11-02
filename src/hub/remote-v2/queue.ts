@@ -65,7 +65,7 @@ export function drainSessionQueue(state: HubState, repo: RemoteRepository, deps:
     });
   } catch (error) {
     if (!(error instanceof HubFailure)) throw error;
-    deps.admissionRefused?.(head.item.operationId);
+    deps.admissionRefused?.(head.item.operationId, error);
     // Refusal is not an observed native queue transition. A fresh machine
     // queue event owns suspension/version changes and any terminal receipt.
     return;
