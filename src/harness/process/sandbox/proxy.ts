@@ -19,6 +19,9 @@ import { unlinkSync } from "node:fs";
 import { isPrivateOrReservedAddress, looksLikeIpHost } from "../../mutation/guard";
 import type { RunCa } from "./tls-ca";
 
+/** Cap on cached per-target TLS terminators (each is a live loopback listener). */
+const MAX_TERMINATORS = 64;
+
 /** Canonical host form for comparison: lowercase, no trailing dot. */
 function normalizeHost(host: string): string {
   return host.toLowerCase().replace(/\.$/, "");
@@ -125,10 +128,11 @@ async function defaultResolveHost(hostname: string): Promise<string | undefined>
  * `sentinel`; the proxy substitutes `realValue` in the request headers of
  * requests to a host matching `injectHosts`.
  *
- * Applies to plaintext HTTP always, and to HTTPS ONLY when TLS termination is
- * enabled (`tlsTerminate`) — a blind `CONNECT` relay cannot rewrite encrypted
- * bytes, so without termination an HTTPS sentinel would leave the sandbox
- * unchanged (and fail auth).
+ * Applies to HTTPS ONLY, and only when TLS termination is enabled
+ * (`tlsTerminate`) — a blind `CONNECT` relay cannot rewrite encrypted bytes, so
+ * without termination an HTTPS sentinel would leave the sandbox unchanged (and
+ * fail auth). Plaintext HTTP NEVER unmasks: the real secret would cross the wire
+ * in cleartext, so a plain-HTTP request carrying an applicable sentinel is refused.
  */
 export interface CredentialMask {
   sentinel: string;
@@ -247,6 +251,17 @@ function applyMasks(
   return out;
 }
 
+/** Does any header value carry the sentinel of a mask that applies to `hostname`? */
+function carriesSentinel(headers: http.IncomingHttpHeaders, masks: CredentialMask[], hostname: string): boolean {
+  const applicable = masks.filter((m) => m.sentinel.length > 0 && matchesAllowlist(hostname, m.injectHosts));
+  if (applicable.length === 0) return false;
+  for (const value of Object.values(headers)) {
+    const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
+    if (values.some((v) => applicable.some((m) => v.includes(m.sentinel)))) return true;
+  }
+  return false;
+}
+
 export interface AllowlistProxy {
   host: string;
   port: number;
@@ -295,6 +310,19 @@ function httpTarget(req: http.IncomingMessage): HttpTarget {
   return { kind: "no-target" };
 }
 
+/** Start listening and reject on a bind error (EADDRINUSE, EACCES, ENAMETOOLONG…) instead of hanging. */
+function listenOrReject(server: http.Server, listen: () => unknown): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const onError = (error: Error): void => reject(error);
+    server.once("error", onError);
+    server.once("listening", () => {
+      server.off("error", onError);
+      resolve();
+    });
+    listen();
+  });
+}
+
 /** Create + start a loopback allowlist proxy. */
 export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise<AllowlistProxy> {
   const host = opts.host ?? "127.0.0.1";
@@ -341,9 +369,15 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
       refuse(`port ${target.port} is not allowed`);
       return;
     }
+    // Plaintext HTTP never unmasks a credential: refuse a request that carries the
+    // sentinel of a mask for this host rather than send the real secret in cleartext.
+    if (carriesSentinel(req.headers, opts.masks ?? [], target.hostname)) {
+      refuse("credential sentinel over plaintext HTTP");
+      return;
+    }
     const proceed = (connectHost: string): void => {
       decide({ host: hostname, allowed: true, kind: "http", port: target.port });
-      const headers = applyMasks(req.headers, opts.masks ?? [], target.hostname);
+      const headers = req.headers;
       // F1 defence-in-depth: `target.port` is already strictly parsed above, but
       // wrap the call anyway — nothing client-controlled may throw synchronously in
       // a request handler and crash the whole dispatcher.
@@ -457,23 +491,56 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
       req.pipe(upstreamReq);
     };
 
-  /** One internal HTTPS terminator per CONNECT target (Bun ignores SNICallback), cached. */
-  const mitmServers = new Map<string, { server: https.Server; port: number }>();
+  /**
+   * One internal HTTPS terminator per CONNECT target (Bun ignores SNICallback), cached
+   * AS A PROMISE set before the first await: concurrent CONNECTs to one host share one
+   * leaf and one listener. Bounded and LRU-ordered (Map insertion order, refreshed on
+   * every hit): under a wildcard allowlist the key space is attacker-chosen, so the
+   * oldest terminator's listener is closed once the cap is reached.
+   */
+  const mitmServers = new Map<string, Promise<{ server: https.Server; port: number }>>();
+  const closeTerminator = (entry: Promise<{ server: https.Server; port: number }>): Promise<void> =>
+    entry.then(
+      ({ server: s }) => new Promise<void>((resolve) => s.close(() => resolve())),
+      () => undefined,
+    );
   const mitmPortFor = async (hostname: string, targetPort: number, ca: RunCa): Promise<number> => {
     const host = normalizeHost(hostname);
     const key = `${host}:${targetPort}`;
     const hit = mitmServers.get(key);
-    if (hit) return hit.port;
-    const leaf = await ca.issueLeaf(host);
-    const server = https.createServer(
-      { key: leaf.keyPem, cert: leaf.certPem },
-      makeMitmHandler(host, targetPort),
-    );
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
-    const addr = server.address();
-    const port = addr && typeof addr === "object" ? addr.port : 0;
-    mitmServers.set(key, { server, port });
-    return port;
+    if (hit) {
+      mitmServers.delete(key);
+      mitmServers.set(key, hit);
+      return (await hit).port;
+    }
+    const created = (async () => {
+      const leaf = await ca.issueLeaf(host);
+      const terminator = https.createServer(
+        { key: leaf.keyPem, cert: leaf.certPem },
+        makeMitmHandler(host, targetPort),
+      );
+      await new Promise<void>((resolve, reject) => {
+        terminator.once("error", reject);
+        terminator.listen(0, "127.0.0.1", () => {
+          terminator.off("error", reject);
+          resolve();
+        });
+      });
+      const addr = terminator.address();
+      return { server: terminator, port: addr && typeof addr === "object" ? addr.port : 0 };
+    })();
+    mitmServers.set(key, created);
+    created.catch(() => {
+      if (mitmServers.get(key) === created) mitmServers.delete(key);
+    });
+    while (mitmServers.size > MAX_TERMINATORS) {
+      const oldest = mitmServers.keys().next().value;
+      if (oldest === undefined || oldest === key) break;
+      const evicted = mitmServers.get(oldest);
+      mitmServers.delete(oldest);
+      if (evicted) void closeTerminator(evicted);
+    }
+    return (await created).port;
   };
 
   server.on("connect", (req, clientSocket, head) => {
@@ -581,9 +648,9 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
     } catch {
       // did not exist — fine
     }
-    await new Promise<void>((resolve) => server.listen(opts.unixSocketPath, () => resolve()));
+    await listenOrReject(server, () => server.listen(opts.unixSocketPath));
   } else {
-    await new Promise<void>((resolve) => server.listen(opts.port ?? 0, host, () => resolve()));
+    await listenOrReject(server, () => server.listen(opts.port ?? 0, host));
   }
   const addr = server.address();
   const port = addr && typeof addr === "object" && addr !== null ? addr.port : 0;
@@ -594,12 +661,9 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       // Tear down every per-host TLS terminator created for this run.
-      await Promise.all(
-        [...mitmServers.values()].map(
-          ({ server: s }) => new Promise<void>((resolve) => s.close(() => resolve())),
-        ),
-      );
+      const terminators = [...mitmServers.values()];
       mitmServers.clear();
+      await Promise.all(terminators.map(closeTerminator));
     },
   };
 }

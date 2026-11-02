@@ -5,7 +5,7 @@
 // TLS upstream. The client trusts only the run CA — exactly what the CA-trust
 // env vars will deliver to a contained process.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import https from "node:https";
 import net from "node:net";
 import tls from "node:tls";
@@ -236,4 +236,99 @@ describe("createAllowlistProxy TLS terminate (live loopback)", () => {
       true,
     );
   });
+
+  test("concurrent CONNECTs to one fresh host share one leaf and one terminator and all succeed", async () => {
+    ca = await createRunCa();
+    const upLeaf = await ca.issueLeaf("localhost");
+    upstream = https.createServer({ key: upLeaf.keyPem, cert: upLeaf.certPem }, (_q, r) => {
+      r.writeHead(200);
+      r.end("OK-TLS-UPSTREAM");
+    });
+    const upPort: number = await new Promise((r) =>
+      upstream!.listen(0, "127.0.0.1", () => r((upstream!.address() as { port: number }).port)),
+    );
+    const realCa = ca;
+    let issued = 0;
+    const countingCa: RunCa = {
+      caCertPem: realCa.caCertPem,
+      // Slow issuance (as real openssl is) so every CONNECT arrives while the first is still issuing.
+      issueLeaf: async (h) => {
+        issued++;
+        await new Promise((r) => setTimeout(r, 150));
+        return realCa.issueLeaf(h);
+      },
+      dispose: () => realCa.dispose(),
+    };
+    const created: https.Server[] = [];
+    const realCreate = https.createServer.bind(https);
+    const spy = spyOn(https, "createServer").mockImplementation(((...args: Parameters<typeof https.createServer>) => {
+      const s = realCreate(...args);
+      created.push(s);
+      return s;
+    }) as typeof https.createServer);
+    try {
+      proxy = await createAllowlistProxy({ allowedDomains: ["localhost"], tlsTerminate: countingCa, upstreamCa: realCa.caCertPem });
+      const bodies = await Promise.all(
+        [1, 2, 3, 4, 5].map(() => httpsViaProxy(proxy!.host, proxy!.port, "localhost", upPort, realCa.caCertPem)),
+      );
+      for (const b of bodies) expect(b).toContain("OK-TLS-UPSTREAM");
+      expect(issued).toBe(1);
+      expect(created.length).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+  }, 30_000);
+
+  test("a failed leaf issuance answers 502 and is retried by the next CONNECT", async () => {
+    ca = await createRunCa();
+    const realCa = ca;
+    let calls = 0;
+    const flakyCa: RunCa = {
+      caCertPem: realCa.caCertPem,
+      issueLeaf: (h) => (++calls === 1 ? Promise.reject(new Error("openssl exploded")) : realCa.issueLeaf(h)),
+      dispose: () => realCa.dispose(),
+    };
+    const upLeaf = await realCa.issueLeaf("localhost");
+    upstream = https.createServer({ key: upLeaf.keyPem, cert: upLeaf.certPem }, (_q, r) => r.end("OK-AFTER-RETRY"));
+    const upPort: number = await new Promise((r) =>
+      upstream!.listen(0, "127.0.0.1", () => r((upstream!.address() as { port: number }).port)),
+    );
+    proxy = await createAllowlistProxy({ allowedDomains: ["localhost"], tlsTerminate: flakyCa, upstreamCa: realCa.caCertPem });
+    await expect(httpsViaProxy(proxy.host, proxy.port, "localhost", upPort, realCa.caCertPem)).rejects.toThrow(/502/);
+    const body = await httpsViaProxy(proxy.host, proxy.port, "localhost", upPort, realCa.caCertPem);
+    expect(body).toContain("OK-AFTER-RETRY");
+  }, 30_000);
+
+  test("the terminator cache is bounded: wildcard-allowlisted hosts cannot grow live listeners without limit", async () => {
+    ca = await createRunCa();
+    const sharedLeaf = await ca.issueLeaf("localhost");
+    const fakeCa: RunCa = { caCertPem: ca.caCertPem, issueLeaf: async () => sharedLeaf, dispose: async () => {} };
+    const created: https.Server[] = [];
+    const realCreate = https.createServer.bind(https);
+    const spy = spyOn(https, "createServer").mockImplementation(((...args: Parameters<typeof https.createServer>) => {
+      const s = realCreate(...args);
+      created.push(s);
+      return s;
+    }) as typeof https.createServer);
+    try {
+      proxy = await createAllowlistProxy({ allowedDomains: ["*.flood.test"], tlsTerminate: fakeCa });
+      for (let i = 0; i < 80; i++) {
+        const status = await new Promise<string>((resolve, reject) => {
+          const sock = net.connect(proxy!.port, proxy!.host, () => sock.write(`CONNECT h${i}.flood.test:443 HTTP/1.1\r\nHost: h${i}.flood.test:443\r\n\r\n`));
+          sock.once("data", (d) => {
+            sock.destroy();
+            resolve(d.toString("utf8").split("\r\n")[0] ?? "");
+          });
+          sock.on("error", reject);
+        });
+        expect(status).toContain("200");
+      }
+      await new Promise((r) => setTimeout(r, 50));
+      expect(created.length).toBe(80);
+      expect(created.filter((s) => s.listening).length).toBeLessThanOrEqual(64);
+    } finally {
+      spy.mockRestore();
+    }
+  }, 30_000);
 });
+
