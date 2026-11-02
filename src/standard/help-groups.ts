@@ -658,6 +658,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "herdr",
+    group: "External agents, ACP and MCP",
+    summary: "Register Keryx with the Herdr desktop app and herdr-core (opt-in install, remove, status).",
+  },
+  {
+    kind: "cli",
     name: "serve-mcp",
     group: "External agents, ACP and MCP",
     summary: "Expose Metaproject services over the Model Context Protocol (opt-in).",

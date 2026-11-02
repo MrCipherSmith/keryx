@@ -1,0 +1,587 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "481",
+  "slug": "herdr-app-herdr-core-keryx-osc-7501-prog",
+  "title": "Herdr app (herdr-core): статус keryx через OSC 7501, запись в programs.json, оркестрация через hc",
+  "status": "in-progress",
+  "createdAt": "2026-11-02T07:11:42.059Z",
+  "updatedAt": "2026-11-02T11:47:40.610Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:afca9eadff68efbc81474142bc51a5e7d422b8baddf0b5d3787a59d51c30b24b",
+  "acConfirmed": {
+    "AC13": {
+      "at": "2026-11-02T11:47:35.248Z",
+      "note": "Re-confirmed after the AC8/AC9 re-freeze; evidence unchanged. Live, isolated hc session keryx481 (hc 0.1.16, dev keryx f3a30d440): idle after start (k4), working->done on hc send --wait (k1), blocked kind=permission msg=<cmd> on a shell approval (k1), status null 20 ms before exit (k4), no 7501 text in any hc read screen. Later review fixes move the exit clear earlier in teardown and retry a failed write; neither changes the observed sequence. Evidence: flows/481-*/live/README.md, events.jsonl"
+    },
+    "AC14": {
+      "at": "2026-11-02T11:47:37.927Z",
+      "note": "Re-confirmed after the AC8/AC9 re-freeze; evidence unchanged. Live, isolated hc session: template run 'hc run --bg --name k2 keryx <task>' returned first_message.sent=true, task became turn 1 (READY, done); positional 'hc run --bg --name k3 <keryx path> shell <task>' idle->working->done with the prompt as the first turn. Evidence: flows/481-*/live/README.md, k2/k3 screens, events.jsonl"
+    },
+    "AC16": {
+      "at": "2026-11-02T11:47:40.610Z",
+      "note": "Re-run after the review fixes rewrote the guide's sandbox and agent-message sections: bun run docs:check: 2013 relative links / 672 files, 0 broken; retired spellings 0 undeclared; cli-reference-coverage + commands-by-task + help-groups 67 pass. Guide docs/docs/guides/herdr.md covers status protocol, keryx herdr install/remove/status, template and its shadowing, delegation via hc, agent-message framing and its shape checks, the per-mode sandbox caveat, old Herdr TUI coexistence, upstream programs.json entry + icon; cli-reference lists keryx herdr and the positional shell prompt."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific implement tasks T5-T9"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written test-first inside each implement task T5-T9 and pinned by AC test files"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "OSC 7501 encoder, herdr-core state mapper and reporter (pure module + tests)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:34:40.280Z",
+            "outcome": "started",
+            "detail": "481-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Wire herdr-core reporter into the TUI: ready idle, matrix states, blocked kind+text, clear on exit, render-safe writer, debug env",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:42:24.283Z",
+            "outcome": "started",
+            "detail": "481-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "keryx shell positional initial prompt submitted as the first turn",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:56:07.393Z",
+            "outcome": "started",
+            "detail": "481-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "hc agent-message framing and herdr-core section in the shell agent context",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T08:23:04.942Z",
+            "outcome": "started",
+            "detail": "481-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "keryx herdr install/remove/status: programs.json entry, icon, herdr-core template, registry",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:34:44.168Z",
+            "outcome": "started",
+            "detail": "481-T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Docs: herdr guide, CLI reference, upstream programs.json snippet",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Live verification under isolated herdr-core session: status sequence, template first_message.sent, positional prompt, screen integrity (AC13, AC14)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Live check in the operator's Herdr app: keryx in the + menu, no programs.error (AC15, operator go-ahead)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-02T07:11:42.059Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-02T07:29:45.080Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"да, запускай flow под пункт 1,2,3\"; source: claude-code session 471f0119, 2026-11-02 (operator asked for items 1-3 after the herdr.dev analysis)"
+    },
+    {
+      "at": "2026-11-02T07:30:08.911Z",
+      "event": "task-added",
+      "detail": "T5: OSC 7501 encoder, herdr-core state mapper and reporter (pure module + tests)"
+    },
+    {
+      "at": "2026-11-02T07:30:28.787Z",
+      "event": "task-added",
+      "detail": "T6: Wire herdr-core reporter into the TUI: ready idle, matrix states, blocked kind+text, clear on exit, render-safe writer, debug env"
+    },
+    {
+      "at": "2026-11-02T07:30:33.936Z",
+      "event": "task-added",
+      "detail": "T7: keryx shell positional initial prompt submitted as the first turn"
+    },
+    {
+      "at": "2026-11-02T07:30:38.944Z",
+      "event": "task-added",
+      "detail": "T8: hc agent-message framing and herdr-core section in the shell agent context"
+    },
+    {
+      "at": "2026-11-02T07:30:48.322Z",
+      "event": "task-added",
+      "detail": "T9: keryx herdr install/remove/status: programs.json entry, icon, herdr-core template, registry"
+    },
+    {
+      "at": "2026-11-02T07:30:53.844Z",
+      "event": "task-added",
+      "detail": "T10: Docs: herdr guide, CLI reference, upstream programs.json snippet"
+    },
+    {
+      "at": "2026-11-02T07:30:58.131Z",
+      "event": "task-added",
+      "detail": "T11: Live verification under isolated herdr-core session: status sequence, template first_message.sent, positional prompt, screen integrity (AC13, AC14)"
+    },
+    {
+      "at": "2026-11-02T07:31:03.966Z",
+      "event": "task-added",
+      "detail": "T12: Live check in the operator's Herdr app: keryx in the + menu, no programs.error (AC15, operator go-ahead)"
+    },
+    {
+      "at": "2026-11-02T07:31:22.208Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-02T07:31:29.555Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-02T07:31:36.829Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-02T07:31:50.227Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T10, T11 (was empty) — review runs on the finished implementation and docs"
+    },
+    {
+      "at": "2026-11-02T07:32:41.100Z",
+      "event": "frozen",
+      "detail": "17 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-02T07:32:49.592Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-02T07:34:40.281Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 481-T5"
+    },
+    {
+      "at": "2026-11-02T07:34:44.168Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 481-T9"
+    },
+    {
+      "at": "2026-11-02T07:41:50.574Z",
+      "event": "task-done",
+      "detail": "T5: OSC 7501 encoder, herdr-core state mapper and reporter (pure module + tests)"
+    },
+    {
+      "at": "2026-11-02T07:42:24.283Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 481-T6"
+    },
+    {
+      "at": "2026-11-02T07:44:45.709Z",
+      "event": "task-done",
+      "detail": "T9: keryx herdr install/remove/status: programs.json entry, icon, herdr-core template, registry"
+    },
+    {
+      "at": "2026-11-02T07:55:46.842Z",
+      "event": "task-done",
+      "detail": "T6: Wire herdr-core reporter into the TUI: ready idle, matrix states, blocked kind+text, clear on exit, render-safe writer, debug env"
+    },
+    {
+      "at": "2026-11-02T07:56:07.393Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 481-T7"
+    },
+    {
+      "at": "2026-11-02T08:21:03.174Z",
+      "event": "task-done",
+      "detail": "T7: keryx shell positional initial prompt submitted as the first turn"
+    },
+    {
+      "at": "2026-11-02T08:23:04.942Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 481-T8"
+    },
+    {
+      "at": "2026-11-02T08:44:48.343Z",
+      "event": "task-done",
+      "detail": "T8: hc agent-message framing and herdr-core section in the shell agent context"
+    },
+    {
+      "at": "2026-11-02T09:05:51.165Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Live, isolated hc session keryx481 (hc 0.1.16, dev keryx f3a30d440): idle after start (k4), working->done on hc send --wait (k1), blocked kind=permission msg=<cmd> on a shell approval (k1), status null 20 ms before exit (k4), no 7501 text in any hc read screen. Evidence: flows/481-*/live/README.md, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-02T09:05:53.217Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Live, isolated hc session: template run 'hc run --bg --name k2 keryx <task>' returned first_message.sent=true, task became turn 1 (READY, done); positional 'hc run --bg --name k3 <keryx> shell <task>' idle->working->done with the prompt as the first turn. Evidence: flows/481-*/live/README.md, k2/k3 screens, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-02T09:05:55.603Z",
+      "event": "task-done",
+      "detail": "T11: Live verification under isolated herdr-core session: status sequence, template first_message.sent, positional prompt, screen integrity (AC13, AC14)"
+    },
+    {
+      "at": "2026-11-02T09:12:13.588Z",
+      "event": "task-done",
+      "detail": "T10: Docs: herdr guide, CLI reference, upstream programs.json snippet"
+    },
+    {
+      "at": "2026-11-02T09:12:27.976Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: bun run docs:check: 2012 relative links / 672 files, 0 broken; retired spellings 0 undeclared; cli-reference-coverage + commands-by-task + help-groups 67 pass. Guide docs/docs/guides/herdr.md (commit 51de6ad24) covers status protocol, keryx herdr install/remove/status, template, delegation via hc, sandbox caveat, old Herdr TUI coexistence, upstream programs.json entry + icon; cli-reference lists keryx herdr and the positional shell prompt. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-02T11:46:57.167Z",
+      "event": "ac-updated",
+      "detail": "T4 review round 1: AC9's 'hc cannot reach the core from the sandbox' is false in workspace mode (network on keeps the herdr-core socket reachable; degradation F-001), so the section now says the sandbox does not contain hc. AC8 gains the review's hardening: from/reach shape checks, fail-closed framing of unparsed hc-shaped lines, operator-only routes skipped, Telegram lines never framed."
+    },
+    {
+      "at": "2026-11-02T11:47:35.248Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Re-confirmed after the AC8/AC9 re-freeze; evidence unchanged. Live, isolated hc session keryx481 (hc 0.1.16, dev keryx f3a30d440): idle after start (k4), working->done on hc send --wait (k1), blocked kind=permission msg=<cmd> on a shell approval (k1), status null 20 ms before exit (k4), no 7501 text in any hc read screen. Later review fixes move the exit clear earlier in teardown and retry a failed write; neither changes the observed sequence. Evidence: flows/481-*/live/README.md, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-02T11:47:37.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Re-confirmed after the AC8/AC9 re-freeze; evidence unchanged. Live, isolated hc session: template run 'hc run --bg --name k2 keryx <task>' returned first_message.sent=true, task became turn 1 (READY, done); positional 'hc run --bg --name k3 <keryx path> shell <task>' idle->working->done with the prompt as the first turn. Evidence: flows/481-*/live/README.md, k2/k3 screens, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-02T11:47:40.610Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: Re-run after the review fixes rewrote the guide's sandbox and agent-message sections: bun run docs:check: 2013 relative links / 672 files, 0 broken; retired spellings 0 undeclared; cli-reference-coverage + commands-by-task + help-groups 67 pass. Guide docs/docs/guides/herdr.md covers status protocol, keryx herdr install/remove/status, template and its shadowing, delegation via hc, agent-message framing and its shape checks, the per-mode sandbox caveat, old Herdr TUI coexistence, upstream programs.json entry + icon; cli-reference lists keryx herdr and the positional shell prompt. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "origin": {
+    "kind": "human-request",
+    "quote": "да, запускай flow под пункт 1,2,3",
+    "source": "claude-code session 471f0119, 2026-11-02"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/tui/herdr-core-status.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/tui/herdr-core-status.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/tui/herdr-core-status.test.ts src/tui/herdr-report.test.ts src/tui/tui-bus.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/tui/herdr-core-status.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/tui/herdr-core-status.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/tui/herdr-core-status.test.ts src/tui/tui-herdr-core-wiring.test.ts src/tui/herdr-report.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/commands/shell-initial-prompt.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/tui/hc-message.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/tui/hc-message.test.ts src/harness/process/sandbox/seatbelt.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/commands/herdr.test.ts"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/commands/herdr.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/standard/command-registry.test.ts src/standard/command-registry.coverage.test.ts src/standard/help-groups.test.ts src/cli-reference-coverage.test.ts"
+    },
+    "AC13": {
+      "kind": "judged"
+    },
+    "AC14": {
+      "kind": "judged"
+    },
+    "AC15": {
+      "kind": "judged"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "bun run docs:check"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun run typecheck && bun run lint && bun run test:client:terminal"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-02T09:05:51.165Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:0bc631cdb590ccd22fe8063895e30533de97bc5b95a6da1fec778abab1633bda"
+    },
+    {
+      "at": "2026-11-02T09:05:53.217Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:0bc631cdb590ccd22fe8063895e30533de97bc5b95a6da1fec778abab1633bda"
+    },
+    {
+      "at": "2026-11-02T09:12:27.976Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:0bc631cdb590ccd22fe8063895e30533de97bc5b95a6da1fec778abab1633bda"
+    },
+    {
+      "at": "2026-11-02T11:47:35.248Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:afca9eadff68efbc81474142bc51a5e7d422b8baddf0b5d3787a59d51c30b24b"
+    },
+    {
+      "at": "2026-11-02T11:47:37.927Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:afca9eadff68efbc81474142bc51a5e7d422b8baddf0b5d3787a59d51c30b24b"
+    },
+    {
+      "at": "2026-11-02T11:47:40.610Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:afca9eadff68efbc81474142bc51a5e7d422b8baddf0b5d3787a59d51c30b24b"
+    }
+  ]
+}

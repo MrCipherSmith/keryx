@@ -72,7 +72,12 @@ export function extraReadDenyRoots(env: Record<string, string | undefined>): str
   return rootsFromEnv("KERYX_SANDBOX_READ_DENY", env);
 }
 
-function shellSandboxProfile(
+/**
+ * The profile a sandboxed `shell_exec` runs under, from an explicit env: configured allowed domains
+ * make it `restricted` in every mode, else `strict` is network-off and `workspace` network-on.
+ * Exported so the mode matrix can be pinned without touching `process.env` or starting a proxy.
+ */
+export function shellSandboxProfile(
   root: string,
   mode: Exclude<ShellSandboxMode, "off">,
   env: Record<string, string | undefined>,

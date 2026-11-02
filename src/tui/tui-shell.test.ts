@@ -4134,13 +4134,23 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
   });
 
   test("a new turn starting (runLine) cancels the suggestion gate before anything else runs", () => {
-    // Flow 274 T7: `runLine`'s signature wrapped onto multiple lines when its
-    // `origin` param widened to include `"bus-message"`.
     const runLineStart = nextStepSource.indexOf("const runLine = (\n");
+    const bodyStart = nextStepSource.indexOf("): void => {", runLineStart);
+    const dispatchStart = nextStepSource.indexOf("if (chrome.isBusy()) {", bodyStart);
     expect(runLineStart).toBeGreaterThanOrEqual(0);
-    const block = nextStepSource.slice(runLineStart, runLineStart + 900);
-    expect(block).toContain('origin: "operator" | "task-notification" | "bus-message" = "operator"');
-    expect(block).toContain('suggestionGate.cancel("new turn started")');
+    expect(bodyStart).toBeGreaterThan(runLineStart);
+    expect(dispatchStart).toBeGreaterThan(bodyStart);
+    expect(nextStepSource.slice(runLineStart, bodyStart)).toContain(
+      'origin: "operator" | "task-notification" | "bus-message" | "agent-message" = "operator"',
+    );
+
+    // An empty operator line starts no turn. Every dispatched line must cancel
+    // before any other work, including the busy/side-worker dispatch.
+    const beforeDispatch = nextStepSource.slice(bodyStart + "): void => {".length, dispatchStart);
+    const withoutComments = beforeDispatch.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
+    expect(withoutComments).toMatch(
+      /^\s*if \(line\.length === 0 && origin === "operator"\) \{\s*return;\s*\}\s*suggestionGate\.cancel\("new turn started"\);/,
+    );
   });
 
   test("composer activity (typing) is wired to cancel the suggestion gate", () => {

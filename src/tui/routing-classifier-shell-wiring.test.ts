@@ -40,7 +40,7 @@ test("/route's on/off toggle read-and-spreads the existing ShellConfig.routingCl
 
 test("a turn routes when routing is on, the turn is the operator's own, and the line is non-empty regardless of /model", () => {
   const gateAt = SOURCE.indexOf(
-    'if (routingEnabled && origin === "operator" && line.trim().length > 0) {',
+    'if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {',
     FN_START,
   );
   expect(gateAt).toBeGreaterThan(FN_START);
@@ -59,7 +59,7 @@ test("an explicit /model or /connect pick changes the baseline without pinning r
 
 test("a routed turn's deps are a FRESH object from a fresh makeAgentDeps call — the routed IIFE reassigns its own block-scoped `deps`, never `sessionDeps` (the outer session's own reference)", () => {
   const gateAt = SOURCE.indexOf(
-    'if (routingEnabled && origin === "operator" && line.trim().length > 0) {',
+    'if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {',
     FN_START,
   );
   expect(gateAt).toBeGreaterThan(FN_START);
@@ -106,7 +106,7 @@ test("flow411: cancellation after routed preparation suppresses success and fall
 
 test("routing dispatch and picker share their catalog loader, both handed the shell's redetect", () => {
   // Flow 468: per-turn dispatch and the `/routing` picker load the same catalog through `loadRoutingProviders`, each with the shell's live detection.
-  const start = SOURCE.indexOf('if (routingEnabled && origin === "operator" && line.trim().length > 0) {', FN_START);
+  const start = SOURCE.indexOf('if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {', FN_START);
   expect(SOURCE.slice(start, SOURCE.indexOf("// Flow 341", start))).toContain("providers: () => loadRoutingProviders(opts.redetect),");
   expect(readFileSync(join(import.meta.dir, "routing-inspector.ts"), "utf8")).toContain("options.providers ?? (() => loadRoutingProviders(options.redetect");
   const showRoutingAt = SOURCE.indexOf("openRouting(otui, chrome, {", FN_START);

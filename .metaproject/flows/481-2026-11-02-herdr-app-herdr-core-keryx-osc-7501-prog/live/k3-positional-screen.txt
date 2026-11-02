@@ -1,0 +1,120 @@
+  keryx · Reply with the single… · 762c047b · deepseek/deepseek-chat                                                                                       ↑23.2K ↓4  │
+                                                                                                                                                                      │  keryx v0.4.3            ▭   ▕
+                                                                                                                                                                      │
+  │ ❯ Reply with the single word READY and nothing else. Do not call any tool.                                                                                        │  ◉ Session
+                                                                                                                                                                      │  deepseek/deepseek-chat
+  ● keryx  1:01 PM                                                                                                                                                    │  mode ask /settings · ↑23.2K ↓4
+  bus: joined as @agent-2 · 1 peers                                                                                                                                   │  23,226 tokens · $5.91
+                                                                                                                                                                      │
+  [quick -> github-copilot/claude-haiku-5.5] (JEV 59%)                                                                                                                │  ▣ Workspace
+                                                                                                                                                                      │  …/471f0119-3094-4a52-8b5e-d40…
+  READY                                                                                                                                                               │  no branch
+  ↑23222 ↓4 tokens · cache-read 17846                                                                                                                                 │
+                                                                                                                                                                      │  ▸ Work
+  worked for 4.7s                                                                                                                                                     │  ● Done
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │  ◈ Reviews
+                                                                                                                                                                      │  no reviews yet
+                                                                                                                                                                      │  2 items need review
+                                                                                                                                                                      │  no autoreview
+                                                                                                                                                                      │
+                                                                                                                                                                      │  ◧ Ops
+                                                                                                                                                                      │  no report — click to run
+                                                                                                                                                                      │  triggers —
+                                                                                                                                                                      │
+                                                                                                                                                                      │  ◇ Policy
+                                                                                                                                                                      │  on · 1 routed (last: quick)
+                                                                                                                                                                      │  guards off
+                                                                                                                                                                      │  53 available
+                                                                                                                                                                      │
+                                                                                                                                                                      │  ◎ Remote
+                                                                                                                                                                      │  off
+                                                                                                                                                                      │  off
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+                                                                                                                                                                      │
+ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+ │ Run the test suite to verify the project works                                                                                                                   │ │
+ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+  / commands · Ctrl+O blocks · Ctrl+C cancels a turn (twice to exit) · /exit                                                                  deepseek/deepseek-chat  │
