@@ -1,0 +1,66 @@
+{
+  "task_id": "task-44",
+  "status": "success",
+  "root": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx",
+  "base_head": "a862a0a3ea5d7f085e2fde1e86097b3486ae556a",
+  "paths": [
+    "src/lib/hub-machine/bridge.test-support.ts",
+    "src/lib/hub-machine/bridge.queue.network.test.ts"
+  ],
+  "diagnosis": "Fixture snapshot/POST CAS race, not product defect. Held real GET response while real native controller release applied; original helper used stale version and reproduced identical409 at helper87.",
+  "fix": "Helper refreshes current snapshot and retries only409 error.code stale-version, at most4 total attempts. Other conflicts propagate immediately; no sleeps or whole-test retries.",
+  "red": {
+    "command": "keryx ctx run -- bun test src/lib/hub-machine/bridge.queue.network.test.ts --test-name-pattern 'controller claim refreshes'",
+    "result": "1fail expected200 got409 stale-version matching CI stack",
+    "raw": ".metaproject/data/gdctx/raw/2026-11-02T07-24-59-426Z-011162_run.log"
+  },
+  "green": {
+    "result": "3network tests PASS70assertions",
+    "raw": ".metaproject/data/gdctx/raw/2026-11-02T07-27-20-503Z-0a9441_run.log",
+    "tests": [
+      "controller claim refreshes pins when an applied native release overtakes its captured snapshot",
+      "controller claim does not retry a real controller conflict",
+      "controller claim bounds repeated stale-version refusals to four fresh reads"
+    ]
+  },
+  "verification": {
+    "related": {
+      "result": "93pass 1preexistingtodo 0fail 7775assertions 9actual files,192.53s",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T07-31-07-190Z-bbd2b7_run.log",
+      "notes": "All8bridge network suites plus work/execution.test.ts ran. Explicit queue.test.ts path has no standalone file; native queue behavior is covered by bridge.queue and work/execution suites."
+    },
+    "root_types": {
+      "result": "PASS",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T07-28-19-168Z-e4d626_run.log"
+    },
+    "scripts_types": {
+      "result": "PASS",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T07-28-00-421Z-11e3d5_run.log"
+    },
+    "lint": {
+      "result": "PASS",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T07-27-55-832Z-1abc71_run.log"
+    },
+    "diff_check": {
+      "result": "PASS",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T07-28-29-724Z-407cbd_run.log"
+    }
+  },
+  "source_frozen": true,
+  "product_changes": false,
+  "index_changes": false,
+  "commits": [],
+  "routing_audit": {
+    "graph_used": "not needed exact failing fixture paths; graph predates working changes",
+    "wiki_used": "prior bootstrapped wiki/testing context",
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "checked_tree": {
+    "HEAD": "a862a0a3ea5d7f085e2fde1e86097b3486ae556a",
+    "files": {
+      "src/lib/hub-machine/bridge.test-support.ts": "1febd50e84cea3704ca9c7b69f17ba9b8a5f031ea78c327cb0f90c98d1cb60f0",
+      "src/lib/hub-machine/bridge.queue.network.test.ts": "4ce6f30b4b2ab7b298e709546b8c23f5c486b2bf6ea5d38d04b859b92092b362"
+    }
+  }
+}

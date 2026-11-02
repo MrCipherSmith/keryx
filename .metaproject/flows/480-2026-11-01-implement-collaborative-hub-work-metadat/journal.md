@@ -127,3 +127,6 @@
 - 2026-11-02T06:54:54.930Z - task-added: T43: Fix CI duplicate proxy bypass keys without weakening offline proof
 - 2026-11-02T06:55:05.371Z - task-attempt: T43: started (attempt 1) — Reproduce CI TS2783 and fix proxy guard test initialization only.
 - 2026-11-02T06:57:51.791Z - task-done: T43: Fix CI duplicate proxy bypass keys without weakening offline proof
+- 2026-11-02T07:21:49.124Z - task-added: T44: Reproduce and fix controller-generation queue CI stale-version race
+- 2026-11-02T07:22:12.084Z - task-attempt: T44: started (attempt 1) — Investigate exact root-suite mixed queue controller claim stale-version; require deterministic RED and narrow fixture or product diagnosis.
+- 2026-11-02T07:31:57.702Z - task-done: T44: Reproduce and fix controller-generation queue CI stale-version race

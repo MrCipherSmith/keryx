@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-02T06:57:51.791Z",
+  "updatedAt": "2026-11-02T07:31:57.702Z",
   "source": {
     "type": "description",
     "ref": null
@@ -934,6 +934,28 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "Exact root tsc reproduced TS2783 then passed with scripts types, guard regression1pass9assertions and focused lint; one-line initialization fix preserves bypass proof."
+    },
+    {
+      "id": "T44",
+      "title": "Reproduce and fix controller-generation queue CI stale-version race",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:22:12.084Z",
+            "outcome": "started",
+            "detail": "Investigate exact root-suite mixed queue controller claim stale-version; require deterministic RED and narrow fixture or product diagnosis."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Deterministic real-network stale claim RED; bounded fixture-only stale-version refresh GREEN;93relatedpass7775assertions1existingTODO;root/scripts types and lint green."
     }
   ],
   "history": [
@@ -1549,6 +1571,21 @@
       "at": "2026-11-02T06:57:51.791Z",
       "event": "task-done",
       "detail": "T43: Fix CI duplicate proxy bypass keys without weakening offline proof"
+    },
+    {
+      "at": "2026-11-02T07:21:49.124Z",
+      "event": "task-added",
+      "detail": "T44: Reproduce and fix controller-generation queue CI stale-version race"
+    },
+    {
+      "at": "2026-11-02T07:22:12.084Z",
+      "event": "task-attempt",
+      "detail": "T44: started (attempt 1) — Investigate exact root-suite mixed queue controller claim stale-version; require deterministic RED and narrow fixture or product diagnosis."
+    },
+    {
+      "at": "2026-11-02T07:31:57.702Z",
+      "event": "task-done",
+      "detail": "T44: Reproduce and fix controller-generation queue CI stale-version race"
     }
   ],
   "acKinds": {

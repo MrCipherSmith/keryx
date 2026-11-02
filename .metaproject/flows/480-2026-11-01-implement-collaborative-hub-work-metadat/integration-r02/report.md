@@ -45,3 +45,7 @@ Mac Bun1.3.14/1.4.4 each passed10package tests; Linux both versions passed actua
 ## Exact CI typecheck correction
 
 On published9dc913fc, distribution succeeded but root CI typecheck reported TS2783 for deliberate duplicate proxy-bypass keys in the test. The prior scripts-only cache verification did not establish root typecheck compatibility. T43 reproduced exact `bun run typecheck` RED and replaced the initializer with Object.assign, retaining wildcard inherited values and both empty-value assertions. Exact root/scripts typechecks, targeted lint and the guard regression (1pass/9assertions) now pass. No application, helper, cache or workflow changes. [Exact RED/GREEN evidence](ts-ci-results.md). Final PR-head CI remains authoritative.
+
+## Deterministic controller fixture race
+
+On a862a0a3e, all19otherchecks passed (including completeAC8 and distribution; Pages deployment skipped), while root core had27785pass/1failure in the mixed queue controller-generation test. T44 deterministically held a real SessionRecord GET across an actual applied native release: the unchanged fixture sent stale CAS pins and failed409 at the same controller claim assertion. Only the test client now refreshes exact stale-version responses, bounded to4attempts. Genuine authority conflicts still fail immediately. Three explicit network regressions and93relatedtests/7775assertions passed with1existingTODO, root/scripts types and lint green. No product source changes or whole-test retry. [Exact RED/GREEN evidence](queue-ci-results.md). Final new-head CI remains required.
