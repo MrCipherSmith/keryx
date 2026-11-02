@@ -233,3 +233,21 @@ test('a different Intent pending operation cannot be reconciled or announced fro
  mountAcceptance('canonical');await screen.findByRole('heading',{name:'Decision'});
  expect(screen.getByText(/another.*operation.*recovery|another.*operation.*reconciliation/i)).toBeVisible();expect(screen.queryByRole('button',{name:'Check decision status'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Retry identical decision'})).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Accept result'})).toBeDisabled();
 });
+
+
+test('canonical return for a nonpassing waivable criterion sends request changes without requiring a waiver',async()=>{
+ const revision=recordOf(fixture.records,'intent-revision',fixture.submission.intentRevisionId)!;
+ revision.criteria[0]!.waivable=true;
+ recordOf(fixture.records,'evidence','ev-agent')!.result='inconclusive';
+ fixture.submission.coverage[0]!.result='inconclusive';
+ mountAcceptance('canonical');const comment=await openReturn();
+ fireEvent.change(comment,{target:{value:'Please complete the Safari keyboard check'}});
+ fireEvent.click(screen.getByRole('checkbox',{name:'Relate to: Arrow keys and focus verified'}));
+ expect(screen.queryByRole('textbox',{name:/Waiver reason/})).not.toBeInTheDocument();
+ confirmReturn();
+ await waitFor(()=>expect(mutationRequests(fixture)).toHaveLength(1));
+ expect(mutationRequests(fixture)[0]!.body).toMatchObject({command:'review.decide',payload:{decision:'request-changes',reason:'Please complete the Safari keyboard check\n\nCriteria: ci1',waivers:[]}});
+ expect(await screen.findByText('Returned for changes',{selector:'[role=status]'})).toBeVisible();
+ expect(screen.queryByRole('button',{name:'Check operation status'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Retry identical operation'})).not.toBeInTheDocument();
+});

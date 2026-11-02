@@ -34,7 +34,7 @@ export function DecisionControls(props:ReviewDecisionProps){
   if(mode==='accept'&&((props.legacy&&!ack)||waiverMissing))return;
   if(mode==='accept'?!props.acceptAllowed:!props.returnAllowed)return;
   const target=current.current,action=mode;inFlight.current=true;setBusy(true);setError(null);
-  try{const result=await props.onDecision({decision:action,comment:comment.trim(),criterionIds:[...refs],waivers:waiverCriteria.map(row=>({criterionId:row.id,reason:waivers[row.id]!.trim()}))});if(current.current===target)outcome(result,action);}catch{if(current.current===target)setError('unknown');}
+  try{const result=await props.onDecision({decision:action,comment:comment.trim(),criterionIds:[...refs],waivers:action==='accept'?waiverCriteria.map(row=>({criterionId:row.id,reason:waivers[row.id]!.trim()})):[]});if(current.current===target)outcome(result,action);}catch{if(current.current===target)setError('unknown');}
   finally{inFlight.current=false;setBusy(false);}
  };
  const reconcile=async(retry:boolean)=>{if(inFlight.current)return;const action=props.pendingDecision??mode??'request-changes',target=current.current;inFlight.current=true;setBusy(true);try{const result=await(retry?props.onRetry?.():props.onCheck?.());if(current.current===target)outcome(result,action);}catch{if(current.current===target)setError('unknown');}finally{inFlight.current=false;setBusy(false);}};
