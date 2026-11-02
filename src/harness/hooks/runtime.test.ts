@@ -625,7 +625,8 @@ describe("createHookRuntime — built-in ports", () => {
       },
       { toolName: "Edit" },
     );
-    expect(seenFiles).toEqual([["src/other.ts", "src/old.ts"]]);
+    // The rename's destination is a write too, so the gate sees it beside the source.
+    expect(seenFiles.map((files) => [...files].sort())).toEqual([["src/new.ts", "src/old.ts", "src/other.ts"]]);
   });
 
   test("a learning-observer sink is invoked with the mapped observation kind", async () => {

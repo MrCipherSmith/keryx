@@ -334,6 +334,33 @@ function isRoutineKeryx(words: readonly string[], walk: Walk): boolean {
   return true;
 }
 
+// Long options that make git read a file outside the repository (`diff --no-index <a> <b>`, `blame --contents <file>`).
+// git accepts any unambiguous prefix of a long option, so a prefix of these names counts too.
+const GIT_OUTSIDE_READ_FLAGS: readonly string[] = ["--no-index", "--contents"];
+
+function isOutsideReadFlag(word: string): boolean {
+  const name = word.split("=")[0] as string;
+  return name.length >= 3 && name.startsWith("--") && GIT_OUTSIDE_READ_FLAGS.some((flag) => flag.startsWith(name));
+}
+
+/** A path operand that could name something outside the project: absolute, or with a `..` component. */
+function isEscapingOperand(word: string, walk: Walk): boolean {
+  if (!path.isAbsolute(word) && !word.split(/[\\/]/).includes("..")) return false;
+  if (walk.cwd === undefined) return true;
+  const resolved = realOrResolved(path.resolve(walk.cwd, word));
+  const relative = path.relative(walk.projectRoot, resolved);
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
+/**
+ * A git read stays routine only while it cannot print a file from outside the project: no `--no-index` or `--contents`
+ * (nor an abbreviation of them), and no absolute or `..` operand that resolves outside the project root.
+ */
+function isGitReadConfined(words: readonly string[], walk: Walk): boolean {
+  if (words.slice(2).some(isOutsideReadFlag)) return false;
+  return !words.slice(2).some((w) => !w.startsWith("-") && isEscapingOperand(w, walk));
+}
+
 function isRoutineSegment(words: readonly string[], walk: Walk): boolean {
   if (words.length === 0 || stripAssignments(words).length !== words.length) return false;
   switch (words[0]) {
@@ -346,7 +373,7 @@ function isRoutineSegment(words: readonly string[], walk: Walk): boolean {
     case "bun":
       return words[1] === "test" && isRoutineBunTest(words, walk);
     case "git":
-      return words[1] !== undefined && GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words);
+      return words[1] !== undefined && GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words) && isGitReadConfined(words, walk);
     default:
       return false;
   }

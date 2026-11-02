@@ -177,19 +177,41 @@ const ruleContainerEscape: Rule = (v) => {
   );
 };
 
+/** `git push` refspec → the branch it writes: `HEAD:main`, `+main`, `:main`, `refs/heads/main` all name `main`. */
+function pushDestination(refspec: string): string {
+  const spec = refspec.replace(/^\+/, "");
+  return (spec.slice(spec.lastIndexOf(":") + 1).split("/").pop() ?? "").toLowerCase();
+}
+
+/** A destination that names no branch (`HEAD`, `@`, empty): the pushed ref is whatever is checked out. */
+function isUnknownPushTarget(destination: string): boolean {
+  return destination === "" || destination === "head" || destination === "@";
+}
+
 /**
- * Force push. Destructive against a protected branch, and escalated when no
- * target is named at all — that form pushes the CURRENT branch, so the target is
- * unknown at approval time and the fail-closed direction is to ask.
+ * Force push or branch deletion. Destructive against a protected branch, and escalated when no target is
+ * named (only a remote, or nothing, follows `push`; or the target is `HEAD`) — that form pushes the CURRENT
+ * branch, so the target is unknown at approval time and the fail-closed direction is to ask. Reads the
+ * flag clusters (`-fu`), the `+` forced refspec, the `<src>:<dst>` destination, `--delete`/`-d` and `:<dst>`
+ * deletions, and `--mirror`/`--all` with force.
  */
 const ruleForcePush: Rule = (v) => {
   if (v.cmd !== "git" || !v.positionals.includes("push")) return false;
-  const forced = v.args.some((x) => x === "-f" || x === "--force" || x.startsWith("--force-with-lease"));
-  if (!forced) return false;
+  const flags = v.args.slice(v.args.indexOf("push") + 1).filter((x) => x.startsWith("-"));
+  const forceFlag = flags.some((x) => x === "--force" || x.startsWith("--force-") || /^-[a-z]*f[a-z]*$/i.test(x));
+  const deleteFlag = flags.some((x) => x === "--delete" || /^-[a-z]*d[a-z]*$/i.test(x));
+  const mirror = flags.some((x) => x === "--mirror" || (x === "--all" && forceFlag));
+  if (mirror) return true;
   const after = v.positionals.slice(v.positionals.indexOf("push") + 1);
-  if (after.length === 0) return true;
-  const named = after.map((x) => x.split("/").pop()?.toLowerCase() ?? "");
-  return named.some((n) => PROTECTED_BRANCHES.includes(n));
+  const refspecs = after.slice(1); // after[0] is the remote
+  if (forceFlag && refspecs.length === 0) return true;
+  return refspecs.some((spec) => {
+    const destination = pushDestination(spec);
+    const deletes = deleteFlag || spec.replace(/^\+/, "").startsWith(":");
+    const forced = forceFlag || spec.startsWith("+") || deletes;
+    if (!forced) return false;
+    return PROTECTED_BRANCHES.includes(destination) || (!deletes && isUnknownPushTarget(destination));
+  });
 };
 
 const RULES: readonly Rule[] = [
@@ -344,8 +366,16 @@ export function isPublishCommand(command: string): boolean {
  * containment is off (ADR-0006) or unavailable. Pure.
  */
 export function touchesAgentCredentials(command: string): boolean {
-  const text = command.toLowerCase();
-  return CREDENTIAL_MARKERS.some((marker) => text.includes(marker));
+  return textSpellings(command).some((text) => CREDENTIAL_MARKERS.some((marker) => text.includes(marker)));
+}
+
+/**
+ * The command text as written and with its shell quoting resolved (`.config/ke''ryx`, `auth\.json`, `$'\x61uth.json'`
+ * collapse to the literal), lowercased, runs of whitespace folded to one space. A marker that is matched on text is
+ * matched on both, so a spelling that changes the text without changing what runs is seen too.
+ */
+function textSpellings(command: string): string[] {
+  return [command, collapseQuoting(joinContinuations(command))].map((text) => text.toLowerCase().replace(/\s+/g, " "));
 }
 
 /**
@@ -371,8 +401,27 @@ const SAC_REVIEW_MARKERS: readonly string[] = ["confirm-review", "workspace revi
 
 /** True when `command` mentions SAC's proposal-review/confirm-token family. Pure. */
 export function touchesSacConfirmReview(command: string): boolean {
-  const text = command.toLowerCase();
-  return SAC_REVIEW_MARKERS.some((marker) => text.includes(marker));
+  if (textSpellings(command).some((text) => SAC_REVIEW_MARKERS.some((marker) => text.includes(marker)))) return true;
+  return parsedSacReview(command);
+}
+
+/**
+ * Parsed-word net for {@link touchesSacConfirmReview}: a keryx command (through wrappers, `bash -c`, `eval`, a terminal
+ * driver) whose words, once quoting and escapes are resolved, name `confirm-review` or `workspace … review`, or whose
+ * `workspace` verb is a word the shell has yet to expand.
+ */
+function parsedSacReview(command: string): boolean {
+  return anySimpleCommand(joinContinuations(command), (words) => {
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lower = args.map((w) => w.toLowerCase());
+    if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    if (lower.includes("confirm-review")) return true;
+    const workspace = lower.indexOf("workspace");
+    if (workspace < 0) return false;
+    const rest = args.slice(workspace + 1);
+    return lower.slice(workspace + 1).includes("review") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+  });
 }
 
 /**
@@ -698,6 +747,8 @@ function anySimpleCommand(command: string, visit: (words: string[]) => boolean, 
     const words = seg.words.map(unescapeWord);
     const peeled = peelWrappers(words);
     if (visit(peeled.words)) return true;
+    // A terminal driver runs the rest of its line as a program (`script -q /dev/null keryx review …`, `unbuffer keryx …`).
+    if (TERMINAL_DRIVERS.has(baseName(peeled.words[0])) && peeled.words.some((_w, i) => i > 0 && visit(peeled.words.slice(i)))) return true;
     if (depth < MAX_SHELL_NESTING) {
       if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, depth + 1)) return true;
       if (words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, depth + 1))) return true;
@@ -793,8 +844,13 @@ export function touchesReviewPublish(raw: string): boolean {
   });
 }
 
+/** `keryx review` verbs only the operator takes (their handlers refuse without a terminal). */
+const OPERATOR_REVIEW_VERBS: ReadonlySet<string> = new Set(["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise"]);
+/** `keryx hub machine` verbs that enroll this machine, widen what the Hub may run here, or drop the enrollment. */
+const HUB_MACHINE_OPERATOR_VERBS: ReadonlySet<string> = new Set(["pair", "allow", "configure", "unpair"]);
+
 /**
- * Flow 456: `keryx learn accept|promote|graduate` and `keryx agents external apply` are decisions only the operator takes
+ * Flow 456: `keryx learn accept|promote|graduate`, `keryx agents external apply`, the operator-only `keryx review` forms (`waive-mutation`, `override-reviewers`, `confirm-plan`, `decide-premise`, `estimate --confirm`, `comments reply --final`, `chunks --mode`, `--unattended`) and `keryx hub machine pair|allow|configure|unpair` are decisions only the operator takes
  * (their CLI needs a terminal; inside keryx shell the operator answers a card instead). A `shell_exec` of one of them always
  * asks, in every permission mode, and no answer is remembered. Parsed words like {@link touchesReviewPublish}, so a split or
  * escaped spelling and a verb the shell assembles (`learn $V`) are seen too. Pure.
@@ -809,6 +865,21 @@ export function touchesOperatorDecision(raw: string): boolean {
     if (learn >= 0) {
       const rest = args.slice(learn + 1);
       if (lower.slice(learn + 1).some((w) => w === "accept" || w === "promote" || w === "graduate") || (rest[0] !== undefined && wordIsOpaque(rest[0]))) return true;
+    }
+    const review = lower.indexOf("review");
+    if (review >= 0) {
+      const rest = lower.slice(review + 1);
+      const hasFlag = (flag: string): boolean => rest.some((w) => w === flag || w.startsWith(`${flag}=`));
+      if (rest.some((w) => OPERATOR_REVIEW_VERBS.has(w)) || hasFlag("--unattended")) return true;
+      if (rest.includes("estimate") && hasFlag("--confirm")) return true;
+      if (rest.includes("comments") && rest.includes("reply") && hasFlag("--final")) return true;
+      if (rest.includes("chunks") && hasFlag("--mode")) return true;
+    }
+    const hub = lower.indexOf("hub");
+    if (hub >= 0) {
+      const machine = lower.indexOf("machine", hub + 1);
+      const rest = args.slice(machine + 1);
+      if (machine >= 0 && (lower.slice(machine + 1).some((w) => HUB_MACHINE_OPERATOR_VERBS.has(w)) || (rest[0] !== undefined && wordIsOpaque(rest[0])))) return true;
     }
     const external = lower.indexOf("external");
     if (external >= 0) {

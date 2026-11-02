@@ -130,3 +130,11 @@ test('a stale daemon lock is released only once its recorded daemon is proven go
   acquireMachineDaemon(stateDir,hubId);await expect(release()).rejects.toThrow('recovery-required');expect(fs.existsSync(lockFile)).toBe(true);
  }finally{daemon.kill('SIGKILL');await daemon.exited;}
 });
+
+test('pair, allow, configure and unpair refuse under an agent shell (KERYX_TOOL_CALL=1) and change nothing', async () => {
+    const stateDir = dir();
+    const env = { KERYX_TOOL_CALL: '1', PAIR_FIXTURE: 'c'.repeat(22) };
+    for (const args of [['pair', '--url', 'https://hub.example', '--code-env', 'PAIR_FIXTURE'], ['allow', '--project', 'p', '--checkout', 'c', '--path', '/tmp', '--profile', 'native'], ['configure', '--candidate', 'current', '--ad-hoc', 'allow', '--max-runs', '1'], ['unpair']])
+        await expect(hubMachineCommand(args, { stateDir, env, write: () => { } })).rejects.toThrow('KERYX_TOOL_CALL=1');
+    expect(loadEnrollment(stateDir)).toBeNull();
+});
