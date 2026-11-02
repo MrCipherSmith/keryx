@@ -519,7 +519,12 @@ export function resolveSubagentHardCapMs(
 ): number {
   const runtime = input.runtime;
   if (typeof runtime === "object" && runtime !== null && Reflect.get(runtime, "kind") === "external") return 0;
-  const deadline = resolveSubagentTimeoutMs(SUBAGENT_CHILD_RESERVATION_MS, env);
+  // Size it from the deadline the call was granted (`invoke` reads the same two fields), not the fixed
+  // default: a 30-minute child must not be abandoned at the default's 5 + 3 minutes.
+  const nativeTimeout = typeof runtime === "object" && runtime !== null && Reflect.get(runtime, "kind") === "keryx"
+    ? Reflect.get(runtime, "timeoutMs") : undefined;
+  const requested = [input.timeout_ms, nativeTimeout].find((v) => typeof v === "number" && Number.isSafeInteger(v) && v >= 1);
+  const deadline = resolveSubagentTimeoutMs(typeof requested === "number" ? requested : SUBAGENT_CHILD_RESERVATION_MS, env);
   return deadline === 0 ? 0 : deadline + SUBAGENT_HARD_CAP_GRACE_MS;
 }
 
@@ -1770,7 +1775,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // Flow 454: a child's memory calls are recorded under its own id, and its keryx subprocesses carry
       // `KERYX_REVIEW_CALLER` — the child has no shell, so that runner is its whole "command environment".
       const reviewCaller = reviewerCallerId(labelRaw, workerId);
-      const tools = deps.childTools !== undefined ? deps.childTools(cwd) :
+      const buildTools = (): InteractiveTool[] => deps.childTools !== undefined ? deps.childTools(cwd) :
         mode === "read_only"
           ? [
               ...builtinReadOnlyTools(cwd),
@@ -1785,6 +1790,26 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
                 withOrchestratorLog(tool, { cwd, caller: reviewCaller }),
               ),
             ];
+      // `deps.childTools` may refuse (native-runtime rejects a cwd other than its own),
+      // and by here the reservation is taken and SubagentStart has fired: give both back
+      // like the hook-deny branch does instead of leaking them past the outer setup catch.
+      let tools: InteractiveTool[];
+      try {
+        tools = buildTools();
+      } catch (cause) {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "tools-unavailable", task });
+        await fireSubagentStop("Error").catch(() => {
+          // observe-only hook; the refusal below is the result that matters
+        });
+        ledger.release(spawned.reservation.reservationId, {
+          maxRuntimeMs: Math.round(performance.now() - nativeStartedAt),
+        });
+        return {
+          status: "Error",
+          output: `spawn_subagent could not build the child's tools for ${workerId}: ${cause instanceof Error ? cause.message : String(cause)}`,
+          isError: true,
+        };
+      }
 
       // SLATE-6 (flow 163 Track A): give the child a real, throwaway slate to
       // write Seeds into during its turn. Minted under the OS temp dir, NEVER

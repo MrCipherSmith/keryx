@@ -111,8 +111,13 @@ function buildDefaultShellAdapter(
   cwd: string,
   env: Record<string, string | undefined>,
   profileOverride?: SandboxProfile,
+  /** The granted runtime reservation; it is the real spawn's deadline (the adapter's own default is 5 s). */
+  timeoutMs?: number,
 ): ProcessAdapter {
-  const real = new RealProcessAdapter({ allowRealSubprocess: true });
+  const real = new RealProcessAdapter({
+    allowRealSubprocess: true,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+  });
   let profile =
     profileOverride ?? defaultSandboxProfile(canonicalPath(cwd), canonicalPath(tmpdir()), homedir());
   if (profileOverride === undefined && env.KERYX_DANGEROUSLY_DISABLE_SANDBOX === "1") {
@@ -1146,7 +1151,7 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
   // KERYX_SANDBOX_ALLOW_UNSANDBOXED=1 to run unsandboxed when no launcher exists.
   const usingInjectedAdapter = deps?.processAdapter !== undefined;
   const adapter: ProcessAdapter =
-    deps?.processAdapter ?? buildDefaultShellAdapter(cwd, env, profileOverride);
+    deps?.processAdapter ?? buildDefaultShellAdapter(cwd, env, profileOverride, budget.maxRuntimeMs);
   // For diagnostics (AC-H2): name the platform launcher when we own the adapter.
   const sandboxLauncher =
     usingInjectedAdapter

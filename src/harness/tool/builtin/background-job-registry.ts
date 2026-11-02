@@ -59,7 +59,7 @@ export type BackgroundSpawner = (
  * teardown (`session-exit`) — a plain "killed" status cannot tell an operator
  * whether their command failed or the supervisor gave up on it.
  */
-export type KillReason = "model" | "operator" | "idle" | "output-cap" | "session-exit" | "hold-timeout";
+export type KillReason = "model" | "operator" | "idle" | "output-cap" | "session-exit" | "hold-timeout" | "over-cap";
 
 /** Public, session-visible snapshot of a tracked task. */
 export interface JobOwner { kind: "run" | "inspection" | "session"; identity: string }
@@ -133,6 +133,9 @@ export function resolveMaxConcurrentBackgroundJobs(
   }
   return n;
 }
+
+/** A foreground task promoted past this multiple of the cap is refused (see `promote`). */
+const PROMOTE_CEILING_FACTOR = 2;
 
 /** SIGTERM→SIGKILL grace period for a background job kill (mirrors the sync path's 2s). */
 export const BACKGROUND_KILL_GRACE_MS = 2_000;
@@ -306,10 +309,11 @@ export interface JobRegistry {
    */
   waitForExit(jobId: string, ms: number): Promise<"exited" | "timeout" | "unknown">;
   /**
-   * Move a still-running foreground task to the background. Never kills and
-   * never refuses on a full concurrency cap — a task that is already running
-   * cannot be un-started, so the cap is reported via `overCap` (naming the
-   * other running background commands) rather than enforced destructively.
+   * Move a still-running foreground task to the background. Never kills. A full
+   * concurrency cap does not refuse it — a task that is already running cannot
+   * be un-started, so the cap is reported via `overCap` (naming the other running
+   * background commands) — but past twice the cap the promotion IS refused
+   * (`ok: false`), and the caller is expected to end the task.
    */
   promote(jobId: string): { ok: true; overCap?: string } | { ok: false; error: string };
   kill(jobId: string, reason?: KillReason, access?: JobAccess): Promise<{ ok: true } | { ok: false; error: string }>;
@@ -360,13 +364,27 @@ export const MIN_TASK_IDLE_TIMEOUT_MS = 1_000;
 /** Upper bound (30 min) for a model-supplied per-task idle timeout. */
 export const MAX_TASK_IDLE_TIMEOUT_MS = 1_800_000;
 
+/**
+ * Largest delay a JS timer honours (2^31 - 1 ms, ~24.8 days). `setTimeout` treats
+ * anything above it as 1 ms, so an env value past it would fire at once and kill
+ * every command. Env millisecond values are CLAMPED to it — a very large value
+ * means "as long as a timer can wait", never "immediately".
+ */
+export const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 function parseEnvMs(raw: string | undefined): number | undefined {
   if (raw === undefined || raw.trim().length === 0) return undefined;
   const n = Number.parseInt(raw.trim(), 10);
   // Malformed/negative is NOT "disabled" — the caller falls back to the
   // default, mirroring `resolveShellTimeoutMs`. An explicit `0` disables.
   if (!Number.isFinite(n) || n < 0) return Number.NaN;
-  return n;
+  return Math.min(n, MAX_TIMER_DELAY_MS);
+}
+
+/** {@link parseEnvMs} with a fallback for unset / malformed values; shared by the shell timeout and yield knobs. */
+export function resolveEnvMs(raw: string | undefined, fallback: number): number {
+  const n = parseEnvMs(raw);
+  return n === undefined || Number.isNaN(n) ? fallback : n;
 }
 
 /**
@@ -1039,16 +1057,29 @@ export function createJobRegistry(options?: {
       if (job === undefined) {
         return { ok: false, error: `unknown job_id: ${jobId}` };
       }
+      // Hard ceiling: past `PROMOTE_CEILING_FACTOR * maxConcurrent` other running
+      // background tasks the promotion is refused (the task stays foreground and
+      // the caller ends it), so slow foreground commands cannot grow the running
+      // set without bound.
+      const running = backgroundRunningJobs().filter((j) => j.info.jobId !== jobId);
+      if (job.info.status === "running" && running.length >= PROMOTE_CEILING_FACTOR * maxConcurrent) {
+        const names = running.map((j) => j.info.command).join(", ");
+        return {
+          ok: false,
+          error: `background task limit reached (${running.length} running: ${names}); this command outlived its wait and cannot become another background task, so it was stopped — wait for one to finish or kill it with shell_job_kill first`,
+        };
+      }
       job.info.phase = "background";
       job.recorder = undefined;
       if (!job.phaseEmitted) {
         job.phaseEmitted = true;
         onEvent?.({ type: "phase", jobId, phase: "background" });
       }
-      // A running task cannot be un-started, so an over-cap promote is
-      // REPORTED, never refused or killed. This is the one path by which
-      // running background tasks can exceed `maxConcurrent` — bounded,
-      // because every subsequent background start is still refused.
+      // A running task cannot be un-started, so a promote just over the cap is
+      // REPORTED, not refused. Foreground starts are not counted, so this is the
+      // one path by which running background tasks can exceed `maxConcurrent`;
+      // it is bounded by the hard ceiling above, past which the promotion is
+      // refused and the caller ends the task.
       const others = backgroundRunningJobs().filter((j) => j.info.jobId !== jobId);
       if (job.info.status === "running" && others.length >= maxConcurrent) {
         return { ok: true, overCap: others.map((j) => j.info.command).join(", ") };

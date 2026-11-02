@@ -359,7 +359,7 @@ describe("C-06 through C-08: timeout cleanup dispositions", () => {
   test("C-08: a torn-down output reader preserves already-collected bytes", () => {
     const source = readFileSync(new URL("./shell-exec-tool.ts", import.meta.url), "utf8");
 
-    expect(source).toMatch(/sink\.text \+= decoder\.decode\(chunk\.value, \{ stream: true \}\)/);
+    expect(source).toMatch(/sink\.push\(decoder\.decode\(chunk\.value, \{ stream: true \}\), which\)/);
     expect(source).toMatch(/catch\s*{\s*\/\/ stream torn down by the kill — keep what we have/s);
     expect(source).toMatch(/Promise\.race\(\[drained, new Promise\(\(r\) => setTimeout\(r, 200\)\)\]\)/);
   });
