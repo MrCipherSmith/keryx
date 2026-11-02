@@ -371,6 +371,25 @@ def info_for(database):
         require(row is not None, "Existing Hub state is missing")
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         body = canonical_legacy_state(db, json.loads(row[0]), tables)
+        # Empty additive review tables are equivalent to absence on a pre-feature copy.
+        # Nonempty facts/guards are exact durable data, not disposable projections.
+        review_history = {}
+        for table, columns in {
+            "hub_legacy_review_decisions": ["id", "project_id", "flow_id", "subject_revision_id", "flow_version", "body"],
+            "hub_legacy_review_guards": ["project_id", "flow_id", "decision_id", "flow_version"],
+        }.items():
+            digest = hashlib.sha256(json.dumps(columns, separators=(",", ":")).encode())
+            count = 0
+            if table in tables:
+                actual = [row[1] for row in db.execute(f'PRAGMA table_info("{table}")')]
+                require(actual == columns, "Unexpected legacy review table schema")
+                selected = ",".join('"' + column + '"' for column in columns)
+                for review_row in db.execute(f'SELECT {selected} FROM "{table}" ORDER BY {selected}'):
+                    require(all(isinstance(value, (str, int)) for value in review_row), "Unexpected legacy review metadata value")
+                    digest.update(json.dumps(review_row, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
+                    count += 1
+            review_history[table] = {"count": count, "digest": digest.hexdigest()}
+        body["_verifiedLegacyReviewHistory"] = review_history
         summary = {key: len(body.get(key, [])) for key in ("projects", "documents", "flows", "proposals", "events")}
         summary["retentionPolicy"] = {"events": 10000, "documentChanges": 5000, "verifiedImmutableDocumentVersions": body["_verifiedDocumentHistory"]["versions"]}
         summary["stateDigest"] = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
