@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
 import { useHub } from "../../app/hub-context";
 import { Button } from "../../components/ui";
+import { attentionTarget, attentionLabel, resolveAttentionTarget } from "./attention-target";
 import type { WorkAdapter } from "./adapter";
 import type { WorkRecord, WorkSnapshot } from "./types";
 import { fetchEventRecords, mergeWorkCache, mergeSnapshotCache, subscribeWorkRefresh, workSnapshotKey, workAttentionKey, workObservationsKey } from "./cache";
@@ -126,6 +127,7 @@ export function WorkAttention({
 }) {
   const { t } = useTranslation("work");
   const hub = useHub();
+  const [selectionError, setSelectionError] = useState(false);
   const query = useInfiniteQuery({
     queryKey: workAttentionKey(hub.scopeKey, hub.projectId, adapter.mode),
     initialPageParam: "",
@@ -150,47 +152,35 @@ export function WorkAttention({
       ) : (
         <div className="work-attention-items">
           {items.map((item) => {
-            const flowId =
-              item.kind === "flow"
-                ? item.id
-                : "flowId" in item
-                  ? item.flowId
-                  : null;
-            if (!flowId) return null;
+            const target = attentionTarget(item, records);
+            const flowId = target?.flowId;
             const parent = records.find(
               (r) => r.kind === "flow" && r.id === flowId,
             );
             return (
               <button
                 key={item.id}
-                onClick={() =>
-                  onSelect(
-                    flowId,
-                    item.kind === "intent"
-                      ? item.id
-                      : item.kind === "attempt"
-                        ? item.intentId
-                        : undefined,
-                    item.kind === "attempt" ? item.id : undefined,
-                  )
-                }
+                onClick={async () => {
+                  setSelectionError(false);
+                  try {
+                    const selected = await resolveAttentionTarget(item, records, adapter);
+                    if (selected) onSelect(selected.flowId, selected.intentId, selected.attemptId);
+                  } catch { setSelectionError(true); }
+                }}
               >
                 <strong>
-                  {"title" in item
-                    ? item.title
-                    : "summary" in item
-                      ? item.summary
-                      : item.id}
+                  {attentionLabel(item)}
                 </strong>
                 <small>
                   {parent && "title" in parent ? parent.title : flowId} ·{" "}
-                  {"state" in item ? t("states." + item.state) : ""}
+                  {"state" in item ? t("states." + item.state) : item.kind === "evidence" ? item.result : ""}
                 </small>
               </button>
             );
           })}
         </div>
       )}
+      {selectionError && <p role="alert">{t("attentionError")}</p>}
       {query.hasNextPage && (
         <Button
           variant="secondary"

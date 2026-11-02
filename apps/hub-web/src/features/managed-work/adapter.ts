@@ -288,7 +288,7 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
         data.records.some(
           (r) =>
             r.projectId !== projectId ||
-            !["flow", "intent", "attempt"].includes(r.kind),
+            !["flow", "intent", "attempt", "evidence"].includes(r.kind),
         ) ||
         !isCursor(data.nextCursor)
       )
