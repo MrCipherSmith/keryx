@@ -107,3 +107,14 @@ test("live-shaped decision-only receipt immediately reconciles related Intent st
   await waitFor(()=>expect(screen.getByText(submission.id)).toBeVisible(),{timeout:1000});
   expect(requests.filter(path=>path.includes("/snapshot?"))).toHaveLength(0);
 });
+
+test("live overview retention gap refreshes a bounded attention page without inventing a snapshot owner", async () => {
+  const flow=recordOf(snapshot.records,"flow","flow-demo")!;
+  route(path=>path.includes("/events?")?Response.json({error:{code:"expired",message:"retention gap"}},{status:410}):response([flow],"retained-current"));
+  const cache=client();
+  renderHub(<Probe/>,context,cache);
+  await waitFor(()=>expect(requests.filter(path=>path.includes("/attention?"))).toHaveLength(1));
+  expect(requests.filter(path=>path.includes("/snapshot?"))).toHaveLength(0);
+  expect(cache.getQueryData(key)).toBeUndefined();
+  expect(cache.getQueryData(attentionKey)).toEqual({pages:[{records:[flow],nextCursor:null,eventCursor:"retained-current"}],pageParams:[""]});
+});
