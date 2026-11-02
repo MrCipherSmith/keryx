@@ -51,3 +51,19 @@ test('a full document archive skips unpinned legacy versions instead of refusing
     expect(store.work.documentVersion('p', { documentId: 'a', version: 1, contentDigest: document('a', 'first').contentDigest })).toEqual(document('a', 'first'));
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('immutable document versions refuse conflicting content or metadata without replacing the original archive',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'hub-archive-conflict-')),store=openHubStore(dir);
+ const document={id:'d',projectId:'p',path:'wiki.md',kind:'wiki' as const,version:1,content:'Original',contentDigest:createHash('sha256').update('Original').digest('hex'),sourceRevision:'source',approval:'accepted' as const};
+ try{
+  store.work.archiveDocument(document);
+  const reference={documentId:document.id,version:document.version,contentDigest:document.contentDigest};
+  for(const changed of [{...document,content:'Other',contentDigest:createHash('sha256').update('Other').digest('hex')},{...document,sourceRevision:'different-source'}]){
+   expect(()=>store.work.archiveDocument(changed)).toThrow('Immutable document version already has a different representation');
+   expect(store.work.documentVersion('p',reference)).toEqual(document);
+  }
+  expect(store.work.archiveDocument(document)).toBe(true);
+  const reordered=Object.fromEntries(Object.entries(document).reverse()) as typeof document;
+  expect(store.work.archiveDocument(reordered)).toBe(true);
+ }finally{store.close();rmSync(dir,{recursive:true,force:true});}
+});

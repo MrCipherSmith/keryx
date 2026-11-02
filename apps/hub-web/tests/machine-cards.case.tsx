@@ -146,7 +146,7 @@ test("more sessions appends a page without hiding the first page", async () => {
   );
 });
 
-test("a collapsed row shows its active run's approval state and Flow association", async () => {
+test("Flow association comes only from the active run and approval state is distinct from idle", async () => {
   const original = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async (url, init) => {
     const path = String(url);
@@ -175,19 +175,18 @@ test("a collapsed row shows its active run's approval state and Flow association
     return original(url, init);
   });
   show();
-  // The row stays collapsed: a pending approval must be visible at a glance.
-  expect(await screen.findByText("Waiting for approval")).toHaveClass(
-    "needs-action",
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Details: Test session" }),
   );
-  expect(
-    screen.getByRole("button", { name: "Details: Test session" }),
-  ).toHaveAttribute("aria-expanded", "false");
-  fireEvent.click(screen.getByRole("button", { name: "Active run Flow: f" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Active run Flow: f" }),
+  );
   expect(navigate).toHaveBeenCalledWith({
     projectId: "p",
     tab: "flows",
     flowId: "f",
   });
+  expect(screen.getByText("Waiting for approval")).toBeVisible();
 });
 
 test("machine metadata resolves a candidate digest to provider and model without displaying the full digest", async () => {
@@ -238,7 +237,7 @@ test("machine metadata resolves a candidate digest to provider and model without
   expect(screen.queryByText(candidateId)).not.toBeInTheDocument();
 });
 
-test("one hundred machine sessions fetch runs only for active runs and routing only for an expanded row", async () => {
+test("machine session lists load only active-run attention eagerly and routing on explicit expansion", async () => {
   const original = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async (url, init) =>
     String(url).includes("/projects/p/sessions?")
@@ -248,6 +247,7 @@ test("one hundred machine sessions fetch runs only for active runs and routing o
             sessionId: "s" + index,
             title: "Session " + index,
             activeRunId: index < 3 ? "r" + index : null,
+            state: index < 3 ? "busy" : sessionFixture.state,
           })),
           cursor: 100,
           hasMore: false,
@@ -256,13 +256,30 @@ test("one hundred machine sessions fetch runs only for active runs and routing o
   );
   show();
   await screen.findByRole("button", { name: "Session 99" });
-  await waitFor(() =>
-    expect(requests.filter((path) => path.includes("/runs/"))).toHaveLength(3),
-  );
+  await waitFor(() => expect(requests.filter((path) => path.includes("/runs/"))).toHaveLength(3));
   expect(requests.filter((path) => path.includes("/routing"))).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Details: Session 0" }));
   await waitFor(() =>
-    expect(requests.filter((path) => path.includes("/routing"))).toHaveLength(1),
+    expect(
+      requests.filter(
+        (path) => path.includes("/routing") || path.includes("/runs/"),
+      ),
+    ).toHaveLength(4),
   );
-  expect(requests.filter((path) => path.includes("/runs/"))).toHaveLength(3);
+});
+
+
+test('collapsed machine sessions expose active-run approval attention without loading routing details',async()=>{
+ const original=vi.mocked(fetch).getMockImplementation()!;
+ vi.mocked(fetch).mockImplementation(async(url,init)=>{
+  const path=String(url);
+  if(path.includes('/projects/p/sessions?'))return Response.json({sessions:[{...sessionFixture,activeRunId:'approval-run',state:'busy'}],cursor:1,hasMore:false});
+  if(path.endsWith('/runs/approval-run')){requests.push(path);return Response.json({runId:'approval-run',sessionId:'s',projectId:'p',machineId:'m',checkoutId:'c',state:'waiting-approval',association:{mode:'flow',flowId:'f',expectedFlowVersion:1,specDigest:'a'.repeat(64),criteriaDigest:'a'.repeat(64)}});}
+  return original(url,init);
+ });
+ show();
+ expect(await screen.findByText('Waiting for approval')).toHaveClass('needs-action');
+ expect(screen.getByRole('button',{name:'Details: Test session'})).toHaveAttribute('aria-expanded','false');
+ expect(screen.getByRole('button',{name:'Active run Flow: f'})).toBeVisible();
+ expect(requests.filter(path=>path.includes('/routing'))).toHaveLength(0);
 });

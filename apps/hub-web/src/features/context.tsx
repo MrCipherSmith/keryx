@@ -10,6 +10,8 @@ import { Markdown } from '../components/Markdown';
 import { formatDate } from '../i18n/format';
 import { decodeRevisionFile, mergeEvents, parseRevisionChanges, safeExternalUrl } from './context-model';
 
+import { useRevisionPages, useRevisionSummary, MoreRevisions } from "./revisions-query";
+
 const projectPath = (id: string | null) => `/projects/${encodeURIComponent(id ?? '')}`;
 const codeClass = 'max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-700';
 
@@ -166,23 +168,16 @@ function ProposalCard({ proposal, document: doc }: { proposal: Proposal; documen
 export function RevisionsView() {
   const { t } = useTranslation('context');
   const { scopeKey, projectId, location, navigate } = useHub();
-  // The server pages newest first; older revisions load on request instead of being silently cut off.
-  const revisions = useInfiniteQuery({
-    queryKey: [scopeKey, projectId, 'revisions', 'pages'], initialPageParam: '',
-    queryFn: ({ pageParam, signal }) => getJson<{ revisions: CodeRevisionSummary[]; nextCursor?: string }>(`${projectPath(projectId)}/revisions?summary=1${pageParam ? `&afterId=${encodeURIComponent(pageParam)}` : ''}`, signal),
-    getNextPageParam: last => last.nextCursor,
-    enabled: Boolean(projectId),
-  });
+  const revisions = useRevisionPages();
   const project = useResource<Project>('project');
-  const items = revisions.data?.pages.flatMap(page => page.revisions) ?? [];
-  const selectedId = location.revisionId || undefined;
+  const exact = useRevisionSummary(location.revisionId);
+  const selected = revisions.data?.revisions.find(item => item.id === location.revisionId) ?? exact.data;
   return <><PageHeading title={t('revisions')} description={t('revisionsDescription')} />
-    {revisions.data && project.data ? <RevisionForm key={`${scopeKey}:${projectId}`} revisions={items} /> : null}
-    <ReadState pending={revisions.isPending || project.isPending} error={revisions.error || project.error} retry={() => { void revisions.refetch(); void project.refetch(); }}>
+    {revisions.data && project.data ? <RevisionForm key={`${scopeKey}:${projectId}`} revisions={revisions.data.revisions} /> : null}
+    <ReadState pending={revisions.isPending || project.isPending} error={revisions.error || project.error || exact.error} retry={() => { void revisions.refetch(); void project.refetch(); void exact.refetch(); }}>
       <div className="mt-6 grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(0,2fr)]"><Panel>
-        {items.length > 0 ? <div className="space-y-2">{items.map(revision => <button key={revision.id} type="button" className={`w-full rounded-xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-emerald-700 ${selectedId === revision.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`} onClick={() => navigate({ revisionId: revision.id })}><span className="block break-words text-sm font-semibold text-slate-900">{revision.message}</span><span className="mt-1 block break-all font-mono text-xs text-slate-500">{revision.id}</span><span className="mt-1 block text-xs text-slate-500">{t('files')}: {revision.fileCount}</span><span className={`mt-2 inline-block rounded px-2 py-1 text-[11px] font-medium ${revision.purpose === 'review-bundle' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{t(revision.purpose === 'review-bundle' ? 'reviewBundle' : 'snapshot')}</span></button>)}</div> : <EmptyState>{t('noRevisions')}</EmptyState>}
-        {revisions.hasNextPage ? <Button variant="secondary" className="mt-3" disabled={revisions.isFetchingNextPage} onClick={() => void revisions.fetchNextPage()}>{t('loadOlderRevisions')}</Button> : null}
-      </Panel><div className="min-w-0">{selectedId && project.data ? <RevisionDetail key={`${scopeKey}:${projectId}:${selectedId}`} revisionId={selectedId} project={project.data} /> : <EmptyState>{t('selectRevision')}</EmptyState>}</div></div>
+        {(revisions.data?.revisions.length ?? 0) > 0 ? <div className="space-y-2">{revisions.data?.revisions.map(revision => <button key={revision.id} type="button" className={`w-full rounded-xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-emerald-700 ${selected?.id === revision.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`} onClick={() => navigate({ revisionId: revision.id })}><span className="block break-words text-sm font-semibold text-slate-900">{revision.message}</span><span className="mt-1 block break-all font-mono text-xs text-slate-500">{revision.id}</span><span className="mt-1 block text-xs text-slate-500">{t('files')}: {revision.fileCount}</span><span className={`mt-2 inline-block rounded px-2 py-1 text-[11px] font-medium ${revision.purpose === 'review-bundle' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{t(revision.purpose === 'review-bundle' ? 'reviewBundle' : 'snapshot')}</span></button>)}</div> : <EmptyState>{t('noRevisions')}</EmptyState>}<MoreRevisions query={revisions} />
+      </Panel><div className="min-w-0">{selected && project.data ? <RevisionDetail key={`${scopeKey}:${projectId}:${selected.id}`} revision={selected} project={project.data} /> : <EmptyState>{t('selectRevision')}</EmptyState>}</div></div>
     </ReadState></>;
 }
 
@@ -210,10 +205,10 @@ function RevisionForm({ revisions }: { revisions: CodeRevisionSummary[] }) {
   </form></details>;
 }
 
-function RevisionDetail({ revisionId, project }: { revisionId: string; project: Project }) {
+function RevisionDetail({ revision: summary, project }: { revision: CodeRevisionSummary; project: Project }) {
   const { projectId, scopeKey } = useHub();
-  const detail = useQuery({ queryKey: [scopeKey, projectId, 'revision', revisionId], queryFn: ({ signal }) => getJson<CodeRevision>(`${projectPath(projectId)}/revisions/${encodeURIComponent(revisionId)}`, signal) });
-  return <ReadState pending={detail.isPending} error={detail.error} retry={detail.refetch}>{detail.data ? <RevisionFiles key={`${scopeKey}:${revisionId}`} revision={detail.data} project={project} /> : null}</ReadState>;
+  const detail = useQuery({ queryKey: [scopeKey, projectId, 'revision', summary.id], queryFn: ({ signal }) => getJson<CodeRevision>(`${projectPath(projectId)}/revisions/${encodeURIComponent(summary.id)}`, signal) });
+  return <ReadState pending={detail.isPending} error={detail.error} retry={detail.refetch}>{detail.data ? <RevisionFiles key={`${scopeKey}:${summary.id}`} revision={detail.data} project={project} /> : null}</ReadState>;
 }
 
 function RevisionFiles({ revision, project }: { revision: CodeRevision; project: Project }) {
@@ -246,11 +241,12 @@ export function DeliveryView() {
   const { principal } = useHub();
   const project = useResource<Project>('project');
   const deliveries = useResource<{ deliveries: Delivery[] }>('deliveries');
+  const revisions = useRevisionSummary(project.data?.lineRevisionId);
+  const selected = revisions.data;
   return <><PageHeading title={t('delivery')} description={t('deliveryDescription')} />
-    <ReadState pending={project.isPending || deliveries.isPending} error={project.error || deliveries.error} retry={() => { void project.refetch(); void deliveries.refetch(); }}>
+    <ReadState pending={project.isPending || (!!project.data?.lineRevisionId && revisions.isPending) || deliveries.isPending} error={project.error || revisions.error || deliveries.error} retry={() => { void project.refetch(); void revisions.refetch(); void deliveries.refetch(); }}>
       {project.data ? <Panel title={t('selectedLine')}><p className="break-all font-mono text-sm text-slate-700">{project.data.lineRevisionId ?? t('noLine')}</p><p className="text-xs text-slate-500">{t('lineVersion')}: {project.data.lineVersion}</p></Panel> : null}
-      {/* The Hub refuses review bundles as the line, so a selected line is always a deliverable snapshot. */}
-      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data?.lineRevisionId ? <DeliveryForm project={project.data} /> : <Notice>{t('deliveryUnavailable')}</Notice>}</div>
+      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>{t('deliveryUnavailable')}</Notice>}</div>
       <div className="space-y-4">{deliveries.data?.deliveries.length ? [...deliveries.data.deliveries].reverse().map(delivery => <Panel key={delivery.id} title={<span className="break-all">{delivery.baseBranch} · {delivery.revisionId.slice(0, 12)}</span>}>
         <StatusBadge status={delivery.status} /><p className="break-all text-sm text-slate-600">{delivery.remoteUrl}</p>
         {delivery.error ? <Notice tone="error"><code>{delivery.error}</code></Notice> : null}

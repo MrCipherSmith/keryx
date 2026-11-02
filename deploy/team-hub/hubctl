@@ -812,15 +812,15 @@ rotate() { # rotate <dir> <keep>
 }
 
 # Safety backups (taken by upgrade, restore and rollback) hold the whole database, and the newest
-# one can be the only copy of the newest data. Keep the three newest, the one
-# `rollback --restore-data` needs, and every one younger than 14 days however many there are.
-# manual-* backups are the operator's and are never pruned.
+# one can be the only copy of the newest data. Keep every copy younger than 14 days,
+# the three newest, and the one `rollback --restore-data` needs. manual-* backups
+# are the operator's and are never pruned.
 prune_safety_backups() {
   _keep=$(state_get last-upgrade-backup)
   # shellcheck disable=SC2012 # modification time orders these; the names are ours
   ls -1td "$ROOT"/backups/upgrade-* "$ROOT"/backups/pre-restore-* "$ROOT"/backups/pre-rollback-* 2>/dev/null | awk 'NR > 3' | while read -r _d; do
     [ "$_d" = "$_keep" ] && continue
-    [ -n "$(find "$_d" -maxdepth 0 -mtime +14 2>/dev/null)" ] || continue
+    [ -n "$(find "$_d" -maxdepth 0 -mtime +14 -print 2>/dev/null)" ] || continue
     rm -rf "$_d"
   done
 }

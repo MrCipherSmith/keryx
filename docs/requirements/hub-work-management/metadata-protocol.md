@@ -48,13 +48,13 @@ Suffix `/commands` handles domain commands below; a single domain service is use
 | `requirements.amend` | flowId, sourceFlowRevisionId, affectedIntentIds, exact replacement entries with target/revision/digest, reason; approved proposal only changes pending guards, not old pins | authorized human |
 | `requirements.resolve-amendment` | amendmentId, manifestDigest, approve/withdraw and reason | authorized human |
 | `attempt.create` | approved intentRevisionId, contextSnapshotId, accountable participant, method, optional predecessor | contributor |
-| `attempt.start` | attemptId and exact context/requirement digests; local required refs resolvable | Attempt participant |
-| `attempt.report` | attemptId, progress/blocked/failed/cancel-request/cancel-confirmed, bounded report; confirmed requires all linked known terminal or zero linked runs | Attempt participant |
+| `attempt.start` | attemptId and exact context/requirement digests; local required refs resolvable | authenticated Attempt participant; human-method Attempts require a human principal |
+| `attempt.report` | attemptId, progress/blocked/failed/cancel-request/cancel-confirmed, bounded report; confirmed requires all linked known terminal or zero linked runs | authenticated Attempt participant; human-method Attempts require a human principal |
 | `execution.bind` | attemptId, exact session/run/turn/checkout/machine refs plus association observation | authenticated original operator / verified bridge for own run |
-| `subject.create` | attemptId, bounded immutable report/artifact manifest | Attempt participant |
-| `evidence.record` | attemptId, subjectId/digest, criterion refs, results and claimed source | Attempt participant; server sets actual provenance |
-| `attempt.submit` | attemptId, subjectId/digest, exact Evidence IDs and coverage map, knowledge follow-up; seals ReviewSubmission | Attempt participant |
-| `attempt.withdraw` | attemptId, submissionId/digest, reason; no replacement edits | Attempt participant |
+| `subject.create` | attemptId, bounded immutable report/artifact manifest | authenticated Attempt participant; human-method Attempts require a human principal |
+| `evidence.record` | attemptId, subjectId/digest, criterion refs, results and claimed source | authenticated Attempt participant; human-method Attempts require a human principal; server sets actual provenance |
+| `attempt.submit` | attemptId, subjectId/digest, exact Evidence IDs and coverage map, knowledge follow-up; seals ReviewSubmission | authenticated Attempt participant; human-method Attempts require a human principal |
+| `attempt.withdraw` | attemptId, submissionId/digest, reason; no replacement edits | authenticated Attempt participant; human-method Attempts require a human principal |
 | `attempt.select` | intentId, attemptId, exact submissionId/digest, reason | authorized human |
 | `review.decide` | Intent or Flow target, exact submission/manifest digest, accept/reject/request-changes, reason, optional permitted exact waivers | authorized human |
 | `flow.submit` | Flow revision and exact accepted Intent Decision set, digest | contributor; server constructs/seals aggregate manifest |
@@ -100,3 +100,9 @@ The generated OpenAPI is the exact executable projection contract. External even
 GET /documents/{documentId}/versions/{version}?digest=<sha256> retrieves exact authorized archived content with its id/project/path/kind/version/contentDigest/content and eventCursor. Digest mismatch, wrong project and unavailable history return404 without latest fallback. Content is rehashed and bounded to1MiB. MCP hub_work_get_document_version and CLI document show --version --digest expose the same read boundary.
 
 Native execution sidecar HTTP headers and current guarantees are documented in execution.md. The minimum writer activation marker and candidate limitations are documented in implementation-status.md.
+
+Attempt contribution authority is checked for every follow-on mutation, not inferred from a display owner or granted to all project contributors. Operator/reviewer roles do not override participant identity for these six commands; human-only review, selection and cancellation remain separate authorities.
+
+Document archival has two policies. Exact versions pinned by managed Work are mandatory immutable records: a new pin fails atomically with `quota-exceeded` if the document archive reaches 512 MiB or 100,000 versions. Reusing an already archived exact version remains idempotent at capacity. Legacy wiki/import writes populate the same archive opportunistically; when full, they continue updating current documents and the bounded legacy delta window without archiving additional unpinned versions. Existing archives and frozen pins are never deleted or rewritten. An exact-version request for a version that was never archived returns `document-version-unavailable`; current wiki content remains available through the legacy document API. There is no automatic archival command or promise of complete unpinned history beyond these retention windows.
+
+An already archived project/document/version is immutable: conflicting content or metadata returns HTTP 409 (`document-version-conflict`) and preserves the original record. Replaying the same document with a different JSON object-key order remains idempotent.

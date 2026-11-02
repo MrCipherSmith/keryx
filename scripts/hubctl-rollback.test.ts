@@ -118,20 +118,32 @@ cmd_upgrade 0.4.5 --yes
   expect(result.stderr.toString()).toContain('v0.4.5 is not newer than v0.4.6');
 });
 
-test('safety backups younger than 14 days are never pruned; older ones past the newest three go, except the restore pointer', () => {
+test('safety backups retain every young copy plus the newest three and the explicit restore pointer', () => {
   const { directory, result } = libraryFixture(`
 mkdir -p "$ROOT/backups"
 for n in 1 2 3 4 5 6 7 8; do mkdir "$ROOT/backups/upgrade-$n"; done
-for n in 1 2 3 4 5; do mkdir "$ROOT/backups/pre-rollback-old-$n"; touch -t 202001010000 "$ROOT/backups/pre-rollback-old-$n"; done
-state_get() { printf '%s/backups/pre-rollback-old-1' "$ROOT"; }
+mkdir "$ROOT/backups/pre-restore-young" "$ROOT/backups/manual-old"
+# Portable fixed timestamps: ancient directories are older than 14 days on every supported runner.
+for n in 1 2 3 4 5 6 7 8; do touch -t 2000010"$n"0000 "$ROOT/backups/upgrade-$n"; done
+touch -t 200001010000 "$ROOT/backups/manual-old"
+state_get() { printf '%s/backups/upgrade-1' "$ROOT"; }
 prune_safety_backups
-ls -1 "$ROOT/backups" > "$ROOT/remaining"
+find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d > "$ROOT/remaining"
 `);
   expect(result.exitCode).toBe(0);
   const remaining = readFileSync(join(directory, 'remaining'), 'utf8').trim().split('\n');
-  for (let n = 1; n <= 8; n += 1) expect(remaining).toContain(`upgrade-${n}`);
-  expect(remaining).toContain('pre-rollback-old-1');
-  for (let n = 2; n <= 5; n += 1) expect(remaining).not.toContain(`pre-rollback-old-${n}`);
+  expect(remaining).toContain(join(directory, 'backups/pre-restore-young'));
+  expect(remaining).toContain(join(directory, 'backups/upgrade-1'));
+  expect(remaining).toContain(join(directory, 'backups/manual-old'));
+  expect(remaining.length).toBeGreaterThanOrEqual(5);
+  expect(remaining.length).toBeLessThanOrEqual(6);
+});
+test('frequent young safety backups are never pruned by count', () => {
+ const {directory,result}=libraryFixture(`mkdir -p "$ROOT/backups"; for n in 1 2 3 4 5 6 7 8; do mkdir "$ROOT/backups/upgrade-$n"; done
+state_get() { :; }
+prune_safety_backups
+find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d > "$ROOT/remaining"`);
+ expect(result.exitCode).toBe(0);expect(readFileSync(join(directory,'remaining'),'utf8').trim().split('\n')).toHaveLength(8);
 });
 
 test('rollback refuses to silently drop a legacy per-release Access overlay', () => {
@@ -165,4 +177,20 @@ test('online preflight excludes changing SQLite files and tolerates tar file-cha
 test('new Hub runtime settings cannot override installation configuration through the caller environment', () => {
   const { result } = libraryFixture('test -z "${KERYX_HUB_FUTURE_RUNTIME_SETTING:-}"\n', { KERYX_HUB_FUTURE_RUNTIME_SETTING: 'external-override' });
   expect(result.exitCode).toBe(0);
+});
+
+test('old unreferenced safety backups prune while every young copy and the old restore pointer survive', () => {
+  const { directory, result } = libraryFixture(`
+mkdir -p "$ROOT/backups"
+for n in 1 2 3 4 5 6 7 8; do mkdir "$ROOT/backups/upgrade-$n"; done
+for n in 1 2 3 4 5; do mkdir "$ROOT/backups/pre-rollback-old-$n"; touch -t 202001010000 "$ROOT/backups/pre-rollback-old-$n"; done
+state_get() { printf '%s/backups/pre-rollback-old-1' "$ROOT"; }
+prune_safety_backups
+ls -1 "$ROOT/backups" > "$ROOT/remaining"
+`);
+  expect(result.exitCode).toBe(0);
+  const remaining = readFileSync(join(directory, 'remaining'), 'utf8').trim().split('\n');
+  for (let n = 1; n <= 8; n += 1) expect(remaining).toContain(`upgrade-${n}`);
+  expect(remaining).toContain('pre-rollback-old-1');
+  for (let n = 2; n <= 5; n += 1) expect(remaining).not.toContain(`pre-rollback-old-${n}`);
 });

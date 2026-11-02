@@ -284,8 +284,12 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
       );
       if (
         !isObject(data) ||
-        // Post-acceptance contradictory Evidence is an attention item (OpenAPI AttentionPage).
-        !pageOf(data, "records", isWorkRecord, ATTENTION_PAGE_LIMIT, (record) => record.projectId === projectId && ["flow", "intent", "attempt", "evidence"].includes(record.kind)) ||
+        !pageOf(data, "records", isWorkRecord, ATTENTION_PAGE_LIMIT, (record) => record.projectId === projectId) ||
+        data.records.some(
+          (r) =>
+            r.projectId !== projectId ||
+            !["flow", "intent", "attempt", "evidence"].includes(r.kind),
+        ) ||
         !isCursor(data.nextCursor)
       )
         return invalid();

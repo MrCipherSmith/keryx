@@ -6,7 +6,7 @@ import type { ServerWebSocket } from 'bun';
 import { openHubStore } from '../store';
 import { createRemoteControl, type RemoteSocketData } from '.';
 
-test('machine frames and disconnect persistence run as internal serialized work, outside the HTTP waiter limit', async () => {
+test('machine frames and disconnect persistence use the bounded mutation lane without an admission bypass', async () => {
     const dir=mkdtempSync(join(tmpdir(),'hub-frame-admission-')), store=openHubStore(dir);
     const calls:unknown[]=[];
     const remote=createRemoteControl({store,human:async()=>{throw new Error('unused');},authorityValid:()=>false,checkOrigin(){},transportAllowed:()=>true,
@@ -15,6 +15,6 @@ test('machine frames and disconnect persistence run as internal serialized work,
     try {
         remote.websocket.message!(socket,JSON.stringify({v:2,type:'heartbeat',messageId:'m',epoch:1,payload:{daemonId:'d'}}));
         remote.websocket.close!(socket,1000,'');
-        expect(calls).toEqual([{internal:true},{internal:true}]);
+        expect(calls).toEqual([undefined,undefined]);
     } finally { remote.close();store.close();rmSync(dir,{recursive:true,force:true}); }
 });

@@ -1,0 +1,49 @@
+{
+  "status": "DONE",
+  "finding_id": "review-testing-practices-w5:F-001",
+  "reviewed_test_head": "d50652ac71030f955c94f84cc5c73589ecf7f02a",
+  "production_head": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6",
+  "delay_ms": 80,
+  "scope": "One disposable two-variant probe, current production server in both variants, only successful unrelated client response delayed",
+  "scratch_directory": "/tmp/pr1113-r02-delivery-flake-probe",
+  "red": {
+    "command": "keryx ctx run -- bun test /tmp/pr1113-r02-delivery-flake-probe/old-race.test.ts --test-name-pattern 'external Git delivery never holds the global mutation queue'",
+    "exit_code": 1,
+    "tests_passed": 0,
+    "tests_failed": 1,
+    "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-14-26-544Z-43b4b4_run.log",
+    "events": [
+      "server-produced-success-before-client-delay",
+      "old-check:blocked=true:serverReady=true",
+      "release-Git",
+      "client-delay-complete"
+    ],
+    "assertion": "Expected wasBlocked=false, received true although actual project response already existed"
+  },
+  "green": {
+    "command": "keryx ctx run -- bun test /tmp/pr1113-r02-delivery-flake-probe/current-barrier.test.ts --test-name-pattern 'external Git delivery never holds the global mutation queue'",
+    "exit_code": 0,
+    "tests_passed": 1,
+    "tests_failed": 0,
+    "assertions": 4,
+    "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-14-36-518Z-592d0a_run.log",
+    "events": [
+      "server-produced-success-before-client-delay",
+      "client-delay-complete",
+      "release-Git"
+    ]
+  },
+  "conclusion": "Historical 30ms timing heuristic reproducibly reports a false queue block on current correct server when only client delivery is delayed. Current explicit barrier waits for unrelated response while Git remains gated and passes under the same delay.",
+  "limitations": [
+    "Controlled client scheduling delay, not a claim that a particular historical CI run exhibited the delay.",
+    "Both variants use current production server, isolating the test assertion defect rather than claiming old production code failed.",
+    "No broad mutation expansion or persistent tests-of-tests; scratch files are evidence only."
+  ],
+  "source_edits": [],
+  "routing": {
+    "graph_used": "not-relevant: exact supplied files/known test, no impact analysis needed",
+    "wiki_used": "not-relevant: bounded existing regression probe, earlier wiki index consulted",
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}

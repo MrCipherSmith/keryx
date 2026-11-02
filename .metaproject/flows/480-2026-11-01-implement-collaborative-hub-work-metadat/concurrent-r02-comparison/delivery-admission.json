@@ -1,0 +1,22 @@
+{
+  "status": "DONE",
+  "mode": "read-only",
+  "ours": "bb65652ca",
+  "verifiedSource": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6",
+  "remote": "8dcb765f072c5e8cb287175af7d7c9ce300ce322",
+  "base": "d50652ac71030f955c94f84cc5c73589ecf7f02a",
+  "recommendation": {
+    "delivery": "retain ours coherent service/CAS/audit/archive/unknown outcome/read-only inspector; deliberately choose API contract",
+    "nativeExecution": "retain ours terminal-fact release and scoped indexed reconciliation; shared participant/native edit behavior already exists in both",
+    "admission": "retain ours actual bytes/root ALS/auth-first/bounded1013/native cleanup; remote clock optional isolated port"
+  },
+  "confirmedProbe": {
+    "command": "keryx ctx run -- bun /tmp/pr1113-r02-compare-delivery-admission/admission-probe.ts",
+    "ours": "second 2-byte request succeeds while first declared1024 body unread",
+    "remote": "second request503 hub-busy",
+    "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-27-00-529Z-11cc83_run.log"
+  },
+  "sharedSourceChanges": false,
+  "integrationPerformed": false,
+  "report": "/tmp/pr1113-r02-compare-delivery-admission.md"
+}

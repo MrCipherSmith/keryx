@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
 import { fail } from '../domain';
@@ -45,6 +46,7 @@ export function migrateWork(db: Database): void {
     DELETE FROM hub_work_outbox;`);
     for (const field of ['kind', 'flowId', 'intentId', 'attemptId', 'subjectId', 'targetId', 'runId'])
         db.exec(`CREATE INDEX IF NOT EXISTS hub_work_record_${field} ON hub_work_records(project_id,json_extract(body,'$.${field}'))`);
+    db.exec("CREATE INDEX IF NOT EXISTS hub_work_decision_target ON hub_work_records(project_id,json_extract(body,'$.targetId'),json_extract(body,'$.targetType'),json_extract(body,'$.kind'))");
     db.exec("CREATE INDEX IF NOT EXISTS hub_work_record_state ON hub_work_records(project_id,json_extract(body,'$.kind'),json_extract(body,'$.state')); CREATE INDEX IF NOT EXISTS hub_work_revision_flow ON hub_work_records(project_id,json_extract(body,'$.kind'),json_extract(body,'$.flowId'),json_extract(body,'$.revision')); CREATE INDEX IF NOT EXISTS hub_work_revision_intent ON hub_work_records(project_id,json_extract(body,'$.kind'),json_extract(body,'$.intentId'),json_extract(body,'$.revision'));");
 
     db.exec(`CREATE TABLE IF NOT EXISTS hub_work_usage(project_id TEXT PRIMARY KEY,records INTEGER NOT NULL DEFAULT 0,operations INTEGER NOT NULL DEFAULT 0,bytes INTEGER NOT NULL DEFAULT 0);
@@ -131,8 +133,8 @@ export function workRepository(db: Database) {
         if (kind === 'attempt.create') visit(payload?.supersedesAttemptId, 'seed');
         if (kind === 'execution.bind' && typeof payload?.runId === 'string') addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='execution-link' AND json_extract(body,'$.runId')=?", [payload.runId]));
         visit(command.payload);
-        // No record points at an amendment's resolution, so the 'already resolved' guard needs it loaded explicitly.
-        if (kind === 'requirements.resolve-amendment' && typeof payload?.amendmentId === 'string') addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetType')='amendment' AND json_extract(body,'$.targetId')=?", [payload.amendmentId]));
+        if (kind === 'requirements.resolve-amendment' && typeof payload?.amendmentId === 'string')
+            addRows(rowsWhere(projectId, "json_extract(body,'$.targetId')=? AND json_extract(body,'$.targetType')='amendment' AND json_extract(body,'$.kind')='decision'", [payload.amendmentId]));
         const loadedAttempts = new Set<string>(), loadedFlows = new Set<string>(), loadedSubjects = new Set<string>();
         const acceptance = ['attempt.submit', 'attempt.select', 'review.decide', 'flow.submit'].includes(kind);
         for (let changed = true; changed;) {
@@ -173,15 +175,26 @@ export function workRepository(db: Database) {
         return stateFromRows(projectId, [...found.values()].sort((a, b) => a.rowid - b.rowid), typeof command.operationId === 'string' ? operation(projectId, actorId, command.operationId) : undefined);
     };
     const recordState = (projectId: string, id: string): WorkState => commandState(projectId, { command: 'attempt.report', payload: { recordId: id } }, '');
-    /** Adds what the domain incident rule reads for Evidence of these Attempts: the Attempt closure, its submissions and their accepting decisions. */
-    const addIncidentContext = (projectId: string, state: WorkState, attemptIds: string[]) => {
-        const ids = new Set(state.records.map(r => r.id));
-        for (const attemptId of new Set(attemptIds)) {
-            const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptId } }, '');
-            for (const record of related.records) if (!ids.has(record.id)) { state.records.push(record); ids.add(record.id); }
-            // Historical acceptance may differ from the Intent's current decision.
-            for (const record of related.records) if (record.kind === 'submission')
-                for (const row of rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetId')=? AND json_extract(body,'$.targetDigest')=?", [related.records.find((item): item is import('./model').Attempt => item.kind === 'attempt' && item.id === record.attemptId)?.intentId ?? '',record.contentDigest])) if (!ids.has(parse(row).id)) { state.records.push(parse(row)); ids.add(parse(row).id); }
+    const addIncidentSupport = (projectId: string, state: WorkState, incidents: WorkRecord[]): void => {
+        const ids = new Set(state.records.map(record => record.id));
+        const add = (record: WorkRecord) => { if (!ids.has(record.id)) { state.records.push(record); ids.add(record.id); } };
+        const loadedAttempts = new Set<string>();
+        for (const incident of incidents) {
+            if (incident.kind !== 'evidence') continue;
+            add(incident);
+            if (loadedAttempts.has(incident.attemptId)) continue;
+            loadedAttempts.add(incident.attemptId);
+            const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptId: incident.attemptId } }, '');
+            related.records.forEach(add);
+            // The original acceptance may differ from the Intent's current selected submission.
+            const attempt = related.records.find(record => record.kind === 'attempt' && record.id === incident.attemptId);
+            if (attempt?.kind === 'attempt') addRowsForAcceptance(attempt.intentId,attempt.id);
+            function addRowsForAcceptance(intentId: string, attemptId: string): void {
+                const decisions = db.query<StoredRow,[string,string,string]>(`SELECT decision.rowid,decision.body FROM hub_work_records decision
+                    WHERE decision.project_id=? AND json_extract(decision.body,'$.targetId')=? AND json_extract(decision.body,'$.targetType')='intent-review' AND json_extract(decision.body,'$.kind')='decision'
+                    AND EXISTS(SELECT 1 FROM hub_work_records submission WHERE submission.project_id=decision.project_id AND json_extract(submission.body,'$.attemptId')=? AND json_extract(submission.body,'$.kind')='submission' AND json_extract(submission.body,'$.contentDigest')=json_extract(decision.body,'$.targetDigest'))`).all(projectId,intentId,attemptId);
+                decisions.map(parse).forEach(add);
+            }
         }
     };
     /** Bounded read projections retain the public cursor and aggregate contracts. */
@@ -211,9 +224,10 @@ export function workRepository(db: Database) {
                 if (children.length > 200) fail(413,'projection-too-large','Use scoped history pages for this aggregate');
                 const ids = new Set(state.records.map(r => r.id));
                 for (const child of children) if (!ids.has(parse(child).id)) state.records.push(parse(child));
-                // Evidence carries no flowId/intentId, so incident Evidence reaches Flow and Intent aggregates through the projection.
-                if (r.kind !== 'attempt')
-                    addIncidentContext(projectId, state, db.query<{ attempt_id: string }, [string, string]>(`SELECT attempt_id FROM hub_work_incidents WHERE project_id=? AND ${r.kind}_id=? ORDER BY rowid`).all(projectId, r.id).map(row => row.attempt_id));
+                const incidentField = r.kind === 'flow' ? 'flow_id' : r.kind === 'intent' ? 'intent_id' : 'attempt_id';
+                const incidents = db.query<StoredRow,[string,string]>(`SELECT evidence.rowid,evidence.body FROM hub_work_incidents incident JOIN hub_work_records evidence ON evidence.project_id=incident.project_id AND evidence.id=incident.evidence_id WHERE incident.project_id=? AND incident.${incidentField}=? ORDER BY evidence.rowid LIMIT 201`).all(projectId,r.id);
+                if (incidents.length > 200) fail(413,'projection-too-large','Use scoped attention pages for incident history');
+                addIncidentSupport(projectId,state,incidents.map(parse));
             }
             return state;
         }
@@ -230,8 +244,7 @@ export function workRepository(db: Database) {
         const rows = db.query<StoredRow, (string | number)[]>(`SELECT rowid,body FROM hub_work_records WHERE project_id=? AND (${clause}) ORDER BY rowid LIMIT ?`).all(projectId,...args,limit+2);
         if (parent) rows.unshift(parent);
         const state = stateFromRows(projectId,rows);
-        if (path[0] === 'attention' && supportAttention)
-            addIncidentContext(projectId, state, state.records.flatMap(item => item.kind === 'evidence' ? [item.attemptId] : []));
+        if (path[0] === 'attention' && supportAttention) addIncidentSupport(projectId,state,[...state.records]);
         return state;
     };
     const attentionPage = (projectId: string, url: URL) => {
@@ -282,20 +295,23 @@ export function workRepository(db: Database) {
         const usage = db.query<{ records: number; operations: number; bytes: number }, [string]>('SELECT records,operations,bytes FROM hub_work_usage WHERE project_id=?').get(projectId);
         if (usage && (usage.records > workStorageLimits.maxRecords || usage.operations > workStorageLimits.maxOperations || usage.bytes > workStorageLimits.maxHistoryBytes)) fail(413, 'quota-exceeded', 'Managed work durable history quota exceeded; archive the project before adding more history');
     });
-    /** Returns false when an unpinned version was skipped because the archive is full. */
-    const archiveDocument = db.transaction((document: HubDocument, pinned = true): boolean => {
+    const archiveDocument = db.transaction((document: HubDocument, optional = false): boolean => {
         const body = JSON.stringify(document);
-        const enforced = !!db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get();
-        const over = (bytes: number, count: number) => {
+        const existing = db.query<{body:string},[string,string,number]>('SELECT body FROM hub_work_documents WHERE project_id=? AND document_id=? AND version=?').get(document.projectId,document.id,document.version);
+        if (existing) {
+            if (existing.body !== body && !isDeepStrictEqual(JSON.parse(existing.body),JSON.parse(body))) fail(409,'document-version-conflict','Immutable document version already has a different representation');
+            return true;
+        }
+        // Opportunistic legacy history is a bounded cache. A Work pin always requests
+        // mandatory archival and fails atomically if its exact bytes cannot be retained.
+        if (db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get()) {
             const usage = db.query<{bytes:number;count:number},[]>('SELECT bytes,count FROM hub_work_document_usage WHERE id=1').get()!;
-            return usage.bytes + bytes > workStorageLimits.maxArchivedDocumentBytes || usage.count + count > workStorageLimits.maxArchivedDocumentVersions;
-        };
-        // An unpinned legacy version that does not fit stays readable from legacy state and is archived if a pin needs it.
-        if (!pinned && enforced && over(Buffer.byteLength(body), 1) && !db.query('SELECT 1 FROM hub_work_documents WHERE project_id=? AND document_id=? AND version=?').get(document.projectId, document.id, document.version)) return false;
-        const result = db.query('INSERT OR IGNORE INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId, document.id, document.version, document.contentDigest, body);
-        // Existing old histories are preserved during the one-time archival migration.
-        // Once that completes, refuse new pinned growth rather than silently dropping immutable wiki/spec pins.
-        if (result.changes && enforced && over(0, 0)) fail(413,'quota-exceeded','Immutable document archive quota exceeded; explicit archival is required');
+            if (usage.bytes + Buffer.byteLength(body) > workStorageLimits.maxArchivedDocumentBytes || usage.count + 1 > workStorageLimits.maxArchivedDocumentVersions) {
+                if (optional) return false;
+                fail(413,'quota-exceeded','Immutable document archive quota exceeded for mandatory Work pin');
+            }
+        }
+        db.query('INSERT INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId,document.id,document.version,document.contentDigest,body);
         return true;
     });
     const documentVersion = (projectId: string, reference: {

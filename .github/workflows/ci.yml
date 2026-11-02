@@ -697,6 +697,13 @@ jobs:
         with:
           bun-version: latest
 
+      # This job already requires the registry for the image. Keep network preparation
+      # here; ordinary bun test remains offline and independent of host Bun caches.
+      - name: Prepare isolated pinned runtime cache and run offline extracted-runtime proof
+        run: |
+          bun scripts/prepare-team-hub-runtime-cache.ts --allow-network --cache "$RUNNER_TEMP/hub-runtime-cache"
+          KERYX_HUB_RUNTIME_CACHE="$RUNNER_TEMP/hub-runtime-cache" bun test scripts/package-team-hub.test.ts --test-name-pattern 'extracted allowlisted source'
+
       - name: Shell scripts parse and lint
         run: |
           set -eu
@@ -716,10 +723,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/hub-release" "$RUNNER_TEMP/hub-src"
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" bun scripts/package-team-hub.ts --out "$RUNNER_TEMP/hub-release"
           tar -xzf "$RUNNER_TEMP/hub-release/team-hub-prototype-source.tar.gz" -C "$RUNNER_TEMP/hub-src" --strip-components=1
-
-      # Needs the registry (it warms a private cache), so it lives here and not in the default `bun test`.
-      - name: Extracted source installs its frozen runtime and serves managed work
-        run: KERYX_LIVE_TEAM_HUB_INSTALL=1 bun test scripts/package-team-hub.test.ts -t 'extracted allowlisted source'
 
       # The context is the EXTRACTED ARCHIVE. Building from the checkout would
       # prove nothing about what a release ships.

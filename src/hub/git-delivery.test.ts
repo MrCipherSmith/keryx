@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createGitDelivery, deliverRevision, hubGit, type HubGitRunner } from "./git-delivery";
+import { createGitDelivery, createGitPublicationInspector, deliverRevision, hubGit, type HubGitRunner } from "./git-delivery";
 import type { CodeRevision } from "./contracts";
 async function git(cwd: string, ...args: string[]) {
     const p = Bun.spawn(["git", "-c", "core.hooksPath=/dev/null", ...args], {
@@ -223,4 +223,38 @@ test('builds selected file trees using one bounded blob batch and one index batc
         expect(calls.filter(args=>args[0]==='hash-object')).toHaveLength(1);
         expect(calls.filter(args=>args[0]==='update-index')).toHaveLength(1);
     } finally { await rm(root,{recursive:true,force:true}); }
+});
+
+
+test('read-only publication inspection verifies the exact operation marker without repeating Git publication', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'hub-git-inspection-'));
+    try {
+        const {remoteUrl,base} = await seedRemote(root);
+        const request = {dataDir:root,projectId:'p',operationId:'interrupted-publication',revision:selected(base),remoteUrl,baseBranch:'main'};
+        const published = await deliverRevision(request);expect(published.status).toBe('published');
+        const calls: string[][] = [], inspect = createGitPublicationInspector(recordingGit(calls));
+        expect(await inspect(request)).toEqual(published);
+        expect(calls.some(args => ['push','commit-tree','cherry-pick','update-ref'].includes(args[0]!))).toBe(false);
+        const forged = await inspect({...request,revision:{...request.revision,message:'A different original payload'}});
+        expect(forged.status).toBe('failed');
+        if (published.status !== 'published') throw Error('Expected published fixture');
+        expect(await git(root,'ls-remote',remoteUrl,`refs/heads/${published.branch}`)).toStartWith(published.commitSha);
+    } finally {await rm(root,{recursive:true,force:true});}
+});
+
+test('a lost push reply remains uncertain and read-only inspection recovers the published commit', async () => {
+    const root=await mkdtemp(join(tmpdir(),'hub-git-lost-reply-'));
+    try {
+        const {remoteUrl,base}=await seedRemote(root);
+        const request={dataDir:root,projectId:'p',operationId:'lost-push-reply',revision:selected(base),remoteUrl,baseBranch:'main'};
+        let pushes=0;
+        const adapter=createGitDelivery(async(cwd,args,input)=>{
+            const output=await hubGit(cwd,args,input);
+            if(args[0]==='push'){pushes++;throw Error('Transport lost after the remote accepted the commit');}
+            return output;
+        });
+        await expect(adapter(request)).rejects.toThrow('uncertain');
+        const proof=await createGitPublicationInspector(hubGit)(request);
+        expect(proof.status).toBe('published');expect(pushes).toBe(1);
+    } finally {await rm(root,{recursive:true,force:true});}
 });

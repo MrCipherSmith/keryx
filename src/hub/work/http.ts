@@ -16,6 +16,11 @@ import type { Attempt, ResultSubject, WorkReceipt, WorkRecord, WorkState } from 
 export const workLimits = {
     maxCommandBytes: MAX_COMMAND_BYTES, defaultPageSize: 50, maxPageSize: 200, maxEventPageSize: 1000, maxEventBytes: 1024 * 1024, maxSnapshotBytes: 20 * 1024 * 1024, maxSnapshotCacheBytes: 64 * 1024 * 1024, maxSnapshots: 32, maxSnapshotsPerPrincipal: 4, maxSnapshotBytesPerPrincipal: 32 * 1024 * 1024, snapshotTtlMs: 5 * 60 * 1000, maxObservations: 8, maxObservationsPerPrincipal: 2
 } as const;
+const publicWorkLimits = {
+    maxCommandBytes: workLimits.maxCommandBytes, defaultPageSize: workLimits.defaultPageSize,
+    maxPageSize: workLimits.maxPageSize, maxEventPageSize: workLimits.maxEventPageSize,
+    maxEventBytes: workLimits.maxEventBytes, maxSnapshotBytes: workLimits.maxSnapshotBytes,
+};
 type Identity = {
     actor: Principal;
     cookie: boolean;
@@ -316,10 +321,8 @@ export function createWorkHttp(deps: Dependencies) {
                     return json({document:{id,projectId,path,kind,version,contentDigest,content},eventCursor:eventCursor(actor,projectId,sequence)});
     }
     function capabilities(actor: Principal, projectId: string) {
-        // Only the published protocol limits; server-side quotas stay internal to the closed Capabilities schema.
-        const { maxCommandBytes, defaultPageSize, maxPageSize, maxEventPageSize, maxEventBytes, maxSnapshotBytes } = workLimits;
         return json({
-                    protocolVersion: 1, enabled: deps.enabled, allowedCommands: deps.enabled ? [...allowedWorkCommands(actor), ...(actor.kind === 'human' && !actor.readOnly ? ['legacy.preview', 'legacy.convert'] : []), ...(actor.kind === 'human' && actor.role === 'operator' && !actor.readOnly ? ['execution.bind'] : [])] : [], limits: { maxCommandBytes, defaultPageSize, maxPageSize, maxEventPageSize, maxEventBytes, maxSnapshotBytes }, features: { managedExecution: deps.enabled, gitObserver: deps.enabled && !!deps.repositories?.some(r => r.projectId===projectId&&!!r.github), legacyConversion: deps.enabled }
+                    protocolVersion: 1, enabled: deps.enabled, allowedCommands: deps.enabled ? [...allowedWorkCommands(actor), ...(actor.kind === 'human' && !actor.readOnly ? ['legacy.preview', 'legacy.convert'] : []), ...(actor.kind === 'human' && actor.role === 'operator' && !actor.readOnly ? ['execution.bind'] : [])] : [], limits: publicWorkLimits, features: { managedExecution: deps.enabled, gitObserver: deps.enabled && !!deps.repositories?.some(r => r.projectId===projectId&&!!r.github), legacyConversion: deps.enabled }
                 });
     }
     async function handle(request: Request): Promise<Response | undefined> {

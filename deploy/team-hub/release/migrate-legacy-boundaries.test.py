@@ -168,15 +168,11 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
     def test_queue_and_command_capacity_each_block_rehearsal(self):
         path = self.root / "commands.sqlite"
         db = sqlite3.connect(path)
-        db.executescript('CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT);CREATE TABLE remote_queue(id TEXT,body TEXT);CREATE TABLE remote_command(id TEXT,body TEXT);')
+        db.executescript('CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT);CREATE TABLE remote_queue(id TEXT);CREATE TABLE remote_command(id TEXT,body TEXT);')
         db.execute("INSERT INTO hub_state VALUES(1,'{}')")
-        # The Hub never deletes queue rows: settled ones (applied/rejected/removed) are history, not work.
-        for state, expected in [("queued", 1), ("suspended", 1), ("admitted", 1), ("applied", 0), ("rejected", 0), ("removed", 0)]:
-            with self.subTest(queue_state=state):
-                db.execute("DELETE FROM remote_queue")
-                db.execute("INSERT INTO remote_queue VALUES('q',?)", (json.dumps({"item": {"state": state}}),))
-                db.commit()
-                self.assertEqual(m.info_for(path)["unresolvedWork"], expected)
+        db.execute("INSERT INTO remote_queue VALUES('q')")
+        db.commit()
+        self.assertEqual(m.info_for(path)["unresolvedWork"], 1)
         db.execute("DELETE FROM remote_queue")
         for status, released, expected in [("admitted", False, 1), ("admitted", True, 0),
                                             ("unknown", False, 1), ("applied", False, 0)]:
@@ -186,6 +182,40 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
                 db.commit()
                 self.assertEqual(m.info_for(path)["unresolvedWork"], expected)
         db.close()
+
+    def test_old_queue_without_json_body_remains_conservatively_unresolved(self):
+        path = self.root / "old-queue.sqlite"
+        db = sqlite3.connect(path)
+        try:
+            db.executescript("CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT); CREATE TABLE remote_queue(id TEXT);")
+            db.execute("INSERT INTO hub_state VALUES(1,'{}')")
+            db.executemany("INSERT INTO remote_queue VALUES(?)", [("old-one",), ("old-two",)])
+            db.commit()
+            self.assertEqual(m.info_for(path)["unresolvedWork"], 2)
+            db.execute("DELETE FROM remote_queue")
+            db.commit()
+            self.assertEqual(m.info_for(path)["unresolvedWork"], 0)
+        finally:
+            db.close()
+
+    def test_queue_json_history_distinguishes_known_terminal_from_unknown_work(self):
+        path = self.root / "queue-states.sqlite"
+        db = sqlite3.connect(path)
+        try:
+            db.executescript("CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT); CREATE TABLE remote_queue(id TEXT,body TEXT);")
+            db.execute("INSERT INTO hub_state VALUES(1,'{}')")
+            cases = [(json.dumps({"item": {"state": state}}), expected)
+                     for state, expected in [("applied", 0), ("rejected", 0), ("removed", 0),
+                                             ("queued", 1), ("suspended", 1), ("admitted", 1), ("unknown", 1)]]
+            cases.extend([("{}", 1), ("not-json", 1), ("null", 1)])
+            for value, expected in cases:
+                with self.subTest(value=value):
+                    db.execute("DELETE FROM remote_queue")
+                    db.execute("INSERT INTO remote_queue VALUES('queue-item',?)", (value,))
+                    db.commit()
+                    self.assertEqual(m.info_for(path)["unresolvedWork"], expected)
+        finally:
+            db.close()
 
     def test_configuration_rejects_each_identity_and_auth_gate(self):
         hub, tunnel = self.configuration()

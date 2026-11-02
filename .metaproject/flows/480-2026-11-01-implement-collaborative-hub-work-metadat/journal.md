@@ -65,3 +65,49 @@
 - 2026-11-01T19:54:30.822Z - task-done: T21: Publish successor release and provide owner-run upgrade instructions
 - 2026-11-01T19:54:31.025Z - task-done: T4: Self-review and prepare draft PR
 - 2026-11-01T20:17:38.194Z - task-done: T22: Prepare PR1113 for owner review without merge release or production cutover
+- 2026-11-01T21:08:16.230Z - task-done: T24: Fix PR1113 review root causes A-N and triage all linked findings
+- 2026-11-02T03:58:17.674Z - task-added: T25: R02 scoped storage aggregates projections and response contracts
+- 2026-11-02T03:58:17.836Z - task-added: T26: R02 frontend event cache forms and revision consumers
+- 2026-11-02T03:58:18.005Z - task-added: T27: R02 native queue reconciliation and Attempt actor authorization
+- 2026-11-02T03:58:18.180Z - task-added: T28: R02 delivery recovery and mutation admission
+- 2026-11-02T03:58:18.346Z - task-added: T29: R02 backup protection migration help and offline test gates
+- 2026-11-02T03:58:18.539Z - task-added: T30: R02 integrated verification mutation coverage and next review handoff
+- 2026-11-02T03:58:28.640Z - task-attempt: T25: started (attempt 1) — Round 2 scoped storage regression fixes; fresh mechanism-specific RED tests
+- 2026-11-02T03:58:28.808Z - task-attempt: T26: started (attempt 1) — Round 2 live frontend regression fixes with real adapter contracts
+- 2026-11-02T03:58:28.981Z - task-attempt: T27: started (attempt 1) — Round 2 queue state-event regressions and upheld participant authorization
+- 2026-11-02T04:12:04.521Z - task-done: T27: R02 native queue reconciliation and Attempt actor authorization
+- 2026-11-02T04:12:04.888Z - task-attempt: T28: started (attempt 1) — Canonical delivery recovery and actual-byte admission repairs with production-path RED tests
+- 2026-11-02T04:12:49.099Z - task-added: T31: R02 verify queued configuration recovery without inferred terminal refusal
+- 2026-11-02T04:12:49.538Z - task-attempt: T31: started (attempt 1) — Expand reservation regression to recoverable config/authority guard failures before native terminal evidence
+- 2026-11-02T04:16:16.881Z - task-done: T31: R02 verify queued configuration recovery without inferred terminal refusal
+- 2026-11-02T04:19:25.261Z - task-attempt: T29: started (attempt 1) — Owner-decided14day backup protection, migration terminal queue classification, actual CLI help and deterministic offline packaging tests
+- 2026-11-02T04:21:45.143Z - task-done: T25: R02 scoped storage aggregates projections and response contracts
+- 2026-11-02T04:23:10.916Z - task-added: T32: R02 actual-byte request admission and nested MCP body leases
+- 2026-11-02T04:32:26.171Z - task-done: T26: R02 frontend event cache forms and revision consumers
+- 2026-11-02T04:32:26.518Z - task-attempt: T32: started (attempt 1) — Actual retained request bytes, nested MCP slot reuse and bounded body deadlines with real streaming RED probes
+- 2026-11-02T04:33:38.981Z - task-done: T29: R02 backup protection migration help and offline test gates
+- 2026-11-02T04:33:56.047Z - task-added: T33: R02 independently verify backup retention mutation boundaries
+- 2026-11-02T04:33:56.373Z - task-attempt: T33: started (attempt 1) — Scratch-only targeted mutation verification of owner-approved young-backup and newest-three retention boundaries
+- 2026-11-02T04:36:16.443Z - task-done: T33: R02 independently verify backup retention mutation boundaries
+- 2026-11-02T04:46:52.232Z - task-attempt: T30: started (attempt 1) — Prepare final independent code-verifier gate; execute after parent finishes committing the now-frozen integrated source
+- 2026-11-02T04:52:13.296Z - task-done: T32: R02 actual-byte request admission and nested MCP body leases
+- 2026-11-02T04:53:26.806Z - task-done: T28: R02 delivery recovery and mutation admission
+- 2026-11-02T04:56:31.565Z - task-added: T34: R02 migration boundary compatibility for queue tables without JSON body
+- 2026-11-02T04:56:31.800Z - task-added: T35: R02 extracted pinned-runtime MCP request compatibility
+- 2026-11-02T04:56:32.603Z - task-attempt: T34: started (attempt 1) — Final independent gate reproduced migration legacy boundary failure; preserve conservative unresolved-work handling for unrecognized queue schema
+- 2026-11-02T04:56:32.850Z - task-attempt: T35: started (attempt 1) — Final independent gate reproduced MCP500 TypeError in real extracted pinned Bun runtime after admission changes
+- 2026-11-02T04:57:28.309Z - task-attempt: T30: failed (attempt 2) — Independent gate b3d94fc4d found two concrete failures: bodyless queue migration boundary and actual HTTP MCP Request TypeError; delegated T34 and T35 before rerun
+- 2026-11-02T05:00:37.752Z - task-done: T34: R02 migration boundary compatibility for queue tables without JSON body
+- 2026-11-02T05:02:54.235Z - task-done: T35: R02 extracted pinned-runtime MCP request compatibility
+- 2026-11-02T05:03:29.696Z - task-attempt: T30: started (attempt 3) — Post-fix verification retry: bodyless/malformed migration and actual TCP MCP cleanup repaired; rerun failed strict/runtime checks and health, reuse unchanged UI/docs evidence
+- 2026-11-02T05:16:49.762Z - task-done: T30: R02 integrated verification mutation coverage and next review handoff
+- 2026-11-02T05:22:19.052Z - task-added: T36: Compare concurrent round2 implementations before owner integration decision
+- 2026-11-02T05:22:19.241Z - task-attempt: T36: started (attempt 1) — Owner explicitly requested differences and recommendations before integration; read-only comparison of bb65652ca vs8dcb765f0
+- 2026-11-02T05:31:14.129Z - task-done: T36: Compare concurrent round2 implementations before owner integration decision
+- 2026-11-02T05:39:15.662Z - task-added: T37: Integrate storage ops and contracts preserving both test suites
+- 2026-11-02T05:39:15.929Z - task-added: T38: Integrate delivery execution and admission policies preserving both histories
+- 2026-11-02T05:39:16.176Z - task-added: T39: Integrate UI MCP demo parity and regression coverage
+- 2026-11-02T05:39:16.421Z - task-added: T40: Verify integrated round2 candidate and publish draft PR update
+- 2026-11-02T05:39:27.648Z - task-attempt: T37: started (attempt 1) — Normal merge storage/ops/contracts integration with coherent archive polarity and retained regression cases
+- 2026-11-02T05:39:27.900Z - task-attempt: T38: started (attempt 1) — Normal merge delivery/admission/native integration retaining chosen safety invariants
+- 2026-11-02T05:39:28.134Z - task-attempt: T39: started (attempt 1) — Normal merge frontend/MCP integration with remote demo event parity and SDK assertions

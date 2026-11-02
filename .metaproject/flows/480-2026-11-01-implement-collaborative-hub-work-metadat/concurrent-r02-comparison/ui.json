@@ -1,0 +1,85 @@
+{
+  "task": "T36 UI bounded comparison",
+  "read_only": true,
+  "ours": "bb65652ca",
+  "verified_ours_source": "2aadf1165",
+  "remote": "8dcb765f072c5e8cb287175af7d7c9ce300ce322",
+  "base": "d50652ac",
+  "recommendation": "ours UI base + remote demo events/polling + remote real SDK pagination regression",
+  "subareas": [
+    {
+      "area": "events/cache",
+      "choose": "ours",
+      "equivalent": [
+        "no snapshot owner skips record GETs",
+        "bounded burst snapshot fallback32 vs50",
+        "newer versions survive slow snapshot",
+        "own receipt wakes polling",
+        "event refreshes Attention"
+      ],
+      "unique_ours": [
+        "exact fallback with no event listener",
+        "immediate Attention invalidation after own receipt",
+        "no-owner gap refreshes observations",
+        "requested wake bypasses hidden throttle"
+      ]
+    },
+    {
+      "area": "Evidence Attention",
+      "choose": "ours",
+      "unique_ours": [
+        "Evidence-only Overview renders report/result",
+        "exact Attempt fetched only on click when absent",
+        "lookup error visible and no navigation"
+      ]
+    },
+    {
+      "area": "amendments/choices",
+      "choose": "ours",
+      "equivalent": [
+        "new unapproved Intent authoring",
+        "all manifest CAS versions",
+        "Flow-only empty affected set valid",
+        "stale displayed/sent choices align"
+      ],
+      "unique_ours": [
+        "revision ownership guard",
+        "required membership filtered again at submit, including persisted drafts"
+      ]
+    },
+    {
+      "area": "collapsed Machines",
+      "choose": "either",
+      "reason": "same active-run eager/routing-on-expand source behavior and100row test scenarios"
+    },
+    {
+      "area": "revision UI",
+      "choose": "ours shared paging; remote direct-ID detail optional",
+      "unique_ours": [
+        "legacy Flow candidate/Evidence selectors page too",
+        "metadata-only exact selected-line validation"
+      ],
+      "unique_remote": [
+        "direct-ID detail avoids extra metadata GET",
+        "Delivery relies selected-line invariant and makes no revision GET"
+      ],
+      "coupling": "ours summary=1 exact GET requires ours backend metadata-only branch; remote backend returns full files"
+    },
+    {
+      "area": "MCP paging",
+      "choose": "either tool + combine tests",
+      "unique_remote": "real SDK\u2192Hub limit1 paging assertions",
+      "unique_ours": "boundary forwarding+limit51 rejection and57row UI fetch test"
+    },
+    {
+      "area": "demo parity",
+      "choose": "remote selective pair",
+      "unique_remote": "real demo event log and polling; side effects arrive via events",
+      "preserve": "ours actual live adapter regressions and refresh safeguards"
+    }
+  ],
+  "test_execution": "none; assertions inspected only",
+  "source_edits": false,
+  "runtime_reader_claim": "none for remote",
+  "report": "/tmp/pr1113-r02-compare-ui.md"
+}

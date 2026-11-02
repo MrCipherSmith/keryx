@@ -52,7 +52,10 @@ export function legacyArtifacts(db:Database){
         return {...durable,revisions:state.revisions.map(metadataRevision),replays};
     };
     const serialize=(state:HubState)=>JSON.stringify(snapshot(state));
-    const persist=(state:HubState,allowExisting=false,previous?:HubState,previousBody?:string)=>{
+    const prepare=(state:HubState)=>{
+        return serialize({...state,events:state.events.slice(-legacyStorageLimits.retainedEvents),documentChanges:state.documentChanges.slice(-legacyStorageLimits.retainedDocumentChanges)});
+    };
+    const persist=(state:HubState,allowExisting=false,previous?:HubState,prepared?:{body:string;previousBytes:number})=>{
         const before=db.query<{bytes:number;count:number},[]>('SELECT bytes,count FROM hub_revision_blob_usage WHERE id=1').get()!;
         const put=db.query('INSERT OR IGNORE INTO hub_revision_blobs(digest,content_base64) VALUES(?,?)');
         for(const revision of state.revisions)for(const file of revision.files??[]){
@@ -68,9 +71,9 @@ export function legacyArtifacts(db:Database){
         // Prune only transient invalidation/delta windows. Accepted artifacts and receipts remain durable.
         state.events=state.events.slice(-legacyStorageLimits.retainedEvents);
         state.documentChanges=state.documentChanges.slice(-legacyStorageLimits.retainedDocumentChanges);
-        const body=serialize(state);
+        const body=prepared?.body??serialize(state);
         if(!allowExisting){
-            const bytes=Buffer.byteLength(body),previousBytes=previous?Buffer.byteLength(previousBody??serialize(previous)):0;
+            const bytes=Buffer.byteLength(body),previousBytes=prepared?.previousBytes??(previous?Buffer.byteLength(serialize(previous)):0);
             const replayCount=Object.keys(state.replays).length,previousReplays=previous?Object.keys(previous.replays).length:0;
             const collections=['projects','documents','proposals','flows','evidence','revisions','deliveries'] as const;
             if(bytes>legacyStorageLimits.maxMetadataBytes&&bytes>previousBytes||replayCount>legacyStorageLimits.maxReplayRecords&&replayCount>previousReplays||collections.some(key=>state[key].length>legacyStorageLimits.maxCollectionRecords&&state[key].length>(previous?.[key].length??0)))fail(413,'quota-exceeded','Legacy durable history quota exceeded; explicit archival is required');
@@ -78,5 +81,5 @@ export function legacyArtifacts(db:Database){
         if(state.revisions.length)db.query('UPDATE remote_schema_version SET version=? WHERE version<?').run(LEGACY_ARTIFACT_WRITER_VERSION,LEGACY_ARTIFACT_WRITER_VERSION);
         return body;
     };
-    return{hydrate,hydrateRevision,metadataRevision,serialize,persist};
+    return{hydrate,hydrateRevision,metadataRevision,serialize,prepare,persist};
 }

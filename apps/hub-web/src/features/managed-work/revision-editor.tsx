@@ -8,9 +8,9 @@ import {
   Textarea,
 } from "../../components/ui";
 import {
+  activeRequiredIntents,
   aggregateVersions,
   recordOf,
-  recordsOf,
 } from "./model";
 import { useWorkOperation } from "./operation";
 import type { WorkAdapter } from "./adapter";
@@ -38,11 +38,9 @@ export function RevisionEditor({
   const hub = useHub();
   const flowRevision = recordOf(records, "flow-revision", flow.currentRevisionId);
   const intentRevision = recordOf(records, "intent-revision", intent?.currentRevisionId);
+  const requiredIntents = activeRequiredIntents(records,flow.id);
+  const requiredIds = new Set(requiredIntents.map((intent) => intent.id));
   const target = intent ?? flow;
-  // A cancelled Intent can no longer be frozen into Flow membership.
-  const liveRequired = recordsOf(records, "intent").filter(
-    (i) => i.flowId === flow.id && i.required && i.state !== "cancelled",
-  );
   const revision = intent ? intentRevision : flowRevision;
   const [draft, setDraft] = useDraft(
     [
@@ -60,9 +58,7 @@ export function RevisionEditor({
       deliverable: intentRevision?.deliverable ?? "",
       approach: intentRevision?.approach ?? "",
       outOfScope: revision?.outOfScope ?? "",
-      requiredIntentIds: (flowRevision?.requiredIntentIds ?? []).filter((id) =>
-        liveRequired.some((i) => i.id === id),
-      ),
+      requiredIntentIds: (flowRevision?.requiredIntentIds ?? []).filter((id) => requiredIds.has(id)),
       criteria: structuredClone(revision?.criteria ?? []),
       mappings: structuredClone(intentRevision?.criterionMappings ?? []),
     },
@@ -115,7 +111,7 @@ export function RevisionEditor({
                 outOfScope: draft.outOfScope,
                 specification: flowRevision.specification,
                 criteria: draft.criteria,
-                requiredIntentIds: draft.requiredIntentIds,
+                requiredIntentIds: draft.requiredIntentIds.filter((id) => requiredIds.has(id)),
               },
         });
       }}
@@ -142,23 +138,24 @@ export function RevisionEditor({
       {!intent && (
         <fieldset>
           <legend>{t("requiredIntents")}</legend>
-          {liveRequired.map((i) => (
-            <label className="work-checkbox" key={i.id}>
-              <input
-                type="checkbox"
-                checked={draft.requiredIntentIds.includes(i.id)}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    requiredIntentIds: e.target.checked
-                      ? [...draft.requiredIntentIds, i.id]
-                      : draft.requiredIntentIds.filter((id) => id !== i.id),
-                  })
-                }
-              />
-              {i.title}
-            </label>
-          ))}
+          {requiredIntents
+            .map((i) => (
+              <label className="work-checkbox" key={i.id}>
+                <input
+                  type="checkbox"
+                  checked={draft.requiredIntentIds.includes(i.id)}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      requiredIntentIds: e.target.checked
+                        ? [...draft.requiredIntentIds, i.id]
+                        : draft.requiredIntentIds.filter((id) => id !== i.id),
+                    })
+                  }
+                />
+                {i.title}
+              </label>
+            ))}
         </fieldset>
       )}
       <fieldset>

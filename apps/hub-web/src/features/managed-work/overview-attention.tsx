@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useHub } from "../../app/hub-context";
 import { ApiError } from "../../api/client";
 import { Button } from "../../components/ui";
+import { attentionLabel, attentionTarget, resolveAttentionTarget } from "./attention-target";
 import { liveWorkAdapter } from "./adapter";
 import { useWorkEvents } from "./updates";
 import "./work.css";
@@ -65,6 +66,7 @@ function ProjectAttention({
   const { t } = useTranslation("work");
   const adapter = useMemo(() => liveWorkAdapter(project.id), [project.id]);
   const [shown, setShown] = useState(10);
+  const [selectionError, setSelectionError] = useState(false);
   const capabilities = useQuery({
     queryKey: [hub.scopeKey, project.id, "work", "live", "capabilities"],
     queryFn: async ({ signal }) => {
@@ -114,46 +116,30 @@ function ProjectAttention({
       <strong>{project.name}</strong>
       <div className="work-attention-items">
         {items.slice(0, shown).map((item) => {
-          const flowId =
-            item.kind === "flow"
-              ? item.id
-              : "flowId" in item
-                ? item.flowId
-                : null;
-          if (!flowId) return null;
+          const flowId = attentionTarget(item, [])?.flowId;
           return (
             <button
               key={item.id}
-              onClick={() =>
-                hub.navigate({
-                  projectId: project.id,
-                  tab: "work",
-                  flowId,
-                  intentId:
-                    item.kind === "intent"
-                      ? item.id
-                      : item.kind === "attempt"
-                        ? item.intentId
-                        : undefined,
-                  attemptId: item.kind === "attempt" ? item.id : undefined,
-                })
-              }
+              onClick={async () => {
+                setSelectionError(false);
+                try {
+                  const target = attentionTarget(item, []) ?? await resolveAttentionTarget(item, [], adapter);
+                  if (target) hub.navigate({ projectId: project.id, tab: "work", ...target });
+                } catch { setSelectionError(true); }
+              }}
             >
               <strong>
-                {"title" in item
-                  ? item.title
-                  : "summary" in item
-                    ? item.summary
-                    : item.id}
+                {attentionLabel(item)}
               </strong>
               <small>
-                {"state" in item ? t("states." + item.state) : ""} · Flow{" "}
-                <code>{flowId}</code>
+                {"state" in item ? t("states." + item.state) : item.kind === "evidence" ? item.result : ""} · Flow{" "}
+                <code>{flowId ?? (item.kind === "evidence" ? item.attemptId : "")}</code>
               </small>
             </button>
           );
         })}
       </div>
+      {selectionError && <p role="alert">{t("attentionError")}</p>}
       <small>{t("itemsShown", { count: Math.min(shown, items.length) })}</small>
       {(items.length > shown || attention.hasNextPage) && (
         <Button

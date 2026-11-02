@@ -137,3 +137,20 @@ test('the demo receipt carries only the command result, like the live server, an
  expect((await demo.events(page.nextCursor)).events).toEqual([]);
  expect((await demo.snapshot()).eventCursor).toBe(page.nextCursor);
 });
+
+test('demo polling applies event side effects after a result-only receipt without rereading snapshots',async()=>{
+ const {mergeWorkCache,requestWorkRefresh,workSnapshotKey}=await import('../src/features/managed-work/cache');
+ const demo=demoWorkAdapter('p');const before=await demo.snapshot();
+ const client=new QueryClient({defaultOptions:{queries:{retry:false}}});const key=workSnapshotKey(99,'p','demo');client.setQueryData(key,before);
+ const adapter={...demo,events:vi.fn(demo.events),snapshot:vi.fn(demo.snapshot),record:vi.fn(demo.record.bind(demo))};
+ const context={projectId:'p',scopeKey:99,principal:{id:'human',kind:'human',role:'operator'},location:{projectId:'p',tab:'work'},navigate:()=>undefined,refresh:async()=>undefined} satisfies HubContextValue;
+ function Probe(){useWorkEvents(adapter,before.eventCursor);return null;}
+ const mounted=render(<QueryClientProvider client={client}><HubContext.Provider value={context}><Probe/></HubContext.Provider></QueryClientProvider>);
+ try{
+  await waitFor(()=>expect(adapter.events).toHaveBeenCalledTimes(1));
+  const submission=before.records.find(record=>record.kind==='submission'&&record.id==='sub-agent')!;
+  await act(async()=>{const receipt=await adapter.command({command:'attempt.select',operationId:'demo-poll-selection',expectedVersions:{'flow-demo':1,i1:1,'a-agent':1},payload:{intentId:'i1',submissionId:submission.id,submissionDigest:'contentDigest' in submission?submission.contentDigest:'',reason:'Exact reviewed selection'}});expect(receipt.entities?.map(record=>record.kind)).toEqual(['decision']);mergeWorkCache(client,key,receipt.entities??[]);requestWorkRefresh(client,key);});
+  await waitFor(()=>expect(client.getQueryData<typeof before>(key)?.records.find(record=>record.id==='i1')).toMatchObject({version:2,selectedSubmissionId:'sub-agent'}));
+  expect(adapter.events).toHaveBeenCalledTimes(2);expect(adapter.record).toHaveBeenCalledTimes(1);expect(adapter.snapshot).not.toHaveBeenCalled();
+ }finally{mounted.unmount();}
+});

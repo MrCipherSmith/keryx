@@ -1,15 +1,13 @@
 
 import type { WorkTransaction } from './domain';
 import { fail, sha256 } from '../domain';
-import type { Principal } from '../contracts';
 import type { Attempt, WorkCommand } from './model';
 
-/** Follow-up Attempt commands are bound to the participant, exactly as attempt.create binds the author. */
-function participant(actor: Principal, a: Attempt): void {
-    if (actor.id !== a.participantId)
-        fail(403, 'participant-mismatch', 'Only the Attempt participant may act on this Attempt');
-    if (actor.kind === 'agent' && a.method === 'human')
-        fail(403, 'method-mismatch', 'An agent cannot claim human work');
+function participant(transaction: WorkTransaction, attempt: Attempt): void {
+    if (transaction.actor.id !== attempt.participantId)
+        fail(403, 'participant-mismatch', 'Only the authenticated Attempt participant may contribute to this Attempt');
+    if (transaction.actor.kind === 'agent' && attempt.method === 'human')
+        fail(403, 'method-mismatch', 'An agent cannot contribute as a human participant');
 }
 
 export function contextCreate(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'context.create' }>): unknown {
@@ -70,9 +68,9 @@ export function attemptCreate(transaction: WorkTransaction, command: Extract<Wor
 }
 
 export function attemptStart(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.start' }>): unknown {
-    const { actor, state, find, cas, change, pin, editable } = transaction;
+    const { state, find, cas, change, pin, editable } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
-    participant(actor, a);
+    participant(transaction, a);
     cas(a);
     editable(a);
     if (a.state !== 'draft')
@@ -91,9 +89,9 @@ export function attemptStart(transaction: WorkTransaction, command: Extract<Work
 }
 
 export function attemptReport(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.report' }>): unknown {
-    const { actor, find, cas, change, editable } = transaction;
+    const { find, cas, change, editable } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
-    participant(actor, a);
+    participant(transaction, a);
     cas(a);
     editable(a);
     if (a.state === 'draft' && (p.event === 'progress' || p.event === 'blocked' || p.event === 'cancel-request'))
@@ -106,9 +104,9 @@ export function attemptReport(transaction: WorkTransaction, command: Extract<Wor
 }
 
 export function subjectCreate(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'subject.create' }>): unknown {
-    const { actor, projectId, context, base, find, cas, add, seal, pin, editable, resolveDocument, repository } = transaction;
+    const { projectId, context, base, find, cas, add, seal, pin, editable, resolveDocument, repository } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
-    participant(actor, a);
+    participant(transaction, a);
     cas(a);
     editable(a);
     const artifacts = p.artifacts.map(v => {
@@ -138,9 +136,9 @@ export function subjectCreate(transaction: WorkTransaction, command: Extract<Wor
 }
 
 export function evidenceRecord(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'evidence.record' }>): unknown {
-    const { actor, base, find, cas, add, seal, pin, unique } = transaction;
+    const { base, find, cas, add, seal, pin, unique } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt'), s = find(p.subjectId, 'subject');
-    participant(actor, a);
+    participant(transaction, a);
     cas(a);
     if (s.attemptId !== a.id)
         fail(404, 'not-found', 'Subject outside Attempt');
@@ -157,9 +155,9 @@ export function evidenceRecord(transaction: WorkTransaction, command: Extract<Wo
 }
 
 export function attemptSubmit(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.submit' }>): unknown {
-    const { actor, projectId, context, base, find, cas, add, seal, change, pin, assertNoContextDrift, editable, validateCoverage } = transaction;
+    const { projectId, context, base, find, cas, add, seal, change, pin, assertNoContextDrift, editable, validateCoverage } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
-    participant(actor, a);
+    participant(transaction, a);
     cas(a);
     const { i, observations } = editable(a);
     if (!['running', 'blocked'].includes(a.state))
@@ -188,9 +186,9 @@ export function attemptSubmit(transaction: WorkTransaction, command: Extract<Wor
 }
 
 export function attemptWithdraw(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.withdraw' }>): unknown {
-    const { actor, find, cas, change, pin } = transaction;
+    const { find, cas, change, pin } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt'), s = find(p.submissionId, 'submission'), i = find(a.intentId, 'intent');
-    participant(actor, a);
+    participant(transaction, a);
     cas(a);
     cas(i);
     if (a.state !== 'submitted' || a.submissionId !== s.id || s.attemptId !== a.id || i.acceptanceDecisionId)

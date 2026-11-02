@@ -1,5 +1,6 @@
+import { shareWorkSnapshot } from "./cache";
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useHub } from '../../app/hub-context';
 import type { NativeWorkHint } from '../../api/client';
@@ -8,7 +9,6 @@ import { Button, Field, Notice, Select } from '../../components/ui';
 import { liveWorkAdapter } from './adapter';
 import { pendingAmendments, recordOf, recordsOf } from './model';
 import { useWorkEvents } from './updates';
-import { workSnapshotQuery } from './cache';
 import './work.css';
 
 type Selection={principalId:string;scopeKey:number;projectId:string;sessionId:string;hint:NativeWorkHint;confirmed:boolean};
@@ -21,8 +21,7 @@ export function useNativeWorkSelection(record:Control['SessionRecord'],mode:stri
  useEffect(()=>setSelection(null),[hub.scopeKey,hub.principal.id,record.projectId,record.sessionId,mode]);
  const capabilities=useQuery({queryKey:[hub.scopeKey,record.projectId,'work','live','capabilities'],queryFn:({signal})=>adapter.capabilities(signal),enabled:sameProject,retry:false});
  const available=capabilities.data?.enabled===true&&capabilities.data.features.managedExecution;
- const client=useQueryClient();
- const snapshot=useQuery({...workSnapshotQuery(client,hub.scopeKey,record.projectId,adapter),enabled:sameProject&&available&&operator&&mode==='managed',retry:false});
+ const snapshot=useQuery({queryKey:[hub.scopeKey,record.projectId,'work','live','snapshot'],queryFn:({signal})=>adapter.snapshot(signal),enabled:sameProject&&available&&operator&&mode==='managed',retry:false,structuralSharing:shareWorkSnapshot});
  useWorkEvents(adapter,mode==='managed'?snapshot.data?.eventCursor:undefined);
  const records=snapshot.data?.records??[];
  const eligible=recordsOf(records,'attempt').filter((a)=>{

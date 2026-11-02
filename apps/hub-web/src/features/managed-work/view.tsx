@@ -1,3 +1,4 @@
+import { shareWorkSnapshot } from "./cache";
 import { FlowList, IntentColumn } from "./work-lists";
 import { WorkBadge, IntentApproval, FlowSummary } from "./work-panels";
 import { AttemptDetail, DecisionHistory } from "./attempt-detail";
@@ -7,7 +8,7 @@ import { indexWorkRecords } from "./record-index";
 import type { PreparedAction } from "./work-types";
 import "./work-identifiers.css";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
@@ -34,7 +35,6 @@ import { LegacyConversion } from "./legacy";
 import { RevisionReview} from "./revision-review";
 import { AmendmentsPanel } from "./amendments";
 import { WorkAttention, useWorkEvents } from "./updates";
-import { workSnapshotQuery } from "./cache";
 import { FlowReview } from "./flow-review";
 import "./work.css";
 
@@ -130,11 +130,12 @@ function WorkBoard({
     setAction(null);
     setCreating(false);
   }, [flowId, hub.location.intentId, hub.location.attemptId]);
-  const client = useQueryClient();
   const snapshot = useQuery({
-    ...workSnapshotQuery(client, hub.scopeKey, hub.projectId, adapter),
+    queryKey: [hub.scopeKey, hub.projectId, "work", adapter.mode, "snapshot"],
+    queryFn: ({ signal }) => adapter.snapshot(signal),
     retry: false,
     staleTime: Infinity,
+    structuralSharing: shareWorkSnapshot,
   });
   const eventStatus = useWorkEvents(adapter, snapshot.data?.eventCursor);
   const records = snapshot.data?.records ?? [];

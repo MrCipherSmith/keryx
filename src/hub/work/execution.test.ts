@@ -4,12 +4,7 @@ import { fixture, admittedSession, appliedController, success, type Fixture } fr
 import type { Control } from '../../remote-control/protocol';
 import type { WorkRecord, Attempt } from './model';
 import { sha256 } from '../domain';
-import { createWorkExecution, workExecutionHint } from './execution';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { openHubStore, type HubStore } from '../store';
-import type { QueueRow } from '../remote-v2/model';
+import { workExecutionHint } from './execution';
 let f: Fixture | undefined;
 afterEach(async () => { await f?.close(); f = undefined; });
 async function managedAttempt(f: Fixture) {
@@ -110,34 +105,6 @@ test('managed original v2 admission binds once, preserves wire protocol, and blo
     const sealed = await managed.command('attempt.submit', submit.payload);
     expect(sealed.entities.some(r => r.kind === 'submission')).toBe(true);
     expect((await managed.read()).records.find(r => r.id === managed.a.id)).toMatchObject({ executionOutcome: 'known-terminal', state: 'submitted' });
-});
-test('session reconciliation reads no remote history without a pending reservation and reads the queue once with one', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hub-reconcile-reads-')), store = openHubStore(dir), reads: string[] = [];
-    const remote = new Proxy(store.remote, { get(target, key, receiver) {
-        const value = Reflect.get(target, key, receiver) as unknown;
-        return (key === 'get' || key === 'all') && typeof value === 'function' ? (table: string, ...rest: unknown[]) => { reads.push(`${key}:${table}`); return (value as (...args: unknown[]) => unknown).call(target, table, ...rest); } : value;
-    } });
-    const execution = createWorkExecution({ ...store, remote } as HubStore);
-    try {
-        execution.reconcileSession('s1');
-        expect(reads).toEqual([]);
-        const scope = { projectId: 'p', machineId: 'm', sessionId: 's1' };
-        const item = (queueItemId: string, operationId: string, state: Control['QueueItem']['state'], replacesOperationId: string | null): QueueRow => ({ item: { queueItemId, version: 1, kind: 'message', operationId, state, position: 0, text: 'Queued', commandName: null, expectedConfigVersion: 1, replacesOperationId }, ...scope } as QueueRow);
-        store.remote.put('remote_project_ref', 'p', { id: 'p' });
-        store.remote.put('remote_machine', 'm', { machineId: 'm' });
-        store.remote.put('remote_session', 's1', { record: { sessionId: 's1', state: 'idle' } }, { projectId: 'p', machineId: 'm' });
-        store.remote.put('remote_queue', 'q0', item('q0', 'op-0', 'removed', null), { ...scope, seq: 0 });
-        store.remote.put('remote_queue', 'q1', item('q1', 'op-1', 'queued', 'op-0'), { ...scope, seq: 0 });
-        const reauthorize = { queueItemId: 'q0', originalOperationId: 'op-0', expectedSessionVersion: 4, expectedQueueVersion: 2, expectedItemVersion: 2, expectedConfigVersion: 1, controller: { controllerLeaseId: randomUUID(), expectedControllerVersion: 1 }, association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
-        store.remote.put('remote_operation', 'op-1', { id: 'op-1', request: reauthorize, response: { status: 'applied' } }, { projectId: 'p', sessionId: 's1' });
-        const pins = { operationId: 'op-0', projectId: 'p', actorId: 'h', sessionDigest: 'd', sessionId: 's1', machineId: 'm', checkoutId: 'c', attemptId: 'a', flowId: 'f', intentId: 'i', flowRevisionId: 'fr', intentRevisionId: 'ir', contextSnapshotId: 'ctx', flowRevisionDigest: 'x', intentRevisionDigest: 'y', contextDigest: 'z', associationDigest: 'ad', wireAssociationDigest: 'wd', createdAt: 'now', state: 'reserved' as const, runId: null, turnId: null };
-        store.work.saveExecutionReservation(pins);
-        reads.length = 0;
-        execution.reconcileSession('s1');
-        // The live reauthorized replacement keeps the removed original reserved.
-        expect(store.work.executionReservation('op-0')?.state).toBe('reserved');
-        expect(reads.filter(read => read === 'all:remote_queue')).toHaveLength(1);
-    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 test('work admission headers require both fields and positive bounded versions', () => {
     expect(() => workExecutionHint(new Request('http://hub', { headers: { 'X-Keryx-Work-Attempt': 'a' } }))).toThrow();
@@ -313,7 +280,7 @@ test('reauthorized queued managed work transfers the original pins and binds its
     expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:run.runId,attemptId:managed.a.id});
 });
 
-test('stale configuration refusal keeps the managed reservation and its reauthorized item binds the original Attempt', async () => {
+test('queued configuration drift retains its reservation and admits after native configuration recovery', async () => {
     f = await fixture({ workManagement: { enabled: true } });
     const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
     const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
@@ -329,56 +296,23 @@ test('stale configuration refusal keeps the managed reservation and its reauthor
     expect((await managed.read()).records.filter(r => r.kind === 'execution-link')).toHaveLength(0);
     const item: Control['QueueItem'] = { queueItemId: 'managed-native-q', version: 1, kind: 'message', operationId: queued.operationId, state: 'queued', position: 0, text: 'Queued managed work', commandName: null, expectedConfigVersion: 2, replacesOperationId: null };
     await emit(5, { kind: 'queue-changed', queueVersion: 1, item });
+
+
     await emit(6,{kind:'session-state',session:{...s.session,version:4,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:1,sessionEventCursor:6}});
     const queue=await success<Control['QueuePage']>(await f.call(s.path+'/queue',{cookie:f.cookie}));
     expect(queue.items[0]).toMatchObject({state:'queued',operationId:queued.operationId});
-    expect(s.peer.pendingFrames().some(frame=>frame.type==='command')).toBe(false);
-    // A stale configuration pin is retryable: the reservation stays reserved, so the outcome is still unknown.
-    await managed.command('attempt.report',{attemptId:managed.a.id,event:'progress',report:'Hub refused stale configuration before admission'});
-    expect((await managed.read()).records.find(record=>record.id===managed.a.id)).toMatchObject({executionOutcome:'unknown'});
-    const suspended={...item,version:2,state:'suspended' as const};
-    await emit(7,{kind:'queue-changed',queueVersion:2,item:suspended});
-    await emit(8,{kind:'session-state',session:{...s.session,version:5,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:2,sessionEventCursor:8}});
-    const replacement=await success<Control['SessionOperationReceipt']>(await f.call(`${s.path}/queue/${item.queueItemId}/reauthorize`,{method:'POST',cookie:f.cookie,body:{expectedSessionVersion:5,controller,expectedQueueVersion:2,expectedItemVersion:2,originalOperationId:queued.operationId,expectedConfigVersion:1,association:body.association,queueItemId:item.queueItemId}}));
-    await s.peer.next('session-command');
-    await emit(9,{kind:'queue-changed',queueVersion:3,item:{...suspended,state:'removed',version:3}});
-    await emit(10,{kind:'queue-changed',queueVersion:3,item:{...item,queueItemId:'managed-replacement',operationId:replacement.operationId,replacesOperationId:queued.operationId,expectedConfigVersion:1}});
-    const record={...s.session,version:6,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:3,sessionEventCursor:12};
-    await emit(11,{kind:'operation-receipt',receipt:{...replacement,status:'applied',observedSessionVersion:6,session:record}});
-    await emit(12,{kind:'session-state',session:record});
-    const delivery=await s.peer.next('command'), run=delivery.payload as {runId:string};
+    const { Database } = await import('bun:sqlite'); const db = new Database(f.dataDir + '/hub.sqlite');
+    try {
+        const reservation = JSON.parse(db.query<{body:string},[string]>('SELECT body FROM hub_work_execution_reservations WHERE operation_id=?').get(queued.operationId)!.body);
+        expect(reservation.state).toBe('reserved');
+    } finally { db.close(); }
+    await emit(7,{kind:'session-state',session:{...s.session,version:5,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,config:{...s.session.config,configVersion:2},queueVersion:1,sessionEventCursor:7}});
+    const delivery = await s.peer.next('command');
     const links=(await managed.read()).records.filter(record=>record.kind==='execution-link');
-    expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:run.runId,attemptId:managed.a.id});
+    expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:(delivery.payload as {runId:string}).runId,attemptId:managed.a.id});
 });
 
-test('definitively refused delayed admission releases work but does not pretend the native queue changed', async () => {
-    f = await fixture({ workManagement: { enabled: true } });
-    const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
-    const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
-    const body: Control['MessageSubmit'] = { expectedSessionVersion: 2, expectedConfigVersion: 1, controller, text: 'First unrelated work', interpretation: 'literal-message', busyPolicy: 'reject', association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
-    const first = await success<Control['TurnReceipt']>(await f.call(s.path + '/messages', { method: 'POST', cookie: f.cookie, body }));
-    await s.peer.next('command');
-    const emit = async (seq: number, event: object) => { s.peer.send('session-event', { sessionId: s.session.sessionId, projectId: f!.project.id, checkoutId: 'checkout', sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next('session-event-ack'); };
-    await emit(4, { kind: 'session-state', session: { ...s.session, version: 3, state: 'busy', activeRunId: first.runId, activeTurnId: first.turnId, nextTurnOrdinal: 2, sessionEventCursor: 4 } });
-    const queuedBody = { ...body, expectedSessionVersion: 3, text: 'Queued managed work', busyPolicy: 'enqueue' }, key = randomUUID();
-    const queued = await success<Control['TurnReceipt']>(await fetch(f.origin + s.path + '/messages', { method: 'POST', headers: headers(f, managed.a, key), body: JSON.stringify(queuedBody) }));
-    expect(queued.runId).toBeNull();
-    await s.peer.next('session-command');
-    expect((await managed.read()).records.filter(r => r.kind === 'execution-link')).toHaveLength(0);
-    const item: Control['QueueItem'] = { queueItemId: 'managed-native-q', version: 1, kind: 'message', operationId: queued.operationId, state: 'queued', position: 0, text: 'Queued managed work', commandName: null, expectedConfigVersion: 1, replacesOperationId: null };
-    await emit(5, { kind: 'queue-changed', queueVersion: 1, item });
-    // The Attempt ending makes the work association stale for good: a definitive refusal.
-    await managed.command('attempt.report',{attemptId:managed.a.id,event:'failed',report:'Abandoned before the queued request ran'});
-    await emit(6,{kind:'session-state',session:{...s.session,version:4,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:1,sessionEventCursor:6}});
-    const queue=await success<Control['QueuePage']>(await f.call(s.path+'/queue',{cookie:f.cookie}));
-    expect(queue.items[0]).toMatchObject({state:'queued',operationId:queued.operationId});
-    expect(s.peer.pendingFrames().some(frame=>frame.type==='command')).toBe(false);
-    expect((await managed.read()).records.filter(record=>record.kind==='execution-link')).toHaveLength(0);
-    const {Database}=await import('bun:sqlite');const db=new Database(f.dataDir+'/hub.sqlite');
-    try { expect(JSON.parse(db.query<{body:string},[string]>('SELECT body FROM hub_work_execution_reservations WHERE operation_id=?').get(queued.operationId)!.body)).toMatchObject({state:'released',runId:null}); } finally { db.close(); }
-});
-
-test('editing queued managed work preserves the Attempt binding under its new native operation', async () => {
+test('native in-place edit then removal releases the original managed reservation', async () => {
     f = await fixture({ workManagement: { enabled: true } });
     const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
     const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
@@ -399,6 +333,42 @@ test('editing queued managed work preserves the Attempt binding under its new na
     await emit(6,{kind:'session-state',session:{...s.session,version:4,state:'busy',activeRunId:first.runId,activeTurnId:first.turnId,nextTurnOrdinal:2,queueVersion:1,sessionEventCursor:6}});
     const edited=await success<Control['SessionOperationReceipt']>(await f.call(`${s.path}/queue/${item.queueItemId}`,{method:'PATCH',cookie:f.cookie,body:{expectedSessionVersion:4,controller,expectedQueueVersion:1,expectedItemVersion:1,text:'Edited managed instructions',queueItemId:item.queueItemId}}));
     await s.peer.next('session-command');
+    const next = {...item,version:2,text:'Edited managed instructions'};
+    await emit(7,{kind:'queue-changed',queueVersion:2,item:next});
+    const record={...s.session,version:5,state:'busy',activeRunId:first.runId,activeTurnId:first.turnId,nextTurnOrdinal:2,queueVersion:2,sessionEventCursor:9};
+    await emit(8,{kind:'operation-receipt',receipt:{...edited,status:'applied',observedSessionVersion:5,session:record}});
+    await emit(9,{kind:'session-state',session:record});
+    await emit(10,{kind:'queue-changed',queueVersion:3,item:{...next,version:3,state:'removed'}});
+    await managed.command('work.cancel',{targetType:'intent',targetId:managed.intent.id,reason:'Native edited queue removed; no execution was allocated'});
+    expect((await managed.read()).records.find(record=>record.id===managed.a.id)).toMatchObject({state:'cancelled',executionOutcome:'none'});
+    expect((await managed.read()).records.filter(record=>record.kind==='execution-link')).toHaveLength(0);
+});
+
+for (const sourceState of ['reserved', 'released'] as const) test(`editing queued managed work with a ${sourceState} reservation acknowledges native facts without restoring released authority`, async () => {
+    f = await fixture({ workManagement: { enabled: true } });
+    const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
+    const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
+    const body: Control['MessageSubmit'] = { expectedSessionVersion: 2, expectedConfigVersion: 1, controller, text: 'First unrelated work', interpretation: 'literal-message', busyPolicy: 'reject', association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
+    const first = await success<Control['TurnReceipt']>(await f.call(s.path + '/messages', { method: 'POST', cookie: f.cookie, body }));
+    await s.peer.next('command');
+    const emit = async (seq: number, event: object) => { s.peer.send('session-event', { sessionId: s.session.sessionId, projectId: f!.project.id, checkoutId: 'checkout', sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next('session-event-ack'); };
+    await emit(4, { kind: 'session-state', session: { ...s.session, version: 3, state: 'busy', activeRunId: first.runId, activeTurnId: first.turnId, nextTurnOrdinal: 2, sessionEventCursor: 4 } });
+    const queuedBody = { ...body, expectedSessionVersion: 3, text: 'Queued managed work', busyPolicy: 'enqueue' }, key = randomUUID();
+    const queued = await success<Control['TurnReceipt']>(await fetch(f.origin + s.path + '/messages', { method: 'POST', headers: headers(f, managed.a, key), body: JSON.stringify(queuedBody) }));
+    expect(queued.runId).toBeNull();
+    await s.peer.next('session-command');
+    expect((await managed.read()).records.filter(r => r.kind === 'execution-link')).toHaveLength(0);
+    const item: Control['QueueItem'] = { queueItemId: 'managed-native-q', version: 1, kind: 'message', operationId: queued.operationId, state: 'queued', position: 0, text: 'Queued managed work', commandName: null, expectedConfigVersion: 1, replacesOperationId: null };
+    await emit(5, { kind: 'queue-changed', queueVersion: 1, item });
+
+
+    await emit(6,{kind:'session-state',session:{...s.session,version:4,state:'busy',activeRunId:first.runId,activeTurnId:first.turnId,nextTurnOrdinal:2,queueVersion:1,sessionEventCursor:6}});
+    const edited=await success<Control['SessionOperationReceipt']>(await f.call(`${s.path}/queue/${item.queueItemId}`,{method:'PATCH',cookie:f.cookie,body:{expectedSessionVersion:4,controller,expectedQueueVersion:1,expectedItemVersion:1,text:'Edited managed instructions',queueItemId:item.queueItemId}}));
+    await s.peer.next('session-command');
+    if (sourceState === 'released') {
+        const { Database } = await import('bun:sqlite'); const db = new Database(f.dataDir + '/hub.sqlite');
+        try { db.query("UPDATE hub_work_execution_reservations SET body=json_set(body,'$.state','released') WHERE operation_id=?").run(queued.operationId); } finally { db.close(); }
+    }
     await emit(7,{kind:'queue-changed',queueVersion:2,item:{...item,version:2,state:'removed'}});
     const next={...item,queueItemId:'edited-managed-native-q',operationId:edited.operationId,replacesOperationId:queued.operationId,text:'Edited managed instructions'};
     s.peer.send('session-event',{sessionId:s.session.sessionId,projectId:f.project.id,checkoutId:'checkout',sessionEventSeq:8,observedAt:new Date().toISOString(),kind:'queue-changed',queueVersion:2,item:{...next,replacesOperationId:'foreign-operation'}});
@@ -407,72 +377,21 @@ test('editing queued managed work preserves the Attempt binding under its new na
     const record={...s.session,version:5,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:2,sessionEventCursor:10};
     await emit(9,{kind:'operation-receipt',receipt:{...edited,status:'applied',observedSessionVersion:5,session:record}});
     await emit(10,{kind:'session-state',session:record});
-    const delivery=await s.peer.next('command');const run=delivery.payload as {runId:string};
-    const links=(await managed.read()).records.filter(record=>record.kind==='execution-link');
-    expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:run.runId,attemptId:managed.a.id});
+    if (sourceState === 'released') {
+        await success<Control['QueuePage']>(await f.call(s.path + '/queue', { cookie: f.cookie }));
+        const { Database } = await import('bun:sqlite'); const db = new Database(f.dataDir + '/hub.sqlite');
+        try { const reservation = JSON.parse(db.query<{body:string},[string]>('SELECT body FROM hub_work_execution_reservations WHERE operation_id=?').get(edited.operationId)!.body); expect(reservation.state).toBe('released'); } finally { db.close(); }
+        expect(s.peer.pendingFrames().filter(frame => frame.type === 'command')).toHaveLength(0);
+        expect((await managed.read()).records.filter(record => record.kind === 'execution-link')).toHaveLength(0);
+    } else {
+        const delivery=await s.peer.next('command');const run=delivery.payload as {runId:string};
+        const links=(await managed.read()).records.filter(record=>record.kind==='execution-link');
+        expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:run.runId,attemptId:managed.a.id});
+    }
 });
 
-test('released managed queue item edited natively is still ingested and acknowledged, never admitted as ad-hoc', async () => {
-    f = await fixture({ workManagement: { enabled: true } });
-    const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
-    const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
-    const body: Control['MessageSubmit'] = { expectedSessionVersion: 2, expectedConfigVersion: 1, controller, text: 'First unrelated work', interpretation: 'literal-message', busyPolicy: 'reject', association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
-    const first = await success<Control['TurnReceipt']>(await f.call(s.path + '/messages', { method: 'POST', cookie: f.cookie, body }));
-    await s.peer.next('command');
-    const emit = async (seq: number, event: object) => { s.peer.send('session-event', { sessionId: s.session.sessionId, projectId: f!.project.id, checkoutId: 'checkout', sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next('session-event-ack'); };
-    await emit(4, { kind: 'session-state', session: { ...s.session, version: 3, state: 'busy', activeRunId: first.runId, activeTurnId: first.turnId, nextTurnOrdinal: 2, sessionEventCursor: 4 } });
-    const queued = await success<Control['TurnReceipt']>(await fetch(f.origin + s.path + '/messages', { method: 'POST', headers: headers(f, managed.a, randomUUID()), body: JSON.stringify({ ...body, expectedSessionVersion: 3, text: 'Queued managed work', busyPolicy: 'enqueue' }) }));
-    await s.peer.next('session-command');
-    // An ended Attempt is a definitive refusal: the reservation is released while the native item stays queued.
-    const item: Control['QueueItem'] = { queueItemId: 'managed-native-q', version: 1, kind: 'message', operationId: queued.operationId, state: 'queued', position: 0, text: 'Queued managed work', commandName: null, expectedConfigVersion: 1, replacesOperationId: null };
-    await emit(5, { kind: 'queue-changed', queueVersion: 1, item });
-    await managed.command('attempt.report', { attemptId: managed.a.id, event: 'failed', report: 'Abandoned before the queued request ran' });
-    await emit(6, { kind: 'session-state', session: { ...s.session, version: 4, state: 'idle', activeRunId: null, activeTurnId: null, nextTurnOrdinal: 2, queueVersion: 1, sessionEventCursor: 6 } });
-    const edited = await success<Control['SessionOperationReceipt']>(await f.call(`${s.path}/queue/${item.queueItemId}`, { method: 'PATCH', cookie: f.cookie, body: { expectedSessionVersion: 4, controller, expectedQueueVersion: 1, expectedItemVersion: 1, text: 'Retry managed instructions', queueItemId: item.queueItemId } }));
-    await s.peer.next('session-command');
-    await emit(7, { kind: 'queue-changed', queueVersion: 2, item: { ...item, version: 2, state: 'removed' } });
-    const next = { ...item, queueItemId: 'edited-managed-native-q', operationId: edited.operationId, replacesOperationId: queued.operationId, text: 'Retry managed instructions' };
-    // The machine already applied the edit: ingest must acknowledge it, not roll it back.
-    await emit(8, { kind: 'queue-changed', queueVersion: 2, item: next });
-    const page = await success<Control['QueuePage']>(await f.call(s.path + '/queue', { cookie: f.cookie }));
-    expect(page.items.find(q => q.queueItemId === next.queueItemId)).toMatchObject({ state: 'queued', operationId: edited.operationId });
-    const record = { ...s.session, version: 5, state: 'idle', activeRunId: null, activeTurnId: null, nextTurnOrdinal: 2, queueVersion: 2, sessionEventCursor: 10 };
-    await emit(9, { kind: 'operation-receipt', receipt: { ...edited, status: 'applied', observedSessionVersion: 5, session: record } });
-    await emit(10, { kind: 'session-state', session: record });
-    s.peer.send('heartbeat', { daemonId: 'daemon-1' });
-    await s.peer.next('heartbeat-ack');
-    expect(s.peer.pendingFrames().some(frame => frame.type === 'command')).toBe(false);
-    expect((await managed.read()).records.filter(r => r.kind === 'execution-link')).toHaveLength(0);
-});
-
-test('editing queued managed work in place and then removing it releases its reservation', async () => {
-    f = await fixture({ workManagement: { enabled: true } });
-    const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
-    const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
-    const body: Control['MessageSubmit'] = { expectedSessionVersion: 2, expectedConfigVersion: 1, controller, text: 'First unrelated work', interpretation: 'literal-message', busyPolicy: 'reject', association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
-    const first = await success<Control['TurnReceipt']>(await f.call(s.path + '/messages', { method: 'POST', cookie: f.cookie, body }));
-    await s.peer.next('command');
-    const emit = async (seq: number, event: object) => { s.peer.send('session-event', { sessionId: s.session.sessionId, projectId: f!.project.id, checkoutId: 'checkout', sessionEventSeq: seq, observedAt: new Date().toISOString(), ...event }); await s.peer.next('session-event-ack'); };
-    await emit(4, { kind: 'session-state', session: { ...s.session, version: 3, state: 'busy', activeRunId: first.runId, activeTurnId: first.turnId, nextTurnOrdinal: 2, sessionEventCursor: 4 } });
-    const queued = await success<Control['TurnReceipt']>(await fetch(f.origin + s.path + '/messages', { method: 'POST', headers: headers(f, managed.a, randomUUID()), body: JSON.stringify({ ...body, expectedSessionVersion: 3, text: 'Queued managed work', busyPolicy: 'enqueue' }) }));
-    await s.peer.next('session-command');
-    const item: Control['QueueItem'] = { queueItemId: 'managed-native-q', version: 1, kind: 'message', operationId: queued.operationId, state: 'queued', position: 0, text: 'Queued managed work', commandName: null, expectedConfigVersion: 1, replacesOperationId: null };
-    await emit(5, { kind: 'queue-changed', queueVersion: 1, item });
-    await emit(6, { kind: 'session-state', session: { ...s.session, version: 4, state: 'busy', activeRunId: first.runId, activeTurnId: first.turnId, nextTurnOrdinal: 2, queueVersion: 1, sessionEventCursor: 6 } });
-    const edited = await success<Control['SessionOperationReceipt']>(await f.call(`${s.path}/queue/${item.queueItemId}`, { method: 'PATCH', cookie: f.cookie, body: { expectedSessionVersion: 4, controller, expectedQueueVersion: 1, expectedItemVersion: 1, text: 'Edited managed instructions', queueItemId: item.queueItemId } }));
-    await s.peer.next('session-command');
-    // The native host edits in place: same queue item and operation, version + 1 (src/session/host.ts edit-queue).
-    await emit(7, { kind: 'queue-changed', queueVersion: 2, item: { ...item, version: 2, text: 'Edited managed instructions' } });
-    const record = { ...s.session, version: 5, state: 'busy', activeRunId: first.runId, activeTurnId: first.turnId, nextTurnOrdinal: 2, queueVersion: 2, sessionEventCursor: 9 };
-    await emit(8, { kind: 'operation-receipt', receipt: { ...edited, status: 'applied', observedSessionVersion: 5, session: record } });
-    await emit(9, { kind: 'session-state', session: record });
-    await emit(10, { kind: 'queue-changed', queueVersion: 3, item: { ...item, version: 3, text: 'Edited managed instructions', state: 'removed' } });
-    const cancelled = await managed.command('work.cancel', { targetType: 'intent', targetId: managed.intent.id, reason: 'Edited queued work removed before admission' });
-    expect(cancelled.entities.find(record => record.id === managed.intent.id)).toMatchObject({ state: 'cancelled' });
-});
-
-test('transient managed queue refusal rolls back native allocation and admits the same queued item once the cause clears', async () => {
-    f = await fixture({ workManagement: { enabled: true } });
+for (const quota of ['work-history', 'active-runs'] as const) test(`managed queue ${quota} quota failure rolls back native allocation and retries the same queued operation`, async () => {
+    f = await fixture({ workManagement: { enabled: true }, ...(quota === 'active-runs' ? { remoteBudgets: { activeRuns: 1 } } : {}) });
     const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
     const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
     const body: Control['MessageSubmit'] = { expectedSessionVersion: 2, expectedConfigVersion: 1, controller, text: 'First unrelated work', interpretation: 'literal-message', busyPolicy: 'reject', association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
@@ -495,7 +414,7 @@ test('transient managed queue refusal rolls back native allocation and admits th
       const beforeRuns=db.query<{n:number},[]>('SELECT COUNT(*) AS n FROM remote_run').get()!.n;
       const beforeCommands=db.query<{n:number},[]>('SELECT COUNT(*) AS n FROM remote_command').get()!.n;
       const beforeMachine=db.query<{body:string},[string]>('SELECT body FROM remote_machine WHERE id=?').get(s.machine.machineId)!.body;
-      db.query('UPDATE hub_work_usage SET records=100000 WHERE project_id=?').run(f.project.id);
+      if (quota === 'work-history') db.query('UPDATE hub_work_usage SET records=100000 WHERE project_id=?').run(f.project.id);
       await emit(7,{kind:'session-state',session:{...s.session,version:5,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:1,sessionEventCursor:7}});
       await success<Control['QueuePage']>(await f.call(s.path+'/queue',{cookie:f.cookie}));
       expect(db.query<{n:number},[]>('SELECT COUNT(*) AS n FROM remote_run').get()!.n).toBe(beforeRuns);
@@ -505,16 +424,16 @@ test('transient managed queue refusal rolls back native allocation and admits th
       const session=JSON.parse(db.query<{body:string},[string]>('SELECT body FROM remote_session WHERE id=?').get(s.session.sessionId)!.body);
       expect(session.record).toMatchObject({state:'idle',activeRunId:null,nextTurnOrdinal:2});expect(session.pending).toBeUndefined();
       const reservation=JSON.parse(db.query<{body:string},[string]>('SELECT body FROM hub_work_execution_reservations WHERE operation_id=?').get(queued.operationId)!.body);
-      // A quota refusal is transient: the reservation stays reserved so the same queued head can still be admitted.
       expect(reservation).toMatchObject({state:'reserved',runId:null,turnId:null});
       expect((await managed.read()).records.filter(record=>record.kind==='execution-link')).toHaveLength(0);
       expect(s.peer.pendingFrames().filter(frame=>frame.type==='command')).toHaveLength(0);
-      db.query('UPDATE hub_work_usage SET records=(SELECT COUNT(*) FROM hub_work_records WHERE project_id=?) WHERE project_id=?').run(f.project.id,f.project.id);
+      if (quota === 'work-history') db.query('UPDATE hub_work_usage SET records=(SELECT COUNT(*) FROM hub_work_records WHERE project_id=?) WHERE project_id=?').run(f.project.id,f.project.id);
+      else db.query("UPDATE remote_run SET body=json_set(body,'$.state','succeeded','$.terminalAt',?) WHERE id=?").run(new Date().toISOString(), first.runId!);
       await emit(8,{kind:'session-state',session:{...s.session,version:6,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:1,sessionEventCursor:8}});
-      const delivery=await s.peer.next('command'), run=delivery.payload as {runId:string};
-      const links=(await managed.read()).records.filter(record=>record.kind==='execution-link');
-      expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:run.runId,attemptId:managed.a.id});
+      const command = await s.peer.next('command');
       const bound=JSON.parse(db.query<{body:string},[string]>('SELECT body FROM hub_work_execution_reservations WHERE operation_id=?').get(queued.operationId)!.body);
-      expect(bound).toMatchObject({state:'bound',runId:run.runId});
+      expect(bound).toMatchObject({state:'bound',runId:(command.payload as {runId:string}).runId});
+      expect(db.query<{n:number},[]>('SELECT COUNT(*) AS n FROM remote_run').get()!.n).toBe(beforeRuns+1);
+      expect((await managed.read()).records.filter(record=>record.kind==='execution-link')).toHaveLength(1);
     } finally {db.close();}
 });

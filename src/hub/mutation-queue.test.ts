@@ -24,65 +24,90 @@ test('drops an aborted queued request before its mutation callback can run', asy
     await expect(waiting).rejects.toThrow('Request was aborted');
     release();await first;await queue.settle();expect(ran).toBe(false);queue.close();
 });
-const encoder=new TextEncoder();
-const post=(body?:BodyInit|null,headers?:HeadersInit)=>new Request('http://hub.test/hub/v1/projects',{method:'POST',...(headers?{headers}:{}),...(body===undefined?{}:{body})});
-function streamed(){
-    let controller!:ReadableStreamDefaultController<Uint8Array>;
-    const stream=new ReadableStream<Uint8Array>({start(value){controller=value;}});
-    return {stream,send:(text:string)=>controller.enqueue(encoder.encode(text)),end:()=>controller.close()};
-}
-function fakeClock(){
-    let next=0; const timers=new Map<number,()=>void>();
-    return {clock:{setTimeout:(callback:()=>void)=>{timers.set(++next,callback);return next;},clearTimeout:(handle:unknown)=>{timers.delete(handle as number);}},
-        fire(){const due=[...timers.values()];timers.clear();for(const callback of due)callback();}};
-}
-test('admits small concurrent mutations by their streamed bytes, not a flat per-route allowance', async () => {
-    const queue=createMutationQueue();
-    let release!:()=>void; const gate=new Promise<void>(resolve=>release=resolve);
-    const held=Array.from({length:6},()=>queue.request(post('{"name":"x"}'),async admitted=>{await admitted.text();await gate;return 'ok';}));
-    release();
-    expect(await Promise.all(held)).toEqual(Array(6).fill('ok'));queue.close();
+test('tiny concurrent mutations retain their actual bytes instead of a full parser allowance', async () => {
+    const queue=createMutationQueue({maxRequestBytes:32*1024*1024});
+    let release!:()=>void;const gate=new Promise<void>(resolve=>release=resolve);
+    const calls=Array.from({length:7},()=>{const request=new Request('http://hub.test/hub/v2/control',{method:'POST',body:'{}'});return queue.request(request,async(admitted=request)=>{await admitted.text();await gate;return 'accepted';});});
+    const settled=Promise.allSettled(calls);await Bun.sleep(5);release();
+    expect((await settled).every(result=>result.status==='fulfilled')).toBe(true);queue.close();
 });
-test('refuses the request whose streamed or declared bytes exceed the remaining budget and releases them on completion', async () => {
-    const queue=createMutationQueue({maxRequestBytes:10});
-    let release!:()=>void, read!:()=>void; const gate=new Promise<void>(resolve=>release=resolve), buffered=new Promise<void>(resolve=>read=resolve);
-    const first=queue.request(post('12345678'),async admitted=>{await admitted.text();read();await gate;});
-    await buffered;
-    await expect(queue.request(post('12345'),async admitted=>admitted.text())).rejects.toThrow('Request memory budget exhausted');
-    let pulled=false;
-    const declared=new ReadableStream<Uint8Array>({pull(){pulled=true;}},{highWaterMark:0});
-    await expect(queue.request(post(declared,{'content-length':'5'}),async admitted=>admitted.text())).rejects.toThrow('Request memory budget exhausted');
-    expect(pulled).toBe(false);
-    release();await first;
-    await expect(queue.request(post('1234567890'),async admitted=>admitted.text())).resolves.toBe('1234567890');queue.close();
+
+test('nested MCP mutations share one root request slot and charge only actual bodies', async()=>{
+    const queue=createMutationQueue({maxRequests:1,maxRequestBytes:128*1024*1024});
+    const outer=new Request('http://hub.test/mcp',{method:'POST',body:'{"tool":"write"}'});
+    const result=await queue.request(outer,async(admitted=outer)=>{await admitted.text();const inner=new Request('http://hub.test/hub/v1/projects',{method:'POST',body:'{}'});return queue.request(inner,async(next=inner)=>next.text());});
+    expect(result).toBe('{}');queue.close();
 });
-test('an in-process request made while handling an admitted request is not admitted a second time', async () => {
-    const queue=createMutationQueue({maxRequests:1,maxRequestBytes:16});
-    const outer=queue.request(post('12345678'),async admitted=>{
-        await admitted.text();
-        return queue.request(post('123456789012'),async inner=>inner.text());
-    });
-    await expect(outer).resolves.toBe('123456789012');queue.close();
+
+test('body read deadline rejects a trickling request and releases its request slot', async()=>{
+    const queue=createMutationQueue({maxRequests:1,maxBodyReadMs:15});
+    let source!:ReadableStreamDefaultController<Uint8Array>;
+    const request=new Request('http://hub.test/hub/v1/session',{method:'POST',body:new ReadableStream<Uint8Array>({start(controller){source=controller;}},{highWaterMark:0})});
+    const pending=queue.request(request,async(admitted=request)=>admitted.text()).then(()=> 'unexpected',error=>error.code);
+    const result=await Promise.race([pending,Bun.sleep(100).then(()=> 'unfinished')]);
+    if(result==='unfinished')source.error(new Error('test cleanup'));
+    await pending;
+    expect(result).toBe('request-timeout');
+    await expect(queue.request(new Request('http://hub.test/mcp',{method:'POST'}),async()=> 'accepted')).resolves.toBe('accepted');queue.close();
 });
-test('a request body that is not received within the read deadline fails and releases its bytes', async () => {
-    const time=fakeClock(), queue=createMutationQueue({maxRequestBytes:8,maxBodyReadMs:30000},time.clock);
-    const slow=streamed();
-    const stalled=queue.request(post(slow.stream),async admitted=>admitted.text());
-    slow.send('1234');
-    time.fire();
-    await expect(stalled).rejects.toMatchObject({status:408,code:'request-timeout'});
-    await expect(queue.request(post('12345678'),async admitted=>admitted.text())).resolves.toBe('12345678');queue.close();
+
+test('actual aggregate chunks enforce the budget without trusting Content-Length and release on refusal',async()=>{
+    const queue=createMutationQueue({maxRequestBytes:8});
+    const request=new Request('http://hub.test/hub/v1/projects',{method:'POST',headers:{'Content-Length':'1'},body:new ReadableStream({start(controller){controller.enqueue(new Uint8Array(9));controller.close();}})});
+    await expect(queue.request(request,async(admitted=request)=>admitted.text())).rejects.toMatchObject({code:'hub-busy'});
+    const retry=new Request('http://hub.test/hub/v1/projects',{method:'POST',body:'12345678'});
+    await expect(queue.request(retry,async(admitted=retry)=>admitted.text())).resolves.toBe('12345678');queue.close();
 });
-test('internal serialized work is exempt from the HTTP waiter limit and wait deadline and does not consume it', async () => {
-    const time=fakeClock(), queue=createMutationQueue({maxPending:1,maxWaitMs:10},time.clock);
-    let release!:()=>void; const order:string[]=[];
-    const running=queue.serialized(async()=>new Promise<void>(resolve=>release=resolve));
-    await Promise.resolve();
-    const frames=[1,2,3].map(index=>queue.serialized(async()=>{order.push('frame'+index);},{internal:true}));
-    const http=queue.serialized(async()=>{order.push('http');});
-    await expect(queue.serialized(async()=>{})).rejects.toThrow('Mutation queue is full');
-    time.fire();
-    await expect(http).rejects.toThrow('Mutation queue wait expired');
-    release();await running;await Promise.all(frames);
-    expect(order).toEqual(['frame1','frame2','frame3']);queue.close();
+
+test('body deadline stops after EOF so a slow Git action can finish normally',async()=>{
+    const queue=createMutationQueue({maxBodyReadMs:10});const request=new Request('http://hub.test/hub/v1/projects/p/deliveries',{method:'POST',body:'{}'});
+    await expect(queue.request(request,async(admitted=request)=>{await admitted.text();await Bun.sleep(30);return 'published';})).resolves.toBe('published');queue.close();
+});
+
+test('header-only refusal never pulls a body and cancels its source on cleanup',async()=>{
+    const queue=createMutationQueue();let pulls=0,cancelled=false;
+    const request=new Request('http://hub.test/hub/v1/projects',{method:'POST',body:new ReadableStream({pull(){pulls++;},cancel(){cancelled=true;}},{highWaterMark:0})});
+    await queue.request(request,async()=> 'unauthorized');await Promise.resolve();expect(pulls).toBe(0);expect(cancelled).toBe(true);queue.close();
+});
+
+test('parsed bytes stay charged through the action and cancelled readers release capacity',async()=>{
+    const queue=createMutationQueue({maxRequestBytes:8});let release!:()=>void,ready!:()=>void;const started=new Promise<void>(resolve=>ready=resolve);const gate=new Promise<void>(resolve=>release=resolve);
+    const firstRequest=new Request('http://hub.test/hub/v1/projects',{method:'POST',body:'123456'});
+    const first=queue.request(firstRequest,async(admitted=firstRequest)=>{await admitted.text();ready();await gate;});await started;
+    const secondRequest=new Request('http://hub.test/hub/v1/projects',{method:'POST',body:'123'});
+    await expect(queue.request(secondRequest,async(admitted=secondRequest)=>admitted.text())).rejects.toMatchObject({code:'hub-busy'});release();await first;
+    const controller=new AbortController();let sourceCancelled=false;const thirdRequest=new Request('http://hub.test/mcp',{method:'POST',signal:controller.signal,body:new ReadableStream({pull(source){source.enqueue(new Uint8Array(8));},cancel(){sourceCancelled=true;}},{highWaterMark:0})});
+    const third=queue.request(thirdRequest,async(admitted=thirdRequest)=>{const reader=admitted.body!.getReader();await reader.read();controller.abort();await reader.read();});
+    await expect(third).rejects.toMatchObject({code:'request-aborted'});expect(sourceCancelled).toBe(true);
+    const lastRequest=new Request('http://hub.test/hub/v1/projects',{method:'POST',body:'12345678'});await expect(queue.request(lastRequest,async(admitted=lastRequest)=>admitted.text())).resolves.toBe('12345678');queue.close();
+});
+
+test('read-only GET never consumes a mutation request slot',async()=>{
+    const queue=createMutationQueue({maxRequests:1});let release!:()=>void;const first=queue.request(new Request('http://hub.test/mcp',{method:'POST'}),async()=>new Promise<void>(resolve=>release=resolve));
+    await expect(queue.request(new Request('http://hub.test/healthz'),async()=> 'healthy')).resolves.toBe('healthy');release();await first;queue.close();
+});
+
+test('admission timeout retains its408 status when a parser throws a translated JSON error',async()=>{
+    const queue=createMutationQueue({maxBodyReadMs:10});const request=new Request('http://hub.test/mcp',{method:'POST',body:new ReadableStream<Uint8Array>({pull(){}},{highWaterMark:0})});
+    await expect(queue.request(request,async(admitted=request)=>{try{return await admitted.text();}catch{throw new Error('Invalid JSON');}})).rejects.toMatchObject({status:408,code:'request-timeout'});queue.close();
+});
+
+test('an aborted MCP root cannot admit a fresh internal mutation action',async()=>{
+    const queue=createMutationQueue();const controller=new AbortController();let ran=false;
+    const outer=new Request('http://hub.test/mcp',{method:'POST',signal:controller.signal});
+    await expect(queue.request(outer,async()=>{controller.abort();return queue.request(new Request('http://hub.test/hub/v1/projects',{method:'POST'}),async()=>{ran=true;});})).rejects.toMatchObject({code:'request-aborted'});
+    expect(ran).toBe(false);queue.close();
+});
+
+test('an unread declared body cannot reserve the aggregate byte budget against another small mutation', async()=>{
+    const queue=createMutationQueue({maxRequestBytes:1024,maxRequests:2});
+    let entered!:()=>void, release!:()=>void, cancelled=false;
+    const started=new Promise<void>(resolve=>entered=resolve), gate=new Promise<void>(resolve=>release=resolve);
+    const unread=new Request('http://hub.test/control',{method:'POST',headers:{'content-length':'1024'},body:new ReadableStream<Uint8Array>({cancel(){cancelled=true;}},{highWaterMark:0})});
+    const first=queue.request(unread,async()=>{entered();await gate;return 'done';});
+    try {
+        await started;
+        expect(await queue.request(new Request('http://hub.test/control',{method:'POST',body:'{}'}),request=>request.text())).toBe('{}');
+    } finally {release();await first;queue.close();}
+    expect(cancelled).toBe(true);
 });

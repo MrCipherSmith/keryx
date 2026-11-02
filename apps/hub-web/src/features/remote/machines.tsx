@@ -447,8 +447,6 @@ function MachineSessionRow({
           encodeURIComponent(session.activeRunId ?? ""),
         signal,
       ),
-    // Eager for active runs only (bounded by them): the collapsed row shows the run's
-    // approval state and Flow link. Routing, one request per row, waits for expansion.
     enabled: !!session.activeRunId,
   });
   const routing = useQuery({

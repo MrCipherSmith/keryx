@@ -378,8 +378,12 @@ def info_for(database):
             active += sum(1 for (raw,) in db.execute("SELECT body FROM remote_run")
                           if not (value := json.loads(raw)).get("terminalAt") and value.get("state") not in TERMINAL)
         if "remote_queue" in tables:
-            # Queue rows are never deleted; applied/rejected/removed are the protocol's settled states.
-            active += db.execute("SELECT count(*) FROM remote_queue WHERE COALESCE(json_extract(body,'$.item.state'),'unknown') NOT IN ('applied','rejected','removed')").fetchone()[0]
+            queue_columns = {row[1].lower() for row in db.execute('PRAGMA table_info("remote_queue")')}
+            if "body" not in queue_columns:
+                # Old or unknown queue shapes cannot prove that their rows ended.
+                active += db.execute("SELECT count(*) FROM remote_queue").fetchone()[0]
+            else:
+                active += db.execute("SELECT count(*) FROM remote_queue WHERE COALESCE(CASE WHEN json_valid(body) THEN json_extract(body,'$.item.state') END,'unknown') NOT IN ('applied','rejected','removed')").fetchone()[0]
         if "remote_command" in tables:
             active += db.execute("SELECT count(*) FROM remote_command WHERE COALESCE(json_extract(body,'$.capacityReleased'),0)=0 AND COALESCE(json_extract(body,'$.status'),'unknown') NOT IN ('applied','not-applied','rejected','expired-unconfirmed')").fetchone()[0]
         if "remote_session" in tables:

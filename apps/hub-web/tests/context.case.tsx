@@ -119,7 +119,7 @@ it('publishes only an explicitly acknowledged selected snapshot with the capture
 
 it('offers delivery of the selected line even when it is not on the first revision page', async () => {
   const newest = { ...revision, id: 'r-newest', purpose: 'snapshot', fileCount: 0 };
-  mocks.get.mockImplementation((path: string) => Promise.resolve(path.includes('/revisions?summary=1') ? { revisions: [newest], nextCursor: 'r-newest' } : path.endsWith('/deliveries') ? { deliveries: [] } : { ...project, lineRevisionId: 'r-old', lineVersion: 3 }));
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.includes('/revisions?summary=1') ? { revisions: [newest], nextCursor: 'r-newest' } : path.endsWith('/deliveries') ? { deliveries: [] } : path.endsWith('/revisions/r-old?summary=1') ? { ...newest, id: 'r-old' } : { ...project, lineRevisionId: 'r-old', lineVersion: 3 }));
   await mount(<DeliveryView />);
   expect(await screen.findByRole('button', { name: en.publish })).toBeVisible();
   expect(screen.queryByText(en.deliveryUnavailable)).not.toBeInTheDocument();
@@ -129,14 +129,14 @@ it('pages older revisions behind the newest page and opens a deep-linked revisio
   const newest = { ...revision, id: 'r-newest', message: 'Newest snapshot', purpose: 'snapshot', fileCount: 0 };
   const older = { ...revision, id: 'r-old', message: 'Older snapshot', purpose: 'snapshot', fileCount: 0 };
   mocks.location.revisionId = 'r-old';
-  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/revisions?summary=1') ? { revisions: [newest], nextCursor: 'r-newest' } : path.endsWith('/revisions?summary=1&afterId=r-newest') ? { revisions: [older] } : path.endsWith('/revisions/r-old') ? { ...revision, ...older, files: [] } : project));
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/revisions?summary=1') ? { revisions: [newest], nextCursor: 'r-newest' } : path.endsWith('/revisions?summary=1&afterId=r-newest') ? { revisions: [older] } : path.endsWith('/revisions/r-old?summary=1') ? older : path.endsWith('/revisions/r-old') ? { ...revision, ...older, files: [] } : project));
   await mount(<RevisionsView />);
   expect(await screen.findByText('Newest snapshot')).toBeVisible();
   await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/projects/p/revisions/r-old', expect.any(AbortSignal)));
-  fireEvent.click(screen.getByRole('button', { name: en.loadOlderRevisions }));
+  fireEvent.click(screen.getByRole('button', { name: en.loadMoreRevisions }));
   await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/projects/p/revisions?summary=1&afterId=r-newest', expect.any(AbortSignal)));
   expect(await screen.findByRole('button', { name: /Older snapshot/ })).toBeVisible();
-  expect(screen.queryByRole('button', { name: en.loadOlderRevisions })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: en.loadMoreRevisions })).not.toBeInTheDocument();
 });
 
 it('switches application copy to Russian while preserving private draft content', async () => {

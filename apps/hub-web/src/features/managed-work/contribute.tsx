@@ -6,6 +6,7 @@ import { Button, Field, Input, Select, Textarea } from "../../components/ui";
 import type { WorkAdapter } from "./adapter";
 import type { Attempt, WorkFlow, WorkIntent, WorkRecord } from "./types";
 import {
+  activeRequiredIntents,
   aggregateVersions,
   recordOf,
   recordsOf,
@@ -42,12 +43,7 @@ export function ContributionPanel({
   const { run, blocked } = useWorkOperation(adapter, onDone);
   const fr = recordOf(records, "flow-revision", flow.currentRevisionId);
   const ir = recordOf(records, "intent-revision", intent?.currentRevisionId);
-  const children = recordsOf(records, "intent").filter(
-    (i) => i.flowId === flow.id,
-  );
-  const required = children
-    .filter((i) => i.required && i.state !== "cancelled")
-    .map((i) => i.id);
+  const required = activeRequiredIntents(records,flow.id).map((intent) => intent.id);
   const requiredSetMatches =
     fr &&
     required.length === fr.requiredIntentIds.length &&
@@ -314,10 +310,10 @@ function ContributionForm({
       )}
     </Field>
   );
-  // A drafted id that left the option list (a newer revision) falls back to the
-  // option the Select shows, so display and payload never disagree.
-  const pick = (name: string, ids: string[]) =>
-    ids.includes(draft[name] ?? "") ? draft[name] : ids[0];
+  const pick = (name: string, ids: string[]) => {
+    const saved = draft[name];
+    return saved !== undefined && ids.includes(saved) ? saved : ids[0];
+  };
   const choice = (
     name: string,
     label: string,
@@ -326,7 +322,7 @@ function ContributionForm({
     <Field key={name} label={t(label)}>
       <Select
         required
-        value={pick(name, values.map((v) => v.id)) ?? ""}
+        value={pick(name,values.map((value) => value.id)) ?? ""}
         onChange={(e) => setDraft({ ...draft, [name]: e.target.value })}
       >
         {values.map((v) => (
@@ -340,10 +336,7 @@ function ContributionForm({
   const send = async () => {
     const expectedVersions = aggregateVersions(flow, intent, attempt);
     if (kind === "intent" && fr) {
-      const flowCriterionId = pick(
-        "criterion",
-        fr.criteria.map((c) => c.criterionId),
-      );
+      const flowCriterionId = pick("criterion",fr.criteria.map((criterion) => criterion.criterionId));
       if (!flowCriterionId) return;
       const criteria = (draft.criteria ?? "")
         .split("\n")
@@ -404,10 +397,7 @@ function ContributionForm({
         expectedVersions,
         payload: {
           intentRevisionId: ir.id,
-          contextSnapshotId: pick(
-            "context",
-            contexts.map((c) => c.id),
-          ),
+          contextSnapshotId: pick("context",contexts.map((context) => context.id)),
           participantId: hub.principal.id,
           method: draft.method ?? "human",
           summary: draft.summary,
@@ -467,7 +457,7 @@ function ContributionForm({
       });
     } else if (kind === "evidence" && attempt && ir) {
       const subject = subjects.find(
-        (s) => s.id === pick("subject", subjects.map((s) => s.id)),
+        (s) => s.id === pick("subject",subjects.map((subject) => subject.id)),
       );
       if (!subject) return;
       const report = draft.report ?? "";
@@ -485,12 +475,7 @@ function ContributionForm({
           attemptId: attempt.id,
           subjectId: subject.id,
           subjectDigest: subject.contentDigest,
-          criterionIds: [
-            pick(
-              "criterion",
-              ir.criteria.map((c) => c.criterionId),
-            ),
-          ],
+          criterionIds: [pick("criterion",ir.criteria.map((criterion) => criterion.criterionId))],
           result: draft.result ?? "inconclusive",
           method: draft.method,
           report,

@@ -225,22 +225,13 @@ A plain rollback confirms first, preserves current data and tests the previous i
 
 `--restore-data` deliberately replaces current work with the pre-upgrade snapshot. It follows only the backup taken when leaving the selected previous release, verifies it, names the destructive effect in its confirmation and first saves current data under `backups/pre-rollback-<time>/`. Both data copies remain available. Once a rollback has run, its automatic pre-upgrade restore pointer is cleared; backups remain usable through explicit `hubctl restore`. Prefer a compatible release or a forward fix when new work already exists.
 
-## A Git delivery interrupted by a stop
-
-A stop, crash or upgrade during a Git delivery leaves that delivery `uncertain`: the push may or may not have reached the remote, so the Hub never re-runs it by itself and refuses further deliveries for that project with `409 delivery-in-progress`, naming the operation. An operator inspects it with `GET /hub/v1/projects/<project>/deliveries/<operation>` and resolves it with `POST /hub/v1/projects/<project>/deliveries/<operation>/resolve` (an `Idempotency-Key` header is required):
-
-- `{"action":"retry"}` re-issues the same operation. The adapter first reconciles the operation's receipt and the managed branch's `Hub-Operation` marker, so a push that already happened is recorded instead of repeated. It also finalizes an operation whose Git result was recorded but never finished.
-- `{"action":"abandon"}` records that you inspected the managed branch and nothing was published. It is refused once Git has reported a result.
-
-Either way the project can deliver again.
-
 ## Backup and restore
 
 The installer schedules `hubctl backup --quiet` at 03:17 server time (skip it with `--no-backup`; add it later with `hubctl schedule on`). Each run takes an online backup **without stopping the Hub**: SQLite serialises a consistent image, `hubctl` checks it (`PRAGMA integrity_check` and the `hub_state` row), compresses it, writes its SHA-256, renames it into place atomically, and rotates.
 
 - **Kept on the server:** the 14 newest daily backups in `backups/daily/` and the 8 newest weekly ones in `backups/weekly/` (one per ISO week, the last of that week). Change the counts with `KERYX_HUB_BACKUP_DAILY` and `KERYX_HUB_BACKUP_WEEKLY` in `secrets/hub.env`.
 - **They are on the same machine as the data.** A lost disk loses both. Copy `backups/` somewhere else on a schedule you own.
-- They hold every project's content and the Hub's session records, though not the tokens. Files are mode 0600. The safety backups an upgrade, restore or rollback takes (`upgrade-*`, `pre-restore-*`, `pre-rollback-*`, full copies of the volume) are kept: the three newest, and **any younger than 14 days however many there are**, because the newest can be the only copy of the newest data. They are the big ones; remove older ones yourself when disk gets tight. `manual-*` backups are never pruned.
+- They hold every project's content and the Hub's session records, though not the tokens. Files are mode 0600. The safety backups an upgrade, restore or rollback takes (`upgrade-*`, `pre-restore-*`, `pre-rollback-*`, full copies of the volume) are kept: the three newest, the explicitly referenced pre-upgrade backup needed by `rollback --restore-data`, and **any younger than 14 days however many there are**, because the newest can be the only copy of the newest data. They are the big ones; remove older ones yourself when disk gets tight. `manual-*` backups are never pruned.
 - An online backup holds the database in the Hub container's memory (limit 512 MB). Above about 150 MB `hubctl backup` refuses; use `hubctl backup --offline`, which stops the Hub and saves the whole volume as `backups/manual-<time>/hub-data.tar`.
 
 Restore:
@@ -293,4 +284,12 @@ The first time the package is published to GitHub Container Registry it may be p
 
 CI (`team-hub-distribution` in `ci.yml`) builds the image from the packaged archive on every pull request and runs the same checks, so a change that breaks the image fails before a tag does.
 
-Safety backups from upgrade, restore and rollback retain the three newest directories, the explicitly referenced pre-upgrade backup, and every directory younger than 14 days; only older ones beyond that are pruned. Manual and legacy-adoption backups remain operator-managed.
+
+The ordinary packaging tests use no registry network and no host Bun cache. The extracted-runtime integration proof is opt-in and runs in CI's `team-hub-distribution` job. To run it locally, prepare an empty private cache explicitly, then run the test offline against that cache:
+
+```sh
+bun scripts/prepare-team-hub-runtime-cache.ts --allow-network --cache /absolute/path/to/new-private-cache
+KERYX_HUB_RUNTIME_CACHE=/absolute/path/to/new-private-cache bun test scripts/package-team-hub.test.ts
+```
+
+The preparation command downloads only the frozen Hub runtime dependency set. The test copies that cache into a temporary isolated installation, uses `bun install --offline`, and starts the actual extracted Hub/MCP runtime. Without the cache environment variable, this network integration proof is skipped; archive closure, build boundaries and empty-cache offline refusal still run in the ordinary suite.

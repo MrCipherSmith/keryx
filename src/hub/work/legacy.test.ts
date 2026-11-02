@@ -68,7 +68,7 @@ test('conversion guard freezes all direct legacy transitions, remote admission a
     expect(guarded.flows[0]).toEqual(legacy.flows[0]);
     const config = { dataDir: dir, operatorToken: 'o'.repeat(64), agentToken: 'a'.repeat(64) };
     for (const action of ['freeze', 'start', 'submit-for-review', 'accept', 'evidence'])
-        await expect(hubMutate(guarded, human, ['projects', 'p', 'flows', 'old', action], { expectedVersion: 2 }, config)).rejects.toMatchObject({ code: 'flow-converted' });
+        await expect(hubMutate(guarded, human, ['projects', 'p', 'flows', 'old', action], { expectedVersion: 2 }, config, async()=>{throw Error('Converted Flow must fence before delivery');}, 'conversion-guard')).rejects.toMatchObject({ code: 'flow-converted' });
     expect(() => checkAssociation(guarded, {
         mode: 'flow', flowId: 'old', expectedFlowVersion: 2, specDigest: 'a'.repeat(64), criteriaDigest: criteriaDigest(['One'])
     }, 'p')).toThrow();

@@ -1,3 +1,4 @@
+import { assertPreparedRuntimeCache } from './hub-runtime-cache.test-support';
 import { test, expect } from 'bun:test';
 import { cp, mkdtemp, mkdir, readFile, writeFile, rm, symlink, readdir } from 'node:fs/promises';
 import { join, posix } from 'node:path';
@@ -113,26 +114,33 @@ test('the Docker image copies every runtime module and schema after ordered cont
 }, 120000);
 test('archive refuses symlink inputs even when extension would otherwise be ignored',async()=>{const f=await fixture();try{await symlink('/etc/passwd',join(f.root,'src/remote-control/leak'));const result=await f.run();expect(result.code).not.toBe(0);expect(result.error).toContain('symlink');}finally{await rm(f.root,{recursive:true,force:true});}});
 test('standalone client bundles no native executor and refuses machine mode clearly',async()=>{const output=await Bun.build({entrypoints:[new URL('../src/hub/client-main.ts',import.meta.url).pathname],target:'bun'});expect(output.success).toBe(true);const code=await output.outputs[0]!.text();expect(code).not.toContain('assembleNativeSessionRuntime');const root=await mkdtemp(join(tmpdir(),'hub-standalone-test-'));try{await writeFile(join(root,'client.js'),code);const p=Bun.spawn([process.execPath,join(root,'client.js'),'machine','pair'],{env:{PATH:process.env.PATH??'',HOME:root},stdout:'pipe',stderr:'pipe'});const error=await new Response(p.stderr).text();expect(await p.exited).not.toBe(0);expect(error).toContain('full Keryx executor');}finally{await rm(root,{recursive:true,force:true});}});
-// Preparing the private cache downloads every runtime package, so it is opt-in (a networked CI job sets it), like the other KERYX_LIVE_* tests.
-test.skipIf(process.env.KERYX_LIVE_TEAM_HUB_INSTALL !== '1')('extracted allowlisted source installs its frozen runtime offline and serves managed work plus MCP from an isolated process',async()=>{
+test.skipIf(!process.env.KERYX_HUB_RUNTIME_CACHE)('extracted allowlisted source installs its frozen runtime offline and serves managed work plus MCP from an isolated process',async()=>{
  const repo=join(import.meta.dir,'..'),isolated=await mkdtemp(join(tmpdir(),'hub-extracted-runtime-'));
+ let registryRequests=0;const registry=Bun.serve({hostname:'127.0.0.1',port:0,fetch(){registryRequests++;return new Response('Registry disabled in offline proof',{status:404});}});
  const environment={PATH:process.env.PATH??'',HOME:join(isolated,'home'),TMPDIR:isolated,SOURCE_DATE_EPOCH:'0',BUN_INSTALL_CACHE_DIR:join(isolated,'cache')};
  async function run(command:string[],cwd:string){const child=Bun.spawn(command,{cwd,env:environment,stdout:'pipe',stderr:'pipe'});const [stdout,stderr,code]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text(),child.exited]);return {code,stdout,stderr};}
  try{
   await mkdir(environment.HOME,{recursive:true});const packaged=await run([process.execPath,'scripts/package-team-hub.ts','--out',join(isolated,'release')],repo);expect(packaged.code).toBe(0);
   const archive=join(isolated,'release/team-hub-prototype-source.tar.gz');expect((await run(['tar','-xzf',archive,'-C',isolated],isolated)).code).toBe(0);const source=join(isolated,'team-hub-prototype');
-  // Prepare only the extracted archive's frozen dependency set in a fresh private cache.
-  // Network is allowed in this explicit preparation step; the proof below is offline.
-  // A separate directory keeps node_modules out of the source being tested.
-  const preparation = join(isolated, 'runtime-cache-preparation');
-  await mkdir(preparation);
-  for (const file of ['package.json', 'bun.lock']) await cp(join(source, file), join(preparation, file));
-  const warm = await run([process.execPath, 'install', '--frozen-lockfile', '--production', '--ignore-scripts'], preparation);
-  expect({ phase: 'prepare isolated runtime cache', code: warm.code, stderr: warm.stderr }).toEqual({
-    phase: 'prepare isolated runtime cache', code: 0, stderr: expect.any(String),
-  });
+  // Only an explicitly prepared isolated cache is accepted. Ordinary tests never
+  // populate it from npm, and this install is always offline.
+  await assertPreparedRuntimeCache(process.env.KERYX_HUB_RUNTIME_CACHE!,join(source,'bun.lock'));
+  await cp(process.env.KERYX_HUB_RUNTIME_CACHE!,environment.BUN_INSTALL_CACHE_DIR,{recursive:true});
   expect(await readdir(source)).not.toContain('node_modules');
-  const install=await run([process.execPath,'install','--frozen-lockfile','--production','--ignore-scripts','--offline'],source);expect({code:install.code,stderr:install.stderr}).toEqual({code:0,stderr:expect.any(String)});
+  const install=await run([process.execPath,'install','--frozen-lockfile','--production','--ignore-scripts','--offline','--registry',registry.url.toString()],source);expect({code:install.code,stderr:install.stderr}).toEqual({code:0,stderr:expect.any(String)});expect(registryRequests).toBe(0);
   const smoke=await run([process.execPath,'scripts/smoke/team-hub.ts'],source);expect({code:smoke.code,stderr:smoke.stderr}).toEqual({code:0,stderr:expect.any(String)});expect(smoke.stdout).toContain('managed work metadata and authenticated MCP');
- }finally{await rm(isolated,{recursive:true,force:true});}
+ }finally{registry.stop(true);await rm(isolated,{recursive:true,force:true});}
 },120000);
+
+test('missing isolated runtime cache is refused before any installer can use the network or host caches',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'hub-offline-missing-cache-'));
+ try{await expect(assertPreparedRuntimeCache(root,join(import.meta.dir,'../deploy/team-hub/runtime/bun.lock'))).rejects.toThrow('Pinned runtime dependency is not cached');}
+ finally{await rm(root,{recursive:true,force:true});}
+});
+test('runtime proof refuses URL or git lock sources before a registry override can be bypassed',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'hub-offline-lock-source-'));
+ try{for(const resolved of ['https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz','git+ssh://git@example.test/pkg']){
+  const lockfile=join(root,'bun.lock');await writeFile(lockfile,JSON.stringify({packages:{pkg:['pkg@1.0.0',resolved,{}]}}));
+  await expect(assertPreparedRuntimeCache(root,lockfile)).rejects.toThrow('Only default-registry frozen runtime dependencies');
+ }}finally{await rm(root,{recursive:true,force:true});}
+});

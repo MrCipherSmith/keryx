@@ -537,9 +537,9 @@ test("incident Evidence in attention is accepted and opens the Attempt it contra
   const navigate = vi.fn();
   const value: HubContextValue = { principal: { id: "human:test", kind: "human", role: "operator" }, projectId: "p", scopeKey: 66, location: { projectId: "p", tab: "work" }, navigate, refresh: async () => undefined };
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><HubContext.Provider value={value}><ManagedWorkView /></HubContext.Provider></QueryClientProvider>);
-  fireEvent.click(await screen.findByRole("button", { name: /ev-agent/ }));
+  fireEvent.click(await screen.findByRole("button", { name: name => name.includes(evidence.report) }));
   const attempt = recordOf(records, "attempt", evidence.attemptId)!;
-  expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ flowId: attempt.flowId, intentId: attempt.intentId, attemptId: attempt.id }));
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ flowId: attempt.flowId, intentId: attempt.intentId, attemptId: attempt.id })));
 });
 test("unsubmitted Attempt detail shows the latest exact subject selected by submission preparation",async()=>{
  const attempt=recordOf(records,"attempt","a-agent")!;attempt.submissionId=null;

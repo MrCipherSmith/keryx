@@ -1,6 +1,6 @@
 import type { Principal } from '../contracts';
 import type { HubStore, HubState } from '../store';
-import { fail, type HubFailure } from '../domain';
+import { fail } from '../domain';
 import { executionBinding } from '../remote-v2/execution';
 import type { HumanAuthority, MachineRecord, RunRow, SessionRow, StoredCommand, QueueRow, OperationRecord } from '../remote-v2/model';
 import type { Control } from '../../remote-control/protocol';
@@ -68,41 +68,40 @@ export function createWorkExecution(store: HubStore) {
         const reservation = store.work.executionReservation(operationId);
         if (reservation?.state === 'reserved') store.work.saveExecutionReservation({...reservation, state:'released'});
     };
-    const sourceReservation = (operationId: string, sessionId?: string, sessionQueue?: QueueRow[]) => {
-        const operation = store.remote.get<OperationRecord>('remote_operation',operationId);
+    const sourceReservation = (operationId: string, sessionId?: string, observed?: {operations: Map<string, OperationRecord>; byId: Map<string, QueueRow>; byOperation: Map<string, QueueRow>}) => {
+        const operation = observed ? observed.operations.get(operationId) : store.remote.get<OperationRecord>('remote_operation',operationId);
         const parsed = operation && validateControl('QueueReauthorize',operation.request);
         if (!parsed?.ok) return;
-        const source = store.remote.get<QueueRow>('remote_queue',parsed.value.queueItemId);
+        const source = observed ? observed.byId.get(parsed.value.queueItemId) : store.remote.get<QueueRow>('remote_queue',parsed.value.queueItemId);
         if (!source || source.item.operationId !== parsed.value.originalOperationId || sessionId && source.sessionId !== sessionId) return;
-        const queue = sessionQueue && sessionId === source.sessionId ? sessionQueue : store.remote.all<QueueRow>('remote_queue',{sessionId:source.sessionId});
+        const byOperation = observed?.byOperation ?? new Map(store.remote.all<QueueRow>('remote_queue',{sessionId:source.sessionId}).map(row => [row.item.operationId, row]));
         let original: string | null = source.item.operationId;
-        for (let depth=0; original && depth<=queue.length; depth++) {
+        for (let depth=0; original && depth<=byOperation.size; depth++) {
             const reservation = store.work.executionReservation(original);
             if (reservation) return reservation.sessionId === source.sessionId && reservation.projectId === source.projectId && reservation.machineId === source.machineId ? reservation : undefined;
-            original = queue.find(row => row.item.operationId === original)?.item.replacesOperationId ?? null;
+            original = byOperation.get(original)?.item.replacesOperationId ?? null;
         }
     };
     const reconcileSession = (sessionId: string) => {
-        // Runs on every machine frame: a session without reserved work must not read its whole remote history.
         const pending = store.work.pendingReservationsForSession(sessionId);
         if (!pending.length) return;
         const session = store.remote.get<SessionRow>('remote_session',sessionId);
-        const queue = store.remote.all<QueueRow>('remote_queue',{sessionId});
-        const commands = store.remote.all<StoredCommand>('remote_command',{sessionId});
-        const operations = store.remote.all<OperationRecord>('remote_operation',{sessionId});
+        const {queue, commands, operations} = store.remote.managedReconciliation(sessionId, pending.map(reservation => reservation.operationId));
+        const observed = { operations: new Map(operations.map(operation => [operation.id, operation])), byId: new Map(queue.map(row => [row.item.queueItemId, row])), byOperation: new Map(queue.map(row => [row.item.operationId, row])) };
         for (const reservation of pending) {
             if (reservation.state !== 'reserved') continue;
-            const original = queue.find(row => row.item.operationId === reservation.operationId);
-            const liveReplacement = queue.some(row => ['queued','suspended'].includes(row.item.state) && sourceReservation(row.item.operationId,sessionId,queue)?.operationId === reservation.operationId);
+            const original = observed.byOperation.get(reservation.operationId);
+            const liveReplacement = queue.some(row => ['queued','suspended'].includes(row.item.state) && sourceReservation(row.item.operationId,sessionId,observed)?.operationId === reservation.operationId);
             const pendingReplacement = operations.some(operation => {
                 const request = validateControl('QueueReauthorize',operation.request);
                 const edit = validateControl('QueueEdit',operation.request);
-                const replacesOriginal = request.ok && sourceReservation(operation.id,sessionId,queue)?.operationId === reservation.operationId || edit.ok && original?.item.queueItemId === edit.value.queueItemId;
+                const replacesOriginal = request.ok && sourceReservation(operation.id,sessionId,observed)?.operationId === reservation.operationId || edit.ok && original?.item.queueItemId === edit.value.queueItemId;
                 if (!replacesOriginal || queue.some(row => row.item.operationId === operation.id)) return false;
+                // The native executor edits the same item in place. A newer
+                // observed version settles that edit, without a replacement ID.
                 const response = operation.response as {status?:string};
-                // The native host edits in place (same item and operation), so an applied edit already shown on the original row awaits no replacement.
-                const editedInPlace = edit.ok && response.status === 'applied' && original?.item.text === edit.value.text;
-                return !editedInPlace && !['rejected','not-applied'].includes(response.status ?? '');
+                if (edit.ok && response.status === 'applied' && original && original.item.version > edit.value.expectedItemVersion) return false;
+                return !['rejected','not-applied'].includes(response.status ?? '');
             });
             const refused = commands.some(command => command.operationId === reservation.operationId && (command.status === 'rejected' || command.status === 'not-applied' && command.receipt && typeof command.receipt === 'object' && 'errorCode' in command.receipt && command.receipt.errorCode !== 'recovery-required'));
             if (refused || session?.record.state === 'closed' && !!session.closedProof || original && ['removed','rejected'].includes(original.item.state) && !liveReplacement && !pendingReplacement) release(reservation.operationId);
@@ -137,23 +136,19 @@ export function createWorkExecution(store: HubStore) {
         if (!source || source.item.operationId === operation.id) return;
         const reservation = store.work.executionReservation(source.item.operationId) ?? sourceReservation(source.item.operationId,event.sessionId);
         if (!reservation) return;
-        // The machine already applied this edit, so ingest never refuses it; an untransferred replacement is refused at admission instead.
-        if (reservation.state !== 'reserved' || reservation.sessionId !== event.sessionId || reservation.projectId !== event.projectId || reservation.machineId !== source.machineId || event.item.replacesOperationId !== source.item.operationId || event.item.text !== edit.value.text) return;
-        release(reservation.operationId);
-        store.work.saveExecutionReservation({...reservation,operationId:operation.id,actorId:operation.actorId,sessionDigest:operation.sessionDigest,state:'reserved'});
+        if (reservation.sessionId !== event.sessionId || reservation.projectId !== event.projectId || reservation.machineId !== source.machineId || event.item.replacesOperationId !== source.item.operationId || event.item.text !== edit.value.text) fail(409,'work-binding-authority','Edited managed queue requires exact original reservation');
+        // Native facts must be ingested even if authority ended while the edit
+        // was in flight. Carry a terminal fence onto the new operation instead
+        // of reviving its authority or allowing it to dispatch as ad-hoc work.
+        const state = reservation.state === 'reserved' ? 'reserved' : 'released';
+        if (state === 'reserved') release(reservation.operationId);
+        store.work.saveExecutionReservation({...reservation,operationId:operation.id,actorId:operation.actorId,sessionDigest:operation.sessionDigest,state,runId:null,turnId:null});
     };
     const beforeAdmission = (auth: HumanAuthority, row: SessionRow, operationId: string, legacy:HubState) => {
         let reservation = store.work.executionReservation(operationId);
         if (!reservation) {
             const source = sourceReservation(operationId,row.record.sessionId);
-            if (!source) {
-                const operation = store.remote.get<OperationRecord>('remote_operation',operationId), edit = operation && validateControl('QueueEdit',operation.request);
-                const edited = edit?.ok ? store.remote.get<QueueRow>('remote_queue',edit.value.queueItemId) : undefined;
-                // A managed item edited after its reservation ended never silently becomes ad-hoc work.
-                if (edited && edited.item.operationId !== operationId && (store.work.executionReservation(edited.item.operationId) ?? sourceReservation(edited.item.operationId,row.record.sessionId)))
-                    fail(409,'execution-reservation-released','Edited managed queue reservation is no longer available');
-                return;
-            }
+            if (!source) return;
             if (source.state !== 'reserved') fail(409,'execution-reservation-released','Original managed queue reservation is no longer available');
             const replacement = store.remote.get<OperationRecord>('remote_operation',operationId);
             const queued = store.remote.all<QueueRow>('remote_queue',{sessionId:row.record.sessionId}).find(item => item.item.operationId === operationId);
@@ -230,14 +225,5 @@ export function createWorkExecution(store: HubStore) {
         return store.work.reservationsForAttempt(projectId, attemptId).some(reservation => reservation.state === 'reserved');
     };
     const context: Pick<WorkContext, 'verifyExecution' | 'inspectExecution' | 'hasPendingExecution'> = { verifyExecution, inspectExecution, hasPendingExecution };
-    // Release is proof of non-admission: only refusals no later drain can overturn settle it. Budget, quota, controller,
-    // stale-configuration, amendment, context and allocation-uncertainty refusals keep it reserved so the still-queued
-    // item (or its reauthorized replacement) can be admitted later.
-    const definitiveAdmissionRefusals = new Set(['forbidden', 'not-found', 'stale-catalogue', 'session-closed', 'recovery-required', 'work-association-stale', 'work-binding-authority', 'execution-proof-mismatch']);
-    const admissionRefused = (operationId: string, failure: HubFailure) => {
-        if (!definitiveAdmissionRefusals.has(failure.code)) return;
-        const reservation = store.work.executionReservation(operationId) ?? sourceReservation(operationId);
-        if (reservation) release(reservation.operationId);
-    };
-    return { hint:workExecutionHint, reserve, beforeAdmission, admitted, reconcileSession, admissionRefused, queueObserved, ...context };
+    return { hint:workExecutionHint, reserve, beforeAdmission, admitted, reconcileSession, queueObserved, ...context };
 }

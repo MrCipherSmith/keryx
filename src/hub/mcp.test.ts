@@ -225,3 +225,24 @@ test("F-MCP-001: official SDK callTool parses structured results with escaped op
     } finally { await c.close(); await endpoint.stop(true); }
   }
 });
+
+
+test("revision MCP forwards exclusive pagination so more than fifty revisions remain reachable", async () => {
+  const paths: string[] = [];
+  const call = async (args: Record<string, unknown>) => {
+    const request = new Request("http://hub.test/mcp", { method: "POST", headers: { Authorization: `Bearer ${agent}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "hub_list_revisions", arguments: args } }) });
+    const response = await handleHubMcp(request, { actor: { id: "agent:test", kind: "agent", role: "agent" }, apiFetch: async req => { paths.push(req.url); return Response.json(new URL(req.url).searchParams.has("afterId") ? { revisions: [{ id: "revision-old" }] } : { revisions: Array.from({length:50},(_,i)=>({id:"revision-"+i})), nextCursor: "revision-49" }); } });
+    return response.json();
+  };
+  const first = await call({ projectId: "p", limit: 50 });
+  expect(first.result.isError).not.toBe(true);
+  const page = JSON.parse(first.result.content[0].text);
+  expect(page.nextCursor).toBe("revision-49");
+  const second = await call({ projectId: "p", limit: 50, afterId: page.nextCursor });
+  expect(second.result.isError).not.toBe(true);
+  expect(JSON.parse(second.result.content[0].text).revisions).toEqual([{id:"revision-old"}]);
+  expect(new URL(paths[1]!).searchParams.get("afterId")).toBe("revision-49");
+  const invalid = await call({ projectId: "p", limit: 51 });
+  expect(invalid.result.isError).toBe(true);
+  expect(paths).toHaveLength(2);
+});

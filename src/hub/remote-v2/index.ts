@@ -25,15 +25,15 @@ import { resultUpload } from "./results";
 import { runCommand, sessionCommand } from "./commands";
 export type RemoteSocketData = { kind: "machine"; machineId: string; credentialDigest: string; projectScopeDigest: string; epoch: number; daemonId: string | null; lastHeartbeat: number } | { kind: "browser"; authority: HumanAuthority; request: Request; projectId: string; lastHeartbeat: number };
 export type RemoteTransportObservation={peer:"machine"|"browser";frameBytes:number;bufferedBytes:number;result:number;closeReason:string|null};
-export type RemotePorts = { managedExecution?:ManagedExecutionPort; workManagementEnabled?:boolean; observeTransport?:(observation:RemoteTransportObservation)=>void; store: HubStore; human(request: Request): Promise<HumanAuthority>; authorityValid(auth: HumanAuthority, projectId?: string, readOnly?: boolean): boolean; checkOrigin(request: Request): void; transportAllowed(request: Request): boolean; serialized<T>(action: () => Promise<T>, options?: { internal?: boolean }): Promise<T> };
+export type RemotePorts = { managedExecution?:ManagedExecutionPort; workManagementEnabled?:boolean; observeTransport?:(observation:RemoteTransportObservation)=>void; store: HubStore; human(request: Request): Promise<HumanAuthority>; authorityValid(auth: HumanAuthority, projectId?: string, readOnly?: boolean): boolean; checkOrigin(request: Request): void; transportAllowed(request: Request): boolean; serialized<T>(action: () => Promise<T>): Promise<T> };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 const mutationKey = (request: Request) => { const key = request.headers.get("idempotency-key"); if (!key || key.length > 200 || [...key].some((char) => char.charCodeAt(0) < 32)) fail(400, "idempotency-key-required", "Bounded operation key required"); return key; };
-async function body(request: Request): Promise<unknown> {
+async function body(request: Request, maxBytes = 32 * 1024 * 1024): Promise<unknown> {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) fail(400, "json-required", "JSON body required");
   if (!request.body) fail(400, "invalid-json", "JSON body required");
   const parts: Uint8Array[] = []; let size = 0; const reader = request.body.getReader();
-  try { while (true) { const next = await reader.read(); if (next.done) break; size += next.value.byteLength; if (size > 32 * 1024 * 1024) { await reader.cancel(); fail(413, "quota-exceeded", "Request exceeds quota"); } parts.push(next.value); } } finally { reader.releaseLock(); }
-  return unwrap(parseClosedJson(Buffer.concat(parts).toString("utf8"), 32 * 1024 * 1024));
+  try { while (true) { const next = await reader.read(); if (next.done) break; size += next.value.byteLength; if (size > maxBytes) { await reader.cancel(); fail(413, "quota-exceeded", "Request exceeds quota"); } parts.push(next.value); } } finally { reader.releaseLock(); }
+  return unwrap(parseClosedJson(Buffer.concat(parts).toString("utf8"), maxBytes));
 }
 export function createRemoteControl(ports: RemotePorts) {
   const { store } = ports; let transportsClosed = false;
@@ -42,7 +42,7 @@ export function createRemoteControl(ports: RemotePorts) {
   const machines = new Map<string, ServerWebSocket<RemoteSocketData>>(); const pending = new Set<string>(); const browsers = new Set<ServerWebSocket<RemoteSocketData>>();
   const attempts = new Map<string, { count: number; reset: number }>();
   const managedExecution=ports.managedExecution;
-  const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid, ...(managedExecution?{beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted, admissionRefused:managedExecution.admissionRefused}:{}) };
+  const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid, ...(managedExecution?{beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted}:{}) };
   const humanRead = createRemoteReader(store, deps);
   const { queueMutation, lifecycle, invoke } = createSessionOperations(store, deps);
   const resolveMachine = (request: Request): MachineRecord | undefined => { const header = request.headers.get("authorization"); if (!header?.startsWith("Bearer ")) return undefined; const digest = sha256(header.slice(7)); return store.remote.all<MachineRecord>("remote_machine").find((m) => !m.revoked && m.credentialDigest === digest); };
@@ -96,10 +96,10 @@ export function createRemoteControl(ports: RemotePorts) {
     if (url.pathname.endsWith("/socket")) fail(426, "upgrade-required", "Native WebSocket upgrade required");
     const p = url.pathname.slice("/hub/v2/".length).split("/").map(decodeURIComponent);
     if (p.some((s) => !s || s.includes("/") || s.includes("\\"))) fail(404, "not-found", "Route not found");
-    const method = request.method; const write = method !== "GET"; const input = write ? await body(request) : undefined;
+    const method = request.method; const write = method !== "GET";
     if (p.length === 2 && p[0] === "machines" && p[1] === "enroll" && method === "POST") {
-      const b = control("EnrollmentRequest", input);
       const rateKey = "enrollment-global"; let rate = attempts.get(rateKey); if (!rate || rate.reset <= Date.now()) { rate = { count: 0, reset: Date.now() + 60000 }; attempts.set(rateKey, rate); } if (++rate.count > 20) fail(429, "rate-limited", "Enrollment temporarily rate limited");
+      const b = control("EnrollmentRequest", await body(request,64*1024));
       return ports.serialized(async () => store.writeTransaction((_state, repo) => {
         const pairing = repo.all<PairingRecord>("remote_pairing").find((entry) => entry.codeDigest === sha256(b.code));
         if (!pairing || Date.parse(pairing.expiresAt) <= Date.now()) fail(401, "unauthorized", "Pairing unavailable");
@@ -111,10 +111,14 @@ export function createRemoteControl(ports: RemotePorts) {
       }));
     }
     const m = resolveMachine(request);
-    if (m) return machineHttp(request, p, input, m);
+    if (m) {
+      if (request.headers.has("origin")) fail(403, "origin-denied", "Machine HTTP requires native credentials without browser Origin");
+      return machineHttp(request,p,write ? await body(request) : undefined,m);
+    }
     const auth = await ports.human(request);
     if (write) { ports.checkOrigin(request); mutationKey(request); if (!(p[0] === "projects" && p[2] === "sessions" && p[4] === "open")) operator(auth); }
     if (!write) return humanRead(p, url, auth);
+    const input = await body(request);
     return ports.serialized(async () => {
       const current = await ports.human(request); if (!(p[2] === "sessions" && p[4] === "open")) operator(current);
       if ((request.headers.has('x-keryx-work-attempt') || request.headers.has('x-keryx-work-version')) && (!ports.workManagementEnabled || !managedExecution)) fail(404,'work-disabled','Managed execution is disabled');
@@ -204,7 +208,6 @@ export function createRemoteControl(ports: RemotePorts) {
     fail(404, "not-found", "Run action not found");
   }
   async function machineHttp(request: Request, p: string[], input: unknown, m: MachineRecord): Promise<Response> {
-    if (request.headers.has("origin")) fail(403, "origin-denied", "Machine HTTP requires native credentials without browser Origin");
     if (request.method === "GET" && p[0] === "projects" && p[1] && p[2] === "sessions" && p[3]) {
       const row = session(store.remote, p[1], p[3]); if (row.record.machineId !== m.machineId || !m.projectIds.includes(p[1])) fail(404, "not-found", "Session not found");
       if (!p[4]) {
@@ -367,7 +370,7 @@ export function createRemoteControl(ports: RemotePorts) {
             delete current.connectedEpoch;current.notificationVersion=(current.notificationVersion??0)+1;repo.put("remote_machine",current.machineId,current);return current;
           });
           if(updated)invalidateMachine(updated);
-        },{internal:true}).catch((error:unknown)=>console.error("Hub disconnect persistence failed",error instanceof Error?error.name:"UnknownError"));
+        }).catch((error:unknown)=>console.error("Hub disconnect persistence failed",error instanceof Error?error.name:"UnknownError"));
       }else browsers.delete(socket);
     },
     message(socket, raw) {
@@ -418,7 +421,10 @@ export function createRemoteControl(ports: RemotePorts) {
         if (frame.type === "command-receipt") { const command = store.remote.get<StoredCommand>("remote_command", frame.payload.commandId); const run = store.remote.get<RunRow>("remote_run", frame.payload.runId); if (command?.envelope.kind === "answer-approval" && run) invalidate(run.projectId, "approval", run.runId, run.notificationVersion ?? run.lastLocalSeq); }
         if (frame.type === "session-event") { const row = store.remote.get<SessionRow>("remote_session", frame.payload.sessionId); if (row) invalidate(frame.payload.projectId, frame.payload.kind === "config-receipt" ? "config" : frame.payload.kind === "controller-changed" ? "controller" : frame.payload.kind === "message" ? "history" : frame.payload.kind === "queue-changed" ? "queue" : "session", row.record.sessionId, row.notificationVersion??0); }
         if (frame.type === "run-event") { const run = store.remote.get<RunRow>("remote_run", frame.payload.runId); if (run) invalidate(run.projectId, frame.payload.kind === "approval-request" || frame.payload.kind === "approval-outcome" ? "approval" : "run", run.runId, run.notificationVersion ?? frame.payload.localSeq); }
-      }, { internal: true }).catch((error: unknown) => {
+      }).catch((error: unknown) => {
+        // No frame was applied or acknowledged. Reconnect/backoff lets the
+        // machine replay its durable outbox; overload is not revoked authority.
+        if (error instanceof HubFailure && error.code === 'hub-busy') { socket.close(1013, 'Hub busy; retry connection'); return; }
         const code = error instanceof HubFailure ? error.code : "internal-error";
         const response = { v: 2, type: "error", messageId: id(), epoch: socket.data.kind === "machine" ? socket.data.epoch : 0, payload: { code, relatedMessageId: frame.messageId } };
         // HTTP domain errors are broader than the frozen native error union.
@@ -433,7 +439,7 @@ export function createRemoteControl(ports: RemotePorts) {
   const timer = setInterval(() => {
     for (const socket of machines.values()) { const data = socket.data; if (data.kind !== "machine") continue; const m = store.remote.get<MachineRecord>("remote_machine", data.machineId); if (!m || !socketAuthorityCurrent(m, data) || Date.now() - data.lastHeartbeat > LIMITS.heartbeatTimeoutMs) socket.close(1008, "Authorization or heartbeat changed"); }
     for (const socket of browsers) { const data = socket.data; if (data.kind !== "browser") continue; void ports.human(data.request).then((auth) => { if (!ports.authorityValid(auth, data.projectId, true)) socket.close(1008, "Authorization changed"); }).catch(() => socket.close(1008, "Authorization changed")); }
-    if (!maintenancePending && !transportsClosed) { maintenancePending = true; void ports.serialized(async () => { store.writeTransaction((state, repo) => { retireRunLogs(repo); for(const sessionId of repo.retryableSessions(Date.now()))drainSessionQueue(state,repo,deps,sessionId); }); dispatch(); }, { internal: true }).catch((error: unknown) => console.error("Hub maintenance failed", error instanceof Error ? error.name : "UnknownError")).finally(() => { maintenancePending = false; }); }
+    if (!maintenancePending && !transportsClosed) { maintenancePending = true; void ports.serialized(async () => { store.writeTransaction((state, repo) => { retireRunLogs(repo); for(const sessionId of repo.retryableSessions(Date.now()))drainSessionQueue(state,repo,deps,sessionId); }); dispatch(); }).catch((error: unknown) => console.error("Hub maintenance failed", error instanceof Error ? error.name : "UnknownError")).finally(() => { maintenancePending = false; }); }
   }, LIMITS.heartbeatMs); timer.unref();
   function machineRead(request: Request, path: string[], url: URL): Response | undefined {
     const m = resolveMachine(request); if (!m) return undefined;

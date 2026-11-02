@@ -65,7 +65,8 @@ export function drainSessionQueue(state: HubState, repo: RemoteRepository, deps:
     });
   } catch (error) {
     if (!(error instanceof HubFailure)) throw error;
-    deps.admissionRefused?.(head.item.operationId, error);
+    // A failed pre-admission check is not a terminal native fact. Keep its
+    // reservation retryable until a machine receipt/removal settles it.
     // Refusal is not an observed native queue transition. A fresh machine
     // queue event owns suspension/version changes and any terminal receipt.
     return;
