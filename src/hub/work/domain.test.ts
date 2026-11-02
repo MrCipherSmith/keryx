@@ -346,6 +346,14 @@ test('approved empty Flow gains draft Intent only through whole-set human member
     expect(state.records.find(r => r.id === f.id)).toMatchObject({ state: 'in-progress', approvedRevisionId: nextFlow.id });
     expect(JSON.stringify(state.records.find(r => r.id === fr.id))).toBe(oldRevision);
 });
+test('Flow-only amendment with no affected Intents is authorised and approved', () => {
+    const { state, cmd, f, fr } = emptyApprovedFlowFixture();
+    const nextFlow = cmd('revision.propose', { targetType: 'flow', flowId: f.id, problem: 'Sharper problem', expectedOutcome: flowPayload.expectedOutcome, scope: flowPayload.scope, outOfScope: flowPayload.outOfScope, specification: null, criteria: flowPayload.criteria, requiredIntentIds: [] });
+    const amendment = cmd('requirements.amend', { flowId: f.id, sourceFlowRevisionId: fr.id, affectedIntentIds: [], reason: 'Clarify the problem', replacements: [{ targetType: 'flow', targetId: f.id, revisionId: nextFlow.id, contentDigest: nextFlow.contentDigest }] });
+    expect(amendment).toMatchObject({ kind: 'amendment', affectedIntentIds: [] });
+    cmd('requirements.resolve-amendment', { amendmentId: amendment.id, manifestDigest: amendment.contentDigest, decision: 'approve', reason: 'Approve Flow-only change' });
+    expect(state.records.find(r => r.id === f.id)).toMatchObject({ state: 'ready', approvedRevisionId: nextFlow.id });
+});
 test('new draft required Intent under active Flow preserves frozen membership and accepted work', () => {
     const { state, cmd, flowId, intentId, fr, a, sub } = fixture();
     cmd('attempt.select', { intentId, attemptId: a.id, submissionId: sub.id, submissionDigest: sub.contentDigest, reason: 'Select existing work' });

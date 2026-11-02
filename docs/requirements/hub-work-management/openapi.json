@@ -5664,7 +5664,6 @@
               "minLength": 1,
               "maxLength": 200
             },
-            "minItems": 1,
             "maxItems": 200
           },
           "replacements": {
@@ -6183,8 +6182,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "minItems": 1
+                    }
                   },
                   "reason": {
                     "type": "string",
