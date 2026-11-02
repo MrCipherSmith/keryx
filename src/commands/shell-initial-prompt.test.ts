@@ -152,15 +152,15 @@ describe("TUI wiring (source audit)", () => {
     expect(tui).toMatch(/runLine\(initialPrompt, "operator", undefined, true\)/);
   });
 
-  test("a prompt that starts with `/` is a model turn in the TUI: only the startup call skips slash routing", () => {
+  test("startup prompts and agent messages skip TUI slash routing while typed operator lines route", () => {
     expect(tui).toMatch(/skipSlashRouting = false,\n\s+\): void => \{/);
-    expect(tui).toContain('if (!skipSlashRouting && line.startsWith("/")) {');
-    expect(tui).toContain('const command = skipSlashRouting ? undefined : findAgentCommand(line, "agent");');
-    // Typed lines (and `/`-menu selections) still route: onSubmit passes no flag.
+    expect(tui.includes('if (!skipSlashRouting && !agentShaped && line.startsWith("/")) {')).toBe(true);
+    expect(tui.includes('const command = skipSlashRouting || agentShaped ? undefined : findAgentCommand(line, "agent");')).toBe(true);
+    // Typed operator lines (and `/`-menu selections) still route: onSubmit passes no flag.
     expect(tui).toMatch(/chrome\.onSubmit\(\(line\) => \{\n\s+runLine\(line\);/);
     // No `startsWith("/")` route is left that the startup prompt could reach.
     const routes = tui.split('line.startsWith("/")').length - 1;
-    const guarded = tui.split('!skipSlashRouting && line.startsWith("/")').length - 1;
+    const guarded = tui.split('!skipSlashRouting && !agentShaped && line.startsWith("/")').length - 1;
     expect(guarded).toBe(2);
     expect(routes).toBe(2);
   });
