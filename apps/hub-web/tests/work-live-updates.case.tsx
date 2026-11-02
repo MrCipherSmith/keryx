@@ -118,3 +118,67 @@ test("live overview retention gap refreshes a bounded attention page without inv
   expect(cache.getQueryData(key)).toBeUndefined();
   expect(cache.getQueryData(attentionKey)).toEqual({pages:[{records:[flow],nextCursor:null,eventCursor:"retained-current"}],pageParams:[""]});
 });
+
+test('late retention snapshot merges without replacing a newer cached record',async()=>{
+  const flow=recordOf(snapshot.records,'flow','flow-demo')!, newer={...flow,version:flow.version+1,title:'Newer event'};
+  let finish!:(value:Response)=>void;
+  route(path=>path.includes('/events?')?(path.includes('after=newer-feed')?Response.json({events:[event(newer)],nextCursor:'newer-next'}):Response.json({error:{code:'expired',message:'gap'}},{status:410})):path.includes('/records/')?Response.json({record:newer,eventCursor:'newer-next'}):path.includes('/snapshot?')?new Promise(resolve=>{finish=resolve;}):response());
+  const cache=client();cache.setQueryData(key,snapshot);cache.setQueryData(attentionKey,{pages:[],pageParams:[]});renderHub(<Probe/>,context,cache);
+  await waitFor(()=>expect(finish).toBeTypeOf('function'));
+  function NewerFeed(){useWorkEvents(adapter,'newer-feed');return null;}
+  renderHub(<NewerFeed/>,context,cache);
+  await waitFor(()=>expect(recordOf(cache.getQueryData<WorkSnapshot>(key)!.records,'flow',flow.id)?.version).toBe(newer.version));
+  await act(async()=>{finish(response(snapshot.records,'gap-cursor'));});
+  await waitFor(()=>expect(cache.getQueryState(attentionKey)?.isInvalidated).toBe(true));
+  expect(recordOf(cache.getQueryData<WorkSnapshot>(key)!.records,'flow',flow.id)).toEqual(newer);
+});
+
+test('overview gap refresh invalidates existing observations without snapshot ownership',async()=>{
+  const flow=recordOf(snapshot.records,'flow','flow-demo')!;
+  route(path=>path.includes('/events?')?Response.json({error:{code:'expired',message:'gap'}},{status:410}):response([flow],'gap-cursor'));
+  const cache=client();cache.setQueryData(observationsKey,{pages:[],pageParams:[]});renderHub(<Probe/>,context,cache);
+  await waitFor(()=>expect(cache.getQueryState(observationsKey)?.isInvalidated).toBe(true));
+  expect(cache.getQueryData(key)).toBeUndefined();
+});
+
+test.each(['record','snapshot','attention'] as const)('late %s response after unmount cannot mutate old cache',async kind=>{
+  const flow=recordOf(snapshot.records,'flow','flow-demo')!, newer={...flow,version:flow.version+1,title:'Late stale response'};
+  let finish!:(value:Response)=>void;
+  route(path=>{
+    if(path.includes('/events?'))return kind==='record'?Response.json({events:[event(newer)],nextCursor:'later'}):Response.json({error:{code:'expired',message:'gap'}},{status:410});
+    if(path.includes('/records/')&&kind==='record')return new Promise(resolve=>{finish=resolve;});
+    if(path.includes('/snapshot?')&&kind==='snapshot')return new Promise(resolve=>{finish=resolve;});
+    if(path.includes('/attention?')&&kind==='attention')return new Promise(resolve=>{finish=resolve;});
+    return response();
+  });
+  const cache=client();if(kind!=='attention')cache.setQueryData(key,snapshot);
+  const mounted=renderHub(<Probe/>,context,cache);await waitFor(()=>expect(finish).toBeTypeOf('function'));
+  mounted.unmount();
+  await act(async()=>{finish(kind==='record'?Response.json({record:newer,eventCursor:'later'}):response([newer],'later'));});
+  if(kind==='attention')expect(cache.getQueryData(attentionKey)).toBeUndefined();
+  else expect(cache.getQueryData(key)).toEqual(snapshot);
+});
+
+test.each([false,true])('receipt wakes an in-flight poll promptly (hidden=%s)',async hidden=>{
+  const intent=recordOf(snapshot.records,'intent','i1')!, attempt=recordOf(snapshot.records,'attempt','a-agent')!, submission=recordOf(snapshot.records,'submission',attempt.submissionId)!;
+  const command:Omit<WorkCommand,'operationId'>={command:'attempt.select',expectedVersions:{'flow-demo':1,i1:intent.version,[attempt.id]:attempt.version},payload:{intentId:intent.id,attemptId:attempt.id,submissionId:submission.id,submissionDigest:submission.contentDigest,reason:'Select exact candidate'}};
+  const demo=demoWorkAdapter('p');await demo.command({...command,operationId:'fixture-select'});const decision=(await demo.snapshot()).records.find(record=>record.kind==='decision')!;
+  let finish!:(value:Response)=>void, calls=0;
+  route((path,init)=>{
+    if(init?.method==='POST'){const posted=JSON.parse(String(init.body));return Response.json({operationId:posted.operationId,status:'committed',receiptId:'r',entities:[{...decision,operationId:posted.operationId}],eventCursor:'selected'});}
+    if(path.includes('/events?'))return ++calls===1?new Promise(resolve=>{finish=resolve;}):Response.json({events:[],nextCursor:'selected'});
+    return response();
+  });
+  function Selection(){useWorkEvents(adapter,'cursor-0');const operation=useWorkOperation(adapter,()=>undefined);return <button onClick={()=>void operation.run(command)}>Select</button>;}
+  const cache=client();cache.setQueryData(key,snapshot);const mounted=renderHub(<Selection/>,context,cache);
+  await waitFor(()=>expect(finish).toBeTypeOf('function'));
+  const original=Object.getOwnPropertyDescriptor(document,'visibilityState');
+  try {
+    if(hidden)Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+    fireEvent.click(screen.getByRole('button',{name:'Select'}));
+    await waitFor(()=>expect(cache.getQueryData<WorkSnapshot>(key)?.records.some(record=>record.kind==='decision')).toBe(true));
+    vi.useFakeTimers();
+    await act(async()=>{finish(Response.json({events:[],nextCursor:'cursor-0'}));await Promise.resolve();await vi.advanceTimersByTimeAsync(0);});
+    expect(calls).toBe(2);
+  } finally {mounted.unmount();vi.useRealTimers();if(original)Object.defineProperty(document,'visibilityState',original);else delete (document as {visibilityState?:string}).visibilityState;}
+});
