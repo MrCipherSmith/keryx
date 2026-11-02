@@ -187,6 +187,13 @@ whatever its shape. An agent's message also skips the prompts meant for a
 person: it never opens the wiki-enrich picker. While a turn runs, it goes to the
 main queue instead of the "Main agent is busy" choice.
 
+These hc messages carry a non-operator turn origin. Completion phrases do not
+close the live slate or declare a human wrap-up, and slash commands in such
+messages do not execute operator controls. Auto permission mode alone does not
+authorize side effects requested by this untrusted input. Queue edits preserve
+that origin, even when an edit removes the hc wrapper; use a separate operator
+message to issue your own session controls.
+
 ## Let Keryx delegate through hc
 
 Inside an herdr-core terminal, the agent's instructions gain a short herdr-core
