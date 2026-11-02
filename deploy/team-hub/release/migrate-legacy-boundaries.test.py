@@ -9,7 +9,7 @@ import sqlite3
 import subprocess
 import tarfile
 import unittest
-from contextlib import contextmanager, ExitStack, nullcontext, redirect_stdout, redirect_stderr
+from contextlib import closing, contextmanager, ExitStack, nullcontext, redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("adoption_fixtures", Path(__file__).with_name("migrate-legacy.test.py"))
@@ -25,6 +25,7 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
         values = {"trusted_source": lambda *a, **k: None, "bind_installation": lambda *a: None,
                   "configuration": lambda *a: config, "verified_bundle": lambda *a: (self.root, "new-image"),
                   "snapshot": lambda *a: dict(info), "info_for": lambda *a: dict(info),
+                  "offline_snapshot": lambda *a: dict(info),
                   "inspect_service": lambda name: {**hub, "Id": name}, "prepare": prepare,
                   "trial": lambda *a, **k: None, "volume_archive": archive,
                   "docker": lambda *a, **k: run(list(a), **k), "run": run,
@@ -96,6 +97,99 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
         self.assertNotIn([str(fixture[0].resolve() / "hubctl"), "stop", "edge", "tunnel", "hub"], fixture[5])
         self.assertNotIn([str(fixture[0].resolve() / "hubctl"), "up", "edge", "tunnel"], fixture[5])
         self.assertEqual((fixture[0] / "current").resolve().name, "v0.4.4")
+
+    def test_offline_archive_snapshot_preserves_committed_wal_and_archive(self):
+        source = self.root / "source"
+        source.mkdir()
+        db = sqlite3.connect(source / "hub.sqlite")
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("PRAGMA wal_autocheckpoint=0")
+        db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY, body TEXT)")
+        db.execute("INSERT INTO hub_state VALUES(1, ?)", (json.dumps({"projects": [1, 2]}),))
+        db.commit()
+        archive_path = self.root / "volume.tar"
+        with tarfile.open(archive_path, "w") as archive:
+            archive.add(source / "hub.sqlite", arcname="./hub.sqlite")
+            archive.add(source / "hub.sqlite-wal", arcname="./hub.sqlite-wal")
+        before = archive_path.read_bytes()
+        try:
+            result = m.offline_snapshot(archive_path, self.root / "final.sqlite")
+            self.assertEqual(result["projects"], 2)
+            self.assertEqual(archive_path.read_bytes(), before)
+            self.assertEqual(m.info_for(self.root / "final.sqlite"), result)
+        finally:
+            db.close()
+
+    def test_offline_archive_rejects_aliases_links_missing_and_invalid_database(self):
+        for kind in ("missing", "duplicate", "alias", "symlink", "hardlink", "invalid", "oversized"):
+            with self.subTest(kind=kind):
+                archive_path = self.root / (kind + ".tar")
+                with tarfile.open(archive_path, "w") as archive:
+                    if kind != "missing":
+                        name = "./x/../hub.sqlite" if kind == "alias" else "./hub.sqlite"
+                        member = tarfile.TarInfo(name)
+                        if kind in ("symlink", "hardlink"):
+                            member.type = tarfile.SYMTYPE if kind == "symlink" else tarfile.LNKTYPE
+                            member.linkname = "elsewhere"
+                            archive.addfile(member)
+                        else:
+                            data = b"x" * (64 * 1024 * 1024 + 1 if kind == "oversized" else 16)
+                            member.size = len(data)
+                            archive.addfile(member, io.BytesIO(data))
+                            if kind == "duplicate":
+                                member.name = "hub.sqlite"
+                                archive.addfile(member, io.BytesIO(data))
+                with self.assertRaises((m.MigrationError, sqlite3.Error)):
+                    m.offline_snapshot(archive_path, self.root / (kind + ".sqlite"))
+                self.assertFalse((self.root / (kind + ".sqlite")).exists())
+
+    def test_apply_final_snapshot_never_runs_stopped_volume_serializer(self):
+        fixture = self.apply_fixture()
+        source = self.root / "original.sqlite"
+        with closing(sqlite3.connect(source)) as db:
+            db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY, body TEXT)")
+            db.execute("INSERT INTO hub_state VALUES(1, '{}')")
+            db.commit()
+        def archive(volume, image, path):
+            with tarfile.open(path, "w") as tar:
+                tar.add(source, arcname="./hub.sqlite")
+        def trial(*args, **kwargs):
+            if args[2].name == "hub-data.tar":
+                self.assertEqual(m.info_for(args[3])["projects"], 0)
+                raise m.MigrationError("stop after final snapshot")
+        with self.apply_ports(fixture, volume_archive=archive, trial=trial, offline_snapshot=m.offline_snapshot, info_for=m.info_for), self.assertRaisesRegex(m.MigrationError, "stop after final snapshot"):
+            m.main()
+        self.assertFalse(any("bun" in call for call in fixture[5]))
+        self.assertIn([str(fixture[0].resolve() / "hubctl"), "up", "-d"], fixture[5])
+        backup = next((fixture[0] / "backups").iterdir())
+        self.assertEqual(m.info_for(backup / "hub.sqlite")["projects"], 0)
+
+    def test_offline_snapshot_refuses_corrupt_wal_and_leaves_no_artifact(self):
+        source = self.root / "corrupt-source.sqlite"
+        with closing(sqlite3.connect(source)) as db:
+            db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY, body TEXT)")
+            db.execute("INSERT INTO hub_state VALUES(1, '{}')")
+            db.commit()
+        archive_path = self.root / "corrupt-wal.tar"
+        with tarfile.open(archive_path, "w") as archive:
+            archive.add(source, arcname="./hub.sqlite")
+            member = tarfile.TarInfo("./hub.sqlite-wal")
+            member.size = 32
+            archive.addfile(member, io.BytesIO(bytes(32)))
+        with self.assertRaisesRegex(m.MigrationError, "Malformed SQLite WAL"):
+            m.offline_snapshot(archive_path, self.root / "corrupt-final.sqlite")
+        self.assertFalse((self.root / "corrupt-final.sqlite").exists())
+
+    def test_apply_uses_archive_snapshot_and_restores_on_failure(self):
+        fixture = self.apply_fixture()
+        def failed_snapshot(archive, destination):
+            self.assertEqual(archive.name, "hub-data.tar")
+            raise m.MigrationError("invalid stopped archive")
+        with self.apply_ports(fixture, offline_snapshot=failed_snapshot), self.assertRaisesRegex(m.MigrationError, "invalid stopped archive"):
+            m.main()
+        self.assertIn([str(fixture[0].resolve() / "hubctl"), "up", "-d"], fixture[5])
+        self.assertFalse(any("bun" in call for call in fixture[5]))
+        self.assertEqual((fixture[0] / "current").resolve(), fixture[1].resolve())
 
     def test_snapshot_refuses_large_wal_before_serialization(self):
         calls = []
