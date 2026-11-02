@@ -411,7 +411,11 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
     const longTmp = path.join(aside, "r".repeat(60), "r".repeat(60), "r".repeat(60));
     await mkdir(longTmp, { recursive: true });
     const saved = process.env["TMPDIR"];
+    const savedRuntime = process.env["XDG_RUNTIME_DIR"];
+    // The primary socket directory prefers XDG_RUNTIME_DIR; force that path
+    // and the TMPDIR fallback over the limit on every host.
     process.env["TMPDIR"] = longTmp;
+    process.env["XDG_RUNTIME_DIR"] = longTmp;
     try {
       const base = entry({ tools: ["gh.pr.list"], bins: { gh: await stubGh() } });
       const action = base["action"] as Record<string, unknown>;
@@ -429,6 +433,8 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
     } finally {
       if (saved === undefined) delete process.env["TMPDIR"];
       else process.env["TMPDIR"] = saved;
+      if (savedRuntime === undefined) delete process.env["XDG_RUNTIME_DIR"];
+      else process.env["XDG_RUNTIME_DIR"] = savedRuntime;
     }
   }, 30_000);
 
