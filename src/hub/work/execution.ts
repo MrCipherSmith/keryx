@@ -96,7 +96,10 @@ export function createWorkExecution(store: HubStore) {
                 const edit = validateControl('QueueEdit',operation.request);
                 const replacesOriginal = request.ok && sourceReservation(operation.id,sessionId)?.operationId === reservation.operationId || edit.ok && original?.item.queueItemId === edit.value.queueItemId;
                 if (!replacesOriginal || queue.some(row => row.item.operationId === operation.id)) return false;
+                // The native executor edits the same item in place. A newer
+                // observed version settles that edit, without a replacement ID.
                 const response = operation.response as {status?:string};
+                if (edit.ok && response.status === 'applied' && original && original.item.version > edit.value.expectedItemVersion) return false;
                 return !['rejected','not-applied'].includes(response.status ?? '');
             });
             const refused = commands.some(command => command.operationId === reservation.operationId && (command.status === 'rejected' || command.status === 'not-applied' && command.receipt && typeof command.receipt === 'object' && 'errorCode' in command.receipt && command.receipt.errorCode !== 'recovery-required'));
@@ -132,9 +135,13 @@ export function createWorkExecution(store: HubStore) {
         if (!source || source.item.operationId === operation.id) return;
         const reservation = store.work.executionReservation(source.item.operationId) ?? sourceReservation(source.item.operationId,event.sessionId);
         if (!reservation) return;
-        if (reservation.state !== 'reserved' || reservation.sessionId !== event.sessionId || reservation.projectId !== event.projectId || reservation.machineId !== source.machineId || event.item.replacesOperationId !== source.item.operationId || event.item.text !== edit.value.text) fail(409,'work-binding-authority','Edited managed queue requires exact original reservation');
-        release(reservation.operationId);
-        store.work.saveExecutionReservation({...reservation,operationId:operation.id,actorId:operation.actorId,sessionDigest:operation.sessionDigest,state:'reserved'});
+        if (reservation.sessionId !== event.sessionId || reservation.projectId !== event.projectId || reservation.machineId !== source.machineId || event.item.replacesOperationId !== source.item.operationId || event.item.text !== edit.value.text) fail(409,'work-binding-authority','Edited managed queue requires exact original reservation');
+        // Native facts must be ingested even if authority ended while the edit
+        // was in flight. Carry a terminal fence onto the new operation instead
+        // of reviving its authority or allowing it to dispatch as ad-hoc work.
+        const state = reservation.state === 'reserved' ? 'reserved' : 'released';
+        if (state === 'reserved') release(reservation.operationId);
+        store.work.saveExecutionReservation({...reservation,operationId:operation.id,actorId:operation.actorId,sessionDigest:operation.sessionDigest,state,runId:null,turnId:null});
     };
     const beforeAdmission = (auth: HumanAuthority, row: SessionRow, operationId: string, legacy:HubState) => {
         let reservation = store.work.executionReservation(operationId);
@@ -217,7 +224,11 @@ export function createWorkExecution(store: HubStore) {
         return store.work.reservationsForAttempt(projectId, attemptId).some(reservation => reservation.state === 'reserved');
     };
     const context: Pick<WorkContext, 'verifyExecution' | 'inspectExecution' | 'hasPendingExecution'> = { verifyExecution, inspectExecution, hasPendingExecution };
-    const admissionRefused = (operationId: string) => {
+    const admissionRefused = (operationId: string, errorCode: string) => {
+        // Retrying the same queued operation must retain its original authority.
+        // Only explicit permanent refusals settle it; quotas, offline peers,
+        // amendments and controller expiry can recover without native removal.
+        if (!['forbidden','work-binding-authority','work-association-stale','stale-catalogue','stale-version'].includes(errorCode)) return;
         const reservation = store.work.executionReservation(operationId) ?? sourceReservation(operationId);
         if (reservation) release(reservation.operationId);
     };

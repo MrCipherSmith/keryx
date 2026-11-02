@@ -7,7 +7,7 @@ import type { RemoteRepository } from "./storage";
 import type { HumanAuthority, Projection, QueueRow, RunRow, SessionRow, StoredCommand } from "./model";
 import { control, held, id, idleFence, iso, machine, projectionKey, saveSession, version } from "./guards";
 import { runCommand, sessionCommand } from "./commands";
-export type SessionDependencies = { online(machineId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean; beforeAdmission?(auth:HumanAuthority,row:SessionRow,operationId:string,state:HubState):void; admitted?(run:RunRow,operationId:string,state:HubState):void; admissionRefused?(operationId:string):void };
+export type SessionDependencies = { online(machineId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean; beforeAdmission?(auth:HumanAuthority,row:SessionRow,operationId:string,state:HubState):void; admitted?(run:RunRow,operationId:string,state:HubState):void; admissionRefused?(operationId:string,errorCode:string):void };
 export function completeProjection(repo: RemoteRepository, row: SessionRow): Projection {
   const p = repo.get<Projection>("remote_projection", projectionKey(row.record.machineId, row.record.projectId, row.record.checkoutId, row.record.agentProfileId));
   const current = machine(repo, row.record.machineId);
