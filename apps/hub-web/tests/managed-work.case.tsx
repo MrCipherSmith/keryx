@@ -550,3 +550,31 @@ test("unsubmitted Attempt detail shows the latest exact subject selected by subm
  expect(await screen.findByText("Latest result marker")).toBeVisible();
  expect(screen.queryByText("Older result marker")).not.toBeInTheDocument();
 });
+
+test("a cancelled required Intent does not block approving the exact live required set", async () => {
+  const flow = recordOf(records, "flow", "flow-demo")!;
+  flow.state = "draft";
+  flow.approvedRevisionId = null;
+  recordOf(records, "intent", "i2")!.state = "cancelled";
+  recordOf(records, "flow-revision", "fr1")!.requiredIntentIds = ["i1"];
+  vi.mocked(fetch).mockImplementation(async (path) =>
+    Response.json(
+      String(path).endsWith("/capabilities")
+        ? {
+            ...capabilities,
+            allowedCommands: ["requirements.approve", "revision.propose"],
+          }
+        : { records, eventCursor: "cursor", nextCursor: null },
+    ),
+  );
+  show();
+  fireEvent.click(
+    await screen.findByRole("button", { name: /^Keyboard accessibility/ }),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Approve requirements" }),
+  ).toBeEnabled();
+  expect(
+    screen.queryByRole("button", { name: "Pin required deliverables" }),
+  ).not.toBeInTheDocument();
+});

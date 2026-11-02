@@ -107,10 +107,12 @@ export function FlowSummary({
   const required = recordsOf(records, "intent").filter(
     (i) => i.flowId === flow.id && i.required,
   );
+  // Approval freezes the live required set: the server ignores cancelled Intents.
+  const live = required.filter((i) => i.state !== "cancelled");
   const exactSet =
-    required.length > 0 &&
-    required.length === revision?.requiredIntentIds.length &&
-    required.every((i) => revision?.requiredIntentIds.includes(i.id));
+    live.length > 0 &&
+    live.length === revision?.requiredIntentIds.length &&
+    live.every((i) => revision?.requiredIntentIds.includes(i.id));
   return (
     <section className="work-flow-summary">
       <div className="work-section-heading">

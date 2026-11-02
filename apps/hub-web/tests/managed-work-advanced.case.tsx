@@ -741,3 +741,32 @@ test("a pending amendment whose Intent was cancelled resolves with every affecte
   const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
   expect(body.expectedVersions).toEqual({ "flow-demo": 1, i1: 1, i2: 2 });
 });
+
+test("the Flow revision editor neither offers nor keeps a cancelled required Intent", async () => {
+  amendment();
+  records = records.filter((record) => record.kind !== "amendment");
+  recordOf(records, "intent", "i2")!.state = "cancelled";
+  show(
+    <AmendmentsPanel
+      adapter={adapter}
+      flow={recordOf(records, "flow", "flow-demo")!}
+      records={records}
+      can={() => true}
+      onDone={() => undefined}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Propose revised requirements" }),
+  );
+  expect(
+    screen.getByRole("checkbox", { name: "Navigation and focus" }),
+  ).toBeChecked();
+  expect(
+    screen.queryByRole("checkbox", { name: "Integration verification" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save proposal" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(body.command).toBe("revision.propose");
+  expect(body.payload.requiredIntentIds).toEqual(["i1"]);
+});

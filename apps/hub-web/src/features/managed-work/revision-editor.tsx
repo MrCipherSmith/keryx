@@ -39,6 +39,10 @@ export function RevisionEditor({
   const flowRevision = recordOf(records, "flow-revision", flow.currentRevisionId);
   const intentRevision = recordOf(records, "intent-revision", intent?.currentRevisionId);
   const target = intent ?? flow;
+  // A cancelled Intent can no longer be frozen into Flow membership.
+  const liveRequired = recordsOf(records, "intent").filter(
+    (i) => i.flowId === flow.id && i.required && i.state !== "cancelled",
+  );
   const revision = intent ? intentRevision : flowRevision;
   const [draft, setDraft] = useDraft(
     [
@@ -56,7 +60,9 @@ export function RevisionEditor({
       deliverable: intentRevision?.deliverable ?? "",
       approach: intentRevision?.approach ?? "",
       outOfScope: revision?.outOfScope ?? "",
-      requiredIntentIds: [...(flowRevision?.requiredIntentIds ?? [])],
+      requiredIntentIds: (flowRevision?.requiredIntentIds ?? []).filter((id) =>
+        liveRequired.some((i) => i.id === id),
+      ),
       criteria: structuredClone(revision?.criteria ?? []),
       mappings: structuredClone(intentRevision?.criterionMappings ?? []),
     },
@@ -136,25 +142,23 @@ export function RevisionEditor({
       {!intent && (
         <fieldset>
           <legend>{t("requiredIntents")}</legend>
-          {recordsOf(records, "intent")
-            .filter((i) => i.flowId === flow.id && i.required)
-            .map((i) => (
-              <label className="work-checkbox" key={i.id}>
-                <input
-                  type="checkbox"
-                  checked={draft.requiredIntentIds.includes(i.id)}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      requiredIntentIds: e.target.checked
-                        ? [...draft.requiredIntentIds, i.id]
-                        : draft.requiredIntentIds.filter((id) => id !== i.id),
-                    })
-                  }
-                />
-                {i.title}
-              </label>
-            ))}
+          {liveRequired.map((i) => (
+            <label className="work-checkbox" key={i.id}>
+              <input
+                type="checkbox"
+                checked={draft.requiredIntentIds.includes(i.id)}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    requiredIntentIds: e.target.checked
+                      ? [...draft.requiredIntentIds, i.id]
+                      : draft.requiredIntentIds.filter((id) => id !== i.id),
+                  })
+                }
+              />
+              {i.title}
+            </label>
+          ))}
         </fieldset>
       )}
       <fieldset>

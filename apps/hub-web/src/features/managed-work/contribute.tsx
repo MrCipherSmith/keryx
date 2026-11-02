@@ -45,7 +45,9 @@ export function ContributionPanel({
   const children = recordsOf(records, "intent").filter(
     (i) => i.flowId === flow.id,
   );
-  const required = children.filter((i) => i.required).map((i) => i.id);
+  const required = children
+    .filter((i) => i.required && i.state !== "cancelled")
+    .map((i) => i.id);
   const requiredSetMatches =
     fr &&
     required.length === fr.requiredIntentIds.length &&
