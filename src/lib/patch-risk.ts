@@ -42,33 +42,116 @@ function stripDiffPathPrefix(raw: string): string {
   return /^[ab]\//.test(trimmed) ? trimmed.slice(2) : trimmed;
 }
 
+const GIT_SECTION_HEADER = /^diff --git (.+)$/;
+const DELETED_FILE_MODE = /^deleted file mode /;
+const NEW_FILE_MODE = /^new file mode /;
+const RENAME_FROM = /^rename from (.+)$/;
+const RENAME_TO = /^rename to (.+)$/;
+const COPY_TO = /^copy to (.+)$/;
+const BINARY_DIFFERS = /^Binary files (.+) differ$/;
+
+/** Both paths of a `diff --git a/<p> b/<q>` line; the shared path when the halves are identical. */
+function gitHeaderPaths(rest: string): { oldPath: string; newPath: string } | undefined {
+  const unquoted = rest.replace(/"/g, "");
+  const half = (unquoted.length - 1) / 2;
+  if (Number.isInteger(half) && unquoted[half] === " ") {
+    const left = stripDiffPathPrefix(unquoted.slice(0, half));
+    const right = stripDiffPathPrefix(unquoted.slice(half + 1));
+    if (left === right) return { oldPath: left, newPath: right };
+  }
+  const split = /^(a\/.+?) (b\/.+)$/.exec(unquoted);
+  if (split === null) return undefined;
+  return { oldPath: stripDiffPathPrefix(split[1]!), newPath: stripDiffPathPrefix(split[2]!) };
+}
+
+/** What one `diff --git` section (or the header-less remainder of a plain diff) says about its files. */
+interface PatchSection {
+  git?: { oldPath: string; newPath: string };
+  pendingOld: string | undefined;
+  /** `---`/`+++` pairs; a header-less diff holds several in one section. */
+  pairs: PatchTarget[];
+  deleted: boolean;
+  created: boolean;
+  renameFrom?: string;
+  renameTo?: string;
+  copyTo?: string;
+  binary: boolean;
+}
+
+function newSection(rest?: string): PatchSection {
+  const git = rest === undefined ? undefined : gitHeaderPaths(rest);
+  return { ...(git === undefined ? {} : { git }), pendingOld: undefined, pairs: [], deleted: false, created: false, binary: false };
+}
+
+/**
+ * Everything a section changes. `git apply` acts on sections that carry no `---`/`+++` pair at all (a binary
+ * deletion or replacement, a pure rename or copy, the deletion of an empty file, a mode change), so the extended
+ * header lines count as targets too: a section the parser cannot see is a file the approval prompt never names.
+ */
+function sectionTargets(section: PatchSection): PatchTarget[] {
+  const out: PatchTarget[] = [];
+  out.push(...section.pairs);
+  if (section.renameFrom !== undefined) out.push({ path: section.renameFrom, action: "delete" });
+  const created = section.renameTo ?? section.copyTo;
+  if (created !== undefined) out.push({ path: created, action: "create" });
+  if (section.pairs.length === 0 && created === undefined && section.git !== undefined) {
+    const path = section.deleted ? section.git.oldPath : section.git.newPath;
+    if (path.length > 0 && path !== "/dev/null") {
+      out.push({ path, action: section.deleted ? "delete" : section.created ? "create" : "modify" });
+    }
+  }
+  return out;
+}
+
 /**
  * Parse a unified-diff patch (as produced by `git diff` / consumed by
  * `git apply`) into its per-file target list. Pure; never throws — malformed
- * or non-diff input simply yields no targets.
+ * or non-diff input simply yields no targets. Reads the `diff --git` extended
+ * headers (`deleted file mode`, `rename from/to`, `copy to`, `Binary files …
+ * differ`) as well as the `---`/`+++` pair, so a section with no hunk is seen.
  */
 export function parsePatchTargets(patch: string): PatchTarget[] {
-  const targets: PatchTarget[] = [];
-  let pendingOld: string | undefined;
+  const sections: PatchSection[] = [];
+  let section = newSection();
+  sections.push(section);
   for (const line of patch.split(/\r?\n/)) {
+    const gitMatch = GIT_SECTION_HEADER.exec(line);
+    if (gitMatch) {
+      section = newSection(gitMatch[1]!);
+      sections.push(section);
+      continue;
+    }
     const oldMatch = OLD_FILE_HEADER.exec(line);
     if (oldMatch) {
-      pendingOld = stripDiffPathPrefix(oldMatch[1]!);
+      section.pendingOld = stripDiffPathPrefix(oldMatch[1]!);
       continue;
     }
     const newMatch = NEW_FILE_HEADER.exec(line);
-    if (newMatch === null || pendingOld === undefined) {
+    if (newMatch !== null && section.pendingOld !== undefined) {
+      const newPath = stripDiffPathPrefix(newMatch[1]!);
+      const oldIsNull = section.pendingOld === "/dev/null";
+      const newIsNull = newPath === "/dev/null";
+      const path = newIsNull ? section.pendingOld : newPath;
+      section.pendingOld = undefined;
+      if (path.length > 0 && path !== "/dev/null") {
+        section.pairs.push({ path, action: oldIsNull ? "create" : newIsNull ? "delete" : "modify" });
+      }
       continue;
     }
-    const newPath = stripDiffPathPrefix(newMatch[1]!);
-    const oldIsNull = pendingOld === "/dev/null";
-    const newIsNull = newPath === "/dev/null";
-    const path = newIsNull ? pendingOld : newPath;
-    pendingOld = undefined;
-    if (path.length === 0 || path === "/dev/null") {
-      continue;
-    }
-    targets.push({ path, action: oldIsNull ? "create" : newIsNull ? "delete" : "modify" });
+    if (section.git === undefined) continue;
+    if (DELETED_FILE_MODE.test(line)) section.deleted = true;
+    else if (NEW_FILE_MODE.test(line)) section.created = true;
+    else if (BINARY_DIFFERS.test(line)) section.binary = true;
+    const rename = RENAME_FROM.exec(line);
+    if (rename) section.renameFrom = stripDiffPathPrefix(rename[1]!);
+    const renameTo = RENAME_TO.exec(line);
+    if (renameTo) section.renameTo = stripDiffPathPrefix(renameTo[1]!);
+    const copyTo = COPY_TO.exec(line);
+    if (copyTo) section.copyTo = stripDiffPathPrefix(copyTo[1]!);
+  }
+  const targets: PatchTarget[] = [];
+  for (const target of sections.flatMap(sectionTargets)) {
+    if (!targets.some((t) => t.path === target.path && t.action === target.action)) targets.push(target);
   }
   return targets;
 }

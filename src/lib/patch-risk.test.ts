@@ -100,3 +100,56 @@ test("classifyPatchRisk: empty/non-diff input is not destructive and touches no 
   const result = classifyPatchRisk("");
   expect(result).toEqual({ destructive: false, credentials: false, reasons: [] });
 });
+
+// Sections git applies with no `---`/`+++` pair (RG-C005-01).
+const BINARY_DELETE = [
+  "diff --git a/src/important.ts b/src/important.ts",
+  "deleted file mode 100644",
+  "index b0d34924d18119b7ca7a85838c523975f2571e82..0000000000000000000000000000000000000000",
+  "GIT binary patch",
+  "literal 0",
+  "HcmV?d00001",
+  "",
+  "literal 46",
+  "zcmYeTD9A4=QAp0uD=twePE9UKEm5#lFfp=L(AQT8^>g<3_4N!1adlB}b@2@00sw2@",
+  "",
+  "",
+].join("\n");
+const EMPTY_DELETE = ["diff --git a/src/empty.ts b/src/empty.ts", "deleted file mode 100644", "index e69de29..0000000", ""].join("\n");
+const PURE_RENAME = ["diff --git a/src/old.ts b/src/renamed.ts", "similarity index 100%", "rename from src/old.ts", "rename to src/renamed.ts", ""].join("\n");
+const PURE_COPY = ["diff --git a/src/a.ts b/src/b.ts", "similarity index 100%", "copy from src/a.ts", "copy to src/b.ts", ""].join("\n");
+
+test("parsePatchTargets: a binary deletion riding with an ordinary hunk is a delete target", () => {
+  const targets = parsePatchTargets(modifyHunk("README.md") + BINARY_DELETE);
+  expect(targets).toContainEqual({ path: "src/important.ts", action: "delete" });
+  expect(classifyPatchRisk(modifyHunk("README.md") + BINARY_DELETE).destructive).toBe(true);
+});
+
+test("parsePatchTargets: deleting an empty file (no hunk) is a delete target", () => {
+  expect(parsePatchTargets(EMPTY_DELETE)).toEqual([{ path: "src/empty.ts", action: "delete" }]);
+});
+
+test("parsePatchTargets: a pure rename names both paths and escalates", () => {
+  expect(parsePatchTargets(modifyHunk("README.md") + PURE_RENAME)).toEqual([
+    { path: "README.md", action: "modify" },
+    { path: "src/old.ts", action: "delete" },
+    { path: "src/renamed.ts", action: "create" },
+  ]);
+  expect(classifyPatchRisk(modifyHunk("README.md") + PURE_RENAME).destructive).toBe(true);
+});
+
+test("parsePatchTargets: a pure copy names its destination", () => {
+  expect(parsePatchTargets(modifyHunk("README.md") + PURE_COPY)).toContainEqual({ path: "src/b.ts", action: "create" });
+});
+
+test("classifyPatchRisk: a rename into a credential file trips the credentials floor", () => {
+  const patch = ["diff --git a/x b/.config/keryx/permissions.json", "rename from x", "rename to .config/keryx/permissions.json", ""].join("\n");
+  expect(classifyPatchRisk(patch).credentials).toBe(true);
+});
+
+test("parsePatchTargets: `Binary files differ` and a mode change are modify targets", () => {
+  const binary = ["diff --git a/img.png b/img.png", "index 1..2 100644", "Binary files a/img.png and b/img.png differ", ""].join("\n");
+  expect(parsePatchTargets(binary)).toEqual([{ path: "img.png", action: "modify" }]);
+  const mode = ["diff --git a/run.sh b/run.sh", "old mode 100644", "new mode 100755", ""].join("\n");
+  expect(parsePatchTargets(mode)).toEqual([{ path: "run.sh", action: "modify" }]);
+});
