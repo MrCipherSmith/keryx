@@ -149,6 +149,7 @@ export class HubConnector {
         return result;
     }
     async connect(url: string, projectId: string): Promise<HubBinding> {
+        if (hasControls(url, true)) throw Error("Invalid Hub URL");
         const parsed = new URL(url);
         if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash)
             throw Error("Invalid Hub URL");

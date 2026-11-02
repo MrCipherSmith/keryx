@@ -1,0 +1,102 @@
+{
+  "task_id": "task-39",
+  "status": "DONE",
+  "root": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx",
+  "remote_parent": "8dcb765f0",
+  "candidate_incoming": "33ef4c0f1",
+  "files_resolved_or_composed": [
+    "apps/hub-web/src/features/context.tsx",
+    "apps/hub-web/src/features/managed-work/adapter.ts",
+    "apps/hub-web/src/features/managed-work/amendment-model.ts",
+    "apps/hub-web/src/features/managed-work/amendments.tsx",
+    "apps/hub-web/src/features/managed-work/attention-target.ts",
+    "apps/hub-web/src/features/managed-work/cache.ts",
+    "apps/hub-web/src/features/managed-work/contribute.tsx",
+    "apps/hub-web/src/features/managed-work/demo.ts",
+    "apps/hub-web/src/features/managed-work/model.ts",
+    "apps/hub-web/src/features/managed-work/native-selection.tsx",
+    "apps/hub-web/src/features/managed-work/operation.tsx",
+    "apps/hub-web/src/features/managed-work/overview-attention.tsx",
+    "apps/hub-web/src/features/managed-work/revision-editor.tsx",
+    "apps/hub-web/src/features/managed-work/updates.tsx",
+    "apps/hub-web/src/features/managed-work/view.tsx",
+    "apps/hub-web/src/features/managed-work/work-panels.tsx",
+    "apps/hub-web/src/features/remote/machines.tsx",
+    "apps/hub-web/src/features/revisions-query.tsx",
+    "apps/hub-web/src/features/workflow.tsx",
+    "apps/hub-web/src/i18n/context.en.ts",
+    "apps/hub-web/src/i18n/context.ru.ts",
+    "apps/hub-web/tests/context.case.tsx",
+    "apps/hub-web/tests/demo-receipt.case.ts",
+    "apps/hub-web/tests/machine-cards.case.tsx",
+    "apps/hub-web/tests/managed-work.case.tsx",
+    "apps/hub-web/tests/revision-pagination.case.tsx",
+    "apps/hub-web/tests/work-incremental.case.tsx",
+    "apps/hub-web/tests/work-live-amendments.case.tsx",
+    "apps/hub-web/tests/work-live-attention.case.tsx",
+    "apps/hub-web/tests/work-live-choices.case.tsx",
+    "apps/hub-web/tests/work-live-updates.case.tsx",
+    "src/hub/mcp-tools.ts",
+    "src/hub/mcp.test.ts",
+    "src/hub/mcp.ts",
+    "src/hub/web-assets.generated.ts"
+  ],
+  "schema_files_not_owned": [
+    "apps/hub-web/src/features/managed-work/command-schema.json",
+    "apps/hub-web/src/features/managed-work/domain-schema.json"
+  ],
+  "kept_candidate": [
+    "Evidence-root Overview/click-time exactAttempt lookup+visiblefailure/report labels",
+    "shared revision paging inCode/legacyFlowcandidate/Evidence selectors, exactsummary route expectation",
+    "draftmembership filtered atsubmit, sharedactiveRequiredIntents, allmanifestCAS",
+    "version-aware snapshot structuralSharing and ownreceipt/no-owner resyncfallbacks",
+    "active-run eagerqueries+collapsedapproval visibility; routingonexpand",
+    "live-boundary regression files and MCPclosedpagearg validation"
+  ],
+  "kept_remote": [
+    "demo.ts completeeventfeed+result-onlyreceipts; updates.tsx demo polling enabled aspairedintegration",
+    "allmeaningfulremote WorkSequences,advanced,context,incrementalcases retained",
+    "actualSDK\u2192Hub limit1revisioncontinuation assertions retained in mcp.test.ts",
+    "mcp.ts explicitHubFailure rethrow frombodyparser retained, with nointernaladmission bypass",
+    "matching English/Russian catalogs retain both relevant revisions labels"
+  ],
+  "adapted_tests": [
+    {
+      "path": "apps/hub-web/tests/context.case.tsx",
+      "change": "Remote revisionfixture nowserves metadata-only exactsummary andfulldetail separately, currentLoadMoreRevisions label. Paging andexactdeep-link assertions retained. Deliveryselectedolderlinefixture nowreturns genuineSummary instead ofproject object."
+    },
+    {
+      "path": "apps/hub-web/tests/managed-work.case.tsx",
+      "change": "Remote Evidence test locates meaningful reportlabel ratherthanUUID andawaits click-time navigation; exactAttempt/Intent/Flow target assertion retained."
+    }
+  ],
+  "discarded_duplicate_or_alternative": [
+    "remote machines collapsedtest variant duplicatescandidate dedicatedcollapsedapproval test; candidate8cases retainthatbehavior and100rows/3activeruns coverage",
+    "remote cachequery helpers/pollloop were alternative implementation; candidateguards retained andonlydemoenablement composed",
+    "remote direct-ID revisiondetail andDeliveryline-invariant-onlyguard replacedbycandidate exactmetadata/purpose checks andsharedpaging; backendmetadata-onlybranch retained bynativeowner",
+    "remote mcp-tool wording/identical schema expression replacedbycandidate equivalentforwarding; realSDK testkept"
+  ],
+  "new_composition_test": {
+    "name": "demo polling applies event side effects after a result-only receipt without rereading snapshots",
+    "red": "/tmp/pr1113-integration-demo-red.log (isolatedscratch withcandidate olddemo-disableguard)",
+    "green": "/tmp/pr1113-integration-demo-green.log10PASS",
+    "purpose": "Pairs remote demo event log withcandidate immediatepollwakeup; provesIntentversion2 arrivesthroughevents afterDecision-onlyreceipt, one exactrecordread andno fullcacheexport"
+  },
+  "verification": {
+    "UI": "39files197testsPASS /tmp/pr1113-integration-ui-green.log",
+    "ui_types": "PASS /tmp/pr1113-integration-ui-types.log",
+    "ui_lint": "PASS /tmp/pr1113-integration-ui-lint.log",
+    "MCP": "14PASS135assertions /tmp/pr1113-integration-mcp-green.log",
+    "MCP_plus_actualTCP_admission": "18PASS142assertions pinnedBun1.3.14 /tmp/pr1113-integration-mcp-admission-green.log",
+    "web_assets": "24assets rebuilt+--checkPASS input2bce6622c96196cbab25def45a5434d251a7b2121e05af5933278c70e9df799a",
+    "root_types": "Onlyremaininglegacy.test.ts71 expected7args got5 reportedtoT37owner; UItypesPASS"
+  },
+  "no_index_commit_push": true,
+  "frozen": true,
+  "routing_audit": {
+    "graph_used": "knownpaths+previousgraph topology only; staleunderactiveconflicts, notusedfor snapshottruth",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}

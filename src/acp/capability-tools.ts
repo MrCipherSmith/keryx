@@ -8,9 +8,11 @@
 //   all), `read_file` never calls it — falls straight through to the
 //   existing local implementation from `builtinReadOnlyTools`. Every input
 //   validation `read_file` already performs (empty path, path escaping the
-//   project root) runs BEFORE a client round trip is attempted, by simply
-//   delegating those cases to the local tool's own `invoke` — so a malformed
-//   call never reaches the wire either way.
+//   project root, a start_line that is not a positive integer) runs BEFORE a
+//   client round trip is attempted, by simply delegating those cases to the
+//   local tool's own `invoke` — so a malformed call never reaches the wire
+//   either way. The client's reply is paged under the local tool's 20,000-
+//   character cap and continuation notice (`pageReadText`).
 //
 //   WRITE — `apply_patch`, the ACP roster's only write-risk tool, stays local
 //   UNCONDITIONALLY, regardless of `fs.writeTextFile`. It applies a
@@ -42,7 +44,12 @@
 //   called" — holds unconditionally rather than only in the absent case,
 //   which is the stronger and simpler property to test and keep true.
 
-import { confineToRoot, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import {
+  confineToRoot,
+  pageReadText,
+  readFileStartLine,
+  type InteractiveTool,
+} from "../harness/tool/builtin/interactive-tools";
 import type { AcpClientCapabilities } from "./protocol";
 
 /**
@@ -88,12 +95,21 @@ export function acpAwareReadFileTool(
         // Same "path escapes the project root" error, same reasoning.
         return base.invoke(input, ctx);
       }
-      const startLine = typeof input.start_line === "number" ? input.start_line : undefined;
-      const viaClient = await readViaClient(target, startLine);
-      if (viaClient !== undefined) {
-        return { output: viaClient, isError: false };
+      const startLine = readFileStartLine(input);
+      if (startLine === undefined) {
+        // Same "start_line must be a positive integer" error: 0, -5 or 2.5 is
+        // never forwarded to the client as a line.
+        return base.invoke(input, ctx);
       }
-      return base.invoke(input, ctx);
+      const viaClient = await readViaClient(target, startLine === 1 ? undefined : startLine);
+      if (viaClient === undefined) {
+        return base.invoke(input, ctx);
+      }
+      // The client's text comes back whole; page it under the local contract
+      // (MAX_READ_BYTES and the continue-with notice), or it would land in
+      // provider-bound history unbounded. An empty reply past line 1 is past the
+      // end — the local read reports that with the file's real length.
+      return (await pageReadText(viaClient, startLine)) ?? base.invoke(input, ctx);
     },
   };
 }

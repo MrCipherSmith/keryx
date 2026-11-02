@@ -1,0 +1,10 @@
+# Storage and managed binding tests-first results
+
+- HL-R03-W5-001: `aggregate incidents share flow criterion support across distinct accepted attempts` in `src/hub/work/storage.incidents.test.ts`. Two distinct Intents, Attempts, acceptance decisions and contradictory Evidence are created via domain commands, sharing the approved Flow revision. Both Evidence, submissions and acceptance decisions are present. `bun test src/hub/work/storage.incidents.test.ts`: RED at the intended bound, 4 waiver queries versus at most 3 distinct revision criteria; existing incident test passes. This case uses no waiver decisions; an explicit waiver-display assertion remains to be added during implementation verification.
+- W2-005: `a successful managed replacement releases its original and reserves the replacement` in `src/hub/work/execution.reconciliation.test.ts`.
+- W2-007: `managed edit refuses mismatched {session,project,machine,lineage,text} without changing reservations` in the same file.
+- W2-011: `managed reconciliation follows multiple replacement hops only within the requested session` in the same file.
+
+`bun test src/hub/work/execution.reconciliation.test.ts`: 9 pass. These cases pin existing behavior, so their meaningful RED is demonstrated by applying the exact review JSON mutants separately to a disposable copy of `src`, then running this command there. All four mutants exit 1 with assertion failures: `w2-reconcile-release` fails the original-release assertion; `w2-supplement-lineage-scope` fails all five mismatch refusal assertions; `w2-supplement-recursive-lineage` and `w2-supplement-session-lineage` each fail the lineage assertion. The initial disposable-copy run lacked the docs schema and was discarded; a corrected copy linked the repository's `docs` and `node_modules` and produced these assertion failures. No production code changed.
+
+Routing audit: graph_used: yes (graph reported untracked `apps/hub-web/node_modules`, no source changes reported); wiki_used: not-relevant (targeted tests against explicit findings); ctx_used: yes; raw_rg_used: no.

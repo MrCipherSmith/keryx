@@ -1,9 +1,22 @@
 import type { Database } from "bun:sqlite";
+import type { OperationRecord, QueueRow, StoredCommand } from "./model";
 import {remoteBudgets,type RemoteBudgets} from './budgets';
 export const REMOTE_TABLES = ["remote_project_ref", "remote_machine", "remote_pairing", "remote_inventory", "remote_capability_page", "remote_projection", "remote_session", "remote_operation", "remote_queue", "remote_controller_release", "remote_confirmation", "remote_run", "remote_command", "remote_event", "remote_session_event", "remote_history", "remote_approval_projection", "remote_authorization_grant", "remote_reconciliation", "remote_result_receipt", "remote_run_check"] as const;
 export type RemoteTable = typeof REMOTE_TABLES[number];
 export class RemoteStorageFailure extends Error {}
-export const REMOTE_SCHEMA_VERSION = 2;
+/** All historical values share the old startup gate column, so marker values are reserved globally. */
+export const DATABASE_MARKERS = { legacySchema: 1, remoteSchema: 2, managedWorkWriter: 3, legacyArtifactsWriter: 4 } as const;
+export function assertDatabaseMarkerNamespace(markers: Readonly<Record<string,number>> = DATABASE_MARKERS): void {
+  const values = Object.values(markers);
+  if (values.some(value => !Number.isSafeInteger(value) || value < 1) || new Set(values).size !== values.length) throw new RemoteStorageFailure('Database schema/writer marker collides with a reserved value');
+}
+assertDatabaseMarkerNamespace();
+const SUPPORTED_DATABASE_MARKERS: ReadonlySet<number> = new Set(Object.values(DATABASE_MARKERS));
+export const REMOTE_SCHEMA_VERSION = DATABASE_MARKERS.remoteSchema;
+/** Existing 0.4.1 startup rejects this marker; remote wire/table layout stays v2. */
+export const MANAGED_WORK_WRITER_VERSION = DATABASE_MARKERS.managedWorkWriter;
+/** Legacy revision bytes/replays require content-addressed hydration; older v3 writers must refuse startup. */
+export const LEGACY_ARTIFACT_WRITER_VERSION = DATABASE_MARKERS.legacyArtifactsWriter;
 function createRemoteTable(db: Database, table: RemoteTable, physical: string = table): void {
   const refs: string[] = [];
   if (table !== "remote_project_ref") refs.push("FOREIGN KEY(projectId) REFERENCES remote_project_ref(id) DEFERRABLE INITIALLY DEFERRED");
@@ -23,8 +36,8 @@ export function migrateRemote(db: Database): void {
     db.transaction(() => {
       db.exec("CREATE TABLE IF NOT EXISTS remote_schema_version(version INTEGER NOT NULL)");
       const row = db.query<{ version: number }, []>("SELECT version FROM remote_schema_version").get();
-      if (row && row.version !== 1 && row.version !== REMOTE_SCHEMA_VERSION) throw new RemoteStorageFailure("Unsupported remote schema version");
-      if (row?.version === REMOTE_SCHEMA_VERSION) return;
+      if (row && !SUPPORTED_DATABASE_MARKERS.has(row.version)) throw new RemoteStorageFailure("Unsupported remote schema version");
+      if (row && row.version !== DATABASE_MARKERS.legacySchema) return;
       for (const table of REMOTE_TABLES) {
         const old = db.query<{ name: string }, [string]>("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
         const temporary = `${table}_v2`;
@@ -44,8 +57,31 @@ export function migrateRemote(db: Database): void {
 export type RemoteIdentity = { projectId?: string | undefined; machineId?: string | undefined; sessionId?: string | undefined; runId?: string | undefined; seq?: number | undefined };
 export function remoteRepository(db: Database, options:Partial<RemoteBudgets>={}) {
   const budgets=remoteBudgets(options);
+  // Reconciliation follows only managed operation lineage, never the lifetime
+  // command/operation log of an otherwise unrelated native session.
+  db.exec(`CREATE INDEX IF NOT EXISTS remote_queue_managed_operation ON remote_queue(sessionId,json_extract(body,'$.item.operationId'));
+    CREATE INDEX IF NOT EXISTS remote_queue_managed_replacement ON remote_queue(sessionId,json_extract(body,'$.item.replacesOperationId'));
+    CREATE INDEX IF NOT EXISTS remote_command_managed_operation ON remote_command(sessionId,json_extract(body,'$.operationId'));
+    CREATE INDEX IF NOT EXISTS remote_operation_managed_queue ON remote_operation(sessionId,json_extract(body,'$.request.queueItemId'));`);
   return {
+    managedReconciliation(sessionId: string, operationIds: string[]): { queue: QueueRow[]; commands: StoredCommand[]; operations: OperationRecord[] } {
+      if (!operationIds.length) return { queue: [], commands: [], operations: [] };
+      const roots = JSON.stringify(operationIds);
+      const queue = db.query<{body:string},[string,string,string]>(`WITH RECURSIVE managed(operationId) AS (
+        SELECT value FROM json_each(?) UNION
+        SELECT json_extract(q.body,'$.item.operationId') FROM remote_queue q JOIN managed m ON json_extract(q.body,'$.item.replacesOperationId')=m.operationId WHERE q.sessionId=?
+      ) SELECT body FROM remote_queue WHERE sessionId=? AND json_extract(body,'$.item.operationId') IN (SELECT operationId FROM managed) ORDER BY seq,id`).all(roots,sessionId,sessionId).map(row => JSON.parse(row.body) as QueueRow);
+      const commands = db.query<{body:string},[string,string]>("SELECT body FROM remote_command WHERE sessionId=? AND json_extract(body,'$.operationId') IN (SELECT value FROM json_each(?)) ORDER BY seq,id").all(sessionId,roots).map(row => JSON.parse(row.body) as StoredCommand);
+      const operations = db.query<{body:string},[string,string]>(`SELECT body FROM remote_operation WHERE sessionId=? AND json_extract(body,'$.request.queueItemId') IN (SELECT value FROM json_each(?))
+        AND COALESCE(json_extract(body,'$.response.status'),'') NOT IN ('rejected','not-applied')
+        AND NOT (COALESCE(json_extract(body,'$.response.status'),'')='applied' AND json_type(body,'$.request.originalOperationId') IS NULL
+          AND json_extract(body,'$.request.expectedItemVersion') < (SELECT json_extract(q.body,'$.item.version') FROM remote_queue q WHERE q.id=json_extract(remote_operation.body,'$.request.queueItemId')))
+        ORDER BY seq,id`).all(sessionId,JSON.stringify(queue.map(row => row.item.queueItemId))).map(row => JSON.parse(row.body) as OperationRecord);
+      return { queue, commands, operations };
+    },
     budgets,
+    /** Nested calls use a SQLite savepoint on this same shared connection. */
+    atomic<T>(action:()=>T):T { return db.transaction(action)(); },
     sessionRuns(sessionId:string):number{return db.query<{n:number},[string]>("SELECT COUNT(*) AS n FROM remote_run WHERE sessionId=?").get(sessionId)!.n;},
     unresolvedSessionCommands(sessionId:string):number{return db.query<{n:number},[string]>("SELECT COUNT(*) AS n FROM remote_command WHERE sessionId=? AND COALESCE(json_extract(body,'$.status'),'unknown') NOT IN ('applied','not-applied','rejected','expired-unconfirmed')").get(sessionId)!.n;},
     dispatchCommands<T>():T[]{return db.query<{body:string},[]>("SELECT body FROM remote_command WHERE json_extract(body,'$.status')='pending' ORDER BY machineId,seq,id").all().map(r=>JSON.parse(r.body) as T);},

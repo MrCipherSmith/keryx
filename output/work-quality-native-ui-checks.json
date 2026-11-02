@@ -1,0 +1,65 @@
+[
+  {
+    "name": "native-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck",
+    "started": "2026-11-01T11:53:05.087Z",
+    "completedObservation": "2026-11-01T11:54:03.329Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-35-489Z-edc4a4_run.log"
+  },
+  {
+    "name": "native-script-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck:scripts",
+    "started": "2026-11-01T11:53:05.087Z",
+    "completedObservation": "2026-11-01T11:54:03.329Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-17-070Z-80325c_run.log"
+  },
+  {
+    "name": "native-frontend-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web test",
+    "started": "2026-11-01T11:53:05.087Z",
+    "completedObservation": "2026-11-01T11:54:03.329Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-14-939Z-b71a04_run.log"
+  },
+  {
+    "name": "native-frontend-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web typecheck",
+    "started": "2026-11-01T11:53:05.087Z",
+    "completedObservation": "2026-11-01T11:54:03.329Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-19-200Z-4df23e_run.log"
+  },
+  {
+    "name": "native-frontend-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web lint",
+    "started": "2026-11-01T11:53:05.087Z",
+    "completedObservation": "2026-11-01T11:54:03.329Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-10-611Z-6a2bb8_run.log"
+  },
+  {
+    "name": "native-frontend-build",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run --cwd apps/hub-web build",
+    "started": "2026-11-01T11:53:05.087Z",
+    "completedObservation": "2026-11-01T11:54:03.329Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-07-677Z-315548_run.log"
+  },
+  {
+    "name": "native-assets",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun scripts/build-hub-web.ts --check",
+    "started": "2026-11-01T11:53:05.087Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-06-060Z-0592a7_run.log"
+  },
+  {
+    "name": "native-packaging",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test scripts/package-team-hub.test.ts",
+    "started": "2026-11-01T11:53:05.087Z",
+    "completedObservation": "2026-11-01T11:54:03.329Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T11-53-16-404Z-9655ef_run.log"
+  }
+]

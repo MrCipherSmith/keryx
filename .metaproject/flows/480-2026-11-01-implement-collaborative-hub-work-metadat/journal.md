@@ -1,0 +1,134 @@
+# Journal
+
+2026-11-01: owner explicitly requested implementation, not another plan. Existing in-flight flows concern other work; initialized this new requested scope, preserving them. No additional execution metrics per earlier owner choice. Graph stale/moved: orientation only, verify actual sources. UI external chat active, own feat-hub-workspace-design; backend feat-hub-work-management. No human-only remote Hub state changed.
+- 2026-11-01T10:22:09.832Z - frozen: 16 criteria; checksum recorded
+- 2026-11-01T10:22:28.564Z - task-added: T5: Domain lifecycle and immutable review
+- 2026-11-01T10:22:28.925Z - task-added: T6: Durable managed-work HTTP and auth
+- 2026-11-01T10:22:29.289Z - task-added: T7: Managed work client OpenAPI and contributor MCP
+- 2026-11-01T10:22:29.652Z - task-added: T8: Integrate live RU/EN UI with API
+- 2026-11-01T10:22:29.828Z - task-added: T9: Bind existing session execution and Git observations safely
+- 2026-11-01T10:22:30.010Z - task-added: T10: Verify legacy coexistence migration backup and restore
+- 2026-11-01T10:22:30.192Z - task-added: T11: Run integrated domain storage HTTP MCP frontend regression gates
+- 2026-11-01T10:22:30.376Z - task-added: T12: Independent correctness security concurrency and UX review
+- 2026-11-01T10:22:30.550Z - task-added: T13: Deliver tested candidate with operator instructions
+- 2026-11-01T10:22:30.740Z - started
+- 2026-11-01T10:23:46.381Z - task-attempt: T5: started (attempt 1) — Domain worker implements guarded immutable lifecycle
+- 2026-11-01T10:23:46.560Z - task-attempt: T6: started (attempt 1) — Storage/HTTP worker implements additive SQLite and existing authentication
+- 2026-11-01T10:23:46.746Z - task-attempt: T7: started (attempt 1) — Contributor client MCP and OpenAPI worker started
+- 2026-11-01T10:23:46.931Z - task-attempt: T8: started (attempt 1) — Existing UI session implementing managed-work view in separate worktree
+- 2026-11-01T10:32:42.946Z - task-done: T7: Managed work client OpenAPI and contributor MCP
+- 2026-11-01T10:32:43.136Z - task-done: T1: Collect remaining context
+- 2026-11-01T11:00:14.305Z - task-done: T5: Domain lifecycle and immutable review
+- 2026-11-01T11:00:14.479Z - task-done: T6: Durable managed-work HTTP and auth
+- 2026-11-01T11:00:14.656Z - task-done: T9: Bind existing session execution and Git observations safely
+- 2026-11-01T11:00:14.828Z - task-done: T10: Verify legacy coexistence migration backup and restore
+- 2026-11-01T11:04:22.333Z - task-attempt: T12: started (attempt 1) — Backend review round1 (backfilled): reproduced admission/coverage/cancellation/terminal-state defects; corrected before round2
+- 2026-11-01T11:04:22.574Z - task-attempt: T12: started (attempt 2) — Backend review round2 (backfilled): queued unknown allocation and missing attention; corrected before round3
+- 2026-11-01T11:04:22.805Z - task-attempt: T12: started (attempt 3) — Backend review round3 (backfilled): APPROVE,68tests/519assertions; UI review initial two majors handled in separate UI delta
+- 2026-11-01T11:04:23.045Z - task-added: T14: Independent final UI delta review and behavioral regressions
+- 2026-11-01T11:13:26.671Z - task-done: T12: Independent correctness security concurrency and UX review
+- 2026-11-01T11:20:18.768Z - task-attempt: T14: started (attempt 1) — Independent UI delta: full revision visibility and target-context guards plus amendment/waiver/events/observer/legacy/Overview increment
+- 2026-11-01T12:49:33.255Z - task-added: T15: Recover original pending work and native requests after browser reload
+- 2026-11-01T12:49:45.381Z - task-done: T8: Integrate live RU/EN UI with API
+- 2026-11-01T12:49:45.646Z - task-done: T14: Independent final UI delta review and behavioral regressions
+- 2026-11-01T12:49:45.878Z - task-attempt: T15: started (attempt 1) — Reproduced memory-only pending envelopes; bounded client recovery worker implements durable original request and manual reconciliation without automatic human actions.
+- 2026-11-01T12:54:34.234Z - task-added: T16: Independently review reload recovery and original-operation retry
+- 2026-11-01T12:56:28.475Z - task-attempt: T16: started (attempt 1) — Independent review of bounded tab recovery, explicit original retry, principal/session scope and storage failures; earlier reviews exclude this delta.
+- 2026-11-01T12:58:46.550Z - task-attempt: T16: failed (attempt 2) — Independent RED probe R-001: uncertain original retry403 cleared original request even though current authority refusal cannot establish prior outcome; fix assigned T15.
+- 2026-11-01T13:00:10.043Z - task-done: T15: Recover original pending work and native requests after browser reload
+- 2026-11-01T13:00:10.276Z - task-done: T16: Independently review reload recovery and original-operation retry
+- 2026-11-01T13:03:49.097Z - task-done: T11: Run integrated domain storage HTTP MCP frontend regression gates
+- 2026-11-01T13:05:07.987Z - task-done: T2: Implement per plan
+- 2026-11-01T13:05:08.311Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-11-01T13:05:08.628Z - task-done: T4: Self-review and prepare draft PR
+- 2026-11-01T13:05:08.876Z - task-done: T13: Deliver tested candidate with operator instructions
+
+2026-11-01 verified handoff: all16 implementation tasks finished. Final independent backend/UI/native/reload reviews APPROVE; documentation PASS. Backend1783PASS retained byte-identical; finalUI151/31files,packaging6,types/lint/build/assets/docsPASS. Browser original-retry403 regression independently RED→GREEN. Final source commit04568a466; packageSHA54d1e3916ab1fd05ee189de1f683f4b86c46b47183786f563e8f9df792d492a3. Isolated geekom loopback19879 final archive installed with existing synthetic DB preserved; HTTP/MCP37PASS. PublicHub/Cloudflare unchanged. No PR/merge or product acceptance requested/performed; leave Flow in-progress, judgedAC unconfirmed, owner unset rather than inferred. Evidence docs/handoffs/hub-work-management-result.md and output/work-quality-gate-reload.md.
+- 2026-11-01T13:24:17.214Z - task-added: T17: Integrate current main and remote lifecycle fixes
+- 2026-11-01T13:24:17.456Z - task-added: T18: Implement release-backed Hub update command and safe deployment integration
+- 2026-11-01T13:24:17.702Z - task-added: T19: Rehearse production backup migration restore and verify release artifact
+- 2026-11-01T13:24:17.950Z - task-added: T20: Publish successor release and update production Hub without losing data
+- 2026-11-01T13:25:33.977Z - task-attempt: T17: started (attempt 1) — Merge current origin/main; preserve latest remote run lifecycle changes and managed work fixture overrides.
+- 2026-11-01T13:25:34.203Z - task-attempt: T18: started (attempt 1) — Release-backed local admin CLI and installer safety implementation; spec docs/requirements/hub-release-update/specification.md.
+- 2026-11-01T13:28:24.297Z - task-done: T17: Integrate current main and remote lifecycle fixes
+- 2026-11-01T15:53:25.553Z - task-added: T21: Publish successor release and provide owner-run upgrade instructions
+- 2026-11-01T15:53:25.803Z - task-done: T20: Publish successor release and update production Hub without losing data
+- 2026-11-01T16:04:18.950Z - task-added: T22: Prepare PR1113 for owner review without merge release or production cutover
+- 2026-11-01T16:04:19.179Z - task-added: T23: Fix and independently verify legacy adoption safety findings
+
+2026-11-01 owner steering: prepare PR1113 and keep Draft; owner will run review, only after review consider merging. Do not merge, tag, publish or perform production cutover. Backend+CLI complete; real Docker E2E passes after Origin/header fixture fixes. Production-copy trial preserved162documents/9legacyFlows and createdWork only in copy; actualHubCID/state unchanged. Legacy helper safety review REQUEST_CHANGES (sharedlock,pending-sessionfence,Compose identity,UIDpolicy,remotehistory); assigned workerT23, do not claim ready until negative probes pass.
+- 2026-11-01T16:05:14.705Z - task-attempt: T23: started (attempt 1) — Repair five independent legacy adoption findings; keep PR1113 Draft and forbid merge/tag/production cutover until owner review.
+- 2026-11-01T16:15:51.160Z - task-done: T18: Implement release-backed Hub update command and safe deployment integration
+- 2026-11-01T16:15:51.391Z - task-done: T19: Rehearse production backup migration restore and verify release artifact
+- 2026-11-01T16:15:51.673Z - task-done: T23: Fix and independently verify legacy adoption safety findings
+- 2026-11-01T18:55:58.015Z - task-added: T24: Fix PR1113 review root causes A-N and triage all linked findings
+- 2026-11-01T19:54:30.822Z - task-done: T21: Publish successor release and provide owner-run upgrade instructions
+- 2026-11-01T19:54:31.025Z - task-done: T4: Self-review and prepare draft PR
+- 2026-11-01T20:17:38.194Z - task-done: T22: Prepare PR1113 for owner review without merge release or production cutover
+- 2026-11-01T21:08:16.230Z - task-done: T24: Fix PR1113 review root causes A-N and triage all linked findings
+- 2026-11-02T03:58:17.674Z - task-added: T25: R02 scoped storage aggregates projections and response contracts
+- 2026-11-02T03:58:17.836Z - task-added: T26: R02 frontend event cache forms and revision consumers
+- 2026-11-02T03:58:18.005Z - task-added: T27: R02 native queue reconciliation and Attempt actor authorization
+- 2026-11-02T03:58:18.180Z - task-added: T28: R02 delivery recovery and mutation admission
+- 2026-11-02T03:58:18.346Z - task-added: T29: R02 backup protection migration help and offline test gates
+- 2026-11-02T03:58:18.539Z - task-added: T30: R02 integrated verification mutation coverage and next review handoff
+- 2026-11-02T03:58:28.640Z - task-attempt: T25: started (attempt 1) — Round 2 scoped storage regression fixes; fresh mechanism-specific RED tests
+- 2026-11-02T03:58:28.808Z - task-attempt: T26: started (attempt 1) — Round 2 live frontend regression fixes with real adapter contracts
+- 2026-11-02T03:58:28.981Z - task-attempt: T27: started (attempt 1) — Round 2 queue state-event regressions and upheld participant authorization
+- 2026-11-02T04:12:04.521Z - task-done: T27: R02 native queue reconciliation and Attempt actor authorization
+- 2026-11-02T04:12:04.888Z - task-attempt: T28: started (attempt 1) — Canonical delivery recovery and actual-byte admission repairs with production-path RED tests
+- 2026-11-02T04:12:49.099Z - task-added: T31: R02 verify queued configuration recovery without inferred terminal refusal
+- 2026-11-02T04:12:49.538Z - task-attempt: T31: started (attempt 1) — Expand reservation regression to recoverable config/authority guard failures before native terminal evidence
+- 2026-11-02T04:16:16.881Z - task-done: T31: R02 verify queued configuration recovery without inferred terminal refusal
+- 2026-11-02T04:19:25.261Z - task-attempt: T29: started (attempt 1) — Owner-decided14day backup protection, migration terminal queue classification, actual CLI help and deterministic offline packaging tests
+- 2026-11-02T04:21:45.143Z - task-done: T25: R02 scoped storage aggregates projections and response contracts
+- 2026-11-02T04:23:10.916Z - task-added: T32: R02 actual-byte request admission and nested MCP body leases
+- 2026-11-02T04:32:26.171Z - task-done: T26: R02 frontend event cache forms and revision consumers
+- 2026-11-02T04:32:26.518Z - task-attempt: T32: started (attempt 1) — Actual retained request bytes, nested MCP slot reuse and bounded body deadlines with real streaming RED probes
+- 2026-11-02T04:33:38.981Z - task-done: T29: R02 backup protection migration help and offline test gates
+- 2026-11-02T04:33:56.047Z - task-added: T33: R02 independently verify backup retention mutation boundaries
+- 2026-11-02T04:33:56.373Z - task-attempt: T33: started (attempt 1) — Scratch-only targeted mutation verification of owner-approved young-backup and newest-three retention boundaries
+- 2026-11-02T04:36:16.443Z - task-done: T33: R02 independently verify backup retention mutation boundaries
+- 2026-11-02T04:46:52.232Z - task-attempt: T30: started (attempt 1) — Prepare final independent code-verifier gate; execute after parent finishes committing the now-frozen integrated source
+- 2026-11-02T04:52:13.296Z - task-done: T32: R02 actual-byte request admission and nested MCP body leases
+- 2026-11-02T04:53:26.806Z - task-done: T28: R02 delivery recovery and mutation admission
+- 2026-11-02T04:56:31.565Z - task-added: T34: R02 migration boundary compatibility for queue tables without JSON body
+- 2026-11-02T04:56:31.800Z - task-added: T35: R02 extracted pinned-runtime MCP request compatibility
+- 2026-11-02T04:56:32.603Z - task-attempt: T34: started (attempt 1) — Final independent gate reproduced migration legacy boundary failure; preserve conservative unresolved-work handling for unrecognized queue schema
+- 2026-11-02T04:56:32.850Z - task-attempt: T35: started (attempt 1) — Final independent gate reproduced MCP500 TypeError in real extracted pinned Bun runtime after admission changes
+- 2026-11-02T04:57:28.309Z - task-attempt: T30: failed (attempt 2) — Independent gate b3d94fc4d found two concrete failures: bodyless queue migration boundary and actual HTTP MCP Request TypeError; delegated T34 and T35 before rerun
+- 2026-11-02T05:00:37.752Z - task-done: T34: R02 migration boundary compatibility for queue tables without JSON body
+- 2026-11-02T05:02:54.235Z - task-done: T35: R02 extracted pinned-runtime MCP request compatibility
+- 2026-11-02T05:03:29.696Z - task-attempt: T30: started (attempt 3) — Post-fix verification retry: bodyless/malformed migration and actual TCP MCP cleanup repaired; rerun failed strict/runtime checks and health, reuse unchanged UI/docs evidence
+- 2026-11-02T05:16:49.762Z - task-done: T30: R02 integrated verification mutation coverage and next review handoff
+- 2026-11-02T05:22:19.052Z - task-added: T36: Compare concurrent round2 implementations before owner integration decision
+- 2026-11-02T05:22:19.241Z - task-attempt: T36: started (attempt 1) — Owner explicitly requested differences and recommendations before integration; read-only comparison of bb65652ca vs8dcb765f0
+- 2026-11-02T05:31:14.129Z - task-done: T36: Compare concurrent round2 implementations before owner integration decision
+- 2026-11-02T05:39:15.662Z - task-added: T37: Integrate storage ops and contracts preserving both test suites
+- 2026-11-02T05:39:15.929Z - task-added: T38: Integrate delivery execution and admission policies preserving both histories
+- 2026-11-02T05:39:16.176Z - task-added: T39: Integrate UI MCP demo parity and regression coverage
+- 2026-11-02T05:39:16.421Z - task-added: T40: Verify integrated round2 candidate and publish draft PR update
+- 2026-11-02T05:39:27.648Z - task-attempt: T37: started (attempt 1) — Normal merge storage/ops/contracts integration with coherent archive polarity and retained regression cases
+- 2026-11-02T05:39:27.900Z - task-attempt: T38: started (attempt 1) — Normal merge delivery/admission/native integration retaining chosen safety invariants
+- 2026-11-02T05:39:28.134Z - task-attempt: T39: started (attempt 1) — Normal merge frontend/MCP integration with remote demo event parity and SDK assertions
+- 2026-11-02T05:51:47.941Z - task-done: T37: Integrate storage ops and contracts preserving both test suites
+- 2026-11-02T05:51:48.137Z - task-done: T38: Integrate delivery execution and admission policies preserving both histories
+- 2026-11-02T05:51:48.329Z - task-done: T39: Integrate UI MCP demo parity and regression coverage
+- 2026-11-02T05:51:48.714Z - task-attempt: T40: started (attempt 1) — Independent full integration gate on normal merge9a0f4641e before PR publication
+- 2026-11-02T05:58:35.236Z - task-attempt: T40: failed (attempt 2) — Combined strict gate reproduced real CI dependency-boundary defect: root HTTP contract imports UI i18next. Preserve regression by moving adapter assertion to UI suite; no NODE_PATH masking.
+- 2026-11-02T05:58:35.432Z - task-added: T41: Place served browser-adapter contract in UI dependency suite
+- 2026-11-02T05:58:35.620Z - task-attempt: T41: started (attempt 1) — Real CI and strict gate RED: i18next missing from root-only dependency install; retain adapter contract in correct UI suite
+- 2026-11-02T06:05:00.944Z - task-done: T41: Place served browser-adapter contract in UI dependency suite
+- 2026-11-02T06:05:31.152Z - task-attempt: T40: started (attempt 3) — Post-CI-boundary retry on committed merged source; verify root without UI dependencies plus strict selection and preserved UI assertion
+- 2026-11-02T06:10:45.562Z - task-done: T40: Verify integrated round2 candidate and publish draft PR update
+- 2026-11-02T06:17:00.146Z - task-added: T42: Make private-cache offline runtime proof portable in CI
+- 2026-11-02T06:17:00.345Z - task-attempt: T42: started (attempt 1) — Published integrated CI distribution job failed actual offline install: all pinned packages reported not cached despite prepared cache; investigate without weakening network isolation
+- 2026-11-02T06:45:16.681Z - task-done: T42: Make private-cache offline runtime proof portable in CI
+- 2026-11-02T06:54:54.930Z - task-added: T43: Fix CI duplicate proxy bypass keys without weakening offline proof
+- 2026-11-02T06:55:05.371Z - task-attempt: T43: started (attempt 1) — Reproduce CI TS2783 and fix proxy guard test initialization only.
+- 2026-11-02T06:57:51.791Z - task-done: T43: Fix CI duplicate proxy bypass keys without weakening offline proof
+- 2026-11-02T07:21:49.124Z - task-added: T44: Reproduce and fix controller-generation queue CI stale-version race
+- 2026-11-02T07:22:12.084Z - task-attempt: T44: started (attempt 1) — Investigate exact root-suite mixed queue controller claim stale-version; require deterministic RED and narrow fixture or product diagnosis.
+- 2026-11-02T07:31:57.702Z - task-done: T44: Reproduce and fix controller-generation queue CI stale-version race
+- 2026-11-02T12:54:35.662Z - task-attempt: T24: started (attempt 1) — R03 provenance reconciliation: attach existing R02 implementation and verification artifacts using current timestamps; this is an audit repair, not a retroactive claim of another R02 implementation run.
+- 2026-11-02T12:58:20.568Z - task-done: T24: Fix PR1113 review root causes A-N and triage all linked findings

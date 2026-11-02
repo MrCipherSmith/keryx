@@ -28,8 +28,8 @@ interface Rig {
   queue: () => QueuedMainQuestion[];
   /** A line typed in the shell, queued while busy. */
   queueLocal: (text: string) => void;
-  /** A line typed in the Telegram topic. */
-  telegram: (text: string) => void;
+  /** A line typed in the Telegram topic; `from` gives it its own update and sender. */
+  telegram: (text: string, from?: { updateId: number; fromId: number }) => void;
 }
 
 async function rig(): Promise<Rig> {
@@ -62,8 +62,8 @@ async function rig(): Promise<Rig> {
     project: () => "/proj",
     // The shell is always busy here: a Telegram line goes to the queue, as it does mid-turn.
     isBusy: () => true,
-    runLine: (text) => wiring.runTelegramLine(text),
-    enqueue: (text) => wiring.enqueueTelegramLine(text),
+    runLine: (text, updateId) => wiring.runTelegramLine(text, updateId),
+    enqueue: (text, updateId) => wiring.enqueueTelegramLine(text, updateId),
     notice: () => {},
     cancelTurn: () => {},
     recordOn: () => {},
@@ -108,7 +108,7 @@ async function rig(): Promise<Rig> {
     queueLocal: (text) => {
       queue.push({ id: `q-${(nextId += 1)}`, question: text, displayQuestion: text });
     },
-    telegram: (text) => clientOptions.onLine(text, META),
+    telegram: (text, from) => clientOptions.onLine(text, from === undefined ? META : { ...META, ...from }),
   };
 }
 
@@ -191,6 +191,58 @@ test("AC4 F-010: with no edit waiting, a submit is not taken for a re-queue", as
   const r = await rig();
   expect(r.wiring.requeuePendingEdit("new line", "new line")).toBe(false);
   expect(r.queue()).toEqual([]);
+});
+
+// ---- perimeter review logic-24 F-001: a queued Telegram line is paired by its id, not its text ----
+
+test("two identical Telegram lines: removing the second leaves the first paired with its own sender", async () => {
+  const r = await rig();
+  r.telegram("deploy staging", { updateId: 100, fromId: 11 });
+  r.telegram("deploy staging", { updateId: 101, fromId: 22 });
+  r.wiring.removeMainQueue(1);
+  const first = r.queue()[0];
+  expect(first).toBeDefined();
+  if (first !== undefined) r.wiring.runQueued(first);
+  r.wiring.turnStarted(TG_SOURCE);
+  expect(r.bridge.telegramTurnUserId).toBe(11);
+});
+
+test("a Telegram line run out of order (forced) is paired with its own sender", async () => {
+  const r = await rig();
+  r.telegram("first", { updateId: 100, fromId: 11 });
+  r.telegram("second", { updateId: 101, fromId: 22 });
+  const second = r.queue()[1];
+  expect(second).toBeDefined();
+  if (second !== undefined) r.wiring.runQueued(second);
+  r.wiring.turnStarted(TG_SOURCE);
+  expect(r.bridge.telegramTurnUserId).toBe(22);
+});
+
+test("an edited, re-queued and then removed Telegram line leaves no stale pairing behind", async () => {
+  const r = await rig();
+  r.telegram("deploy staging", { updateId: 100, fromId: 11 });
+  r.wiring.editMainQueue(0);
+  r.wiring.requeuePendingEdit("deploy staging --dry-run", "deploy staging --dry-run");
+  r.wiring.removeMainQueue(0);
+  r.telegram("status of tests", { updateId: 101, fromId: 22 });
+  const next = r.queue()[0];
+  expect(next?.question).toBe("status of tests");
+  if (next !== undefined) r.wiring.runQueued(next);
+  r.wiring.turnStarted(TG_SOURCE);
+  expect(r.bridge.telegramTurnUserId).toBe(22);
+});
+
+test("an edited Telegram line that is never re-queued does not take the next Telegram turn (regression-24 F-001)", async () => {
+  const r = await rig();
+  r.telegram("deploy staging", { updateId: 100, fromId: 11 });
+  r.wiring.editMainQueue(0);
+  // The operator submits the edit while idle (it runs as an operator line) or drops it: no re-queue.
+  r.telegram("status of tests", { updateId: 101, fromId: 22 });
+  const next = r.queue()[0];
+  expect(next?.question).toBe("status of tests");
+  if (next !== undefined) r.wiring.runQueued(next);
+  r.wiring.turnStarted(TG_SOURCE);
+  expect(r.bridge.telegramTurnUserId).toBe(22);
 });
 
 // ---- F-014: a session switch leaves no Telegram line behind --------------------------

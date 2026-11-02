@@ -36,7 +36,7 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
   "х": "x", "Х": "X",
   "у": "y", "У": "Y",
   "ѕ": "s", "Ѕ": "S",
-  "і": "o", "І": "O", // flow 355 AC3's own evasion: "Ignіre" (U+0456) for "Ignore".
+  "і": "i", "І": "I", // their visual twins; ALT_CONFUSABLES below folds them to "o" as well.
   "ј": "j", "Ј": "J",
   // Greek → Latin.
   "α": "a", "Α": "A",
@@ -51,6 +51,12 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
   "χ": "x", "Χ": "X",
 };
 
+// Flow 355 AC3's own evasion puts U+0456 in the "o" slot ("Ignіre" for
+// "Ignore"), so content holding U+0456/U+0406 is matched a second time with
+// them folded to "o"/"O". Both foldings keep the length, so offsets agree.
+const ALT_CONFUSABLES: Readonly<Record<string, string>> = { ...CONFUSABLES, "і": "o", "І": "O" };
+const HAS_ALT_CONFUSABLE = /[іІ]/;
+
 /**
  * Fold confusables, then NFKC — in THAT order, and only when NFKC does not
  * change the length. NFKC can expand a ligature (`"ﬁ"` → `"fi"`) or otherwise
@@ -61,11 +67,11 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
  * length. The confusables map above never changes length by construction, so
  * it always applies.
  */
-function foldForMatching(content: string): string {
+function foldForMatching(content: string, map: Readonly<Record<string, string>> = CONFUSABLES): string {
   let folded = "";
   for (let i = 0; i < content.length; i += 1) {
     const ch = content[i] as string;
-    folded += CONFUSABLES[ch] ?? ch;
+    folded += map[ch] ?? ch;
   }
   const nfkc = folded.normalize("NFKC");
   return nfkc.length === folded.length ? nfkc : folded;
@@ -100,7 +106,18 @@ const PATTERNS: Array<{ policyId: string; regex: RegExp; confidence: number }> =
 
 export function detectInjection(content: string): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
-  const folded = foldForMatching(content);
+  const seen = new Set<string>();
+  const views = [foldForMatching(content)];
+  if (HAS_ALT_CONFUSABLE.test(content)) {
+    views.push(foldForMatching(content, ALT_CONFUSABLES));
+  }
+  for (const folded of views) {
+    scanView(content, folded, matches, seen);
+  }
+  return matches;
+}
+
+function scanView(content: string, folded: string, matches: DetectorMatch[], seen: Set<string>): void {
   for (const pattern of PATTERNS) {
     pattern.regex.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -112,6 +129,14 @@ export function detectInjection(content: string): DetectorMatch[] {
       // text, which is what a human reviewing a finding needs to see.
       const start = Math.min(m.index, content.length);
       const end = Math.min(m.index + m[0].length, content.length);
+      const key = `${pattern.policyId}:${start}:${end}`;
+      if (seen.has(key)) {
+        if (m.index === pattern.regex.lastIndex) {
+          pattern.regex.lastIndex += 1;
+        }
+        continue;
+      }
+      seen.add(key);
       matches.push({
         category: "prompt-injection",
         policyId: pattern.policyId,
@@ -128,5 +153,4 @@ export function detectInjection(content: string): DetectorMatch[] {
       }
     }
   }
-  return matches;
 }

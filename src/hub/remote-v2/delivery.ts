@@ -1,4 +1,4 @@
-import {saveSession} from './guards';
+import {commandRunId,saveSession} from './guards';
 import type {RemoteRepository} from "./storage";
 import type {OperationRecord,RunRow,SessionRow,StoredCommand} from "./model";
 /** Start expiry never asserts that an unobserved local process stopped. */
@@ -19,7 +19,7 @@ export function expirePendingCommands(repo:RemoteRepository,now=Date.now()):{pro
   const row=repo.get<SessionRow>("remote_session",sessionId);
   if(row&&control&&!uncertain&&row.pendingClosure?.commandId===envelope.commandId){delete row.pendingClosure;row.closing=false;}
   if(row){if(row.pending?.commandId===envelope.commandId){if(uncertain&&!control)row.baselineVerified=false;else{delete row.pending;delete row.pendingController;}}saveSession(repo,row);}
-  const runId="target" in envelope?(envelope.target.scope==="run"?envelope.target.runId:undefined):envelope.runId;
+  const runId=commandRunId(envelope);
   changes.push({projectId:command.projectId,sessionId,...(runId?{runId}:{})});
   const run=runId&&repo.get<RunRow>("remote_run",runId);
   if(run&&run.commandId===envelope.commandId&&run.state==="dispatching"){run.state=uncertain?"unknown":"rejected";run.version++;run.notificationVersion=(run.notificationVersion??0)+1;run.observedAt=new Date(now).toISOString();if(!uncertain)run.terminalAt=run.observedAt;repo.put("remote_run",run.runId,run);}

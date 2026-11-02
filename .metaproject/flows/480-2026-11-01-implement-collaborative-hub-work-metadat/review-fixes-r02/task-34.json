@@ -1,0 +1,39 @@
+{
+  "task": {
+    "task_id": "task-34",
+    "task_name": "Final gate reproduces no such column body for legacy remote_queue fixture",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Final gate reproduces no such column body for legacy remote_queue fixture. Preserve conservative migration blocking for unrecognized queue schemas: bodyless table with rows remains unresolved, while known JSON terminal states do not block. First reproduce boundary RED, then minimal compatible code/test fix. Do not discard unknown queue state or weaken rehearsal safety. No unrelated refactor.",
+    "target_files": [
+      "deploy/team-hub/migrate-legacy.py",
+      "deploy/team-hub/release/migrate-legacy-boundaries.test.py"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

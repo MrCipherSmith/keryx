@@ -1,3 +1,7 @@
+import { createDeliveryService } from "./delivery-service";
+import { createWorkExecution } from "./work/execution";
+import { createMutationQueue, type MutationQueueLimits } from "./mutation-queue";
+import { createWorkHttp, validateWorkRepositories, type WorkRepositoryConfig } from "./work/http";
 import {remoteBudgets,remoteBudgetsFromEnv} from './remote-v2/budgets';
 import { createRemoteControl, type RemoteSocketData } from "./remote-v2";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -5,11 +9,11 @@ import { resolve } from "node:path";
 import type { HubApplication, HubConfig, Principal } from "./contracts";
 import { createAccessVerifier, readAccessRoles, validateAccessConfig, type AccessDependencies, type CloudflareAccessConfig, type VerifiedAccessIdentity } from "./cloudflare-access";
 import { fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
-import { deliverRevision } from "./git-delivery";
+import { deliverRevision, inspectGitPublication } from "./git-delivery";
 import { openHubStore } from "./store";
 import { webAssets } from "./web";
 import { authorizeAgentRequest, resolveNamedAgent, validateAgentCredentialsConfiguration } from "./agent-credentials";
-export type HubServerConfig = HubConfig & { publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
+export type HubServerConfig = HubConfig & { mutationQueue?: Partial<MutationQueueLimits>; workManagement?: { enabled: boolean; repositories?:WorkRepositoryConfig[]; observerFetch?:(request:Request)=>Promise<Response> }; publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
 const MAX_BODY = 32 * 1024 * 1024;
 function json(value: unknown, status = 200, headers?: HeadersInit): Response {
   const h = new Headers(headers); h.set("Content-Type", "application/json; charset=utf-8"); h.set("Cache-Control", "no-store");
@@ -24,16 +28,16 @@ function principalForToken(token: string, config: HubConfig): Principal | undefi
   if (sameToken(token, config.agentToken)) return { id: "agent:connector", kind: "agent", role: "agent" };
 }
 function credentialFor(actor: Principal, config: HubConfig): string { return actor.role === "operator" ? config.operatorToken : actor.role === "reviewer" ? config.reviewerToken ?? "" : config.agentToken; }
-async function readJson(request: Request): Promise<unknown> {
+async function readJson(request: Request, maxBytes = MAX_BODY): Promise<unknown> {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) fail(400, "json-required", "Expected application/json");
-  if (Number(request.headers.get("content-length") ?? "0") > MAX_BODY) fail(413, "quota-exceeded", "Request exceeds quota");
+  if (Number(request.headers.get("content-length") ?? "0") > maxBytes) fail(413, "quota-exceeded", "Request exceeds quota");
   if (!request.body) fail(400, "invalid-json", "JSON body required");
   const reader = request.body.getReader(); const parts: Uint8Array[] = []; let size = 0;
   try {
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY) { await reader.cancel(); fail(413, "quota-exceeded", "Request exceeds quota"); }
+      if (size > maxBytes) { await reader.cancel(); fail(413, "quota-exceeded", "Request exceeds quota"); }
       parts.push(value);
     }
   } finally { reader.releaseLock(); }
@@ -41,6 +45,7 @@ async function readJson(request: Request): Promise<unknown> {
 }
 function validateConfig(config: HubServerConfig) {
   remoteBudgets(config.remoteBudgets);
+  if(config.workManagement?.repositories!==undefined)validateWorkRepositories(config.workManagement.repositories);
   const tokens = [config.operatorToken, config.agentToken, ...(config.reviewerToken ? [config.reviewerToken] : [])];
   if (tokens.some((t) => typeof t !== "string" || t.length < 32) || new Set(tokens).size !== tokens.length) throw new Error("Hub requires distinct bootstrap tokens of at least 32 characters");
   if (!config.dataDir) throw new Error("Hub dataDir is required");
@@ -55,12 +60,11 @@ function validateConfig(config: HubServerConfig) {
 }
 export function createHubApplication(config: HubServerConfig): HubApplication {
   validateConfig(config); const store = openHubStore(config.dataDir,config.remoteBudgets); let closed = false;
+  store.deliveries.markInterrupted();
   const access = config.cloudflareAccess ? createAccessVerifier(config.cloudflareAccess, config.accessDependencies) : undefined;
   const now = config.accessDependencies?.now ?? Date.now;
-  let queue: Promise<unknown> = Promise.resolve();
-  function serialized<T>(operation: () => Promise<T>): Promise<T> {
-    const result = queue.then(operation); queue = result.catch(() => undefined); return result;
-  }
+  const mutationQueue = createMutationQueue(config.mutationQueue);
+  const serialized = mutationQueue.serialized;
   const cookieName = "keryx_hub_session";
   function sessionKey(request: Request): string | undefined {
     return request.headers.get("cookie")?.split(";").map((p) => p.trim()).find((p) => p.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
@@ -82,7 +86,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   }
   async function authenticate(request: Request): Promise<{ actor: Principal; cookie: boolean }> {
     if (request.headers.has("authorization")) return { actor: bearerIdentity(request), cookie: false };
-    const key = sessionKey(request); const session = key ? store.load().sessions[sha256(key)] : undefined;
+    const key = sessionKey(request); const session = key ? store.session(sha256(key)) : undefined;
     if (!session || session.expiresAt <= now()) fail(401, "unauthorized", "Authentication required");
     if (session.accessIdentity) {
       if (!access) fail(401, "unauthorized", "Authentication required");
@@ -101,11 +105,18 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     const secure = new URL(config.publicOrigin ?? request.url).protocol === "https:" ? "; Secure" : "";
     return `${cookieName}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
   }
-  const remote = createRemoteControl({ store, serialized, checkOrigin,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
+  const workEnabled = config.workManagement?.enabled === true;
+  const workRepositories = config.workManagement?.repositories ?? [];
+  const protectedValues = (request: Request) => [
+    config.operatorToken, config.agentToken, config.reviewerToken ?? '',
+    ...workRepositories.map(repository => repository.github?.token ?? ''),
+    request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '', sessionKey(request) ?? '',
+  ];
+  const remote = createRemoteControl({ store, managedExecution:createWorkExecution(store), serialized, checkOrigin,workManagementEnabled:workEnabled,...(config.observeRemoteTransport?{observeTransport:config.observeRemoteTransport}:{}),
     transportAllowed(request) { const origin = new URL(config.publicOrigin ?? request.url); return origin.protocol === "https:" || ["localhost", "127.0.0.1", "[::1]", "::1"].includes(origin.hostname); },
     async human(request) { const identity = await authenticate(request); if (!identity.cookie || identity.actor.kind !== "human") fail(403, "human-session-required", "Current human browser session required"); const key = sessionKey(request); if (!key) fail(401, "unauthorized", "Session required"); return { actor: identity.actor, sessionDigest: sha256(key) }; },
     authorityValid(auth, projectId, readOnly = false) {
-      const stored = store.load().sessions[auth.sessionDigest];
+      const stored = store.session(auth.sessionDigest);
       if (!stored || stored.expiresAt <= now() || stored.principal.id !== auth.actor.id) return false;
       const inScope = (principal: Principal) => projectId === undefined || !principal.projectIds || principal.projectIds.includes(projectId);
       if (stored.accessIdentity) {
@@ -116,9 +127,36 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
         && stored.credentialDigest === sha256(credentialFor(stored.principal, config));
     },
   });
+  const work = createWorkHttp({ store, enabled: workEnabled, repositories: workRepositories,
+    ...(config.workManagement?.observerFetch ? {observerFetch:config.workManagement.observerFetch} : {}),
+    protectedValues, authenticate, checkOrigin, serialized, now });
+  const deliveries = createDeliveryService({store,dataDir:config.dataDir,serialized,deliver:config.gitDelivery ?? deliverRevision,inspect:inspectGitPublication});
+  async function externalDelivery(request: Request, path: string[], body: unknown, key: string, digest: string): Promise<Response> {
+    const actor = (await authenticate(request)).actor;
+    const result = await deliveries.run({actor,projectId:path[1]!,body,key,digest,reauthorize:async () => (await authenticate(request)).actor});
+    return json(result.body,result.status,result.headers);
+  }
+  // Match the decoded route segments used by the dispatchers. A client cannot
+  // select this class with headers, including through a nested MCP request.
+  function publicBodyRoute(request: Request): boolean {
+    if (request.method !== "POST") return false;
+    const pathname = new URL(request.url).pathname;
+    try {
+      if (pathname.startsWith("/hub/v1/")) {
+        const path = pathname.slice("/hub/v1/".length).split("/").map(decodeURIComponent);
+        return path.length === 1 && path[0] === "session";
+      }
+      if (pathname.startsWith("/hub/v2/")) {
+        const path = pathname.slice("/hub/v2/".length).split("/").map(decodeURIComponent);
+        return path.length === 2 && path[0] === "machines" && path[1] === "enroll";
+      }
+    } catch { return false; }
+    return false;
+  }
   async function handle(request: Request): Promise<Response> {
     if (closed) fail(503, "closed", "Hub is closed");
     const url = new URL(request.url);
+    const workResponse = await work.handle(request); if (workResponse) return workResponse;
     const remoteResponse = await remote.handle(request); if (remoteResponse) return remoteResponse;
     if (url.pathname === "/mcp") {
       const actor = bearerIdentity(request);
@@ -157,7 +195,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
       if (bearer?.kind === "agent") fail(403, "human-required", "Browser sessions require human credentials");
       if (access && request.headers.has("cf-access-jwt-assertion")) fail(403, "local-recovery-only", "Token recovery is available only through the local SSH access path");
       const origin = request.headers.get("origin"); if (origin) checkOrigin(request);
-      const body = object(await readJson(request)); const token = text(body.token, "token"); const actor = principalForToken(token, config);
+      const body = object(await readJson(request,64*1024)); const token = text(body.token, "token"); const actor = principalForToken(token, config);
       if (!actor) fail(401, "unauthorized", "Invalid credentials");
       if (bearer && bearer.id !== actor.id) fail(403, "identity-conflict", "Browser credentials do not match the authenticated principal");
       if (actor.kind !== "human") fail(403, "human-required", "Browser sessions require a human token");
@@ -192,8 +230,10 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
       });
       fail(405, "method-not-allowed", "Unsupported method");
     }
+    if (path[0] === 'projects' && path[2] === 'delivery-jobs') deliveries.authorize(identity.actor,path[1]!);
     authorizeAgentRequest(identity.actor, path, request.method);
     if (request.method === "GET") {
+      if (path[0] === 'projects' && path[2] === 'delivery-jobs' && path.length <= 4) return json(path[3] ? deliveries.read(identity.actor,path[1]!,path[3]) : {jobs:deliveries.list(identity.actor,path[1]!)});
       const state = store.load();
       const projectIds = identity.actor.projectIds;
       if (projectIds !== undefined && path.length === 1 && path[0] === "projects") return json({ projects: state.projects.filter((p) => projectIds.includes(p.id)) });
@@ -214,6 +254,9 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
         if (typeof value === "string") evidenceBody[field] = value.replaceAll(incomingToken, "[REDACTED]");
       }
     }
+    if (path.length === 5 && path[0] === 'projects' && path[2] === 'delivery-jobs' && path[4] === 'archive') return json(await deliveries.archive({actor:identity.actor,projectId:path[1]!,jobId:path[3]!,body,key,digest:bodyDigest,reauthorize:async () => (await authenticate(request)).actor}));
+    if (path.length === 5 && path[0] === 'projects' && path[2] === 'delivery-jobs' && path[4] === 'reconcile') return json(await deliveries.reconcile({actor:identity.actor,projectId:path[1]!,jobId:path[3]!,body,key,digest:bodyDigest,reauthorize:async () => (await authenticate(request)).actor}));
+    if (path.length === 3 && path[2] === 'deliveries') return externalDelivery(request,path,body,key,bodyDigest);
     return serialized(async () => {
       const currentIdentity = await authenticate(request);
       authorizeAgentRequest(currentIdentity.actor, path, request.method);
@@ -226,24 +269,31 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   }
   const application: HubApplication = {
     async fetch(request: Request) {
-      try { return await handle(request); } catch (error) {
-        if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status);
+      try { return await mutationQueue.request(request, admittedRequest => handle(admittedRequest), publicBodyRoute(request) ? "public" : "protected"); } catch (error) {
+        if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status, error.status === 503 ? {"Retry-After":"1"} : undefined);
         console.error("Hub request failed", error instanceof Error ? error.name : "UnknownError");
         return json({ error: { code: "internal-error", message: "Hub request failed" } }, 500);
       }
     },
-    async upgrade(request, server) { try { return await remote.upgrade(request, server); } catch (error) { if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status); return json({ error: { code: "internal-error", message: "Hub upgrade failed" } }, 500); } },
+    async upgrade(request, server) { try { return await remote.upgrade(request, server); } catch (error) { if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status, error.status === 503 ? {"Retry-After":"1"} : undefined); return json({ error: { code: "internal-error", message: "Hub upgrade failed" } }, 500); } },
     websocket: remote.websocket,
     closeTransports() { remote.close(); },
     transportsClosed() { return remote.transportsClosed(); },
-    async settle() { await queue; },
-    close() { if (!closed) { closed = true; remote.close(); store.close(); } },
+    async settle() { await mutationQueue.settle(); await deliveries.settle(); await mutationQueue.settle(); },
+    close() { if (!closed) { closed = true; mutationQueue.close(); work.close(); remote.close(); store.close(); } },
   };
   return application;
 }
 export function loadHubConfig(env: Record<string, string | undefined> = process.env): HubServerConfig {
   const port = Number(env.KERYX_HUB_PORT ?? "8787"); if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("Invalid KERYX_HUB_PORT");
   const config: HubServerConfig = { dataDir: resolve(env.KERYX_HUB_DATA_DIR ?? ".keryx-hub"), operatorToken: env.KERYX_HUB_OPERATOR_TOKEN ?? "", agentToken: env.KERYX_HUB_AGENT_TOKEN ?? "", host: env.KERYX_HUB_HOST ?? "127.0.0.1", port, ...(env.KERYX_HUB_REVIEWER_TOKEN ? { reviewerToken: env.KERYX_HUB_REVIEWER_TOKEN } : {}), ...(env.KERYX_HUB_AGENT_CREDENTIALS_FILE !== undefined ? { agentCredentialsFile: env.KERYX_HUB_AGENT_CREDENTIALS_FILE ? resolve(env.KERYX_HUB_AGENT_CREDENTIALS_FILE) : "" } : {}), ...(env.KERYX_HUB_PUBLIC_ORIGIN ? { publicOrigin: env.KERYX_HUB_PUBLIC_ORIGIN } : {}) };
+  if (env.KERYX_HUB_WORK_ENABLED !== undefined && !["true", "false"].includes(env.KERYX_HUB_WORK_ENABLED)) throw new Error("Invalid KERYX_HUB_WORK_ENABLED; expected true or false");
+  config.workManagement = { enabled: env.KERYX_HUB_WORK_ENABLED === "true" };
+  if(env.KERYX_HUB_WORK_REPOSITORIES!==undefined){
+    if(Buffer.byteLength(env.KERYX_HUB_WORK_REPOSITORIES)>64*1024)throw new TypeError('Work repository registry exceeds quota');
+    let repositories:unknown;try{repositories=JSON.parse(env.KERYX_HUB_WORK_REPOSITORIES);}catch{throw new TypeError('Invalid work repository registry JSON');}
+    config.workManagement.repositories=validateWorkRepositories(repositories);
+  }
   const budgets=remoteBudgetsFromEnv(env);if(budgets)config.remoteBudgets=budgets;
   if (env.KERYX_HUB_ACCESS_ENABLED !== undefined && env.KERYX_HUB_ACCESS_ENABLED !== "true" && env.KERYX_HUB_ACCESS_ENABLED !== "false") throw new Error("Invalid KERYX_HUB_ACCESS_ENABLED; expected true or false");
   if (env.KERYX_HUB_ACCESS_ENABLED === "true") config.cloudflareAccess = { issuer: env.KERYX_HUB_ACCESS_ISSUER ?? "", audience: env.KERYX_HUB_ACCESS_AUDIENCE ?? "", rolesFile: env.KERYX_HUB_ACCESS_ROLES_FILE ?? "" };

@@ -6,9 +6,10 @@ import { LIMITS, canonicalDigest, parseMachineFrame, runCommandDigest, sessionCo
 import { fail } from "../domain";
 import type { RemoteRepository } from "./storage";
 import type { ApprovalRow, MachineRecord, OperationRecord, Projection, QueueRow, RunRow, SessionRow, StoredCommand } from "./model";
-import { control, projectionKey, saveSession } from "./guards";
+import { commandRunId, control, endRun, projectionKey, saveSession } from "./guards";
 import { redact } from "./results";
 import type { ConfirmationRow, CommandConfirmationRow } from "./config";
+type ReceiptPayload = FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"];
 export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, event: Control["SessionEvent"]): number {
   const row = repo.get<SessionRow>("remote_session", event.sessionId);
   if (!row || row.record.machineId !== m.machineId || row.record.projectId !== event.projectId || row.record.checkoutId !== event.checkoutId || !m.projectIds.includes(event.projectId)) fail(403, "scope-denied", "Session event ownership denied");
@@ -119,7 +120,14 @@ export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, eve
       if (source.item.kind === "message") request = { ...control("MessageSubmit", source.request), expectedSessionVersion: replacement.value.expectedSessionVersion, controller: replacement.value.controller, expectedConfigVersion: replacement.value.expectedConfigVersion, association: replacement.value.association };
       else if (source.item.kind === "config") request = { ...control("ConfigChange", source.request), expectedSessionVersion: replacement.value.expectedSessionVersion, controller: replacement.value.controller, expectedConfigVersion: replacement.value.expectedConfigVersion };
       else request = { ...control("CommandInvoke", source.request), expectedSessionVersion: replacement.value.expectedSessionVersion, controller: replacement.value.controller, expectedConfigVersion: replacement.value.expectedConfigVersion, association: replacement.value.association };
-    } else request = existing?.request ?? (item.kind === "message" ? control("MessageSubmit", operation.request) : item.kind === "config" ? control("ConfigChange", operation.request) : control("CommandInvoke", operation.request));
+    } else {
+      const edit = validateControl("QueueEdit", operation.request);
+      if (edit.ok) {
+        const source = repo.get<QueueRow>("remote_queue", edit.value.queueItemId);
+        if (!source || source.sessionId !== event.sessionId || source.projectId !== event.projectId || source.machineId !== m.machineId || source.item.kind !== "message" || item.kind !== "message" || item.position !== source.item.position || item.text !== edit.value.text || item.replacesOperationId !== source.item.operationId) fail(409,"stale-reference","Edited queue lineage differs from original owned item");
+        request = {...control("MessageSubmit",source.request),text:edit.value.text,controller:edit.value.controller,expectedSessionVersion:edit.value.expectedSessionVersion};
+      } else request = existing?.request ?? (item.kind === "message" ? control("MessageSubmit", operation.request) : item.kind === "config" ? control("ConfigChange", operation.request) : control("CommandInvoke", operation.request));
+    }
     if (item.kind === "message") request = { ...control("MessageSubmit", request), text: item.text ?? "" };
     const queued: QueueRow = { item, sessionId: event.sessionId, projectId: event.projectId, machineId: m.machineId, authority: { actor: { id: operation.actorId, kind: "human", role: "operator" }, sessionDigest: operation.sessionDigest }, controller: request.controller, request, payloadDigest: operation.payloadDigest, ...(existing?.admissionCommandId ? { admissionCommandId: existing.admissionCommandId } : {}), ...(existing&&existing.item.operationId===operation.id?{...(existing.admissionReceipt!==undefined?{admissionReceipt:existing.admissionReceipt}:{}),...(existing.retryAfter!==undefined?{retryAfter:existing.retryAfter,retryAfterSessionCursor:existing.retryAfterSessionCursor}:{})}:{}), ...("association" in request && request.association ? { association: request.association } : {}) };
     repo.put("remote_queue", item.queueItemId, queued, { sessionId: event.sessionId, projectId: event.projectId, machineId: m.machineId, seq: item.position }); row.record.queueVersion = event.queueVersion;
@@ -214,14 +222,14 @@ export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: Fr
  * release-resolved-run step: the human retries after that step instead of meeting session-busy. `not-applied` follows an attempted
  * application, and with recovery-required its effect is not known, so that fence stays.
  */
-function knownNonApplication(p: FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"]): boolean {
+function knownNonApplication(p: ReceiptPayload): boolean {
   return p.status === "rejected" || (p.status === "not-applied" && p.errorCode !== "recovery-required");
 }
 /**
  * A session command the machine rejected before starting it fails its operation with the machine's own code, as an expired delivery
  * does. A FIFO admission of a queued item is the exception: its refusal does not reject the still-queued logical operation.
  */
-function failRejectedDelivery(repo: RemoteRepository, command: StoredCommand, p: FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"]): void {
+function failRejectedDelivery(repo: RemoteRepository, command: StoredCommand, p: ReceiptPayload): void {
   if (p.status !== "rejected" || p.errorCode === null) return;
   if (repo.all<QueueRow>("remote_queue", { sessionId: p.sessionId }).some((queued) => queued.admissionCommandId === p.commandId)) return;
   const operation = repo.get<OperationRecord>("remote_operation", command.operationId);
@@ -234,14 +242,12 @@ function failRejectedDelivery(repo: RemoteRepository, command: StoredCommand, p:
  * here, frees its run capacity and fails its operation. A queued admission is ended by releaseQueuedAttempt first, so it is
  * past `dispatching` by now.
  */
-function endRefusedRun(repo: RemoteRepository, command: StoredCommand, p: FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"]): void {
+function endRefusedRun(repo: RemoteRepository, command: StoredCommand, p: ReceiptPayload): void {
   if (p.status !== "rejected") return;
-  const envelope = command.envelope;
-  const runId = "target" in envelope ? (envelope.target.scope === "run" ? envelope.target.runId : undefined) : envelope.runId;
+  const runId = commandRunId(command.envelope);
   const run = runId ? repo.get<RunRow>("remote_run", runId) : undefined;
-  if (!run || run.commandId !== envelope.commandId || run.state !== "dispatching") return;
-  run.state = "rejected"; run.version++; run.notificationVersion = (run.notificationVersion ?? 0) + 1; run.terminalAt ??= new Date().toISOString();
-  repo.put("remote_run", run.runId, run); repo.releaseRunCapacity(run.runId); command.capacityReleased = true;
+  if (!run || run.commandId !== command.envelope.commandId || run.state !== "dispatching") return;
+  endRun(repo, run, "rejected"); command.capacityReleased = true;
   failRejectedDelivery(repo, command, p);
 }
 export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, frame: FrameOf<"command-receipt"> | FrameOf<"session-command-receipt">,authorityValid?:(authority:StoredCommand["authority"],projectId:string)=>boolean): void {

@@ -1,7 +1,9 @@
 import { detectPii } from "./detect/pii";
 import { detectSecrets } from "./detect/secrets";
 import { detectExfil } from "./detect/exfil";
-import { applyRedaction, redactSensitiveText } from "./redact";
+import { detectEntropy } from "./detect/entropy";
+import { isEntropyBackendEnabled } from "./entropy-gate";
+import { applyRedaction } from "./redact";
 import { validateAgainstSchema, type JsonSchema } from "./schemas";
 import type { DetectorMatch } from "./types";
 
@@ -156,18 +158,24 @@ function isNumericText(value: string): boolean {
   return /^[+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value);
 }
 
-function redactString(
+// The one detector composition of the floor: every string and every number goes
+// through it, and every branch masks exactly the list it returns. It used to hand
+// the clean case to `redactSensitiveText` and mask the filtered case itself, and
+// only the former carried entropy, so a token only the entropy pass knows was
+// masked or not depending on its neighbours (review-logic-slice-36:F-001).
+function floorMatches(
   value: string,
   key: string | undefined,
-  exemptExfil?: ExfilExemption,
-): RedactedString {
+  exemptExfil: ExfilExemption | undefined,
+): DetectorMatch[] {
   const secretMatches = detectSecrets(value);
   const piiMatches = detectPii(value);
   const allExfilMatches = detectExfil(value);
   const exfilMatches = exemptExfil
     ? allExfilMatches.filter((match) => !exemptExfil(match))
     : allExfilMatches;
-  const exemptedCount = allExfilMatches.length - exfilMatches.length;
+  // Same gate `redactSensitiveText` honours, so the floor is never narrower than it.
+  const entropyMatches = isEntropyBackendEnabled() ? detectEntropy(value) : [];
   const contextualMatches: DetectorMatch[] =
     isSensitiveFieldKey(key) && value.length > 0 && secretMatches.length === 0
       ? [
@@ -184,36 +192,46 @@ function redactString(
           },
         ]
       : [];
-  const matches = isNumericContextKey(key) && isNumericText(value)
-    ? [
-        ...secretMatches,
-        ...contextualMatches,
-        ...piiMatches.filter((match) => match.policyId !== "pii.phone"),
-        ...exfilMatches,
-      ]
-    : [...secretMatches, ...contextualMatches, ...piiMatches, ...exfilMatches];
+  const pii = isNumericContextKey(key) && isNumericText(value)
+    ? piiMatches.filter((match) => match.policyId !== "pii.phone")
+    : piiMatches;
+  return [...secretMatches, ...contextualMatches, ...pii, ...exfilMatches, ...entropyMatches];
+}
 
+function redactString(
+  value: string,
+  key: string | undefined,
+  exemptExfil?: ExfilExemption,
+): RedactedString {
+  const matches = floorMatches(value, key, exemptExfil);
   if (matches.length === 0) {
     return { value, reasons: [] };
   }
-
-  // Keep the established deterministic text helper as the normal redaction
-  // path. The contextual numeric-ID exception needs the already-filtered
-  // spans, and so does an exfil exemption (GDCTX-2): `redactSensitiveText`
-  // re-runs the detectors from scratch and would put an exempted match right
-  // back, so any exemption forces the `applyRedaction(value, matches)` path,
-  // which masks exactly (and only) the already-filtered `matches` array.
-  const redacted = matches.length ===
-      secretMatches.length + piiMatches.length + exfilMatches.length &&
-    contextualMatches.length === 0 &&
-    exemptedCount === 0
-    ? redactSensitiveText(value)
-    : applyRedaction(value, matches);
-
+  // `applyRedaction` masks exactly the filtered list, so an exfil exemption
+  // (GDCTX-2) or the numeric-ID exception is never undone by a re-scan.
   return {
-    value: redacted,
+    value: applyRedaction(value, matches),
     reasons: matches.map((match) => match.policyId),
   };
+}
+
+// The major card networks start with 2-6, while a 13-digit integer starting with 1
+// is the millisecond-epoch form (2001-2033): refusing every Luhn-valid-by-chance
+// timestamp would refuse one payload in ten that carries one. The separator rule
+// in pii.ts uses the same 2-6 leading-digit gate (`CARD_EXTRA`).
+const CARD_LEADING_DIGIT = /^[2-6]/;
+
+// A number has no masked representation of its own type, so a recognised span in
+// one leaves the structure unrepresentable: the caller fails closed, exactly as
+// for a number under a credential key (review-backend-slice-36:F-003). A number is
+// always numeric text, so `pii.phone` never fires on digit length alone.
+function isSensitiveNumber(value: number, exemptExfil: ExfilExemption | undefined): boolean {
+  const text = String(value);
+  return floorMatches(text, undefined, exemptExfil).some(
+    (match) =>
+      match.policyId !== "pii.phone" &&
+      (match.policyId !== "pii.credit-card" || CARD_LEADING_DIGIT.test(match.value)),
+  );
 }
 
 // A property name is not a value: masking it would rename the member and break the
@@ -262,6 +280,9 @@ function sanitizeJsonValue(
           ? "sensitive-numeric-field"
           : "non-json-value",
       };
+    }
+    if (isSensitiveNumber(value, exemptExfil)) {
+      return { ok: false, reason: "sensitive-numeric-value" };
     }
     return { ok: true, value, reasons: [] };
   }
@@ -747,6 +768,11 @@ export function validateSerializedContentForTransport(
   try {
     value = JSON.parse(content);
   } catch {
+    return validateOutputForTransport({ value: content, format: "text", ...exemption });
+  }
+  // A bare number (a digit-only payload or delta chunk) is text that happens to
+  // parse: the text path masks a card in it, where a number could only be refused.
+  if (typeof value === "number") {
     return validateOutputForTransport({ value: content, format: "text", ...exemption });
   }
   const result = validateOutputForTransport({ value, format: "json", ...exemption });

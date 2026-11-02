@@ -1,0 +1,44 @@
+{
+  "task_id": "task-35",
+  "status": "DONE",
+  "files_modified": [
+    "src/hub/mutation-queue.ts",
+    "src/hub/mutation-queue-http.test.ts"
+  ],
+  "files_created": [],
+  "commits": [],
+  "cause": "Pinned Bun1.3.14 native incoming HTTP body reader.releaseLock() can throw TypeError after EOF and after a successful MCP action. The finally cleanup replaced the valid response with outer500. Disposable instrumented TCP+SDK reproduced exact mutation-queue.ts102 native release stack.",
+  "refuted_hypotheses": [
+    "Request constructor/body wrapper construction: real generic TCP POST succeeded; targeted omission of native release fixed SDK connect and listTools.",
+    "Cancel-after-EOF alone: avoiding cancellation on completed sources still reproduced the native releaseLock failure.",
+    "Moving releaseLock to EOF: also reproduced the native failure."
+  ],
+  "fix": "Request nonblocking source cancellation first. Tolerate cleanup-only TypeError from optional reader lock release only when cancellation was requested; unexpected cleanup error is deferred until after finally, preserving any original action error. Byte/slot leases always release in nested finally. No metering/deadline/auth/abort/nested admission behavior changed.",
+  "tests": [
+    {
+      "name": "real TCP MCP initialization and tool listing survive native incoming-body cleanup",
+      "runtime": "Bun1.3.14",
+      "red": "/tmp/pr1113-r02-runtime-tcp-red.log",
+      "green": "/tmp/pr1113-r02-runtime-tcp-green.log"
+    },
+    {
+      "name": "extracted allowlisted source installs its frozen runtime offline and serves managed work plus MCP from an isolated process",
+      "runtime": "Bun1.3.14 actual distribution/source archive, frozen privatecache offline install, loopback registry0requests",
+      "red": "/tmp/pr1113-r02-final-runtime-proof.log",
+      "green": "/tmp/pr1113-r02-runtime-extracted-green.log",
+      "result": "1PASS7assertions"
+    }
+  ],
+  "verification": {
+    "queue_subset": "Bun1.3.14:40PASS331assertions5files /tmp/pr1113-r02-runtime-queue-subset-green.log",
+    "types": "PASS /tmp/pr1113-r02-runtime-types.log",
+    "focused_eslint": "PASS /tmp/pr1113-r02-runtime-lint.log",
+    "diff_check": "PASS"
+  },
+  "notes": [
+    "No production instrumentation; sanitized stack only in disposable source fixture; no credentials/environment dumps.",
+    "Package integration proof already exercised actualTCP officialSDK so no package-test code modification needed.",
+    "No commits/push; parent integrates exact2paths.",
+    "Routing audit graph_used yes (predates concurrent source edits); wiki_used yes; ctx_used yes; raw_rg_used no."
+  ]
+}

@@ -114,6 +114,96 @@ function parseScalar(raw: string): string | boolean | number | undefined {
   return undefined;
 }
 
+/** Split on commas outside quotes and outside nested `[]` / `{}`. */
+function splitDepthAware(inner: string): string[] {
+  const parts: string[] = [];
+  let quoted = false;
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === '"' && inner[i - 1] !== "\\") quoted = !quoted;
+    if (quoted) continue;
+    if (ch === "[" || ch === "{") depth++;
+    if (ch === "]" || ch === "}") depth--;
+    if (ch === "," && depth === 0) {
+      parts.push(inner.slice(start, i));
+      start = i + 1;
+    }
+  }
+  const tail = inner.slice(start).trim();
+  if (tail !== "") parts.push(tail);
+  return parts;
+}
+
+/** A dotted key path of bare or quoted segments (`a."b c".d`), or undefined. */
+function parseKeyPath(text: string): string[] | undefined {
+  const segments: string[] = [];
+  let rest = text.trim();
+  for (;;) {
+    const m = /^(?:"((?:[^"\\]|\\.)*)"|([A-Za-z0-9_-]+))\s*/.exec(rest);
+    if (m === null) return undefined;
+    segments.push(m[1] !== undefined ? unescapeToml(m[1]) : (m[2] as string));
+    rest = rest.slice(m[0].length);
+    if (rest === "") return segments;
+    if (!rest.startsWith(".")) return undefined;
+    rest = rest.slice(1).trimStart();
+  }
+}
+
+/** Index of the `=` that ends the key in `key = value` (outside quotes), or -1. */
+function findKeyEquals(line: string): number {
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"' && line[i - 1] !== "\\") quoted = !quoted;
+    if (ch === "=" && !quoted) return i;
+  }
+  return -1;
+}
+
+/**
+ * Apply one `command` / `args` field to a server. Other fields are validated
+ * as a scalar, array or inline table and ignored. Returns an error or undefined.
+ */
+function applyField(server: RawServer, key: string, valueText: string): string | undefined {
+  const value = valueText.trim();
+  if (value.startsWith("[")) {
+    const closeAt = findUnquotedClose(value);
+    if (closeAt === -1 || value.slice(closeAt + 1).trim() !== "") return `value for "${key}" is not a single-line array`;
+    const parsed = parseStringArray(value.slice(1, closeAt));
+    if (parsed === undefined) return `value for "${key}" is not an array of strings this reader supports`;
+    if (key === "command") return '"command" must be a string, not an array';
+    if (key === "args") server.args = parsed;
+    return undefined;
+  }
+  if (value.startsWith("{")) {
+    if (key === "command" || key === "args") return `"${key}" must not be a table`;
+    return value.endsWith("}") ? undefined : `value for "${key}" is an inline table this reader cannot read`;
+  }
+  const scalar = parseScalar(value);
+  if (scalar === undefined) return `value for "${key}" is a TOML form this reader does not support (${value})`;
+  if (key === "command") {
+    if (typeof scalar !== "string") return '"command" must be a string';
+    server.command = scalar;
+  }
+  return undefined;
+}
+
+/** Fields of one inline table (`{ command = "npx", args = [...] }`) onto `server`. */
+function applyInlineServer(server: RawServer, table: string): string | undefined {
+  const text = table.trim();
+  if (!text.startsWith("{") || !text.endsWith("}")) return `"${server.name}" is not an inline table this reader understands`;
+  for (const entry of splitDepthAware(text.slice(1, -1))) {
+    const eq = findKeyEquals(entry);
+    const path = eq === -1 ? undefined : parseKeyPath(entry.slice(0, eq));
+    if (path === undefined || path.length !== 1) return `cannot read "${entry.trim()}" as a key/value in "${server.name}"`;
+    const error = applyField(server, path[0] as string, entry.slice(eq + 1));
+    if (error !== undefined) return error;
+  }
+  return undefined;
+}
+
 const HEADER = /^\[mcp_servers\.(?:"((?:[^"\\]|\\.)*)"|([A-Za-z0-9_-]+))\]$/;
 
 /**
@@ -128,10 +218,22 @@ export function parseCodexToml(text: string): CodexTomlResult {
   const servers = new Map<string, RawServer>();
   const order: string[] = [];
   let current: RawServer | undefined;
+  // Before the first table header, keys sit at the document root, where TOML
+  // lets `mcp_servers.<name>.command = ...` and `mcp_servers = { ... }` define servers.
+  let atRoot = true;
+  const serverFor = (name: string, line: number): RawServer => {
+    const existing = servers.get(name);
+    if (existing) return existing;
+    const created: RawServer = { name, line };
+    servers.set(name, created);
+    order.push(name);
+    return created;
+  };
 
   // Multi-line array accumulation state, for `key = [` with no closing
   // `]` on the same line.
   let pendingKey: string | undefined;
+  let pendingServer: RawServer | undefined;
   let pendingBuffer = "";
   let pendingStartLine = 0;
 
@@ -158,15 +260,16 @@ export function parseCodexToml(text: string): CodexTomlResult {
           error: `line ${pendingStartLine}: value for "${pendingKey}" is not an array of strings this reader supports`,
         };
       }
-      if (current && pendingKey === "command") {
+      if (pendingServer && pendingKey === "command") {
         // An array assigned to `command` is nonsense, but not ours to
         // interpret further than "unsupported": refuse rather than guess.
         return { ok: false, error: `line ${pendingStartLine}: "command" must be a string, not an array` };
       }
-      if (current && pendingKey === "args") {
-        current.args = parsedArray;
+      if (pendingServer && pendingKey === "args") {
+        pendingServer.args = parsedArray;
       }
       pendingKey = undefined;
+      pendingServer = undefined;
       pendingBuffer = "";
       continue;
     }
@@ -175,6 +278,7 @@ export function parseCodexToml(text: string): CodexTomlResult {
     if (trimmed === "") continue;
 
     if (trimmed.startsWith("[")) {
+      atRoot = false;
       const header = HEADER.exec(trimmed);
       if (header !== null) {
         const name = header[1] ?? header[2];
@@ -211,22 +315,59 @@ export function parseCodexToml(text: string): CodexTomlResult {
       continue;
     }
 
+    let target = current;
+    let kv: { key: string; valueText: string } | undefined;
     if (current === undefined) {
-      // A key outside any `[mcp_servers.*]` table. Not ours.
-      continue;
+      if (!atRoot) continue; // A key under a foreign table. Not ours.
+      const eq = findKeyEquals(trimmed);
+      const path = eq === -1 ? undefined : parseKeyPath(trimmed.slice(0, eq));
+      if (path === undefined) {
+        if (/^"?mcp_servers"?\s*[.=]/.test(trimmed)) {
+          return { ok: false, error: `line ${lineNo}: cannot read "${trimmed}" as a TOML key/value` };
+        }
+        continue;
+      }
+      if (path[0] !== "mcp_servers") continue; // A root key that is not ours.
+      const valueText = trimmed.slice(eq + 1).trim();
+      if (path.length === 1) {
+        // `mcp_servers = { name = { command = ... }, ... }`
+        if (!valueText.startsWith("{") || !valueText.endsWith("}")) {
+          return { ok: false, error: `line ${lineNo}: "mcp_servers" is not an inline table this reader understands` };
+        }
+        for (const entry of splitDepthAware(valueText.slice(1, -1))) {
+          const innerEq = findKeyEquals(entry);
+          const innerPath = innerEq === -1 ? undefined : parseKeyPath(entry.slice(0, innerEq));
+          if (innerPath === undefined || innerPath.length !== 1) {
+            return { ok: false, error: `line ${lineNo}: cannot read "${entry.trim()}" as an mcp_servers entry` };
+          }
+          const error = applyInlineServer(serverFor(innerPath[0] as string, lineNo), entry.slice(innerEq + 1));
+          if (error !== undefined) return { ok: false, error: `line ${lineNo}: ${error}` };
+        }
+        continue;
+      }
+      const server = serverFor(path[1] as string, lineNo);
+      if (path.length === 2) {
+        // `mcp_servers.name = { command = ... }`
+        const error = applyInlineServer(server, valueText);
+        if (error !== undefined) return { ok: false, error: `line ${lineNo}: ${error}` };
+        continue;
+      }
+      if (path.length > 3) continue; // e.g. `mcp_servers.x.env.KEY = "v"`: not command/args.
+      target = server;
+      kv = { key: path[2] as string, valueText };
+    } else {
+      const pair = /^([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*(.+)$/.exec(trimmed);
+      if (pair === null) {
+        return { ok: false, error: `line ${lineNo}: cannot read "${trimmed}" as a TOML key/value` };
+      }
+      kv = { key: pair[1] as string, valueText: (pair[2] as string).trim() };
     }
-
-    const pair = /^([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*(.+)$/.exec(trimmed);
-    if (pair === null) {
-      return { ok: false, error: `line ${lineNo}: cannot read "${trimmed}" as a TOML key/value` };
-    }
-    const key = pair[1] as string;
-    const valueText = (pair[2] as string).trim();
-
+    const { key, valueText } = kv;
     if (valueText.startsWith("[")) {
       const closeAt = findUnquotedClose(valueText);
       if (closeAt === -1) {
         pendingKey = key;
+        pendingServer = target;
         pendingBuffer = `${valueText.slice(1)}\n`;
         pendingStartLine = lineNo;
         continue;
@@ -239,7 +380,7 @@ export function parseCodexToml(text: string): CodexTomlResult {
       if (parsedArray === undefined) {
         return { ok: false, error: `line ${lineNo}: value for "${key}" is not an array of strings this reader supports` };
       }
-      if (key === "args") current.args = parsedArray;
+      if (key === "args" && target) target.args = parsedArray;
       continue;
     }
 
@@ -251,7 +392,7 @@ export function parseCodexToml(text: string): CodexTomlResult {
       if (typeof scalar !== "string") {
         return { ok: false, error: `line ${lineNo}: "command" must be a string` };
       }
-      current.command = scalar;
+      if (target) target.command = scalar;
     }
     // Other keys (e.g. `env`, `startup_timeout_ms`) are read and validated
     // as a scalar, then ignored: audit-harness only needs `command`/`args`.

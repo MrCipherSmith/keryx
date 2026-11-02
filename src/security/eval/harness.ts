@@ -37,6 +37,8 @@ export interface EvalReport {
   corpora: string[];
   totalCases: number;
   detectors: DetectorEval[];
+  /** Requested corpora that could not be evaluated; each one fails the gate. */
+  invalidCorpora: Array<{ corpus: string; reason: string }>;
 }
 
 export interface DetectFn {
@@ -55,42 +57,52 @@ export interface GateResult {
 
 export const DEFAULT_CORPORA = ["injection", "exfil", "structured-pii", "secret"];
 
+// A corpus that cannot be evaluated. It is a gate failure, never an empty
+// corpus: a cases.json broken by a conflict marker or a renamed directory used to
+// load as [] and drop its detectors out of the gate (review-backend-slice-35:F-002).
+export class EvalCorpusError extends Error {}
+
 // Load the labeled cases for a corpus directory. Accepts `{ cases: [...] }` or a
-// bare array; malformed entries are dropped; cases are sorted by id for a
-// deterministic report regardless of file order.
+// bare array; cases are sorted by id for a deterministic report regardless of
+// file order. Throws `EvalCorpusError` when the file is missing, does not parse,
+// has neither shape, holds no cases or holds a malformed entry.
 export async function loadEvalCases(dir: string): Promise<EvalCase[]> {
   const file = path.join(dir, "cases.json");
   if (!(await pathExists(file))) {
-    return [];
+    throw new EvalCorpusError("cases.json is missing");
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(await readFile(file, "utf8"));
   } catch {
-    return [];
+    throw new EvalCorpusError("cases.json is not valid JSON");
   }
-  const raw = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as { cases?: unknown })?.cases)
-      ? (parsed as { cases: unknown[] }).cases
-      : [];
+  const raw: unknown = Array.isArray(parsed) ? parsed : (parsed as { cases?: unknown } | null)?.cases;
+  if (!Array.isArray(raw)) {
+    throw new EvalCorpusError("cases.json is neither a cases array nor { cases: [...] }");
+  }
+  if (raw.length === 0) {
+    throw new EvalCorpusError("cases.json has no cases");
+  }
   const cases: EvalCase[] = [];
-  for (const entry of raw) {
-    if (!entry || typeof entry !== "object") continue;
-    const e = entry as Record<string, unknown>;
+  for (const [index, entry] of raw.entries()) {
+    const e = (entry !== null && typeof entry === "object" ? entry : {}) as Record<string, unknown>;
     if (
-      typeof e.id === "string" &&
-      typeof e.input === "string" &&
-      typeof e.detector === "string" &&
-      (e.expected === "positive" || e.expected === "negative")
+      typeof e.id !== "string" ||
+      typeof e.input !== "string" ||
+      typeof e.detector !== "string" ||
+      (e.expected !== "positive" && e.expected !== "negative")
     ) {
-      cases.push({
-        id: e.id,
-        input: e.input,
-        detector: e.detector,
-        expected: e.expected,
-      });
+      throw new EvalCorpusError(
+        `cases.json entry ${index} is malformed (needs string id/input/detector and expected positive|negative)`,
+      );
     }
+    cases.push({
+      id: e.id,
+      input: e.input,
+      detector: e.detector,
+      expected: e.expected,
+    });
   }
   return cases.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
@@ -123,12 +135,17 @@ export async function runEval(opts: {
     { truePos: number; falseNeg: number; falsePos: number; trueNeg: number }
   >();
   const corporaSeen: string[] = [];
+  const invalidCorpora: EvalReport["invalidCorpora"] = [];
   let totalCases = 0;
 
   for (const corpus of opts.corpora) {
     const dir = path.join(opts.fixturesRoot, corpus);
-    const cases = await loadEvalCases(dir);
-    if (cases.length === 0) {
+    let cases: EvalCase[];
+    try {
+      cases = await loadEvalCases(dir);
+    } catch (error) {
+      if (!(error instanceof EvalCorpusError)) throw error;
+      invalidCorpora.push({ corpus, reason: error.message });
       continue;
     }
     corporaSeen.push(corpus);
@@ -167,7 +184,8 @@ export async function runEval(opts: {
       };
     });
 
-  return { corpora: corporaSeen.sort(), totalCases, detectors };
+  invalidCorpora.sort((a, b) => (a.corpus < b.corpus ? -1 : a.corpus > b.corpus ? 1 : 0));
+  return { corpora: corporaSeen.sort(), totalCases, detectors, invalidCorpora };
 }
 
 // Load the committed threshold table.
@@ -194,9 +212,12 @@ export async function loadThresholds(file: string): Promise<Thresholds> {
 
 // Gate the report against thresholds. A detector with no committed threshold
 // defaults to 0 (any false negative fails), so an unlisted detector cannot
-// silently regress.
+// silently regress — and a requested corpus that could not be evaluated fails,
+// so its detectors cannot leave the gate by disappearing from the report.
 export function gateEval(report: EvalReport, thresholds: Thresholds): GateResult {
-  const reasons: string[] = [];
+  const reasons: string[] = report.invalidCorpora.map(
+    ({ corpus, reason }) => `corpus "${corpus}": not evaluated, ${reason}`,
+  );
   for (const d of report.detectors) {
     const max = thresholds[d.detector]?.maxFnRate ?? 0;
     if (d.fnRate > max + 1e-9) {
@@ -215,6 +236,9 @@ export function formatEvalReport(report: EvalReport, thresholds: Thresholds = {}
   lines.push("security eval — false-negative rate by detector");
   lines.push(`corpora: ${report.corpora.join(", ") || "(none)"}`);
   lines.push(`cases: ${report.totalCases}`);
+  for (const { corpus, reason } of report.invalidCorpora) {
+    lines.push(`not evaluated: ${corpus} (${reason})`);
+  }
   lines.push("");
   lines.push("detector                     pos   TP   FN   FP   fnRate  ceiling  status");
   for (const d of report.detectors) {

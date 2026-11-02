@@ -1,0 +1,53 @@
+export const sessionRunCopy = {
+  ru: {
+    currentRun: "Текущий запуск",
+    noActiveRun: "Сейчас нет активного запуска.",
+    noActiveRunHint:
+      "Результаты завершённых запусков доступны в истории запусков.",
+    openRuns: "История запусков",
+    openRun: "Открыть запуск",
+    runState: "Состояние запуска",
+    flow: "Flow текущего запуска",
+    adHoc: "Работа без Flow",
+    noResult: "У текущего запуска пока нет опубликованного результата.",
+    changes: "Результат запуска",
+    resultRevision: "Ревизия результата",
+    viewChanges: "Посмотреть изменения",
+    checks: "Отчёт о проверках",
+    noChecks:
+      "Запуск ещё не опубликовал квитанцию результата и ссылки на проверки.",
+    selfReported:
+      "Проверки сообщены исполнителем. Они не заменяют приёмку результата человеком.",
+    flowEvidence: "Evidence проекта",
+    runChecks: "Проверки запуска",
+    receipt: "Квитанция результата",
+    evidence: "Evidence",
+    viewFlow: "Открыть Flow",
+    incomplete: "Результат неполный.",
+  },
+  en: {
+    currentRun: "Current run",
+    noActiveRun: "There is no active run right now.",
+    noActiveRunHint: "Results of completed runs are available in run history.",
+    openRuns: "Run history",
+    openRun: "Open run",
+    runState: "Run state",
+    flow: "Current run Flow",
+    adHoc: "Ad-hoc work",
+    noResult: "The current run has not published a result yet.",
+    changes: "Run result",
+    resultRevision: "Result revision",
+    viewChanges: "View changes",
+    checks: "Check report",
+    noChecks:
+      "The run has not published a result receipt and check references yet.",
+    selfReported:
+      "Checks are reported by the executor. They do not replace human acceptance.",
+    flowEvidence: "Project Evidence",
+    runChecks: "Run checks",
+    receipt: "Result receipt",
+    evidence: "Evidence",
+    viewFlow: "Open Flow",
+    incomplete: "The result is partial.",
+  },
+} as const;

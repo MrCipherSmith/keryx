@@ -113,6 +113,40 @@ describe("a command that outlasts its limit (L-6)", () => {
     expect(h.client().reported.at(-1)?.[1]).toBe("failed");
   });
 
+  // Perimeter review (highload-20 F-001): the limit stops the topic waiting, not the line. The next command
+  // shares the shell's output capture, so it must not start until the first one has really ended.
+  it("the next command does not start while one past its limit is still running", async () => {
+    const slow = gate();
+    const started: string[] = [];
+    let firstSettled = false;
+    const h = commandHarness({
+      commandLimitMs: 15,
+      runCommand: async (line) => {
+        started.push(line);
+        if (line === "/compact") {
+          const outcome = await slow.done;
+          firstSettled = true;
+          return outcome;
+        }
+        return { output: `ran ${line}`, ok: true };
+      },
+    });
+    await h.bridge.enable();
+    await h.say("/compact");
+    await waitFor(() => h.client().replies.some((reply) => reply.includes("Stopped waiting")), "the limit notice");
+    await h.say("/status");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(started).toEqual(["/compact"]);
+    slow.open({ output: "compacted", ok: true });
+    await h.bridge.idle();
+    expect(firstSettled).toBe(true);
+    expect(started).toEqual(["/compact", "/status"]);
+    const late = h.client().replies.findIndex((reply) => reply.includes("/compact finished after the time limit"));
+    const status = h.client().replies.findIndex((reply) => reply.includes("ran /status"));
+    expect(late).toBeGreaterThanOrEqual(0);
+    expect(status).toBeGreaterThan(late);
+  });
+
   it("a command that does finish in time gets no second message", async () => {
     const h = commandHarness({ commandLimitMs: 500 });
     await h.bridge.enable();

@@ -108,8 +108,15 @@ export interface InteractiveTool {
 /** Read-file output cap so a tool result stays modest. */
 const MAX_READ_BYTES = 20_000;
 
+interface ReadPart {
+  text: string;
+  nextLine?: number;
+  pastEnd: boolean;
+  lines: number;
+}
+
 /**
- * Read up to `cap` characters of `file` starting at 1-based `startLine`.
+ * Read up to `cap` characters of `stream` starting at 1-based `startLine`.
  *
  * `read_file` used to return the first 20 KB of a file and nothing else — no
  * offset, no range — so content past the head was unreachable however the model
@@ -121,11 +128,11 @@ const MAX_READ_BYTES = 20_000;
  * cut at the last whole line so the continuation starts cleanly.
  */
 async function readFromLine(
-  file: ReturnType<typeof Bun.file>,
+  stream: ReadableStream<Uint8Array>,
   startLine: number,
   cap: number,
-): Promise<{ text: string; nextLine?: number; pastEnd: boolean; lines: number }> {
-  const reader = file.stream().getReader();
+): Promise<ReadPart> {
+  const reader = stream.getReader();
   const decoder = new TextDecoder();
   let line = 1;
   let out = "";
@@ -175,6 +182,51 @@ async function readFromLine(
   const body = lastBreak >= 0 ? kept.slice(0, lastBreak + 1) : kept;
   const shownLines = (body.match(/\n/g) ?? []).length;
   return { text: body, nextLine: startLine + shownLines, pastEnd: false, lines: line };
+}
+
+/**
+ * The read_file result for a part that is not past the end: the text, plus the
+ * paging notice when the source continues. `source` names what was read in the
+ * notice ("a 4096-byte file", "the file").
+ */
+function readPartResult(part: ReadPart, startLine: number, source: string): InteractiveToolResult {
+  if (part.nextLine === undefined) {
+    return { output: part.text, isError: false };
+  }
+  // Lines, not a byte count: "read 19,990 of 100,000 bytes" at start_line 1500
+  // compared characters from that line with the whole file's bytes, and told
+  // the model something false about how much was left.
+  const notice =
+    part.nextLine > startLine
+      ? `truncated: showed lines ${startLine}–${part.nextLine - 1} of ${source}; continue with start_line: ${part.nextLine}`
+      : `truncated: line ${startLine} alone is longer than ${MAX_READ_BYTES} characters, in ${source} — search_code finds text inside it`;
+  return { output: `${part.text}\n…(${notice})`, isError: false };
+}
+
+/**
+ * read_file's `start_line` (default 1), or `undefined` when it is not a positive
+ * integer — the value the local tool refuses. Exported so a client-routed
+ * read_file (ACP) applies the same rule before it asks the client.
+ */
+export function readFileStartLine(input: Readonly<Record<string, unknown>>): number | undefined {
+  const startLine = input.start_line ?? 1;
+  return typeof startLine === "number" && Number.isInteger(startLine) && startLine >= 1 ? startLine : undefined;
+}
+
+/**
+ * Shape text another party read for read_file (ACP's `fs/read_text_file`, which
+ * already starts at `startLine`) under the local tool's contract: at most
+ * MAX_READ_BYTES characters, cut on a line boundary, with the same continuation
+ * notice. Returns `undefined` for an empty reply past line 1 — that is past the
+ * end, and only the caller's local read can say how long the file is.
+ */
+export async function pageReadText(text: string, startLine: number): Promise<InteractiveToolResult | undefined> {
+  if (text.length === 0 && startLine > 1) {
+    return undefined;
+  }
+  const part = await readFromLine(new Blob([text]).stream(), 1, MAX_READ_BYTES);
+  const shifted = part.nextLine === undefined ? part : { ...part, nextLine: part.nextLine + startLine - 1 };
+  return readPartResult(shifted, startLine, "the file");
 }
 
 /**
@@ -329,8 +381,8 @@ export function builtinReadOnlyTools(
       if (requested.length === 0) {
         return { output: "read_file requires a non-empty 'path'", isError: true };
       }
-      const startLine = input.start_line ?? 1;
-      if (typeof startLine !== "number" || !Number.isInteger(startLine) || startLine < 1) {
+      const startLine = readFileStartLine(input);
+      if (startLine === undefined) {
         return { output: "read_file: start_line must be a positive integer", isError: true };
       }
       // Flow 387 T14: the project root first; failing that, ONLY the live session's
@@ -355,24 +407,14 @@ export function builtinReadOnlyTools(
         // parallel, and reading a 256 MiB file to return 20 KB of it cost 256 MiB
         // of RSS once (stress findings T1/L3). The stream is cancelled as soon as
         // the cap is filled.
-        const part = await readFromLine(file, startLine, MAX_READ_BYTES);
+        const part = await readFromLine(file.stream(), startLine, MAX_READ_BYTES);
         if (part.pastEnd) {
           return {
             output: `read_file: start_line ${startLine} is past the end of the file (it has ${part.lines} lines)`,
             isError: true,
           };
         }
-        if (part.nextLine === undefined) {
-          return { output: part.text, isError: false };
-        }
-        // Lines, not a byte count: "read 19,990 of 100,000 bytes" at start_line 1500
-        // compared characters from that line with the whole file's bytes, and told
-        // the model something false about how much was left.
-        const notice =
-          part.nextLine > startLine
-            ? `truncated: showed lines ${startLine}–${part.nextLine - 1} of a ${size}-byte file; continue with start_line: ${part.nextLine}`
-            : `truncated: line ${startLine} alone is longer than ${MAX_READ_BYTES} characters, in a ${size}-byte file — search_code finds text inside it`;
-        return { output: `${part.text}\n…(${notice})`, isError: false };
+        return readPartResult(part, startLine, `a ${size}-byte file`);
       } catch (cause) {
         return {
           output: `read_file failed: ${cause instanceof Error ? cause.message : String(cause)}`,

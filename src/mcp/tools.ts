@@ -30,7 +30,7 @@ import {
   memoryPropose,
   MEMORY_TYPE_VALUES,
 } from "../memory/service";
-import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, proposeFromSession, createLocalCollaborationService, normalizeCollaborationResult, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, proposeFromSession, createLocalCollaborationService, normalizeCollaborationResult, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, isWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -117,6 +117,8 @@ function pageLimitParam(params: Record<string, unknown>, key: string): number | 
  * `kind`/`text` rejection style just below.
  */
 const MAX_EXTERNAL_SLATE_SEEDS = 200;
+/** Cap on `slate.open`'s self-reported `anchors.touched` list. */
+const MAX_EXTERNAL_SLATE_TOUCHED = 1000;
 
 // Load the code graph, degrading to an empty graph when storage is absent (the
 // graph tools then return empty results rather than throwing).
@@ -147,7 +149,7 @@ async function filterMemorySearchHitsByHarness(
   }
   const visibility = await memoryHarnessVisibilityByPath(cwd, harnessIdentity);
   const filteredHits = hits.filter((hit) => {
-    const path = typeof hit.path === "string" ? hit.path : null;
+    const hitPath = typeof hit.path === "string" ? hit.path : null;
     // R2-I1 (evaluated, not applied): a `path` present in the map is decided
     // by the map (the normal case — the map is built from every on-disk
     // entry, R1-F4/R1-F14). A `path` absent from the map is `?? true`
@@ -159,7 +161,7 @@ async function filterMemorySearchHitsByHarness(
     // every such fixture hit with no real on-disk store to match against,
     // breaking that intentional decoupled-dispatch test for no production
     // security gain — see `memoryHarnessVisibilityByPath`'s doc comment.
-    return path === null || (visibility.get(path) ?? true);
+    return hitPath === null || (visibility.get(hitPath) ?? true);
   });
   return { ...result, hits: filteredHits };
 }
@@ -224,12 +226,26 @@ export interface HandleSlateOpenParams {
 export async function handleSlateOpen(params: HandleSlateOpenParams): Promise<ExternalSlate> {
   const { cwd, externalSessionId, resolveWorkspace } = params;
   if (externalSessionId.length === 0) throw new Error("slate.open requires a non-empty 'externalSessionId'");
+  // The bound id later becomes a path segment of the wrap-up evidence dir
+  // (`.metaproject/workspaces/<id>/machine-evidence`), written before any
+  // workspace lookup on the close path — so it must name a real workspace this
+  // actor can see, checked here before it is stored.
+  if (params.workspaceId !== undefined) {
+    if (!isWorkspaceId(params.workspaceId)) {
+      throw new Error(`slate.open: 'workspaceId' ${JSON.stringify(params.workspaceId)} is not a workspace id`);
+    }
+    const found = await lookupWorkspace(sacWorkspaceService(cwd), params.workspaceId);
+    if (found.outcome !== "workspace") {
+      throw new Error(`slate.open: 'workspaceId' ${JSON.stringify(params.workspaceId)} cannot be bound: ${SAC_WORKSPACE_LOOKUP_CODE[found.outcome]}`);
+    }
+  }
   await reclaimStaleExternalSlates(cwd);
   // AC-35: idempotent per id — a second `slate.open` for an id that already
   // has a live external slate returns it completely unmodified, never a
-  // second file, never an error, and never re-resolves a workspace.
+  // second file, never an error, and never re-resolves a workspace. A closed
+  // record is not live: the id gets a fresh slate below.
   const existing = await readExternalSlate(cwd, externalSessionId);
-  if (existing) return existing;
+  if (existing && existing.closedAt === undefined) return existing;
   const rawAnchors = (params.anchors && typeof params.anchors === "object" ? params.anchors : {}) as {
     root?: unknown;
     touched?: unknown;
@@ -243,6 +259,14 @@ export async function handleSlateOpen(params: HandleSlateOpenParams): Promise<Ex
     ...(Array.isArray(rawAnchors.touched) ? { touched: rawAnchors.touched.filter((t): t is string => typeof t === "string") } : {}),
     ...(typeof rawAnchors.note === "string" ? { note: rawAnchors.note } : {}),
   };
+  // inputSchema is advisory over MCP, so the anchors are bounded here: the
+  // record is re-read on every slate.* call and `note` feeds a model prompt.
+  if (anchors.root.length > SEED_TEXT_MAX_LENGTH || (anchors.note?.length ?? 0) > SEED_TEXT_MAX_LENGTH) {
+    throw new Error(`slate.open: 'anchors.root' and 'anchors.note' are limited to ${SEED_TEXT_MAX_LENGTH} characters`);
+  }
+  if (anchors.touched && (anchors.touched.length > MAX_EXTERNAL_SLATE_TOUCHED || anchors.touched.some((entry) => entry.length > SEED_TEXT_MAX_LENGTH))) {
+    throw new Error(`slate.open: 'anchors.touched' is limited to ${MAX_EXTERNAL_SLATE_TOUCHED} entries of ${SEED_TEXT_MAX_LENGTH} characters`);
+  }
   let workspaceId = params.workspaceId;
   if (workspaceId === undefined) {
     // SLATE-16: an explicit `workspaceId` param always wins (checked above,
@@ -268,21 +292,29 @@ export async function handleSlateOpen(params: HandleSlateOpenParams): Promise<Ex
     const resolver = resolveWorkspace ?? resolveOrCreateWorkspace;
     const topicHint = anchors.note ?? (anchors.root.length > 0 ? anchors.root : externalSessionId);
     try {
-      const resolved = await resolver({ cwd, topicHint });
-      if (resolved.ok) workspaceId = resolved.workspaceId;
+      const resolved = await resolver({ cwd, topicHint: topicHint.slice(0, 2000) });
+      // Same path-segment rule as an explicit id; a malformed one stays unbound.
+      if (resolved.ok && isWorkspaceId(resolved.workspaceId)) workspaceId = resolved.workspaceId;
     } catch {
       // Fail-open for `slate.open` itself, fail-closed for the bind: never
       // block opening this hand's own slate over a resolver failure —
       // `workspaceId` simply stays unset, identical to an `ok: false` result.
     }
   }
-  return writeExternalSlate(cwd, externalSessionId, () => ({
-    externalSessionId,
-    ...(workspaceId ? { workspaceId } : {}),
-    anchors,
-    seeds: [],
-    lastWriteAt: new Date().toISOString(),
-  }));
+  // The existence check above ran outside the lock and the resolver may have
+  // taken seconds, so re-check under the lock: a live slate another open
+  // committed meanwhile wins and is returned unchanged, Seeds included.
+  return writeExternalSlate(cwd, externalSessionId, (prev) =>
+    prev && prev.closedAt === undefined
+      ? prev
+      : {
+          externalSessionId,
+          ...(workspaceId ? { workspaceId } : {}),
+          anchors,
+          seeds: [],
+          lastWriteAt: new Date().toISOString(),
+        },
+  );
 }
 
 export function buildToolRegistry(): ToolEntry[] {
@@ -332,6 +364,7 @@ export function buildToolRegistry(): ToolEntry[] {
         const sessionRef = stringParam(params, "sessionId") ?? "";
         const note = stringParam(params, "note");
         const proposalRevision = stringParam(params, "proposalRevision") ?? "1";
+        if (!isSlateSeedKind(kind)) throw new Error(`sac.propose: unrecognized 'kind' "${kind}"`);
         // Same guarded use case as `keryx workspace propose` and the agent's
         // `workspace_propose` tool, including the note guard.
         const proposed = await proposeFromSession({ cwd, workspaceId, kind, sessionRef, note, proposalRevision });
@@ -950,6 +983,11 @@ export function buildToolRegistry(): ToolEntry[] {
           throw new Error(`memory.propose: unknown type "${type}". Supported: ${MEMORY_TYPE_VALUES.join(", ")}`);
         }
         const details = stringParam(params, "details") ?? "";
+        // A non-array would otherwise be dropped and the entry written visible
+        // to every harness — the widest scope, the opposite of what was asked.
+        if (params.target_harnesses !== undefined && !Array.isArray(params.target_harnesses)) {
+          throw new Error("memory.propose: target_harnesses must be an array of harness ids");
+        }
         const rawTargets = Array.isArray(params.target_harnesses) ? params.target_harnesses : undefined;
         if (rawTargets !== undefined) {
           for (const value of rawTargets) {

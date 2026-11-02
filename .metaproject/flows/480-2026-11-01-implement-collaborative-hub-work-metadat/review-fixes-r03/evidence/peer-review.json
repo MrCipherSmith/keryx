@@ -1,0 +1,33 @@
+{
+  "status": "DONE",
+  "scope": "Focused peer review of uncommitted fixes against 7e7179a8",
+  "findings": [],
+  "reviewed_files": [
+    "src/hub/delivery-service.ts",
+    "src/hub/mutation-queue.ts",
+    "src/hub/server.ts",
+    "src/hub/work/storage.ts",
+    "src/hub/work/http.ts",
+    "src/hub/work/validation.ts",
+    "src/hub/work/openapi.ts",
+    "src/hub/admission-regression.test.ts",
+    "src/hub/delivery-queue.test.ts",
+    "src/hub/work/storage.incidents.test.ts",
+    "apps/hub-web/src/features/context.tsx",
+    "apps/hub-web/src/features/revisions-query.tsx",
+    "apps/hub-web/src/features/managed-work/updates.tsx",
+    "apps/hub-web/tests/work-live-updates.case.tsx"
+  ],
+  "mutant": {
+    "id": "w1-events-inflight-wake",
+    "disposition": "equivalent",
+    "caller_enumeration": [
+      "initial invocation: running is initially false",
+      "hidden-visibility timer: scheduled only after the running guard has passed and before running becomes true",
+      "completion timer: scheduled in finally after running=false",
+      "refresh listener: sets requested=true and invokes poll only when !running"
+    ],
+    "reason": "No caller reaches the running guard with running=true; refresh during flight already sets requested and finally schedules an immediate poll. The new receipt wake test exercises that real behavior."
+  },
+  "verification": "Read-only review; tests and network not run. Graph is advisory and predates concurrent changes."
+}

@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -90,6 +90,32 @@ describe("sac.propose / sac.review over MCP", () => {
 
     const written = await readFile(path.join(cwd, ".metaproject", "memory", "task-notes", `sac-${proposed.id}.md`), "utf8");
     expect(written).toContain("MCP propose worked end-to-end.");
+  });
+
+  test("a note carrying a secret never reaches the sidecar verbatim — same guard as the CLI and workspace_propose", async () => {
+    const workspaceId = await createWorkspace("mcp sac secret note");
+    const session = realSession("Secret note session");
+    const secret = `AKIA${"A".repeat(16)}`;
+
+    // The guard may refuse (nothing written) or redact (sidecar holds a mask);
+    // either way the raw secret must not be on disk afterwards.
+    await tool("sac.propose")
+      .invoke(cwd, { workspaceId, kind: "memory-entry", sessionId: session.summary.id, note: `aws_key = ${secret}` }, { transport: "stdio" })
+      .catch(() => undefined);
+
+    const proposalsDir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals");
+    const landed = await readdir(proposalsDir).catch(() => [] as string[]);
+    for (const entry of landed) {
+      expect(await readFile(path.join(proposalsDir, entry), "utf8")).not.toContain(secret);
+    }
+  });
+
+  test("an unknown kind is rejected before any proposal is created", async () => {
+    const workspaceId = await createWorkspace("mcp sac bad kind");
+    const session = realSession("Bad kind session");
+    await expect(
+      tool("sac.propose").invoke(cwd, { workspaceId, kind: "../escape", sessionId: session.summary.id }, { transport: "stdio" }),
+    ).rejects.toThrow(/unrecognized 'kind'/);
   });
 });
 

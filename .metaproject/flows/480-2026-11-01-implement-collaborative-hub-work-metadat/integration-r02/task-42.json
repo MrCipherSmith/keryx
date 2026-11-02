@@ -1,0 +1,42 @@
+{
+  "task": {
+    "task_id": "task-42",
+    "task_name": "Portable fail-closed private-cache runtime proof",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "CI distribution job125124613180 on publishedaf2e67acc fails extracted offline install: @modelcontextprotocol/sdk and all pinnedpackages notincache despite prior explicit prep. Investigate exact log/runtime/cache registry metadata/version first; flags/layout are hypotheses. Preserve explicit network prep only, default tests no registry dependency, completeprivatefrozenpins, URL/git refusal, fail-closed offline install and actual zero-network proof. Do not restore hostglobalcache dependence, silentlyskipintegration, remove assertions or allow externalregistry duringproof. Reproduce both relevant Bunversions or exactLinuxCI wherepossible, then minimal portable fix. No source changes outside scripts/helper/CI/test/docs ownership, no commit/push.",
+    "target_files": [
+      "scripts/package-team-hub.test.ts",
+      "scripts/hub-runtime-cache.test-support.ts",
+      "scripts/prepare-team-hub-runtime-cache.ts",
+      ".github/workflows/ci.yml",
+      "docs/docs/team-hub-deployment.md"
+    ],
+    "acceptance_criteria": [
+      "All owned conflicts resolved with chosen coherent contract and valuable tests from both sides preserved.",
+      "Newly combined behavior is covered by meaningful green focused regressions; report discarded duplicate/obsolete assertions explicitly.",
+      "No source modifications outside ownership, no Git index/commit/push or production."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx",
+    "branch": "feat-hub-1113-r02-integration"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 1
+  }
+}

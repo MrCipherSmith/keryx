@@ -1,0 +1,146 @@
+{
+  "task_id": "task-1",
+  "status": "success",
+  "files_modified": [
+    "src/hub/delivery-service.ts",
+    "src/hub/delivery-queue.test.ts"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "test_command": "bun test src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts",
+  "test_result": "29 pass, 0 fail, 196 assertions",
+  "lint_result": "delegated to parent full gates",
+  "type_check_result": "delegated to parent full gates",
+  "per_id": {
+    "R03-L6-001": "fixed, HTTP role and reauthorization tests pass",
+    "review-testing-practices-w5:F-002": "killed w2-settle-event-loop",
+    "review-testing-practices-w2:W2-002": "killed w2-guard-20",
+    "review-testing-practices-w2:W2-003": "killed w2-guard-25",
+    "review-testing-practices-w2:W2-004": "killed w2-additional-guard-02",
+    "review-testing-practices-w2:W2-006": "killed w2-supplement-05",
+    "review-testing-practices-w2:W2-008": "killed w2-supplement-active-list-order",
+    "review-testing-practices-w2:W2-009": "killed w2-supplement-version-increment"
+  },
+  "mutations": [
+    {
+      "id": "w2-settle-event-loop",
+      "exit": 1,
+      "command": [
+        "bun",
+        "test",
+        "src/hub/delivery-queue.test.ts",
+        "--test-name-pattern",
+        "settle waits for an external"
+      ],
+      "log": ".metaproject/jobs/pr1113-r03-fixes/worker-results/delivery-mutation/w2-settle-event-loop.log",
+      "result": "killed",
+      "failure_lines": [
+        "error: expect(received).toBe(expected)",
+        "(fail) settle waits for an external Git delivery to persist its result before shutdown [92.62ms]"
+      ]
+    },
+    {
+      "id": "w2-guard-20",
+      "exit": 1,
+      "command": [
+        "bun",
+        "test",
+        "src/hub/delivery-queue.test.ts",
+        "--test-name-pattern",
+        "at most two independent"
+      ],
+      "log": ".metaproject/jobs/pr1113-r03-fixes/worker-results/delivery-mutation/w2-guard-20.log",
+      "result": "killed",
+      "failure_lines": [
+        "error: expect(received).toMatchObject(expected)",
+        "(fail) at most two independent publication inspections may run concurrently [49.48ms]"
+      ]
+    },
+    {
+      "id": "w2-guard-25",
+      "exit": 1,
+      "command": [
+        "bun",
+        "test",
+        "src/hub/delivery-queue.test.ts",
+        "--test-name-pattern",
+        "operator archives completed"
+      ],
+      "log": ".metaproject/jobs/pr1113-r03-fixes/worker-results/delivery-mutation/w2-guard-25.log",
+      "result": "killed",
+      "failure_lines": [
+        "error: expect(received).toBe(expected)",
+        "(fail) operator archives completed jobs at the audit cap without losing exact reads replay or external facts [136.44ms]"
+      ]
+    },
+    {
+      "id": "w2-additional-guard-02",
+      "exit": 1,
+      "command": [
+        "bun",
+        "test",
+        "src/hub/git-delivery.test.ts",
+        "--test-name-pattern",
+        "inspection refuses a managed branch"
+      ],
+      "log": ".metaproject/jobs/pr1113-r03-fixes/worker-results/delivery-mutation/w2-additional-guard-02.log",
+      "result": "killed",
+      "failure_lines": [
+        "error: expect(received).toMatchObject(expected)",
+        "(fail) inspection refuses a managed branch that changes between remote observation and fetch [614.65ms]"
+      ]
+    },
+    {
+      "id": "w2-supplement-05",
+      "exit": 1,
+      "command": [
+        "bun",
+        "test",
+        "src/hub/delivery-queue.test.ts",
+        "--test-name-pattern",
+        "external Git delivery never"
+      ],
+      "log": ".metaproject/jobs/pr1113-r03-fixes/worker-results/delivery-mutation/w2-supplement-05.log",
+      "result": "killed",
+      "failure_lines": [
+        "error: expect(received).toBe(expected)",
+        "(fail) external Git delivery never holds the global mutation queue and same-key retry never starts it twice [40.43ms]"
+      ]
+    },
+    {
+      "id": "w2-supplement-active-list-order",
+      "exit": 1,
+      "command": [
+        "bun",
+        "test",
+        "src/hub/delivery-queue.test.ts",
+        "--test-name-pattern",
+        "delivery list retains old active"
+      ],
+      "log": ".metaproject/jobs/pr1113-r03-fixes/worker-results/delivery-mutation/w2-supplement-active-list-order.log",
+      "result": "killed",
+      "failure_lines": [
+        "error: expect(received).toMatchObject(expected)",
+        "(fail) delivery list retains old active jobs ahead of more than fifty completed jobs [42.98ms]"
+      ]
+    },
+    {
+      "id": "w2-supplement-version-increment",
+      "exit": 1,
+      "command": [
+        "bun",
+        "test",
+        "src/hub/delivery-queue.test.ts",
+        "--test-name-pattern",
+        "reconciliation advances the exact"
+      ],
+      "log": ".metaproject/jobs/pr1113-r03-fixes/worker-results/delivery-mutation/w2-supplement-version-increment.log",
+      "result": "killed",
+      "failure_lines": [
+        "error: expect(received).toBe(expected)",
+        "(fail) reconciliation advances the exact job version and rejects stale archive CAS [43.36ms]"
+      ]
+    }
+  ]
+}
