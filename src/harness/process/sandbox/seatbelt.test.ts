@@ -76,6 +76,33 @@ describe("buildSeatbeltProfile", () => {
   });
 });
 
+describe("buildSeatbeltProfile: host IPC and git control files (review-security-code-w5 F-001/F-002)", () => {
+  test("LaunchServices mach services are denied, and open/osascript cannot be exec'd", () => {
+    const sb = buildSeatbeltProfile(workspaceWrite, []);
+    expect(sb).toContain('(deny mach-lookup (global-name-prefix "com.apple.coreservices") (global-name-prefix "com.apple.lsd"))');
+    expect(sb).toContain('(deny process-exec (literal "/usr/bin/open") (literal "/usr/bin/osascript"))');
+  });
+
+  test("the IPC deny applies in read-only mode too", () => {
+    const sb = buildSeatbeltProfile({ ...workspaceWrite, mode: "read-only", writableRoots: [] }, []);
+    expect(sb).toContain("(deny mach-lookup");
+  });
+
+  test("git hooks/config are re-denied AFTER the root allow (last match wins), and the git dir by name", () => {
+    const sb = buildSeatbeltProfile(workspaceWrite, ["/work/repo/.git/config", "/work/repo/.git/hooks"]);
+    const allow = sb.indexOf('(allow file-write* (subpath "/work/repo"))');
+    for (const g of ["/work/repo/.git/config", "/work/repo/.git/hooks"]) {
+      const deny = sb.indexOf(`(deny file-write* (subpath "${g}"))`);
+      expect(deny).toBeGreaterThan(allow);
+    }
+    expect(sb).toContain('(deny file-write* (literal "/work/repo/.git"))');
+  });
+
+  test("no git control paths, no git deny lines", () => {
+    expect(buildSeatbeltProfile(workspaceWrite, [])).not.toContain(".git");
+  });
+});
+
 describe("wrapSeatbelt", () => {
   test("wraps under sandbox-exec -p <profile> <cmd> [args]", () => {
     const wrapped = wrapSeatbelt(command, workspaceWrite);

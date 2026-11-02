@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
-import { BWRAP_PROGRAM, buildBwrapArgs, inspectMaskTarget, wrapBwrap } from "./bwrap";
+import { BWRAP_PROGRAM, buildBwrapArgs, hostBwrapOptions, inspectMaskTarget, wrapBwrap } from "./bwrap";
 import type { MaskTargetKind } from "./bwrap";
 import type { SandboxProfile } from "./profile";
 import type { ContainedCommand } from "../executor";
@@ -103,6 +103,86 @@ describe("buildBwrapArgs", () => {
     // "Can't mkdir …: Read-only file system" because / is bound read-only.
     const args = buildBwrapArgs(workspaceWrite, () => "missing");
     expect(args).not.toContain("/home/u/.ssh");
+  });
+});
+
+// review-security-code-w5:F-001 / F-002 — host IPC and repository control files.
+const noHost = { gitProtected: [], ipcDirs: [] };
+
+describe("buildBwrapArgs: host IPC services are unreachable (F-001)", () => {
+  test("/run, /var/run and a runtime dir outside /run are hidden behind an empty tmpfs", () => {
+    const args = buildBwrapArgs(workspaceWrite, asDir, { gitProtected: [], ipcDirs: ["/run", "/var/run", "/xdg"] });
+    expect(hasPair(args, "--tmpfs", "/run")).toBe(true);
+    expect(hasPair(args, "--tmpfs", "/var/run")).toBe(true);
+    expect(hasPair(args, "--tmpfs", "/xdg")).toBe(true);
+  });
+
+  test("the hide comes after the root bind and before the writable binds, so a session tmp under /run still re-binds", () => {
+    const args = buildBwrapArgs({ ...workspaceWrite, writableRoots: ["/run/user/1000/s"] }, asDir, {
+      gitProtected: [],
+      ipcDirs: ["/run"],
+    });
+    const hide = args.indexOf("/run");
+    expect(args[hide - 1]).toBe("--tmpfs");
+    expect(args.indexOf("--ro-bind")).toBeLessThan(hide);
+    expect(hide).toBeLessThan(args.indexOf("--bind"));
+  });
+
+  test("the allowed half: nothing is hidden when the host has no such dir, and the root bind is untouched", () => {
+    const args = buildBwrapArgs(workspaceWrite, asDir, noHost);
+    expect(hasPair(args, "--tmpfs", "/run")).toBe(false);
+    expect(hasPair(args, "--bind", "/work/repo", "/work/repo")).toBe(true);
+  });
+
+  test("network on binds the resolv.conf target back read-only after hiding /run", () => {
+    const args = buildBwrapArgs({ ...workspaceWrite, network: "on" }, asDir, {
+      gitProtected: [],
+      ipcDirs: ["/run"],
+      resolvConf: "/run/systemd/resolve/stub-resolv.conf",
+    });
+    const hide = args.indexOf("/run");
+    const bind = args.indexOf("/run/systemd/resolve/stub-resolv.conf");
+    expect(args[bind - 1]).toBe("--ro-bind");
+    expect(bind).toBeGreaterThan(hide);
+  });
+
+  test("hostBwrapOptions: XDG_RUNTIME_DIR outside /run is hidden, with no duplicates", () => {
+    const dir = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "keryx-xdg-")));
+    try {
+      const opts = hostBwrapOptions(workspaceWrite, { XDG_RUNTIME_DIR: dir });
+      expect(opts.ipcDirs).toContain(dir);
+      expect(new Set(opts.ipcDirs).size).toBe(opts.ipcDirs.length);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("buildBwrapArgs: the git control files stay read-only inside the writable root (F-002)", () => {
+  test("hooks and config are re-bound read-only AFTER the RW root bind", () => {
+    const guarded = ["/work/repo/.git/config", "/work/repo/.git/hooks"];
+    const args = buildBwrapArgs(workspaceWrite, asDir, { gitProtected: guarded, ipcDirs: [] });
+    const rw = args.indexOf("--bind");
+    for (const g of guarded) {
+      expect(hasPair(args, "--ro-bind", g, g)).toBe(true);
+      expect(args.indexOf(g)).toBeGreaterThan(rw);
+    }
+  });
+
+  test("a real repo on disk resolves to its control files through hostBwrapOptions", () => {
+    const root = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "keryx-gitprot-")));
+    try {
+      mkdirSync(nodePath.join(root, ".git", "hooks"), { recursive: true });
+      writeFileSync(nodePath.join(root, ".git", "config"), "[core]\n");
+      const profile = { ...workspaceWrite, writableRoots: [root] };
+      const args = buildBwrapArgs(profile, asDir, hostBwrapOptions(profile, {}));
+      const hooks = nodePath.join(root, ".git", "hooks");
+      const config = nodePath.join(root, ".git", "config");
+      expect(hasPair(args, "--ro-bind", hooks, hooks)).toBe(true);
+      expect(hasPair(args, "--ro-bind", config, config)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

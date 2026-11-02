@@ -8,6 +8,12 @@
 //   --bind <root> <root> re-bind each writable root (cwd + session tmp) RW
 //   --tmpfs <secret-dir> mask each secret DIRECTORY with an empty tmpfs (deny-read)
 //   --ro-bind /dev/null <secret-file>  mask each secret FILE as empty
+//   --tmpfs /run         host IPC services (D-Bus, systemd user manager, docker.sock)
+//                        are unix sockets under /run; --unshare-net does not isolate
+//                        them and a read-only mount does not refuse connect(), so
+//                        the directory is hidden (also /var/run and XDG_RUNTIME_DIR)
+//   --ro-bind <git ctl>  <cwd>/.git/hooks + config stay read-only inside the
+//                        writable root: the host runs them on its next git command
 //   --unshare-net        no network namespace ⇒ network OFF (when profile off)
 //   --dev /dev --proc /proc  minimal device + proc for tool compatibility
 //   --unshare-pid        own PID namespace ⇒ the host process table is neither
@@ -20,8 +26,10 @@
 // validated by the flag-gated live smoke (T7). `danger-full-access` never
 // reaches this module — the wrap dispatcher skips containment for it.
 
-import { statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
+import path from "node:path";
 import type { ContainedCommand } from "../executor";
+import { resolveGitProtectedPaths } from "./git-protect";
 import type { SandboxProfile } from "./profile";
 
 /** Default launcher program name (resolved via PATH; detect.ts confirms it). */
@@ -45,14 +53,66 @@ export function inspectMaskTarget(target: string): MaskTargetKind {
   }
 }
 
+/** Host-dependent inputs of {@link buildBwrapArgs}, injectable so tests stay off the real filesystem. */
+export interface BwrapHostOptions {
+  /** Read-only paths inside the writable roots (git hooks/config), see git-protect.ts. */
+  gitProtected: readonly string[];
+  /** Host directories hidden behind an empty tmpfs: the IPC socket homes. */
+  ipcDirs: readonly string[];
+  /** Real target of /etc/resolv.conf to bind back read-only (network on only), when it lives in a hidden dir. */
+  resolvConf?: string;
+}
+
+function isRealDir(p: string): boolean {
+  try {
+    return statSync(p).isDirectory() && realpathSync(p) === path.resolve(p);
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve {@link BwrapHostOptions} from the real host. `env` supplies XDG_RUNTIME_DIR. */
+export function hostBwrapOptions(
+  profile: SandboxProfile,
+  env: Record<string, string | undefined> = process.env,
+): BwrapHostOptions {
+  // /run and (when it is a real directory, not the usual symlink to /run)
+  // /var/run hold the host's service sockets. XDG_RUNTIME_DIR is hidden too in
+  // case it lives outside /run.
+  const ipcDirs = ["/run", "/var/run"].filter(isRealDir);
+  const runtimeDir = env["XDG_RUNTIME_DIR"];
+  if (runtimeDir !== undefined && runtimeDir.length > 0 && isRealDir(runtimeDir)) {
+    const real = realpathSync(runtimeDir);
+    if (!ipcDirs.some((d) => real === d || real.startsWith(`${d}${path.sep}`))) ipcDirs.push(real);
+  }
+  const options: BwrapHostOptions = {
+    gitProtected: resolveGitProtectedPaths(profile.writableRoots),
+    ipcDirs,
+  };
+  if (profile.network === "on") {
+    // /etc/resolv.conf is often a symlink into /run (systemd-resolved's stub);
+    // with /run hidden it would dangle. Bind the FILE back, never the directory.
+    try {
+      const resolv = realpathSync("/etc/resolv.conf");
+      const hidden = ipcDirs.some((d) => resolv.startsWith(`${d}${path.sep}`));
+      if (hidden && existsSync(resolv) && !statSync(resolv).isDirectory()) options.resolvConf = resolv;
+    } catch {
+      // no resolv.conf: nothing to bind back
+    }
+  }
+  return options;
+}
+
 /**
  * Build the `bwrap` argument list (everything up to and including `--`, before
- * the wrapped command). Deterministic given the profile and the mask-target
- * classification (injectable so unit tests stay off the real filesystem).
+ * the wrapped command). Deterministic given the profile, the mask-target
+ * classification and the host options (both injectable so unit tests stay off
+ * the real filesystem).
  */
 export function buildBwrapArgs(
   profile: SandboxProfile,
   inspect: (target: string) => MaskTargetKind = inspectMaskTarget,
+  host: BwrapHostOptions = hostBwrapOptions(profile),
 ): string[] {
   const args: string[] = [
     "--ro-bind",
@@ -67,9 +127,26 @@ export function buildBwrapArgs(
     "/tmp",
   ];
 
+  // Hide the host IPC socket homes before anything is bound back, so a writable
+  // root that lives under one of them (a session tmp in $XDG_RUNTIME_DIR) still
+  // re-binds on top of the empty tmpfs.
+  for (const dir of host.ipcDirs) {
+    args.push("--tmpfs", dir);
+  }
+  if (host.resolvConf !== undefined) {
+    args.push("--ro-bind", host.resolvConf, host.resolvConf);
+  }
+
   // Re-bind writable roots RW (order after --ro-bind / and --tmpfs /tmp wins).
   for (const root of profile.writableRoots) {
     args.push("--bind", root, root);
+  }
+
+  // Re-protect the repository control files the host would later execute. After
+  // the RW binds so the read-only mount wins; existing paths only (bwrap cannot
+  // create a mount point on the read-only root).
+  for (const guarded of host.gitProtected) {
+    args.push("--ro-bind", guarded, guarded);
   }
 
   // Mask secrets so reads see nothing (deny-read). A directory gets an empty
@@ -112,9 +189,10 @@ export function wrapBwrap(
   profile: SandboxProfile,
   launcherPath: string = BWRAP_PROGRAM,
 ): ContainedCommand {
+  const host = hostBwrapOptions(profile, { ...process.env, ...command.env });
   return {
     path: launcherPath,
-    argv: [BWRAP_PROGRAM, ...buildBwrapArgs(profile), "--", command.path, ...command.argv.slice(1)],
+    argv: [BWRAP_PROGRAM, ...buildBwrapArgs(profile, inspectMaskTarget, host), "--", command.path, ...command.argv.slice(1)],
     env: command.env,
     cwd: command.cwd,
   };
