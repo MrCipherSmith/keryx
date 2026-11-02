@@ -4,10 +4,11 @@ import {
   Notice} from "../../components/ui";
 import { type WorkAdapter } from "./adapter";
 import {
+  activeRequiredIntents,
   aggregateVersions,
   flowStartReady,
   recordOf,
-  recordsOf} from "./model";
+} from "./model";
 import type {
   WorkFlow,
   WorkIntent,
@@ -104,9 +105,7 @@ export function FlowSummary({
 }) {
   const { t } = useTranslation("work");
   const revision = recordOf(records, "flow-revision", flow.currentRevisionId);
-  const required = recordsOf(records, "intent").filter(
-    (i) => i.flowId === flow.id && i.required,
-  );
+  const required = activeRequiredIntents(records,flow.id);
   const exactSet =
     required.length > 0 &&
     required.length === revision?.requiredIntentIds.length &&

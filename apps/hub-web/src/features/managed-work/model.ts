@@ -159,3 +159,8 @@ export function aggregateVersions(
       .map((r) => [r.id, r.version]),
   );
 }
+
+/** Membership semantics shared with the server: cancelled work is historical. */
+export function activeRequiredIntents(records: WorkRecord[], flowId: string): WorkIntent[] {
+  return recordsOf(records,"intent").filter((intent) => intent.flowId === flowId && intent.required && intent.state !== "cancelled");
+}

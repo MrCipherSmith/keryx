@@ -8,9 +8,9 @@ import {
   Textarea,
 } from "../../components/ui";
 import {
+  activeRequiredIntents,
   aggregateVersions,
   recordOf,
-  recordsOf,
 } from "./model";
 import { useWorkOperation } from "./operation";
 import type { WorkAdapter } from "./adapter";
@@ -38,6 +38,8 @@ export function RevisionEditor({
   const hub = useHub();
   const flowRevision = recordOf(records, "flow-revision", flow.currentRevisionId);
   const intentRevision = recordOf(records, "intent-revision", intent?.currentRevisionId);
+  const requiredIntents = activeRequiredIntents(records,flow.id);
+  const requiredIds = new Set(requiredIntents.map((intent) => intent.id));
   const target = intent ?? flow;
   const revision = intent ? intentRevision : flowRevision;
   const [draft, setDraft] = useDraft(
@@ -56,7 +58,7 @@ export function RevisionEditor({
       deliverable: intentRevision?.deliverable ?? "",
       approach: intentRevision?.approach ?? "",
       outOfScope: revision?.outOfScope ?? "",
-      requiredIntentIds: [...(flowRevision?.requiredIntentIds ?? [])],
+      requiredIntentIds: (flowRevision?.requiredIntentIds ?? []).filter((id) => requiredIds.has(id)),
       criteria: structuredClone(revision?.criteria ?? []),
       mappings: structuredClone(intentRevision?.criterionMappings ?? []),
     },
@@ -109,7 +111,7 @@ export function RevisionEditor({
                 outOfScope: draft.outOfScope,
                 specification: flowRevision.specification,
                 criteria: draft.criteria,
-                requiredIntentIds: draft.requiredIntentIds,
+                requiredIntentIds: draft.requiredIntentIds.filter((id) => requiredIds.has(id)),
               },
         });
       }}
@@ -136,8 +138,7 @@ export function RevisionEditor({
       {!intent && (
         <fieldset>
           <legend>{t("requiredIntents")}</legend>
-          {recordsOf(records, "intent")
-            .filter((i) => i.flowId === flow.id && i.required)
+          {requiredIntents
             .map((i) => (
               <label className="work-checkbox" key={i.id}>
                 <input

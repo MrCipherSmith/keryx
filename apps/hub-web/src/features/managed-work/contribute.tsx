@@ -6,6 +6,7 @@ import { Button, Field, Input, Select, Textarea } from "../../components/ui";
 import type { WorkAdapter } from "./adapter";
 import type { Attempt, WorkFlow, WorkIntent, WorkRecord } from "./types";
 import {
+  activeRequiredIntents,
   aggregateVersions,
   recordOf,
   recordsOf,
@@ -42,10 +43,7 @@ export function ContributionPanel({
   const { run, blocked } = useWorkOperation(adapter, onDone);
   const fr = recordOf(records, "flow-revision", flow.currentRevisionId);
   const ir = recordOf(records, "intent-revision", intent?.currentRevisionId);
-  const children = recordsOf(records, "intent").filter(
-    (i) => i.flowId === flow.id,
-  );
-  const required = children.filter((i) => i.required).map((i) => i.id);
+  const required = activeRequiredIntents(records,flow.id).map((intent) => intent.id);
   const requiredSetMatches =
     fr &&
     required.length === fr.requiredIntentIds.length &&
