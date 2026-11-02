@@ -159,7 +159,32 @@ function outboundUrlComponents(text: string): string[] {
   return components;
 }
 
+/**
+ * The hostname labels, in the case the caller wrote them. `new URL` lowercases
+ * the host, which would hide a mixed-case key from the entropy shape check, so
+ * the labels come from the raw authority; a trailing `:port` and any userinfo
+ * are dropped (a userinfo secret is scanned by the whole-text checks).
+ */
+function outboundHostLabels(text: string): string[] {
+  const authority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(text.trim())?.[1];
+  if (authority === undefined) return [];
+  const host = safeDecodeComponent(authority.slice(authority.lastIndexOf("@") + 1)).replace(/:\d*$/, "");
+  return host.split(".").filter((label) => label.length > 0);
+}
+
+/** A secret in a subdomain leaves through DNS before any request is made. */
+function hostLooksSecret(text: string): boolean {
+  const labels = outboundHostLabels(text);
+  if (labels.length === 0) return false;
+  if (detectSecrets(labels.join(".")).length > 0) return true;
+  const entropyGateOpen = isEntropyBackendEnabled();
+  return labels.some((label) => detectSecrets(label).length > 0 || (entropyGateOpen && looksSecretShapedIn(label)));
+}
+
 function anyComponentLooksSecret(text: string): boolean {
+  if (hostLooksSecret(text)) {
+    return true;
+  }
   // `looksSecretShapedIn`'s shape decision is entropy-based (F-REG-F3): it
   // must honour the same gate `detectEntropy(text)` below already does, so a
   // disabled entropy backend turns this check off too, not just the whole-URL
