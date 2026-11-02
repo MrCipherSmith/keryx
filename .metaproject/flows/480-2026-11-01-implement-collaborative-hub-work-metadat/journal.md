@@ -101,3 +101,6 @@
 - 2026-11-02T05:02:54.235Z - task-done: T35: R02 extracted pinned-runtime MCP request compatibility
 - 2026-11-02T05:03:29.696Z - task-attempt: T30: started (attempt 3) — Post-fix verification retry: bodyless/malformed migration and actual TCP MCP cleanup repaired; rerun failed strict/runtime checks and health, reuse unchanged UI/docs evidence
 - 2026-11-02T05:16:49.762Z - task-done: T30: R02 integrated verification mutation coverage and next review handoff
+- 2026-11-02T05:22:19.052Z - task-added: T36: Compare concurrent round2 implementations before owner integration decision
+- 2026-11-02T05:22:19.241Z - task-attempt: T36: started (attempt 1) — Owner explicitly requested differences and recommendations before integration; read-only comparison of bb65652ca vs8dcb765f0
+- 2026-11-02T05:31:14.129Z - task-done: T36: Compare concurrent round2 implementations before owner integration decision

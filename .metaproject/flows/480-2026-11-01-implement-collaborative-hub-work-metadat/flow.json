@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-02T05:16:49.762Z",
+  "updatedAt": "2026-11-02T05:31:14.129Z",
   "source": {
     "type": "description",
     "ref": null
@@ -748,6 +748,28 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "Native TCP reader cleanup TypeError fixed without changing admission; actual pinned Bun1.3.14 SDK RED→GREEN, extracted offline runtime proof and40tests/types/lint pass."
+    },
+    {
+      "id": "T36",
+      "title": "Compare concurrent round2 implementations before owner integration decision",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T05:22:19.241Z",
+            "outcome": "started",
+            "detail": "Owner explicitly requested differences and recommendations before integration; read-only comparison of bb65652ca vs8dcb765f0"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Owner-requested read-only comparison of bb65652ca vs8dcb765f0 documented with concrete API/policy incompatibilities, complementary safeguards/tests and integration recommendation; no product or remote changes."
     }
   ],
   "history": [
@@ -1233,6 +1255,21 @@
       "at": "2026-11-02T05:16:49.762Z",
       "event": "task-done",
       "detail": "T30: R02 integrated verification mutation coverage and next review handoff"
+    },
+    {
+      "at": "2026-11-02T05:22:19.052Z",
+      "event": "task-added",
+      "detail": "T36: Compare concurrent round2 implementations before owner integration decision"
+    },
+    {
+      "at": "2026-11-02T05:22:19.241Z",
+      "event": "task-attempt",
+      "detail": "T36: started (attempt 1) — Owner explicitly requested differences and recommendations before integration; read-only comparison of bb65652ca vs8dcb765f0"
+    },
+    {
+      "at": "2026-11-02T05:31:14.129Z",
+      "event": "task-done",
+      "detail": "T36: Compare concurrent round2 implementations before owner integration decision"
     }
   ],
   "acKinds": {
