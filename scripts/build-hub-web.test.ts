@@ -14,12 +14,13 @@ function fixture(root:string){
  for(const path of ['scripts','src/hub','src/remote-control','apps/hub-web/src','apps/hub-web/public'])mkdirSync(join(root,path),{recursive:true});
  copyFileSync(resolve(import.meta.dir,'build-hub-web.ts'),join(root,'scripts/build-hub-web.ts'));
  const shared=join(root,'src/remote-control/owned-controls.ts');copyFileSync(resolve(import.meta.dir,'../src/remote-control/owned-controls.ts'),shared);
+ const reviewShared=['review-guide.ts','review-guide-resolution.ts'].map(name=>{const file=join(root,'src/hub',name);copyFileSync(resolve(import.meta.dir,'../src/hub',name),file);return file;});
  const app=join(root,'apps/hub-web');writeFileSync(join(app,'src/main.ts'),"import { isOwnedControlCommand } from '../../../src/remote-control/owned-controls'; console.log(isOwnedControlCommand('tasks.kill'));\n");
  writeFileSync(join(app,'package.json'),JSON.stringify({name:'frontend-input-fixture',scripts:{build:'bun build-fixture.ts'}}));
  writeFileSync(join(app,'build-fixture.ts'),"import { mkdirSync,writeFileSync } from 'node:fs';mkdirSync('dist',{recursive:true});writeFileSync('dist/index.html','<!doctype html><title>Freshness fixture</title>');\n");
  for(const name of ['bun.lock','tsconfig.json','vite.config.ts'])writeFileSync(join(app,name),'{}\n');writeFileSync(join(app,'index.html'),'<!doctype html><title>Fixture source</title>\n');
  const run=(...args:string[])=>Bun.spawnSync([process.execPath,join(root,'scripts/build-hub-web.ts'),...args],{cwd:root,stdout:'pipe',stderr:'pipe',timeout:10000});
- return{shared,app,run};
+ return{shared,reviewShared,app,run};
 }
 
 // `--check` writing nothing, fresh or stale, is what lets the release build run it as a
@@ -41,13 +42,23 @@ test('embedded frontend freshness rejects changes to its shared owned-controls r
 test('embedded frontend freshness is the same for CRLF and LF text inputs, including the script itself',()=>{
  const root=mkdtempSync(join(tmpdir(),'keryx-web-crlf-'));
  try{
-  const{shared,app,run}=fixture(root);expect(run().exitCode).toBe(0);expect(run('--check').exitCode).toBe(0);
+  const{shared,reviewShared,app,run}=fixture(root);expect(run().exitCode).toBe(0);expect(run('--check').exitCode).toBe(0);
   const crlf=(file:string)=>writeFileSync(file,readFileSync(file,'utf8').replaceAll('\r\n','\n').replaceAll('\n','\r\n'));
-  for(const file of [shared,join(root,'scripts/build-hub-web.ts'),join(app,'src/main.ts'),join(app,'index.html'),join(app,'package.json'),join(app,'bun.lock'),join(app,'tsconfig.json'),join(app,'vite.config.ts')])crlf(file);
+  for(const file of [shared,...reviewShared,join(root,'scripts/build-hub-web.ts'),join(app,'src/main.ts'),join(app,'index.html'),join(app,'package.json'),join(app,'bun.lock'),join(app,'tsconfig.json'),join(app,'vite.config.ts')])crlf(file);
   expect(readFileSync(shared,'utf8')).toContain('\r\n');
   expect(run('--check').exitCode).toBe(0);
   // A real content change is still stale.
   writeFileSync(shared,readFileSync(shared,'utf8')+'// changed\r\n');
   expect(run('--check').exitCode).not.toBe(0);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+
+for(const name of ['review-guide.ts','review-guide-resolution.ts'])test(`embedded frontend freshness detects ${name} changes without writing during check`,()=>{
+ const root=mkdtempSync(join(tmpdir(),'keryx-web-review-input-'));
+ try{
+  const{run}=fixture(root);expect(run().exitCode).toBe(0);expect(run('--check').exitCode).toBe(0);
+  const file=join(root,'src/hub',name);writeFileSync(file,readFileSync(file,'utf8')+'\n// Changed shared review browser behavior.\n');
+  const changed=tree(root),stale=run('--check');expect(stale.exitCode).not.toBe(0);expect(stale.stderr.toString()).toContain('Frontend assets are stale');expect(tree(root)).toEqual(changed);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
