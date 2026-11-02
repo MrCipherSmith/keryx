@@ -286,12 +286,13 @@ failures do not qualify; non-interactive behavior is unchanged.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
             [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
-            [--tui|--no-tui] [--debug] [--name <name>] [--guard]
+            [--tui|--no-tui] [--debug] [--name <name>] [--guard] [--] ["<prompt>"]
 ```
 
 | Flag | Description |
 |---|---|
 | _(default)_ | Full-screen OpenTUI renderer plus the agent, whenever `stdout` is a TTY. |
+| `"<prompt>"` | One positional argument: submitted as the session's first turn once the composer is ready (after any resume picker), through the same path as a typed line, so the session stays open afterwards. Quote it as one argument; put `--` before a prompt that starts with `-`. Two positionals, an empty one, one with `--print` or with `--chat` are refused. In the readline shell it is the first line the REPL reads; the provider and mode pickers never see it. This is how herdr-core starts an agent with a task — see [Run Keryx in the Herdr app](guides/herdr.md). |
 | `-c`, `--continue` | Resume the most recent session for this project that no other shell has open. When it skips a newer session, it prints that session and its holder. |
 | `-r`, `--resume [id]` | Resume a specific session; without an id, pick one interactively. Without a TTY, bare `-r` uses the latest session no other shell has open. |
 | `--fork` | With `-r <id>`: fork a session another shell has open, and continue in the fork. |
@@ -4716,6 +4717,10 @@ Three targets, under `XDG_CONFIG_HOME` (default `~/.config`):
   `{ command, dryRun, targets: [{ target, path, action, reason? }] }`. Any error
   exits non-zero. On Windows every target is `skipped`: herdr-core keeps its
   config under `%APPDATA%`.
+
+What the shell does inside an herdr-core terminal (status over OSC 7501, `<hc from>`
+messages, the delegation section of the agent's instructions) is in
+[Run Keryx in the Herdr app](guides/herdr.md).
 
 ---
 
