@@ -30,15 +30,19 @@ function tempDir(): string {
   return d;
 }
 
-test("matchShellPattern: exact, star, and question mark", () => {
+test("matchShellPattern: exact, and a trailing star", () => {
   expect(matchShellPattern("keryx wiki index", "keryx wiki index")).toBe(true);
   expect(matchShellPattern("keryx wiki index", "keryx wiki collect")).toBe(false);
   expect(matchShellPattern("keryx *", "keryx wiki index")).toBe(true);
   expect(matchShellPattern("keryx *", "git status")).toBe(false);
   expect(matchShellPattern("git status*", "git status")).toBe(true);
   expect(matchShellPattern("git status*", "git status --short")).toBe(true);
-  expect(matchShellPattern("ls ?", "ls a")).toBe(true);
-  expect(matchShellPattern("ls ?", "ls ab")).toBe(false);
+  // `?` and a non-trailing `*` are no longer wildcards: such a pattern is invalid and matches nothing.
+  expect(matchShellPattern("ls ?", "ls a")).toBe(false);
+  expect(matchShellPattern("ls ?", "ls ?")).toBe(false);
+  // Escaped, they are literal.
+  expect(matchShellPattern("ls \\?", "ls ?")).toBe(true);
+  expect(matchShellPattern("ls \\?", "ls a")).toBe(false);
 });
 
 test("matchShellPattern: * matches newlines (heredoc / multiline shell_exec)", () => {
@@ -79,8 +83,10 @@ test("suggestShellPatterns: exact + first-token prefix", () => {
   });
   // `git *` is no longer offerable (git -c/-exec run arbitrary commands), but
   // the exact command still is.
+  // The exact grant is the command verbatim (trimmed only): collapsing spaces would store a
+  // pattern that never matches the command again.
   expect(suggestShellPatterns("  git   status  --short ")).toEqual({
-    exact: "git status --short",
+    exact: "git   status  --short",
     prefix: "git *",
     offerExact: true,
     offerPrefix: false,
