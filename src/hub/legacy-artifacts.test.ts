@@ -35,7 +35,7 @@ test('revision bytes are content addressed once, replay stores a reference, and 
 });
 
 test('migrates inline bytes and replay references atomically, preserves a rollback copy, and the actual previous writer refuses v4', async()=>{
-    const {copyFileSync,mkdirSync}=await import('node:fs');
+    const {mkdirSync}=await import('node:fs');
     const {createHash}=await import('node:crypto');
     const {migrateRemote:previousWriter}=await import('./fixtures/writer-v3-migration.test-support');
     const root=mkdtempSync(join(tmpdir(),'hub-artifact-migration-')),dir=join(root,'live');mkdirSync(dir);
@@ -46,8 +46,8 @@ test('migrates inline bytes and replay references atomically, preserves a rollba
     const db=new Database(join(dir,'hub.sqlite'));
     db.query('UPDATE hub_state SET body=? WHERE id=1').run(JSON.stringify(state));
     db.exec("UPDATE remote_schema_version SET version=3; DELETE FROM hub_work_settings WHERE key='legacy-artifacts-v1'");
-    expect(()=>previousWriter(db)).not.toThrow();db.close();
-    const rollback=join(root,'rollback.sqlite');copyFileSync(join(dir,'hub.sqlite'),rollback);
+    expect(()=>previousWriter(db)).not.toThrow();
+    const rollback=join(root,'rollback.sqlite');db.query('VACUUM INTO ?').run(rollback);db.close();
     try{
         const migrated=openHubStore(dir);
         expect(migrated.load().revisions[0]).toEqual(revision);
