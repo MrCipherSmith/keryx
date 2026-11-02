@@ -89,3 +89,91 @@ describe("git push is parsed the way git parses it", () => {
     test(`not destructive: ${command} (${why})`, () => expect(isDestructiveCommand(command)).toBe(false));
   }
 });
+
+// Block 1 round 4 (review-security-code-w1:F-001, review-logic-w1:F-001): git runs its own command before it looks at an
+// alias, so an `alias.<builtin>` is ignored and the builtin runs. The verifier's real-git probe overwrote or deleted main
+// with the first two.
+describe("an alias that shadows a git command is not expanded", () => {
+  for (const command of [
+    "git -c alias.push=status push --force origin main",
+    "git -c alias.push=log push origin :main",
+    "git -c alias.push=status push origin --delete main",
+    "git -c alias.push=log push --delete origin main",
+    "git -c alias.push='!true' push -f origin main",
+    "git -c alias.push=status PUSH --force origin main",
+    "git -c alias.config=status config remote.origin.push +refs/heads/*:refs/heads/*",
+    "git -c alias.config=status config remote.origin.mirror true",
+    "git -c alias.remote=status remote add --mirror=push backup ../remote.git",
+  ]) {
+    test(`destructive: ${command}`, () => expect(isDestructiveCommand(command)).toBe(true));
+  }
+  test("an alias of a name git does not own is still expanded", () => {
+    expect(isDestructiveCommand("git -c alias.p=status p --force origin main")).toBe(false);
+    expect(isDestructiveCommand("git -c alias.p='push --force' p origin main")).toBe(true);
+    expect(isDestructiveCommand("git -c alias.st=push st origin feature/x")).toBe(false);
+  });
+});
+
+// Block 1 round 4 (review-security-code-w1:F-002): config a `git push` reads from a source the line does not show. The
+// verifier's real-git probe force-overwrote main with an include, HOME, XDG_CONFIG_HOME, --git-dir, a persistent alias
+// and a persistent include.
+describe("a push whose config comes from somewhere the classifier cannot read fails closed", () => {
+  for (const command of [
+    "git -c include.path=/tmp/x.cfg push origin",
+    "git -c include.path=/tmp/x.cfg push origin feature/x",
+    "git -c includeIf.gitdir:/.path=/tmp/x.cfg push origin",
+    "git -c includeif.onbranch:main.path=/tmp/x.cfg push origin",
+    "git --config-env include.path=CFG push origin",
+    "git --git-dir=/tmp/g push origin",
+    "git --git-dir /tmp/g push origin",
+    "git --work-tree=/tmp/w push origin",
+    "GIT_DIR=/tmp/g git push origin",
+    "GIT_COMMON_DIR=/tmp/g git push origin",
+    "HOME=/tmp/h git push origin",
+    "XDG_CONFIG_HOME=/tmp/h git push origin",
+    "GIT_CONFIG_GLOBAL=/tmp/x.cfg git push origin",
+    "GIT_CONFIG_SYSTEM=/tmp/x.cfg git push origin",
+    "env HOME=/tmp/h git push origin",
+    "env -u GIT_CONFIG_GLOBAL HOME=/tmp/h git push origin",
+    "HOME=/tmp/h; git push origin",
+    "export XDG_CONFIG_HOME=/tmp/h && git push origin",
+    "(HOME=/tmp/h; git push origin)",
+    "env git push --force origin main",
+    "nohup git push -f origin main",
+  ]) {
+    test(`destructive: ${command}`, () => expect(isDestructiveCommand(command)).toBe(true));
+  }
+  test("the same sources without a push, and a push without them, do not escalate", () => {
+    for (const command of [
+      "HOME=/tmp/h git status",
+      "git --git-dir=/tmp/g log -n 1",
+      "git -c include.path=/tmp/x.cfg log -n 1",
+      "git commit -m 'HOME=/tmp/h' && git push origin feature/x",
+      "git push origin feature/x",
+      "env git push origin feature/x",
+    ]) {
+      expect(isDestructiveCommand(command), command).toBe(false);
+    }
+  });
+});
+
+describe("config writes that arm a later plain push are destructive (review-security-code-w1:F-002)", () => {
+  for (const command of [
+    "git config alias.x 'push -f origin main'",
+    "git config --global alias.x 'push -f origin main'",
+    "git config alias.x '!git push -f origin main'",
+    "git config alias.x '!rm -rf /'",
+    "git config set alias.x push",
+    "git config include.path /tmp/x.cfg",
+    "git config --global include.path /tmp/x.cfg",
+    "git config --add includeIf.gitdir:~/.path /tmp/x.cfg",
+    "git config alias.x \"$CMD\"",
+  ]) {
+    test(`destructive: ${command}`, () => expect(isDestructiveCommand(command)).toBe(true));
+  }
+  test("unrelated aliases and reads do not escalate", () => {
+    for (const command of ["git config alias.st status", "git config alias.lg 'log --oneline --graph'", "git config --get alias.x", "git config include.path"]) {
+      expect(isDestructiveCommand(command), command).toBe(false);
+    }
+  });
+});

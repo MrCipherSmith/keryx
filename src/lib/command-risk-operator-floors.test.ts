@@ -155,3 +155,50 @@ describe("review operator floors match what the handlers refuse (review-regressi
     }
   });
 });
+
+// Block 1 round 4 (review-regression-w3:F-001, review-degradation-w3:F-001): an expansion makes the command path unknown
+// only where the literal words before it can still start an operator command; single-quoted text is literal.
+describe("an expansion after a literal non-operator command path does not ask", () => {
+  test("routine keryx commands with an expanded operand", () => {
+    for (const command of [
+      'keryx ctx read "$FILE" --mode compact',
+      'keryx ctx read "$F"',
+      "keryx flow show $ID",
+      'keryx wiki ask "$Q"',
+      'keryx gdgraph affected "$f"',
+      'keryx test related "$F"',
+      "keryx test related $f",
+      'keryx memory search "$Q"',
+      "keryx wiki ask 'what does {x} mean'",
+      "keryx hub status $X",
+      "keryx review status $P",
+      "keryx learn list $X",
+      "keryx agents list $X",
+      "keryx hub '$M' pair",
+      "keryx '$X'",
+      "bun src/cli.ts wiki ask \"$Q\"",
+      "keryx gdgraph affected src/a.ts",
+    ]) {
+      expect(touchesOperatorDecision(command), command).toBe(false);
+      expect(touchesHumanConfirmation(command), command).toBe(false);
+    }
+  });
+  test("an expansion that can still complete an operator command keeps asking", () => {
+    for (const command of [
+      "keryx hub $M pair",
+      "keryx $H machine pair",
+      "keryx hub $(printf machine) pair",
+      "$K $H machine pair",
+      "keryx `printf hub` machine pair",
+      "keryx learn $V p-1",
+      "keryx agents external $V",
+      "keryx review chunks $V --mode automatic",
+      "keryx hub machine $V",
+      "bash -c 'keryx hub $M pair'",
+      "keryx \"$H\" machine pair",
+    ]) {
+      expect(touchesOperatorDecision(command), command).toBe(true);
+      expect(touchesHumanConfirmation(command), command).toBe(true);
+    }
+  });
+});
