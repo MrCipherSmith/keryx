@@ -59,7 +59,7 @@ export function useWorkOperation(
         setOperation({ ...initial, lastReceipt: receipt });
         if (receipt.entities) mergeWorkCache(client, workSnapshotKey(hub.scopeKey, hub.projectId, adapter.mode), receipt.entities.filter((record) => record.projectId === hub.projectId));
         // A receipt contains result records, not necessarily all changed aggregates.
-        requestWorkRefresh(client,workSnapshotKey(hub.scopeKey,hub.projectId,adapter.mode));
+        if (!observation) requestWorkRefresh(client,workSnapshotKey(hub.scopeKey,hub.projectId,adapter.mode));
         void client.invalidateQueries({queryKey:workAttentionKey(hub.scopeKey,hub.projectId,adapter.mode),exact:true,refetchType:"active"});
         onCommitted(receipt);
       }

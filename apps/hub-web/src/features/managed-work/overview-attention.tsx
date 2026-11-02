@@ -123,7 +123,7 @@ function ProjectAttention({
               onClick={async () => {
                 setSelectionError(false);
                 try {
-                  const target = await resolveAttentionTarget(item, [], adapter);
+                  const target = attentionTarget(item, []) ?? await resolveAttentionTarget(item, [], adapter);
                   if (target) hub.navigate({ projectId: project.id, tab: "work", ...target });
                 } catch { setSelectionError(true); }
               }}
