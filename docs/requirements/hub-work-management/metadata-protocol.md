@@ -48,13 +48,13 @@ Suffix `/commands` handles domain commands below; a single domain service is use
 | `requirements.amend` | flowId, sourceFlowRevisionId, affectedIntentIds, exact replacement entries with target/revision/digest, reason; approved proposal only changes pending guards, not old pins | authorized human |
 | `requirements.resolve-amendment` | amendmentId, manifestDigest, approve/withdraw and reason | authorized human |
 | `attempt.create` | approved intentRevisionId, contextSnapshotId, accountable participant, method, optional predecessor | contributor |
-| `attempt.start` | attemptId and exact context/requirement digests; local required refs resolvable | contributor |
-| `attempt.report` | attemptId, progress/blocked/failed/cancel-request/cancel-confirmed, bounded report; confirmed requires all linked known terminal or zero linked runs | owner/contributor within scope |
+| `attempt.start` | attemptId and exact context/requirement digests; local required refs resolvable | authenticated Attempt participant; human-method Attempts require a human principal |
+| `attempt.report` | attemptId, progress/blocked/failed/cancel-request/cancel-confirmed, bounded report; confirmed requires all linked known terminal or zero linked runs | authenticated Attempt participant; human-method Attempts require a human principal |
 | `execution.bind` | attemptId, exact session/run/turn/checkout/machine refs plus association observation | authenticated original operator / verified bridge for own run |
-| `subject.create` | attemptId, bounded immutable report/artifact manifest | contributor |
-| `evidence.record` | attemptId, subjectId/digest, criterion refs, results and claimed source | contributor; server sets actual provenance |
-| `attempt.submit` | attemptId, subjectId/digest, exact Evidence IDs and coverage map, knowledge follow-up; seals ReviewSubmission | contributor |
-| `attempt.withdraw` | attemptId, submissionId/digest, reason; no replacement edits | contributor |
+| `subject.create` | attemptId, bounded immutable report/artifact manifest | authenticated Attempt participant; human-method Attempts require a human principal |
+| `evidence.record` | attemptId, subjectId/digest, criterion refs, results and claimed source | authenticated Attempt participant; human-method Attempts require a human principal; server sets actual provenance |
+| `attempt.submit` | attemptId, subjectId/digest, exact Evidence IDs and coverage map, knowledge follow-up; seals ReviewSubmission | authenticated Attempt participant; human-method Attempts require a human principal |
+| `attempt.withdraw` | attemptId, submissionId/digest, reason; no replacement edits | authenticated Attempt participant; human-method Attempts require a human principal |
 | `attempt.select` | intentId, attemptId, exact submissionId/digest, reason | authorized human |
 | `review.decide` | Intent or Flow target, exact submission/manifest digest, accept/reject/request-changes, reason, optional permitted exact waivers | authorized human |
 | `flow.submit` | Flow revision and exact accepted Intent Decision set, digest | contributor; server constructs/seals aggregate manifest |
@@ -100,3 +100,5 @@ The generated OpenAPI is the exact executable projection contract. External even
 GET /documents/{documentId}/versions/{version}?digest=<sha256> retrieves exact authorized archived content with its id/project/path/kind/version/contentDigest/content and eventCursor. Digest mismatch, wrong project and unavailable history return404 without latest fallback. Content is rehashed and bounded to1MiB. MCP hub_work_get_document_version and CLI document show --version --digest expose the same read boundary.
 
 Native execution sidecar HTTP headers and current guarantees are documented in execution.md. The minimum writer activation marker and candidate limitations are documented in implementation-status.md.
+
+Attempt contribution authority is checked for every follow-on mutation, not inferred from a display owner or granted to all project contributors. Operator/reviewer roles do not override participant identity for these six commands; human-only review, selection and cancellation remain separate authorities.

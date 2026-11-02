@@ -1,7 +1,14 @@
 
 import type { WorkTransaction } from './domain';
 import { fail, sha256 } from '../domain';
-import type { WorkCommand } from './model';
+import type { Attempt, WorkCommand } from './model';
+
+function participant(transaction: WorkTransaction, attempt: Attempt): void {
+    if (transaction.actor.id !== attempt.participantId)
+        fail(403, 'participant-mismatch', 'Only the authenticated Attempt participant may contribute to this Attempt');
+    if (transaction.actor.kind === 'agent' && attempt.method === 'human')
+        fail(403, 'method-mismatch', 'An agent cannot contribute as a human participant');
+}
 
 export function contextCreate(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'context.create' }>): unknown {
     const { base, find, cas, add, seal, unique, resolveDocument, repository } = transaction;
@@ -63,6 +70,7 @@ export function attemptCreate(transaction: WorkTransaction, command: Extract<Wor
 export function attemptStart(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.start' }>): unknown {
     const { state, find, cas, change, pin, editable } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
+    participant(transaction, a);
     cas(a);
     editable(a);
     if (a.state !== 'draft')
@@ -83,6 +91,7 @@ export function attemptStart(transaction: WorkTransaction, command: Extract<Work
 export function attemptReport(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.report' }>): unknown {
     const { find, cas, change, editable } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
+    participant(transaction, a);
     cas(a);
     editable(a);
     if (a.state === 'draft' && (p.event === 'progress' || p.event === 'blocked' || p.event === 'cancel-request'))
@@ -97,6 +106,7 @@ export function attemptReport(transaction: WorkTransaction, command: Extract<Wor
 export function subjectCreate(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'subject.create' }>): unknown {
     const { projectId, context, base, find, cas, add, seal, pin, editable, resolveDocument, repository } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
+    participant(transaction, a);
     cas(a);
     editable(a);
     const artifacts = p.artifacts.map(v => {
@@ -128,6 +138,7 @@ export function subjectCreate(transaction: WorkTransaction, command: Extract<Wor
 export function evidenceRecord(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'evidence.record' }>): unknown {
     const { base, find, cas, add, seal, pin, unique } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt'), s = find(p.subjectId, 'subject');
+    participant(transaction, a);
     cas(a);
     if (s.attemptId !== a.id)
         fail(404, 'not-found', 'Subject outside Attempt');
@@ -146,6 +157,7 @@ export function evidenceRecord(transaction: WorkTransaction, command: Extract<Wo
 export function attemptSubmit(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.submit' }>): unknown {
     const { projectId, context, base, find, cas, add, seal, change, pin, assertNoContextDrift, editable, validateCoverage } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt');
+    participant(transaction, a);
     cas(a);
     const { i, observations } = editable(a);
     if (!['running', 'blocked'].includes(a.state))
@@ -176,6 +188,7 @@ export function attemptSubmit(transaction: WorkTransaction, command: Extract<Wor
 export function attemptWithdraw(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'attempt.withdraw' }>): unknown {
     const { find, cas, change, pin } = transaction;
     const p = command.payload, a = find(p.attemptId, 'attempt'), s = find(p.submissionId, 'submission'), i = find(a.intentId, 'intent');
+    participant(transaction, a);
     cas(a);
     cas(i);
     if (a.state !== 'submitted' || a.submissionId !== s.id || s.attemptId !== a.id || i.acceptanceDecisionId)
