@@ -22,6 +22,7 @@ import {
   ENV_SHELL_IDLE_MS,
   MAX_TASK_IDLE_TIMEOUT_MS,
   MIN_TASK_IDLE_TIMEOUT_MS,
+  PROMOTE_REFUSED_FOREGROUND_NOTE,
   clampTaskIdleTimeoutMs,
   resolveEnvMs,
 } from "./background-job-registry";
@@ -577,7 +578,16 @@ export function shellExecTool(
           // Refused (the background set is full past its ceiling): the task is
           // still foreground and nobody awaits it, so end it rather than leak it.
           await jobRegistry.kill(taskId, "over-cap");
-          return { output: `${promoted.error}; shell_exec then stopped this command, so nothing is left running`, isError: true };
+          // The registry's sentence says the command is "still running in the
+          // foreground" (true for a caller that leaves it running); here it was
+          // just killed, so replace that tail rather than contradict it.
+          const refusal = promoted.error.endsWith(PROMOTE_REFUSED_FOREGROUND_NOTE)
+            ? promoted.error.slice(0, -PROMOTE_REFUSED_FOREGROUND_NOTE.length)
+            : promoted.error;
+          return {
+            output: `${refusal}; shell_exec stopped this command, so nothing is left running — wait for one of those tasks to finish or kill it with shell_job_kill, then run the command again`,
+            isError: true,
+          };
         }
         const notice =
           outcome === "aborted"

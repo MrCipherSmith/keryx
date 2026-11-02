@@ -16,6 +16,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import type { InteractiveTool, InteractiveToolContext } from "./interactive-tools";
 import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
+import { MAX_TIMER_DELAY_MS } from "./background-job-registry";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
 import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
 import { slateWriteSeedTool } from "./slate-tool";
@@ -508,9 +509,6 @@ export function resolveSubagentTimeoutMs(
   }
   return Math.min(n, reservationMs);
 }
-
-/** Longest delay a timer can hold: past 2^31-1 ms Node/Bun fire it after 1 ms instead. */
-const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 /** Slack past the child deadline for setup, hooks and slate cleanup before the harness stops waiting. */
 export const SUBAGENT_HARD_CAP_GRACE_MS = 3 * 60_000;

@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { pinGrantedBinary, type BinaryPin } from "../trigger/granted-binary";
 import { execFileSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { runTriggerOnce } from "./trigger";
@@ -444,6 +444,18 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
       expect(made.socketPath).not.toContain("check-github");
     } finally {
       await rm(made.dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the proxy socket directory is private (0700) and created under the parent it is given", async () => {
+    const { makeProxySocketDir } = await import("./trigger-agent-task");
+    const parent = await mkdtemp(path.join(tmpdir(), "kp-"));
+    const made = await makeProxySocketDir(parent, "linux");
+    try {
+      expect(path.dirname(made.dir)).toBe(parent);
+      expect((await stat(made.dir)).mode & 0o777).toBe(0o700);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
     }
   });
 

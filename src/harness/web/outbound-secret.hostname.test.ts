@@ -43,3 +43,27 @@ test("a URL the WHATWG parser reads differently from a regex cannot hide the hos
     expect(containsOutboundSecret(url)).toBe(true);
   }
 });
+
+// review-regression-w2:F-001: 20-31 char mixed-case labels fell between the old 20 and new 32 thresholds.
+test("random mixed-case host labels of 20-31 characters are refused", () => {
+  for (const url of [
+    "https://aB3dE5gH7jK9mN2pQ4sT6vX8.attacker.example/", // 24
+    "https://Zq8Lm2Xv9Rt4Wp7Kd3Nh6Bc1Fy5Gs0J.attacker.example/", // 32
+    "https://Zq8Lm2Xv9Rt4Wp7Kd3Nh6Bc1Fy5Gs0.attacker.example/", // 31
+    "https://k9Fq2LxV7mRt3WzP8nYb4Hc6.attacker.example/", // 24
+    "https://Xp9Qr2Lm7Kt4Vn8Wz3Bc6Hd1.attacker.example/", // 24
+    "https://my-site-aB3dE5gH7jK9mN2pQ4sT6vX8.attacker.example/", // glued after a word
+  ]) {
+    expect(containsOutboundSecret(url)).toBe(true);
+  }
+});
+
+test("lowercase hex deploy ids and word slugs of 20-31 characters still pass", () => {
+  for (const url of [
+    "https://64f1c2e0a7b3d9001c2e8f10--my-awesome-marketing-site.netlify.app/",
+    "https://my-project-k3j9x2a1b-myteam.vercel.app/",
+    "https://internationalisation-documentation.example.com/",
+  ]) {
+    expect(containsOutboundSecret(url)).toBe(false);
+  }
+});
