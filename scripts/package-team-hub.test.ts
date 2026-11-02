@@ -152,7 +152,7 @@ test('offline proxy guard rejects CONNECT attempts and overrides both proxy bypa
   const endpoint=new URL(guard.environment.HTTPS_PROXY);
   await new Promise<void>(resolve=>{const socket=connect(Number(endpoint.port),endpoint.hostname);socket.on('error',()=>{});socket.once('connect',()=>socket.write('CONNECT registry.invalid:443 HTTP/1.1\r\n\r\n'));socket.once('close',()=>resolve());});
   expect(guard.connections()).toBe(1);
-  const inherited={NO_PROXY:'*',no_proxy:'*',...guard.environment};
+  const inherited=Object.assign({NO_PROXY:'*',no_proxy:'*'},guard.environment);
   expect(inherited.NO_PROXY).toBe('');expect(inherited.no_proxy).toBe('');
   for(const key of ['HTTP_PROXY','http_proxy','HTTPS_PROXY','https_proxy','ALL_PROXY','all_proxy'] as const)expect(guard.environment[key]).toBe(endpoint.toString().replace(/\/$/,''));
  }finally{await guard.close();}

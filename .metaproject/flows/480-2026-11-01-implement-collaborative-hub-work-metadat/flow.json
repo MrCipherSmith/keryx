@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-02T06:45:16.681Z",
+  "updatedAt": "2026-11-02T06:57:51.791Z",
   "source": {
     "type": "description",
     "ref": null
@@ -912,6 +912,28 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "Portable offline proof committed; registry identity preserved, rejectingproxy+Linuxnetworknone tested1.3.14/1.4.4 andUID1001 withoutHOMEoverride; ordinaryhermetic/lint/scriptstypes pass."
+    },
+    {
+      "id": "T43",
+      "title": "Fix CI duplicate proxy bypass keys without weakening offline proof",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T06:55:05.371Z",
+            "outcome": "started",
+            "detail": "Reproduce CI TS2783 and fix proxy guard test initialization only."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Exact root tsc reproduced TS2783 then passed with scripts types, guard regression1pass9assertions and focused lint; one-line initialization fix preserves bypass proof."
     }
   ],
   "history": [
@@ -1512,6 +1534,21 @@
       "at": "2026-11-02T06:45:16.681Z",
       "event": "task-done",
       "detail": "T42: Make private-cache offline runtime proof portable in CI"
+    },
+    {
+      "at": "2026-11-02T06:54:54.930Z",
+      "event": "task-added",
+      "detail": "T43: Fix CI duplicate proxy bypass keys without weakening offline proof"
+    },
+    {
+      "at": "2026-11-02T06:55:05.371Z",
+      "event": "task-attempt",
+      "detail": "T43: started (attempt 1) — Reproduce CI TS2783 and fix proxy guard test initialization only."
+    },
+    {
+      "at": "2026-11-02T06:57:51.791Z",
+      "event": "task-done",
+      "detail": "T43: Fix CI duplicate proxy bypass keys without weakening offline proof"
     }
   ],
   "acKinds": {

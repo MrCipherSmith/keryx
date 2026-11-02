@@ -124,3 +124,6 @@
 - 2026-11-02T06:17:00.146Z - task-added: T42: Make private-cache offline runtime proof portable in CI
 - 2026-11-02T06:17:00.345Z - task-attempt: T42: started (attempt 1) — Published integrated CI distribution job failed actual offline install: all pinned packages reported not cached despite prepared cache; investigate without weakening network isolation
 - 2026-11-02T06:45:16.681Z - task-done: T42: Make private-cache offline runtime proof portable in CI
+- 2026-11-02T06:54:54.930Z - task-added: T43: Fix CI duplicate proxy bypass keys without weakening offline proof
+- 2026-11-02T06:55:05.371Z - task-attempt: T43: started (attempt 1) — Reproduce CI TS2783 and fix proxy guard test initialization only.
+- 2026-11-02T06:57:51.791Z - task-done: T43: Fix CI duplicate proxy bypass keys without weakening offline proof
