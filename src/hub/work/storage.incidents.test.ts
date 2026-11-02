@@ -1,5 +1,6 @@
 import { expect,test } from 'bun:test';
-import { scopedFixture } from './storage.fixture.test-support';
+import { scopedFixture, human } from './storage.fixture.test-support';
+import { workRead } from './domain';
 
 test('many incidents on one Attempt load its support once and overflow aggregates fail within a bounded incident page',()=>{
  const f=scopedFixture(),{db,repository,cmd,intentId,a,sub,subject,flowId}=f;
@@ -42,6 +43,26 @@ test('aggregate incidents share flow criterion support across distinct accepted 
   expect(aggregate.records.some(r=>r.id===sub2.id)).toBe(true);
   expect(aggregate.records.some(r=>r.id===accepted1.id)).toBe(true);
   expect(aggregate.records.some(r=>r.id===accepted2.id)).toBe(true);
-  expect(waiverQueries).toBeLessThanOrEqual(3); // one Flow criterion and two Intent criteria
+  expect(waiverQueries).toBe(2); // shared Flow and Intent criterion IDs are each queried once
+ }finally{db.close();}
+});
+
+test('incident support retains the exact accepted waiver and submission on Flow and attention reads',()=>{
+ const {db,repository,state,cmd,intentId,a,sub,subject,flowId}=scopedFixture(true,'fail');
+ try{
+  cmd('attempt.select',{intentId,attemptId:a.id,submissionId:sub.id,submissionDigest:sub.contentDigest,reason:'Select'});
+  const acceptance=cmd('review.decide',{targetType:'intent-review',targetId:intentId,submissionId:sub.id,submissionDigest:sub.contentDigest,decision:'accept',reason:'Accept limitation',waivers:[{criterionId:'ic',reason:'Explicit limitation'}]});
+  const waiver=state.records.find(r=>r.kind==='decision'&&r.targetType==='criterion-waiver');
+  expect(waiver).toBeDefined();
+  const incident=cmd('evidence.record',{attemptId:a.id,subjectId:subject.id,subjectDigest:subject.contentDigest,criterionIds:['ic'],result:'fail',method:'late-test',report:'Further regression',outputDigest:'c'.repeat(64),sourceRunId:null,sourceObservationId:null});
+  for (const path of [['flows',flowId],['attention']]) {
+   const projection=repository.readState('p',path,new URL('http://hub.test'));
+   expect(projection.records.find(r=>r.id===waiver!.id)).toEqual(waiver);
+   expect(projection.records.find(r=>r.id===acceptance.id)).toEqual(state.records.find(r=>r.id===acceptance.id));
+   expect(projection.records.find(r=>r.id===sub.id)).toEqual(state.records.find(r=>r.id===sub.id));
+   expect(projection.records.find(r=>r.id===incident.id)).toEqual(state.records.find(r=>r.id===incident.id));
+   const rendered=workRead(projection,human,'p',path,new URL('http://hub.test')) as {records: {id:string}[]};
+   expect(rendered.records.some(r=>r.id===incident.id)).toBe(true);
+  }
  }finally{db.close();}
 });

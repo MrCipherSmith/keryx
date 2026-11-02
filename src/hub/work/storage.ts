@@ -166,10 +166,15 @@ export function workRepository(db: Database) {
         }
         // Criterion waivers are immutable decisions addressed by exact criterion digest.
         if (acceptance) {
+            const loadedCriteria = new Set<string>();
             for (const row of [...found.values()]) {
                 const r = parse(row);
                 if (r.kind === 'flow-revision' || r.kind === 'intent-revision')
-                    for (const criterion of r.criteria) addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetType')='criterion-waiver' AND json_extract(body,'$.targetId')=?", [criterion.criterionId]));
+                    for (const criterion of r.criteria) {
+                        if (loadedCriteria.has(criterion.criterionId)) continue;
+                        loadedCriteria.add(criterion.criterionId);
+                        addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetType')='criterion-waiver' AND json_extract(body,'$.targetId')=?", [criterion.criterionId]));
+                    }
             }
         }
         return stateFromRows(projectId, [...found.values()].sort((a, b) => a.rowid - b.rowid), typeof command.operationId === 'string' ? operation(projectId, actorId, command.operationId) : undefined);
@@ -178,23 +183,24 @@ export function workRepository(db: Database) {
     const addIncidentSupport = (projectId: string, state: WorkState, incidents: WorkRecord[]): void => {
         const ids = new Set(state.records.map(record => record.id));
         const add = (record: WorkRecord) => { if (!ids.has(record.id)) { state.records.push(record); ids.add(record.id); } };
-        const loadedAttempts = new Set<string>();
+        const attemptIds = new Set<string>();
         for (const incident of incidents) {
             if (incident.kind !== 'evidence') continue;
             add(incident);
-            if (loadedAttempts.has(incident.attemptId)) continue;
-            loadedAttempts.add(incident.attemptId);
-            const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptId: incident.attemptId } }, '');
-            related.records.forEach(add);
+            attemptIds.add(incident.attemptId);
+        }
+        if (!attemptIds.size) return;
+        // Traverse all incident attempts together so shared revisions and their
+        // criteria are loaded once for this projection, including attention.
+        const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptIds: [...attemptIds] } }, '');
+        related.records.forEach(add);
+        for (const attempt of related.records) {
+            if (attempt.kind !== 'attempt' || !attemptIds.has(attempt.id)) continue;
             // The original acceptance may differ from the Intent's current selected submission.
-            const attempt = related.records.find(record => record.kind === 'attempt' && record.id === incident.attemptId);
-            if (attempt?.kind === 'attempt') addRowsForAcceptance(attempt.intentId,attempt.id);
-            function addRowsForAcceptance(intentId: string, attemptId: string): void {
-                const decisions = db.query<StoredRow,[string,string,string]>(`SELECT decision.rowid,decision.body FROM hub_work_records decision
-                    WHERE decision.project_id=? AND json_extract(decision.body,'$.targetId')=? AND json_extract(decision.body,'$.targetType')='intent-review' AND json_extract(decision.body,'$.kind')='decision'
-                    AND EXISTS(SELECT 1 FROM hub_work_records submission WHERE submission.project_id=decision.project_id AND json_extract(submission.body,'$.attemptId')=? AND json_extract(submission.body,'$.kind')='submission' AND json_extract(submission.body,'$.contentDigest')=json_extract(decision.body,'$.targetDigest'))`).all(projectId,intentId,attemptId);
-                decisions.map(parse).forEach(add);
-            }
+            const decisions = db.query<StoredRow,[string,string,string]>(`SELECT decision.rowid,decision.body FROM hub_work_records decision
+                WHERE decision.project_id=? AND json_extract(decision.body,'$.targetId')=? AND json_extract(decision.body,'$.targetType')='intent-review' AND json_extract(decision.body,'$.kind')='decision'
+                AND EXISTS(SELECT 1 FROM hub_work_records submission WHERE submission.project_id=decision.project_id AND json_extract(submission.body,'$.attemptId')=? AND json_extract(submission.body,'$.kind')='submission' AND json_extract(submission.body,'$.contentDigest')=json_extract(decision.body,'$.targetDigest'))`).all(projectId,attempt.intentId,attempt.id);
+            decisions.map(parse).forEach(add);
         }
     };
     /** Bounded read projections retain the public cursor and aggregate contracts. */
