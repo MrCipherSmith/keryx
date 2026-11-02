@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:keryx:hub:legacy-review:v1",
+  "$ref": "#/$defs/requestChanges",
+  "$defs": {
+    "requestChanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedVersion",
+        "subjectRevisionId",
+        "comment",
+        "criterionRefs"
+      ],
+      "properties": {
+        "expectedVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "subjectRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "comment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "criterionRefs": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "specContentDigest",
+              "position"
+            ],
+            "properties": {
+              "specContentDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              }
+            }
+          }
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "operationId",
+        "flowVersion",
+        "flowState",
+        "decision"
+      ],
+      "properties": {
+        "status": {
+          "const": "committed"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "flowVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "flowState": {
+          "const": "in-progress"
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "flowId",
+            "subjectRevisionId",
+            "specContentDigest",
+            "comment",
+            "criterionRefs",
+            "actorId",
+            "actorKind",
+            "createdAt"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "flowId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "subjectRevisionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "specContentDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "comment": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "criterionRefs": {
+              "type": "array",
+              "maxItems": 20,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "specContentDigest",
+                  "position"
+                ],
+                "properties": {
+                  "specContentDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200
+                  }
+                }
+              }
+            },
+            "actorId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "actorKind": {
+              "const": "human"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "resubmitAfterReturn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedVersion",
+        "subjectRevisionId",
+        "afterReturnDecisionId"
+      ],
+      "properties": {
+        "expectedVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "subjectRevisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "afterReturnDecisionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    }
+  }
+}

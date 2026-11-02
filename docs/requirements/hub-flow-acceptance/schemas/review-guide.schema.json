@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:keryx:hub:review-guide:v1",
+  "title": "Contributor-authored immutable review guide",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "summary",
+    "userImpact",
+    "limitations",
+    "prerequisites",
+    "steps"
+  ],
+  "properties": {
+    "format": {
+      "const": "review-guide/v1"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "userImpact": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "prerequisites": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "steps": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stepId",
+          "criterionIds",
+          "location",
+          "instruction",
+          "expectedResult"
+        ],
+        "properties": {
+          "stepId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "criterionIds": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "location": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "instruction": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000
+          },
+          "expectedResult": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      }
+    }
+  }
+}
