@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { X509Certificate, createPrivateKey } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createRunCa, type RunCa } from "./tls-ca";
+import { MAX_CACHED_LEAVES, MAX_CONCURRENT_ISSUANCES, createRunCa, type RunCa } from "./tls-ca";
 
 describe("createRunCa (system openssl)", () => {
   let ca: RunCa | undefined;
@@ -106,5 +106,65 @@ describe("createRunCa (system openssl)", () => {
       await rm(parent, { recursive: true, force: true });
     }
   }, 30_000);
-});
 
+  // review-highload-w2:F-001. 100 distinct hosts at once started 58 concurrent
+  // openssl processes, and every leaf then stayed cached for the whole run.
+  test("issuance runs at most MAX_CONCURRENT_ISSUANCES openssl processes at once, and every host still gets its leaf", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "keryx-ca-conc-"));
+    try {
+      const shim = path.join(parent, "openssl-shim");
+      const running = path.join(parent, "running");
+      const log = path.join(parent, "peak.log");
+      await writeFile(
+        shim,
+        `#!/bin/sh\nmkdir -p "${running}"\ntouch "${running}/$$"\nls "${running}" | wc -l >> "${log}"\nopenssl "$@"\nrc=$?\nrm -f "${running}/$$"\nexit $rc\n`,
+        { mode: 0o755 },
+      );
+      ca = await createRunCa({ openssl: shim, tmpDir: parent });
+      await writeFile(log, "");
+      const hosts = Array.from({ length: 16 }, (_, i) => `conc${i}.example.test`);
+      const leaves = await Promise.all(hosts.map((h) => ca!.issueLeaf(h)));
+      for (const [i, leaf] of leaves.entries()) {
+        expect(new X509Certificate(leaf.certPem).subjectAltName).toContain(hosts[i]!);
+      }
+      const peak = Math.max(...(await readFile(log, "utf8")).split("\n").filter(Boolean).map((l) => Number(l.trim())));
+      expect(peak).toBeGreaterThan(1); // it does run in parallel...
+      expect(peak).toBeLessThanOrEqual(MAX_CONCURRENT_ISSUANCES); // ...but capped
+    } finally {
+      if (ca) await ca.dispose();
+      ca = undefined;
+      await rm(parent, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test("the leaf cache is bounded and least-recently-used: the oldest host is issued again, a recently used one is not", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "keryx-ca-lru-"));
+    try {
+      const shim = path.join(parent, "openssl-shim");
+      const log = path.join(parent, "reqs.log");
+      await writeFile(shim, `#!/bin/sh\n[ "$1" = "req" ] && [ "$2" = "-new" ] && echo x >> "${log}"\nexec openssl "$@"\n`, { mode: 0o755 });
+      ca = await createRunCa({ openssl: shim, tmpDir: parent });
+      await writeFile(log, "");
+      const issued = async (host: string) => (await ca!.issueLeaf(host)).certPem;
+      const spawns = async () => (await readFile(log, "utf8")).split("\n").filter(Boolean).length;
+
+      const first = await issued("lru-keep.example.test");
+      const second = await issued("lru-old.example.test");
+      for (let i = 0; i < MAX_CACHED_LEAVES - 2; i += 1) await issued(`lru-fill${i}.example.test`);
+      expect(await spawns()).toBe(MAX_CACHED_LEAVES);
+      // Touch the first host so it is no longer the oldest, then overflow by one.
+      expect(await issued("lru-keep.example.test")).toBe(first);
+      await issued("lru-overflow.example.test");
+      expect(await spawns()).toBe(MAX_CACHED_LEAVES + 1);
+
+      expect(await issued("lru-keep.example.test")).toBe(first); // still cached
+      expect(await spawns()).toBe(MAX_CACHED_LEAVES + 1);
+      expect(await issued("lru-old.example.test")).not.toBe(second); // evicted, issued again
+      expect(await spawns()).toBe(MAX_CACHED_LEAVES + 2);
+    } finally {
+      if (ca) await ca.dispose();
+      ca = undefined;
+      await rm(parent, { recursive: true, force: true });
+    }
+  }, 120_000);
+});
