@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-02T05:39:28.134Z",
+  "updatedAt": "2026-11-02T06:10:45.562Z",
   "source": {
     "type": "description",
     "ref": null
@@ -775,7 +775,7 @@
       "id": "T37",
       "title": "Integrate storage ops and contracts preserving both test suites",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -789,13 +789,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Storage/ops/contracts resolved in normal merge9a0f4641e; both suites retained,68storage/197UIshared proof and9offline runtime/ops checks green."
     },
     {
       "id": "T38",
       "title": "Integrate delivery execution and admission policies preserving both histories",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -809,13 +811,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Native delivery/admission merge committed;85focused+14final delivery tests, atomic recovery/archive replay preserved, types/lint pass."
     },
     {
       "id": "T39",
       "title": "Integrate UI MCP demo parity and regression coverage",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -829,21 +833,63 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "UI/MCP merge committed with remote demo events and SDK paging;197UI and18MCP/TCP tests, assets/types/lint green."
     },
     {
       "id": "T40",
       "title": "Verify integrated round2 candidate and publish draft PR update",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-11-02T05:51:48.714Z",
+            "outcome": "started",
+            "detail": "Independent full integration gate on normal merge9a0f4641e before PR publication"
+          },
+          {
+            "at": "2026-11-02T05:58:35.236Z",
+            "outcome": "failed",
+            "detail": "Combined strict gate reproduced real CI dependency-boundary defect: root HTTP contract imports UI i18next. Preserve regression by moving adapter assertion to UI suite; no NODE_PATH masking."
+          },
+          {
+            "at": "2026-11-02T06:05:31.152Z",
+            "outcome": "started",
+            "detail": "Post-CI-boundary retry on committed merged source; verify root without UI dependencies plus strict selection and preserved UI assertion"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent integrated gate passed452strict/534Hub/198UI/runtime9 with root UI dependencies absent; owner review handoff documented. Publish/checkGitHubCI remains final task action; no main merge or acceptance."
+    },
+    {
+      "id": "T41",
+      "title": "Place served browser-adapter contract in UI dependency suite",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T05:58:35.619Z",
+            "outcome": "started",
+            "detail": "Real CI and strict gate RED: i18next missing from root-only dependency install; retain adapter contract in correct UI suite"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "RealCI boundary RED corrected by moving served browser adapter assertion into UI suite; root3tests pass with UI link absent, fullUI198/types/lint/assets pass; no dependency workaround."
     }
   ],
   "history": [
@@ -1379,6 +1425,56 @@
       "at": "2026-11-02T05:39:28.134Z",
       "event": "task-attempt",
       "detail": "T39: started (attempt 1) — Normal merge frontend/MCP integration with remote demo event parity and SDK assertions"
+    },
+    {
+      "at": "2026-11-02T05:51:47.941Z",
+      "event": "task-done",
+      "detail": "T37: Integrate storage ops and contracts preserving both test suites"
+    },
+    {
+      "at": "2026-11-02T05:51:48.137Z",
+      "event": "task-done",
+      "detail": "T38: Integrate delivery execution and admission policies preserving both histories"
+    },
+    {
+      "at": "2026-11-02T05:51:48.329Z",
+      "event": "task-done",
+      "detail": "T39: Integrate UI MCP demo parity and regression coverage"
+    },
+    {
+      "at": "2026-11-02T05:51:48.714Z",
+      "event": "task-attempt",
+      "detail": "T40: started (attempt 1) — Independent full integration gate on normal merge9a0f4641e before PR publication"
+    },
+    {
+      "at": "2026-11-02T05:58:35.236Z",
+      "event": "task-attempt",
+      "detail": "T40: failed (attempt 2) — Combined strict gate reproduced real CI dependency-boundary defect: root HTTP contract imports UI i18next. Preserve regression by moving adapter assertion to UI suite; no NODE_PATH masking."
+    },
+    {
+      "at": "2026-11-02T05:58:35.432Z",
+      "event": "task-added",
+      "detail": "T41: Place served browser-adapter contract in UI dependency suite"
+    },
+    {
+      "at": "2026-11-02T05:58:35.620Z",
+      "event": "task-attempt",
+      "detail": "T41: started (attempt 1) — Real CI and strict gate RED: i18next missing from root-only dependency install; retain adapter contract in correct UI suite"
+    },
+    {
+      "at": "2026-11-02T06:05:00.944Z",
+      "event": "task-done",
+      "detail": "T41: Place served browser-adapter contract in UI dependency suite"
+    },
+    {
+      "at": "2026-11-02T06:05:31.152Z",
+      "event": "task-attempt",
+      "detail": "T40: started (attempt 3) — Post-CI-boundary retry on committed merged source; verify root without UI dependencies plus strict selection and preserved UI assertion"
+    },
+    {
+      "at": "2026-11-02T06:10:45.562Z",
+      "event": "task-done",
+      "detail": "T40: Verify integrated round2 candidate and publish draft PR update"
     }
   ],
   "acKinds": {

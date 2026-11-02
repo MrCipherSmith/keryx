@@ -111,3 +111,13 @@
 - 2026-11-02T05:39:27.648Z - task-attempt: T37: started (attempt 1) — Normal merge storage/ops/contracts integration with coherent archive polarity and retained regression cases
 - 2026-11-02T05:39:27.900Z - task-attempt: T38: started (attempt 1) — Normal merge delivery/admission/native integration retaining chosen safety invariants
 - 2026-11-02T05:39:28.134Z - task-attempt: T39: started (attempt 1) — Normal merge frontend/MCP integration with remote demo event parity and SDK assertions
+- 2026-11-02T05:51:47.941Z - task-done: T37: Integrate storage ops and contracts preserving both test suites
+- 2026-11-02T05:51:48.137Z - task-done: T38: Integrate delivery execution and admission policies preserving both histories
+- 2026-11-02T05:51:48.329Z - task-done: T39: Integrate UI MCP demo parity and regression coverage
+- 2026-11-02T05:51:48.714Z - task-attempt: T40: started (attempt 1) — Independent full integration gate on normal merge9a0f4641e before PR publication
+- 2026-11-02T05:58:35.236Z - task-attempt: T40: failed (attempt 2) — Combined strict gate reproduced real CI dependency-boundary defect: root HTTP contract imports UI i18next. Preserve regression by moving adapter assertion to UI suite; no NODE_PATH masking.
+- 2026-11-02T05:58:35.432Z - task-added: T41: Place served browser-adapter contract in UI dependency suite
+- 2026-11-02T05:58:35.620Z - task-attempt: T41: started (attempt 1) — Real CI and strict gate RED: i18next missing from root-only dependency install; retain adapter contract in correct UI suite
+- 2026-11-02T06:05:00.944Z - task-done: T41: Place served browser-adapter contract in UI dependency suite
+- 2026-11-02T06:05:31.152Z - task-attempt: T40: started (attempt 3) — Post-CI-boundary retry on committed merged source; verify root without UI dependencies plus strict selection and preserved UI assertion
+- 2026-11-02T06:10:45.562Z - task-done: T40: Verify integrated round2 candidate and publish draft PR update

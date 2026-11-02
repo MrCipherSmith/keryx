@@ -1,0 +1,217 @@
+{
+  "gate": "FAIL",
+  "task": "task-40",
+  "head": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+  "base": "d50652ac71030f955c94f84cc5c73589ecf7f02a",
+  "scope": "whole integration delta since reviewed base",
+  "readOnly": true,
+  "checks": {
+    "health": {
+      "status": "pass",
+      "exitCode": 0,
+      "command": "bun run keryx health run --changed --since d50652ac71030f955c94f84cc5c73589ecf7f02a --source eslint,typescript",
+      "findings": 0,
+      "log": "/tmp/pr1113-integration-final-health.log",
+      "normalized": "/tmp/pr1113-integration-final-health-report.json"
+    },
+    "strictChanged": {
+      "status": "fail",
+      "exitCode": 1,
+      "command": "/opt/homebrew/bin/bun run test apps/hub-web/tests/context.case.tsx apps/hub-web/tests/demo-receipt.case.ts apps/hub-web/tests/localization.case.ts apps/hub-web/tests/machine-cards.case.tsx apps/hub-web/tests/managed-native-message.case.tsx apps/hub-web/tests/managed-work-advanced.case.tsx apps/hub-web/tests/managed-work.case.tsx apps/hub-web/tests/pending-recovery.case.tsx apps/hub-web/tests/revision-pagination.case.tsx apps/hub-web/tests/session-run-context.case.tsx apps/hub-web/tests/work-incremental.case.tsx apps/hub-web/tests/work-live-amendments.case.tsx apps/hub-web/tests/work-live-attention.case.tsx apps/hub-web/tests/work-live-choices.case.tsx apps/hub-web/tests/work-live-updates.case.tsx apps/hub-web/tests/work-sequences.case.tsx apps/hub-web/tests/workflow.case.tsx scripts/hub-legacy-migration.test.ts scripts/hubctl-rollback.test.ts scripts/package-team-hub.test.ts src/commands/hub-machine.test.ts src/commands/hub-update.test.ts src/hub/agent-credentials.test.ts src/hub/connector.test.ts src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/legacy-artifacts.test.ts src/hub/legacy-flow-pins.test.ts src/hub/mcp-bridge.test.ts src/hub/mcp.test.ts src/hub/mutation-queue-http.test.ts src/hub/mutation-queue.http.test.ts src/hub/mutation-queue.test.ts src/hub/remote-v2/admission-limits.network.test.ts src/hub/remote-v2/admission-state.test.ts src/hub/remote-v2/auth-before-body.test.ts src/hub/remote-v2/backup.test.ts src/hub/remote-v2/budgets.test.ts src/hub/remote-v2/control-expiry.network.test.ts src/hub/remote-v2/delivery-expiry.network.test.ts src/hub/remote-v2/frame-admission.test.ts src/hub/remote-v2/migration-integrity.test.ts src/hub/remote-v2/migration.test.ts src/hub/remote-v2/outbox.network.test.ts src/hub/remote-v2/overload.test.ts src/hub/remote-v2/queue-admission.network.test.ts src/hub/remote-v2/queue-cas.network.test.ts src/hub/remote-v2/queue-replacement.network.test.ts src/hub/remote-v2/results.network.test.ts src/hub/remote-v2/retention.test.ts src/hub/remote-v2/transport.network.test.ts src/hub/review-bundle.test.ts src/hub/revision-summary.test.ts src/hub/server.security.test.ts src/hub/server.sso.test.ts src/hub/server.test.ts src/hub/store.incremental.test.ts src/hub/store.projections.test.ts src/hub/web.sso.test.ts src/hub/work/cli.test.ts src/hub/work/client.test.ts src/hub/work/domain.test.ts src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts src/hub/work/git-observer.test.ts src/hub/work/handlers-attempts.test.ts src/hub/work/http.contract.test.ts src/hub/work/http.projections.test.ts src/hub/work/http.test.ts src/hub/work/legacy.test.ts src/hub/work/observer-http.test.ts src/hub/work/openapi.test.ts src/hub/work/participant.authorization.test.ts src/hub/work/storage.amendment-resolution.test.ts src/hub/work/storage.incidents.test.ts src/hub/work/storage.incremental.test.ts src/hub/work/storage.lifecycle.test.ts src/hub/work/storage.scenarios.test.ts src/hub/work/storage.test.ts src/lib/hub-machine/bridge.lifecycle.network.test.ts src/lib/hub-machine/bridge.network.test.ts",
+      "selectedFiles": 81,
+      "durationMs": 97474,
+      "normalizedCounts": {
+        "passed": 452,
+        "failed": 2,
+        "skipped": 0,
+        "total": 454
+      },
+      "actualCounts": {
+        "passed": 452,
+        "failed": 1,
+        "skipped": 1,
+        "todo": 1,
+        "total": 455,
+        "files": 64,
+        "assertions": 8092
+      },
+      "log": "/tmp/pr1113-integration-final-strict-changed.log",
+      "raw": "/tmp/pr1113-integration-final-tests.raw.log",
+      "normalized": "/tmp/pr1113-integration-final-test-report.json",
+      "preloads": "standard project preloads retained",
+      "gitIsolation": "Only child test process core.hooksPath=/dev/null via GIT_CONFIG_COUNT"
+    },
+    "supplemental": [
+      {
+        "name": "scripts-types",
+        "command": [
+          "bun",
+          "run",
+          "typecheck:scripts"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-scripts-types.log",
+        "status": "pass"
+      },
+      {
+        "name": "ui",
+        "command": [
+          "bun",
+          "run",
+          "check:hub-web"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-ui.log",
+        "status": "pass",
+        "counts": {
+          "passed": 197,
+          "failed": 0,
+          "files": 39,
+          "lint": "pass",
+          "types": "pass",
+          "assets": "pass"
+        }
+      },
+      {
+        "name": "fullhub",
+        "command": [
+          "bun",
+          "test",
+          "src/hub/"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-fullhub.log",
+        "status": "pass",
+        "counts": {
+          "passed": 535,
+          "failed": 0,
+          "files": 95,
+          "assertions": 7746
+        },
+        "note": "Executed with UI dependency symlink present; does not resolve the root-only test dependency defect discovered by strict gate."
+      },
+      {
+        "name": "python-boundaries",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/migrate-legacy-boundaries.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-python-boundaries.log",
+        "status": "pass",
+        "tests": 29
+      },
+      {
+        "name": "python-migration",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/migrate-legacy.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-python-migration.log",
+        "status": "pass",
+        "tests": 14
+      },
+      {
+        "name": "python-profile",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/legacy-profile.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-python-profile.log",
+        "status": "pass",
+        "tests": 5
+      },
+      {
+        "name": "docs",
+        "command": [
+          "node",
+          "docs/requirements/hub-work-management/verify.cjs"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-docs.log",
+        "status": "pass"
+      },
+      {
+        "name": "hubctl-parse",
+        "command": [
+          "sh",
+          "-n",
+          "deploy/team-hub/hubctl"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-hubctl-parse.log",
+        "status": "pass"
+      },
+      {
+        "name": "e2e-parse",
+        "command": [
+          "sh",
+          "-n",
+          "deploy/team-hub/release/e2e.sh"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-e2e-parse.log",
+        "status": "pass"
+      },
+      {
+        "name": "shellcheck",
+        "command": [
+          "shellcheck",
+          "-s",
+          "sh",
+          "deploy/team-hub/hubctl",
+          "deploy/team-hub/release/e2e.sh"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-integration-final-shellcheck.log",
+        "status": "pass"
+      }
+    ],
+    "offlineRuntime": {
+      "status": "pass",
+      "command": "KERYX_HUB_RUNTIME_CACHE=/tmp/pr1113-r02-runtime-cache-t29-01 bun test scripts/package-team-hub.test.ts",
+      "passed": 9,
+      "failed": 0,
+      "assertions": 61,
+      "log": "/tmp/pr1113-integration-final-package-runtime.log",
+      "network": "Only explicit existing private prepared cache; zero registry requests during extracted install"
+    },
+    "circularImports": {
+      "status": "skipped",
+      "reason": "madge not a project devDependency; no installation performed"
+    },
+    "CI": {
+      "status": "not-run-by-verifier",
+      "reason": "Parent owns PR push/checks and separately confirmed same dependency failure in remote CI"
+    },
+    "DockerLifecycle": {
+      "status": "not-run",
+      "reason": "Actual extracted SDK/runtime checked; full container lifecycle remains CI job"
+    }
+  },
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "src/hub/work/http.contract.test.ts",
+      "test": "the Team Hub adapter accepts the served attention page with incident Evidence",
+      "message": "Root Bun test imports browser adapter, which imports i18next via apps/hub-web/src/api/client.ts. Root-only dependency installation cannot resolve it. Exact error Cannot find package i18next. Parent confirmed same failure in real remote CI jobs, so this is a test boundary defect, not merely a local symlink inconvenience.",
+      "owner": "task-41 / fix_n_packaging",
+      "recommendation": "Keep server/schema/WorkClient assertions in root; move browser validator assertion to configured UI Vitest while preserving real served-page integration. Do not inject UI dependencies into root gate."
+    },
+    {
+      "severity": "INFO",
+      "message": "Normalized test parser double-counts repeated failing-summary lines and omits skip/todo; actual Bun counts recorded separately."
+    }
+  ],
+  "environment": "Parent-created UI dependency symlink temporarily moved out for strict/package tests, restored in finally. No dependency copies, injection or installations; unsuccessful NODE_PATH probe did not alter source and was stopped per parent.",
+  "sourceEdits": false,
+  "followUp": "Await T41 source freeze; no rerun until signal.",
+  "routingAudit": {
+    "graph_used": "parent rebuilt integrated graph; changed selection routed through Keryx",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}
