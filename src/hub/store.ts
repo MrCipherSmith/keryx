@@ -80,8 +80,8 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
       previousSessions.delete(id);
     }
     for (const id of previousSessions.keys()) db.query('DELETE FROM hub_sessions WHERE id=?').run(id);
-    for (const document of state.documents) work.archiveDocument(document);
-    for (const change of state.documentChanges) work.archiveDocument(change.document);
+    for (const document of state.documents) work.archiveDocument(document,true);
+    for (const change of state.documentChanges) work.archiveDocument(change.document,true);
   };
   // The projection is additive. Bootstrap once from old databases, never on a work request.
   if (!db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-projection-v1'").get()) db.transaction(() => {

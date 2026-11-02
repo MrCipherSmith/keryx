@@ -4,6 +4,7 @@ import { mkdtempSync,rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHubStore } from './store';
+import { createHubApplication } from './server';
 
 test('legacy reads do not serialize history and remote-only transactions do not materialize it',()=>{
  const dir=mkdtempSync(join(tmpdir(),'hub-serialization-')),store=openHubStore(dir);
@@ -29,6 +30,33 @@ test('rollback writer changes rebuild legacy and session projections on reupgrad
 test('lazy legacy transactions roll back changes and preserve optimistic concurrency',()=>{
  const dir=mkdtempSync(join(tmpdir(),'hub-lazy-rollback-')),store=openHubStore(dir);
  try{const stale=store.load();expect(()=>store.writeTransaction(state=>{state.replays.failed={digest:'x',status:200,body:'x'};throw Error('abort');})).toThrow('abort');expect(store.load().replays.failed).toBeUndefined();store.writeTransaction(state=>{state.replays.winner={digest:'w',status:200,body:'winner'};});expect(()=>store.save(stale)).toThrow('Legacy state changed');expect(store.load().replays.winner?.body).toBe('winner');}finally{store.close();rmSync(dir,{recursive:true,force:true});}
+});
+
+test('optional legacy archival cannot block unrelated writes while immutable pin quota stays strict',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'hub-archive-quota-')),store=openHubStore(dir),db=new Database(join(dir,'hub.sqlite'));
+ const doc={id:'d',projectId:'p',path:'wiki.md',kind:'wiki' as const,content:'pinned',contentDigest:'a'.repeat(64),sourceRevision:'source',version:1,approval:'unreviewed' as const};
+ try {
+  store.work.archiveDocument(doc);
+  db.query('UPDATE hub_work_document_usage SET bytes=? WHERE id=1').run(512*1024*1024);
+  expect(()=>store.work.archiveDocument(doc)).not.toThrow();
+  expect(()=>store.writeTransaction(state=>{state.documents.push({...doc,id:'other',content:'Unrelated'});})).not.toThrow();
+  expect(store.load().documents.some(item=>item.id==='other')).toBe(true);
+  expect(store.work.documentVersion('p',{...doc,documentId:doc.id})).toEqual(doc);
+  expect(()=>store.work.archiveDocument({...doc,id:'new-pin'})).toThrow('quota');
+  expect(store.work.documentVersion('p',{...doc,documentId:'new-pin'})).toBeUndefined();
+ }finally{db.close();store.close();rmSync(dir,{recursive:true,force:true});}
+});
+
+test('live legacy import remains writable at optional document archive capacity with Work disabled',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'hub-http-archive-')),token='operator-'+ 'x'.repeat(64),app=createHubApplication({dataDir:dir,operatorToken:token,agentToken:'agent-'+ 'a'.repeat(64)}),db=new Database(join(dir,'hub.sqlite'));
+ const post=(path:string,body:unknown)=>app.fetch(new Request('http://hub.test/hub/v1'+path,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json','idempotency-key':crypto.randomUUID()},body:JSON.stringify(body)}));
+ try{
+  const project=await(await post('/projects',{name:'Archive capacity'})).json();
+  db.query('UPDATE hub_work_document_usage SET bytes=? WHERE id=1').run(512*1024*1024);
+  const response=await post('/projects/'+project.id+'/import',{expectedVersion:project.version,sourceRevision:'new',documents:[{path:'wiki/new.md',kind:'wiki',content:'Current wiki remains writable'}]});
+  expect(response.status).toBe(200);const imported=await response.json();expect(imported.documents[0].content).toBe('Current wiki remains writable');
+  expect(db.query('SELECT count(*) AS n FROM hub_work_documents').get()).toEqual({n:0});
+ }finally{db.close();app.close();rmSync(dir,{recursive:true,force:true});}
 });
 
 test('returning the lazy transaction state preserves its original snapshot boundary',()=>{

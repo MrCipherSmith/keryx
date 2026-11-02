@@ -294,14 +294,21 @@ export function workRepository(db: Database) {
         const usage = db.query<{ records: number; operations: number; bytes: number }, [string]>('SELECT records,operations,bytes FROM hub_work_usage WHERE project_id=?').get(projectId);
         if (usage && (usage.records > workStorageLimits.maxRecords || usage.operations > workStorageLimits.maxOperations || usage.bytes > workStorageLimits.maxHistoryBytes)) fail(413, 'quota-exceeded', 'Managed work durable history quota exceeded; archive the project before adding more history');
     });
-    const archiveDocument = db.transaction((document: HubDocument): void => {
-        const result = db.query('INSERT OR IGNORE INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId, document.id, document.version, document.contentDigest, JSON.stringify(document));
-        // Existing old histories are preserved during the one-time archival migration.
-        // Once that completes, refuse new growth rather than silently dropping immutable wiki/spec pins.
-        if (result.changes && db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get()) {
+    const archiveDocument = db.transaction((document: HubDocument, optional = false): boolean => {
+        const existing = db.query('SELECT 1 FROM hub_work_documents WHERE project_id=? AND document_id=? AND version=? AND content_digest=?').get(document.projectId,document.id,document.version,document.contentDigest);
+        if (existing) return true;
+        const body = JSON.stringify(document);
+        // Opportunistic legacy history is a bounded cache. A Work pin always requests
+        // mandatory archival and fails atomically if its exact bytes cannot be retained.
+        if (db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get()) {
             const usage = db.query<{bytes:number;count:number},[]>('SELECT bytes,count FROM hub_work_document_usage WHERE id=1').get()!;
-            if (usage.bytes > workStorageLimits.maxArchivedDocumentBytes || usage.count > workStorageLimits.maxArchivedDocumentVersions) fail(413,'quota-exceeded','Immutable document archive quota exceeded; explicit archival is required');
+            if (usage.bytes + Buffer.byteLength(body) > workStorageLimits.maxArchivedDocumentBytes || usage.count + 1 > workStorageLimits.maxArchivedDocumentVersions) {
+                if (optional) return false;
+                fail(413,'quota-exceeded','Immutable document archive quota exceeded for mandatory Work pin');
+            }
         }
+        db.query('INSERT INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId,document.id,document.version,document.contentDigest,body);
+        return true;
     });
     const documentVersion = (projectId: string, reference: {
         documentId: string;
