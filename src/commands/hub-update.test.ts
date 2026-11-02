@@ -143,3 +143,9 @@ test("CLI help interception prints dedicated update help without invoking an ins
   expect(output).toContain("--install-dir");
   expect(output).not.toContain("Cannot use this Hub installation");
 }, 15_000);
+test("CLI help interception prints the work command help for hub work --help", async () => {
+  const child = Bun.spawn([process.execPath, "--no-env-file", join(import.meta.dir, "..", "cli.ts"), "hub", "work", "--help"], { stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 10_000 });
+  const [output, errors, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+  expect(code).toBe(0); expect(errors).toBe("");
+  expect(output).toContain("keryx hub work — Managed work metadata");
+}, 15_000);
