@@ -73,6 +73,11 @@ function defaultLookup(hostname: string): Promise<readonly { address: string }[]
   return systemLookup(hostname, { all: true }).then((answers) => answers.map(({ address }) => ({ address })));
 }
 
+/** A function, so the check is not narrowed away across an await. */
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
 function readableContentType(contentType: string): boolean {
   return /^(?:text\/(?:html|plain)|application\/(?:json|xml|xhtml\+xml))(?:\s*;|$)/i.test(contentType);
 }
@@ -198,6 +203,8 @@ export class SandboxedWebTransport {
         ? { ok: true as const, value: { url: url.toString(), hostname: url.hostname, address: url.hostname === "::1" || url.hostname === "[::1]" ? "::1" : "127.0.0.1" } }
         : await validatePublicTarget(url, this.lookup);
       if (!target.ok) return target;
+      // The DNS await can outlive the deadline or a cancel; never start a worker after it.
+      if (isAborted(request.signal)) return { ok: false, reason: "cancelled" };
       const sameOrigin = url.origin === originalOrigin;
       const worker = await this.runner.run(
         {

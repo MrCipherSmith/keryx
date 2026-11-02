@@ -297,12 +297,48 @@ function extractHostCandidates(token: string): string[] {
  */
 function isPrivateEgressToken(token: string): boolean {
   if (PRIVATE_HOST_TOKENS.some((host) => token.includes(host))) return true;
-  if (PRIVATE_EGRESS_PATTERNS.some((pattern) => pattern.test(token))) return true;
-  for (const candidate of extractHostCandidates(token)) {
-    const octets = decodeEncodedIPv4(candidate);
-    if (octets !== null && isPrivateIPv4(octets[0], octets[1], octets[2], octets[3])) {
-      return true;
+  for (const variant of optionStrippedVariants(token)) {
+    if (PRIVATE_EGRESS_PATTERNS.some((pattern) => pattern.test(variant))) return true;
+    for (const candidate of extractHostCandidates(variant)) {
+      if (PRIVATE_EGRESS_PATTERNS.some((pattern) => pattern.test(candidate))) return true;
+      if (embeddedDottedQuadIsPrivate(candidate)) return true;
+      const octets = decodeEncodedIPv4(candidate);
+      if (octets !== null && isPrivateIPv4(octets[0], octets[1], octets[2], octets[3])) {
+        return true;
+      }
     }
+  }
+  return false;
+}
+
+/**
+ * The token itself plus the forms with a leading option stripped, so a host glued
+ * to its option (`-h10.0.0.5`, `-x169.254.169.254:80`, `--host=10.0.0.5`,
+ * `-xhttp://10.0.0.5`) is judged as the host it carries and not as part of a word.
+ */
+function optionStrippedVariants(token: string): string[] {
+  const out = new Set<string>([token]);
+  out.add(token.replace(/^--?[A-Za-z][\w-]*=/, ""));
+  out.add(token.replace(/^-[A-Za-z]/, ""));
+  out.add(token.replace(/^-[A-Za-z]+(?=\d)/, ""));
+  return [...out].filter((v) => v.length > 0);
+}
+
+/**
+ * True when a host name embeds a whole private dotted quad as consecutive numeric
+ * labels (`x.10.0.0.1.nip.io`, `foo-10.0.0.1.sslip.io`). Whole labels only: a
+ * version (`18.10.0`) has three numbers and `gpu10.` / `v10.` are not numeric labels.
+ */
+function embeddedDottedQuadIsPrivate(host: string): boolean {
+  const labels = host.split(".");
+  for (let i = 0; i + 3 < labels.length; i += 1) {
+    const first = /(?:^|[-_])(\d{1,3})$/.exec(labels[i] as string)?.[1];
+    if (first === undefined) continue;
+    const rest = labels.slice(i + 1, i + 4);
+    if (!rest.every((l) => /^\d{1,3}$/.test(l))) continue;
+    const nums = [first, ...rest].map(Number);
+    if (nums.some((n) => n > 255)) continue;
+    if (isPrivateIPv4(nums[0] as number, nums[1] as number, nums[2] as number, nums[3] as number)) return true;
   }
   return false;
 }
