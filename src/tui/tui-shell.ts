@@ -9483,6 +9483,12 @@ export async function launchTuiAgentShell(opts: {
       // "In progress" is the chrome's own spinner state, which `startBusy` /
       // `stopBusy` below are the only things that move.
       if (chrome.isBusy()) {
+        // Agent-origin text, including edited slash text, is never a shell control.
+        if (agentShaped) {
+          const position = turnLoop.enqueue(line, displayLine, source, "agent-message");
+          io.onSystem?.(`◇ agent message queued as q${position}; the main agent reads it when this turn ends.\n`);
+          return;
+        }
         const command = findAgentCommand(line, "agent");
         // Reuses `/status`'s and `/flows`'s own single-source-of-truth command
         // matchers instead of a second, separately-maintained name list that
@@ -9750,15 +9756,6 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
-        // Flow 481: a line herdr-core typed for another agent goes to the main queue, which re-enters
-        // runLine and frames it when it drains. The recipient dialog below is for a person at the
-        // keyboard, and its Side-1 answer would hand the raw, unframed text to a worker outside the
-        // main history. A Telegram line is the operator's, so it keeps the dialog.
-        if (agentShaped) {
-          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);
-          io.onSystem?.(`◇ agent message queued as q${position}; the main agent reads it when this turn ends.\n`);
-          return;
-        }
         void (async () => {
           let blockedByOpenDialog = false;
           const chosen = await journaledPick(
@@ -9822,7 +9819,7 @@ export async function launchTuiAgentShell(opts: {
 
       // Echo a slash command so it is clear WHICH command ran (turns echo their
       // own `❯ …` user box below).
-      if (!skipSlashRouting && line.startsWith("/")) {
+      if (!skipSlashRouting && !agentShaped && line.startsWith("/")) {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `c${uid++}`,
@@ -9832,7 +9829,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      const command = skipSlashRouting ? undefined : findAgentCommand(line, "agent");
+      const command = skipSlashRouting || agentShaped ? undefined : findAgentCommand(line, "agent");
       if (command !== undefined) {
         if (command.name === "/exit") {
           // SLATE-5 close trigger: shell exit (explicit command).
@@ -10575,7 +10572,7 @@ export async function launchTuiAgentShell(opts: {
         openHelp(); // /help
         return;
       }
-      if (!skipSlashRouting && line.startsWith("/")) {
+      if (!skipSlashRouting && !agentShaped && line.startsWith("/")) {
         // A real command belonging to the OTHER mode (`/models`)
         // says so; only a genuinely unknown token is "unknown" (S4 parity with
         // the readline surfaces).

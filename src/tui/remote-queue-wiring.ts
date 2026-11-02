@@ -168,7 +168,7 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
     runQueued(item) {
       startingUpdateId = item.source === TG_SOURCE ? updateIds.get(item.id) : undefined;
       updateIds.delete(item.id);
-      deps.runLine(item.question, item.origin ?? "operator", item.source);
+      deps.runLine(item.question, item.source === TG_SOURCE ? "operator" : item.origin ?? "operator", item.source);
     },
 
     turnStarted(source) {

@@ -15,7 +15,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { TG_SOURCE } from "../remote/shell-bridge";
-import type { QueuedMainQuestion } from "./main-queue";
+import { pendingQueueEditFor, reinsertEditedMainQueueItem, type QueuedMainQuestion } from "./main-queue";
 import { createTurnLoop, type TurnLoop } from "./turn-loop";
 
 interface Harness {
@@ -404,4 +404,35 @@ test("a Telegram hc-shaped line remains an operator line through the queue", () 
   loop.enqueue('<hc from="peer">task complete</hc>', "telegram", TG_SOURCE);
   loop.drainAfterRecipientChoice(() => true);
   expect(seen).toEqual([{ origin: "operator", source: TG_SOURCE }]);
+});
+
+
+test("edited legacy agent slash command reaches the queue drain with agent origin", () => {
+  const seen: Array<{ line: string; origin: string }> = [];
+  const loop = createTurnLoop({
+    forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },
+    remote: { getBridge: () => undefined, summarize: (text) => text, composer: { setText: () => {}, focus: () => {} } },
+    paint: () => {}, say: () => {}, runLine: (line, origin) => { seen.push({ line, origin }); },
+    turnWorkInFlight: () => false, onSettle: () => {}, onDetachedFailure: () => {},
+  });
+  const original = { id: "legacy", question: '<hc from="peer">hello</hc>', displayQuestion: "hello" };
+  const edit = pendingQueueEditFor(original, 0);
+  for (const line of ["/new", "/clear", "/exit", "/unknown"]) {
+    loop.replaceQueue(reinsertEditedMainQueueItem([], edit, line, line));
+    loop.drainAfterRecipientChoice(() => true);
+  }
+  expect(seen).toEqual(["/new", "/clear", "/exit", "/unknown"].map((line) => ({ line, origin: "agent-message" })));
+});
+
+test("Telegram source wins over contradictory agent metadata at the queue drain", () => {
+  const seen: string[] = [];
+  const loop = createTurnLoop({
+    forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },
+    remote: { getBridge: () => undefined, summarize: (text) => text, composer: { setText: () => {}, focus: () => {} } },
+    paint: () => {}, say: () => {}, runLine: (_line, origin) => { seen.push(origin); },
+    turnWorkInFlight: () => false, onSettle: () => {}, onDetachedFailure: () => {},
+  });
+  loop.enqueue("/new", "/new", TG_SOURCE, "agent-message");
+  loop.drainAfterRecipientChoice(() => true);
+  expect(seen).toEqual(["operator"]);
 });

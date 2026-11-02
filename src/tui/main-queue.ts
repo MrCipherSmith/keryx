@@ -21,6 +21,8 @@
 // untouched: `T` infers to `QueuedMainQuestion` from their arguments.
 // `src/tui/addressee-queue.ts` builds the per-addressee layer on top.
 
+import { looksLikeHcMessage } from "./hc-message";
+
 export interface QueuedMainQuestion {
   id: string;
   question: string;
@@ -140,7 +142,8 @@ export interface PendingQueueEdit {
 }
 
 export function pendingQueueEditFor(removed: QueuedMainQuestion, at: number): PendingQueueEdit {
-  return { id: removed.id, at, ...(removed.source !== undefined ? { source: removed.source } : {}), ...(removed.origin !== undefined ? { origin: removed.origin } : {}) };
+  const origin = removed.source === "tg" ? undefined : removed.origin ?? (looksLikeHcMessage(removed.question) ? "agent-message" : undefined);
+  return { id: removed.id, at, ...(removed.source !== undefined ? { source: removed.source } : {}), ...(origin !== undefined ? { origin } : {}) };
 }
 
 /** Re-queue the edited text where it was, keeping the id and the source of the item it replaces. */

@@ -406,7 +406,7 @@ describe("wiring (source audit)", () => {
     expect(tuiSource).toContain("if (source === undefined && !agentShaped && isWikiEnrichIntent(line)) {");
     const defined = tuiSource.indexOf(definition);
     const busy = tuiSource.indexOf("if (chrome.isBusy()) {");
-    const queued = tuiSource.indexOf('if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);');
+    const queued = tuiSource.indexOf('if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source, "agent-message");');
     expect(defined).toBeGreaterThan(-1);
     expect(busy).toBeGreaterThan(defined);
     const dialog = tuiSource.indexOf('title: "Main agent is busy",');
@@ -438,4 +438,14 @@ test("hc provenance reaches the driver from both direct and queued TUI lines and
 
 test("an incoming agent message cannot consume a human's pending queue edit", () => {
   expect(tuiSource).toContain("if (!agentShaped && remoteQueue.requeuePendingEdit(line, displayLine))");
+});
+
+test("queued agent-origin slash text reaches the model before operator command routing", () => {
+  const busy = tuiSource.indexOf("if (chrome.isBusy()) {", tuiSource.indexOf("const runLine = ("));
+  const queued = tuiSource.indexOf("if (agentShaped) {", busy);
+  const busyCommand = tuiSource.indexOf('const command = findAgentCommand(line, "agent");', busy);
+  expect(queued).toBeGreaterThan(busy);
+  expect(queued).toBeLessThan(busyCommand);
+  expect(tuiSource).toContain('const command = skipSlashRouting || agentShaped ? undefined : findAgentCommand(line, "agent");');
+  expect(tuiSource.split('if (!skipSlashRouting && !agentShaped && line.startsWith("/"))').length).toBe(3);
 });

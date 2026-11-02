@@ -254,3 +254,16 @@ test("editing a queued agent message preserves its non-operator origin", () => {
   const edit = pendingQueueEditFor(original, 0);
   expect(reinsertEditedMainQueueItem([], edit, "edited", "edited")[0]).toMatchObject({ origin: "agent-message" });
 });
+
+test("editing a legacy hc queue entry preserves agent origin while Telegram remains operator", () => {
+  const raw = '<hc from="peer">hello</hc>';
+  const local = reinsertEditedMainQueueItem([], pendingQueueEditFor(q("old", raw), 0), "/new", "/new")[0];
+  expect(local).toMatchObject({ question: "/new", origin: "agent-message" });
+  const telegram = reinsertEditedMainQueueItem([], pendingQueueEditFor({ ...q("tg", raw), source: "tg" }, 0), "/new", "/new")[0];
+  expect(telegram).toEqual({ id: "tg", question: "/new", displayQuestion: "/new", source: "tg" });
+});
+
+test("Telegram queue edits retain operator origin even if old metadata is contradictory", () => {
+  const item = { ...q("tg", '<hc from="peer">hi</hc>'), source: "tg" as const, origin: "agent-message" as const };
+  expect(reinsertEditedMainQueueItem([], pendingQueueEditFor(item, 0), "/new", "/new")[0]).toEqual({ id: "tg", source: "tg", question: "/new", displayQuestion: "/new" });
+});
