@@ -4,7 +4,12 @@ import { fixture, admittedSession, appliedController, success, type Fixture } fr
 import type { Control } from '../../remote-control/protocol';
 import type { WorkRecord, Attempt } from './model';
 import { sha256 } from '../domain';
-import { workExecutionHint } from './execution';
+import { createWorkExecution, workExecutionHint } from './execution';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { openHubStore, type HubStore } from '../store';
+import type { QueueRow } from '../remote-v2/model';
 let f: Fixture | undefined;
 afterEach(async () => { await f?.close(); f = undefined; });
 async function managedAttempt(f: Fixture) {
@@ -105,6 +110,34 @@ test('managed original v2 admission binds once, preserves wire protocol, and blo
     const sealed = await managed.command('attempt.submit', submit.payload);
     expect(sealed.entities.some(r => r.kind === 'submission')).toBe(true);
     expect((await managed.read()).records.find(r => r.id === managed.a.id)).toMatchObject({ executionOutcome: 'known-terminal', state: 'submitted' });
+});
+test('session reconciliation reads no remote history without a pending reservation and reads the queue once with one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hub-reconcile-reads-')), store = openHubStore(dir), reads: string[] = [];
+    const remote = new Proxy(store.remote, { get(target, key, receiver) {
+        const value = Reflect.get(target, key, receiver) as unknown;
+        return (key === 'get' || key === 'all') && typeof value === 'function' ? (table: string, ...rest: unknown[]) => { reads.push(`${key}:${table}`); return (value as (...args: unknown[]) => unknown).call(target, table, ...rest); } : value;
+    } });
+    const execution = createWorkExecution({ ...store, remote } as HubStore);
+    try {
+        execution.reconcileSession('s1');
+        expect(reads).toEqual([]);
+        const scope = { projectId: 'p', machineId: 'm', sessionId: 's1' };
+        const item = (queueItemId: string, operationId: string, state: Control['QueueItem']['state'], replacesOperationId: string | null): QueueRow => ({ item: { queueItemId, version: 1, kind: 'message', operationId, state, position: 0, text: 'Queued', commandName: null, expectedConfigVersion: 1, replacesOperationId }, ...scope } as QueueRow);
+        store.remote.put('remote_project_ref', 'p', { id: 'p' });
+        store.remote.put('remote_machine', 'm', { machineId: 'm' });
+        store.remote.put('remote_session', 's1', { record: { sessionId: 's1', state: 'idle' } }, { projectId: 'p', machineId: 'm' });
+        store.remote.put('remote_queue', 'q0', item('q0', 'op-0', 'removed', null), { ...scope, seq: 0 });
+        store.remote.put('remote_queue', 'q1', item('q1', 'op-1', 'queued', 'op-0'), { ...scope, seq: 0 });
+        const reauthorize = { queueItemId: 'q0', originalOperationId: 'op-0', expectedSessionVersion: 4, expectedQueueVersion: 2, expectedItemVersion: 2, expectedConfigVersion: 1, controller: { controllerLeaseId: randomUUID(), expectedControllerVersion: 1 }, association: { mode: 'ad-hoc', profileConsentVersion: 1 } };
+        store.remote.put('remote_operation', 'op-1', { id: 'op-1', request: reauthorize, response: { status: 'applied' } }, { projectId: 'p', sessionId: 's1' });
+        const pins = { operationId: 'op-0', projectId: 'p', actorId: 'h', sessionDigest: 'd', sessionId: 's1', machineId: 'm', checkoutId: 'c', attemptId: 'a', flowId: 'f', intentId: 'i', flowRevisionId: 'fr', intentRevisionId: 'ir', contextSnapshotId: 'ctx', flowRevisionDigest: 'x', intentRevisionDigest: 'y', contextDigest: 'z', associationDigest: 'ad', wireAssociationDigest: 'wd', createdAt: 'now', state: 'reserved' as const, runId: null, turnId: null };
+        store.work.saveExecutionReservation(pins);
+        reads.length = 0;
+        execution.reconcileSession('s1');
+        // The live reauthorized replacement keeps the removed original reserved.
+        expect(store.work.executionReservation('op-0')?.state).toBe('reserved');
+        expect(reads.filter(read => read === 'all:remote_queue')).toHaveLength(1);
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 test('work admission headers require both fields and positive bounded versions', () => {
     expect(() => workExecutionHint(new Request('http://hub', { headers: { 'X-Keryx-Work-Attempt': 'a' } }))).toThrow();

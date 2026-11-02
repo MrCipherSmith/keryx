@@ -68,13 +68,13 @@ export function createWorkExecution(store: HubStore) {
         const reservation = store.work.executionReservation(operationId);
         if (reservation?.state === 'reserved') store.work.saveExecutionReservation({...reservation, state:'released'});
     };
-    const sourceReservation = (operationId: string, sessionId?: string) => {
+    const sourceReservation = (operationId: string, sessionId?: string, sessionQueue?: QueueRow[]) => {
         const operation = store.remote.get<OperationRecord>('remote_operation',operationId);
         const parsed = operation && validateControl('QueueReauthorize',operation.request);
         if (!parsed?.ok) return;
         const source = store.remote.get<QueueRow>('remote_queue',parsed.value.queueItemId);
         if (!source || source.item.operationId !== parsed.value.originalOperationId || sessionId && source.sessionId !== sessionId) return;
-        const queue = store.remote.all<QueueRow>('remote_queue',{sessionId:source.sessionId});
+        const queue = sessionQueue && sessionId === source.sessionId ? sessionQueue : store.remote.all<QueueRow>('remote_queue',{sessionId:source.sessionId});
         let original: string | null = source.item.operationId;
         for (let depth=0; original && depth<=queue.length; depth++) {
             const reservation = store.work.executionReservation(original);
@@ -83,18 +83,21 @@ export function createWorkExecution(store: HubStore) {
         }
     };
     const reconcileSession = (sessionId: string) => {
+        // Runs on every machine frame: a session without reserved work must not read its whole remote history.
+        const pending = store.work.pendingReservationsForSession(sessionId);
+        if (!pending.length) return;
         const session = store.remote.get<SessionRow>('remote_session',sessionId);
         const queue = store.remote.all<QueueRow>('remote_queue',{sessionId});
         const commands = store.remote.all<StoredCommand>('remote_command',{sessionId});
         const operations = store.remote.all<OperationRecord>('remote_operation',{sessionId});
-        for (const reservation of store.work.pendingReservationsForSession(sessionId)) {
+        for (const reservation of pending) {
             if (reservation.state !== 'reserved') continue;
             const original = queue.find(row => row.item.operationId === reservation.operationId);
-            const liveReplacement = queue.some(row => ['queued','suspended'].includes(row.item.state) && sourceReservation(row.item.operationId,sessionId)?.operationId === reservation.operationId);
+            const liveReplacement = queue.some(row => ['queued','suspended'].includes(row.item.state) && sourceReservation(row.item.operationId,sessionId,queue)?.operationId === reservation.operationId);
             const pendingReplacement = operations.some(operation => {
                 const request = validateControl('QueueReauthorize',operation.request);
                 const edit = validateControl('QueueEdit',operation.request);
-                const replacesOriginal = request.ok && sourceReservation(operation.id,sessionId)?.operationId === reservation.operationId || edit.ok && original?.item.queueItemId === edit.value.queueItemId;
+                const replacesOriginal = request.ok && sourceReservation(operation.id,sessionId,queue)?.operationId === reservation.operationId || edit.ok && original?.item.queueItemId === edit.value.queueItemId;
                 if (!replacesOriginal || queue.some(row => row.item.operationId === operation.id)) return false;
                 const response = operation.response as {status?:string};
                 // The native host edits in place (same item and operation), so an applied edit already shown on the original row awaits no replacement.

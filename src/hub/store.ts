@@ -46,12 +46,17 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     return state;
   };
   const legacyBaselines = new WeakMap<HubState, string>();
-  const load = (): HubState => {
+  // The stored body is the canonical serialization persist wrote, so it doubles as the save baseline: no re-serialization per read.
+  const readLegacy = (): { state: HubState; body: string } => {
     const row = db.query<{ body: string }, []>("SELECT body FROM hub_state WHERE id=1").get();
     const state=row ? JSON.parse(row.body) as HubState : emptyState();
     artifacts.hydrate(state);
     withConversionProjection(state);
-    legacyBaselines.set(state, serializedLegacy(state));
+    return { state, body: row?.body ?? serializedLegacy(state) };
+  };
+  const load = (): HubState => {
+    const { state, body } = readLegacy();
+    legacyBaselines.set(state, body);
     return state;
   };
   const listeners = new Set<(state: HubState, previous: HubState) => void>();
@@ -114,20 +119,20 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     }
     return state;
   };
-  const persist = db.transaction((state: HubState, previous?: HubState, allowExisting = false) => {
+  const persist = db.transaction((state: HubState, previous?: HubState, allowExisting = false, previousBody?: string): string => {
     syncProjectReferences(db, state.projects);
     syncLegacy(state, previous);
-    const body = artifacts.persist(state, allowExisting, previous);
+    const body = artifacts.persist(state, allowExisting, previous, previousBody);
     db.query("INSERT INTO hub_state(id,body) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body WHERE body<>excluded.body").run(body);
+    return body;
   });
   const save = (state: HubState) => {
     let previous!: HubState;
     db.transaction(() => {
-      previous = load();
+      const current = readLegacy(); previous = current.state;
       const baseline = legacyBaselines.get(state);
-      if (baseline !== undefined && baseline !== serializedLegacy(previous)) fail(409, 'version-conflict', 'Legacy state changed; reload before saving');
-      persist(state, previous);
-      legacyBaselines.set(state, serializedLegacy(state));
+      if (baseline !== undefined && baseline !== current.body) fail(409, 'version-conflict', 'Legacy state changed; reload before saving');
+      legacyBaselines.set(state, persist(state, previous, false, current.body));
     })();
     notify(state, previous);
   };
@@ -140,11 +145,12 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   const writeTransaction = <T>(action: (state: HubState, remote: RemoteRepository) => T): T => {
     let previous!: HubState, committed!: HubState, changed = false;
     const result = db.transaction(() => {
-      previous = load(); const state = withConversionProjection(artifacts.hydrate(JSON.parse(serializedLegacy(previous)) as HubState)); committed = state;
+      const { state, body } = readLegacy(); committed = state;
       const result = action(state, remote);
       if (result instanceof Promise) throw new TypeError('Hub transactions must be synchronous');
-      changed = serializedLegacy(state) !== serializedLegacy(previous);
-      if (changed) persist(state, previous);
+      changed = serializedLegacy(state) !== body;
+      // Only a real change needs the untouched previous copy (projection diff and listeners), parsed from the same body.
+      if (changed) { previous = withConversionProjection(artifacts.hydrate(JSON.parse(body) as HubState)); persist(state, previous, false, body); }
       return result;
     })();
     if (changed) notify(committed, previous);

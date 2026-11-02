@@ -52,7 +52,7 @@ export function legacyArtifacts(db:Database){
         return {...durable,revisions:state.revisions.map(metadataRevision),replays};
     };
     const serialize=(state:HubState)=>JSON.stringify(snapshot(state));
-    const persist=(state:HubState,allowExisting=false,previous?:HubState)=>{
+    const persist=(state:HubState,allowExisting=false,previous?:HubState,previousBody?:string)=>{
         const before=db.query<{bytes:number;count:number},[]>('SELECT bytes,count FROM hub_revision_blob_usage WHERE id=1').get()!;
         const put=db.query('INSERT OR IGNORE INTO hub_revision_blobs(digest,content_base64) VALUES(?,?)');
         for(const revision of state.revisions)for(const file of revision.files??[]){
@@ -70,7 +70,7 @@ export function legacyArtifacts(db:Database){
         state.documentChanges=state.documentChanges.slice(-legacyStorageLimits.retainedDocumentChanges);
         const body=serialize(state);
         if(!allowExisting){
-            const bytes=Buffer.byteLength(body),previousBytes=previous?Buffer.byteLength(serialize(previous)):0;
+            const bytes=Buffer.byteLength(body),previousBytes=previous?Buffer.byteLength(previousBody??serialize(previous)):0;
             const replayCount=Object.keys(state.replays).length,previousReplays=previous?Object.keys(previous.replays).length:0;
             const collections=['projects','documents','proposals','flows','evidence','revisions','deliveries'] as const;
             if(bytes>legacyStorageLimits.maxMetadataBytes&&bytes>previousBytes||replayCount>legacyStorageLimits.maxReplayRecords&&replayCount>previousReplays||collections.some(key=>state[key].length>legacyStorageLimits.maxCollectionRecords&&state[key].length>(previous?.[key].length??0)))fail(413,'quota-exceeded','Legacy durable history quota exceeded; explicit archival is required');

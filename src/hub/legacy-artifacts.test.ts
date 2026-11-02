@@ -137,3 +137,41 @@ test('existing inline base64 aliases migrate without changing either immutable r
     const db=new Database(join(dir,'hub.sqlite'));db.query('UPDATE hub_state SET body=? WHERE id=1').run(JSON.stringify(state));db.exec("UPDATE remote_schema_version SET version=3;DELETE FROM hub_work_settings WHERE key='legacy-artifacts-v1'");db.close();
     try{const migrated=openHubStore(dir);expect(migrated.load().revisions).toEqual(revisions);expect(migrated.load().replays.alias!.body).toEqual(revisions[1]);migrated.close();}finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('legacy load and write transactions parse and serialize the aggregate once per needed copy, with unchanged results', ()=>{
+    const dir=mkdtempSync(join(tmpdir(),'hub-legacy-serialization-')), store=openHubStore(dir), seeded=store.load();
+    const event=(sequence:number)=>({projectId:'p',sequence,type:'context-changed',entityId:'d',actorId:'h',createdAt:'now'});
+    seeded.projects.push({id:'p',name:'P',version:1,lineRevisionId:null,lineVersion:0,contextRevision:0});
+    seeded.events=Array.from({length:2000},(_,index)=>event(index+1));
+    // Only whole-aggregate JSON is counted; per-record projection bodies stay far below this size.
+    const large=50_000, parse=JSON.parse, stringify=JSON.stringify;
+    let parses=0, serializations=0;
+    const counted=<T>(action:()=>T)=>{
+        parses=0; serializations=0;
+        JSON.parse=((text:string,reviver?:Parameters<typeof parse>[1])=>{ if(typeof text==='string'&&text.length>large) parses++; return parse(text,reviver); }) as typeof JSON.parse;
+        JSON.stringify=((...args:Parameters<typeof stringify>)=>{ const out=stringify(...args); if(typeof out==='string'&&out.length>large) serializations++; return out; }) as typeof JSON.stringify;
+        try{ return action(); }finally{ JSON.parse=parse; JSON.stringify=stringify; }
+    };
+    try{
+        store.save(seeded);
+        const loaded=counted(()=>store.load());
+        expect({parses,serializations}).toEqual({parses:1,serializations:0});
+        let notified=0; const unsubscribe=store.subscribe(()=>{ notified++; });
+        counted(()=>store.writeTransaction(()=>undefined));
+        // A no-op transaction parses its working copy and serializes it once to detect change; nothing is persisted.
+        expect({parses,serializations,notified}).toEqual({parses:1,serializations:1,notified:0});
+        counted(()=>store.writeTransaction(state=>{ state.events.push(event(2001)); }));
+        expect({parses,serializations,notified}).toEqual({parses:2,serializations:2,notified:1});
+        unsubscribe();
+        expect(store.load().events).toHaveLength(2001);
+        // The baseline taken before that write still refuses to overwrite it.
+        expect(()=>store.save(loaded)).toThrow('Legacy state changed');
+        const current=store.load(); current.events.push(event(2002));
+        counted(()=>store.save(current));
+        expect({parses,serializations}).toEqual({parses:1,serializations:1});
+        expect(store.load()).toEqual(current);
+        current.events.push(event(2003));
+        store.save(current);
+        expect(store.load().events).toHaveLength(2003);
+    }finally{store.close();rmSync(dir,{recursive:true,force:true});}
+});
