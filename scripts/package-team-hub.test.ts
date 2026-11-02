@@ -12,7 +12,7 @@ const WORK_SCHEMA_FILES = [
   'docs/requirements/hub-work-management/schemas/event.schema.json',
 ];
 const WORK_DOCS = ['docs/requirements/hub-work-management/openapi.json'];
-const ACCEPTANCE_FILES=['docs/requirements/hub-flow-acceptance/specification.md',...['review-guide','review-report','legacy-review'].map(name=>`docs/requirements/hub-flow-acceptance/schemas/${name}.schema.json`)];
+const ACCEPTANCE_FILES=['docs/requirements/hub-flow-acceptance/specification.md','docs/requirements/hub-flow-acceptance/execution-api.md',...['review-guide','review-report','legacy-review'].map(name=>`docs/requirements/hub-flow-acceptance/schemas/${name}.schema.json`)];
 const WORK_RUNTIME_FILES = ['src/hub/work/domain.ts', 'src/hub/work/validation.ts'];
 const WORK_RELEASE_FILES = [
   'scripts/smoke/team-hub-work.ts',
@@ -112,7 +112,7 @@ test('the Docker image copies every runtime module and schema after ordered cont
         await copyInput(source, target);
       }
     }
-    for (const path of [...WORK_SCHEMA_FILES, ...WORK_DOCS]) {
+    for (const path of [...WORK_SCHEMA_FILES, ...WORK_DOCS, 'docs/requirements/hub-flow-acceptance/schemas/legacy-review.schema.json']) {
       expect(dockerContextIncludes(path, patterns)).toBe(true);
       expect(await readFile(join(layout, path), 'utf8')).toBe(await readFile(join(repo, path), 'utf8'));
     }

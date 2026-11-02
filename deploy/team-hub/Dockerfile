@@ -15,6 +15,8 @@ COPY --chown=bun:bun docs/requirements/hub-remote-sessions ./docs/requirements/h
 # Managed-work runtime JSON imports and its published closed HTTP contract.
 COPY --chown=bun:bun docs/requirements/hub-work-management/schemas ./docs/requirements/hub-work-management/schemas
 COPY --chown=bun:bun docs/requirements/hub-work-management/openapi.json ./docs/requirements/hub-work-management/openapi.json
+# Legacy commented-review closed runtime contract.
+COPY --chown=bun:bun docs/requirements/hub-flow-acceptance/schemas/legacy-review.schema.json ./docs/requirements/hub-flow-acceptance/schemas/legacy-review.schema.json
 ENV KERYX_HUB_HOST=0.0.0.0 KERYX_HUB_PORT=8787 KERYX_HUB_DATA_DIR=/data
 EXPOSE 8787
 VOLUME ["/data"]

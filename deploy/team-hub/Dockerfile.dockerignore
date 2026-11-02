@@ -30,3 +30,7 @@ src/hub/**/*.test-support.ts
 !docs/requirements/hub-work-management/schemas/command.schema.json
 !docs/requirements/hub-work-management/schemas/event.schema.json
 !docs/requirements/hub-work-management/openapi.json
+
+!docs/requirements/hub-flow-acceptance
+!docs/requirements/hub-flow-acceptance/schemas
+!docs/requirements/hub-flow-acceptance/schemas/legacy-review.schema.json
