@@ -6,6 +6,9 @@ import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import en from '../src/i18n/workflow.en';
 import ru from '../src/i18n/workflow.ru';
+import acceptanceEn from '../src/i18n/acceptance.en';
+import acceptanceRu from '../src/i18n/acceptance.ru';
+import { clearPending } from '../src/state/pending';
 import { FlowsView, ProjectsView, OverviewView } from '../src/features/workflow';
 import { useDraftStore } from '../src/state/drafts';
 
@@ -14,31 +17,35 @@ const fixture = vi.hoisted(() => ({
   get: vi.fn(), post: vi.fn(),
 }));
 vi.mock('../src/app/hub-context', () => ({ useHub: () => fixture.hub }));
-vi.mock('../src/api/client', () => ({
+vi.mock('../src/api/client', async () => ({
+  ...await vi.importActual('../src/api/client'),
+  versionedJson: (_version: string, path: string, method: string, body?: unknown) => method === 'GET' ? fixture.get(path) : fixture.post(path, body),
   getJson: (...args: unknown[]) => fixture.get(...args), postJson: (...args: unknown[]) => fixture.post(...args),
 }));
-const flow = { id: 'f', projectId: 'p', title: 'Exact candidate', status: 'in-progress', version: 3, criteria: ['Keep the exact subject'], specDocumentId: 's', specContentDigest: 'abc', subjectRevisionId: null };
-const spec = { id: 's', projectId: 'p', path: 'specs/real.md', kind: 'spec', contentDigest: 'abc', version: 1, approval: 'unreviewed', content: '# Source', sourceRevision: 'manual:v1' };
-const revision = { id: 'r', projectId: 'p', message: 'Candidate', purpose: 'review-bundle', files: [] };
+const flow = { id: 'f', projectId: 'p', title: 'Exact candidate', status: 'in-progress', version: 3, criteria: ['Keep the exact subject'], specDocumentId: 's', specContentDigest: 'a'.repeat(64), subjectRevisionId: null };
+const spec = { id: 's', projectId: 'p', path: 'specs/real.md', kind: 'spec', contentDigest: 'a'.repeat(64), version: 1, approval: 'unreviewed', content: '# Source', sourceRevision: 'manual:v1' };
+const revision = { id: 'r', projectId: 'p', message: 'Candidate', purpose: 'review-bundle', files: [],createdBy:'agent:author',createdAt:'2026-11-03T08:00:00Z',treeDigest:'b'.repeat(64),gitBaseSha:'a'.repeat(40) };
 
 async function mount(view: React.ReactNode) {
   const i18n = createInstance();
-  await i18n.init({ lng: 'en', fallbackLng: 'en', resources: { en: { workflow: en, common: { loading: 'Loading', retry: 'Retry', 'status.implemented': 'For review' } }, ru: { workflow: ru } }, interpolation: { escapeValue: false } });
+  await i18n.init({ lng: 'en', fallbackLng: 'en', resources: { en: { acceptance: acceptanceEn, workflow: en, common: { loading: 'Loading', retry: 'Retry', 'status.implemented': 'For review' } }, ru: { acceptance: acceptanceRu, workflow: ru } }, interpolation: { escapeValue: false } });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const rendered = render(<I18nextProvider i18n={i18n}><QueryClientProvider client={client}>{view}</QueryClientProvider></I18nextProvider>);
   return { client, i18n, ...rendered };
 }
 
 beforeEach(() => {
-  useDraftStore.getState().clearAll();
+  clearPending();useDraftStore.getState().clearAll();
   fixture.hub.projectId = 'p'; fixture.hub.principal.kind = 'human'; fixture.hub.location.flowId = undefined;
   fixture.hub.navigate.mockReset(); fixture.hub.refresh.mockReset(); fixture.post.mockReset(); fixture.get.mockReset();
   fixture.get.mockImplementation(async (path: string) => {
     if (path.endsWith('/proposals')) return { proposals: [] };
+    if (path.startsWith('/machines?')) return { machines: [] };
     if (path.endsWith('/documents')) return { documents: [spec] };
     if (path.endsWith('/flows')) return { flows: [flow] };
     if (path.endsWith('/flows/f')) return flow;
     if (path.endsWith('/evidence')) return { evidence: [] };
+    if (path.endsWith('/revisions/r')) return revision;
     if (path.endsWith('/revisions?summary=1')) return { revisions: [(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length }))(revision)] };
     if (path === '/projects') return { projects: [] };
     return { id: 'p', name: 'Project', lineVersion: 0, lineRevisionId: null };
@@ -74,22 +81,22 @@ describe('workflow screens preserve exact Hub operations', () => {
 
   it('requires fresh explicit human acknowledgment for the exact accepted subject', async () => {
     fixture.hub.location.flowId = 'f';
-    fixture.get.mockImplementation(async (path: string) => path.endsWith('/flows/f') ? { ...flow, status: 'implemented', version: 4, subjectRevisionId: 'r' } : path.endsWith('/evidence') ? { evidence: [] } : path.endsWith('/documents') ? { documents: [spec] } : path.endsWith('/revisions?summary=1') ? { revisions: [(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length }))(revision)] } : { flows: [flow] });
-    fixture.post.mockResolvedValue({ ...flow, status: 'done' });
+    fixture.get.mockImplementation(async (path: string) => path.endsWith('/flows/f') ? { ...flow, status: 'implemented', version: 4, subjectRevisionId: 'r' } : path.endsWith('/evidence') ? { evidence: [] } : path.endsWith('/revisions/r') ? revision : path.endsWith('/documents') ? { documents: [spec] } : path.endsWith('/revisions?summary=1') ? { revisions: [(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length }))(revision)] } : { flows: [flow] });
+    fixture.post.mockResolvedValue({ ...flow, status: 'done',version:5,subjectRevisionId:'r',acceptedBy:'human:owner',receipt:{id:'accepted',actorId:'human:owner',actorKind:'human',createdAt:'2026-11-03T08:10:00Z'} });
     await mount(<FlowsView />);
-    const button = await screen.findByRole('button', { name: 'Accept exact revision & finish' });
-    expect(button).toBeDisabled();
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(button);
+    const button = await screen.findByRole('button', { name: 'Accept result' });
+    await waitFor(() => expect(button).toBeEnabled());fireEvent.click(button);
+    const confirm=screen.getByRole('button',{name:'Confirm acceptance'});expect(confirm).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(confirm);
     await waitFor(() => expect(fixture.post).toHaveBeenCalledWith('/projects/p/flows/f/accept', { expectedVersion: 4, subjectRevisionId: 'r', acknowledgeSelfReportedEvidence: true }));
   });
 
   it('does not offer human acceptance to an agent', async () => {
     fixture.hub.principal.kind = 'agent'; fixture.hub.location.flowId = 'f';
-    fixture.get.mockImplementation(async (path: string) => path.endsWith('/flows/f') ? { ...flow, status: 'implemented', subjectRevisionId: 'r' } : path.endsWith('/evidence') ? { evidence: [] } : path.endsWith('/documents') ? { documents: [spec] } : { flows: [flow] });
+    fixture.get.mockImplementation(async (path: string) => path.endsWith('/flows/f') ? { ...flow, status: 'implemented', subjectRevisionId: 'r' } : path.endsWith('/evidence') ? { evidence: [] } : path.endsWith('/revisions/r') ? revision : path.endsWith('/documents') ? { documents: [spec] } : { flows: [flow] });
     await mount(<FlowsView />);
-    expect(await screen.findByText('This decision requires a human principal.')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Accept exact revision & finish' })).toBeNull();
+    expect(await screen.findByText('Only an authorized human reviewer can make this decision.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Accept result' })).toBeDisabled();
   });
 
   it('validates project creation before issuing a mutation', async () => {

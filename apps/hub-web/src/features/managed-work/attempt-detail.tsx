@@ -1,3 +1,4 @@
+import { CanonicalIntentReview } from "../acceptance/canonical";
 import { AttemptResult, AttemptEvidence } from "./attempt-artifacts";
 import { useTranslation } from "react-i18next";
 import { useHub } from "../../app/hub-context";
@@ -7,7 +8,6 @@ import {
 import { type WorkAdapter } from "./adapter";
 import {
   aggregateVersions,
-  exactPassingCoverage,
   criterionHasExactPassingEvidence,
   pendingAmendments,
   recordOf,
@@ -118,7 +118,7 @@ export function AttemptDetail({
             },
     });
   };
-  return (
+  const technical = (
     <div className="work-attempt-detail">
       {drift && <Notice>{t("stale")}</Notice>}
       {pendingAmendment && <Notice>{t("pendingAmendment")}</Notice>}
@@ -162,75 +162,7 @@ export function AttemptDetail({
             onDone={refresh}
           />
         )}
-      {submission && (
-        <section className="work-review">
-          <h3>
-            {t(
-              intent.state === "accepted"
-                ? "states.accepted"
-                : attempt.state === "submitted"
-                  ? "needsReview"
-                  : "states." + attempt.state,
-            )}
-          </h3>
-          <div className="work-pin">
-            <span>{t("submissionDigest")}</span>
-            <code>{submission.contentDigest}</code>
-          </div>
-          <p>{t("selectionHelp")}</p>
-          <div className="work-actions">
-            <Button
-              variant="secondary"
-              disabled={!eligible || !can("attempt.select") || selected}
-              onClick={() => make("attempt.select", t("select"))}
-            >
-              {t(selected ? "selected" : "select")}
-            </Button>
-            <Button
-              disabled={
-                !eligible ||
-                !selected ||
-                !can("review.decide") ||
-                !exactPassingCoverage(
-                  records,
-                  submission,
-                  revision?.criteria
-                    .filter((c) => c.waivable)
-                    .map((c) => c.criterionId) ?? [],
-                )
-              }
-              onClick={() => make("review.decide", t("accept"), "accept")}
-            >
-              {t("accept")}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!eligible || !selected || !can("review.decide")}
-              onClick={() =>
-                make("review.decide", t("requestChanges"), "request-changes")
-              }
-            >
-              {t("requestChanges")}
-            </Button>
-            <Button
-              variant="danger"
-              disabled={!eligible || !selected || !can("review.decide")}
-              onClick={() => make("review.decide", t("reject"), "reject")}
-            >
-              {t("reject")}
-            </Button>
-          </div>
-          {!human && <small>{t("humanOnly")}</small>}
-          <p className="work-muted">{t("acceptHelp")}</p>
-          <h4>{t("knowledge")}</h4>
-          <p>
-            {submission.knowledgeFollowup.noUpdateReason ?? t("noKnowledge")}
-          </p>
-          {submission.knowledgeFollowup.proposalIds.map((id) => (
-            <code key={id}>{id}</code>
-          ))}
-        </section>
-      )}
+      {submission && <section><h3>{t("knowledge")}</h3><code>{submission.contentDigest}</code><p>{submission.knowledgeFollowup.noUpdateReason??t("noKnowledge")}</p><Button variant="danger" disabled={!eligible||!selected||!can("review.decide")} onClick={()=>make("review.decide",t("reject"),"reject")}>{t("reject")}</Button></section>}
       <details>
         <summary>{t("context")}</summary>
         <div className="work-pin">
@@ -292,6 +224,9 @@ export function AttemptDetail({
       </details>
     </div>
   );
+  if(submission&&subject&&revision&&(flow.state!=="in-review"||hub.location.intentId))return <CanonicalIntentReview adapter={adapter} flow={flow} intent={intent} attempt={attempt} submission={submission} records={records} can={can} refresh={refresh} technical={<>{technical}{evidence.map(item=><details key={item.id} id={"review-evidence-"+item.id}><summary>{item.method}</summary><p>{item.report}</p><code>{item.subjectDigest}</code></details>)}</>} selection={<Button variant="secondary" disabled={!eligible||!can("attempt.select")||selected||["active","unknown"].includes(attempt.executionOutcome)} onClick={()=>make("attempt.select",t("select"))}>{t(selected?"selected":"select")}</Button>}/>;
+  return technical;
+
 }
 export function DecisionHistory({
   records,

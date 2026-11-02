@@ -52,8 +52,10 @@ export function useWorkOperation(
           : await adapter.command(value)
         : await adapter.operation(value.operationId);
       if (generation !== getClientScope()) return;
-      if (receipt.status === "pending")
+      if (receipt.status === "pending") {
         setOperation({ status: "unknown", command: value, code: "pending" });
+        return {status:"unknown" as const,code:"pending"};
+      }
       else {
         if (!pending.put(null)) return;
         setOperation({ ...initial, lastReceipt: receipt });
@@ -62,6 +64,7 @@ export function useWorkOperation(
         if (!observation) requestWorkRefresh(client,workSnapshotKey(hub.scopeKey,hub.projectId,adapter.mode));
         void client.invalidateQueries({queryKey:workAttentionKey(hub.scopeKey,hub.projectId,adapter.mode),exact:true,refetchType:"active"});
         onCommitted(receipt);
+        return {status:"committed" as const};
       }
     } catch (e) {
       if (generation !== getClientScope()) return;
@@ -70,8 +73,11 @@ export function useWorkOperation(
       if (mode === "submit" && e instanceof ApiError && e.status >= 400 && e.status < 500) {
         if (!pending.put(null)) return;
         setOperation({ status: "rejected", command: null, code: e.code });
+        return {status:"rejected" as const,code:e.code};
       }
-      else setOperation({ status: "unknown", command: value, code: "unknown" });
+      else { setOperation({ status: "unknown", command: value, code: "unknown" });
+        return {status:"unknown" as const,code:"unknown"};
+      }
     }
   };
   return {

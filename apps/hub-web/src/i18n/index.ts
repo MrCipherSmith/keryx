@@ -1,3 +1,5 @@
+import acceptanceEn from "./acceptance.en";
+import acceptanceRu from "./acceptance.ru";
 import workEn from "./work.en";
 import workRu from "./work.ru";
 import i18n from "i18next";
@@ -23,6 +25,7 @@ void i18n
   .init({
     resources: {
       en: {
+        acceptance: acceptanceEn,
         work: workEn,
         common: commonEn,
         workflow: workflowEn,
@@ -30,6 +33,7 @@ void i18n
         remote: remoteEn,
       },
       ru: {
+        acceptance: acceptanceRu,
         work: workRu,
         common: commonRu,
         workflow: workflowRu,

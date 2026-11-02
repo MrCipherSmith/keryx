@@ -1,9 +1,9 @@
+import { CanonicalFlowReview } from "../acceptance/canonical";
 import { ApiError } from "../../api/client";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useHub } from "../../app/hub-context";
-import { useDraft } from "../../state/drafts";
-import { Button, Field, Notice, Select, Textarea } from "../../components/ui";
+import { Button, Notice } from "../../components/ui";
 import { aggregateVersions, recordOf, recordsOf } from "./model";
 import { useWorkOperation } from "./operation";
 import type { WorkAdapter } from "./adapter";
@@ -24,18 +24,11 @@ export function FlowReview({
 }) {
   const { t } = useTranslation("work");
   const hub = useHub();
-  const [reason, setReason] = useDraft(
-    [hub.scopeKey, hub.projectId, adapter.mode, flow.id, "flow-review"].join(
-      ":",
-    ),
-    "",
-  );
   const { run, blocked } = useWorkOperation(adapter, onDone);
   const [preview, setPreview] = useState<Awaited<
     ReturnType<WorkAdapter["acceptancePreview"]>
   > | null>(null);
   const [previewError, setError] = useState<string | null>(null);
-  const [decision, setDecision] = useState("accept");
   const [reading, setReading] = useState(false);
   const intents = recordsOf(records, "intent").filter(
     (i) => i.flowId === flow.id,
@@ -60,6 +53,8 @@ export function FlowReview({
     ...aggregateVersions(flow),
     ...Object.fromEntries(intents.map((i) => [i.id, i.version])),
   };
+  if(flow.state==="in-review"&&submission&&!hub.location.intentId)return <CanonicalFlowReview adapter={adapter} flow={flow} submission={submission} records={records} can={can} refresh={onDone}/>;
+  if(flow.state==="in-review"&&submission)return <Button variant="secondary" onClick={()=>hub.navigate({intentId:undefined,attemptId:undefined})}>{t("flowReview")}</Button>;
   if (flow.state === "accepted")
     return (
       <Notice tone="success">
@@ -130,75 +125,7 @@ export function FlowReview({
           )}
         </>
       )}
-      {flow.state === "in-review" && submission && (
-        <form
-          className="work-contribution-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run({
-              command: "review.decide",
-              expectedVersions: versions,
-              payload: {
-                targetType: "flow-review",
-                targetId: flow.id,
-                submissionId: submission.id,
-                submissionDigest: submission.contentDigest,
-                decision,
-                reason: reason.trim(),
-                waivers: [],
-              },
-            });
-          }}
-        >
-          <code>{submission.contentDigest}</code>
-          <ul>
-            {submission.acceptedIntents.map((entry) => (
-              <li key={entry.intentId}>
-                {recordOf(records, "intent", entry.intentId)?.title ??
-                  entry.intentId}{" "}
-                · <code>{entry.subjectDigest}</code>
-              </li>
-            ))}
-          </ul>
-          <Field label={t("decision")}>
-            <Select
-              value={decision}
-              onChange={(e) => setDecision(e.target.value)}
-            >
-              {["accept", "request-changes", "reject"].map((d) => (
-                <option key={d} value={d}>
-                  {t(
-                    d === "accept"
-                      ? "accept"
-                      : d === "request-changes"
-                        ? "requestChanges"
-                        : "reject",
-                  )}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t("reason")}>
-            <Textarea
-              required
-              maxLength={4000}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </Field>
-          <Button
-            type="submit"
-            disabled={
-              blocked ||
-              hub.principal.kind !== "human" ||
-              !can("review.decide") ||
-              !reason.trim()
-            }
-          >
-            {t("confirm")}
-          </Button>
-        </form>
-      )}
+
     </section>
   );
 }

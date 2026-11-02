@@ -6,14 +6,14 @@ import { acceptanceFixture, addCoverageCases, mountAcceptance, mutationRequests,
 
 let fixture:AcceptanceFixture;
 beforeEach(async()=>{fixture=await acceptanceFixture();});
-const openReturn=async()=>{fireEvent.click(await screen.findByRole('button',{name:'Return for changes'}));return screen.findByRole('textbox',{name:'Return comment'});};
+const openReturn=async()=>{const button=await screen.findByRole('button',{name:'Return for changes'});await waitFor(()=>expect(button).toBeEnabled());fireEvent.click(button);return screen.findByRole('textbox',{name:'Return comment'});};
 const confirmReturn=()=>fireEvent.click(screen.getByRole('button',{name:'Confirm return'}));
 
 test('canonical review explains delivered effect and exact Intent target before collapsed technical identifiers',async()=>{
  mountAcceptance('canonical');
  const narrative=await screen.findByRole('heading',{name:'What was done'});
  expect(screen.getByText('Keyboard navigation delivered')).toBeVisible();
- expect(screen.getByText('Reviewers can navigate without a mouse')).toBeVisible();
+ expect(await screen.findByText('Reviewers can navigate without a mouse')).toBeVisible();
  expect(screen.getByText('Safari requires a manual check')).toBeVisible();
  expect(screen.getAllByText(/human:maya|agent:|Contributor/i).length).toBeGreaterThan(0);
  const summary=screen.getByText('Technical details',{selector:'summary'});const details=summary.closest('details')!;
@@ -28,7 +28,7 @@ test('canonical guide resolves its exact immutable document and copy stays inert
  mountAcceptance('canonical');await screen.findByRole('heading',{name:'How to check'});
  expect(await screen.findByText('Open the disposable project')).toBeVisible();expect(screen.getByText('Hub browser')).toBeVisible();expect(screen.getByText('The highlighted result is visible')).toBeVisible();
  fireEvent.click(screen.getByRole('button',{name:'Copy instruction'}));
- await waitFor(()=>expect(copy).toHaveBeenCalledWith("printf 'review-only'"));expect(await screen.findByRole('status')).toHaveTextContent(/copied/i);
+ await waitFor(()=>expect(copy).toHaveBeenCalledWith("printf 'review-only'"));expect(await screen.findByText('Instruction copied',{selector:'[role=status]'})).toBeVisible();
  expect(fixture.requests.some(request=>request.url.includes('/documents/guide-doc/versions/1?digest='+fixture.guideDigest))).toBe(true);
  expect(mutationRequests(fixture)).toHaveLength(0);expect(open).not.toHaveBeenCalled();
 });
@@ -45,7 +45,7 @@ test.each(['missing-selector','mismatched-artifact','ambiguous-artifact','malfor
 });
 
 test('canonical review lists every pinned criterion with conflicting and missing support instead of the last green report',async()=>{
- addCoverageCases(fixture);mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria'});
+ addCoverageCases(fixture);mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria',level:2});
  for(const [criterion,status] of [['Passing criterion','Reported pass'],['Failing criterion','Failing support'],['Inconclusive criterion','Inconclusive'],['Missing criterion','Missing support'],['Conflicting criterion','Conflicting support']]){
   expect(within(screen.getByRole('group',{name:criterion})).getByText(status!)).toBeVisible();
  }
@@ -58,14 +58,14 @@ test('review provenance distinguishes contributor agent human and observed CI wi
  template.method='Verified by CI (contributor text)';
  const extra=[{id:'independent-agent',source:'machine-observation' as const,createdBy:'agent:independent',sourceRunId:'independent-run',report:'Independent agent check'},{id:'human-check',source:'human-review' as const,createdBy:'human:reviewer',sourceRunId:null,report:'Human review check'},{id:'observed-ci',source:'ci-observation' as const,createdBy:'server:ci-observer',sourceRunId:null,sourceObservationId:'ci-observation-1',report:'Provider-observed CI result'}];
  fixture.records.push(...extra.map(record=>({...template,...record})));fixture.submission.evidenceIds.push(...extra.map(record=>record.id));fixture.submission.coverage[0]!.evidenceIds.push(...extra.map(record=>record.id));
- mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria'});
+ mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria',level:2});
  expect(screen.getByText('Contributor report')).toBeVisible();expect(screen.getByText('Agent report')).toBeVisible();expect(screen.getByText('Human review')).toBeVisible();expect(screen.getByText('Observed CI')).toBeVisible();
- expect(screen.getByText('Independent agent check').closest('[role=group]')).not.toHaveTextContent('Observed CI');
+ const independent=screen.getByText('Agent report').closest('[role=group]')!;expect(independent).toHaveTextContent('Independent agent check');expect(independent).not.toHaveTextContent('Observed CI');
 });
 
 test('canonical accept confirms the Intent effect and preserves exact command pins without accepting the Flow',async()=>{
- mountAcceptance('canonical');fireEvent.click(await screen.findByRole('button',{name:'Accept result'}));
- expect(screen.getByText(/accept.*deliverable|Intent.*accept/i)).toBeVisible();
+ mountAcceptance('canonical');const accept=await screen.findByRole('button',{name:'Accept result'});await waitFor(()=>expect(accept).toBeEnabled());fireEvent.click(accept);
+ expect(screen.getAllByText(/accept.*deliverable|Intent.*accept/i).length).toBeGreaterThan(0);
  fireEvent.click(screen.getByRole('button',{name:'Confirm acceptance'}));
  await waitFor(()=>expect(mutationRequests(fixture)).toHaveLength(1));const request=mutationRequests(fixture)[0]!;
  expect(request.body).toMatchObject({command:'review.decide',expectedVersions:{'flow-demo':1,i1:1,'a-agent':1},payload:{targetType:'intent-review',targetId:'i1',submissionId:fixture.submission.id,submissionDigest:fixture.submission.contentDigest,decision:'accept'}});
@@ -92,7 +92,7 @@ test('canonical selection and server eligibility remain separate from reviewer s
 test.each(['en','ru'] as const)('legacy no-guide review in %s keeps unmapped reports honest and exposes plain decisions',async(language)=>{
  fixture=await acceptanceFixture(language);fixture.legacyResult.files=[];mountAcceptance('legacy');
  await screen.findByRole('heading',{name:language==='en'?'What was done':'Что сделано'});
- expect(screen.getByText(language==='en'?'No verification steps were supplied':'Шаги проверки не предоставлены')).toBeVisible();
+ expect(await screen.findByText(language==='en'?'No verification steps were supplied':'Шаги проверки не предоставлены')).toBeVisible();
  expect(screen.getByText(language==='en'?'Reports without criterion mapping':'Отчёты без привязки к критериям')).toBeVisible();
  expect(screen.getByText('Keyboard focus remains visible')).toBeVisible();expect(screen.getByText('Screen reader labels are clear')).toBeVisible();
  expect(screen.queryByText(language==='en'?'Observed CI':'Наблюдаемый CI')).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ test.each(['en','ru'] as const)('legacy no-guide review in %s keeps unmapped rep
 
 test('legacy designated guide renders bounded instructions without publishing its review-only bundle',async()=>{
  mountAcceptance('legacy');await screen.findByRole('heading',{name:'How to check'});
- expect(await screen.findByText('The highlighted result is visible')).toBeVisible();expect(screen.getByText('Reviewers can navigate without a mouse')).toBeVisible();
+ expect(await screen.findByText('The highlighted result is visible')).toBeVisible();expect(await screen.findByText('Reviewers can navigate without a mouse')).toBeVisible();
  expect(screen.getByText(/contributor.*guide|guide.*contributor/i)).toBeVisible();expect(screen.queryByRole('button',{name:/publish|merge|deploy/i})).not.toBeInTheDocument();
  expect(mutationRequests(fixture)).toHaveLength(0);
 });
@@ -116,7 +116,7 @@ test('legacy acceptance confirmation captures existing exact-result acknowledgme
 });
 
 test.each(['','   ','x'.repeat(4001)])('legacy return rejects a blank or oversized comment before sending',async(value)=>{
- mountAcceptance('legacy');const comment=await openReturn();fireEvent.change(comment,{target:{value}});confirmReturn();
+ mountAcceptance('legacy');const comment=await openReturn();comment.focus();fireEvent.change(comment,{target:{value}});confirmReturn();
  expect(await screen.findByRole('alert')).toHaveTextContent(/comment|required|4000/i);expect(comment).toHaveFocus();expect(mutationRequests(fixture)).toHaveLength(0);
 });
 
@@ -165,7 +165,7 @@ test('historical completed legacy results are readable but never reopened or ret
 
 test('legacy return feedback appears in project Overview without inventing an assignee',async()=>{
  const decision=returnedDecision(fixture);fixture.legacyFlow.status='in-progress';fixture.legacyFlow.reviewFeedback=decision;fixture.legacyFlow.lastReturnDecisionId=decision.id;
- mountAcceptance('overview');expect(await screen.findByText(decision.comment)).toBeVisible();expect(screen.getByText(/returned for changes|changes requested/i)).toBeVisible();expect(screen.queryByText('Assigned to human:reviewer')).not.toBeInTheDocument();
+ mountAcceptance('overview');expect(await screen.findByText(decision.comment)).toBeVisible();expect(screen.getAllByText(/returned for changes|changes requested/i).length).toBeGreaterThan(0);expect(screen.queryByText('Assigned to human:reviewer')).not.toBeInTheDocument();
 });
 
 test.each([403,404])('unavailable canonical guide (%s) stays explicit without inventing steps or granting authority',async(status)=>{
@@ -195,12 +195,12 @@ test('canonical aggregate confirmation names required accepted deliverables and 
  const intents=fixture.records.filter(record=>record.kind==='intent');for(const intent of intents){intent.state='accepted';intent.acceptanceDecisionId='accepted-'+intent.id;}
  fixture.records.push({kind:'flow-submission',id:'aggregate-submission',projectId:'p',createdBy:'human:reviewer',createdAt:'2026-11-03T08:00:00Z',flowId:flow.id,flowRevisionId:flow.approvedRevisionId!,acceptedIntents:intents.map(intent=>({intentId:intent.id,intentRevisionId:intent.approvedRevisionId!,decisionId:intent.acceptanceDecisionId!,submissionId:'accepted-submission-'+intent.id,subjectDigest:'a'.repeat(64)})),knowledgeProposalIds:[],contentDigest:'c'.repeat(64),criterionCoverage:[{flowCriterionId:'fc1',intentId:'i1',intentCriterionId:'ci1',submissionId:'accepted-submission-i1',decisionId:'accepted-i1'},{flowCriterionId:'fc2',intentId:'i2',intentCriterionId:'ci2',submissionId:'accepted-submission-i2',decisionId:'accepted-i2'}]});
  mountAcceptance('canonical',{location:{projectId:'p',tab:'work',flowId:'flow-demo'}});await screen.findByRole('heading',{name:'Decision'});
- expect(screen.getByText('Navigation and focus')).toBeVisible();expect(screen.getByText('Integration verification')).toBeVisible();fireEvent.click(screen.getByRole('button',{name:'Accept result'}));fireEvent.click(screen.getByRole('button',{name:'Confirm acceptance'}));
+ const composition=screen.getByRole('list',{name:'Flow composition'});expect(within(composition).getByText('Navigation and focus')).toBeVisible();expect(within(composition).getByText('Integration verification')).toBeVisible();fireEvent.click(screen.getByRole('button',{name:'Accept result'}));fireEvent.click(screen.getByRole('button',{name:'Confirm acceptance'}));
  await waitFor(()=>expect(mutationRequests(fixture)).toHaveLength(1));expect(mutationRequests(fixture)[0]!.body).toMatchObject({command:'review.decide',payload:{targetType:'flow-review',targetId:flow.id,submissionId:'aggregate-submission',submissionDigest:'c'.repeat(64),decision:'accept'}});
 });
 
 test('legacy decision success is announced and focused for keyboard reviewers',async()=>{
- fixture.respond=request=>{if(request.method==='POST'&&request.url.endsWith('/accept')){fixture.legacyFlow.status='done';fixture.legacyFlow.acceptedBy='human:reviewer';return Response.json({...fixture.legacyFlow});}};
+ fixture.respond=request=>{if(request.method==='POST'&&request.url.endsWith('/accept')){fixture.legacyFlow.status='done';fixture.legacyFlow.version=5;fixture.legacyFlow.acceptedBy='human:reviewer';return Response.json({...fixture.legacyFlow,receipt:{id:'accept-receipt',actorId:'human:reviewer',actorKind:'human',createdAt:'2026-11-03T08:10:00Z'}});}};
  mountAcceptance('legacy');const accept=await screen.findByRole('button',{name:'Accept result'});accept.focus();expect(accept).toHaveFocus();fireEvent.click(accept);
  const confirm=screen.getByRole('button',{name:'Confirm acceptance'});fireEvent.click(screen.getByRole('checkbox',{name:/self.reported|supplied reports/i}));confirm.focus();fireEvent.click(confirm);
  const status=await screen.findByRole('status');expect(status).toHaveTextContent(/accepted/i);expect(status).toHaveFocus();
@@ -218,6 +218,18 @@ test('legacy resubmission names the durable return decision and a new immutable 
 test('an existing human waiver stays visible as a reasoned decision rather than a passing check',async()=>{
  fixture.revision.criteria[0]!.waivable=true;fixture.submission.coverage[0]!.result='inconclusive';recordOf(fixture.records,'evidence','ev-agent')!.result='inconclusive';
  fixture.records.push({id:'human-waiver',kind:'decision',projectId:'p',createdBy:'human:reviewer',createdAt:'2026-11-03T08:00:00Z',targetType:'criterion-waiver',targetId:'ci1',targetDigest:fixture.submission.contentDigest,decision:'waive',reason:'Manual Safari validation recorded separately',actorKind:'human',operationId:'waiver-op',contentDigest:'d'.repeat(64)});
- mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria'});const row=screen.getByRole('group',{name:'Arrow keys and focus verified'});
+ mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria',level:2});const row=screen.getByRole('group',{name:'Arrow keys and focus verified'});
  expect(within(row).getByText('Human waiver')).toBeVisible();expect(row).toHaveTextContent('Manual Safari validation recorded separately');expect(within(row).queryByText('Reported pass')).not.toBeInTheDocument();
+});
+
+test('submitted narrative never turns non-HTTP contributor links into active navigation',async()=>{
+ fixture.subject.report='[Email instruction](mailto:owner@example.test) [Unsafe action](javascript:alert(1))';mountAcceptance('canonical');await screen.findByRole('heading',{name:'What was done'});
+ expect(screen.queryByRole('link',{name:'Email instruction'})).not.toBeInTheDocument();expect(screen.queryByRole('link',{name:'Unsafe action'})).not.toBeInTheDocument();expect(mutationRequests(fixture)).toHaveLength(0);
+});
+
+test('a different Intent pending operation cannot be reconciled or announced from the current review pane',async()=>{
+ const {pendingScope,writePending}=await import('../src/state/pending');const {validCommand}=await import('../src/features/managed-work/operation');
+ writePending(pendingScope('work','human:reviewer','p','live'),{command:'review.decide',operationId:'different-intent-operation',expectedVersions:{'flow-demo':1,i2:1},payload:{targetType:'intent-review',targetId:'i2',submissionId:'other-submission',submissionDigest:'a'.repeat(64),decision:'accept',reason:'Original review',waivers:[]}},validCommand);
+ mountAcceptance('canonical');await screen.findByRole('heading',{name:'Decision'});
+ expect(screen.getByText(/another.*operation.*recovery|another.*operation.*reconciliation/i)).toBeVisible();expect(screen.queryByRole('button',{name:'Check decision status'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Retry identical decision'})).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Accept result'})).toBeDisabled();
 });

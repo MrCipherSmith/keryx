@@ -113,6 +113,7 @@ function WorkBoard({
 }) {
   const hub = useHub();
   const { t } = useTranslation("work");
+  const {t:acceptanceText}=useTranslation("acceptance");
   const flowId = hub.location.flowId ?? null;
   const setFlow = (id: string | null) =>
     hub.navigate({ tab: "work", flowId: id ?? undefined });
@@ -256,6 +257,7 @@ function WorkBoard({
         <FlowList flows={flows} intentsByFlow={index.intentsByFlow} onSelect={(id) => { setFlow(id); setIntent(null); setAttempt(null); }} />
       ) : (
         <>
+          <details open={!(flow.approvedRevisionId&&flow.state!=="draft"&&(attempt?.submissionId||flow.state==="in-review"))}><summary>{acceptanceText("workContext")}</summary>
           <ContributionPanel
             adapter={adapter}
             records={records}
@@ -273,6 +275,7 @@ function WorkBoard({
             human={human}
             prepare={(next) => setAction({ ...next, scopeFlowId: flow.id })}
           />
+          </details>
           <div className="work-detail-grid">
             <IntentColumn intents={intents} selectedIntentId={intent?.id} onSelect={(id) => { setIntent(id); setAttempt(null); setAction(null); }} />
             <section className="work-attempts">
@@ -392,7 +395,7 @@ function WorkBoard({
             can={can}
             onDone={() => void refresh()}
           />
-          <DecisionHistory records={records} flow={flow} />
+          <details><summary>{t("decisions")}</summary><DecisionHistory records={records} flow={flow}/></details>
         </>
       )}
       <Button
