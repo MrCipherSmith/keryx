@@ -378,7 +378,7 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
         operationId: command.operationId,
         receiptId: "demo-" + command.operationId,
         status: "committed" as const,
-        entities: structuredClone(records),
+        entities: structuredClone(records.filter((record) => record.kind === "decision" && record.operationId === command.operationId)),
         eventCursor: String(receipts.size + 1),
       };
       receipts.set(command.operationId, {
