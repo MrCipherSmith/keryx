@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import net from "node:net";
 import http from "node:http";
-import { createAllowlistProxy, matchesAllowlist, type AllowlistProxy } from "./proxy";
+import { createAllowlistProxy, matchesAllowlist, type AllowlistProxy, type ProxyDecision } from "./proxy";
 
 function rawHttpRequest(proxyPort: number, request: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -136,15 +136,31 @@ describe("createAllowlistProxy credential masking (HTTP)", () => {
     });
   }
 
-  test("sentinel in a header is unmasked to an inject host; never leaks", async () => {
-    const upPort = await echoAuthUpstream();
-    proxy = await createAllowlistProxy({
-      allowedDomains: ["localhost"],
-      masks: [{ sentinel: "SENTINEL-XYZ", realValue: "real-secret-123", injectHosts: ["localhost"] }],
+  test("plain HTTP never unmasks: a request carrying a sentinel for its host is refused and the real secret is never sent", async () => {
+    let upstreamHit = false;
+    let upstreamSaw = "";
+    const up = http.createServer((q, r) => {
+      upstreamHit = true;
+      upstreamSaw = JSON.stringify(q.headers);
+      r.end("reached");
     });
-    const body = await proxiedGet(proxy.port, `http://localhost:${upPort}/`, { Authorization: "Bearer SENTINEL-XYZ" });
-    expect(body).toContain("AUTH=Bearer real-secret-123");
-    expect(body).not.toContain("SENTINEL-XYZ");
+    const upPort: number = await new Promise((r) => up.listen(0, "127.0.0.1", () => r((up.address() as { port: number }).port)));
+    const decisions: ProxyDecision[] = [];
+    try {
+      proxy = await createAllowlistProxy({
+        allowedDomains: ["localhost"],
+        masks: [{ sentinel: "SENTINEL-XYZ", realValue: "real-secret-123", injectHosts: ["localhost"] }],
+        onDecision: (d) => decisions.push(d),
+      });
+      const body = await proxiedGet(proxy.port, `http://localhost:${upPort}/`, { Authorization: "Bearer SENTINEL-XYZ" });
+      expect(body).toContain("blocked");
+      expect(body).not.toContain("real-secret-123");
+      expect(upstreamHit).toBe(false);
+      expect(upstreamSaw).not.toContain("real-secret-123");
+      expect(decisions.find((d) => d.kind === "http" && !d.allowed)?.reason).toContain("plaintext");
+    } finally {
+      await new Promise<void>((r) => up.close(() => r()));
+    }
   });
 
   test("no substitution for a host outside injectHosts (sentinel passes through)", async () => {
@@ -209,6 +225,40 @@ describe("C-13/C-14: malformed absolute HTTP targets", () => {
       expect(response).toContain("502 Bad Gateway");
       expect(response).toContain("upstream error");
       expect(seenPath).toBe("");
+    }
+  });
+});
+
+describe("createAllowlistProxy listen failures", () => {
+  test("a unix socket path that cannot be bound rejects instead of hanging", async () => {
+    const tooLong = `/tmp/${"x".repeat(300)}.sock`;
+    const outcome = await Promise.race([
+      createAllowlistProxy({ allowedDomains: ["localhost"], unixSocketPath: tooLong }).then(
+        () => "resolved",
+        () => "rejected",
+      ),
+      new Promise<string>((r) => setTimeout(() => r("hung"), 3_000)),
+    ]);
+    expect(outcome).toBe("rejected");
+  });
+
+  test("a TCP port already in use rejects instead of hanging", async () => {
+    const holder = net.createServer();
+    const port: number = await new Promise((r) => holder.listen(0, "127.0.0.1", () => r((holder.address() as net.AddressInfo).port)));
+    try {
+      const outcome = await Promise.race([
+        createAllowlistProxy({ allowedDomains: ["localhost"], port }).then(
+          (p) => {
+            void p.close();
+            return "resolved";
+          },
+          () => "rejected",
+        ),
+        new Promise<string>((r) => setTimeout(() => r("hung"), 3_000)),
+      ]);
+      expect(outcome).toBe("rejected");
+    } finally {
+      await new Promise<void>((r) => holder.close(() => r()));
     }
   });
 });

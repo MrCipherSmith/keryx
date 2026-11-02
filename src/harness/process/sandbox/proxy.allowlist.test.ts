@@ -2,7 +2,8 @@
 // `refuseReservedAddresses: true` — used only by the unattended `agent-task`
 // path. The pre-existing `network: "restricted"` posture (flow 098/142) never
 // sets this flag and is proven unchanged by `proxy.test.ts`.
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { PassThrough } from "node:stream";
 import net from "node:net";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
@@ -382,4 +383,54 @@ describe("flow 301 security review F2: the allowlist restricts host AND port", (
     expect(res).toContain("200 Connection Established");
     expect(res).toContain("UPSTREAM-OK");
   });
+
+  test("AC4: CONNECT dials the address that passed the check, never the hostname again", async () => {
+    const dialled: unknown[][] = [];
+    const spy = spyOn(net, "connect").mockImplementation(((...args: unknown[]) => {
+      dialled.push(args);
+      return new net.Socket(); // never connects; only the dial target matters
+    }) as unknown as typeof net.connect);
+    try {
+      proxy = await createAllowlistProxy({
+        allowedDomains: ["pinned.test"],
+        refuseReservedAddresses: true,
+        resolveHost: async () => "93.184.216.34",
+      });
+      // The test client uses Socket#connect, not net.connect, so only the proxy's own dial is recorded.
+      const sock = new net.Socket();
+      sock.connect(proxy.port, proxy.host, () => sock.write("CONNECT pinned.test:443 HTTP/1.1\r\nHost: pinned.test:443\r\n\r\n"));
+      await new Promise((r) => setTimeout(r, 300));
+      sock.destroy();
+      const targets = dialled.map((a) => a[1]);
+      expect(targets).toContain("93.184.216.34");
+      expect(targets).not.toContain("pinned.test");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("AC4: plain HTTP dials the address that passed the check, never the hostname again", async () => {
+    const dialled: Array<{ host?: unknown }> = [];
+    const spy = spyOn(http, "request").mockImplementation(((opts: { host?: unknown }) => {
+      dialled.push(opts);
+      return new PassThrough();
+    }) as unknown as typeof http.request);
+    try {
+      proxy = await createAllowlistProxy({
+        allowedDomains: ["pinned.test"],
+        refuseReservedAddresses: true,
+        resolveHost: async () => "93.184.216.34",
+      });
+      const sock = net.connect(proxy.port, proxy.host, () =>
+        sock.write("GET http://pinned.test/ HTTP/1.1\r\nHost: pinned.test\r\nConnection: close\r\n\r\n"),
+      );
+      sock.on("error", () => {});
+      await new Promise((r) => setTimeout(r, 300));
+      sock.destroy();
+      expect(dialled.map((d) => d.host)).toEqual(["93.184.216.34"]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
+

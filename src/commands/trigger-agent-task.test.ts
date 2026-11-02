@@ -406,6 +406,32 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
     expect(provider.calls()).toBe(0);
   });
 
+  test("network allowlist whose proxy cannot bind refuses the run with sandbox-unavailable instead of hanging", async () => {
+    // A scratch parent so deep that the proxy's unix socket path exceeds sun_path: the bind fails.
+    const longRuntime = path.join(aside, "r".repeat(60), "r".repeat(60), "r".repeat(60));
+    await mkdir(longRuntime, { recursive: true });
+    const saved = process.env["XDG_RUNTIME_DIR"];
+    process.env["XDG_RUNTIME_DIR"] = longRuntime;
+    try {
+      const base = entry({ tools: ["gh.pr.list"], bins: { gh: await stubGh() } });
+      const action = base["action"] as Record<string, unknown>;
+      const grants = { ...(action["grants"] as Record<string, unknown>), network: "allowlist", domains: ["api.github.com"] };
+      await addConfirmedSchedule(root, { ...base, action: { ...action, grants } });
+      const provider = scripted([finalText("never")]);
+      await Promise.race([
+        run(provider),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error("dispatcher hung on a proxy bind failure")), 15_000)),
+      ]);
+      const record = await lastRecord();
+      expect(record.outcome).toBe("dispatch-refused");
+      expect(record.agentTask?.refusal).toBe("sandbox-unavailable");
+      expect(provider.calls()).toBe(0);
+    } finally {
+      if (saved === undefined) delete process.env["XDG_RUNTIME_DIR"];
+      else process.env["XDG_RUNTIME_DIR"] = saved;
+    }
+  }, 30_000);
+
   test("a schedule edited after confirmation is refused with grants-changed and calls no model", async () => {
     await addConfirmedSchedule(root, entry({ tools: ["gh.pr.list"], bins: { gh: await stubGh() } }));
     // Widen the grant behind the confirmed hash, the way a hand edit would.

@@ -325,6 +325,9 @@ export function agentTaskScratchParent(env: Record<string, string | undefined> =
   return path.join(tmpdir(), `keryx-agent-tasks-${uid}`);
 }
 
+/** Longest unix socket path the proxy may bind: macOS `sun_path` is 104 bytes with the NUL, Linux 108. */
+const MAX_UNIX_SOCKET_PATH_BYTES = 103;
+
 function lastAssistantText(history: readonly NormalizedMessage[]): string {
   for (let i = history.length - 1; i >= 0; i -= 1) {
     const message = history[i]!;
@@ -425,6 +428,12 @@ async function runLocked(
       // refuses the whole run; it never falls back to `off` or `full`.
       const proxySocketPath = path.join(scratch, "net-proxy.sock");
       try {
+        // A path past `sun_path` (104 bytes on macOS, 108 on Linux, each counting the NUL)
+        // may be truncated by a bind and so bind somewhere else: refuse it with a reason.
+        const socketPathBytes = Buffer.byteLength(proxySocketPath);
+        if (socketPathBytes > MAX_UNIX_SOCKET_PATH_BYTES) {
+          throw new Error(`its socket path is ${socketPathBytes} bytes, past the ${MAX_UNIX_SOCKET_PATH_BYTES}-byte unix socket limit`);
+        }
         const proxy = await createAllowlistProxy({
           allowedDomains: [...action.grants.domains],
           unixSocketPath: proxySocketPath,

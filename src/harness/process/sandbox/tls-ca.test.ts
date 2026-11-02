@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { X509Certificate } from "node:crypto";
+import { X509Certificate, createPrivateKey } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createRunCa, type RunCa } from "./tls-ca";
 
 describe("createRunCa (system openssl)", () => {
@@ -58,4 +61,50 @@ describe("createRunCa (system openssl)", () => {
     // The CA workspace is gone, so a further issuance cannot succeed.
     await expect(local.issueLeaf("y.example.test")).rejects.toThrow();
   });
+
+  test("concurrent issuance for one host shares one key/cert pair that matches", async () => {
+    ca = await createRunCa();
+    const leaves = await Promise.all([1, 2, 3, 4, 5].map(() => ca!.issueLeaf("race.example.test")));
+    for (const leaf of leaves) {
+      expect(leaf.certPem).toBe(leaves[0]!.certPem);
+      expect(leaf.keyPem).toBe(leaves[0]!.keyPem);
+    }
+    const cert = new X509Certificate(leaves[0]!.certPem);
+    expect(cert.checkPrivateKey(createPrivateKey(leaves[0]!.keyPem))).toBe(true);
+  }, 30_000);
+
+  test("concurrent issuance for different hosts: every cert matches its own key and serials differ", async () => {
+    ca = await createRunCa();
+    const hosts = ["a.example.test", "b.example.test", "c.example.test", "d.example.test"];
+    const leaves = await Promise.all(hosts.map((h) => ca!.issueLeaf(h)));
+    const serials = new Set<string>();
+    leaves.forEach((leaf, i) => {
+      const cert = new X509Certificate(leaf.certPem);
+      expect(cert.subjectAltName).toContain(hosts[i]!);
+      expect(cert.checkPrivateKey(createPrivateKey(leaf.keyPem))).toBe(true);
+      expect(cert.verify(new X509Certificate(ca!.caCertPem).publicKey)).toBe(true);
+      serials.add(cert.serialNumber);
+    });
+    expect(serials.size).toBe(hosts.length);
+  }, 30_000);
+
+  test("a failed issuance is not cached: the next call retries", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "keryx-ca-test-"));
+    try {
+      const shim = path.join(parent, "openssl-shim");
+      const flag = path.join(parent, "fail-once");
+      // Real openssl, except `x509` fails once while the flag file exists.
+      await writeFile(shim, `#!/bin/sh\nif [ "$1" = "x509" ] && [ -f "${flag}" ]; then rm -f "${flag}"; echo boom >&2; exit 1; fi\nexec openssl "$@"\n`, { mode: 0o755 });
+      ca = await createRunCa({ openssl: shim, tmpDir: parent });
+      await writeFile(flag, "");
+      await expect(ca.issueLeaf("retry.example.test")).rejects.toThrow();
+      const leaf = await ca.issueLeaf("retry.example.test");
+      expect(leaf.certPem).toContain("BEGIN CERTIFICATE");
+    } finally {
+      if (ca) await ca.dispose();
+      ca = undefined;
+      await rm(parent, { recursive: true, force: true });
+    }
+  }, 30_000);
 });
+
