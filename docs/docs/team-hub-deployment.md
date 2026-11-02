@@ -283,3 +283,13 @@ Pushing a `v*` tag runs the existing release job first (the whole suite and gate
 The first time the package is published to GitHub Container Registry it may be private. The job fails at its anonymous-pull step in that case; make the package public once in its settings and re-run the job.
 
 CI (`team-hub-distribution` in `ci.yml`) builds the image from the packaged archive on every pull request and runs the same checks, so a change that breaks the image fails before a tag does.
+
+
+The ordinary packaging tests use no registry network and no host Bun cache. The extracted-runtime integration proof is opt-in and runs in CI's `team-hub-distribution` job. To run it locally, prepare an empty private cache explicitly, then run the test offline against that cache:
+
+```sh
+bun scripts/prepare-team-hub-runtime-cache.ts --allow-network --cache /absolute/path/to/new-private-cache
+KERYX_HUB_RUNTIME_CACHE=/absolute/path/to/new-private-cache bun test scripts/package-team-hub.test.ts
+```
+
+The preparation command downloads only the frozen Hub runtime dependency set. The test copies that cache into a temporary isolated installation, uses `bun install --offline`, and starts the actual extracted Hub/MCP runtime. Without the cache environment variable, this network integration proof is skipped; archive closure, build boundaries and empty-cache offline refusal still run in the ordinary suite.
