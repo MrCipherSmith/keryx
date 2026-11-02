@@ -1,4 +1,5 @@
 export default {
+  loadMoreRevisions: 'Load more revisions',
   documents: 'Documents', documentsDescription: 'Shared specifications and wiki, with exact versions and review history.',
   searchDocuments: 'Search paths, types or review status', noDocuments: 'No documents match this view.', selectDocument: 'Select a document to read its source and propose a change.', missingDocument: 'This document is unavailable in the selected project.',
   importDocument: 'Import document', path: 'Project-relative path', kind: 'Document type', specification: 'Specification', wiki: 'Wiki', sourceRevision: 'Source revision', sourceRevisionHint: 'Required provenance, for example a Git SHA or manual:spec-v1.', markdownSource: 'Markdown source', import: 'Import', importHint: 'Changed existing content creates a proposal. Canonical content is never overwritten.',
