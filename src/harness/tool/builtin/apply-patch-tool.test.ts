@@ -148,7 +148,10 @@ function execGitClean(command: string, cwd: string): void {
       cleanEnv[key] = value;
     }
   }
-  execSync(command, { cwd, env: cleanEnv });
+  // Hermetic git: no host global config, system config, init template or commit hook may run in the fixture.
+  cleanEnv.GIT_CONFIG_GLOBAL = "/dev/null";
+  cleanEnv.GIT_CONFIG_NOSYSTEM = "1";
+  execSync(command.replace(/^git init -q/, "git init -q --template=").replace(/git -c user\.email/, "git -c core.hooksPath=/dev/null -c user.email"), { cwd, env: cleanEnv });
 }
 
 test("makeGitApplyRunner: applies a real patch to a real file via the real git binary", async () => {

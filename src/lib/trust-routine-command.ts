@@ -334,6 +334,38 @@ function isRoutineKeryx(words: readonly string[], walk: Walk): boolean {
   return true;
 }
 
+// Long options that make git read a file outside the repository (`diff --no-index <a> <b>`, `blame --contents <file>`).
+// git accepts any unambiguous prefix of a long option, so a prefix of these names counts too.
+const GIT_OUTSIDE_READ_FLAGS: readonly string[] = ["--no-index", "--contents"];
+
+function isOutsideReadFlag(word: string): boolean {
+  const name = word.split("=")[0] as string;
+  return name.length >= 3 && name.startsWith("--") && GIT_OUTSIDE_READ_FLAGS.some((flag) => flag.startsWith(name));
+}
+
+function isOutsideRoot(projectRoot: string, target: string): boolean {
+  const relative = path.relative(projectRoot, target);
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
+/** An operand whose real path, resolved from the working directory, lies outside the project (a symlink is followed). */
+function isEscapingOperand(word: string, cwd: string, projectRoot: string): boolean {
+  return isOutsideRoot(projectRoot, realOrResolved(path.resolve(cwd, word)));
+}
+
+/**
+ * A git read stays routine only while it cannot print a file from outside the project: it runs in a known directory
+ * inside the project root (outside a work tree `git diff a b` is an implicit `--no-index`, and inside another repository
+ * `git show`/`git log` read that one, so a `cd` out of the project is never followed), carries no `--no-index` or
+ * `--contents` (nor an abbreviation of them), and no operand resolves outside the project root.
+ */
+function isGitReadConfined(words: readonly string[], walk: Walk): boolean {
+  const cwd = walk.cwd;
+  if (cwd === undefined || isOutsideRoot(walk.projectRoot, cwd)) return false;
+  if (words.slice(2).some(isOutsideReadFlag)) return false;
+  return !words.slice(2).some((w) => !w.startsWith("-") && isEscapingOperand(w, cwd, walk.projectRoot));
+}
+
 function isRoutineSegment(words: readonly string[], walk: Walk): boolean {
   if (words.length === 0 || stripAssignments(words).length !== words.length) return false;
   switch (words[0]) {
@@ -346,7 +378,7 @@ function isRoutineSegment(words: readonly string[], walk: Walk): boolean {
     case "bun":
       return words[1] === "test" && isRoutineBunTest(words, walk);
     case "git":
-      return words[1] !== undefined && GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words);
+      return words[1] !== undefined && GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words) && isGitReadConfined(words, walk);
     default:
       return false;
   }

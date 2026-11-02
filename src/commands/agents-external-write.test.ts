@@ -177,6 +177,24 @@ describe("agents external review", () => {
     expect(out.join("\n")).not.toContain("escapes");
   });
 
+  test("the run report escapes the agent's cost currency", () => {
+    const acp = {
+      agentId: "codex-cli",
+      agentInfo: "unreported",
+      mode: { effective: "read", clamped: false, requested: "read" },
+      unattended: false,
+      context: { offered: false, reason: "none" },
+      decisions: [],
+      fsRequests: [],
+      cost: { amount: 0.5, currency: "USD\x1b]52;c;ZXZpbA==\x07\r" },
+    };
+    const outcome = { status: "completed", output: "done", acp } as unknown as Parameters<typeof renderRunOutcome>[0];
+    const text = renderRunOutcome(outcome).join("\n");
+    // eslint-disable-next-line no-control-regex -- Assert terminal control bytes were escaped.
+    expect(text).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/);
+    expect(text).toContain("cost: 0.5 USD\\x1b]52;c;ZXZpbA==\\x07\\x0d");
+  });
+
   test("apply prints the same escaped review before it asks", async () => {
     const patch = `${makePatch()}+\x1b[2Jhidden\n`;
     const record = seed(patch);

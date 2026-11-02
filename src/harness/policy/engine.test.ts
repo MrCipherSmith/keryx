@@ -40,7 +40,7 @@ import type { ToolCall, ToolRisk } from "../tool/types";
 // PINNED API (see dispatch) — S3 impl exports these; imports fail until then
 // (expected RED: "Cannot find module './types'" / "Cannot find module
 // './engine'").
-import { contextIsPolicyTrusted, decide } from "./engine";
+import { contextIsPolicyTrusted, decide, isManagedFlowFile } from "./engine";
 import type { Approval, PolicyContext, PolicyDecision, PolicyProfile } from "./types";
 
 // Frozen schemas dir, computed relative to this file
@@ -503,4 +503,17 @@ describe("SC_R07_STALE_OR_UNTRUSTED_CONTEXT — stale/untrusted context never be
     // trustedAsPolicy false.
     expect(contextIsPolicyTrusted({ reliability: "unknown", trustedAsPolicy: false })).toBe(false);
   });
+});
+
+describe("isManagedFlowFile is case-insensitive (APFS/NTFS alias the same file)", () => {
+  for (const p of [
+    ".metaproject/flows/1/flow.json",
+    ".metaproject/flows/1/flow.JSON",
+    ".metaproject/flows/1/FLOW.JSON",
+    ".metaproject/flows/x/state.Json",
+    ".metaproject/FLOWS/x/state.json",
+  ]) {
+    test(p, () => expect(isManagedFlowFile(p)).toBe(true));
+  }
+  test("unrelated json is not managed", () => expect(isManagedFlowFile("src/data.JSON")).toBe(false));
 });

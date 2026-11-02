@@ -4,6 +4,7 @@ import {existsSync,unlinkSync} from 'node:fs';
 import {processPresence} from '../lib/hub-machine/process-identity';
 import {parseLocalOwnerRequest,requestLocalOwnerControl} from '../lib/hub-machine/local-control';
 import { keryxConfigDir } from '../lib/config-dir';
+import { nestedAgentCardRefusal } from './operator-confirm-tools';
 import { allowCheckout, hubIdentity, machineStateDir, loadEnrollment, removeEnrollment, pairEnrollment } from '../lib/hub-machine/config';
 import {canonicalDigest,type Control} from '../remote-control/protocol';
 import {loadShellConfig} from '../lib/shell-config';
@@ -42,6 +43,8 @@ interface CommandOptions {
 /** Every `keryx hub machine` subcommand and the flags it accepts; the usage error and the help are checked against it. */
 const allowed: Record<string, string[]> = { pair: ['--url', '--code-env'], allow: ['--project', '--checkout', '--path', '--profile','--hub'], configure:['--hub','--candidate','--ad-hoc','--max-runs'], readiness: [], recover: ['--hub','--action','--session','--native-session','--controller-lease','--controller-version','--session-version','--history-version','--workspace-baseline','--request-id','--run','--reconciliation','--command'], unpair: ['--hub'] };
 export const MACHINE_SUBCOMMANDS: readonly string[] = Object.keys(allowed);
+/** Subcommands that enroll this machine, widen what the Hub may run here, or drop the enrollment: the operator's own decision. */
+const OPERATOR_SUBCOMMANDS: ReadonlySet<string> = new Set(['pair', 'allow', 'configure', 'unpair']);
 export async function hubMachineCommand(args: string[], options: CommandOptions = {}): Promise<void> {
     const stateDir = keryxConfigDir(options.stateDir);
     const env = options.env ?? process.env;
@@ -49,6 +52,16 @@ export async function hubMachineCommand(args: string[], options: CommandOptions 
     const [command, ...rest] = args;
     if (!command || !allowed[command])
         throw new MachineError(`Use hub machine ${MACHINE_SUBCOMMANDS.join(' | ')}`);
+    // A keryx started from an agent's shell_exec (KERYX_TOOL_CALL=1) never grants lasting remote execution on its own say.
+    // Defence in depth only: the agent controls its child's environment (`env -u KERYX_TOOL_CALL keryx hub machine pair`
+    // removes the marker), so the gate that holds is the approval floor in command-risk.ts (touchesOperatorDecision),
+    // which asks in every permission mode. A terminal check would not hold either: a pseudo-terminal driver
+    // (`script -q /dev/null keryx …`) hands the agent one.
+    if (OPERATOR_SUBCOMMANDS.has(command)) {
+        const nested = nestedAgentCardRefusal(env);
+        if (nested)
+            throw new MachineError(`hub machine ${command} ${nested}`);
+    }
     const flags = new Map<string, string>();
     for (let i = 0; i < rest.length; i++) {
         const key = rest[i]!;

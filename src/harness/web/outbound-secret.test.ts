@@ -28,6 +28,30 @@ test("a secret as a bare path segment is caught", () => {
   expect(containsOutboundSecret(`https://x.example/webhooks/${secret}`)).toBe(true);
 });
 
+test("a secret placed in a subdomain is caught before DNS can leak it", () => {
+  const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+  expect(containsOutboundSecret(`https://${secret}.attacker.example/`)).toBe(true);
+  expect(containsOutboundSecret(`https://${secret}.attacker.example:8443/x`)).toBe(true);
+  expect(containsOutboundSecret(`https://u@${secret}.attacker.example/`)).toBe(true);
+  expect(containsOutboundSecret(`https://sk-${"A".repeat(24)}.attacker.example/`)).toBe(true);
+  expect(containsOutboundSecret(`https://AKIAIOSFODNN7EXAMPLE.attacker.example/`)).toBe(true);
+});
+
+test("BOUNDARY — ordinary hostnames, including digits and long vendor labels, fetch", () => {
+  for (const host of [
+    "gpu10.inference.example.com",
+    "api.v10.example.com",
+    "d1234abcdef.cloudfront.net",
+    "my-project-1a2b3c.vercel.app",
+    "bucket-name-prod-eu-west-1.s3.amazonaws.com",
+    "ec2-52-12-34-56.compute-1.amazonaws.com",
+    "registry.npmjs.org",
+    "xn--80ak6aa92e.com",
+  ]) {
+    expect(containsOutboundSecret(`https://${host}/path`)).toBe(false);
+  }
+});
+
 test("BOUNDARY — an ordinary URL with no secret-shaped component fetches", () => {
   expect(containsOutboundSecret("https://x.example/webhooks/abc?limit=10")).toBe(false);
 });

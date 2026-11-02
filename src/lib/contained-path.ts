@@ -88,10 +88,16 @@ export function outsideProjectMessage(candidate: string, rootReal: string): stri
  * The refusal is typed and distinguishable from a missing file: an operator
  * needs to know whether they made a typo or asked for something they may not
  * have, and a generic ENOENT hides the difference.
+ *
+ * A relative `candidate` is resolved against `baseDir`, which defaults to
+ * `projectRoot`. A caller that took the path as typed on a command line passes
+ * its working directory, so `../lib/x.ts` typed in `<root>/src` means
+ * `<root>/lib/x.ts`; containment is still judged against the project root.
  */
 export async function resolveContainedPath(
   projectRoot: string,
   candidate: string,
+  baseDir?: string,
 ): Promise<ContainedPathResult> {
   try {
     const rootStat = await lstat(projectRoot);
@@ -102,7 +108,7 @@ export async function resolveContainedPath(
     return { ok: false, reason: "not-found", message: `no such file or directory: ${candidate}` };
   }
   const rootReal = await realpath(projectRoot).catch(() => path.resolve(projectRoot));
-  const absolute = path.resolve(rootReal, candidate);
+  const absolute = path.resolve(baseDir ?? rootReal, candidate);
 
   // Resolve symlinks. A path that does not exist yet cannot be a symlink
   // escape, so its lexical resolution is the honest answer — but it is still
@@ -176,7 +182,7 @@ export function placePathWithinSync(projectRoot: string, candidate: string, cwd:
  * are synchronous end to end (`agents monitor`). Same rules, same order: real
  * path first, containment before existence.
  */
-export function resolveContainedPathSync(projectRoot: string, candidate: string): ContainedPathResult {
+export function resolveContainedPathSync(projectRoot: string, candidate: string, baseDir?: string): ContainedPathResult {
   try {
     const rootStat = lstatSync(projectRoot);
     if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
@@ -186,7 +192,7 @@ export function resolveContainedPathSync(projectRoot: string, candidate: string)
     return { ok: false, reason: "not-found", message: `no such file or directory: ${candidate}` };
   }
   const rootReal = realOrResolved(projectRoot);
-  const absolute = path.resolve(rootReal, candidate);
+  const absolute = path.resolve(baseDir ?? rootReal, candidate);
 
   let real: string | null;
   try {

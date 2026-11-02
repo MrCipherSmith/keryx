@@ -22,6 +22,7 @@ export {
 } from "./proposal-lifecycle";
 export { sessionEvidenceRef } from "./session-wrap-up";
 export { proposalNotePath } from "./proposal-evidence";
+export { proposeFromSession } from "./propose-from-session";
 export { findSession } from "../session/store";
 export { createLocalCollaborationService, normalizeCollaborationResult, type CollaborationActivity } from "./collaboration-service";
 export {

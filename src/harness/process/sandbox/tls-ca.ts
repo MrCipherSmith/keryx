@@ -15,9 +15,24 @@
 // leaves the process that created it.
 
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+/**
+ * Leaves kept per run: the same size class as the proxy's 64 live terminators
+ * (`MAX_TERMINATORS`). Unbounded, every distinct host a wildcard allowlist let
+ * a contained command reach stayed resident (about 3 KB each) for the whole run.
+ * Least recently used goes first; an evicted host is simply issued again.
+ */
+export const MAX_CACHED_LEAVES = 64;
+
+/**
+ * Concurrent `openssl` issuances (two processes each). 100 distinct hosts at
+ * once used to start 100 issuances, 58 of them running openssl together.
+ */
+export const MAX_CONCURRENT_ISSUANCES = 4;
 
 /** Issued key material for one host. */
 export interface LeafCertificate {
@@ -56,6 +71,14 @@ function run(bin: string, args: string[]): Promise<string> {
       code === 0 ? resolve(out) : reject(new Error(`${bin} ${args[0]} failed (exit ${code}): ${err.trim()}`)),
     );
   });
+}
+
+/** A random positive 128-bit certificate serial, as the `0x…` form `x509 -set_serial` takes. */
+function randomSerial(): string {
+  const bytes = randomBytes(16);
+  bytes[0] = (bytes[0] ?? 0) & 0x7f; // keep it positive
+  bytes[15] = (bytes[15] ?? 0) | 0x01; // and non-zero
+  return `0x${bytes.toString("hex")}`;
 }
 
 /** openssl config enabling a CA cert (basicConstraints CA:TRUE). */
@@ -121,19 +144,44 @@ export async function createRunCa(options: CreateRunCaOptions = {}): Promise<Run
 
   const caCertPem = await readFile(caCert, "utf8");
   const cache = new Map<string, LeafCertificate>();
+  // In-flight issuances, keyed like `cache`: concurrent callers for one host share ONE
+  // issuance (and so one key/cert pair) instead of racing over the same files. An entry
+  // is dropped on rejection so a transient openssl failure can be retried.
+  const inflight = new Map<string, Promise<LeafCertificate>>();
 
-  return {
-    caCertPem,
-    async issueLeaf(host: string): Promise<LeafCertificate> {
-      const key = host.toLowerCase();
-      const hit = cache.get(key);
-      if (hit) return hit;
+  // A counting semaphore over `issue`: at most MAX_CONCURRENT_ISSUANCES run, the rest wait in order.
+  let running = 0;
+  const waiting: Array<() => void> = [];
+  const acquire = (): Promise<void> => {
+    if (running < MAX_CONCURRENT_ISSUANCES) {
+      running += 1;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => waiting.push(resolve));
+  };
+  const release = (): void => {
+    const next = waiting.shift();
+    if (next) next(); // hand the slot straight over: `running` is unchanged
+    else running -= 1;
+  };
+  const issueLimited = async (key: string): Promise<LeafCertificate> => {
+    await acquire();
+    try {
+      return await issue(key);
+    } finally {
+      release();
+    }
+  };
 
-      const safe = key.replace(/[^a-z0-9.-]/g, "_");
-      const leafKey = path.join(root, `${safe}.key`);
-      const leafCsr = path.join(root, `${safe}.csr`);
-      const leafCrt = path.join(root, `${safe}.crt`);
-      const leafCfg = path.join(root, `${safe}.cnf`);
+  const issue = async (key: string): Promise<LeafCertificate> => {
+    // A private working directory per issuance: two issuances (even for the same host
+    // after a rejection) never share a key/CSR/cert/config file name.
+    const work = await mkdtemp(path.join(root, "leaf-"));
+    try {
+      const leafKey = path.join(work, "leaf.key");
+      const leafCsr = path.join(work, "leaf.csr");
+      const leafCrt = path.join(work, "leaf.crt");
+      const leafCfg = path.join(work, "leaf.cnf");
       await writeFile(leafCfg, leafConfig(key), { mode: 0o600 });
 
       await run(openssl, [
@@ -143,27 +191,64 @@ export async function createRunCa(options: CreateRunCaOptions = {}): Promise<Run
         "-out", leafCsr,
         "-config", leafCfg,
       ]);
+      // An explicit random serial instead of `-CAcreateserial`: that rewrites the one
+      // shared `ca.srl`, which concurrent issuances for different hosts would race on.
       await run(openssl, [
         "x509", "-req",
         "-in", leafCsr,
         "-CA", caCert,
         "-CAkey", caKey,
-        "-CAcreateserial",
+        "-set_serial", randomSerial(),
         "-out", leafCrt,
         "-days", days,
         "-extfile", leafCfg,
         "-extensions", "v3_req",
       ]);
 
-      const issued: LeafCertificate = {
+      return {
         certPem: await readFile(leafCrt, "utf8"),
         keyPem: await readFile(leafKey, "utf8"),
       };
-      cache.set(key, issued);
-      return issued;
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  };
+
+  return {
+    caCertPem,
+    issueLeaf(host: string): Promise<LeafCertificate> {
+      const key = host.toLowerCase();
+      const hit = cache.get(key);
+      if (hit) {
+        // Refresh recency: a Map iterates in insertion order, so re-inserting makes this the newest.
+        cache.delete(key);
+        cache.set(key, hit);
+        return Promise.resolve(hit);
+      }
+      const pending = inflight.get(key);
+      if (pending) return pending;
+      const started = issueLimited(key).then(
+        (issued) => {
+          cache.set(key, issued);
+          while (cache.size > MAX_CACHED_LEAVES) {
+            const oldest = cache.keys().next().value;
+            if (oldest === undefined) break;
+            cache.delete(oldest);
+          }
+          inflight.delete(key);
+          return issued;
+        },
+        (error: unknown) => {
+          inflight.delete(key);
+          throw error;
+        },
+      );
+      inflight.set(key, started);
+      return started;
     },
     async dispose(): Promise<void> {
       cache.clear();
+      inflight.clear();
       await rm(root, { recursive: true, force: true });
     },
   };

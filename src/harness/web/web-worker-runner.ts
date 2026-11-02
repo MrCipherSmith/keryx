@@ -199,6 +199,7 @@ export class SystemWebWorkerRunner implements WebWorkerRunner {
   }
 
   async run(request: WebWorkerRequest, signal?: AbortSignal): Promise<WebPolicyResult<WebWorkerResponse>> {
+    if (signal?.aborted === true) return { ok: false, reason: "cancelled" };
     const launcherAvailable = this.platform === "darwin"
       ? existsSync("/usr/bin/sandbox-exec")
       : this.platform === "linux"

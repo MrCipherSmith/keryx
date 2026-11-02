@@ -28,8 +28,13 @@ test("/route's on/off toggle read-and-spreads the existing ShellConfig.routingCl
   // `src/lib/shell-config.ts`), so this call site must read the existing
   // value first and spread it in (`saveProviderBaseUrl`'s own idiom).
   expect(body).not.toContain("saveShellConfig({ routingClassifier: { enabled: next } });");
-  expect(body).toContain("const existing = loadShellConfig().routingClassifier ?? {};");
-  expect(body).toContain("saveShellConfig({ routingClassifier: { ...existing, enabled: next } });");
+  // Merged into the value on disk at write time: a pre-read `existing` spread
+  // through `saveShellConfig` reverted `enabled` after a concurrent change.
+  expect(body).not.toContain("loadShellConfig()");
+  expect(body).not.toContain("saveShellConfig(");
+  expect(body).toContain(
+    "updateShellConfig((current) => ({ ...current, routingClassifier: { ...(current.routingClassifier ?? {}), enabled: next } }));",
+  );
   expect(body).toContain("refreshRoutingSidebar();");
 });
 

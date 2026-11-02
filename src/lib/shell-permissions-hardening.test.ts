@@ -153,8 +153,10 @@ test("F5: no bare prefix grant for destructive-capable file mutators", () => {
     const v = validateShellPattern(`${word} *`);
     expect(`${word} *: ${v.ok}`).toBe(`${word} *: false`);
   }
-  // `rm build/*.tmp` narrows the target and remains offerable.
-  expect(validateShellPattern("rm build/*.tmp").ok).toBe(true);
+  // An exact `rm build/*.tmp` (its `*` escaped) remains offerable; the unescaped glob form is not
+  // a valid pattern at all, because a mid-pattern `*` would match `rm -rf src build/x.tmp`.
+  expect(validateShellPattern("rm build/\\*.tmp").ok).toBe(true);
+  expect(validateShellPattern("rm build/*.tmp").ok).toBe(false);
 });
 
 test("B3: keryx is now banned from prefix grants (like git, bash, etc.)", () => {

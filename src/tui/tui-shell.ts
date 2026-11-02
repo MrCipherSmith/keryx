@@ -351,7 +351,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig, updateShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -6016,8 +6016,10 @@ export async function launchTuiAgentShell(opts: {
      */
     const setRoutingEnabled = (next: boolean): void => {
       routingEnabled = next;
-      const existing = loadShellConfig().routingClassifier ?? {};
-      saveShellConfig({ routingClassifier: { ...existing, enabled: next } });
+      // Applied to the value on disk at write time (`updateShellConfig`), not
+      // to one read here: a `routingClassifier` snapshot taken a moment earlier
+      // put `enabled` back after another process had flipped it.
+      updateShellConfig((current) => ({ ...current, routingClassifier: { ...(current.routingClassifier ?? {}), enabled: next } }));
       refreshRoutingSidebar();
       io.onSystem?.(`Route: ${next ? "on" : "off"}\n`);
     };

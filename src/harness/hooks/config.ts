@@ -36,6 +36,7 @@ import type { PolicyProfileId } from "../policy/types";
 export type HookConfigDiagnosticCode =
   | "invalid-json"
   | "schema-invalid"
+  | "matcher-invalid"
   | "unknown-schema-version"
   | "hook-id-collides-with-builtin"
   | "hook-id-duplicate"
@@ -300,7 +301,37 @@ export function validateHookConfigDocument(
     return { valid: false, diagnostics };
   }
   const hooks = (record.hooks as Record<string, unknown[]> | undefined) ?? {};
+  const matcherDiagnostics = scanForInvalidMatchers(hooks, scope, label);
+  if (matcherDiagnostics.length > 0) return { valid: false, diagnostics: matcherDiagnostics };
   return { valid: true, hooks };
+}
+
+/**
+ * A `matcher` is compiled as `^(?:<matcher>)$` at fire time. One that does not
+ * compile can never be proven not to apply, and a gate hook that silently never
+ * runs is fail-open — so the whole document is refused here instead.
+ */
+function scanForInvalidMatchers(hooks: Record<string, unknown[]>, scope: HookScope, label: string): HookConfigDiagnostic[] {
+  const diagnostics: HookConfigDiagnostic[] = [];
+  for (const [event, list] of Object.entries(hooks)) {
+    if (!Array.isArray(list)) continue;
+    for (const raw of list) {
+      if (typeof raw !== "object" || raw === null || isDisableOverride(raw)) continue;
+      const { id, matcher } = raw as Record<string, unknown>;
+      if (typeof matcher !== "string" || matcher === "*") continue;
+      try {
+        new RegExp(`^(?:${matcher})$`);
+      } catch (err) {
+        diagnostics.push({
+          code: "matcher-invalid",
+          scope,
+          path: typeof id === "string" ? id : label,
+          message: `${label}: hook "${String(id)}" (event ${event}) has an invalid matcher regex: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+  }
+  return diagnostics;
 }
 
 function normalizeFullRegistration(

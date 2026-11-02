@@ -794,20 +794,24 @@ describe("ensureSafeBunExec", () => {
   // stopped) does not see the actual `keryx` process outlive it forever.
   describe("ppid watchdog (the already-safe / no-spawn path)", () => {
     function intervalDeps(): {
-      deps: Pick<SafeExecDeps, "getPpid" | "setUnrefInterval" | "exit">;
+      deps: Pick<SafeExecDeps, "getPpid" | "isPidAlive" | "setUnrefInterval" | "exit">;
       fire: () => void;
       cleared: () => boolean;
       exited: () => number | undefined;
       currentPpid: { value: number };
+      parentAlive: { value: boolean };
     } {
       const currentPpid = { value: 111 };
+      const parentAlive = { value: true };
       let fn: (() => void) | undefined;
       let cleared = false;
       let exitCode: number | undefined;
       return {
         currentPpid,
+        parentAlive,
         deps: {
           getPpid: () => currentPpid.value,
+          isPidAlive: () => parentAlive.value,
           setUnrefInterval: (f) => {
             fn = f;
             return { clear: () => (cleared = true) };
@@ -830,6 +834,7 @@ describe("ensureSafeBunExec", () => {
         env: {},
         spawn: noSpawn,
         getPpid: deps.getPpid,
+        isPidAlive: deps.isPidAlive,
         setUnrefInterval: (f, ms) => {
           intervalStarted = true;
           return deps.setUnrefInterval(f, ms);
@@ -856,6 +861,122 @@ describe("ensureSafeBunExec", () => {
       expect(exited()).toBe(1);
     });
 
+    test("ignores a recorded parent pid that is not this process's real parent (an inherited, stale marker)", async () => {
+      const { deps, fire, exited, currentPpid } = intervalDeps();
+      currentPpid.value = 999; // the real parent is NOT the pid the env names
+      let intervalStarted = false;
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: "555" },
+        spawn: noSpawn,
+        getPpid: deps.getPpid,
+        isPidAlive: deps.isPidAlive,
+        setUnrefInterval: (f, ms) => {
+          intervalStarted = true;
+          return deps.setUnrefInterval(f, ms);
+        },
+        exit: deps.exit,
+      });
+      expect(intervalStarted).toBe(false);
+      fire();
+      expect(exited()).toBeUndefined();
+    });
+
+    test("arms the watchdog when the wrapper already died before startup (reparented to init), so the orphan exits", async () => {
+      const { deps, fire, exited, currentPpid } = intervalDeps();
+      currentPpid.value = 1; // wrapper died during startup: already adopted by init
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: "555" },
+        spawn: noSpawn,
+        ...deps,
+      });
+      fire();
+      expect(exited()).toBe(1);
+    });
+
+    test("arms when a subreaper (neither the recorded pid nor 1) adopted the orphan and the recorded wrapper is dead", async () => {
+      const { deps, fire, exited, currentPpid, parentAlive } = intervalDeps();
+      currentPpid.value = 4242; // systemd --user / tini / PR_SET_CHILD_SUBREAPER
+      parentAlive.value = false;
+      let armed = false;
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: "555" },
+        spawn: noSpawn,
+        ...deps,
+        setUnrefInterval: (f, ms) => {
+          armed = true;
+          return deps.setUnrefInterval(f, ms);
+        },
+      });
+      expect(armed).toBe(true);
+      fire();
+      expect(exited()).toBe(1);
+    });
+
+    test("does not arm for a foreign live parent (recorded pid still alive, ppid differs)", async () => {
+      const { deps, currentPpid, parentAlive } = intervalDeps();
+      currentPpid.value = 4242;
+      parentAlive.value = true;
+      let armed = false;
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: "555" },
+        spawn: noSpawn,
+        ...deps,
+        setUnrefInterval: (f, ms) => {
+          armed = true;
+          return deps.setUnrefInterval(f, ms);
+        },
+      });
+      expect(armed).toBe(false);
+    });
+
+    test("the default liveness probe sees a reaped pid as dead and the current pid as alive", async () => {
+      const proc = Bun.spawn(["true"]);
+      await proc.exited;
+      let armedDead = false;
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: String(proc.pid) },
+        spawn: noSpawn,
+        getPpid: () => 4242,
+        setUnrefInterval: () => {
+          armedDead = true;
+          return { clear: () => {} };
+        },
+        exit: () => {},
+      });
+      expect(armedDead).toBe(true);
+      let armedAlive = false;
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: String(process.pid) },
+        spawn: noSpawn,
+        getPpid: () => 4242,
+        setUnrefInterval: () => {
+          armedAlive = true;
+          return { clear: () => {} };
+        },
+        exit: () => {},
+      });
+      expect(armedAlive).toBe(false);
+    });
+
+    test("consumes the marker so a process spawned later does not inherit it", async () => {
+      const { deps, currentPpid } = intervalDeps();
+      currentPpid.value = 555;
+      const env: NodeJS.ProcessEnv = { [REEXEC_PARENT_PID_ENV]: "555" };
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env,
+        spawn: noSpawn,
+        ...deps,
+      });
+      expect(env[REEXEC_PARENT_PID_ENV]).toBeUndefined();
+    });
+
     test("ignores a malformed recorded parent pid rather than watching garbage", async () => {
       const { deps, fire, exited } = intervalDeps();
       let intervalStarted = false;
@@ -864,6 +985,7 @@ describe("ensureSafeBunExec", () => {
         env: { [REEXEC_PARENT_PID_ENV]: "not-a-pid" },
         spawn: noSpawn,
         getPpid: deps.getPpid,
+        isPidAlive: deps.isPidAlive,
         setUnrefInterval: (f, ms) => {
           intervalStarted = true;
           return deps.setUnrefInterval(f, ms);

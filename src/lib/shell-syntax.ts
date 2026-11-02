@@ -61,7 +61,12 @@ function isStructural(ch: string, next: string | undefined): boolean {
   return METACHARACTERS.has(ch);
 }
 
-/** Walk `text` tracking quote state; report unquoted metacharacters. */
+/** True when `ch` (with lookahead) starts a command substitution: `$(` or a backtick. */
+function isSubstitution(ch: string, next: string | undefined): boolean {
+  return ch === "`" || (ch === "$" && next === "(");
+}
+
+/** Walk `text` tracking quote state; report structural metacharacters (outside quotes, or a substitution inside ""). */
 function scan(text: string): ScanState {
   let quote: '"' | "'" | undefined;
   let metacharacter = false;
@@ -71,6 +76,9 @@ function scan(text: string): ScanState {
     const next = text[i + 1];
 
     if (quote !== undefined) {
+      // Double quotes keep `$(` and a backtick live: sh still runs the
+      // substitution there (`ls "$(curl … | sh)"`). Only '' is fully literal.
+      if (quote === '"' && isSubstitution(ch, next)) metacharacter = true;
       const step = stepInsideQuote(ch, next, quote);
       quote = step.quote;
       if (step.skipNext) i++;
@@ -93,8 +101,9 @@ function scan(text: string): ScanState {
 }
 
 /**
- * True when `command` contains a shell metacharacter OUTSIDE quotes, or cannot
- * be analysed at all (unbalanced quotes → fail closed).
+ * True when `command` contains a shell metacharacter OUTSIDE quotes, a command
+ * substitution (`$(` or a backtick) inside double quotes, or cannot be analysed
+ * at all (unbalanced quotes → fail closed).
  *
  * A command for which this is true must never be matched against a saved
  * allowlist pattern and must never be remembered as one: the pattern would be
@@ -108,7 +117,7 @@ export function hasUnquotedMetacharacter(command: string): boolean {
 
 /**
  * True when `command` has a backslash, `$`, `{`, `}`, a glob character (`*`, `?`, `[`) or a word-initial `~` OUTSIDE
- * quotes, or cannot be analysed (unbalanced quotes). The shell rewrites such a word (`$IFS`, a brace list, `$'..'`, an
+ * quotes, a `$` or backtick inside double quotes, or cannot be analysed (unbalanced quotes). The shell rewrites such a word (`$IFS`, a brace list, `$'..'`, an
  * escape, a glob that matches a file named like an option, a home directory) into words this module does not compute,
  * so a caller that judges the words by their text must not approve the command.
  */
@@ -117,6 +126,8 @@ export function hasUnquotedExpansion(command: string): boolean {
   for (let i = 0; i < command.length; i++) {
     const ch = command[i]!;
     if (quote !== undefined) {
+      // Inside "" the shell still expands `$…` and backticks, so the word's text is not what runs.
+      if (quote === '"' && (ch === "$" || ch === "`")) return true;
       const step = stepInsideQuote(ch, command[i + 1], quote);
       quote = step.quote;
       if (step.skipNext) i++;
@@ -250,9 +261,13 @@ export function stripAssignments(words: readonly string[]): string[] {
   return words.slice(i);
 }
 
-/** Lowercased basename of the command word: `/usr/bin/rm` → `rm`. */
+/**
+ * Lowercased basename of the command word: `/usr/bin/rm` → `rm`. A backslash escape the shell
+ * drops (`\rm`, `r\m`) and a leading subshell/group opener (`(rm`) are removed first, so those
+ * spellings name the command they run. Wrapper words (`env rm`, `nice rm`) are NOT peeled here.
+ */
 export function commandWord(words: readonly string[]): string {
-  const first = stripAssignments(words)[0] ?? "";
+  const first = (stripAssignments(words)[0] ?? "").replace(/^[({]+/, "").replace(/\\(.)/g, "$1");
   const base = first.split("/").pop() ?? first;
   return base.toLowerCase();
 }
