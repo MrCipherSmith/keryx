@@ -68,33 +68,34 @@ export function createWorkExecution(store: HubStore) {
         const reservation = store.work.executionReservation(operationId);
         if (reservation?.state === 'reserved') store.work.saveExecutionReservation({...reservation, state:'released'});
     };
-    const sourceReservation = (operationId: string, sessionId?: string) => {
-        const operation = store.remote.get<OperationRecord>('remote_operation',operationId);
+    const sourceReservation = (operationId: string, sessionId?: string, observed?: {operations: Map<string, OperationRecord>; byId: Map<string, QueueRow>; byOperation: Map<string, QueueRow>}) => {
+        const operation = observed ? observed.operations.get(operationId) : store.remote.get<OperationRecord>('remote_operation',operationId);
         const parsed = operation && validateControl('QueueReauthorize',operation.request);
         if (!parsed?.ok) return;
-        const source = store.remote.get<QueueRow>('remote_queue',parsed.value.queueItemId);
+        const source = observed ? observed.byId.get(parsed.value.queueItemId) : store.remote.get<QueueRow>('remote_queue',parsed.value.queueItemId);
         if (!source || source.item.operationId !== parsed.value.originalOperationId || sessionId && source.sessionId !== sessionId) return;
-        const queue = store.remote.all<QueueRow>('remote_queue',{sessionId:source.sessionId});
+        const byOperation = observed?.byOperation ?? new Map(store.remote.all<QueueRow>('remote_queue',{sessionId:source.sessionId}).map(row => [row.item.operationId, row]));
         let original: string | null = source.item.operationId;
-        for (let depth=0; original && depth<=queue.length; depth++) {
+        for (let depth=0; original && depth<=byOperation.size; depth++) {
             const reservation = store.work.executionReservation(original);
             if (reservation) return reservation.sessionId === source.sessionId && reservation.projectId === source.projectId && reservation.machineId === source.machineId ? reservation : undefined;
-            original = queue.find(row => row.item.operationId === original)?.item.replacesOperationId ?? null;
+            original = byOperation.get(original)?.item.replacesOperationId ?? null;
         }
     };
     const reconcileSession = (sessionId: string) => {
+        const pending = store.work.pendingReservationsForSession(sessionId);
+        if (!pending.length) return;
         const session = store.remote.get<SessionRow>('remote_session',sessionId);
-        const queue = store.remote.all<QueueRow>('remote_queue',{sessionId});
-        const commands = store.remote.all<StoredCommand>('remote_command',{sessionId});
-        const operations = store.remote.all<OperationRecord>('remote_operation',{sessionId});
-        for (const reservation of store.work.pendingReservationsForSession(sessionId)) {
+        const {queue, commands, operations} = store.remote.managedReconciliation(sessionId, pending.map(reservation => reservation.operationId));
+        const observed = { operations: new Map(operations.map(operation => [operation.id, operation])), byId: new Map(queue.map(row => [row.item.queueItemId, row])), byOperation: new Map(queue.map(row => [row.item.operationId, row])) };
+        for (const reservation of pending) {
             if (reservation.state !== 'reserved') continue;
-            const original = queue.find(row => row.item.operationId === reservation.operationId);
-            const liveReplacement = queue.some(row => ['queued','suspended'].includes(row.item.state) && sourceReservation(row.item.operationId,sessionId)?.operationId === reservation.operationId);
+            const original = observed.byOperation.get(reservation.operationId);
+            const liveReplacement = queue.some(row => ['queued','suspended'].includes(row.item.state) && sourceReservation(row.item.operationId,sessionId,observed)?.operationId === reservation.operationId);
             const pendingReplacement = operations.some(operation => {
                 const request = validateControl('QueueReauthorize',operation.request);
                 const edit = validateControl('QueueEdit',operation.request);
-                const replacesOriginal = request.ok && sourceReservation(operation.id,sessionId)?.operationId === reservation.operationId || edit.ok && original?.item.queueItemId === edit.value.queueItemId;
+                const replacesOriginal = request.ok && sourceReservation(operation.id,sessionId,observed)?.operationId === reservation.operationId || edit.ok && original?.item.queueItemId === edit.value.queueItemId;
                 if (!replacesOriginal || queue.some(row => row.item.operationId === operation.id)) return false;
                 // The native executor edits the same item in place. A newer
                 // observed version settles that edit, without a replacement ID.
