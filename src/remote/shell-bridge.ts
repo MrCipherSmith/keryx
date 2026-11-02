@@ -97,15 +97,25 @@ export interface RemoteApprovalAnswer {
   undelivered?: true;
 }
 
+/** A line from the topic that was handed to the shell and has not started its turn yet. */
+interface WaitingLine {
+  updateId: number;
+  line: string;
+  fromId?: number;
+}
+
 export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn" | "stopTelegramTurn">> {
   sessionId(): string;
   project(): string;
   /** A turn is running, or something the user typed is waiting to run. */
   isBusy(): boolean;
-  /** Idle path: run `text` like a typed line, labelled `tg`. */
-  runLine(text: string): void;
-  /** Busy path: queue `text` through the same queue a typed line takes, labelled `tg`. */
-  enqueue(text: string): void;
+  /**
+   * Idle path: run `text` like a typed line, labelled `tg`. `updateId` names the line: a host that hands it back
+   * to {@link RemoteBridge.turnStarted} and {@link RemoteBridge.queuedLineRemoved} gets the turn paired with this line.
+   */
+  runLine(text: string, updateId: number): void;
+  /** Busy path: queue `text` through the same queue a typed line takes, labelled `tg`; `updateId` as for runLine. */
+  enqueue(text: string, updateId: number): void;
   /** One line in the transcript. */
   notice(text: string): void;
   /** Stop the running turn (the run time limit). */
@@ -324,7 +334,7 @@ export class RemoteBridge {
   private keepTopic = false;
   private switched = false;
   /** Plain lines taken from the topic whose turn has not started yet, oldest first (flow 387, AC18). */
-  private readonly waiting: Array<{ updateId: number; line: string; fromId?: number }> = [];
+  private readonly waiting: WaitingLine[] = [];
   /** The Telegram message the running turn belongs to. */
   private currentUpdate: number | undefined;
   /** The Telegram user whose line started the running turn (flow 396): who an auto-approval is recorded against. */
@@ -535,6 +545,12 @@ export class RemoteBridge {
     this.clientConnected = false;
     this.lastHistory = undefined;
     const result = await client.start();
+    if (this.client !== client) {
+      // Turned off while it was starting: disable() already closed the history interval, so this late
+      // result must not reopen it or say "on".
+      if (result.ok) await client.close().catch(() => undefined);
+      return { ok: false, code: "stopped", message: "remote control was turned off while it was starting", retrying: false };
+    }
     if (!result.ok) {
       // Remote control starts only on an explicit command and only when it
       // worked: a serve that is not there is reported, not retried behind the
@@ -634,7 +650,7 @@ export class RemoteBridge {
 
   // ---- a line from Telegram -------------------------------------------------------
 
-  /** Resolves as soon as the line is in the session or its queue, never after the turn: serve is told it arrived then. */
+  /** Takes one line from the topic; returns once it is run, queued or routed, never after the turn: serve is told it arrived then. */
   private accept(text: string, meta: InboundMeta): void {
     const line = text.trim();
     if (line.length === 0 || this.client === undefined) return;
@@ -655,10 +671,10 @@ export class RemoteBridge {
     this.waiting.push({ updateId: meta.updateId, line, ...(meta.fromId === undefined ? {} : { fromId: meta.fromId }) });
     if (this.host.isBusy()) {
       // Queued: the message keeps its "received" reaction until its own turn starts.
-      this.host.enqueue(line);
+      this.host.enqueue(line, meta.updateId);
     } else {
       this.report(meta.updateId, "reading");
-      this.host.runLine(line);
+      this.host.runLine(line, meta.updateId);
     }
   }
 
@@ -818,12 +834,16 @@ export class RemoteBridge {
 
   // ---- hooks the host calls around a turn ------------------------------------------
 
-  /** A turn is starting. `source` is `tg` only for a line that came from Telegram. */
-  turnStarted(source: RemoteLineSource | undefined): void {
+  /**
+   * A turn is starting. `source` is `tg` only for a line that came from Telegram. `updateId` is the id the
+   * line was handed over with: the turn is paired with that line, wherever it sat in the queue. Without it the
+   * oldest waiting line is taken, which is right only when lines run in the order they came.
+   */
+  turnStarted(source: RemoteLineSource | undefined, updateId?: number): void {
     this.endTurnState();
     if (this.client !== undefined) this.progress.begin();
     if (source !== TG_SOURCE || this.client === undefined) return;
-    const next = this.waiting.shift();
+    const next = updateId === undefined ? this.waiting.shift() : this.takeWaiting(updateId);
     this.currentUpdate = next?.updateId;
     this.currentFromId = next?.fromId;
     if (next !== undefined) this.report(next.updateId, "working");
@@ -881,19 +901,28 @@ export class RemoteBridge {
   /**
    * A line that came from Telegram was removed from the shell's queue by the
    * operator, so it will never run. Tell the topic, or its author waits for a reply.
+   * `updateId` (as handed to the host) finds the line even after an edit or next to an identical one;
+   * without it the first line with the same text is taken.
    */
-  queuedLineRemoved(line: string): void {
+  queuedLineRemoved(line: string, updateId?: number): void {
     const client = this.client;
     if (client === undefined) return;
     this.push("line", `Telegram line removed from the queue: ${preview(line)}`);
-    const index = this.waiting.findIndex((entry) => entry.line === line.trim());
-    if (index >= 0) {
-      const [gone] = this.waiting.splice(index, 1);
-      if (gone !== undefined) this.report(gone.updateId, "failed");
-    }
+    const gone = updateId === undefined ? this.takeWaitingByText(line.trim()) : this.takeWaiting(updateId);
+    if (gone !== undefined) this.report(gone.updateId, "failed");
     void client
       .reply(`Your message "${preview(line)}" was removed from the queue in the shell, so it will not run.`)
       .catch(() => false);
+  }
+
+  private takeWaiting(updateId: number): WaitingLine | undefined {
+    const index = this.waiting.findIndex((entry) => entry.updateId === updateId);
+    return index === -1 ? undefined : this.waiting.splice(index, 1)[0];
+  }
+
+  private takeWaitingByText(line: string): WaitingLine | undefined {
+    const index = this.waiting.findIndex((entry) => entry.line === line);
+    return index === -1 ? undefined : this.waiting.splice(index, 1)[0];
   }
 
   /** The turn finished (or was cancelled). Sends the reply for a Telegram turn. */

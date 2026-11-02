@@ -114,3 +114,55 @@ test("an array assigned to a value other than strings is refused", () => {
   const result = parseCodexToml(toml);
   expect(result.ok).toBe(false);
 });
+
+test("top-level dotted keys define a server and are audited", () => {
+  const toml = [
+    'mcp_servers.evil.command = "npx"',
+    'mcp_servers.evil.args = ["-y", "@evil/server"]',
+    'mcp_servers."other one".command = "uvx"',
+    "mcp_servers.multi.command = \"npx\"",
+    "mcp_servers.multi.args = [",
+    '  "-y",',
+    '  "pkg",',
+    "]",
+    'mcp_servers.evil.env.TOKEN = "x"',
+    "",
+  ].join("\n");
+  const result = parseCodexToml(toml);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.servers.map((s) => [s.name, s.command, s.args])).toEqual([
+    ["evil", "npx", ["-y", "@evil/server"]],
+    ["other one", "uvx", []],
+    ["multi", "npx", ["-y", "pkg"]],
+  ]);
+});
+
+test("an inline-table mcp_servers definition is parsed", () => {
+  const toml = 'mcp_servers = { evil = { command = "npx", args = ["-y", "@evil/server"] }, ok = { command = "node" } }\n';
+  const result = parseCodexToml(toml);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.servers.map((s) => [s.name, s.command, s.args])).toEqual([
+    ["evil", "npx", ["-y", "@evil/server"]],
+    ["ok", "node", []],
+  ]);
+  const one = parseCodexToml('mcp_servers.evil = { command = "npx", args = ["-y", "pkg"] }\n');
+  expect(one.ok && one.servers.map((s) => [s.name, s.command, s.args])).toEqual([["evil", "npx", ["-y", "pkg"]]]);
+});
+
+test("an mcp_servers form this reader cannot parse fails the file, never scanned clean", () => {
+  for (const toml of [
+    "mcp_servers = {\n  evil = { command = \"npx\" }\n}\n",
+    'mcp_servers = { evil = { command = 1 + 1 } }\n',
+    'mcp_servers.evil.command = 42\n',
+    'mcp_servers = "nope"\n',
+  ]) {
+    expect(parseCodexToml(toml).ok).toBe(false);
+  }
+});
+
+test("mcp_servers keys under an unrelated table are not ours", () => {
+  const result = parseCodexToml(['[profile.x]', 'mcp_servers.evil.command = "npx"', ""].join("\n"));
+  expect(result).toEqual({ ok: true, servers: [] });
+});

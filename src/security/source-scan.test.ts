@@ -1,7 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import * as configModule from "./config";
+import { configPath, mergeSecurityConfig } from "./config";
+import { listIncidents } from "./incidents";
+import * as selfProtectModule from "./self-protect";
 import { createSecurityService, runScanPath, scanContent } from "./service";
 
 let root: string;
@@ -54,6 +58,55 @@ test("filesystem scan retains findings and reports conservative fallback for inv
   expect(result.decision.gate).toBe("fail");
   expect(result.warnings.some((warning) =>
     warning.includes("source syntax unverified; conservative security matches retained"))).toBe(true);
+});
+
+// review-backend-slice-36:F-001: runScanPath ran the whole stateful analyze() per
+// file, so a tampered config wrote one incident and one critical finding per file
+// and re-read config, key and state N times.
+test("a path scan loads its context and runs self-protection once, not once per file", async () => {
+  const config = { ...mergeSecurityConfig({}), configChecksum: "deadbeef" };
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(configPath(root), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  await mkdir(path.join(root, "src"));
+  for (let index = 0; index < 5; index += 1) {
+    await writeFile(path.join(root, "src", `file${index}.ts`), `export const n${index} = ${index};\n`);
+  }
+  const configLoads = spyOn(configModule, "loadSecurityConfig");
+  const stateReads = spyOn(selfProtectModule, "readState");
+  try {
+    const result = await runScanPath(root, {
+      ownerRoot: root, targetPath: path.join(root, "src"), source: "trusted-project",
+    });
+    expect(result.report.files).toHaveLength(5);
+    expect(configLoads).toHaveBeenCalledTimes(1);
+    expect(stateReads).toHaveBeenCalledTimes(1);
+    const mismatches = (await listIncidents(root)).filter((entry) => entry.type === "config-checksum-mismatch");
+    expect(mismatches).toHaveLength(1);
+    const safety = result.decision.findings.filter((finding) => finding.category === "artifact-safety");
+    expect(safety).toHaveLength(1);
+    expect(result.decision.gate).toBe("fail");
+  } finally {
+    configLoads.mockRestore();
+    stateReads.mockRestore();
+  }
+});
+
+test("per-file findings of a path scan are unchanged by the one-context split", async () => {
+  await mkdir(path.join(root, "src"));
+  await writeFile(path.join(root, "src", "a.ts"), 'fetch(url, process.env); upload(".env");');
+  await writeFile(path.join(root, "src", "b.ts"), "export const ok = 1;\n");
+  const result = await runScanPath(root, {
+    ownerRoot: root, targetPath: path.join(root, "src"), source: "trusted-project",
+  });
+  expect(result.report.coverage?.status).toBe("complete");
+  expect(result.decision.findings.map((finding) => finding.policyId)).toEqual([
+    "egress.private-file-publish",
+  ]);
+  expect(result.report.files).toEqual([
+    { path: "src/a.ts", status: "scanned" },
+    { path: "src/b.ts", status: "scanned" },
+  ]);
+  expect(result.decision.gate).toBe("fail");
 });
 
 test("shell and TUI source scans are clean with complete coverage", async () => {

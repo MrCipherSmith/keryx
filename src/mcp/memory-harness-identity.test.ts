@@ -95,6 +95,18 @@ test("memory.propose: a Source-Harness: line smuggled into summary/details is re
   expect(inDetails.isError).toBe(true);
 });
 
+test("memory.propose: a non-array target_harnesses is refused, not dropped into an unrestricted entry", async () => {
+  const ctx = await buildMcpContext(project, "in-process", { harnessIdentity: "claude" });
+  const result = await dispatchCallTool(ctx, "memory.propose", {
+    title: "Restricted lesson",
+    type: "lesson",
+    summary: "Only for codex.",
+    target_harnesses: "codex",
+  });
+  expect(result.isError).toBe(true);
+  expect(result.text).toContain("target_harnesses must be an array");
+});
+
 test("a server launched with a different identity cannot rewrite an existing entry's stamped source", async () => {
   const claudeCtx = await buildMcpContext(project, "in-process", { harnessIdentity: "claude" });
   const first = await dispatchCallTool(claudeCtx, "memory.propose", {

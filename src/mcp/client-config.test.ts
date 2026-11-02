@@ -548,3 +548,26 @@ test("mcpClientStatus excludes keryx's own entry from otherServers once connecte
   expect(status[0]?.otherServers).toEqual(["playwright"]);
   await uninstallMcpClient(root, ["cursor"]);
 });
+
+test("mcpClientStatus reads a JSONC client config (comments, trailing commas) the way the editor does", async () => {
+  const settingsPath = VSCODE_RUNTIME.settingsPath(root);
+  if (settingsPath === null) throw new Error("unreachable: vscode always has a settings path");
+  await mkdir(path.dirname(settingsPath), { recursive: true });
+  await writeFile(
+    settingsPath,
+    `{\n  // user's own servers\n  "servers": {\n    "context7": { "command": "context7", }, /* trailing */\n  },\n}\n`,
+    "utf8",
+  );
+  const status = await mcpClientStatus(root, ["vscode"]);
+  expect(status[0]?.error).toBeUndefined();
+  expect(status[0]?.otherServers).toEqual(["context7"]);
+});
+
+test("mcpClientStatus reports an unparseable config on that runtime only, instead of rejecting for all", async () => {
+  await mkdir(path.join(root, ".cursor"), { recursive: true });
+  await writeFile(path.join(root, ".cursor", "mcp.json"), "{ not json at all", "utf8");
+  const status = await mcpClientStatus(root, ["cursor", "claude"]);
+  expect(status.find((r) => r.id === "cursor")?.error).toContain("Cannot parse");
+  expect(status.find((r) => r.id === "claude")).toMatchObject({ connected: false, otherServers: [] });
+  expect(status.find((r) => r.id === "claude")?.error).toBeUndefined();
+});

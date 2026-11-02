@@ -49,7 +49,7 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "compact", kind: "text", description: "Compact the conversation: /compact [focus]" },
   { name: "think", kind: "text", description: "Set how reasoning shows: /think <auto|expand|hide>" },
   { name: "goal", kind: "text", description: "Show or set the session goal" },
-  { name: "queue", kind: "text", description: "Manage the queue: /queue <remove|edit|force> [N]" },
+  { name: "queue", kind: "text", description: "Show the queue: /queue; remove, edit and force stay in the shell" },
   { name: "mode", kind: "confirm", description: "Show or set the permission mode; trust and auto ask for a button press" },
   { name: "plan", kind: "confirm", description: "Read-only mode: /plan [on|off]; bare shows it, off asks for a button press" },
   { name: "reasoning", kind: "text", description: "Show or set reasoning effort" },
@@ -175,6 +175,10 @@ export function isAddressedToOtherBot(line: string, botUsername: string | undefi
   return head.slice(at + 1).toLowerCase() !== botUsername.replace(/^@/, "").toLowerCase();
 }
 
+function refusedFor(name: string): string | undefined {
+  return Object.hasOwn(REMOTE_REFUSED, name) ? REMOTE_REFUSED[name] : undefined;
+}
+
 function refuse(command: string, reason: string, known: boolean): GatewayDecision {
   return { kind: "refuse", command, reason, known };
 }
@@ -191,7 +195,8 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
     return refuse("", "an empty command", false);
   }
   const canonical = token.replace(/_/g, "-");
-  const refusedReason = REMOTE_REFUSED[canonical] ?? REMOTE_REFUSED[token];
+  // Own properties only: the token is typed by the sender, and `/constructor` must not find Object's.
+  const refusedReason = refusedFor(canonical) ?? refusedFor(token);
   const spec = BY_NAME.get(canonical) ?? BY_MENU.get(token);
 
   if (canonical === "remote-control") {
@@ -227,6 +232,15 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
         return { kind: "run", command: name, line: "/plan" };
       }
       return first === "on" ? { kind: "run", command: name, line: "/plan on" } : refuse(name, "use /plan on or /plan off", true);
+    case "queue":
+      // `force` interrupts the running turn and `remove`/`edit` change lines the operator queued:
+      // a topic may only look (perimeter review, security-code-20 F-001).
+      if (rest.length === 0 || rest.toLowerCase() === "list") {
+        return { kind: "run", command: name, line: asTyped };
+      }
+      return first === "force"
+        ? refuse(name, "it interrupts the running turn; use /stop for a run you started from Telegram, or the shell", true)
+        : refuse(name, "/queue here only shows the queue; remove, edit and force stay in the shell", true);
     case "theme":
       return first === "" ? refuse(name, "bare /theme opens a picker in the shell; use /theme <name>", true) : { kind: "run", command: name, line: asTyped };
     case "think":
@@ -275,6 +289,9 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
       return { kind: "builtin", command: name, args: rest };
     case "picker":
       return { kind: "picker", command: name, args: rest };
+    case "confirm":
+      // A confirm command needs its own rule above; without one it is refused, never run unasked.
+      return refuse(name, "this command needs a confirmation rule that is not defined", true);
     default:
       return { kind: "run", command: name, line: name === "new" || name === "clear" ? `/${name}` : asTyped };
   }

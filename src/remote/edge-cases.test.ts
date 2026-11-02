@@ -243,6 +243,19 @@ describe("outbound queue", () => {
     expect(hub.events().some((e) => e.type === "outbound-dropped")).toBe(true);
   });
 
+  // Perimeter review (highload-22 F-001): a drop record is kept for a tracked caller to read; untracked
+  // sends into a refused topic must not grow the record without bound. The map is private, so it is read
+  // through a cast: no public surface shows it.
+  test("drop records stay bounded when untracked sends keep being refused", async () => {
+    const { hub, reg } = await registered();
+    await h.api.deleteForumTopic({ chatId: h.api.chatId, messageThreadId: reg.threadId });
+    for (let n = 1; n <= 600; n += 1) {
+      await hub.send("sess-one-0001", `lost ${n}`);
+    }
+    const records = (hub as unknown as { droppedReasons: Map<string, string> }).droppedReasons;
+    expect(records.size).toBeLessThanOrEqual(256);
+  });
+
   test("a network failure keeps the message and the hub retries on its own", async () => {
     const { hub, reg } = await registered();
     await hub.start();
