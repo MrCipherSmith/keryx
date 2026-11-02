@@ -127,6 +127,20 @@ describe("buildSeatbeltProfile: host IPC and git control files (review-security-
     expect(sb).toContain('(deny file-write* (subpath "/work/repo/githooks"))');
   });
 
+  // review-logic-w3:F-001: a `.git` symlink is pinned by its NAME (a literal deny
+  // never widens anything), and the outside target gets no rule of its own.
+  test("a symlink to a git dir is denied by name as a literal", () => {
+    const sb = buildSeatbeltProfile(workspaceWrite, { controls: [], anchors: [], links: ["/work/repo/.git"] });
+    expect(sb).toContain('(deny file-write* (literal "/work/repo/.git"))');
+  });
+
+  // review-security-code-w3:F-001: a submodule gitdir or linked worktree created
+  // during the run is refused by a regex that matches names not existing yet.
+  test("a sealed dir refuses new direct entries through an escaped regex", () => {
+    const sb = buildSeatbeltProfile(workspaceWrite, { controls: [], anchors: [], sealed: ["/work/re.po+x/.git/modules"] });
+    expect(sb).toContain('(deny file-write* (regex "^/work/re\\\\.po\\\\+x/\\\\.git/modules/[^/]+$"))');
+  });
+
   test("no git control paths, no git deny lines", () => {
     expect(buildSeatbeltProfile(workspaceWrite, noGit)).not.toContain(".git");
   });

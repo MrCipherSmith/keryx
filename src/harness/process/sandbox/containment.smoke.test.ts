@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { defaultSandboxProfile } from "./profile";
@@ -131,6 +131,149 @@ describe.skipIf(!live)("OS-sandbox live containment (macOS)", () => {
       expect(perCommand.status).toBe(0);
     } finally {
       rmSync(ws, { recursive: true, force: true });
+      rmSync(wsTmp, { recursive: true, force: true });
+    }
+  });
+
+  // review-logic-w3:F-001: `.git` is a symlink to a git dir outside the roots. The
+  // link must not be replaceable by a fresh git dir carrying a hook, and the
+  // outside git dir stays read-only.
+  test.each(["absolute", "relative"])("w3 logic F-001: a %s `.git` symlink cannot be replaced, its outside target stays read-only", (form) => {
+    const parent = mk("keryx-gitlnk-");
+    const outside = path.join(parent, "outside", "g.git");
+    const ws = path.join(parent, "ws");
+    const wsTmp = mk("keryx-gitlnktmp-");
+    try {
+      expect(git(parent, "init", "-q", "--bare", outside).status).toBe(0);
+      mkdirSync(ws);
+      symlinkSync(form === "absolute" ? outside : path.relative(ws, outside), path.join(ws, ".git"));
+      const swap = contained(ws, wsTmp, "rm .git && mkdir -p .git/hooks");
+      expect(swap.status).not.toBe(0);
+      expect(lstatSync(path.join(ws, ".git")).isSymbolicLink()).toBe(true);
+      const hook = contained(ws, wsTmp, `printf '#!/bin/sh\\n' > ${path.join(outside, "hooks", "post-checkout")}`);
+      expect(hook.status).not.toBe(0);
+      expect(existsSync(path.join(outside, "hooks", "post-checkout"))).toBe(false);
+      const ok = contained(ws, wsTmp, "echo fine > normal.txt");
+      expect(ok.status).toBe(0); // allowed half
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+      rmSync(wsTmp, { recursive: true, force: true });
+    }
+  });
+
+  // review-security-code-w3:F-001: the verifier's repro (r3-v2 f2-live / f2-exec) on a
+  // superproject with a submodule `lib` that itself holds a submodule `deep`.
+  describe("w3 security F-001: a superproject's submodules", () => {
+    const sub = (cwd: string, ...args: string[]) => git(cwd, "-c", "protocol.file.allow=always", ...args);
+    const commit = (cwd: string, m: string) => git(cwd, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "-q", "-m", m);
+
+    function superproject(parent: string): string {
+      const deep = path.join(parent, "src-deep");
+      const lib = path.join(parent, "src-lib");
+      const sup = path.join(parent, "sup");
+      for (const d of [deep, lib, sup]) {
+        mkdirSync(d);
+        expect(git(d, "init", "-q").status).toBe(0);
+      }
+      writeFileSync(path.join(deep, "d.txt"), "d\n");
+      git(deep, "add", "d.txt");
+      expect(commit(deep, "d").status).toBe(0);
+      expect(sub(lib, "submodule", "add", "-q", deep, "deep").status).toBe(0);
+      expect(commit(lib, "lib").status).toBe(0);
+      expect(sub(sup, "submodule", "add", "-q", lib, "lib").status).toBe(0);
+      expect(sub(sup, "submodule", "update", "--init", "--recursive", "-q").status).toBe(0);
+      expect(commit(sup, "sup").status).toBe(0);
+      expect(existsSync(path.join(sup, ".git", "modules", "lib", "modules", "deep", "config"))).toBe(true);
+      return sup;
+    }
+
+    test("submodule gitdir config/hooks (nested too) and every gitlink file are read-only; the host's git status runs nothing", () => {
+      const parent = mk("keryx-gitsm-");
+      const wsTmp = mk("keryx-gitsmtmp-");
+      const pwned = path.join(parent, "PWNED_SUBMODULE");
+      try {
+        const sup = superproject(parent);
+        for (const rel of [
+          ".git/config",
+          ".git/modules/lib/config",
+          ".git/modules/lib/hooks/post-checkout",
+          ".git/modules/lib/modules/deep/config",
+          ".git/modules/lib/modules/deep/hooks/post-checkout",
+          "lib/.git",
+          "lib/deep/.git",
+        ]) {
+          const target = path.join(sup, rel);
+          const before = existsSync(target) ? readFileSync(target, "utf8") : undefined;
+          const w = contained(sup, wsTmp, `printf '#probe\\n' >> "${target}"`);
+          expect({ rel, status: w.status }).not.toEqual({ rel, status: 0 });
+          expect(existsSync(target) ? readFileSync(target, "utf8") : undefined).toBe(before);
+        }
+        // f2-exec: the planted fsmonitor would run on the host's next `git status`.
+        for (const cfg of [".git/modules/lib/config", ".git/modules/lib/modules/deep/config"]) {
+          contained(sup, wsTmp, `printf '[core]\\n\\tfsmonitor = "touch ${pwned}; false"\\n' >> ${cfg}`);
+        }
+        expect(git(sup, "status", "--short").status).toBe(0);
+        expect(existsSync(pwned)).toBe(false);
+        // Allowed half: work inside a submodule (index, objects, refs) still commits.
+        const work = contained(sup, wsTmp, "echo w > lib/w.txt && cd lib && git add w.txt && git -c user.email=a@b.c -c user.name=t commit -q -m w");
+        expect(work.status).toBe(0);
+      } finally {
+        rmSync(parent, { recursive: true, force: true });
+        rmSync(wsTmp, { recursive: true, force: true });
+      }
+    }, 30_000);
+
+    test("a submodule gitdir or linked worktree cannot be created during the run", () => {
+      const parent = mk("keryx-gitsmnew-");
+      const wsTmp = mk("keryx-gitsmnewtmp-");
+      try {
+        const sup = superproject(parent);
+        for (const script of [
+          "mkdir -p .git/modules/evil/hooks",
+          "mkdir -p .git/modules/lib/modules/evil",
+          "mkdir -p .git/worktrees/evil && echo ../.. > .git/worktrees/evil/commondir",
+          "git worktree add -q wt2 -b y",
+        ]) {
+          expect({ script, status: contained(sup, wsTmp, script).status }).not.toEqual({ script, status: 0 });
+        }
+        expect(existsSync(path.join(sup, ".git", "modules", "evil"))).toBe(false);
+        expect(existsSync(path.join(sup, ".git", "modules", "lib", "modules", "evil"))).toBe(false);
+        expect(existsSync(path.join(sup, ".git", "worktrees", "evil"))).toBe(false);
+        expect(existsSync(path.join(sup, ".git", "worktrees", "wt2"))).toBe(false);
+        const ok = contained(sup, wsTmp, "mkdir -p notgit/modules/x && echo fine > notgit/modules/x/f");
+        expect(ok.status).toBe(0); // allowed half: the same names outside a git dir are writable
+      } finally {
+        rmSync(parent, { recursive: true, force: true });
+        rmSync(wsTmp, { recursive: true, force: true });
+      }
+    }, 30_000);
+  });
+
+  // review-degradation-w3:F-002 (accepted cost, see os-sandbox.md): from the main
+  // checkout, an existing worktree's gitdir is pinned, so these fail inside.
+  test("w3 degradation F-002 (accepted cost): git worktree remove/prune cannot delete the gitdir inside the sandbox", () => {
+    const main = mk("keryx-gitwtcost-");
+    const wsTmp = mk("keryx-gitwtcosttmp-");
+    try {
+      expect(git(main, "init", "-q").status).toBe(0);
+      expect(git(main, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "--allow-empty", "-q", "-m", "i").status).toBe(0);
+      expect(git(main, "worktree", "add", "-q", "wt", "-b", "x").status).toBe(0);
+      // `move` only rewrites `.git/worktrees/wt/gitdir`, which is not protected.
+      expect(contained(main, wsTmp, "git worktree move wt wt-moved").status).toBe(0);
+      // `remove` deletes the checkout, then fails on the pinned gitdir: still registered.
+      const remove = contained(main, wsTmp, "git worktree remove --force wt-moved");
+      expect(remove.status).not.toBe(0);
+      expect(remove.stderr).toContain("failed to delete '.git/worktrees/wt'");
+      expect(existsSync(path.join(main, "wt-moved"))).toBe(false);
+      expect(existsSync(path.join(main, ".git", "worktrees", "wt"))).toBe(true);
+      // `prune` reports the error but exits 0, and the entry stays.
+      expect(contained(main, wsTmp, "git worktree prune").stderr).toContain("failed to delete");
+      expect(existsSync(path.join(main, ".git", "worktrees", "wt"))).toBe(true);
+      // The workaround: outside the sandbox it works.
+      expect(git(main, "worktree", "prune").status).toBe(0);
+      expect(existsSync(path.join(main, ".git", "worktrees", "wt"))).toBe(false);
+    } finally {
+      rmSync(main, { recursive: true, force: true });
       rmSync(wsTmp, { recursive: true, force: true });
     }
   });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import {
@@ -237,6 +237,96 @@ describe("buildBwrapArgs: the git control files stay read-only inside the writab
       expect(hasPair(args, "--bind", dotGit, dotGit)).toBe(true);
       expect(hasPair(args, "--tmpfs", hooks)).toBe(true);
       expect(hasPair(args, "--ro-bind", config, config)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // review-logic-w3:F-001: a bind follows a symlink, so an anchor on `.git -> outside`
+  // mounted the outside git dir READ-WRITE. No read-write bind may name the link or
+  // its target; the outside git dir stays under the read-only `/`.
+  test.each(["absolute", "relative"])("a %s `.git` symlink to a git dir outside the roots gets no read-write bind", (form) => {
+    const base = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "keryx-gitlink-")));
+    try {
+      const outside = nodePath.join(base, "outside", "g.git");
+      mkdirSync(nodePath.join(outside, "hooks"), { recursive: true });
+      writeFileSync(nodePath.join(outside, "config"), "[core]\n");
+      writeFileSync(nodePath.join(outside, "HEAD"), "ref: refs/heads/main\n");
+      const root = nodePath.join(base, "root");
+      mkdirSync(root);
+      symlinkSync(form === "absolute" ? outside : nodePath.relative(root, outside), nodePath.join(root, ".git"));
+      const profile = { ...workspaceWrite, writableRoots: [root] };
+      const host = hostBwrapOptions(profile, {});
+      const args = buildBwrapArgs(profile, asDir, host);
+      const rwBinds = args.flatMap((a, i) => (a === "--bind" ? [args[i + 1]] : []));
+      expect(rwBinds).toEqual([root]);
+      expect(host.git.anchors).toEqual([]);
+      expect(host.git.links).toEqual([nodePath.join(root, ".git")]);
+      expect(args.join("\0")).not.toContain(outside);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("a `.git` symlink to a git dir INSIDE the root anchors the real dir, never the link", () => {
+    const root = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "keryx-gitlinkin-")));
+    try {
+      const real = nodePath.join(root, "meta", "repo.git");
+      mkdirSync(nodePath.join(real, "hooks"), { recursive: true });
+      writeFileSync(nodePath.join(real, "config"), "[core]\n");
+      symlinkSync("meta/repo.git", nodePath.join(root, ".git"));
+      const profile = { ...workspaceWrite, writableRoots: [root] };
+      const args = buildBwrapArgs(profile, asDir, hostBwrapOptions(profile, {}));
+      const rwBinds = args.flatMap((a, i) => (a === "--bind" ? [args[i + 1]] : []));
+      expect(rwBinds).toEqual([root, nodePath.join(root, "meta"), real]);
+      expect(hasPair(args, "--ro-bind", nodePath.join(real, "config"), nodePath.join(real, "config"))).toBe(true);
+      expect(hasPair(args, "--ro-bind", nodePath.join(real, "hooks"), nodePath.join(real, "hooks"))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // review-security-code-w3:F-001: the existing submodule layout — `.git/modules/**`
+  // (nested ones too) and every `<sub>/.git` gitlink file — is covered by mounts.
+  // Paths that do not exist at launch cannot be (no mount point); see os-sandbox.md.
+  test("a superproject's existing submodule gitdirs (nested too) and gitlink files are read-only", () => {
+    const root = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "keryx-gitsub-")));
+    try {
+      const dotGit = nodePath.join(root, ".git");
+      const lib = nodePath.join(dotGit, "modules", "lib");
+      const deep = nodePath.join(lib, "modules", "deep");
+      for (const [gd, wt] of [
+        [dotGit, undefined],
+        [lib, "../../../lib"],
+        [deep, "../../../../../lib/deep"],
+      ] as const) {
+        mkdirSync(nodePath.join(gd, "hooks"), { recursive: true });
+        writeFileSync(nodePath.join(gd, "HEAD"), "ref: refs/heads/main\n");
+        writeFileSync(nodePath.join(gd, "config"), wt === undefined ? "[core]\n" : `[core]\n\tworktree = ${wt}\n`);
+      }
+      mkdirSync(nodePath.join(root, "lib", "deep"), { recursive: true });
+      writeFileSync(nodePath.join(root, "lib", ".git"), "gitdir: ../.git/modules/lib\n");
+      writeFileSync(nodePath.join(root, "lib", "deep", ".git"), "gitdir: ../../.git/modules/lib/modules/deep\n");
+      const profile = { ...workspaceWrite, writableRoots: [root] };
+      const host = hostBwrapOptions(profile, {});
+      const args = buildBwrapArgs(profile, asDir, host);
+      for (const p of [
+        nodePath.join(lib, "config"),
+        nodePath.join(lib, "hooks"),
+        nodePath.join(deep, "config"),
+        nodePath.join(deep, "hooks"),
+        nodePath.join(root, "lib", ".git"),
+        nodePath.join(root, "lib", "deep", ".git"),
+      ]) {
+        expect(hasPair(args, "--ro-bind", p, p)).toBe(true);
+      }
+      for (const a of [lib, deep, nodePath.join(root, "lib"), nodePath.join(root, "lib", "deep")]) {
+        expect(hasPair(args, "--bind", a, a)).toBe(true);
+      }
+      // The sealed dirs are a Seatbelt-only rule: nothing in the argv names them.
+      expect(host.git.sealed).toContain(nodePath.join(dotGit, "modules"));
+      expect(host.git.sealed).toContain(nodePath.join(dotGit, "worktrees"));
+      expect(gitProtectBwrapArgs({ controls: [], anchors: [], sealed: [nodePath.join(dotGit, "modules")], links: ["/x/.git"] })).toEqual([]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

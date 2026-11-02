@@ -35,11 +35,11 @@
 // reasons are what the run record carries.
 
 import { execFileSync } from "node:child_process";
-import { realpathSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { gitProtectBwrapArgs } from "./bwrap";
 import { detectSandboxLauncher, type DetectOptions } from "./detect";
-import { resolveGitProtection } from "./git-protect";
+import { resolveGitProtection, type GitProtectFs } from "./git-protect";
 import { defaultReadDenyList } from "./profile";
 
 /** Environment variables an unattended command inherits, by name. Nothing else passes. */
@@ -97,7 +97,8 @@ function shQuote(value: string): string {
 
 /**
  * `DetectOptions` plus the host-filesystem reads the plan makes. EVERY read the
- * plan performs goes through `existsSync` / `isDir` / `realpath` here, so a test
+ * plan performs goes through `existsSync` / `isDir` / `realpath` / `readText` /
+ * `listDir` here (the git-protection walk included), so a test
  * that injects `platform: "linux"` on a non-Linux host supplies a fake filesystem
  * and gets the same argv on any machine; production leaves them unset and reads
  * the real one. (`existsSync` is shared with launcher detection.)
@@ -107,6 +108,10 @@ export interface UnattendedDetectOptions extends DetectOptions {
   isDir?: (p: string) => boolean;
   /** Canonical path of `p` on the (possibly fake) host. Default: real `realpathSync`, falling back to `path.resolve`. */
   realpath?: (p: string) => string;
+  /** Contents of the file `p` (a `.git` gitdir file, `commondir`, `.gitmodules`), undefined when unreadable. Default: real `readFileSync`. */
+  readText?: (p: string) => string | undefined;
+  /** Entry names of the directory `p` (`.git/worktrees`, `.git/modules`), empty when unreadable. Default: real `readdirSync`. */
+  listDir?: (p: string) => string[];
 }
 
 export interface UnattendedSandboxInput {
@@ -204,6 +209,22 @@ function exists(p: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+function readText(p: string): string | undefined {
+  try {
+    return readFileSync(p, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function listDir(p: string): string[] {
+  try {
+    return readdirSync(p);
+  } catch {
+    return [];
   }
 }
 
@@ -310,7 +331,13 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   // The worktree's `.git` (a gitdir FILE for a linked worktree) and any git
   // control path inside the RW binds stay read-only, so a contained write cannot
   // repoint the repository the host runs git in afterwards (see git-protect.ts).
-  args.push(...gitProtectBwrapArgs(resolveGitProtection([hostReal(input.worktree), hostReal(input.scratchHome)])));
+  const hostGit: GitProtectFs = {
+    kind: (p) => (hostIsDir(p) ? "dir" : hostExists(p) ? "file" : "missing"),
+    real: hostReal,
+    readText: input.detect?.readText ?? readText,
+    list: input.detect?.listDir ?? listDir,
+  };
+  args.push(...gitProtectBwrapArgs(resolveGitProtection([hostReal(input.worktree), hostReal(input.scratchHome)], hostGit)));
 
   // Known secret paths, masked inside anything bound back (e.g. a toolchain
   // root that happens to hold a credentials file).
