@@ -350,6 +350,10 @@ describe('legacy commented return HTTP contract', () => {
     }
     const first=await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions?limit=1',undefined,agent));
     expect(first).toEqual({decisions:[receipts[2]!.decision],nextAfter:receipts[2]!.decision.id});
+    // A newly inserted return belongs before this already-issued keyset cursor.
+    const newest=await revision(p,'concurrent newer result');await evidence(p,current,newest);
+    const resubmitted=await success<FeedbackFlow>(await request(path+'/submit-for-review',{expectedVersion:receipts[2]!.flowVersion,subjectRevisionId:newest.id,afterReturnDecisionId:receipts[2]!.decision.id},agent));
+    await success<ReviewReceipt>(await request(path+'/request-changes',{...firstBody,expectedVersion:resubmitted.version,subjectRevisionId:newest.id,comment:'A later return'},reviewer));
     const second=await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions?limit=1&after='+first.nextAfter,undefined,reviewer));
     expect(second).toEqual({decisions:[receipts[1]!.decision],nextAfter:receipts[1]!.decision.id});
     const last=await success<{decisions:Decision[];nextAfter:string|null}>(await request(path+'/review-decisions?limit=1&after='+second.nextAfter));

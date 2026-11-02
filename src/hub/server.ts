@@ -8,7 +8,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import type { HubApplication, HubConfig, HubFlow, Principal } from "./contracts";
 import { createAccessVerifier, readAccessRoles, validateAccessConfig, type AccessDependencies, type CloudflareAccessConfig, type VerifiedAccessIdentity } from "./cloudflare-access";
-import { legacyReviewFingerprint } from "./legacy-review-contract";
+import { legacyReviewFingerprint, parseLegacyHistoryQuery } from "./legacy-review-contract";
 import { fail, HubFailure, hubMutate, hubRead, object, returnLegacyFlow, sha256, text } from "./domain";
 import { deliverRevision, inspectGitPublication } from "./git-delivery";
 import { openHubStore } from "./store";
@@ -238,6 +238,10 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     const isReviewReturn = path.length===5 && path[0]==='projects' && path[2]==='flows' && path[4]==='request-changes';
     const reviewReplayKey = (actor: Principal, operationId: string) => sha256(JSON.stringify([actor.id,'POST',`/hub/v1/projects/${encodeURIComponent(path[1]!)}/flows/${encodeURIComponent(path[3]!)}/request-changes`,operationId]));
     if (request.method === "GET") {
+      if (path.length===5 && path[0]==='projects' && path[2]==='flows' && path[4]==='review-decisions') {
+        const {after,limit}=parseLegacyHistoryQuery(url.searchParams);
+        return json(store.legacyReview.history(path[1]!,path[3]!,after,limit));
+      }
       if ((path.length===5 || path.length===6) && path[0]==='projects' && path[2]==='flows' && path[4]==='review-operations') {
         if (identity.actor.kind!=='human' || !['operator','reviewer'].includes(identity.actor.role)) fail(403,'human-required','Review operations require an authorized human');
         const queryIds=url.searchParams.getAll('operationId');

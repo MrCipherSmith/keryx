@@ -21,12 +21,13 @@ const errors = Object.fromEntries([400,401,403,404,409,413,500,503].map(status =
 export const legacyReviewOpenApi = {
   openapi:'3.1.0',info:{title:'Keryx legacy commented review',version:'0.1.0'},security:[{HubBearer:[]},{HubSession:[]}],
   paths:{
+    '/hub/v1/projects/{projectId}/flows/{flowId}/review-decisions':{get:{operationId:'legacy_review_history',description:'Immutable newest-first review history for existing project readers, including contributors. Closed query; after anchors a decision of this exact Flow. No mutation or acceptance authority.',parameters:[...parameters,{name:'after',in:'query',required:false,schema:stringId},{name:'limit',in:'query',required:false,schema:{type:'integer',minimum:1,maximum:50,default:20}}],responses:{200:{description:'Bounded immutable history page',content:{'application/json':{schema:{$ref:'#/components/schemas/ReviewHistoryPage'}}}},...errors}}},
     '/hub/v1/projects/{projectId}/flows/{flowId}/submit-for-review':{post:{operationId:'legacy_submit_for_review',description:'First submission keeps its existing body. After an unresolved return, afterReturnDecisionId and a distinct new result are required.',parameters:[...parameters,{name:'Idempotency-Key',in:'header',required:true,schema:stringId}],requestBody:{required:true,content:{'application/json':{schema:{oneOf:[{$ref:'#/components/schemas/firstSubmission'},{$ref:'#/components/schemas/resubmitAfterReturn'}]}}}},responses:{200:{description:'Current exact legacy Flow, with nullable reviewFeedback',content:{'application/json':{schema:{$ref:'#/components/schemas/LegacyFlow'}}}},...errors}}},
     '/hub/v1/projects/{projectId}/flows/{flowId}/request-changes':{post:{operationId:'legacy_request_changes',parameters:[...parameters,{name:'Idempotency-Key',in:'header',required:true,schema:stringId}],requestBody:{required:true,content:{'application/json':{schema:{$ref:'#/components/schemas/requestChanges'}}}},responses:{200:response,...errors}}},
     '/hub/v1/projects/{projectId}/flows/{flowId}/review-operations':{get:{operationId:'legacy_review_operation_query',description:'Closed query alias for operation identifiers normalized by URL path handling, including dot-only identifiers. Same actor/project/Flow authorization and immutable receipt.',parameters:[...parameters,{name:'operationId',in:'query',required:true,schema:stringId}],responses:{200:response,...errors}}},
     '/hub/v1/projects/{projectId}/flows/{flowId}/review-operations/{operationId}':{get:{operationId:'legacy_review_operation',parameters:[...parameters,{name:'operationId',in:'path',required:true,schema:stringId}],responses:{200:response,...errors}}},
   },
-  components:{schemas:{...definitions,LegacyFlow:legacyFlowSchema,ReviewDecision:definitions.receipt.properties.decision,firstSubmission:{type:'object',additionalProperties:false,required:['expectedVersion','subjectRevisionId'],properties:{expectedVersion:{type:'integer',minimum:1},subjectRevisionId:stringId}},error:{type:'object',additionalProperties:false,required:['error'],properties:{error:{type:'object',additionalProperties:false,required:['code','message'],properties:{code:{type:'string'},message:{type:'string'}}}}}},securitySchemes:{HubBearer:{type:'http',scheme:'bearer'},HubSession:{type:'apiKey',in:'cookie',name:'keryx_hub_session'}}},
+  components:{schemas:{...definitions,ReviewHistoryPage:{type:'object',additionalProperties:false,required:['decisions','nextAfter'],properties:{decisions:{type:'array',maxItems:50,items:{$ref:'#/components/schemas/ReviewDecision'}},nextAfter:{anyOf:[stringId,{type:'null'}]}}},LegacyFlow:legacyFlowSchema,ReviewDecision:definitions.receipt.properties.decision,firstSubmission:{type:'object',additionalProperties:false,required:['expectedVersion','subjectRevisionId'],properties:{expectedVersion:{type:'integer',minimum:1},subjectRevisionId:stringId}},error:{type:'object',additionalProperties:false,required:['error'],properties:{error:{type:'object',additionalProperties:false,required:['code','message'],properties:{code:{type:'string'},message:{type:'string'}}}}}},securitySchemes:{HubBearer:{type:'http',scheme:'bearer'},HubSession:{type:'apiKey',in:'cookie',name:'keryx_hub_session'}}},
 };
 export function parseLegacyReturn(input: unknown, flow: HubFlow): RequestLegacyChanges {
   const body = object(input), required = ['expectedVersion','subjectRevisionId','comment','criterionRefs'];
@@ -52,4 +53,13 @@ export function legacyReviewFingerprint(value: unknown): string {
     return item;
   };
   return JSON.stringify(canonical(value));
+}
+
+/** Closed, single-valued query; identifiers are opaque and always bound as SQL parameters. */
+export function parseLegacyHistoryQuery(params: URLSearchParams): {after: string | undefined;limit:number} {
+  if ([...params.keys()].some(key=>!['after','limit'].includes(key)) || params.getAll('after').length>1 || params.getAll('limit').length>1) fail(400,'invalid-request','Expected a single after cursor and limit');
+  const rawLimit=params.get('limit'), after=params.get('after') ?? undefined;
+  if (rawLimit!==null && !/^(?:[1-9]|[1-4][0-9]|50)$/.test(rawLimit)) fail(400,'invalid-request','History limit must be an integer from 1 to 50');
+  if (after!==undefined && (!after || after.length>200 || [...after].some(char=>char.charCodeAt(0)<32 || char.charCodeAt(0)===127))) fail(400,'invalid-request','Invalid review history cursor');
+  return {after,limit:rawLimit===null ? 20 : Number(rawLimit)};
 }

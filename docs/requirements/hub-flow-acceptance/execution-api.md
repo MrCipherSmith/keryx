@@ -1,5 +1,5 @@
 # Legacy commented review execution API
-Version: 0.1.0
+Version: 0.1.1
 
 Implementation companion to the approved frozen specification; this document records additive transport details, not a rewrite of the frozen input.
 
@@ -12,6 +12,16 @@ Implementation companion to the approved frozen specification; this document rec
 Flow list/detail/action responses expose `reviewFeedback: null` or the unresolved immutable decision fields. `lastReturnDecisionId` is durable after resubmission. The internal resolution flag is not a wire field. Existing list/detail/event invalidation supplies legacy Overview attention; no managed Work attention kind is introduced.
 
 Legacy review guides use presentation IDs `legacy:<frozen-spec-digest>:<1-based-position>`. Structured return references remain `{specContentDigest, position}`. Newly designated `attempt/review-guide.json` files are bounded/validated before persistence; pinned membership is validated at submission. Ordinary JSON is not scanned. Historical invalid or missing guides remain explicit display fallbacks.
+
+## Readable immutable history
+
+GET `/hub/v1/projects/{projectId}/flows/{flowId}/review-decisions?after=<decisionId>&limit=<1..50>` returns the closed response `{decisions: LegacyReviewDecision[], nextAfter: string | null}`. The default limit is20; at most50 decisions are returned. Only `after` and `limit` are allowed, each at most once. An empty/oversized/control-bearing cursor or nondecimal/out-of-range limit is `400 invalid-request`. An unknown decision or a cursor belonging to another project/Flow is `400 invalid-cursor`; a nonexistent exact Flow is404.
+
+Existing authorized project readers, including scoped read-only agents, may read contributor-visible comments. No human decision authority is granted by this read. Current authentication and project scope still apply; requests cannot enumerate another project's history.
+
+Pages are newest-first by immutable post-return Flow version, which is unique within a Flow and remains deterministic when timestamps tie. `after` anchors the exact last returned decision and retrieves older records; `nextAfter` is the last returned ID only when more records exist, otherwise null. The server uses the existing composite unique index, fetches at most `limit+1` rows and does not load the lifetime legacy aggregate or all decisions. A new return between requests does not duplicate older entries.
+
+The same immutable decision fields remain accessible after resubmission clears active `reviewFeedback` and after the Flow is accepted. Reading history changes no Flow, candidate, Evidence, receipt, guard or event. The UI places this bounded history in accessible technical details; active feedback and past decisions stay distinct. The existing writer5 marker and frozen input schemas are unchanged; the additive read schema lives in the runtime OpenAPI companion.
 
 ## Storage and deployment boundary
 

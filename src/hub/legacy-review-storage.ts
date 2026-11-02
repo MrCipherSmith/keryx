@@ -27,6 +27,26 @@ export function legacyReviewRepository(db: Database) {
       db.query('INSERT INTO hub_legacy_review_guards(project_id,flow_id,decision_id,flow_version) VALUES(?,?,?,?) ON CONFLICT(project_id,flow_id) DO UPDATE SET decision_id=excluded.decision_id,flow_version=excluded.flow_version').run(projectId,value.flowId,value.id,receipt.flowVersion);
     },
     decision,
+    history(projectId: string, flowId: string, after: string | undefined, limit: number): {decisions: LegacyReviewDecision[];nextAfter: string | null} {
+      // Authorization has already established a current project reader. Resolve the exact
+      // legacy target through its indexed projection, never the lifetime JSON aggregate.
+      const target = db.query<{id:string},[string,string]>(`SELECT f.id FROM hub_legacy_records f JOIN hub_legacy_records p ON p.kind='projects' AND p.id=f.project_id
+        WHERE f.kind='flows' AND f.project_id=? AND f.id=?`).get(projectId,flowId);
+      if (!target) fail(404,'not-found','Flow not found');
+      let version: number | undefined;
+      if (after !== undefined) {
+        const anchor = db.query<{flow_version:number},[string,string,string]>('SELECT flow_version FROM hub_legacy_review_decisions WHERE project_id=? AND flow_id=? AND id=?').get(projectId,flowId,after);
+        if (!anchor) fail(400,'invalid-cursor','Review decision cursor does not belong to this Flow');
+        version=anchor.flow_version;
+      }
+      // The existing UNIQUE(project_id,flow_id,flow_version) index supplies a reverse
+      // keyset walk; immutable versions are unique within a Flow, including timestamp ties.
+      const rows = version === undefined
+        ? db.query<{body:string},[string,string,number]>('SELECT body FROM hub_legacy_review_decisions WHERE project_id=? AND flow_id=? ORDER BY flow_version DESC LIMIT ?').all(projectId,flowId,limit+1)
+        : db.query<{body:string},[string,string,number,number]>('SELECT body FROM hub_legacy_review_decisions WHERE project_id=? AND flow_id=? AND flow_version<? ORDER BY flow_version DESC LIMIT ?').all(projectId,flowId,version,limit+1);
+      const decisions=rows.slice(0,limit).map(row=>JSON.parse(row.body) as LegacyReviewDecision);
+      return {decisions,nextAfter:rows.length>limit ? decisions.at(-1)!.id : null};
+    },
     projectFlows(flows: readonly HubFlow[]): HubFlow[] {
       // Only current unresolved decision IDs are loaded, never lifetime history or per-row queries.
       const ids = flows.filter(flow => flow.lastReturnDecisionId && !flow.returnResolved).map(flow => flow.lastReturnDecisionId!);
