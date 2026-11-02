@@ -1,7 +1,7 @@
 # Hub work management: candidate handoff
+Version: 0.2.0
 
 Historical milestone record: the counts below describe their named pre-review test scopes, not the current PR head. Current validation and per-finding outcomes are recorded in [PR1113 correction results](../../.metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/report.md).
-Version: 0.2.0
 
 Status: integrated candidate verified, including native UI delta. No owner product acceptance or public production upgrade is claimed.
 
