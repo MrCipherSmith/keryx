@@ -35,3 +35,9 @@ Routing: graph_used=yes (explicit rebuild after merge), wiki_used=yes, ctx_used=
 ## Independent final gate
 
 Verified source676783e55e01468fd1fdd7021ffbbad41cbdeae6. PASS_WITH_WARNINGS:452strict changed tests,0failures,454total with1intentional separately-exercised integration skip and1existing rewind TODO;534Hub tests/7745assertions;198UI tests; actual frozen offline package/runtime9tests/61assertions. Strict, Hub and extracted-runtime checks ran with UI dependency link absent, without dependency injection/install. UI/types/lint/assets, scripts types, Python migration14/boundaries29/profile5, shell and docs checks passed. Only metadata/report commits follow this source; final GitHub checks remain authoritative for publication readiness.
+
+## CI cache portability follow-up
+
+Commit `7f32cc739b52d1567bd1431afd2274434afc6d07` fixes the only failed published integration check: Bun1.4.4 keys cache metadata by registry identity, so a loopback registry override made all prepared pins appear absent. The installer now preserves registry identity and uses a rejecting local TCP proxy with both bypass variants cleared. CI explicitly prepares cache/pulls the matching image, then executes the extracted proof with `--pull=never --network none`, readonly mounts and UID1001 without overriding HOME. Ordinary tests still perform no network preparation.
+
+Mac Bun1.3.14/1.4.4 each passed10package tests; Linux both versions passed actual extracted offline SDK proof with no container network, including exact UID1001 commands (1test/7assertions each). Ordinary network-denied gate passed9tests with1explicit integration skip; lint/scripts types passed. Production backend/frontend source was unchanged. [Exact RED/GREEN matrix and commands](cache-ci-results.md).

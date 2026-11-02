@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-02T06:10:45.562Z",
+  "updatedAt": "2026-11-02T06:45:16.681Z",
   "source": {
     "type": "description",
     "ref": null
@@ -890,6 +890,28 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "RealCI boundary RED corrected by moving served browser adapter assertion into UI suite; root3tests pass with UI link absent, fullUI198/types/lint/assets pass; no dependency workaround."
+    },
+    {
+      "id": "T42",
+      "title": "Make private-cache offline runtime proof portable in CI",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T06:17:00.344Z",
+            "outcome": "started",
+            "detail": "Published integrated CI distribution job failed actual offline install: all pinned packages reported not cached despite prepared cache; investigate without weakening network isolation"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Portable offline proof committed; registry identity preserved, rejectingproxy+Linuxnetworknone tested1.3.14/1.4.4 andUID1001 withoutHOMEoverride; ordinaryhermetic/lint/scriptstypes pass."
     }
   ],
   "history": [
@@ -1475,6 +1497,21 @@
       "at": "2026-11-02T06:10:45.562Z",
       "event": "task-done",
       "detail": "T40: Verify integrated round2 candidate and publish draft PR update"
+    },
+    {
+      "at": "2026-11-02T06:17:00.146Z",
+      "event": "task-added",
+      "detail": "T42: Make private-cache offline runtime proof portable in CI"
+    },
+    {
+      "at": "2026-11-02T06:17:00.345Z",
+      "event": "task-attempt",
+      "detail": "T42: started (attempt 1) — Published integrated CI distribution job failed actual offline install: all pinned packages reported not cached despite prepared cache; investigate without weakening network isolation"
+    },
+    {
+      "at": "2026-11-02T06:45:16.681Z",
+      "event": "task-done",
+      "detail": "T42: Make private-cache offline runtime proof portable in CI"
     }
   ],
   "acKinds": {

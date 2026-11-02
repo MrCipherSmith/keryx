@@ -121,3 +121,6 @@
 - 2026-11-02T06:05:00.944Z - task-done: T41: Place served browser-adapter contract in UI dependency suite
 - 2026-11-02T06:05:31.152Z - task-attempt: T40: started (attempt 3) — Post-CI-boundary retry on committed merged source; verify root without UI dependencies plus strict selection and preserved UI assertion
 - 2026-11-02T06:10:45.562Z - task-done: T40: Verify integrated round2 candidate and publish draft PR update
+- 2026-11-02T06:17:00.146Z - task-added: T42: Make private-cache offline runtime proof portable in CI
+- 2026-11-02T06:17:00.345Z - task-attempt: T42: started (attempt 1) — Published integrated CI distribution job failed actual offline install: all pinned packages reported not cached despite prepared cache; investigate without weakening network isolation
+- 2026-11-02T06:45:16.681Z - task-done: T42: Make private-cache offline runtime proof portable in CI
