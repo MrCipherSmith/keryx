@@ -53,3 +53,20 @@ test("secret-bearing and oversized questions visibly refuse instead of publishin
     expect(service.pending()).toHaveLength(0); expect(delivered).toBe(0);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("regression-33:F-001: a question linking a known document host is shown unchanged; an unknown host carrying the same id still refuses", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-question-doc-hosts-")); const abort = new AbortController(); const delivered: SessionUserQuestion[] = [];
+  const service = createSessionUserQuestions({ dir, sessionId: "session-a", context: () => context("a", abort.signal), deliver(value) { delivered.push(value); } });
+  const sheets = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0";
+  const notion = "https://www.notion.so/Keryx-Roadmap-8f3e2a1b4c5d6e7f8a9b0c1d2e3f4a5b";
+  try {
+    const shown = service.ask({ ...request, question: `Use the plan in ${sheets} or ${notion}?`, options: [{ id: "sheet", label: "Sheet", description: sheets }, { id: "notion", label: "Notion", description: notion }] });
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]?.question).toBe(`Use the plan in ${sheets} or ${notion}?`);
+    expect(delivered[0]?.options.map((option) => option.description)).toEqual([sheets, notion]);
+    service.denyAll("test-end"); expect(await shown).toBe(ASK_USER_CANCEL);
+    expect(await service.ask({ ...request, question: "Use https://files.example.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?" })).toBe("__no_host__");
+    expect(await service.ask({ ...request, question: `Use ${sheets.replace("#gid=0", "?access_token=K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI")}?` })).toBe("__no_host__");
+    expect(delivered).toHaveLength(1);
+  } finally { service.denyAll("test-end"); await rm(dir, { recursive: true, force: true }); }
+});

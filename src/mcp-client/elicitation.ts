@@ -172,6 +172,15 @@ export function unwrapShellWrappedCommand(command: readonly string[]): string | 
   return actual;
 }
 
+function hidesScriptFromClassifier(vendor: Readonly<Record<string, unknown>>): boolean {
+  const command = extractCodexCommand(vendor);
+  if (command === undefined) return false;
+  const inner = unwrapShellWrappedCommand(command);
+  if (inner === undefined) return command.some(looksLikeShellBinary);
+  const words = inner.split(/\s+/).map((word) => word.replace(/^["'(]+/, ""));
+  return words.some((word, index) => looksLikeShellBinary(word) && isShellCommandFlag(words[index + 1] ?? ""));
+}
+
 /**
  * The synthetic tool-name prefix `supervise-mcp.ts` gives every elicitation
  * it forwards to `deps.requestApproval` (`${MCP_ELICITATION_TOOL_PREFIX}${requestId}`).
@@ -308,6 +317,14 @@ export function classifyElicitationRisk(pending: PendingElicitation): Elicitatio
   if (commandForClassification !== undefined && isDestructiveCommand(commandForClassification)) {
     destructive = true;
     reasons.push(`underlying command looks destructive: ${commandForClassification}`);
+  }
+
+  // The classifier reads head words and never looks inside `sh -c`, so a
+  // shell-run script it cannot see into fails closed: any shell in an argv the
+  // fixed unwrap did not recognise, or a nested `<shell> -c` in the script.
+  if (!destructive && hidesScriptFromClassifier(pending.vendor)) {
+    destructive = true;
+    reasons.push(`shell-wrapped command in a shape the classifier cannot inspect: ${commandForClassification ?? ""}`);
   }
 
   if (pending.vendor.codex_elicitation === "patch-approval") {

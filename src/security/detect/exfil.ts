@@ -448,6 +448,8 @@ type UrlHit = {
   classify?: string;
   // Per-callsite override; defaults to FETCH_REMEDIATION below (T53#F-001).
   remediation?: string;
+  // Flag without classifying: a work budget ran out before this url was read.
+  unexamined?: boolean;
 };
 
 const FETCH_REMEDIATION =
@@ -483,7 +485,7 @@ function considerUrl(
   allowlist: string[],
   out: DetectorMatch[],
 ): void {
-  if (!isExfilDestination(hit.classify ?? hit.url, allowlist)) {
+  if (!hit.unexamined && !isExfilDestination(hit.classify ?? hit.url, allowlist)) {
     return;
   }
   out.push({
@@ -752,14 +754,9 @@ function descriptionEnds(index: ContentIndex, open: number): DescriptionEnds {
 // auto-fetching image from a user-initiated link.
 const BRACKET_OPEN = /(!?)\[/g;
 
-// The inline destination, `(URL …)`. Anchored (sticky) at the first byte of the
-// destination itself — NOT at the `(` — because the leading whitespace, and any
-// newline plus repeated block-container marker it crosses, is read by
-// `skipDestinationLeadingWhitespace` below rather than by a `\s*` prefix on this
-// pattern. That is the same split T90 made for `REFERENCE_DESTINATION`, made
-// here for the same reason and with the SAME helper (T93#A). Groups:
-// 1 = angle-bracket destination, 2 = bare destination.
-const INLINE_DESTINATION = /(?:<([^<>\n]*)>|([^)\s]+))[^)]*\)/y;
+// The inline destination, `(URL …)`, is read by `readInlineDestination` below
+// with two hand-written scanners rather than one sticky pattern. See there.
+//
 // A reference definition's destination, `: URL`. Groups: 1 = angle-bracket
 // destination, 2 = bare destination. Anchored (sticky) at the first byte of the
 // destination itself — NOT at `]:` — because leading whitespace, including any
@@ -1792,10 +1789,201 @@ type BracketConstruct =
       descriptionEnd: number;
       end: number;
       escapeAware: boolean;
+      resolves: boolean;
     }
   | { kind: "reference"; label: string; end: number; escapeAware: boolean };
 
-type InlineDestination = { url: string; start: number; end: number } | null;
+// `end` is just past the first `)` at or after the destination — the span the
+// scan cursor may skip. `resolves` is whether a renderer accepts the construct
+// at all; only then may the cursor skip it (slice-34 logic F-001).
+type InlineDestination = {
+  url: string;
+  start: number;
+  end: number;
+  resolves: boolean;
+} | null;
+
+interface InlineDestinationCache {
+  readings: Map<number, InlineDestination>;
+  // `classificationHeadEnd` memo: position → head end + 1 (0 = not yet known)
+  heads: Int32Array | null;
+  // `bareDestinationEnd` memo: start → destination end, or -1
+  bare: Map<number, number>;
+}
+
+function newInlineDestinationCache(): InlineDestinationCache {
+  return { readings: new Map(), heads: null, bare: new Map() };
+}
+
+// CommonMark's backslash-escapable characters.
+function isAsciiPunctuation(code: number): boolean {
+  return (
+    (code >= 0x21 && code <= 0x2f) ||
+    (code >= 0x3a && code <= 0x40) ||
+    (code >= 0x5b && code <= 0x60) ||
+    (code >= 0x7b && code <= 0x7e)
+  );
+}
+
+// cmark refuses a bare destination nested deeper than this; refusing to call
+// such a construct resolved can only cost a skip, never a finding.
+const MAX_DESTINATION_PAREN_DEPTH = 32;
+
+// The end of the bare head the CLASSIFIED url is read from: the first `)` or
+// whitespace at or after `from` — byte for byte what the old `[^)\s]+` read, so
+// every url classified today is still classified. Memoised per position, so
+// heads from distinct starts that run to the same stop (an escape-aware run of
+// `![a\]](` that never moves the cursor, highload F-001) are scanned once.
+function classificationHeadEnd(
+  content: string,
+  from: number,
+  cache: InlineDestinationCache,
+): number {
+  const heads = (cache.heads ??= new Int32Array(content.length + 1));
+  let at = from;
+  while (at < content.length) {
+    const known = heads[at] as number;
+    if (known !== 0) {
+      at = known - 1;
+      break;
+    }
+    const code = content.charCodeAt(at);
+    if (code === 0x29 || isCollapsibleSpace(code, content[at] as string)) break;
+    at += 1;
+  }
+  for (let fill = from; fill < at && heads[fill] === 0; fill += 1) heads[fill] = at + 1;
+  return at;
+}
+
+// The end of a CommonMark bare destination starting at `from` — no space or
+// control character, parentheses balanced unless escaped — or -1 when there is
+// none. Iterative, and memoised by the start just past every `(` it opens, so
+// the destination a nested `(` begins is never scanned twice: `"[a](".repeat(n)`
+// is one pass, not n.
+function bareDestinationEnd(
+  content: string,
+  from: number,
+  memo: Map<number, number>,
+): number {
+  const known = memo.get(from);
+  if (known !== undefined) return known;
+  const opens: number[] = []; // starts just past each `(` still open
+  const fail = (): number => {
+    for (const start of opens) memo.set(start, -1);
+    memo.set(from, -1);
+    return -1;
+  };
+  let at = from;
+  for (;;) {
+    const code = at < content.length ? content.charCodeAt(at) : 0;
+    // The end of input, a space or a control character ends a bare destination.
+    if (code <= 0x20 || code === 0x7f || isCollapsibleSpace(code, content[at] as string)) {
+      // A space ends the innermost open destination; every outer one is unbalanced.
+      if (opens.length === 0) break;
+      memo.set(opens.pop() as number, at);
+      return fail();
+    }
+    if (code === 0x5c && isAsciiPunctuation(content.charCodeAt(at + 1))) {
+      at += 2;
+      continue;
+    }
+    if (code === 0x28) {
+      const inner = memo.get(at + 1);
+      if (inner === undefined) {
+        if (opens.length >= MAX_DESTINATION_PAREN_DEPTH) return fail();
+        opens.push(at + 1);
+        at += 1;
+        continue;
+      }
+      // Already read: it closes at a `)`, or this destination is unbalanced.
+      if (inner === -1 || content.charCodeAt(inner) !== 0x29) return fail();
+      at = inner + 1;
+      continue;
+    }
+    if (code === 0x29) {
+      if (opens.length === 0) break; // the construct's own close
+      memo.set(opens.pop() as number, at);
+    }
+    at += 1;
+  }
+  memo.set(from, at);
+  return at;
+}
+
+function skipSpacesAndTabs(content: string, from: number): number {
+  let at = from;
+  while (at < content.length) {
+    const code = content.charCodeAt(at);
+    if (code !== 0x20 && code !== 0x09) break;
+    at += 1;
+  }
+  return at;
+}
+
+// Would a renderer accept `(` + `content[from…]` as an inline destination?
+// CommonMark's grammar: a `<…>` or balanced bare destination, then optionally
+// whitespace and a `"…"`, `'…'` or `(…)` title, then `)`. Anything else after
+// the destination — the junk the old `[^)]*` swallowed — makes the renderer
+// reject the construct and parse those bytes as markdown, so an image written
+// there is fetched and must be scanned (slice-34 logic F-001).
+//
+// Stricter than CommonMark in one direction only: a construct that crosses a
+// line ending is never called resolved. Whether it resolves depends on block
+// structure this reader does not see — an ordered-list marker `1)` on the next
+// line ends the paragraph, and its `)` is not the construct's close (slice-34
+// backend F-002). A false "no" costs a skip and nothing else: the url is still
+// classified.
+//
+// Linear in total: the leading gap is the skip's own disjoint span, angle and
+// bare destinations end at the next unescaped `<` or at a space, and a title
+// begins where at most one destination ends.
+function resolvesAsInline(
+  content: string,
+  from: number,
+  at: number,
+  memo: Map<number, number>,
+): boolean {
+  for (let gap = from; gap < at; gap += 1) {
+    const code = content.charCodeAt(gap);
+    if (code !== 0x20 && code !== 0x09) return false; // crossed a line ending
+  }
+  let cursor = at;
+  if (content.charCodeAt(cursor) === 0x3c /* < */) {
+    for (cursor += 1; ; cursor += 1) {
+      if (cursor >= content.length) return false;
+      const code = content.charCodeAt(cursor);
+      if (code === 0x5c && isAsciiPunctuation(content.charCodeAt(cursor + 1))) {
+        cursor += 1;
+        continue;
+      }
+      if (code === 0x3e /* > */) break;
+      if (code === 0x3c || code === 0x0a || code === 0x0d) return false;
+    }
+    cursor += 1;
+  } else {
+    cursor = bareDestinationEnd(content, cursor, memo);
+    if (cursor === -1) return false;
+  }
+  const destinationEnd = cursor;
+  cursor = skipSpacesAndTabs(content, cursor);
+  if (content[cursor] === ")") return true;
+  if (cursor === destinationEnd) return false; // a title needs a space before it
+  const opener = content[cursor];
+  const closer = opener === "(" ? ")" : opener === '"' || opener === "'" ? opener : null;
+  if (closer === null) return false;
+  for (cursor += 1; ; cursor += 1) {
+    if (cursor >= content.length) return false;
+    const code = content.charCodeAt(cursor);
+    if (code === 0x5c && isAsciiPunctuation(content.charCodeAt(cursor + 1))) {
+      cursor += 1;
+      continue;
+    }
+    if (content[cursor] === closer) break;
+    if (opener === "(" && code === 0x28) return false;
+    if (LINE_TERMINATORS.has(code)) return false;
+  }
+  return content[skipSpacesAndTabs(content, cursor + 1)] === ")";
+}
 
 // The inline destination at one description end, memoised.
 //
@@ -1805,21 +1993,23 @@ type InlineDestination = { url: string; start: number; end: number } | null;
 // share one description end (`"[".repeat(n) + "](URL)"` gives every one of them
 // the same `]`), and re-running the regex per bracket is quadratic.
 //
-// And every alternative it can match ends at the FIRST `)` at or after the
-// description, because neither `[^)\s]+` nor `[^)]*` may cross one. So when no
-// `)` follows, the grammar cannot match — and running it anyway is what cost
-// 285 seconds on a 12.5 KB payload (T72#F-003): `[^)\s]+[^)]*\)` backtracks
-// over every split of the run it just consumed, quadratic in the run length and
-// cubic once a leading run of `[` offers it a start position at every bracket.
-// The `)` positions are indexed in the same single pass as the brackets, so
-// asking is O(log n) and the answer is exact rather than a bound.
+// It reads two things. The CLASSIFIED url is what the old sticky pattern
+// `(?:<([^<>\n]*)>|([^)\s]+))[^)]*\)` read — an angle destination, else a bare
+// head up to the first `)` or space — and `end` is just past the first `)` at
+// or after that head, taken from the `)` index instead of from a `[^)]*` scan:
+// that scan re-ran to the same far `)` for every description end that did not
+// move the cursor (slice-34 performance F-001), and on failure it backtracked
+// over every split of the head, which once cost 285 seconds on 12.5 KB
+// (T72#F-003). Every url classified today is still classified, at the same
+// offset. `resolves` is the second reading, `resolvesAsInline`: whether the
+// cursor may skip the construct at all.
 function readInlineDestination(
   content: string,
   index: ContentIndex,
   descriptionEnd: number,
-  cache: Map<number, InlineDestination>,
+  cache: InlineDestinationCache,
 ): InlineDestination {
-  const cached = cache.get(descriptionEnd);
+  const cached = cache.readings.get(descriptionEnd);
   if (cached !== undefined) return cached;
   let destination: InlineDestination = null;
   // `(` immediately after the description ⇒ inline. CommonMark allows no
@@ -1856,19 +2046,48 @@ function readInlineDestination(
     // memoised calls therefore cover pairwise-disjoint spans of `content`, so
     // total inline-destination skipping is bounded by `content.length`.
     const at = skipDestinationLeadingWhitespace(content, descriptionEnd + 1);
-    INLINE_DESTINATION.lastIndex = at;
-    const match = INLINE_DESTINATION.exec(content);
-    const url = match ? (match[1] ?? match[2] ?? "") : "";
-    if (match && url) {
+    const head = readClassifiedHead(content, index, at, cache);
+    if (head) {
       destination = {
-        url,
-        start: at + match[0].indexOf(url),
-        end: INLINE_DESTINATION.lastIndex,
+        ...head,
+        resolves: resolvesAsInline(content, descriptionEnd + 1, at, cache.bare),
       };
     }
   }
-  cache.set(descriptionEnd, destination);
+  cache.readings.set(descriptionEnd, destination);
   return destination;
+}
+
+// The old pattern's reading at `at`, alternative by alternative. The `)` must
+// be looked up AFTER the head, not before the leading skip: that skip can
+// consume an ordered-list marker `N)`, and when that was the document's only
+// `)` the pattern ran anyway and backtracked quadratically (slice-34 backend
+// F-002).
+function readClassifiedHead(
+  content: string,
+  index: ContentIndex,
+  at: number,
+  cache: InlineDestinationCache,
+): { url: string; start: number; end: number } | null {
+  if (content[at] === "<") {
+    // `<([^<>\n]*)>`. Scans stop at the next `<`, so they are disjoint.
+    let close = at + 1;
+    while (close < content.length && !"<>\n".includes(content[close] as string)) {
+      close += 1;
+    }
+    const paren =
+      content[close] === ">" ? firstAtOrAfter(index.closeParens, close + 1) : -1;
+    if (paren !== -1) {
+      const url = content.slice(at + 1, close);
+      return url ? { url, start: at + 1, end: paren + 1 } : null; // `<>` reads nothing
+    }
+    // no `)` after the angle form: the pattern fell back to the bare one
+  }
+  const headEnd = classificationHeadEnd(content, at, cache);
+  if (headEnd === at) return null;
+  const paren = firstAtOrAfter(index.closeParens, headEnd);
+  if (paren === -1) return null;
+  return { url: content.slice(at, headEnd), start: at, end: paren + 1 };
 }
 
 // Every construct the bytes at `open` (`content[open] === "["`) could be, in the
@@ -1884,7 +2103,7 @@ function readBracketConstructs(
   content: string,
   index: ContentIndex,
   open: number,
-  destinations: Map<number, InlineDestination>,
+  destinations: InlineDestinationCache,
   budget: LabelBudget,
   wantReference: boolean,
 ): BracketConstruct[] {
@@ -1902,6 +2121,7 @@ function readBracketConstructs(
         descriptionEnd,
         end: inline.end,
         escapeAware,
+        resolves: inline.resolves,
       });
       continue;
     }
@@ -2268,21 +2488,18 @@ function readStartTag(
 const SENSITIVE_URL_VALUE =
   /(?:[?&](?:api[_-]?key|access[_-]?token|auth[_-]?token|token|password|secret)=|\/(?:api[_-]?key|access[_-]?token|auth[_-]?token|token|password|secret)\/)[^&#/?\s]+/i;
 
-// Does this inline LINK destination carry an explicit credential locator?
-// Memoised by description end for the same reason the destination itself is:
-// many opening brackets can share one description end, and re-running a regex
-// over the same (possibly very long) destination once per bracket is quadratic.
-function isSensitiveDestination(
-  url: string,
-  descriptionEnd: number,
-  cache: Map<number, boolean>,
-): boolean {
-  const cached = cache.get(descriptionEnd);
-  if (cached !== undefined) return cached;
-  const sensitive = SENSITIVE_URL_VALUE.test(url);
-  cache.set(descriptionEnd, sensitive);
-  return sensitive;
+// Does this inline LINK destination carry an explicit credential locator? A
+// renderer decodes character references in a destination before following it,
+// so `&amp;token=` is a locator too (slice-34 backend F-003). The raw spelling
+// is still tested, so decoding can only add findings.
+function isSensitiveDestination(url: string): boolean {
+  return SENSITIVE_URL_VALUE.test(url) || SENSITIVE_URL_VALUE.test(renderableUrl(url));
 }
+
+// How much url the inline pass may classify, per character of input. Each url
+// is classified once per start; only constructs that do not move the cursor
+// can overlap, so an ordinary document stays far below this.
+const INLINE_CLASSIFY_WORK_FACTOR = 8;
 
 // How many candidate boundaries a `srcset` value carries, counted without
 // allocating the split.
@@ -2307,6 +2524,9 @@ export function detectExfil(
 ): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
   let m: RegExpExecArray | null;
+  // Every surface needs one of the two: a markdown construct or definition a
+  // `[`, an HTML tag a `<` (slice-34 performance F-002).
+  if (!content.includes("[") && !content.includes("<")) return matches;
 
   // Build the reference-definition table (ref → { url, start }) FIRST, because
   // it is what decides whether any bracket run in this document can be a label
@@ -2352,7 +2572,7 @@ export function detectExfil(
     exhausted: false,
   };
   // One inline-destination reading per description end, shared by both passes.
-  const destinations = new Map<number, InlineDestination>();
+  const destinations = newInlineDestinationCache();
 
   // Inline images and links. Images are auto-fetched by renderers. An inline
   // link is a finding here only when it embeds a sensitive query/path value;
@@ -2386,8 +2606,9 @@ export function detectExfil(
   //     from being read as two constructs.
   let destinationStart = -1;
   let destinationEnd = -1;
-  const sensitive = new Map<number, boolean>();
   const flaggedInlineStarts = new Set<number>();
+  const examinedLinkStarts = new Set<number>();
+  let classifyWork = INLINE_CLASSIFY_WORK_FACTOR * content.length;
   BRACKET_OPEN.lastIndex = 0;
   while ((m = BRACKET_OPEN.exec(content)) !== null) {
     const isImage = m[1] === "!";
@@ -2416,7 +2637,11 @@ export function detectExfil(
     // Skipping is an optimisation justified by a renderer resolving the outer
     // construct, and for a candidate this file added itself that is exactly the
     // thing not yet established. So the new ends may only ADD.
-    if (inline.escapeAware) {
+    //
+    // A construct a renderer REJECTS skips nothing either: its bytes are
+    // markdown again, so an image written in them is fetched (slice-34 logic
+    // F-001).
+    if (inline.escapeAware || !inline.resolves) {
       // fall through to the classification below without moving the cursor
     } else if (isImage) {
       BRACKET_OPEN.lastIndex = inline.end; // alt text: nothing inside is fetched
@@ -2429,24 +2654,30 @@ export function detectExfil(
     // every one of them the same `]`). One span is one finding, and dropping
     // out here is also what keeps the classification off the hot path.
     if (flaggedInlineStarts.has(inline.start)) continue;
-    if (
-      !isImage &&
-      !isSensitiveDestination(inline.url, inline.descriptionEnd, sensitive)
-    ) {
+    if (!isImage) {
+      if (examinedLinkStarts.has(inline.start)) continue;
+      examinedLinkStarts.add(inline.start);
+    }
+    const hit = {
+      url: inline.url,
+      start: inline.start,
+      policyId: isImage
+        ? "egress.markdown-image-exfil"
+        : "egress.markdown-link-sensitive-value",
+    };
+    // Constructs that do not move the cursor can each carry a url running to
+    // the same far `)` (`"![a\\]](".repeat(n) + ")".repeat(n)`), and
+    // classifying every one is quadratic (slice-34 highload F-001). Past the
+    // budget a url is flagged unexamined: what is not examined is not released.
+    if (inline.url.length > classifyWork) {
+      flaggedInlineStarts.add(inline.start);
+      considerUrl({ ...hit, unexamined: true }, allowlist, matches);
       continue;
     }
+    classifyWork -= inline.url.length;
+    if (!isImage && !isSensitiveDestination(inline.url)) continue;
     flaggedInlineStarts.add(inline.start);
-    considerUrl(
-      {
-        url: inline.url,
-        start: inline.start,
-        policyId: isImage
-          ? "egress.markdown-image-exfil"
-          : "egress.markdown-link-sensitive-value",
-      },
-      allowlist,
-      matches,
-    );
+    considerUrl(hit, allowlist, matches);
   }
 
   // Reference-style uses remain guarded as an indirect injection surface. They
@@ -2494,8 +2725,9 @@ export function detectExfil(
       // …and an ESCAPE-AWARE-only construct skips nothing at all, for the reason
       // the inline pass states. It also does not `continue`: suppressing the
       // reference reading on the strength of a candidate end this file added
-      // itself would be the same release seen from the other pass.
-      if (!inline.escapeAware) {
+      // itself would be the same release seen from the other pass. A construct
+      // a renderer rejects is no inline construct to win, likewise.
+      if (!inline.escapeAware && inline.resolves) {
         if (isImage) BRACKET_OPEN.lastIndex = inline.end;
         else {
           destinationStart = inline.descriptionEnd;

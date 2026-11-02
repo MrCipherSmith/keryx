@@ -128,6 +128,7 @@ class MigrationSafety(unittest.TestCase):
             for target, value in [("trusted_source", lambda *a, **k: None), ("bind_installation", lambda *a: None),
                                   ("configuration", lambda *a: config), ("verified_bundle", lambda *a: (self.root, "new-image")),
                                   ("snapshot", lambda *a: dict(info)), ("info_for", lambda *a: dict(info)),
+                                  ("offline_snapshot", lambda *a: dict(info)),
                                   ("inspect_service", lambda name: {**hub, "Id": name}), ("prepare", prepare),
                                   ("trial", trial), ("volume_archive", archive), ("docker", lambda *a, **k: run(list(a), **k)),
                                   ("run", run), ("adoption_lock", lambda *a: nullcontext())]:

@@ -29,10 +29,27 @@ const SEND_WINDOW = 60;
 const BARE_SSRF_HOST =
   /\b(?:(?:\d{1,3}\.){3}\d{1,3}|metadata\.google\.internal)\b/gi;
 
-// Extract the lowercased host from an `http(s)://…` URL, or null when the URL is
-// malformed. Strips userinfo, port, path, query and fragment.
+// Extract the lowercased host from an `http(s)://…` URL the way the request
+// would resolve it, or null when the URL is malformed. The WHATWG parser is the
+// source of truth: it treats `\\` as `/`, drops `[v6]:port`, and normalises
+// decimal/hex/octal IPv4 forms. Text it rejects (e.g. a `%25` zone id) falls back
+// to a literal authority read.
 export function hostOf(url: string): string | null {
-  const m = /^https?:\/\/([^/?#]+)/i.exec(url);
+  try {
+    const host = new URL(url).hostname;
+    if (host) {
+      return host.toLowerCase();
+    }
+  } catch {
+    // fall through to the literal read
+  }
+  return literalHostOf(url);
+}
+
+// Literal authority read: strips userinfo, port, path, query and fragment, and
+// ends the authority at a backslash like the WHATWG parser does.
+function literalHostOf(url: string): string | null {
+  const m = /^https?:[/\\]{2}([^/?#\\]+)/i.exec(url);
   if (!m || m[1] === undefined) {
     return null;
   }
@@ -41,14 +58,23 @@ export function hostOf(url: string): string | null {
   if (at >= 0) {
     authority = authority.slice(at + 1);
   }
-  // Strip a :port suffix (but keep IPv6 brackets intact).
-  if (!authority.startsWith("[")) {
-    const colon = authority.indexOf(":");
-    if (colon >= 0) {
-      authority = authority.slice(0, colon);
-    }
+  if (authority.startsWith("[")) {
+    // Keep the bracketed IPv6 literal, drop the `:port` after it.
+    const close = authority.indexOf("]");
+    return close > 0 ? authority.slice(0, close + 1).toLowerCase() : null;
   }
-  return authority.toLowerCase();
+  const colon = authority.indexOf(":");
+  if (colon >= 0) {
+    authority = authority.slice(0, colon);
+  }
+  return authority.toLowerCase() || null;
+}
+
+// Every reading of the URL's host. A guard flags a URL when ANY reading is
+// private or non-allowlisted, so a parser disagreement cannot hide a target.
+function hostCandidates(url: string): string[] {
+  const hosts = [hostOf(url), literalHostOf(url)].filter((h): h is string => !!h);
+  return [...new Set(hosts)];
 }
 
 // True when `host` is covered by the allowlist: an exact match or a subdomain of
@@ -61,31 +87,105 @@ export function hostAllowed(host: string, allowlist: string[]): boolean {
   });
 }
 
+function isPrivateV4(a: number, b: number): boolean {
+  if (a === 0) return true; // 0/8 "this network" (0.0.0.0 reaches localhost)
+  if (a === 10) return true; // 10/8 RFC-1918
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64/10 CGNAT
+  if (a === 127) return true; // 127/8 loopback
+  if (a === 169 && b === 254) return true; // 169.254/16 link-local + metadata IP
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12 RFC-1918
+  if (a === 192 && b === 168) return true; // 192.168/16 RFC-1918
+  return false;
+}
+
+// Dotted quad read as plain decimal (`010` is 10), as the shipped rule did.
+function decimalV4(h: string): [number, number] | null {
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (!v4) return null;
+  const o = v4.slice(1, 5).map((n) => Number(n));
+  if (o.some((n) => n > 255)) return null;
+  return [o[0] as number, o[1] as number];
+}
+
+// IPv4 read as the WHATWG/inet_aton parser does: 1-4 parts, each decimal, 0x hex
+// or 0-prefixed octal, the last part filling the remaining bytes.
+function whatwgV4(h: string): [number, number] | null {
+  const parts = h.split(".");
+  if (parts.length > 1 && parts[parts.length - 1] === "") parts.pop();
+  if (parts.length < 1 || parts.length > 4) return null;
+  const nums: number[] = [];
+  for (const p of parts) {
+    let n: number;
+    if (/^0x[0-9a-f]*$/i.test(p)) n = p.length === 2 ? 0 : parseInt(p.slice(2), 16);
+    else if (/^0[0-7]+$/.test(p)) n = parseInt(p.slice(1), 8);
+    else if (/^(0|[1-9]\d*)$/.test(p)) n = Number(p);
+    else return null;
+    nums.push(n);
+  }
+  const last = nums.pop() as number;
+  if (nums.some((n) => n > 255) || last >= 256 ** (4 - nums.length)) return null;
+  let value = last;
+  nums.forEach((n, i) => {
+    value += n * 256 ** (3 - i);
+  });
+  return [Math.floor(value / 2 ** 24), Math.floor(value / 2 ** 16) % 256];
+}
+
+// Parse an IPv6 literal (brackets and zone id already removed) into 8 hextets.
+function parseV6(h: string): number[] | null {
+  let text = h;
+  const tail: number[] = [];
+  const v4 = /^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/.exec(text);
+  if (v4) {
+    const o = (v4[2] as string).split(".").map(Number);
+    if (o.some((n) => n > 255)) return null;
+    tail.push(((o[0] as number) << 8) | (o[1] as number), ((o[2] as number) << 8) | (o[3] as number));
+    text = `${v4[1] as string}0`; // placeholder hextet, dropped below
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const read = (s: string): number[] | null => {
+    if (s === "") return [];
+    const out: number[] = [];
+    for (const g of s.split(":")) {
+      if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+      out.push(parseInt(g, 16));
+    }
+    return out;
+  };
+  const head = read(halves[0] as string);
+  const rest = halves.length === 2 ? read(halves[1] as string) : [];
+  if (!head || !rest) return null;
+  if (tail.length > 0) (rest.length > 0 ? rest : head).pop();
+  const given = head.length + rest.length + tail.length;
+  if (halves.length === 1 ? given !== 8 : given > 7) return null;
+  return [...head, ...new Array<number>(8 - given).fill(0), ...rest, ...tail];
+}
+
 // True when `host` is a private / loopback / link-local / cloud-metadata target.
 export function isSsrfHost(host: string): boolean {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
-  if (h === "metadata.google.internal" || h === "localhost") {
+  const h = host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.+$/, "");
+  if (h === "metadata.google.internal" || h === "localhost" || h.endsWith(".localhost")) {
     return true;
   }
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
-  if (v4) {
-    const o = v4.slice(1, 5).map((n) => Number(n));
-    if (o.some((n) => n > 255)) {
-      return false;
+  // IPv6 classification applies only to IPv6 literals, never to DNS names
+  // such as fcc.gov or fdic.gov.
+  if (h.includes(":")) {
+    const g = parseV6(h.replace(/%.*$/, ""));
+    if (!g) return false;
+    const [g0, , , , , g5, g6, g7] = g as [number, number, number, number, number, number, number, number];
+    if (g.slice(0, 7).every((x) => x === 0) && g7 <= 1) return true; // :: and ::1
+    if ((g0 & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+    if ((g0 & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+    if (g.slice(0, 5).every((x) => x === 0) && g5 === 0xffff) {
+      return isPrivateV4(g6 >> 8, g6 & 0xff); // ::ffff:a.b.c.d IPv4-mapped
     }
-    const [a, b] = o as [number, number, number, number];
-    if (a === 10) return true; // 10/8 RFC-1918
-    if (a === 127) return true; // 127/8 loopback
-    if (a === 169 && b === 254) return true; // 169.254/16 link-local + metadata IP
-    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12 RFC-1918
-    if (a === 192 && b === 168) return true; // 192.168/16 RFC-1918
     return false;
   }
-  // IPv6 loopback / unique-local / link-local.
-  if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80")) {
-    return true;
-  }
-  return false;
+  return [decimalV4(h), whatwgV4(h)].some((v4) => v4 !== null && isPrivateV4(v4[0], v4[1]));
 }
 
 export function detectEgress(
@@ -93,7 +193,8 @@ export function detectEgress(
   allowlist: string[] = [],
 ): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
-  const ssrfSpans = new Set<string>();
+  // SSRF URL spans, pushed in ascending order (the URL scan walks left to right).
+  const ssrfSpans: { start: number; end: number }[] = [];
 
   EXTERNAL_URL.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -101,10 +202,10 @@ export function detectEgress(
     const url = m[0];
     const start = m.index;
     const end = start + url.length;
-    const host = hostOf(url);
+    const hosts = hostCandidates(url);
 
     // SSRF / metadata takes precedence over the other URL rules.
-    if (host && isSsrfHost(host)) {
+    if (hosts.some(isSsrfHost)) {
       matches.push({
         category: "egress",
         policyId: "egress.ssrf-metadata",
@@ -116,8 +217,12 @@ export function detectEgress(
         remediation:
           "Block requests to private, loopback, link-local, or cloud-metadata hosts (SSRF).",
       });
-      ssrfSpans.add(`${start}:${end}`);
-    } else if (host && allowlist.length > 0 && !hostAllowed(host, allowlist)) {
+      ssrfSpans.push({ start, end });
+    } else if (
+      hosts.length > 0 &&
+      allowlist.length > 0 &&
+      hosts.some((h) => !hostAllowed(h, allowlist))
+    ) {
       // Deny-by-default: proximity-independent when an allowlist is configured.
       matches.push({
         category: "egress",
@@ -155,15 +260,18 @@ export function detectEgress(
 
   // Scheme-less SSRF host tokens (proximity-independent).
   BARE_SSRF_HOST.lastIndex = 0;
+  let span = 0;
   while ((m = BARE_SSRF_HOST.exec(content)) !== null) {
     const value = m[0];
     const start = m.index;
     const end = start + value.length;
-    // Skip a token already covered by a scheme-qualified SSRF URL above.
-    const covered = [...ssrfSpans].some((span) => {
-      const [s, e] = span.split(":").map((n) => Number(n));
-      return start >= (s ?? 0) && end <= (e ?? 0);
-    });
+    // Skip a token already covered by a scheme-qualified SSRF URL above. Both
+    // walks are ascending, so a moving cursor keeps this linear.
+    while (span < ssrfSpans.length && (ssrfSpans[span] as { end: number }).end <= start) {
+      span += 1;
+    }
+    const cur = ssrfSpans[span];
+    const covered = cur !== undefined && start >= cur.start && end <= cur.end;
     if (!covered && isSsrfHost(value)) {
       matches.push({
         category: "egress",

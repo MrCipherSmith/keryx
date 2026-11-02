@@ -121,12 +121,15 @@ export interface RouterLimits {
   queuedCommandLimitMs?: number;
 }
 
+const DEFAULT_IDLE_POLL_MS = 250;
+const DEFAULT_QUEUED_COMMAND_LIMIT_MS = 30 * 60_000;
+
 export const DEFAULT_ROUTER_LIMITS: RouterLimits = {
   runningNoticeMs: 4_000,
   commandLimitMs: 120_000,
   choiceTimeoutMs: 120_000,
-  idlePollMs: 250,
-  queuedCommandLimitMs: 30 * 60_000,
+  idlePollMs: DEFAULT_IDLE_POLL_MS,
+  queuedCommandLimitMs: DEFAULT_QUEUED_COMMAND_LIMIT_MS,
 };
 
 /** The most items on one picker page; with the navigation row this stays within the eight rows a keyboard may have. */
@@ -329,7 +332,7 @@ export class RemoteCommandRouter {
   private async awaitIdle(line: string, command: string): Promise<boolean> {
     this.ctx.record(`/${command} queued: main is busy`);
     await this.ctx.reply(this.ctx.compose(`${line} is queued: main is busy. It runs when main is idle.`)).catch(() => false);
-    const { idlePollMs = 250, queuedCommandLimitMs = 30 * 60_000 } = this.ctx.limits;
+    const { idlePollMs = DEFAULT_IDLE_POLL_MS, queuedCommandLimitMs = DEFAULT_QUEUED_COMMAND_LIMIT_MS } = this.ctx.limits;
     const until = Date.now() + queuedCommandLimitMs;
     while (this.ctx.host.isBusy()) {
       if (this.ctx.live?.() === false) {
@@ -413,15 +416,18 @@ export class RemoteCommandRouter {
       // Never cancel anything here. The shell may be running the operator's own turn, which a
       // command from the topic has no right to stop; the command's own work is left to finish.
       // Its outcome is not lost: when it ends, the topic is told how (flow 387 review, L-6).
-      void running.then(
-        (late) => this.lateOutcome(command, late, end),
-        (error: unknown) => this.lateOutcome(command, { output: error instanceof Error ? error.message : String(error), ok: false }, end),
-      );
       this.ctx.record(`/${command} still running: stopped waiting after the time limit`);
       ended(end, "failed");
       await this.ctx
         .reply(`/${command} is still running in the shell. Stopped waiting for it after ${Math.max(1, Math.round(limits.commandLimitMs / 1000))} seconds.`)
         .catch(() => false);
+      // The line stays held until the work settles: the next command shares the shell's output
+      // capture, so it must never start alongside this one (perimeter review, highload-20 F-001).
+      const late = await running.then(
+        (value) => value,
+        (error: unknown): CommandOutcome => ({ output: error instanceof Error ? error.message : String(error), ok: false }),
+      );
+      await this.lateOutcome(command, late, end);
       return;
     }
     if (outcome === undefined) {

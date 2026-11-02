@@ -6,11 +6,13 @@ credentials, environment values, cookies, role mappings or container logs.
 """
 import base64
 import argparse
-from contextlib import contextmanager, nullcontext
+from contextlib import closing, contextmanager, nullcontext
 from typing import NamedTuple
 import hashlib
 import json
 import os
+import posixpath
+import struct
 from pathlib import Path
 import re
 import secrets
@@ -422,6 +424,73 @@ def snapshot(container, path):
     return info_for(path)
 
 
+def validate_wal(path):
+    """Check the current WAL generation; distinguish reusable tails where possible."""
+    data = path.read_bytes()
+    if not data:
+        return
+    require(len(data) >= 32, "Malformed SQLite WAL")
+    magic, version, page_size = struct.unpack_from(">III", data)
+    require(magic in (0x377f0682, 0x377f0683) and version == 3007000 and
+            512 <= page_size <= 65536 and page_size & (page_size - 1) == 0 and
+            (len(data) - 32) % (24 + page_size) == 0, "Malformed SQLite WAL")
+    order = "<" if magic == 0x377f0682 else ">"
+    def checksum(chunk, first=0, second=0):
+        words = struct.unpack(order + str(len(chunk) // 4) + "I", chunk)
+        for index in range(0, len(words), 2):
+            first = (first + words[index] + second) & 0xffffffff
+            second = (second + words[index + 1] + first) & 0xffffffff
+        return first, second
+    first, second = checksum(data[:24])
+    require((first, second) == struct.unpack_from(">II", data, 24), "Malformed SQLite WAL")
+    salt = data[16:24]
+    for offset in range(32, len(data), 24 + page_size):
+        candidate = checksum(data[offset:offset + 8] + data[offset + 24:offset + 24 + page_size], first, second)
+        stored = struct.unpack_from(">II", data, offset + 16)
+        if data[offset + 8:offset + 16] != salt:
+            # SQLite reuses WAL files after checkpoints. A checksum that still
+            # chains from this generation identifies a damaged frame salt.
+            require(candidate != stored, "Malformed SQLite WAL")
+            break
+        require(candidate == stored, "Malformed SQLite WAL")
+        first, second = candidate
+
+
+def offline_snapshot(archive_path, destination):
+    """Snapshot the stopped archive using only private writable copies of DB and WAL."""
+    names = ("hub.sqlite", "hub.sqlite-wal")
+    with tempfile.TemporaryDirectory(prefix="keryx-legacy-snapshot-") as temporary:
+        private = Path(temporary)
+        selected = {}
+        with tarfile.open(archive_path, "r:") as archive:
+            for member in archive:
+                canonical = posixpath.normpath(member.name).lstrip("/")
+                if canonical not in names:
+                    continue
+                require(member.name in (canonical, "./" + canonical) and canonical not in selected and member.isfile(),
+                        "Unsafe or duplicate SQLite archive member")
+                selected[canonical] = member
+            require("hub.sqlite" in selected and sum(member.size for member in selected.values()) <= 64 * 1024 * 1024,
+                    "Missing or oversized SQLite archive members")
+            for name, member in selected.items():
+                source = archive.extractfile(member)
+                require(source is not None, "Missing SQLite archive member")
+                with source, (private / name).open("wb") as output:
+                    shutil.copyfileobj(source, output)
+        if "hub.sqlite-wal" in selected:
+            validate_wal(private / "hub.sqlite-wal")
+        source = sqlite3.connect(private / "hub.sqlite")
+        try:
+            with closing(sqlite3.connect(private / "snapshot.sqlite")) as target:
+                source.backup(target)
+        finally:
+            source.close()
+        result = info_for(private / "snapshot.sqlite")
+        # Publish only a complete, validated standalone database.
+        private_write(destination, (private / "snapshot.sqlite").read_bytes())
+        return result
+
+
 def volume_archive(volume, image, path):
     with path.open("wb") as output:
         docker("run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
@@ -660,11 +729,7 @@ def main():
                 run([str(root / "hubctl"), "stop", "hub"])
                 # No writer remains. Copy and validate the final exact database and full volume.
                 volume_archive(config["volume"], hub["Image"], backup / "hub-data.tar")
-                with (backup / "hub.sqlite").open("wb") as final:
-                    docker("run", "--rm", "--network", "none", "--user", "1000:1000", "-v", f'{config["volume"]}:/data:ro', "--entrypoint", "bun", hub["Image"],
-                           "-e", SERIALIZE_JS,
-                           output=final)
-                final_info = info_for(backup / "hub.sqlite")
+                final_info = offline_snapshot(backup / "hub-data.tar", backup / "hub.sqlite")
                 require(final_info["unresolvedWork"] == 0, "Work raced with shutdown; original Hub will be resumed")
                 trial(workspace, image, backup / "hub-data.tar", backup / "hub.sqlite", stage, config, expected=final_info)
                 install_candidate(root, stage, args.version)
