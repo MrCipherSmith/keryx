@@ -310,6 +310,10 @@ function ContributionForm({
       )}
     </Field>
   );
+  const pick = (name: string, ids: string[]) => {
+    const saved = draft[name];
+    return saved !== undefined && ids.includes(saved) ? saved : ids[0];
+  };
   const choice = (
     name: string,
     label: string,
@@ -318,7 +322,7 @@ function ContributionForm({
     <Field key={name} label={t(label)}>
       <Select
         required
-        value={draft[name] ?? values[0]?.id ?? ""}
+        value={pick(name,values.map((value) => value.id)) ?? ""}
         onChange={(e) => setDraft({ ...draft, [name]: e.target.value })}
       >
         {values.map((v) => (
@@ -332,7 +336,7 @@ function ContributionForm({
   const send = async () => {
     const expectedVersions = aggregateVersions(flow, intent, attempt);
     if (kind === "intent" && fr) {
-      const flowCriterionId = draft.criterion ?? fr.criteria[0]?.criterionId;
+      const flowCriterionId = pick("criterion",fr.criteria.map((criterion) => criterion.criterionId));
       if (!flowCriterionId) return;
       const criteria = (draft.criteria ?? "")
         .split("\n")
@@ -393,7 +397,7 @@ function ContributionForm({
         expectedVersions,
         payload: {
           intentRevisionId: ir.id,
-          contextSnapshotId: draft.context ?? contexts[0]?.id,
+          contextSnapshotId: pick("context",contexts.map((context) => context.id)),
           participantId: hub.principal.id,
           method: draft.method ?? "human",
           summary: draft.summary,
@@ -453,7 +457,7 @@ function ContributionForm({
       });
     } else if (kind === "evidence" && attempt && ir) {
       const subject = subjects.find(
-        (s) => s.id === (draft.subject ?? subjects[0]?.id),
+        (s) => s.id === pick("subject",subjects.map((subject) => subject.id)),
       );
       if (!subject) return;
       const report = draft.report ?? "";
@@ -471,7 +475,7 @@ function ContributionForm({
           attemptId: attempt.id,
           subjectId: subject.id,
           subjectDigest: subject.contentDigest,
-          criterionIds: [draft.criterion ?? ir.criteria[0]?.criterionId],
+          criterionIds: [pick("criterion",ir.criteria.map((criterion) => criterion.criterionId))],
           result: draft.result ?? "inconclusive",
           method: draft.method,
           report,
