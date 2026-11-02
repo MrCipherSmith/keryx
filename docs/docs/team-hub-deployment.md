@@ -225,6 +225,15 @@ A plain rollback confirms first, preserves current data and tests the previous i
 
 `--restore-data` deliberately replaces current work with the pre-upgrade snapshot. It follows only the backup taken when leaving the selected previous release, verifies it, names the destructive effect in its confirmation and first saves current data under `backups/pre-rollback-<time>/`. Both data copies remain available. Once a rollback has run, its automatic pre-upgrade restore pointer is cleared; backups remain usable through explicit `hubctl restore`. Prefer a compatible release or a forward fix when new work already exists.
 
+## A Git delivery interrupted by a stop
+
+A stop, crash or upgrade during a Git delivery leaves that delivery `uncertain`: the push may or may not have reached the remote, so the Hub never re-runs it by itself and refuses further deliveries for that project with `409 delivery-in-progress`, naming the operation. An operator inspects it with `GET /hub/v1/projects/<project>/deliveries/<operation>` and resolves it with `POST /hub/v1/projects/<project>/deliveries/<operation>/resolve` (an `Idempotency-Key` header is required):
+
+- `{"action":"retry"}` re-issues the same operation. The adapter first reconciles the operation's receipt and the managed branch's `Hub-Operation` marker, so a push that already happened is recorded instead of repeated. It also finalizes an operation whose Git result was recorded but never finished.
+- `{"action":"abandon"}` records that you inspected the managed branch and nothing was published. It is refused once Git has reported a result.
+
+Either way the project can deliver again.
+
 ## Backup and restore
 
 The installer schedules `hubctl backup --quiet` at 03:17 server time (skip it with `--no-backup`; add it later with `hubctl schedule on`). Each run takes an online backup **without stopping the Hub**: SQLite serialises a consistent image, `hubctl` checks it (`PRAGMA integrity_check` and the `hub_state` row), compresses it, writes its SHA-256, renames it into place atomically, and rotates.

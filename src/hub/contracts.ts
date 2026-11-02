@@ -17,7 +17,7 @@ export type RevisionPurpose = "snapshot" | "review-bundle";
 export type CodeRevision = { id: string; projectId: string; baseRevisionId: string | null; gitBaseSha: string; message: string; files: RevisionFile[]; createdBy: string; createdAt: string; treeDigest: string; purpose?: RevisionPurpose };
 /** Metadata-only collection projection; immutable file bytes remain on single-revision reads. */
 export type CodeRevisionSummary = Omit<CodeRevision, 'files'> & { fileCount: number };
-export type Delivery = { id: string; projectId: string; revisionId: string; remoteUrl: string; baseBranch: string; status: "published" | "conflict" | "failed"; branch?: string; commitSha?: string; treeSha?: string; prUrl?: string; error?: string; receipt: Receipt };
+export type Delivery = { id: string; projectId: string; revisionId: string; remoteUrl: string; baseBranch: string; status: "published" | "conflict" | "failed"; branch?: string; commitSha?: string; treeSha?: string; prUrl?: string; error?: string; /** The selected line moved while Git ran; the effect is still recorded. */ lineChanged?: true; receipt: Receipt };
 export type HubEvent = { sequence: number; projectId: string; type: string; actorId: string; actorRole?: Principal["role"]; entityId: string; createdAt: string };
 export type CreateProjectRequest = { name: string };
 export type ImportRequest = { expectedVersion: number; sourceRevision: string; documents: { path: string; kind: "wiki" | "spec"; content: string }[] };

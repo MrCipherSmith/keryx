@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { legacyStorageLimits } from "./legacy-limits";
 import { canTransition } from "../flow/machine";
-import type { CodeRevision, GitDeliveryAdapter, GitDeliveryRequest, GitDeliveryResult, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
+import type { CodeRevision, Delivery, GitDeliveryRequest, GitDeliveryResult, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
 import type { HubState } from "./store";
 export class HubFailure extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -144,7 +144,7 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
     default: fail(404, "not-found", "Route not found");
   }
 }
-export async function hubMutate(state: HubState, actor: Principal, path: string[], input: unknown, config: HubConfig, deliveryAdapter: GitDeliveryAdapter, operationId: string): Promise<unknown> {
+export async function hubMutate(state: HubState, actor: Principal, path: string[], input: unknown, config: HubConfig): Promise<unknown> {
   const body = object(input);
   if (path.length === 1 && path[0] === "projects") {
     const p: Project = { id: randomUUID(), name: text(body.name, "name", 200), version: 1, lineRevisionId: null, lineVersion: 0, contextRevision: 0 };
@@ -235,13 +235,6 @@ export async function hubMutate(state: HubState, actor: Principal, path: string[
     deliverableRevision(r);
     p.lineRevisionId = r.id; p.lineVersion++; event(state, actor, p.id, "line-selected", r.id); return p;
   }
-  if (path.length === 3 && path[2] === "deliveries") {
-    const request = prepareGitDelivery(state, actor, p.id, body, config.dataDir, operationId);
-    let result: GitDeliveryResult;
-    try { result = await deliveryAdapter(request); }
-    catch { result = { status: 'failed', error: 'Git delivery failed; inspect managed repository state before retry' }; }
-    return completeGitDelivery(state, actor, request, result, Number(body.expectedLineVersion));
-  }
   fail(404, "not-found", "Route not found");
 }
 
@@ -253,14 +246,22 @@ export function prepareGitDelivery(state: HubState, actor: Principal, projectId:
   if (p.lineRevisionId !== revision.id) fail(409, 'line-conflict', 'Revision is not the selected integration line');
   return { dataDir, projectId, operationId, revision, remoteUrl: text(body.remoteUrl,'remoteUrl'), baseBranch: text(body.baseBranch,'baseBranch',200) };
 }
-/** Finalize against current authority state, never the pre-network legacy snapshot. */
-export function completeGitDelivery(state: HubState, actor: Principal, request: GitDeliveryRequest, result: GitDeliveryResult, expectedLineVersion: number) {
+/** Finalize against current authority state, never the pre-network legacy snapshot.
+ *  The external effect already happened, so a line change during Git is recorded, not refused. */
+export function completeGitDelivery(state: HubState, actor: Principal, request: GitDeliveryRequest, result: GitDeliveryResult, expectedLineVersion: number): Delivery {
   const p = found(state.projects.find(project => project.id === request.projectId));
-  human(actor); version(expectedLineVersion, p.lineVersion);
-  if (p.lineRevisionId !== request.revision.id) fail(409,'line-conflict','Selected integration line changed during Git delivery; inspect the recorded external result');
-  const delivery = { id: request.operationId, projectId: p.id, revisionId: request.revision.id, remoteUrl: request.remoteUrl, baseBranch: request.baseBranch, ...result, receipt: receipt(actor) };
+  human(actor);
+  const lineChanged = expectedLineVersion !== p.lineVersion || p.lineRevisionId !== request.revision.id;
+  const delivery: Delivery = { id: request.operationId, projectId: p.id, revisionId: request.revision.id, remoteUrl: request.remoteUrl, baseBranch: request.baseBranch, ...result, ...(lineChanged ? { lineChanged: true as const } : {}), receipt: receipt(actor) };
   state.deliveries.push(delivery); event(state, actor, p.id, `delivery-${result.status}`, delivery.id);
   return delivery;
+}
+
+/** Audit record for an operator's explicit finding that an interrupted delivery published nothing. */
+export function recordDeliveryAbandoned(state: HubState, actor: Principal, projectId: string, operationId: string) {
+  if (actor.kind !== 'human' || actor.role !== 'operator') fail(403,'operator-required','Resolving a delivery operation requires an operator');
+  event(state, actor, projectId, 'delivery-abandoned', operationId);
+  return { resolution: 'abandoned' as const, receipt: receipt(actor) };
 }
 
 /** Shared synchronous revision construction; callers supply their own authority and transaction. */
