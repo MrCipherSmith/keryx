@@ -345,7 +345,7 @@ test("keryx providers test: an unknown provider name exits non-zero without a ne
     await providersCommand(["test", "not-a-real-provider"], { fetch: fetchFn });
   } finally {
     expect(process.exitCode).toBe(1);
-    process.exitCode = before;
+    process.exitCode = before ?? 0;
   }
   expect(called).toBe(false);
 });
@@ -385,7 +385,7 @@ test("keryx providers remove: an unknown provider name errors, exits 1, and neve
   } finally {
     console.error = orig;
     expect(process.exitCode).toBe(1);
-    process.exitCode = before;
+    process.exitCode = before ?? 0;
   }
   expect(errors.join("\n")).toContain("Unknown provider: not-a-real-provider");
   expect(confirmCalled).toBe(false);
@@ -402,7 +402,7 @@ test("keryx providers remove --json: an unknown provider name reports ok:false, 
   } finally {
     console.log = orig;
     expect(process.exitCode).toBe(1);
-    process.exitCode = before;
+    process.exitCode = before ?? 0;
   }
   const parsed = JSON.parse(logs.join("\n")) as { provider: string; ok: boolean; reason: string };
   expect(parsed).toEqual({ provider: "not-a-real-provider", ok: false, reason: "unknown provider" });
@@ -473,7 +473,7 @@ test("keryx providers remove: without --yes and without a confirm seam, refuses 
     await providersCommand(["remove", "deepseek"], { dir, env: {} });
   } finally {
     if (!process.stdin.isTTY) expect(process.exitCode).toBe(1);
-    process.exitCode = before;
+    process.exitCode = before ?? 0;
   }
   expect(loadShellConfig(dir).apiKeys).toEqual({ DEEPSEEK_API_KEY: "sk-ds" }); // untouched
 });
@@ -489,7 +489,7 @@ test("keryx providers remove: an env-var-only provider is refused even with --ye
   } finally {
     console.log = orig;
     expect(process.exitCode).toBe(1);
-    process.exitCode = before;
+    process.exitCode = before ?? 0;
   }
   expect(logs.join("\n")).toContain("DEEPSEEK_API_KEY");
 });
