@@ -16,6 +16,7 @@ export function DecisionControls(props:ReviewDecisionProps){
  const [ack,setAck]=useState(false),[error,setError]=useState<string|null>(null),[notice,setNotice]=useState<string|null>(null),[busy,setBusy]=useState(false);
  const [waivers,setWaivers]=useState<Record<string,string>>({}),[waived,setWaived]=useState<string[]>([]);
  const commentRef=useRef<HTMLTextAreaElement>(null),statusRef=useRef<HTMLParagraphElement>(null),inFlight=useRef(false),current=useRef(props.subjectKey??props.targetKey);current.current=props.subjectKey??props.targetKey;
+ const submittedComment=useRef<{target:string;value:string}|null>(null);
  const stale=!props.readonly&&(pinnedTarget!==props.targetKey||error==='stale');
  const reason=props.legacy?comment.trim():returnReason(comment,refs);
  const waiverCriteria=props.criteria.filter(row=>row.waivable&&row.status!=='reportedPass');
@@ -24,7 +25,7 @@ export function DecisionControls(props:ReviewDecisionProps){
  const disabled=busy||!!props.pending||!!unknown||stale;
  useEffect(()=>{if(notice)statusRef.current?.focus();},[notice]);
  const outcome=(result:DecisionOutcome|undefined,action:'accept'|'request-changes')=>{
-  if(result?.status==='committed'){setError(null);setNotice(action==='accept'?'accepted':'returned');setMode(null);clearComment(comment);setAck(false);return;}
+  if(result?.status==='committed'){setError(null);setNotice(action==='accept'?'accepted':'returned');setMode(null);if(submittedComment.current?.target===current.current)clearComment(submittedComment.current.value);submittedComment.current=null;setAck(false);return;}
   if(result?.status==='rejected'){setError(['stale-version','subject-changed','version-conflict','invalid-transition','stale-context'].includes(result.code??'')?'stale':result.code==='forbidden'||result.code==='human-required'?'permission':result.code==='pending-storage'?'pendingStorage':'blocked');return;}
   setError('unknown');
  };
@@ -33,7 +34,7 @@ export function DecisionControls(props:ReviewDecisionProps){
   if(mode==='request-changes'&&(!comment.trim()||reason.length>4000||refs.length>20)){setError('commentInvalid');commentRef.current?.focus();return;}
   if(mode==='accept'&&((props.legacy&&!ack)||waiverMissing))return;
   if(mode==='accept'?!props.acceptAllowed:!props.returnAllowed)return;
-  const target=current.current,action=mode;inFlight.current=true;setBusy(true);setError(null);
+  const target=current.current,action=mode;submittedComment.current={target,value:comment};inFlight.current=true;setBusy(true);setError(null);
   try{const result=await props.onDecision({decision:action,comment:comment.trim(),criterionIds:[...refs],waivers:action==='accept'?waiverCriteria.map(row=>({criterionId:row.id,reason:waivers[row.id]!.trim()})):[]});if(current.current===target)outcome(result,action);}catch{if(current.current===target)setError('unknown');}
   finally{inFlight.current=false;setBusy(false);}
  };
