@@ -192,6 +192,20 @@ class MigrationSafety(unittest.TestCase):
         self.assertEqual(m.info_for(path)["stateDigest"], result["stateDigest"])
         db.close()
 
+    def test_queue_history_only_blocks_adoption_when_unsettled(self):
+        path = self.root / "queue-history.sqlite"
+        db = sqlite3.connect(path)
+        db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT)")
+        db.execute("INSERT INTO hub_state VALUES(1,?)", (json.dumps({"projects":[],"documents":[],"events":[]}),))
+        db.execute("CREATE TABLE remote_queue(body TEXT)")
+        for state in ("applied", "rejected", "removed", "queued", "suspended", "unknown"):
+            with self.subTest(state=state):
+                db.execute("DELETE FROM remote_queue")
+                db.execute("INSERT INTO remote_queue VALUES(?)", (json.dumps({"item":{"state":state}}),))
+                db.commit()
+                self.assertEqual(m.info_for(path)["unresolvedWork"], 0 if state in ("applied","rejected","removed") else 1)
+        db.close()
+
     def test_apply_requires_explicit_yes_before_any_docker_call(self):
         result = subprocess.run([sys.executable, str(MODULE), "--deployment-profile", str(self.root / "profile.json"), "--artifacts", str(self.root), "--version", "0.4.4", "--apply"], capture_output=True)
         self.assertNotEqual(result.returncode, 0)
