@@ -118,18 +118,20 @@ cmd_upgrade 0.4.5 --yes
   expect(result.stderr.toString()).toContain('v0.4.5 is not newer than v0.4.6');
 });
 
-test('frequent safety backups are count bounded while retaining the explicit restore pointer', () => {
+test('safety backups younger than 14 days are never pruned; older ones past the newest three go, except the restore pointer', () => {
   const { directory, result } = libraryFixture(`
 mkdir -p "$ROOT/backups"
 for n in 1 2 3 4 5 6 7 8; do mkdir "$ROOT/backups/upgrade-$n"; done
-state_get() { printf '%s/backups/upgrade-1' "$ROOT"; }
+for n in 1 2 3 4 5; do mkdir "$ROOT/backups/pre-rollback-old-$n"; touch -t 202001010000 "$ROOT/backups/pre-rollback-old-$n"; done
+state_get() { printf '%s/backups/pre-rollback-old-1' "$ROOT"; }
 prune_safety_backups
-find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d > "$ROOT/remaining"
+ls -1 "$ROOT/backups" > "$ROOT/remaining"
 `);
   expect(result.exitCode).toBe(0);
   const remaining = readFileSync(join(directory, 'remaining'), 'utf8').trim().split('\n');
-  expect(remaining.length).toBeLessThanOrEqual(4);
-  expect(remaining).toContain(join(directory, 'backups/upgrade-1'));
+  for (let n = 1; n <= 8; n += 1) expect(remaining).toContain(`upgrade-${n}`);
+  expect(remaining).toContain('pre-rollback-old-1');
+  for (let n = 2; n <= 5; n += 1) expect(remaining).not.toContain(`pre-rollback-old-${n}`);
 });
 
 test('rollback refuses to silently drop a legacy per-release Access overlay', () => {

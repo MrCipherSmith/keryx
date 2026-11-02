@@ -429,12 +429,13 @@ mkdir "$E/old-reader-bundle"
 tar -xzf "$E/releases/v0.0.5/team-hub-install.tar.gz" -C "$E/old-reader-bundle" --strip-components=1
 hubctl _stage "$E/old-reader-bundle" 0.0.5 "kth-e2e-$run-old-reader" >>"$steps" 2>&1 || fail "could not stage old-reader fixture"
 printf 'v0.0.5\n' > "$hub/state/previous-release"
-# Count retention is the documented contract: three newest plus a referenced upgrade copy.
+# Documented contract: the three newest, a referenced upgrade copy and anything younger than 14 days
+# are kept; every directory here is fresh, so only the referenced copy and a non-empty set are checkable.
 # Capture the actual retained set AFTER the successful upgrade has legitimately pruned it.
 find "$hub/backups" -mindepth 1 -maxdepth 1 -type d \( -name 'upgrade-*' -o -name 'pre-restore-*' -o -name 'pre-rollback-*' \) > "$E/retained-safety-backups"
 safety=$(wc -l < "$E/retained-safety-backups" | tr -d ' ')
-if [ "$safety" -lt 1 ] || [ "$safety" -gt 4 ]; then
-  fail "safety retention must keep a bounded recoverable set: $safety"
+if [ "$safety" -lt 1 ]; then
+  fail "safety retention must keep a recoverable set: $safety"
 fi
 IFS= read -r protected_backup < "$hub/state/last-upgrade-backup"
 [ -d "$protected_backup" ] || fail "the explicitly referenced pre-upgrade backup was pruned"

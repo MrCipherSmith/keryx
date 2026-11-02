@@ -284,4 +284,4 @@ The first time the package is published to GitHub Container Registry it may be p
 
 CI (`team-hub-distribution` in `ci.yml`) builds the image from the packaged archive on every pull request and runs the same checks, so a change that breaks the image fails before a tag does.
 
-Safety backups from upgrade, restore and rollback retain the three newest directories plus the explicitly referenced pre-upgrade backup. Retention has a count bound even during frequent operations; manual and legacy-adoption backups remain operator-managed.
+Safety backups from upgrade, restore and rollback retain the three newest directories, the explicitly referenced pre-upgrade backup, and every directory younger than 14 days; only older ones beyond that are pruned. Manual and legacy-adoption backups remain operator-managed.
