@@ -2118,6 +2118,54 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: false,
     sideEffects: ["writes .metaproject/data/stack/stack.json (skipped with --no-write)"],
   },
+  // ---- herdr (flow 481) ---------------------------------------------------
+  // User-global writes outside the project: the Herdr app config and herdr-core's
+  // templates directory (both honour XDG_CONFIG_HOME). Opt-in; never run by `update`.
+  {
+    module: "herdr",
+    command: "herdr install",
+    summary: "Register Keryx with the Herdr app and herdr-core: programs.keryx entry, icon and agent template.",
+    intent: ["подключи keryx к herdr", "install keryx into herdr", "register keryx in herdr", "herdr-core template for keryx"],
+    args: [
+      { name: "dry-run", type: "bool", required: false, desc: "print the plan, write nothing" },
+      { name: "force", type: "bool", required: false, desc: "overwrite a programs.keryx entry, keryx.svg or keryx.md that differs from keryx's" },
+      { name: "json", type: "bool", required: false, desc: "structured per-target result" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "merges programs.keryx into <config>/herdr-app/programs.json (backup programs.json.keryx-backup on the first change)",
+      "writes <config>/herdr-app/keryx/keryx.svg",
+      "writes <config>/herdr-core/templates/keryx.md",
+      "skips a target whose herdr-app or herdr-core directory does not exist; <config> is XDG_CONFIG_HOME or ~/.config",
+    ],
+  },
+  {
+    module: "herdr",
+    command: "herdr remove",
+    summary: "Remove only what keryx wrote for Herdr: its programs.keryx entry, icon and template, when unmodified.",
+    intent: ["убери keryx из herdr", "remove keryx from herdr", "uninstall herdr integration"],
+    args: [
+      { name: "dry-run", type: "bool", required: false, desc: "print the plan, write nothing" },
+      { name: "json", type: "bool", required: false, desc: "structured per-target result" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "deletes programs.keryx from <config>/herdr-app/programs.json when it still equals keryx's entry (programs.json itself is kept)",
+      "deletes <config>/herdr-app/keryx/keryx.svg and then its directory when empty",
+      "deletes <config>/herdr-core/templates/keryx.md when it still equals keryx's template",
+    ],
+  },
+  {
+    module: "herdr",
+    command: "herdr status",
+    summary: "Report, per target, whether Keryx is installed, absent, modified or skipped in Herdr and herdr-core.",
+    intent: ["статус herdr", "is keryx installed in herdr", "herdr integration status"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured per-target result" }],
+    json: true,
+    read: true,
+  },
   // Flow 295: `keryx schedule` (self-contained in ./schedule-descriptors.ts).
   ...SCHEDULE_DESCRIPTORS,
 ];

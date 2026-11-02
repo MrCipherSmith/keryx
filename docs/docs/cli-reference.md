@@ -4680,6 +4680,45 @@ help. `keryx init` prints the same matrix once, up front.
 
 ---
 
+## herdr
+
+Opt-in registration of Keryx with the Herdr desktop app and herdr-core. It
+writes user-global files, never anything inside a project, and `keryx update`
+never runs it.
+
+```
+keryx herdr install [--dry-run] [--force] [--json]
+keryx herdr remove [--dry-run] [--json]
+keryx herdr status [--json]
+```
+
+Three targets, under `XDG_CONFIG_HOME` (default `~/.config`):
+
+| Target | File | Content |
+|---|---|---|
+| `programs` | `herdr-app/programs.json` | `programs.keryx` merged in; every other key preserved |
+| `icon` | `herdr-app/keryx/keryx.svg` | the Keryx glyph the entry points at |
+| `template` | `herdr-core/templates/keryx.md` | agent template running `keryx shell` |
+
+- `install` creates what is missing. A second run changes nothing and says so.
+  A target whose `herdr-app` or `herdr-core` directory does not exist is
+  `skipped` with a reason and nothing is created.
+- An invalid `programs.json` makes `install` exit non-zero, name the file and
+  leave it byte-identical. The first change to an existing `programs.json`
+  leaves `programs.json.keryx-backup` beside it.
+- A `programs.keryx` entry, `keryx.svg` or `keryx.md` that differs from Keryx's
+  own is reported as `kept`; `--force` overwrites it.
+- `remove` deletes only the entry and files that still equal Keryx's own, keeps
+  everything else, and never deletes `programs.json` itself.
+- `status` reports each target as `installed`, `absent`, `modified` or
+  `skipped`, and writes nothing.
+- `--dry-run` prints the plan and writes nothing. `--json` prints
+  `{ command, dryRun, targets: [{ target, path, action, reason? }] }`. Any error
+  exits non-zero. On Windows every target is `skipped`: herdr-core keeps its
+  config under `%APPDATA%`.
+
+---
+
 ## standard
 
 Validate the workspace against the built-in Metaproject Standard
