@@ -7,7 +7,7 @@ import { writeContained } from "../lib/contained-write";
 // gdgraph symbol layer works out of the box: `keryx gdgraph symbols enable` then
 // `keryx gdgraph assets pull` can fetch + verify real grammars. These are real,
 // publicly-hosted, sha-pinned wasm builds (tree-sitter-wasms on jsDelivr), ABI
-// 14 — compatible with web-tree-sitter 0.22.
+// 14 — compatible with web-tree-sitter 0.22 and 0.25.
 //
 // Merge-safe: only ADDS missing grammar entries. Existing entries (user re-pins,
 // model-asset placeholders) are preserved untouched.
