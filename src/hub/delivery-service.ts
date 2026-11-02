@@ -17,9 +17,13 @@ export function createDeliveryService({store,dataDir,serialized,deliver,inspect}
     const inFlight = new Set<string>(), settlers = new Set<() => void>();
     let reconciling = 0;
     const notifySettled = () => { if (!inFlight.size && !reconciling) { for (const resolve of settlers) resolve(); settlers.clear(); } };
+    const publisher = (actor: Principal, projectId: string) => {
+        if (actor.kind !== 'human' || actor.readOnly) fail(403,'human-required','Current writable human required');
+        if (!store.project(projectId) || actor.projectIds && !actor.projectIds.includes(projectId)) fail(404,'not-found','Project not found');
+    };
     const operator = (actor: Principal, projectId: string) => {
         if (actor.kind !== 'human' || actor.role !== 'operator' || actor.readOnly) fail(403,'human-required','Current human operator required');
-        if (!store.project(projectId) || actor.projectIds && !actor.projectIds.includes(projectId)) fail(404,'not-found','Project not found');
+        publisher(actor,projectId);
     };
     const requestFor = (job: DeliveryJob): GitDeliveryRequest => {
         const revision = store.load().revisions.find(revision => revision.projectId === job.projectId && revision.id === job.revisionId);
@@ -55,7 +59,7 @@ export function createDeliveryService({store,dataDir,serialized,deliver,inspect}
     });
     async function run(input: Authority & {projectId:string;body:unknown;key:string;digest:string}): Promise<Result> {
         const prepared = await serialized(async () => {
-            const actor = await input.reauthorize(); operator(actor,input.projectId);
+            const actor = await input.reauthorize(); publisher(actor,input.projectId);
             const pathname = `/hub/v1/projects/${input.projectId}/deliveries`;
             const replayKey = sha256(JSON.stringify([actor.id,'POST',pathname,input.key]));
             return store.workTransaction(() => {
@@ -95,7 +99,7 @@ export function createDeliveryService({store,dataDir,serialized,deliver,inspect}
                 recordResult(job,actor,request);
             }
             return await serialized(async () => {
-                const current = await input.reauthorize();operator(current,job.projectId);
+                const current = await input.reauthorize();publisher(current,job.projectId);
                 if (current.id !== job.actorId) fail(403,'identity-changed','Current delivery authority changed');
                 return finalize(job,current,request);
             });

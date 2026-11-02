@@ -374,13 +374,18 @@ test('at most two independent publication inspections may run concurrently', asy
     try {
         const original=f.store.deliveries.get(f.id)!;
         f.store.workTransaction(()=>{for(const id of ['inspection-two','inspection-three']) f.store.deliveries.save({...original,id,replayKey:id});});
-        let release!:()=>void, entered!:()=>void, count=0;
-        const gate=new Promise<void>(resolve=>release=resolve), both=new Promise<void>(resolve=>entered=resolve);
+        let release!:()=>void, entered!:()=>void, thirdEntered!:()=>void, count=0;
+        const gate=new Promise<void>(resolve=>release=resolve), both=new Promise<void>(resolve=>entered=resolve), thirdStarted=new Promise<void>(resolve=>thirdEntered=resolve);
         const actor={id:'human:operator',kind:'human' as const,role:'operator' as const};
-        const service=createDeliveryService({store:f.store,dataDir:f.config.dataDir,serialized:async action=>action(),deliver:async()=>{throw Error('must not publish');},inspect:async()=>{if(++count===2)entered();await gate;return {status:'failed',error:'No publication'};}});
+        const service=createDeliveryService({store:f.store,dataDir:f.config.dataDir,serialized:async action=>action(),deliver:async()=>{throw Error('must not publish');},inspect:async()=>{if(++count===2)entered();if(count===3)thirdEntered();await gate;return {status:'failed',error:'No publication'};}});
         const input=(id:string)=>{const job=f.store.deliveries.get(id)!;const body={expectedVersion:job.version,decision:'inspect-publication',reason:'Inspect original publication'};return {actor,reauthorize:async()=>actor,projectId:f.p.id,jobId:id,body,key:id,digest:createHash('sha256').update(JSON.stringify(body)).digest('hex')};};
         const a=service.reconcile(input(f.id)).catch(error=>error), b=service.reconcile(input('inspection-two')).catch(error=>error);
-        try {await both;await expect(service.reconcile(input('inspection-three'))).rejects.toMatchObject({status:503,code:'hub-busy'});expect(count).toBe(2);} finally {release();await Promise.all([a,b]);}
+        try {
+            await both;
+            const third=service.reconcile(input('inspection-three')).then(()=>null,error=>error);
+            const outcome=await Promise.race([third,thirdStarted.then(()=>null)]);
+            expect(outcome).toMatchObject({status:503,code:'hub-busy'});expect(count).toBe(2);
+        } finally {release();await Promise.all([a,b]);}
     } finally {f.store.close();}
 });
 
