@@ -9,7 +9,8 @@
 // unit-testable against a temp directory.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "./config-dir";
+import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, type ConfigReadResult } from "./config-dir";
+import { updateConfigFile } from "./config-update";
 
 export interface ShellConfig {
   provider?: string;
@@ -24,7 +25,12 @@ export interface ShellConfig {
    * fields on its own record instead — see `CustomCompatProvider`.
    */
   modelParams?: Record<string, { temperature?: number; maxOutputTokens?: number; timeoutMs?: number }>;
-  /** Legacy single OpenRouter key (flow 080); migrated into `apiKeys` on read. */
+  /**
+   * Legacy single OpenRouter key (flow 080). `loadShellConfig` moves it into
+   * `apiKeys.OPENROUTER_API_KEY` (unless that is already set) and never returns
+   * it, so every write drops it from disk and a remove of OPENROUTER_API_KEY
+   * really revokes it.
+   */
   openrouterKey?: string;
   /**
    * Per-provider API keys, keyed by env var name (e.g. `DEEPSEEK_API_KEY`). Each is
@@ -185,6 +191,35 @@ export function shellConfigPath(dir?: string): string {
   return path.join(keryxConfigDir(dir), "auth.json");
 }
 
+/**
+ * Fold the legacy `openrouterKey` into `apiKeys.OPENROUTER_API_KEY`.
+ *
+ * Done on every read, not only where env vars are applied: a migration that
+ * lived only in `envWithSavedApiKeys` kept loading the key on every launch
+ * while `removeApiKey` and the provider classifier, which look at `apiKeys`,
+ * could not see it — a stored credential nothing in the product could revoke.
+ * Because every write starts from this view, the first write after an upgrade
+ * persists the migration.
+ */
+function withLegacyKeyMigrated(config: ShellConfig): ShellConfig {
+  if (!("openrouterKey" in config)) return config;
+  const { openrouterKey: legacy, ...rest } = config;
+  if (typeof legacy !== "string" || legacy.length === 0 || rest.apiKeys?.OPENROUTER_API_KEY !== undefined) {
+    return rest;
+  }
+  return { ...rest, apiKeys: { ...(rest.apiKeys ?? {}), OPENROUTER_API_KEY: legacy } };
+}
+
+function parseShellConfig(read: ConfigReadResult): ShellConfig {
+  if (!read.ok) return {};
+  try {
+    const raw: unknown = JSON.parse(read.text);
+    return raw !== null && typeof raw === "object" && !Array.isArray(raw) ? withLegacyKeyMigrated(raw as ShellConfig) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** Read the persisted config; `{}` when absent/unreadable/malformed. Never throws. */
 export function loadShellConfig(dir?: string): ShellConfig {
   try {
@@ -194,33 +229,30 @@ export function loadShellConfig(dir?: string): ShellConfig {
     }
     // `readConfigFile`, not `readFileSync`: an oversized file aborts the
     // process outright (SIGABRT, no output, uncatchable). See MAX_CONFIG_FILE_BYTES.
-    const read = readConfigFile(file);
-    if (!read.ok) {
-      return {};
-    }
-    const raw: unknown = JSON.parse(read.text);
-    return raw !== null && typeof raw === "object" ? (raw as ShellConfig) : {};
+    return parseShellConfig(readConfigFile(file));
   } catch {
     return {};
   }
 }
 
 /**
- * Merge `patch` into the persisted config (0600). Best-effort; never throws.
+ * Apply `mutate` to the config as it is on disk NOW and persist the result
+ * (0600). `mutate` returns the next config, or `undefined` for "nothing to
+ * change". Best-effort; never throws.
  *
- * Round 2 item 2 briefly put this read-modify-write under a shared sync lock
- * with `model-profile.ts`'s one-time `modelProfiles` migration strip
- * (`withAuthFileLockSync`); round 3 removed it (review of PR #718: that lock
- * — `Atomics.wait`-based, up to a 2s timeout on contention — sat around
- * EVERY call here, including hot TUI paths like `/reasoning`/`/think`, to
- * guard a race only the migration strip actually needs to avoid. This
- * function is back to its original, unconditional read-merge-write; the
- * migration strip now protects itself instead
- * (`stripModelProfilesFromAuthJsonUnlocked`, `../harness/routing/
- * model-profile.ts` — see that function's own doc for the window and its
- * residual risk).
+ * Every writer of this file goes through here, so a change is always applied
+ * to the latest content and never to a snapshot read earlier: this file is
+ * written by every keryx process of the user at once, and a read-modify-write
+ * over an earlier read lost half of two processes' saved keys and restored a
+ * spent OAuth refresh token over a just-rotated one. Serialised by
+ * `updateConfigFile`, whose lock waits at most 750ms and then falls back to a
+ * compare-before-rename, so a TUI path such as `/reasoning` can never hang on
+ * it — the reason the earlier `Atomics.wait` lock (PR #718) was removed.
+ *
+ * `mutate` may run more than once; it must derive its result from its
+ * argument alone.
  */
-export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void {
+export function updateShellConfig(mutate: (current: ShellConfig) => ShellConfig | undefined, dir?: string): void {
   try {
     // `ensureKeryxConfigDir`, not `mkdirSync`: this is usually the first writer
     // to create the shared directory, and creating it mode-less under `umask
@@ -228,7 +260,6 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
     // credential store beside it were unlinkable and replaceable by any member
     // of the operator's primary group. See `config-dir.permissions.test.ts`.
     ensureKeryxConfigDir(dir);
-    const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
     // Atomic (temp file + rename), not a direct overwrite (flow 304 review
     // finding #6): a crash or a second concurrent write mid-write must never
     // leave `auth.json` half-written — this file holds plaintext provider API
@@ -236,10 +267,29 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
     // has no recovery. Rename also sidesteps the "existing file keeps its old
     // mode" trap `writeOwnerOnlyFile` had to `chmodSync` around: the renamed-in
     // temp file's 0600 mode becomes the destination's mode outright.
-    writeOwnerOnlyFileAtomic(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    updateConfigFile(shellConfigPath(dir), (read) => {
+      const next = mutate(parseShellConfig(read));
+      return next === undefined ? undefined : `${JSON.stringify(withLegacyKeyMigrated(next), null, 2)}\n`;
+    });
   } catch {
     // best-effort persistence — a failure just means the user re-enters next time
   }
+}
+
+/**
+ * Merge `patch` into the persisted config (0600). Best-effort; never throws.
+ *
+ * A top-level shallow merge applied to the file as it is at write time (see
+ * {@link updateShellConfig}). A caller that changes ONE entry of a nested map
+ * must use `updateShellConfig` instead of reading the map, editing it and
+ * passing the whole map here: the map it read may already be stale.
+ *
+ * `model-profile.ts`'s one-time `modelProfiles` migration strip still writes
+ * this file on its own lock-free read/verify/write
+ * (`stripModelProfilesFromAuthJsonUnlocked`); see that function's doc.
+ */
+export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void {
+  updateShellConfig((current) => ({ ...current, ...patch }), dir);
 }
 
 /**
@@ -247,14 +297,12 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
  * existing keys. Best-effort; never throws.
  */
 export function saveApiKey(envKey: string, value: string, dir?: string): void {
-  const existing = loadShellConfig(dir).apiKeys ?? {};
-  saveShellConfig({ apiKeys: { ...existing, [envKey]: value } }, dir);
+  updateShellConfig((current) => ({ ...current, apiKeys: { ...(current.apiKeys ?? {}), [envKey]: value } }), dir);
 }
 
 /** Persist a user-selected endpoint without overwriting other providers. */
 export function saveProviderBaseUrl(provider: string, baseUrl: string, dir?: string): void {
-  const existing = loadShellConfig(dir).baseUrls ?? {};
-  saveShellConfig({ baseUrls: { ...existing, [provider]: baseUrl } }, dir);
+  updateShellConfig((current) => ({ ...current, baseUrls: { ...(current.baseUrls ?? {}), [provider]: baseUrl } }), dir);
 }
 
 /**
@@ -268,41 +316,45 @@ export function saveProviderModelParams(
   patch: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number },
   dir?: string,
 ): void {
-  const existing = loadShellConfig(dir).modelParams ?? {};
-  const merged = { ...(existing[provider] ?? {}), ...patch };
-  saveShellConfig({ modelParams: { ...existing, [provider]: merged } }, dir);
+  updateShellConfig((current) => {
+    const existing = current.modelParams ?? {};
+    return { ...current, modelParams: { ...existing, [provider]: { ...(existing[provider] ?? {}), ...patch } } };
+  }, dir);
+}
+
+/** Drop `key` from the `field` map of the config on disk; `undefined` (no write) when it is not there. */
+function withoutEntry(
+  current: ShellConfig,
+  field: "apiKeys" | "baseUrls" | "modelParams",
+  key: string,
+): ShellConfig | undefined {
+  const existing: Record<string, unknown> = current[field] ?? {};
+  if (!(key in existing)) return undefined;
+  const { [key]: _removed, ...rest } = existing;
+  return { ...current, [field]: rest };
 }
 
 /**
  * Remove one provider's saved API key (flow 304, the `/connect` Disconnect
- * button + `keryx providers remove`). Merge-and-rewrite, same shape as
- * `saveApiKey`'s own read-modify-write — siblings under `apiKeys` are left
+ * button + `keryx providers remove`). Siblings under `apiKeys` are left
  * untouched. A no-op (not an error) when `envKey` was never saved: disconnect
  * is idempotent, and a caller that already classified the credential as
  * "saved" before calling this never hits the absent case in practice.
- * Best-effort; never throws.
+ * `OPENROUTER_API_KEY` also covers the legacy `openrouterKey` field, which
+ * `loadShellConfig` presents under that name. Best-effort; never throws.
  */
 export function removeApiKey(envKey: string, dir?: string): void {
-  const existing = loadShellConfig(dir).apiKeys ?? {};
-  if (!(envKey in existing)) return;
-  const { [envKey]: _removed, ...rest } = existing;
-  saveShellConfig({ apiKeys: rest }, dir);
+  updateShellConfig((current) => withoutEntry(current, "apiKeys", envKey), dir);
 }
 
 /** Remove a provider's saved endpoint override, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
 export function removeProviderBaseUrl(provider: string, dir?: string): void {
-  const existing = loadShellConfig(dir).baseUrls ?? {};
-  if (!(provider in existing)) return;
-  const { [provider]: _removed, ...rest } = existing;
-  saveShellConfig({ baseUrls: rest }, dir);
+  updateShellConfig((current) => withoutEntry(current, "baseUrls", provider), dir);
 }
 
 /** Remove a provider's saved sampling/budget/timeout overrides, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
 export function removeProviderModelParams(provider: string, dir?: string): void {
-  const existing = loadShellConfig(dir).modelParams ?? {};
-  if (!(provider in existing)) return;
-  const { [provider]: _removed, ...rest } = existing;
-  saveShellConfig({ modelParams: rest }, dir);
+  updateShellConfig((current) => withoutEntry(current, "modelParams", provider), dir);
 }
 
 /**
@@ -319,10 +371,8 @@ export function envWithSavedApiKeys(
   const merged: Record<string, string | undefined> = { ...env };
   try {
     const cfg = loadShellConfig(dir);
+    // The legacy `openrouterKey` arrives here already as OPENROUTER_API_KEY (`loadShellConfig`).
     const keys: Record<string, string> = { ...(cfg.apiKeys ?? {}) };
-    if (typeof cfg.openrouterKey === "string" && cfg.openrouterKey.length > 0 && keys.OPENROUTER_API_KEY === undefined) {
-      keys.OPENROUTER_API_KEY = cfg.openrouterKey;
-    }
     for (const [envKey, value] of Object.entries(keys)) {
       if (typeof value !== "string" || value.length === 0) {
         continue;
@@ -389,8 +439,8 @@ export function declaredCredentialEnvKeys(dir?: string): ReadonlySet<string> {
 
 /**
  * Load every persisted API key into `process.env` WITHOUT overwriting a var the
- * user already set in their environment (env wins). Migrates the legacy
- * `openrouterKey` into `apiKeys.OPENROUTER_API_KEY`. Returns the env var names
+ * user already set in their environment (env wins). Includes the legacy
+ * `openrouterKey`, which `loadShellConfig` presents as `apiKeys.OPENROUTER_API_KEY`. Returns the env var names
  * applied. Best-effort; never throws.
  */
 export function applySavedApiKeys(dir?: string): string[] {

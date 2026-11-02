@@ -32,8 +32,9 @@ import {
   isDefiniteAbsence,
   keryxConfigDir,
   readConfigFile,
-  writeOwnerOnlyFileAtomic,
+  type ConfigReadResult,
 } from "../../lib/config-dir";
+import { updateConfigFile } from "../../lib/config-update";
 import { realpathOrResolve, trustBoundaryRoot } from "../../lib/git-toplevel";
 import { TerminalSafeTracker } from "../../lib/terminal-safe";
 import type { HookRegistration } from "./types";
@@ -131,7 +132,10 @@ export function loadHooksTrustStore(configDir?: string, projectRoot?: string): H
   if (projectRoot !== undefined && trustStoreInsideProject(projectRoot, configDir)) {
     return {};
   }
-  const read = readConfigFile(hooksTrustFile(configDir));
+  return parseHooksTrustStore(readConfigFile(hooksTrustFile(configDir)));
+}
+
+function parseHooksTrustStore(read: ConfigReadResult): HooksTrustStore {
   if (!read.ok) return {};
   let parsed: unknown;
   try {
@@ -241,21 +245,34 @@ export function recordProjectHooksTrust(input: {
     };
   }
   const file = hooksTrustFile(input.configDir);
-  const read = readConfigFile(file);
-  if (!read.ok && !isDefiniteAbsence(read.reason)) {
-    return { ok: false, error: `${file} could not be read (${read.reason}); nothing was written` };
-  }
-  const store = loadHooksTrustStore(input.configDir);
   const key = projectHooksTrustKey(input.trustRoot);
   const now = input.now ?? (() => new Date());
-  store[key] = {
-    digest: input.digest,
-    trustedAt: now().toISOString(),
-    hookIds: [...input.hookIds],
-  };
+  const entry: HooksTrustEntry = { digest: input.digest, trustedAt: now().toISOString(), hookIds: [...input.hookIds] };
   ensureKeryxConfigDir(input.configDir);
-  writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ version: 1, projects: store }, null, 2)}\n`);
+  // The one-key change is applied to the store as it is at write time, under
+  // the store lock: other processes trust and revoke other projects in the
+  // same file, and a write built from an earlier read dropped their entries
+  // (34 of 200 parallel trusts survived) or brought a revoked one back.
+  let unreadable: string | undefined;
+  const outcome = updateConfigFile(file, (read) => {
+    unreadable = !read.ok && !isDefiniteAbsence(read.reason) ? read.reason : undefined;
+    if (unreadable !== undefined) return undefined;
+    return serializeHooksTrustStore({ ...parseHooksTrustStore(read), [key]: entry });
+  });
+  if (unreadable !== undefined) {
+    return { ok: false, error: `${file} could not be read (${unreadable}); nothing was written` };
+  }
+  if (outcome === "failed") return { ok: false, error: busyStoreError(file) };
   return { ok: true, file };
+}
+
+/** The store lock stayed held and every compare-before-write lost to another writer. */
+function busyStoreError(file: string): string {
+  return `${file} kept changing under concurrent keryx writers; nothing was written — try again`;
+}
+
+function serializeHooksTrustStore(store: HooksTrustStore): string {
+  return `${JSON.stringify({ version: 1, projects: store }, null, 2)}\n`;
 }
 
 /** Withdraw trust for one project. A no-op (reported) when there was nothing to remove. */
@@ -272,20 +289,30 @@ export function revokeProjectHooksTrust(input: {
     };
   }
   const file = hooksTrustFile(input.configDir);
-  const read = readConfigFile(file);
-  if (!read.ok && !isDefiniteAbsence(read.reason)) {
-    return { ok: false, error: `${file} could not be read (${read.reason}); nothing was written` };
-  }
-  const store = loadHooksTrustStore(input.configDir);
   const key = projectHooksTrustKey(input.trustRoot);
-  const existed = key in store;
-  if (!existed) {
-    return { ok: true, file, removed: false };
+  // Same write-time application as recordProjectHooksTrust: a revoke must not
+  // be undone by a concurrent trust of another project.
+  let unreadable: string | undefined;
+  let removed = false;
+  const read = readConfigFile(file);
+  if (read.ok || !isDefiniteAbsence(read.reason)) {
+    ensureKeryxConfigDir(input.configDir);
+    const outcome = updateConfigFile(file, (current) => {
+      removed = false;
+      unreadable = !current.ok && !isDefiniteAbsence(current.reason) ? current.reason : undefined;
+      if (unreadable !== undefined) return undefined;
+      const store = parseHooksTrustStore(current);
+      if (!(key in store)) return undefined;
+      delete store[key];
+      removed = true;
+      return serializeHooksTrustStore(store);
+    });
+    if (outcome === "failed") return { ok: false, error: busyStoreError(file) };
   }
-  delete store[key];
-  ensureKeryxConfigDir(input.configDir);
-  writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ version: 1, projects: store }, null, 2)}\n`);
-  return { ok: true, file, removed: true };
+  if (unreadable !== undefined) {
+    return { ok: false, error: `${file} could not be read (${unreadable}); nothing was written` };
+  }
+  return { ok: true, file, removed };
 }
 
 /**

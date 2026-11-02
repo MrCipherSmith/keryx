@@ -11,7 +11,8 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, readConfigFile, type ConfigReadResult } from "./config-dir";
+import { updateConfigFile } from "./config-update";
 import { shellConfigPath } from "./shell-config";
 import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSchedulerControl } from "./command-risk";
 import { createHash } from "node:crypto";
@@ -346,9 +347,23 @@ export function saveShellPermissions(
     const body: ShellPermissions = {
       allow: options.skipValidation === true ? cleaned : cleaned.filter((p) => validateShellPattern(p).ok),
     };
-    writeOwnerOnlyFile(file, `${JSON.stringify(body, null, 2)}\n`);
+    // Under the store lock and atomic (temp + rename): a truncate-then-write
+    // let a concurrent reader parse half a file, fail closed to an empty list
+    // and report a spurious fingerprint change.
+    updateConfigFile(file, () => `${JSON.stringify(body, null, 2)}\n`);
   } catch {
     // best-effort
+  }
+}
+
+/** The stored object, or `undefined` when the file is absent, unreadable or not a JSON object. */
+function parsePermissionsFile(read: ConfigReadResult): Record<string, unknown> | undefined {
+  if (!read.ok) return undefined;
+  try {
+    const raw: unknown = JSON.parse(read.text);
+    return raw !== null && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -365,10 +380,21 @@ export function allowShellPattern(pattern: string, dir?: string): string {
   if (!validateShellPattern(trimmed).ok) {
     return "";
   }
-  const current = loadShellPermissions(dir);
-  if (!current.allow.includes(trimmed)) {
-    current.allow.push(trimmed);
-    saveShellPermissions(current, dir);
+  // Appended to the RAW list as it is on disk at write time, under the store
+  // lock — never to a list loaded earlier, which put back a pattern another
+  // process had just removed. Entries that no longer validate stay in the file
+  // (see `loadShellPermissionsWithAudit`); they are refused on load.
+  try {
+    const file = shellPermissionsPath(dir);
+    ensureKeryxConfigDir(path.dirname(file));
+    updateConfigFile(file, (read) => {
+      const raw = parsePermissionsFile(read) ?? {};
+      const allowRaw: unknown[] = Array.isArray(raw.allow) ? raw.allow : [];
+      if (allowRaw.some((entry) => typeof entry === "string" && entry.trim() === trimmed)) return undefined;
+      return `${JSON.stringify({ ...raw, allow: [...allowRaw, trimmed] }, null, 2)}\n`;
+    });
+  } catch {
+    // best-effort
   }
   return trimmed;
 }
@@ -390,17 +416,21 @@ export function removeShellPattern(pattern: string, dir?: string): boolean {
   try {
     const file = shellPermissionsPath(dir);
     if (!existsSync(file)) return false;
-    const read = readConfigFile(file);
-    if (!read.ok) return false;
-    const raw: unknown = JSON.parse(read.text);
-    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return false;
-    const allowRaw = (raw as { allow?: unknown }).allow;
-    if (!Array.isArray(allowRaw)) return false;
-    const kept = allowRaw.filter((entry) => !(typeof entry === "string" && entry.trim() === wanted));
-    if (kept.length === allowRaw.length) return false;
     ensureKeryxConfigDir(path.dirname(file));
-    writeOwnerOnlyFile(file, `${JSON.stringify({ ...(raw as object), allow: kept }, null, 2)}\n`);
-    return true;
+    // Filtered from the file as it is at write time, under the store lock, so
+    // a grant another process is writing at the same moment cannot carry the
+    // removed pattern back in.
+    let removed = false;
+    const outcome = updateConfigFile(file, (read) => {
+      removed = false;
+      const raw = parsePermissionsFile(read);
+      if (raw === undefined || !Array.isArray(raw.allow)) return undefined;
+      const kept = raw.allow.filter((entry) => !(typeof entry === "string" && entry.trim() === wanted));
+      if (kept.length === raw.allow.length) return undefined;
+      removed = true;
+      return `${JSON.stringify({ ...raw, allow: kept }, null, 2)}\n`;
+    });
+    return outcome === "written" && removed;
   } catch {
     return false;
   }

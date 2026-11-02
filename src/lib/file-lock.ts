@@ -56,7 +56,14 @@ function sleepSync(ms: number): void {
 export function withFileLock<T>(
   lockPath: string,
   fn: () => T,
-  options: { onWaiting?: ((message: string) => void) | undefined; waitingMessage?: string } = {},
+  options: {
+    onWaiting?: ((message: string) => void) | undefined;
+    waitingMessage?: string;
+    /** Override {@link LOCK_TIMEOUT_MS} — a caller on an interactive path must not wait 15s. */
+    timeoutMs?: number;
+    /** Override {@link LOCK_STALE_MS} — a short critical section can call its lock abandoned sooner. */
+    staleMs?: number;
+  } = {},
 ): T | null {
   try {
     mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
@@ -71,7 +78,8 @@ export function withFileLock<T>(
   // exists to prevent.
   const nonce = randomUUID();
   const started = Date.now();
-  const deadline = started + LOCK_TIMEOUT_MS;
+  const deadline = started + (options.timeoutMs ?? LOCK_TIMEOUT_MS);
+  const staleMs = options.staleMs ?? LOCK_STALE_MS;
   let handle: number | null = null;
   let announced = false;
 
@@ -99,7 +107,7 @@ export function withFileLock<T>(
       }
     } catch {
       const age = statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs;
-      if (age !== undefined && Date.now() - age > LOCK_STALE_MS) {
+      if (age !== undefined && Date.now() - age > staleMs) {
         try {
           rmSync(lockPath, { force: true });
         } catch {
