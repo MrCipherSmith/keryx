@@ -1,0 +1,265 @@
+{
+  "gate": "PASS_WITH_WARNINGS",
+  "scope": "round2 changed",
+  "head": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6",
+  "base": "d50652ac71030f955c94f84cc5c73589ecf7f02a",
+  "productChangedFiles": 90,
+  "sourceEditsByVerifier": false,
+  "checks": {
+    "health": {
+      "status": "pass",
+      "command": "bun run keryx health run --changed --since d50652ac71030f955c94f84cc5c73589ecf7f02a --source eslint,typescript",
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "log": "/tmp/pr1113-r02-retry-health.log",
+      "normalized": "/tmp/pr1113-r02-retry-health-report.json",
+      "optionalSkippedSources": [
+        "oxlint",
+        "tests (run independently)",
+        "dependencyAudit",
+        "sonarqube"
+      ]
+    },
+    "strictChangedTests": {
+      "status": "pass",
+      "command": "/opt/homebrew/bin/bun run test apps/hub-web/tests/context.case.tsx apps/hub-web/tests/demo-receipt.case.ts apps/hub-web/tests/localization.case.ts apps/hub-web/tests/machine-cards.case.tsx apps/hub-web/tests/managed-native-message.case.tsx apps/hub-web/tests/managed-work-advanced.case.tsx apps/hub-web/tests/managed-work.case.tsx apps/hub-web/tests/pending-recovery.case.tsx apps/hub-web/tests/revision-pagination.case.tsx apps/hub-web/tests/work-incremental.case.tsx apps/hub-web/tests/work-live-amendments.case.tsx apps/hub-web/tests/work-live-attention.case.tsx apps/hub-web/tests/work-live-choices.case.tsx apps/hub-web/tests/work-live-updates.case.tsx apps/hub-web/tests/workflow.case.tsx scripts/hub-legacy-migration.test.ts scripts/hubctl-rollback.test.ts scripts/package-team-hub.test.ts src/commands/hub-machine.test.ts src/commands/hub-update.test.ts src/hub/agent-credentials.test.ts src/hub/connector.test.ts src/hub/delivery-queue.test.ts src/hub/git-delivery.test.ts src/hub/legacy-artifacts.test.ts src/hub/legacy-flow-pins.test.ts src/hub/mcp.test.ts src/hub/mutation-queue-http.test.ts src/hub/mutation-queue.http.test.ts src/hub/mutation-queue.test.ts src/hub/remote-v2/admission-limits.network.test.ts src/hub/remote-v2/admission-state.test.ts src/hub/remote-v2/auth-before-body.test.ts src/hub/remote-v2/backup.test.ts src/hub/remote-v2/budgets.test.ts src/hub/remote-v2/control-expiry.network.test.ts src/hub/remote-v2/delivery-expiry.network.test.ts src/hub/remote-v2/migration-integrity.test.ts src/hub/remote-v2/migration.test.ts src/hub/remote-v2/outbox.network.test.ts src/hub/remote-v2/overload.test.ts src/hub/remote-v2/queue-admission.network.test.ts src/hub/remote-v2/queue-cas.network.test.ts src/hub/remote-v2/queue-replacement.network.test.ts src/hub/remote-v2/results.network.test.ts src/hub/remote-v2/retention.test.ts src/hub/remote-v2/transport.network.test.ts src/hub/review-bundle.test.ts src/hub/revision-summary.test.ts src/hub/server.security.test.ts src/hub/server.sso.test.ts src/hub/server.test.ts src/hub/store.incremental.test.ts src/hub/web.sso.test.ts src/hub/work/domain.test.ts src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts src/hub/work/git-observer.test.ts src/hub/work/http.projections.test.ts src/hub/work/http.test.ts src/hub/work/legacy.test.ts src/hub/work/observer-http.test.ts src/hub/work/openapi.test.ts src/hub/work/participant.authorization.test.ts src/hub/work/storage.amendment-resolution.test.ts src/hub/work/storage.incidents.test.ts src/hub/work/storage.incremental.test.ts src/hub/work/storage.lifecycle.test.ts src/hub/work/storage.scenarios.test.ts src/hub/work/storage.test.ts src/lib/hub-machine/bridge.lifecycle.network.test.ts src/lib/hub-machine/bridge.network.test.ts",
+      "routedCommand": "bun run keryx test run --changed --strict --since d50652ac71030f955c94f84cc5c73589ecf7f02a --run-id pr1113-r02-final-verifier-retry",
+      "exitCode": 0,
+      "selectedFiles": 72,
+      "durationMs": 106378,
+      "normalizedCounts": {
+        "passed": 392,
+        "failed": 0,
+        "skipped": 0,
+        "total": 392
+      },
+      "actualBunCounts": {
+        "passed": 392,
+        "failed": 0,
+        "skipped": 1,
+        "todo": 1,
+        "total": 394,
+        "files": 57,
+        "assertions": 7849
+      },
+      "log": "/tmp/pr1113-r02-retry-tests.log",
+      "raw": "/tmp/pr1113-r02-retry-tests.raw.log",
+      "normalized": "/tmp/pr1113-r02-retry-test-run.json",
+      "environmentIsolation": "Only test process GIT_CONFIG_COUNT=1/core.hooksPath=/dev/null; normal project preloads retained"
+    },
+    "supplemental": [
+      {
+        "name": "scripts-types",
+        "command": [
+          "bun",
+          "run",
+          "typecheck:scripts"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-scripts-types.log",
+        "status": "pass",
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      },
+      {
+        "name": "hub-web",
+        "command": [
+          "bun",
+          "run",
+          "check:hub-web"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-hub-web.log",
+        "status": "pass",
+        "tests": {
+          "filesPassed": 38,
+          "passed": 182,
+          "failed": 0,
+          "lint": "pass",
+          "types": "pass",
+          "assets": "pass"
+        },
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      },
+      {
+        "name": "python-migration",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/migrate-legacy.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-python-migration.log",
+        "status": "pass",
+        "tests": 14,
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      },
+      {
+        "name": "python-boundaries",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/migrate-legacy-boundaries.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-retry-python-boundaries.log",
+        "status": "pass",
+        "tests": 29,
+        "rerunAtHead": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6"
+      },
+      {
+        "name": "python-profile",
+        "command": [
+          "python3",
+          "deploy/team-hub/release/legacy-profile.test.py"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-python-profile.log",
+        "status": "pass",
+        "tests": 5,
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      },
+      {
+        "name": "hubctl-parse",
+        "command": [
+          "sh",
+          "-n",
+          "deploy/team-hub/hubctl"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-hubctl-parse.log",
+        "status": "pass",
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      },
+      {
+        "name": "e2e-parse",
+        "command": [
+          "sh",
+          "-n",
+          "deploy/team-hub/release/e2e.sh"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-e2e-parse.log",
+        "status": "pass",
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      },
+      {
+        "name": "docs",
+        "command": [
+          "node",
+          "docs/requirements/hub-work-management/verify.cjs"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-docs.log",
+        "status": "pass",
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      },
+      {
+        "name": "runtime-proof",
+        "command": [
+          "bun",
+          "test",
+          "scripts/package-team-hub.test.ts",
+          "--test-name-pattern",
+          "extracted allowlisted source"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-retry-runtime.log",
+        "status": "pass",
+        "tests": {
+          "passed": 1,
+          "failed": 0,
+          "assertions": 7
+        },
+        "rerunAtHead": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6"
+      },
+      {
+        "name": "shellcheck",
+        "command": [
+          "shellcheck",
+          "-s",
+          "sh",
+          "deploy/team-hub/hubctl",
+          "deploy/team-hub/release/e2e.sh"
+        ],
+        "exitCode": 0,
+        "log": "/tmp/pr1113-r02-final-shellcheck.log",
+        "status": "pass",
+        "reusedFromHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+        "reuseReason": "Relevant UI/docs/shell/profile/scripts source unchanged in four-path post-fix delta; explicitly authorized reuse by parent."
+      }
+    ],
+    "circularImports": {
+      "status": "skipped",
+      "reason": "madge is not a project devDependency; no dependency installation authorized or performed"
+    },
+    "CI": {
+      "status": "not-run",
+      "reason": "Final PR push and CI execution are parent-owned, local verifier does not push"
+    },
+    "DockerE2E": {
+      "status": "not-run",
+      "reason": "Full container install/upgrade/rollback job not executed by this bounded local verifier; shell syntax+shellcheck and real extracted-runtime proof executed"
+    },
+    "fullHub": {
+      "status": "pass",
+      "command": "keryx ctx run -- bun test src/hub/",
+      "exitCode": 0,
+      "passed": 513,
+      "failed": 0,
+      "assertions": 7621,
+      "files": 91,
+      "durationSeconds": 30.03,
+      "head": "2aadf1165ffef7ab2fb86293c6e2551c5c82c1d6",
+      "log": "/tmp/pr1113-r02-retry-fullhub.log",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-05-12-852Z-1a2464_run.log"
+    }
+  },
+  "findings": [
+    {
+      "severity": "INFO",
+      "check": "test",
+      "message": "Ordinary suite intentionally skips network integration proof; that exact extracted-runtime/MCP proof independently passed in this gate with prepared private cache and zero registry requests."
+    },
+    {
+      "severity": "INFO",
+      "check": "test",
+      "message": "Existing R10.1 rewind TODO remains; unchanged by round2 fixes and not claimed implemented."
+    },
+    {
+      "severity": "INFO",
+      "check": "test-report",
+      "message": "Normalized TestingModule omits actual skip/todo counts; report includes both normalized392/0 and actual Bun392pass1skip1todo394total. No reporting source edits performed."
+    }
+  ],
+  "routingAudit": {
+    "graph_used": "yes; graph answer noted as predating in-flight final additions, not relied on for current semantic claims",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "previousFailedHead": "b3d94fc4db0975738c8387994e88586195a2703d",
+  "postFixDelta": [
+    "deploy/team-hub/migrate-legacy.py",
+    "deploy/team-hub/release/migrate-legacy-boundaries.test.py",
+    "src/hub/mutation-queue-http.test.ts",
+    "src/hub/mutation-queue.ts"
+  ],
+  "resolvedBlockers": [
+    {
+      "mechanism": "migration queue schema compatibility",
+      "commit": "4759009a1",
+      "verifiedBy": "Python29pass and routed strict wrapper pass"
+    },
+    {
+      "mechanism": "native incoming Request cleanup TypeError",
+      "commit": "2aadf1165",
+      "verifiedBy": "real extracted SDK/MCP smoke pass plus fullHub513pass"
+    }
+  ]
+}

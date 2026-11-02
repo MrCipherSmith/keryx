@@ -1,0 +1,57 @@
+{
+  "status": "DONE",
+  "task_id": "task-34",
+  "paths": [
+    "deploy/team-hub/migrate-legacy.py",
+    "deploy/team-hub/release/migrate-legacy-boundaries.test.py"
+  ],
+  "mechanism": "Legacy queue schema compatibility in read-only adoption readiness",
+  "red": {
+    "command": "python3 deploy/team-hub/release/migrate-legacy-boundaries.test.py AdoptionBoundaries.test_queue_and_command_capacity_each_block_rehearsal AdoptionBoundaries.test_old_queue_without_json_body_remains_conservatively_unresolved AdoptionBoundaries.test_queue_json_history_distinguishes_known_terminal_from_unknown_work",
+    "result": "3 errors: missing body column and malformed JSON",
+    "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-58-22-865Z-dd07d9_run.log"
+  },
+  "green": [
+    {
+      "command": "python3 deploy/team-hub/release/migrate-legacy.test.py",
+      "tests": 14,
+      "failed": 0,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-58-46-403Z-1f50df_run.log"
+    },
+    {
+      "command": "python3 deploy/team-hub/release/migrate-legacy-boundaries.test.py",
+      "tests": 29,
+      "failed": 0,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-58-47-201Z-2140b3_run.log"
+    },
+    {
+      "command": "python3 deploy/team-hub/release/legacy-profile.test.py",
+      "tests": 5,
+      "failed": 0,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-58-45-653Z-66fe57_run.log"
+    },
+    {
+      "command": "bun test scripts/hub-legacy-migration.test.ts",
+      "tests": 4,
+      "failed": 0,
+      "assertions": 12,
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T04-58-47-787Z-c4d990_run.log"
+    }
+  ],
+  "additional_checks": [
+    "git diff --check for both owned paths: exit0",
+    "py_compile for both owned paths with outputs under /tmp: pass"
+  ],
+  "notes": [
+    "Inspect remote_queue columns before JSON extraction. A legacy shape without body counts every row as unresolved; empty queue is zero.",
+    "Existing body is guarded by json_valid; malformed/missing/null state remains unknown work. Only applied/rejected/removed rows are known terminal.",
+    "Read-only schema inspection does not mutate original data or ignore unknown work; original remote-history digest continues covering every row.",
+    "No broader native table compatibility refactor. No commits, pushes, production operations or edits to original review packages."
+  ],
+  "routing": {
+    "graph_used": "yes; affected graph stale and no Python dependencies inferred",
+    "wiki_used": "previous task wiki index; no matching Hub migration domain page",
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}

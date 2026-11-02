@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-01T20:17:38.194Z",
+  "updatedAt": "2026-11-02T05:16:49.762Z",
   "source": {
     "type": "description",
     "ref": null
@@ -485,7 +485,7 @@
       "id": "T24",
       "title": "Fix PR1113 review root causes A-N and triage all linked findings",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -493,7 +493,261 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All 30 A-N majors fixed with regressions; full per-ID dispositions published. Final head d50652ac71030f955c94f84cc5c73589ecf7f02a CI41348630889: 20 successful checks, one expected skipped Pages deployment. F002 bounded-v1 residual and other carry-over follow-ups explicitly disclosed. No merge, release, production cutover or frozen product acceptance."
+    },
+    {
+      "id": "T25",
+      "title": "R02 scoped storage aggregates projections and response contracts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T03:58:28.640Z",
+            "outcome": "started",
+            "detail": "Round 2 scoped storage regression fixes; fresh mechanism-specific RED tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Scoped resolving decisions, bounded Evidence projections, closed response contracts, lazy legacy serialization, rollback projection rebuild and archive-quota isolation committed;217tests+lint+types green."
+    },
+    {
+      "id": "T26",
+      "title": "R02 frontend event cache forms and revision consumers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T03:58:28.808Z",
+            "outcome": "started",
+            "detail": "Round 2 live frontend regression fixes with real adapter contracts"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All UI/MCP major mechanisms committed;181UI+14MCP tests, types/lint/assets green;five targeted reviewer mutants killed,33 explicitly unrun."
+    },
+    {
+      "id": "T27",
+      "title": "R02 native queue reconciliation and Attempt actor authorization",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T03:58:28.981Z",
+            "outcome": "started",
+            "detail": "Round 2 queue state-event regressions and upheld participant authorization"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Queue state-event regressions, participant authorization and scoped reconciliation fixed; 290 Work/remote tests, lint and global types green."
+    },
+    {
+      "id": "T28",
+      "title": "R02 delivery recovery and mutation admission",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:12:04.888Z",
+            "outcome": "started",
+            "detail": "Canonical delivery recovery and actual-byte admission repairs with production-path RED tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Durable delivery recovery/archival, external facts, unknown-push fencing, real delivery-path tests, revision paging, pre-auth and recoverable WS overload committed; final Hub512tests/7619assertions green plus types/lint."
+    },
+    {
+      "id": "T29",
+      "title": "R02 backup protection migration help and offline test gates",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:19:25.261Z",
+            "outcome": "started",
+            "detail": "Owner-decided14day backup protection, migration terminal queue classification, actual CLI help and deterministic offline packaging tests"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Owner14day backup policy, settled queue migration, doc metadata, real CLI help and hermetic default packaging committed; targeted suites and explicit runtime integration green."
+    },
+    {
+      "id": "T30",
+      "title": "R02 integrated verification mutation coverage and next review handoff",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-11-02T04:46:52.232Z",
+            "outcome": "started",
+            "detail": "Prepare final independent code-verifier gate; execute after parent finishes committing the now-frozen integrated source"
+          },
+          {
+            "at": "2026-11-02T04:57:28.309Z",
+            "outcome": "failed",
+            "detail": "Independent gate b3d94fc4d found two concrete failures: bodyless queue migration boundary and actual HTTP MCP Request TypeError; delegated T34 and T35 before rerun"
+          },
+          {
+            "at": "2026-11-02T05:03:29.696Z",
+            "outcome": "started",
+            "detail": "Post-fix verification retry: bodyless/malformed migration and actual TCP MCP cleanup repaired; rerun failed strict/runtime checks and health, reuse unchanged UI/docs evidence"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent post-fix gate passed:392changed/513Hub tests, runtime and migration; per-ID dispositions, mutation evidence and owner next-review handoff prepared. PR publication remains gated on GitHub CI; no merge/acceptance."
+    },
+    {
+      "id": "T31",
+      "title": "R02 verify queued configuration recovery without inferred terminal refusal",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:12:49.538Z",
+            "outcome": "started",
+            "detail": "Expand reservation regression to recoverable config/authority guard failures before native terminal evidence"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Config recovery RED then native authoritative terminal-only settlement; 290 native/Work regressions and lint green, no pre-admission release hook remains."
+    },
+    {
+      "id": "T32",
+      "title": "R02 actual-byte request admission and nested MCP body leases",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:32:26.517Z",
+            "outcome": "started",
+            "detail": "Actual retained request bytes, nested MCP slot reuse and bounded body deadlines with real streaming RED probes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Actual-byte admission, nested MCP lease reuse, body deadlines and legacy HTTP test compatibility committed in b3d94fc4d;39tests/329assertions, types/lint green; final integrated gate running."
+    },
+    {
+      "id": "T33",
+      "title": "R02 independently verify backup retention mutation boundaries",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:33:56.373Z",
+            "outcome": "started",
+            "detail": "Scratch-only targeted mutation verification of owner-approved young-backup and newest-three retention boundaries"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Both count-bound and14day-age protection mutants killed in isolated scratch; all-old minimum-three and young-fourth/reference-pointer cases verified without shared source edits."
+    },
+    {
+      "id": "T34",
+      "title": "R02 migration boundary compatibility for queue tables without JSON body",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:56:32.603Z",
+            "outcome": "started",
+            "detail": "Final independent gate reproduced migration legacy boundary failure; preserve conservative unresolved-work handling for unrecognized queue schema"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Conservative bodyless/malformed queue readiness handling verified RED3→GREEN migration14/boundaries29/profile5/Bun4; two paths committed."
+    },
+    {
+      "id": "T35",
+      "title": "R02 extracted pinned-runtime MCP request compatibility",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T04:56:32.850Z",
+            "outcome": "started",
+            "detail": "Final independent gate reproduced MCP500 TypeError in real extracted pinned Bun runtime after admission changes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Native TCP reader cleanup TypeError fixed without changing admission; actual pinned Bun1.3.14 SDK RED→GREEN, extracted offline runtime proof and40tests/types/lint pass."
     }
   ],
   "history": [
@@ -799,6 +1053,186 @@
       "at": "2026-11-01T20:17:38.194Z",
       "event": "task-done",
       "detail": "T22: Prepare PR1113 for owner review without merge release or production cutover"
+    },
+    {
+      "at": "2026-11-01T21:08:16.230Z",
+      "event": "task-done",
+      "detail": "T24: Fix PR1113 review root causes A-N and triage all linked findings"
+    },
+    {
+      "at": "2026-11-02T03:58:17.674Z",
+      "event": "task-added",
+      "detail": "T25: R02 scoped storage aggregates projections and response contracts"
+    },
+    {
+      "at": "2026-11-02T03:58:17.836Z",
+      "event": "task-added",
+      "detail": "T26: R02 frontend event cache forms and revision consumers"
+    },
+    {
+      "at": "2026-11-02T03:58:18.005Z",
+      "event": "task-added",
+      "detail": "T27: R02 native queue reconciliation and Attempt actor authorization"
+    },
+    {
+      "at": "2026-11-02T03:58:18.180Z",
+      "event": "task-added",
+      "detail": "T28: R02 delivery recovery and mutation admission"
+    },
+    {
+      "at": "2026-11-02T03:58:18.346Z",
+      "event": "task-added",
+      "detail": "T29: R02 backup protection migration help and offline test gates"
+    },
+    {
+      "at": "2026-11-02T03:58:18.539Z",
+      "event": "task-added",
+      "detail": "T30: R02 integrated verification mutation coverage and next review handoff"
+    },
+    {
+      "at": "2026-11-02T03:58:28.640Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — Round 2 scoped storage regression fixes; fresh mechanism-specific RED tests"
+    },
+    {
+      "at": "2026-11-02T03:58:28.808Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — Round 2 live frontend regression fixes with real adapter contracts"
+    },
+    {
+      "at": "2026-11-02T03:58:28.981Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — Round 2 queue state-event regressions and upheld participant authorization"
+    },
+    {
+      "at": "2026-11-02T04:12:04.521Z",
+      "event": "task-done",
+      "detail": "T27: R02 native queue reconciliation and Attempt actor authorization"
+    },
+    {
+      "at": "2026-11-02T04:12:04.888Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — Canonical delivery recovery and actual-byte admission repairs with production-path RED tests"
+    },
+    {
+      "at": "2026-11-02T04:12:49.099Z",
+      "event": "task-added",
+      "detail": "T31: R02 verify queued configuration recovery without inferred terminal refusal"
+    },
+    {
+      "at": "2026-11-02T04:12:49.538Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 1) — Expand reservation regression to recoverable config/authority guard failures before native terminal evidence"
+    },
+    {
+      "at": "2026-11-02T04:16:16.881Z",
+      "event": "task-done",
+      "detail": "T31: R02 verify queued configuration recovery without inferred terminal refusal"
+    },
+    {
+      "at": "2026-11-02T04:19:25.261Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — Owner-decided14day backup protection, migration terminal queue classification, actual CLI help and deterministic offline packaging tests"
+    },
+    {
+      "at": "2026-11-02T04:21:45.143Z",
+      "event": "task-done",
+      "detail": "T25: R02 scoped storage aggregates projections and response contracts"
+    },
+    {
+      "at": "2026-11-02T04:23:10.916Z",
+      "event": "task-added",
+      "detail": "T32: R02 actual-byte request admission and nested MCP body leases"
+    },
+    {
+      "at": "2026-11-02T04:32:26.171Z",
+      "event": "task-done",
+      "detail": "T26: R02 frontend event cache forms and revision consumers"
+    },
+    {
+      "at": "2026-11-02T04:32:26.518Z",
+      "event": "task-attempt",
+      "detail": "T32: started (attempt 1) — Actual retained request bytes, nested MCP slot reuse and bounded body deadlines with real streaming RED probes"
+    },
+    {
+      "at": "2026-11-02T04:33:38.981Z",
+      "event": "task-done",
+      "detail": "T29: R02 backup protection migration help and offline test gates"
+    },
+    {
+      "at": "2026-11-02T04:33:56.047Z",
+      "event": "task-added",
+      "detail": "T33: R02 independently verify backup retention mutation boundaries"
+    },
+    {
+      "at": "2026-11-02T04:33:56.373Z",
+      "event": "task-attempt",
+      "detail": "T33: started (attempt 1) — Scratch-only targeted mutation verification of owner-approved young-backup and newest-three retention boundaries"
+    },
+    {
+      "at": "2026-11-02T04:36:16.443Z",
+      "event": "task-done",
+      "detail": "T33: R02 independently verify backup retention mutation boundaries"
+    },
+    {
+      "at": "2026-11-02T04:46:52.232Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 1) — Prepare final independent code-verifier gate; execute after parent finishes committing the now-frozen integrated source"
+    },
+    {
+      "at": "2026-11-02T04:52:13.296Z",
+      "event": "task-done",
+      "detail": "T32: R02 actual-byte request admission and nested MCP body leases"
+    },
+    {
+      "at": "2026-11-02T04:53:26.806Z",
+      "event": "task-done",
+      "detail": "T28: R02 delivery recovery and mutation admission"
+    },
+    {
+      "at": "2026-11-02T04:56:31.565Z",
+      "event": "task-added",
+      "detail": "T34: R02 migration boundary compatibility for queue tables without JSON body"
+    },
+    {
+      "at": "2026-11-02T04:56:31.800Z",
+      "event": "task-added",
+      "detail": "T35: R02 extracted pinned-runtime MCP request compatibility"
+    },
+    {
+      "at": "2026-11-02T04:56:32.603Z",
+      "event": "task-attempt",
+      "detail": "T34: started (attempt 1) — Final independent gate reproduced migration legacy boundary failure; preserve conservative unresolved-work handling for unrecognized queue schema"
+    },
+    {
+      "at": "2026-11-02T04:56:32.850Z",
+      "event": "task-attempt",
+      "detail": "T35: started (attempt 1) — Final independent gate reproduced MCP500 TypeError in real extracted pinned Bun runtime after admission changes"
+    },
+    {
+      "at": "2026-11-02T04:57:28.309Z",
+      "event": "task-attempt",
+      "detail": "T30: failed (attempt 2) — Independent gate b3d94fc4d found two concrete failures: bodyless queue migration boundary and actual HTTP MCP Request TypeError; delegated T34 and T35 before rerun"
+    },
+    {
+      "at": "2026-11-02T05:00:37.752Z",
+      "event": "task-done",
+      "detail": "T34: R02 migration boundary compatibility for queue tables without JSON body"
+    },
+    {
+      "at": "2026-11-02T05:02:54.235Z",
+      "event": "task-done",
+      "detail": "T35: R02 extracted pinned-runtime MCP request compatibility"
+    },
+    {
+      "at": "2026-11-02T05:03:29.696Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 3) — Post-fix verification retry: bodyless/malformed migration and actual TCP MCP cleanup repaired; rerun failed strict/runtime checks and health, reuse unchanged UI/docs evidence"
+    },
+    {
+      "at": "2026-11-02T05:16:49.762Z",
+      "event": "task-done",
+      "detail": "T30: R02 integrated verification mutation coverage and next review handoff"
     }
   ],
   "acKinds": {
