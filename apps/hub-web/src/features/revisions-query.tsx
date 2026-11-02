@@ -18,12 +18,12 @@ export function useRevisionPages(projectOverride?: string) {
   });
   return { ...query, data: query.data ? { revisions: [...new Map(query.data.pages.flatMap(page => page.revisions).map(row => [row.id, row])).values()] } : undefined };
 }
-export function useRevisionSummary(id: string | null | undefined) {
+export function useRevisionSummary(id: string | null | undefined, enabled = true) {
   const hub = useHub();
   return useQuery({
     queryKey: [hub.scopeKey, hub.projectId, "revision-summary", id],
     queryFn: ({ signal }) => getJson<CodeRevisionSummary>(`/projects/${encodeURIComponent(hub.projectId ?? "")}/revisions/${encodeURIComponent(id ?? "")}?summary=1`, signal),
-    enabled: !!hub.projectId && !!id,
+    enabled: enabled && !!hub.projectId && !!id,
   });
 }
 export function MoreRevisions({ query }: { query: ReturnType<typeof useRevisionPages> }) {
