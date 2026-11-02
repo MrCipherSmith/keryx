@@ -15,6 +15,7 @@
 // followed by "allow <roots>" yields writes only under the roots.
 
 import type { ContainedCommand } from "../executor";
+import { gitProtectAnchors, resolveGitProtectedPaths } from "./git-protect";
 import type { SandboxProfile } from "./profile";
 
 /** Absolute path to the macOS sandbox launcher. */
@@ -40,12 +41,30 @@ const DEVICE_WRITE_LITERALS = [
 ];
 
 /**
+ * LaunchServices / CoreServices mach services. `open`, `osascript` and friends
+ * reach launchd through them and start the program as a launchd child, OUTSIDE
+ * this profile — a contained command could write an .app into a writable root,
+ * `open` it, and have it write anywhere. No single service name is enough (the
+ * lookup falls back across several), so the families are denied by prefix. Verified
+ * against git, curl, python, clang/xcrun, swift, bun and node, which all still run.
+ */
+const LAUNCH_SERVICES_PREFIXES = ["com.apple.coreservices", "com.apple.lsd"];
+
+/** Launchers that hand a program to launchd; denied as an interim second layer. */
+const LAUNCHER_BINARIES = ["/usr/bin/open", "/usr/bin/osascript"];
+
+/**
  * Build the Seatbelt (.sb) profile text for `profile`. Allow-default, then:
  *   - deny all writes, re-allow writable roots + stdio devices;
+ *   - re-deny the git hooks/config inside those roots (see git-protect.ts);
+ *   - deny the LaunchServices IPC that starts programs outside the sandbox;
  *   - deny reads of the secret deny-list;
  *   - deny all network when `profile.network === "off"`.
  */
-export function buildSeatbeltProfile(profile: SandboxProfile): string {
+export function buildSeatbeltProfile(
+  profile: SandboxProfile,
+  gitProtected: readonly string[] = resolveGitProtectedPaths(profile.writableRoots),
+): string {
   const lines: string[] = [
     "(version 1)",
     "(allow default)",
@@ -61,6 +80,26 @@ export function buildSeatbeltProfile(profile: SandboxProfile): string {
   // stdio/tty devices must stay writable regardless of mode.
   lines.push(
     `(allow file-write-data ${DEVICE_WRITE_LITERALS.map((d) => `(literal ${sbplString(d)})`).join(" ")})`,
+  );
+
+  // Last match wins: re-deny the files the host would later execute (a git hook,
+  // `core.fsmonitor` in config). The git dir itself is denied by name too, so it
+  // cannot be renamed away and replaced by one with a hook in it.
+  if (gitProtected.length > 0) {
+    lines.push("", ";; --- git hooks/config stay read-only inside the writable roots ---");
+    for (const guarded of gitProtected) {
+      lines.push(`(deny file-write* (subpath ${sbplString(guarded)}))`);
+    }
+    for (const anchor of gitProtectAnchors(gitProtected)) {
+      lines.push(`(deny file-write* (literal ${sbplString(anchor)}))`);
+    }
+  }
+
+  lines.push(
+    "",
+    ";; --- no program handoff to launchd (open, osascript): it would run outside this profile ---",
+    `(deny mach-lookup ${LAUNCH_SERVICES_PREFIXES.map((p) => `(global-name-prefix ${sbplString(p)})`).join(" ")})`,
+    `(deny process-exec ${LAUNCHER_BINARIES.map((b) => `(literal ${sbplString(b)})`).join(" ")})`,
   );
 
   if (profile.readDenyList.length > 0) {
