@@ -33,6 +33,16 @@ function tempDir(): string {
   return mkdtempSync(path.join(tmpdir(), "keryx-providers-disconnect-"));
 }
 
+// Keep Bun's native-backed process.env object: replacing it with a plain copy
+// makes native consumers such as os.tmpdir() miss subsequent environment edits.
+function restoreEnv(env: NodeJS.ProcessEnv, snapshot: NodeJS.ProcessEnv): void {
+  for (const key of Object.keys(env)) if (!(key in snapshot)) delete env[key];
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value === undefined) delete env[key];
+    else env[key] = value;
+  }
+}
+
 // --- classifyProviderConnection --------------------------------------------
 
 test("classifyProviderConnection: a custom provider's llm-providers.json entry outranks everything else", () => {
@@ -79,7 +89,8 @@ test("classifyProviderConnection: no credential anywhere, and a keyless local pr
 test("classifyProviderConnection: after applyOAuthAccessToEnv + disconnect, the provider is no longer env-var-only", () => {
   const dir = tempDir();
   saveOAuthGrant("grok", { method: "device-code", access: "tok-grok", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
-  const savedBefore = { ...process.env };
+  const originalEnv = process.env;
+  const savedBefore = { ...originalEnv };
   try {
     delete process.env.XAI_API_KEY;
     applyOAuthAccessToEnv(dir); // copies the grant onto process.env.XAI_API_KEY, marks it keryx-saved
@@ -94,7 +105,7 @@ test("classifyProviderConnection: after applyOAuthAccessToEnv + disconnect, the 
     // clean slate, not `env-var-only` pointing at a var keryx itself unset.
     expect(classifyProviderConnection("grok", process.env, dir)).toEqual({ kind: "no-credential", sharedWith: [] });
   } finally {
-    process.env = savedBefore;
+    restoreEnv(originalEnv, savedBefore);
   }
 });
 
@@ -108,13 +119,14 @@ test("classifyProviderConnection: after applyOAuthAccessToEnv + disconnect, the 
 test("classifyProviderConnection: an operator-exported GITHUB_COPILOT_TOKEN is not touched by a github-copilot OAuth disconnect", () => {
   const dir = tempDir();
   saveOAuthGrant("github-copilot", { method: "device-code", access: "tok-gh", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
-  const savedBefore = { ...process.env };
+  const originalEnv = process.env;
+  const savedBefore = { ...originalEnv };
   try {
     process.env.GITHUB_COPILOT_TOKEN = "operator-exported-token"; // NOT loaded via applyOAuthAccessToEnv
     disconnectProvider("github-copilot", process.env, dir);
     expect(readEnv("GITHUB_COPILOT_TOKEN")).toBe("operator-exported-token");
   } finally {
-    process.env = savedBefore;
+    restoreEnv(originalEnv, savedBefore);
   }
 });
 
@@ -252,7 +264,8 @@ function readEnv(key: string): string | undefined {
 test("disconnectProvider: a keryx-saved key is cleared from THIS process's env (AC7)", () => {
   const dir = tempDir();
   saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
-  const savedBefore = { ...process.env };
+  const originalEnv = process.env;
+  const savedBefore = { ...originalEnv };
   try {
     delete process.env.DEEPSEEK_API_KEY;
     applySavedApiKeys(dir); // loads it into process.env AND records it as keryx-saved
@@ -262,20 +275,21 @@ test("disconnectProvider: a keryx-saved key is cleared from THIS process's env (
     disconnectProvider("deepseek", process.env, dir);
     expect(readEnv("DEEPSEEK_API_KEY")).toBeUndefined();
   } finally {
-    process.env = savedBefore;
+    restoreEnv(originalEnv, savedBefore);
   }
 });
 
 test("disconnectProvider: an operator-exported env var is NEVER cleared from process.env, even for a different provider's disconnect", () => {
   const dir = tempDir();
   saveApiKey("GROQ_API_KEY", "gsk-saved", dir);
-  const savedBefore = { ...process.env };
+  const originalEnv = process.env;
+  const savedBefore = { ...originalEnv };
   try {
     process.env.DEEPSEEK_API_KEY = "sk-operator-exported"; // never saved by keryx
     disconnectProvider("groq", process.env, dir); // unrelated provider
     expect(process.env.DEEPSEEK_API_KEY).toBe("sk-operator-exported");
   } finally {
-    process.env = savedBefore;
+    restoreEnv(originalEnv, savedBefore);
   }
 });
 

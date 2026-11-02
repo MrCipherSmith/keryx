@@ -1,4 +1,4 @@
-name: Temporary Linux proxy refusal diagnostic
+name: Linux native environment regression proof
 on:
   workflow_dispatch:
 permissions:
@@ -10,25 +10,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
-      - name: Compare isolated and command-suite behavior
+      - name: Prove original failure then verify preserved native environment
         shell: bash
         run: |
           set +e
-          bun --version
-          bun --no-env-file scripts/diagnose-proxy-env.ts
-          probe=$?
-          bun test src/commands/trigger-agent-task.test.ts -t "network allowlist whose proxy cannot bind"
-          focused=$?
-          env -u TMPDIR -u TMP -u TEMP -u XDG_RUNTIME_DIR bun --no-env-file scripts/diagnose-proxy-env.ts
-          unset_probe=$?
-          env -u TMPDIR -u TMP -u TEMP -u XDG_RUNTIME_DIR bun test src/commands/trigger-agent-task.test.ts -t "network allowlist whose proxy cannot bind"
-          unset_test=$?
-          bun test src/commands -t "network allowlist whose proxy cannot bind"
-          commands=$?
-          printf 'probe=%s focused=%s unset_probe=%s unset_test=%s commands=%s\n' "$probe" "$focused" "$unset_probe" "$unset_test" "$commands"
-          if (( probe || focused || unset_probe || unset_test || commands )); then exit 1; fi
+          cp src/commands/providers.disconnect.test.ts "$RUNNER_TEMP/provider-fixed.ts"
+          git show fb30f4bfdc1cd4c1d9e3a7c96abdf92cc8ad82c9:src/commands/providers.disconnect.test.ts > src/commands/providers.disconnect.test.ts
+          pattern='classifyProviderConnection: after applyOAuthAccessToEnv|network allowlist whose proxy cannot bind'
+          found_seed=0
+          for seed in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            env -u TMPDIR -u TMP -u TEMP -u XDG_RUNTIME_DIR bun test --randomize --seed "$seed" src/commands/providers.disconnect.test.ts src/commands/trigger-agent-task.test.ts -t "$pattern" > "$RUNNER_TEMP/red-$seed.log" 2>&1
+            status=$?
+            if [ "$status" -ne 0 ]; then found_seed=$seed; cat "$RUNNER_TEMP/red-$seed.log"; break; fi
+          done
+          cp "$RUNNER_TEMP/provider-fixed.ts" src/commands/providers.disconnect.test.ts
+          if [ "$found_seed" -eq 0 ]; then echo 'INCONCLUSIVE: no failing original ordering'; exit 1; fi
+          env -u TMPDIR -u TMP -u TEMP -u XDG_RUNTIME_DIR bun test --randomize --seed "$found_seed" src/commands/providers.disconnect.test.ts src/commands/trigger-agent-task.test.ts -t "$pattern"
+          green=$?
+          env -u TMPDIR -u TMP -u TEMP -u XDG_RUNTIME_DIR bun test --randomize --seed "$found_seed" src/commands/providers.disconnect.test.ts src/commands/trigger-agent-task.test.ts
+          paired=$?
+          printf 'original_failing_seed=%s fixed_focused_exit=%s fixed_full_pair_exit=%s\n' "$found_seed" "$green" "$paired"
+          if (( green || paired )); then exit 1; fi
