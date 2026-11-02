@@ -849,7 +849,7 @@ export function renderRunOutcome(outcome: ExternalChildOutcome): string[] {
     const denied = record.decisions.filter((d) => d.verdict === "deny").length;
     lines.push(`permissions: ${record.decisions.length} asked, ${denied} refused`);
     lines.push(`fs/terminal requests: ${record.fsRequests.length} (${record.fsRequests.filter((r) => r.outcome === "refused").length} refused)`);
-    lines.push(`cost: ${record.cost === "missing" ? "missing (not reported by the agent)" : `${record.cost.amount} ${record.cost.currency}`}`);
+    lines.push(`cost: ${record.cost === "missing" ? "missing (not reported by the agent)" : plain(`${record.cost.amount} ${record.cost.currency}`)}`);
     if (record.patchArtifact !== undefined) lines.push(`patch (never applied): ${record.patchArtifact}`);
     if (record.sessionId !== undefined) lines.push(`session: ${plain(record.sessionId)}`);
   } else {
