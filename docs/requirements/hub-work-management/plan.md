@@ -1,7 +1,7 @@
 # Implementation and verification plan
-
-Historical milestone record: the counts below describe their named pre-review test scopes, not the current PR head. Current validation and per-finding outcomes are recorded in [PR1113 correction results](../../../.metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/report.md).
 Version: 0.2.0
+
+Historical plan: task status reflects the pre-review candidate, not the current PR head. Current validation and per-finding outcomes are recorded in [PR1113 correction results](../../../.metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/report.md).
 
 Status: implementation/verification waves executed for the candidate; no remote owner acceptance or public production rollout performed. Baseline main 0.4.1/v0.4.0 must be rechecked; preserve active parallel branches and frozen machine contracts.
 
