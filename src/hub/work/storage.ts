@@ -45,6 +45,7 @@ export function migrateWork(db: Database): void {
     DELETE FROM hub_work_outbox;`);
     for (const field of ['kind', 'flowId', 'intentId', 'attemptId', 'subjectId', 'targetId', 'runId'])
         db.exec(`CREATE INDEX IF NOT EXISTS hub_work_record_${field} ON hub_work_records(project_id,json_extract(body,'$.${field}'))`);
+    db.exec("CREATE INDEX IF NOT EXISTS hub_work_decision_target ON hub_work_records(project_id,json_extract(body,'$.targetId'),json_extract(body,'$.targetType'),json_extract(body,'$.kind'))");
     db.exec("CREATE INDEX IF NOT EXISTS hub_work_record_state ON hub_work_records(project_id,json_extract(body,'$.kind'),json_extract(body,'$.state')); CREATE INDEX IF NOT EXISTS hub_work_revision_flow ON hub_work_records(project_id,json_extract(body,'$.kind'),json_extract(body,'$.flowId'),json_extract(body,'$.revision')); CREATE INDEX IF NOT EXISTS hub_work_revision_intent ON hub_work_records(project_id,json_extract(body,'$.kind'),json_extract(body,'$.intentId'),json_extract(body,'$.revision'));");
 
     db.exec(`CREATE TABLE IF NOT EXISTS hub_work_usage(project_id TEXT PRIMARY KEY,records INTEGER NOT NULL DEFAULT 0,operations INTEGER NOT NULL DEFAULT 0,bytes INTEGER NOT NULL DEFAULT 0);
@@ -131,6 +132,8 @@ export function workRepository(db: Database) {
         if (kind === 'attempt.create') visit(payload?.supersedesAttemptId, 'seed');
         if (kind === 'execution.bind' && typeof payload?.runId === 'string') addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='execution-link' AND json_extract(body,'$.runId')=?", [payload.runId]));
         visit(command.payload);
+        if (kind === 'requirements.resolve-amendment' && typeof payload?.amendmentId === 'string')
+            addRows(rowsWhere(projectId, "json_extract(body,'$.targetId')=? AND json_extract(body,'$.targetType')='amendment' AND json_extract(body,'$.kind')='decision'", [payload.amendmentId]));
         const loadedAttempts = new Set<string>(), loadedFlows = new Set<string>(), loadedSubjects = new Set<string>();
         const acceptance = ['attempt.submit', 'attempt.select', 'review.decide', 'flow.submit'].includes(kind);
         for (let changed = true; changed;) {
