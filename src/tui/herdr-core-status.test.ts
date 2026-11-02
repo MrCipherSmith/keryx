@@ -14,7 +14,8 @@ const decodeMsg = (seq: string): string => {
   const m = /:msg=([A-Za-z0-9+/=]*)/.exec(seq);
   return m === null ? "" : Buffer.from(m[1] ?? "", "base64").toString("utf8");
 };
-const FAKE_TOKEN = "ghp_aB3dE5gH7jK9mN1pQ3sT5vW7yZ9bD1fH3jL5";
+// Built at runtime, as the other suites do, so no token-shaped literal sits in the source.
+const FAKE_TOKEN = `ghp_${"A".repeat(36)}`;
 
 describe("encodeOsc7501", () => {
   test("pins the herdr-core wire format byte-exactly", () => {
