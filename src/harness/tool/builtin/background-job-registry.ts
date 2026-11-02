@@ -370,6 +370,15 @@ export const MAX_TASK_IDLE_TIMEOUT_MS = 1_800_000;
  * every command. Env millisecond values are CLAMPED to it — a very large value
  * means "as long as a timer can wait", never "immediately".
  */
+/**
+ * Tail of `promote()`'s over-cap refusal: true for a caller that leaves the job
+ * running (the job stays foreground). A caller that ends the job itself
+ * (`shell_exec`) strips exactly this tail rather than append a contradicting
+ * sentence.
+ */
+export const PROMOTE_REFUSED_FOREGROUND_NOTE =
+  "; it is still running in the foreground — wait for one of those to finish or kill it with shell_job_kill first";
+
 export const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 function parseEnvMs(raw: string | undefined): number | undefined {
@@ -1066,7 +1075,7 @@ export function createJobRegistry(options?: {
         const names = running.map((j) => j.info.command).join(", ");
         return {
           ok: false,
-          error: `background task limit reached (${running.length} running: ${names}); refused to make this command another background task; it is still running in the foreground — wait for one of those to finish or kill it with shell_job_kill first`,
+          error: `background task limit reached (${running.length} running: ${names}); refused to make this command another background task${PROMOTE_REFUSED_FOREGROUND_NOTE}`,
         };
       }
       job.info.phase = "background";

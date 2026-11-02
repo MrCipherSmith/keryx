@@ -480,6 +480,8 @@ export interface SafeExecDeps {
   exit: (code: number) => void;
   /** This process's OWN current parent pid, read fresh each call (a real ppid can change — a dying parent reparents its children to init/pid 1 on POSIX). Defaults to `process.ppid`. Used only by the re-exec'd CHILD's ppid watchdog (see `watchParentPid`), never by the wrapper itself. */
   getPpid: () => number | undefined;
+  /** True when `pid` names a live process (signal 0; EPERM counts as alive). Defaults to `process.kill(pid, 0)`. Used only by the watchdog's arming decision. */
+  isPidAlive: (pid: number) => boolean;
   /** Run `fn` every `ms` milliseconds on an UNREF'd timer (never keeps the process alive on its own) until `.clear()` is called. Defaults to a real `setInterval` + `.unref()`. */
   setUnrefInterval: (fn: () => void, ms: number) => { clear: () => void };
 }
@@ -512,6 +514,14 @@ function realDeps(): SafeExecDeps {
       process.exit(code);
     },
     getPpid: () => process.ppid,
+    isPidAlive: (pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (err) {
+        return (err as NodeJS.ErrnoException).code === "EPERM";
+      }
+    },
     setUnrefInterval: (fn, ms) => {
       const handle = setInterval(fn, ms);
       handle.unref?.();
@@ -633,7 +643,7 @@ const PPID_WATCHDOG_INTERVAL_MS = 250;
  * process state short of `/proc` (not portable) — the preferred fix (no
  * wrapper) is what actually closes the SIGSTOP gap, not this timer.
  */
-function watchParentPid(deps: Pick<SafeExecDeps, "env" | "getPpid" | "setUnrefInterval" | "exit">): void {
+function watchParentPid(deps: Pick<SafeExecDeps, "env" | "getPpid" | "isPidAlive" | "setUnrefInterval" | "exit">): void {
   const recorded = deps.env[REEXEC_PARENT_PID_ENV];
   if (recorded === undefined) return;
   // The marker is for THIS process only. Consume it so a keryx (or `bun test`)
@@ -648,8 +658,13 @@ function watchParentPid(deps: Pick<SafeExecDeps, "env" | "getPpid" | "setUnrefIn
   // (the first poll sees ppid 1 !== parentPid and exits). Any other live parent
   // means the value arrived through an inherited environment (a grandchild, a
   // test runner) and names some other process; watching it would kill this one.
+  //
+  // Also arm when the recorded parent is no longer alive: a subreaper
+  // (systemd --user, tini/dumb-init, PR_SET_CHILD_SUBREAPER) adopts the orphan
+  // under a pid that is neither the recorded one nor 1. The marker was deleted
+  // above, so a stale inherited value cannot reach this check a second time.
   const startPpid = deps.getPpid();
-  if (startPpid !== parentPid && startPpid !== 1) return;
+  if (startPpid !== parentPid && startPpid !== 1 && deps.isPidAlive(parentPid)) return;
   const handle = deps.setUnrefInterval(() => {
     const currentPpid = deps.getPpid();
     if (currentPpid === parentPid) return;

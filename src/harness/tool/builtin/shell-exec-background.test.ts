@@ -516,6 +516,11 @@ describe("flow 263 AC5: the cap counts background-phase tasks only (through shel
     expect(refused.isError).toBe(true);
     expect(refused.output).toContain("npm run dev");
     expect(refused.output).toContain("bun test --watch");
+    // review-clean-code-w3:F-002: one consistent story — stopped, not "still running in the foreground".
+    expect(refused.output).not.toContain("still running");
+    expect(refused.output).toBe(
+      "background task limit reached (2 running: npm run dev, bun test --watch); refused to make this command another background task; shell_exec stopped this command, so nothing is left running — wait for one of those tasks to finish or kill it with shell_job_kill, then run the command again",
+    );
     const stopped = registry.list().find((t) => t.command === "tail -f app.log");
     expect(stopped).toMatchObject({ status: "killed", killReason: "over-cap" });
     expect(kills.get(stopped?.pid as number)?.[0]).toBe("SIGTERM");

@@ -35,7 +35,7 @@
 
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
@@ -342,7 +342,12 @@ export async function makeProxySocketDir(
   tmp: string = tmpdir(),
   platform: NodeJS.Platform = process.platform,
 ): Promise<{ dir: string; socketPath: string }> {
+  // mkdtemp creates the directory 0700 and with a random suffix; the explicit chmod keeps that
+  // true under any umask or platform default. Callers pass the run's private 0700 scratch
+  // PARENT (verified owned-by-us, not a symlink) so a sibling run or another local user that
+  // can list a shared tmpdir still cannot reach another run's allowlist proxy socket.
   const dir = await mkdtemp(path.join(tmp, "kx-"));
+  await chmod(dir, 0o700).catch(() => {});
   const socketPath = path.join(dir, "p.sock");
   const bytes = Buffer.byteLength(socketPath);
   const limit = maxUnixSocketPathBytes(platform);
@@ -456,7 +461,7 @@ async function runLocked(
         // A path past `sun_path` may be truncated by a bind and so bind somewhere else: the
         // socket lives in its own short directory (not under `scratch`, whose name carries the
         // schedule name) and a path that still cannot fit is refused with a reason.
-        const socketDir = await makeProxySocketDir();
+        const socketDir = await makeProxySocketDir(scratchParent).catch(() => makeProxySocketDir());
         proxySocketPath = socketDir.socketPath;
         closeProxy = async () => {
           await rm(socketDir.dir, { recursive: true, force: true }).catch(() => {});
