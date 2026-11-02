@@ -225,13 +225,5 @@ export function createWorkExecution(store: HubStore) {
         return store.work.reservationsForAttempt(projectId, attemptId).some(reservation => reservation.state === 'reserved');
     };
     const context: Pick<WorkContext, 'verifyExecution' | 'inspectExecution' | 'hasPendingExecution'> = { verifyExecution, inspectExecution, hasPendingExecution };
-    const admissionRefused = (operationId: string, errorCode: string) => {
-        // Retrying the same queued operation must retain its original authority.
-        // Only explicit permanent refusals settle it; quotas, offline peers,
-        // amendments and controller expiry can recover without native removal.
-        if (!['forbidden','work-binding-authority','work-association-stale','stale-catalogue','stale-version'].includes(errorCode)) return;
-        const reservation = store.work.executionReservation(operationId) ?? sourceReservation(operationId);
-        if (reservation) release(reservation.operationId);
-    };
-    return { hint:workExecutionHint, reserve, beforeAdmission, admitted, reconcileSession, admissionRefused, queueObserved, ...context };
+    return { hint:workExecutionHint, reserve, beforeAdmission, admitted, reconcileSession, queueObserved, ...context };
 }

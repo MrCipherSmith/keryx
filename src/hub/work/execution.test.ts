@@ -280,7 +280,7 @@ test('reauthorized queued managed work transfers the original pins and binds its
     expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:run.runId,attemptId:managed.a.id});
 });
 
-test('definitively refused delayed admission releases work but does not pretend the native queue changed', async () => {
+test('queued configuration drift retains its reservation and admits after native configuration recovery', async () => {
     f = await fixture({ workManagement: { enabled: true } });
     const s = await admittedSession(f), c = await appliedController(f, s), managed = await managedAttempt(f);
     const controller = { controllerLeaseId: c.lease.controllerLeaseId, expectedControllerVersion: c.lease.version };
@@ -301,13 +301,15 @@ test('definitively refused delayed admission releases work but does not pretend 
     await emit(6,{kind:'session-state',session:{...s.session,version:4,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,queueVersion:1,sessionEventCursor:6}});
     const queue=await success<Control['QueuePage']>(await f.call(s.path+'/queue',{cookie:f.cookie}));
     expect(queue.items[0]).toMatchObject({state:'queued',operationId:queued.operationId});
-    await managed.command('attempt.report',{attemptId:managed.a.id,event:'progress',report:'Hub refused stale configuration before admission'});
-    expect((await managed.read()).records.find(record=>record.id===managed.a.id)).toMatchObject({executionOutcome:'none'});
-    expect((await managed.read()).records.filter(record=>record.kind==='execution-link')).toHaveLength(0);
-    const healthy=await admittedSession(f), nextController=await appliedController(f,healthy);
-    const current=(await managed.read()).records.find((record):record is Attempt=>record.kind==='attempt'&&record.id===managed.a.id)!;
-    const dispatched=await success<Control['TurnReceipt']>(await fetch(f.origin+healthy.path+'/messages',{method:'POST',headers:headers(f,current,randomUUID()),body:JSON.stringify({...body,expectedSessionVersion:nextController.sessionVersion,controller:{controllerLeaseId:nextController.lease.controllerLeaseId,expectedControllerVersion:nextController.lease.version}})}));
-    expect(dispatched.status).toBe('admitted');
+    const { Database } = await import('bun:sqlite'); const db = new Database(f.dataDir + '/hub.sqlite');
+    try {
+        const reservation = JSON.parse(db.query<{body:string},[string]>('SELECT body FROM hub_work_execution_reservations WHERE operation_id=?').get(queued.operationId)!.body);
+        expect(reservation.state).toBe('reserved');
+    } finally { db.close(); }
+    await emit(7,{kind:'session-state',session:{...s.session,version:5,state:'idle',activeRunId:null,activeTurnId:null,nextTurnOrdinal:2,config:{...s.session.config,configVersion:2},queueVersion:1,sessionEventCursor:7}});
+    const delivery = await s.peer.next('command');
+    const links=(await managed.read()).records.filter(record=>record.kind==='execution-link');
+    expect(links).toHaveLength(1);expect(links[0]).toMatchObject({runId:(delivery.payload as {runId:string}).runId,attemptId:managed.a.id});
 });
 
 test('native in-place edit then removal releases the original managed reservation', async () => {

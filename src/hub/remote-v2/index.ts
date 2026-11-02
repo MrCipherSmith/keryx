@@ -42,7 +42,7 @@ export function createRemoteControl(ports: RemotePorts) {
   const machines = new Map<string, ServerWebSocket<RemoteSocketData>>(); const pending = new Set<string>(); const browsers = new Set<ServerWebSocket<RemoteSocketData>>();
   const attempts = new Map<string, { count: number; reset: number }>();
   const managedExecution=ports.managedExecution;
-  const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid, ...(managedExecution?{beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted, admissionRefused:managedExecution.admissionRefused}:{}) };
+  const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid, ...(managedExecution?{beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted}:{}) };
   const humanRead = createRemoteReader(store, deps);
   const { queueMutation, lifecycle, invoke } = createSessionOperations(store, deps);
   const resolveMachine = (request: Request): MachineRecord | undefined => { const header = request.headers.get("authorization"); if (!header?.startsWith("Bearer ")) return undefined; const digest = sha256(header.slice(7)); return store.remote.all<MachineRecord>("remote_machine").find((m) => !m.revoked && m.credentialDigest === digest); };
