@@ -11,13 +11,22 @@
   "title": "Herdr app (herdr-core): статус keryx через OSC 7501, запись в programs.json, оркестрация через hc",
   "status": "in-progress",
   "createdAt": "2026-11-02T07:11:42.059Z",
-  "updatedAt": "2026-11-02T07:32:49.592Z",
+  "updatedAt": "2026-11-02T09:05:55.603Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:0bc631cdb590ccd22fe8063895e30533de97bc5b95a6da1fec778abab1633bda",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC13": {
+      "at": "2026-11-02T09:05:51.165Z",
+      "note": "Live, isolated hc session keryx481 (hc 0.1.16, dev keryx f3a30d440): idle after start (k4), working->done on hc send --wait (k1), blocked kind=permission msg=<cmd> on a shell approval (k1), status null 20 ms before exit (k4), no 7501 text in any hc read screen. Evidence: flows/481-*/live/README.md, events.jsonl"
+    },
+    "AC14": {
+      "at": "2026-11-02T09:05:53.217Z",
+      "note": "Live, isolated hc session: template run 'hc run --bg --name k2 keryx <task>' returned first_message.sent=true, task became turn 1 (READY, done); positional 'hc run --bg --name k3 <keryx> shell <task>' idle->working->done with the prompt as the first turn. Evidence: flows/481-*/live/README.md, k2/k3 screens, events.jsonl"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -96,77 +105,112 @@
       "id": "T5",
       "title": "OSC 7501 encoder, herdr-core state mapper and reporter (pure module + tests)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:34:40.280Z",
+            "outcome": "started",
+            "detail": "481-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Wire herdr-core reporter into the TUI: ready idle, matrix states, blocked kind+text, clear on exit, render-safe writer, debug env",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:42:24.283Z",
+            "outcome": "started",
+            "detail": "481-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "keryx shell positional initial prompt submitted as the first turn",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:56:07.393Z",
+            "outcome": "started",
+            "detail": "481-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "hc agent-message framing and herdr-core section in the shell agent context",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T08:23:04.942Z",
+            "outcome": "started",
+            "detail": "481-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "keryx herdr install/remove/status: programs.json entry, icon, herdr-core template, registry",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T07:34:44.168Z",
+            "outcome": "started",
+            "detail": "481-T9"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -189,7 +233,7 @@
       "id": "T11",
       "title": "Live verification under isolated herdr-core session: status sequence, template first_message.sent, positional prompt, screen integrity (AC13, AC14)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8",
         "T9"
@@ -200,7 +244,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -297,6 +342,71 @@
     {
       "at": "2026-11-02T07:32:49.592Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-02T07:34:40.281Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 481-T5"
+    },
+    {
+      "at": "2026-11-02T07:34:44.168Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 481-T9"
+    },
+    {
+      "at": "2026-11-02T07:41:50.574Z",
+      "event": "task-done",
+      "detail": "T5: OSC 7501 encoder, herdr-core state mapper and reporter (pure module + tests)"
+    },
+    {
+      "at": "2026-11-02T07:42:24.283Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 481-T6"
+    },
+    {
+      "at": "2026-11-02T07:44:45.709Z",
+      "event": "task-done",
+      "detail": "T9: keryx herdr install/remove/status: programs.json entry, icon, herdr-core template, registry"
+    },
+    {
+      "at": "2026-11-02T07:55:46.842Z",
+      "event": "task-done",
+      "detail": "T6: Wire herdr-core reporter into the TUI: ready idle, matrix states, blocked kind+text, clear on exit, render-safe writer, debug env"
+    },
+    {
+      "at": "2026-11-02T07:56:07.393Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 481-T7"
+    },
+    {
+      "at": "2026-11-02T08:21:03.174Z",
+      "event": "task-done",
+      "detail": "T7: keryx shell positional initial prompt submitted as the first turn"
+    },
+    {
+      "at": "2026-11-02T08:23:04.942Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 481-T8"
+    },
+    {
+      "at": "2026-11-02T08:44:48.343Z",
+      "event": "task-done",
+      "detail": "T8: hc agent-message framing and herdr-core section in the shell agent context"
+    },
+    {
+      "at": "2026-11-02T09:05:51.165Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Live, isolated hc session keryx481 (hc 0.1.16, dev keryx f3a30d440): idle after start (k4), working->done on hc send --wait (k1), blocked kind=permission msg=<cmd> on a shell approval (k1), status null 20 ms before exit (k4), no 7501 text in any hc read screen. Evidence: flows/481-*/live/README.md, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-02T09:05:53.217Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Live, isolated hc session: template run 'hc run --bg --name k2 keryx <task>' returned first_message.sent=true, task became turn 1 (READY, done); positional 'hc run --bg --name k3 <keryx> shell <task>' idle->working->done with the prompt as the first turn. Evidence: flows/481-*/live/README.md, k2/k3 screens, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-02T09:05:55.603Z",
+      "event": "task-done",
+      "detail": "T11: Live verification under isolated herdr-core session: status sequence, template first_message.sent, positional prompt, screen integrity (AC13, AC14)"
     }
   ],
   "origin": {
@@ -370,5 +480,29 @@
       "kind": "exec",
       "check": "bun run typecheck && bun run lint && bun run test:client:terminal"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-02T09:05:51.165Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:0bc631cdb590ccd22fe8063895e30533de97bc5b95a6da1fec778abab1633bda"
+    },
+    {
+      "at": "2026-11-02T09:05:53.217Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:0bc631cdb590ccd22fe8063895e30533de97bc5b95a6da1fec778abab1633bda"
+    }
+  ]
 }
