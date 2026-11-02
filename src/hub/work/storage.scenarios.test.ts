@@ -152,3 +152,16 @@ test('membership amendment drops a cancelled approved Intent without requiring a
     expect(state.records.find(r => r.id === flowId)).toMatchObject({ state: 'in-progress', approvedRevisionId: nextFlow.id });
     expect(state.records.find(r => r.id === intentId)).toMatchObject({ state: 'cancelled' });
 });
+test('an Intent-only amendment resolves once through the scoped unit of work', () => {
+    for (const [first, second] of [['approve', 'approve'], ['approve', 'withdraw'], ['withdraw', 'approve']] as const) {
+        const { state, cmd, flowId, intentId, fr, ir, intentPayload } = fixture();
+        const next = cmd('revision.propose', { targetType: 'intent', intentId, flowRevisionId: fr.id, deliverable: 'Changed', approach: 'Manual', outOfScope: 'None', criteria: intentPayload.criteria, flowCriterionIds: ['fc'], criterionMappings: intentPayload.criterionMappings });
+        const amendment = cmd('requirements.amend', { flowId, sourceFlowRevisionId: fr.id, affectedIntentIds: [intentId], replacements: [{ targetType: 'intent', targetId: intentId, revisionId: next.id, contentDigest: next.contentDigest }], reason: 'Change' });
+        cmd('requirements.resolve-amendment', { amendmentId: amendment.id, manifestDigest: amendment.contentDigest, decision: first, reason: 'First' });
+        const before = JSON.stringify(state);
+        expect<unknown>(() => cmd('requirements.resolve-amendment', { amendmentId: amendment.id, manifestDigest: amendment.contentDigest, decision: second, reason: 'Again' })).toThrow('resolved');
+        expect<unknown>(JSON.stringify(state)).toBe(before);
+        expect(state.records.find(r => r.id === intentId)).toMatchObject({ approvedRevisionId: first === 'approve' ? next.id : ir.id });
+        expect(state.records.filter(r => r.kind === 'decision' && r.targetId === amendment.id)).toHaveLength(1);
+    }
+});

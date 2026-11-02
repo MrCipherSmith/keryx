@@ -131,6 +131,8 @@ export function workRepository(db: Database) {
         if (kind === 'attempt.create') visit(payload?.supersedesAttemptId, 'seed');
         if (kind === 'execution.bind' && typeof payload?.runId === 'string') addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='execution-link' AND json_extract(body,'$.runId')=?", [payload.runId]));
         visit(command.payload);
+        // No record points at an amendment's resolution, so the 'already resolved' guard needs it loaded explicitly.
+        if (kind === 'requirements.resolve-amendment' && typeof payload?.amendmentId === 'string') addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetType')='amendment' AND json_extract(body,'$.targetId')=?", [payload.amendmentId]));
         const loadedAttempts = new Set<string>(), loadedFlows = new Set<string>(), loadedSubjects = new Set<string>();
         const acceptance = ['attempt.submit', 'attempt.select', 'review.decide', 'flow.submit'].includes(kind);
         for (let changed = true; changed;) {
@@ -171,6 +173,17 @@ export function workRepository(db: Database) {
         return stateFromRows(projectId, [...found.values()].sort((a, b) => a.rowid - b.rowid), typeof command.operationId === 'string' ? operation(projectId, actorId, command.operationId) : undefined);
     };
     const recordState = (projectId: string, id: string): WorkState => commandState(projectId, { command: 'attempt.report', payload: { recordId: id } }, '');
+    /** Adds what the domain incident rule reads for Evidence of these Attempts: the Attempt closure, its submissions and their accepting decisions. */
+    const addIncidentContext = (projectId: string, state: WorkState, attemptIds: string[]) => {
+        const ids = new Set(state.records.map(r => r.id));
+        for (const attemptId of new Set(attemptIds)) {
+            const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptId } }, '');
+            for (const record of related.records) if (!ids.has(record.id)) { state.records.push(record); ids.add(record.id); }
+            // Historical acceptance may differ from the Intent's current decision.
+            for (const record of related.records) if (record.kind === 'submission')
+                for (const row of rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetId')=? AND json_extract(body,'$.targetDigest')=?", [related.records.find((item): item is import('./model').Attempt => item.kind === 'attempt' && item.id === record.attemptId)?.intentId ?? '',record.contentDigest])) if (!ids.has(parse(row).id)) { state.records.push(parse(row)); ids.add(parse(row).id); }
+        }
+    };
     /** Bounded read projections retain the public cursor and aggregate contracts. */
     const readState = (projectId: string, path: string[], url: URL, supportAttention = true): WorkState => {
         const kinds: Record<string, string> = { flows: 'flow', intents: 'intent', attempts: 'attempt', contexts: 'context', subjects: 'subject', submissions: 'submission', 'flow-submissions': 'flow-submission', decisions: 'decision', amendments: 'amendment' };
@@ -198,6 +211,9 @@ export function workRepository(db: Database) {
                 if (children.length > 200) fail(413,'projection-too-large','Use scoped history pages for this aggregate');
                 const ids = new Set(state.records.map(r => r.id));
                 for (const child of children) if (!ids.has(parse(child).id)) state.records.push(parse(child));
+                // Evidence carries no flowId/intentId, so incident Evidence reaches Flow and Intent aggregates through the projection.
+                if (r.kind !== 'attempt')
+                    addIncidentContext(projectId, state, db.query<{ attempt_id: string }, [string, string]>(`SELECT attempt_id FROM hub_work_incidents WHERE project_id=? AND ${r.kind}_id=? ORDER BY rowid`).all(projectId, r.id).map(row => row.attempt_id));
             }
             return state;
         }
@@ -214,16 +230,8 @@ export function workRepository(db: Database) {
         const rows = db.query<StoredRow, (string | number)[]>(`SELECT rowid,body FROM hub_work_records WHERE project_id=? AND (${clause}) ORDER BY rowid LIMIT ?`).all(projectId,...args,limit+2);
         if (parent) rows.unshift(parent);
         const state = stateFromRows(projectId,rows);
-        if (path[0] === 'attention' && supportAttention) {
-            const ids = new Set(state.records.map(r => r.id));
-            for (const item of [...state.records]) if (item.kind === 'evidence') {
-                const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptId: item.attemptId } }, '');
-                for (const record of related.records) if (!ids.has(record.id)) { state.records.push(record); ids.add(record.id); }
-                // Historical acceptance may differ from the Intent's current decision.
-                for (const record of related.records) if (record.kind === 'submission')
-                    for (const row of rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetId')=? AND json_extract(body,'$.targetDigest')=?", [related.records.find((item): item is import('./model').Attempt => item.kind === 'attempt' && item.id === record.attemptId)?.intentId ?? '',record.contentDigest])) if (!ids.has(parse(row).id)) { state.records.push(parse(row)); ids.add(parse(row).id); }
-            }
-        }
+        if (path[0] === 'attention' && supportAttention)
+            addIncidentContext(projectId, state, state.records.flatMap(item => item.kind === 'evidence' ? [item.attemptId] : []));
         return state;
     };
     const attentionPage = (projectId: string, url: URL) => {
