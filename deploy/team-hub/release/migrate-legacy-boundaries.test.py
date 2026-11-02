@@ -168,11 +168,15 @@ class AdoptionBoundaries(fixtures.MigrationSafety):
     def test_queue_and_command_capacity_each_block_rehearsal(self):
         path = self.root / "commands.sqlite"
         db = sqlite3.connect(path)
-        db.executescript('CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT);CREATE TABLE remote_queue(id TEXT);CREATE TABLE remote_command(id TEXT,body TEXT);')
+        db.executescript('CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT);CREATE TABLE remote_queue(id TEXT,body TEXT);CREATE TABLE remote_command(id TEXT,body TEXT);')
         db.execute("INSERT INTO hub_state VALUES(1,'{}')")
-        db.execute("INSERT INTO remote_queue VALUES('q')")
-        db.commit()
-        self.assertEqual(m.info_for(path)["unresolvedWork"], 1)
+        # The Hub never deletes queue rows: settled ones (applied/rejected/removed) are history, not work.
+        for state, expected in [("queued", 1), ("suspended", 1), ("admitted", 1), ("applied", 0), ("rejected", 0), ("removed", 0)]:
+            with self.subTest(queue_state=state):
+                db.execute("DELETE FROM remote_queue")
+                db.execute("INSERT INTO remote_queue VALUES('q',?)", (json.dumps({"item": {"state": state}}),))
+                db.commit()
+                self.assertEqual(m.info_for(path)["unresolvedWork"], expected)
         db.execute("DELETE FROM remote_queue")
         for status, released, expected in [("admitted", False, 1), ("admitted", True, 0),
                                             ("unknown", False, 1), ("applied", False, 0)]:
