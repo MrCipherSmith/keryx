@@ -4502,6 +4502,13 @@ export async function launchTuiAgentShell(opts: {
    * `/guard on|off` can still change it live and persists the new default.
    */
   initialGuardEnabled?: boolean;
+  /**
+   * Flow 481 T7: `keryx shell "<task>"` — taken once and submitted as the
+   * session's first turn through the composer's own submit path once the shell
+   * is ready. Taking empties it, so a readline fallback after a TUI failure
+   * cannot run the same task a second time.
+   */
+  takeInitialPrompt?: () => string | undefined;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -11450,6 +11457,14 @@ export async function launchTuiAgentShell(opts: {
     chrome.onSubmit((line) => {
       runLine(line);
     });
+
+    // Flow 481 T7: the positional prompt is the first turn. Submitted only here — after
+    // `hostStatus.markReady()` and any resume picker / held-session choice, with `runLine`
+    // defined — through `runLine`, the very function a typed line + Enter reaches.
+    const initialPrompt = opts.takeInitialPrompt?.()?.trim();
+    if (initialPrompt !== undefined && initialPrompt.length > 0) {
+      runLine(initialPrompt);
+    }
 
     await done;
     return true;
