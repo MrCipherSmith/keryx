@@ -56,7 +56,7 @@ export function AmendmentsPanel({
     ].join(":"),
     "",
   );
-  const { intents, replacements, affected, complete, expectedVersions } = amendmentDraft(records, flow);
+  const { all, intents, replacements, affected, complete, expectedVersions } = amendmentDraft(records, flow);
   const pending = pendingAmendments(records, flow.id);
   const history = recordsOf(records, "amendment").filter((manifest) => manifest.flowId === flow.id);
   const terminal = ["accepted", "cancelled"].includes(flow.state);
@@ -165,7 +165,8 @@ export function AmendmentsPanel({
           key={manifest.id}
           adapter={adapter}
           flow={flow}
-          intents={intents}
+          // Resolution CASes every Intent the manifest names, even one cancelled since.
+          intents={all}
           records={records}
           manifest={manifest}
           pending={pending.some((p) => p.id === manifest.id)}

@@ -1,11 +1,13 @@
 import { recordOf, recordsOf } from "./model";
 import type { AmendmentManifest, WorkFlow, WorkRecord } from "./types";
 
-/** Only approved, live work can be replaced by a requirements amendment. */
+/**
+ * Every live Intent can join a requirements amendment: a draft Intent introduced after
+ * Flow approval can only be approved through one. Cancelled Intents cannot be replaced.
+ */
 export function amendmentDraft(records: WorkRecord[], flow: WorkFlow) {
-  const intents = recordsOf(records, "intent").filter(
-    (intent) => intent.flowId === flow.id && intent.state !== "cancelled" && !!intent.approvedRevisionId,
-  );
+  const all = recordsOf(records, "intent").filter((intent) => intent.flowId === flow.id);
+  const intents = all.filter((intent) => intent.state !== "cancelled");
   const flowRevision = recordOf(records, "flow-revision", flow.currentRevisionId);
   const flowChanged = !!flow.approvedRevisionId && !!flowRevision && flowRevision.id !== flow.approvedRevisionId;
   const replacements: AmendmentManifest["replacements"] = [];
@@ -20,6 +22,6 @@ export function amendmentDraft(records: WorkRecord[], flow: WorkFlow) {
     intents.filter((intent) => intent.required && affected.includes(intent.id)).every((intent) => targetRevision.requiredIntentIds.includes(intent.id)) &&
     (!flowChanged || intents.every((intent) => affected.includes(intent.id))) &&
     affected.every((id) => recordOf(records,"intent-revision",intents.find((intent) => intent.id === id)?.currentRevisionId)?.flowRevisionId === targetRevision.id);
-  const expectedVersions = Object.fromEntries([flow,...intents.filter((intent) => affected.includes(intent.id))].map((record) => [record.id,record.version]));
-  return { intents, replacements, affected, complete, expectedVersions };
+  const expectedVersions = Object.fromEntries([flow,...all.filter((intent) => affected.includes(intent.id))].map((record) => [record.id,record.version]));
+  return { all, intents, replacements, affected, complete, expectedVersions };
 }

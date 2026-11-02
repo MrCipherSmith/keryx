@@ -582,17 +582,11 @@ test("work events retry with bounded backoff and stop on unmount without replayi
   }
 });
 
-test("amendments exclude cancelled and never-approved Intents from the exact replacement set", async () => {
+test("amendments exclude cancelled Intents from the exact replacement set", async () => {
   amendment();
   records = records.filter((record) => record.kind !== "amendment");
   const cancelled = recordOf(records, "intent", "i2")!;
   cancelled.state = "cancelled";
-  records.push({
-    ...cancelled,
-    id: "draft-intent",
-    state: "draft",
-    approvedRevisionId: null,
-  });
   recordOf(records, "flow-revision", "fr2")!.requiredIntentIds = ["i1"];
   show(
     <AmendmentsPanel
@@ -623,7 +617,7 @@ test("amendments exclude cancelled and never-approved Intents from the exact rep
   ).toEqual(["flow-demo", "i1"]);
 });
 
-test("an approved Flow with no approved dependent Intent can authorize a Flow-only amendment", () => {
+test("an approved Flow with no approved dependent Intent can authorize a Flow-only amendment", async () => {
   amendment();
   records = records.filter(
     (record) => record.kind !== "amendment" && record.kind !== "intent",
@@ -642,7 +636,108 @@ test("an approved Flow with no approved dependent Intent can authorize a Flow-on
     screen.getByRole("textbox", { name: "Reason for the requirements change" }),
     { target: { value: "Change only the Flow scope" } },
   );
-  expect(
+  fireEvent.click(
     screen.getByRole("button", { name: "Authorize exact amendment set" }),
-  ).toBeEnabled();
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(body.command).toBe("requirements.amend");
+  expect(body.payload.affectedIntentIds).toEqual([]);
+  expect(body.payload.replacements).toEqual([
+    {
+      targetType: "flow",
+      targetId: "flow-demo",
+      revisionId: "fr2",
+      contentDigest: "b".repeat(64),
+    },
+  ]);
+  expect(body.expectedVersions).toEqual({ "flow-demo": 1 });
+});
+
+test("a draft Intent introduced after Flow approval is authorised through a membership amendment", async () => {
+  amendment();
+  records = records.filter((record) => record.kind !== "amendment");
+  const i1 = recordOf(records, "intent", "i1")!;
+  records.push(
+    {
+      ...i1,
+      id: "i3",
+      title: "Screen reader labels",
+      state: "draft",
+      currentRevisionId: "iri3",
+      approvedRevisionId: null,
+    },
+    {
+      ...recordOf(records, "intent-revision", i1.currentRevisionId)!,
+      id: "iri3",
+      intentId: "i3",
+      revision: 1,
+      flowRevisionId: "fr2",
+    },
+  );
+  recordOf(records, "flow-revision", "fr2")!.requiredIntentIds = ["i1", "i2", "i3"];
+  show(
+    <AmendmentsPanel
+      adapter={adapter}
+      flow={recordOf(records, "flow", "flow-demo")!}
+      records={records}
+      can={() => true}
+      onDone={() => undefined}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Propose revised requirements" }),
+  );
+  expect(
+    screen.getByRole("option", { name: "Screen reader labels" }),
+  ).toBeInTheDocument();
+  fireEvent.change(
+    screen.getByRole("textbox", { name: "Reason for the requirements change" }),
+    { target: { value: "Add the new required deliverable" } },
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Authorize exact amendment set" }),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(body.payload.affectedIntentIds).toEqual(["i1", "i2", "i3"]);
+  expect(
+    body.payload.replacements.map(
+      (replacement: { targetId: string }) => replacement.targetId,
+    ),
+  ).toEqual(["flow-demo", "i1", "i2", "i3"]);
+  expect(body.expectedVersions).toEqual({ "flow-demo": 1, i1: 1, i2: 1, i3: 1 });
+});
+
+test("a pending amendment whose Intent was cancelled resolves with every affected Intent version", async () => {
+  amendment();
+  const cancelled = recordOf(records, "intent", "i2")!;
+  cancelled.state = "cancelled";
+  cancelled.version = 2;
+  vi.mocked(fetch).mockImplementation(async (_path, init) => {
+    const body = JSON.parse(String(init?.body));
+    return Response.json({
+      operationId: body.operationId,
+      entities: [],
+      receiptId: "r",
+      eventCursor: "opaque",
+    });
+  });
+  show(
+    <AmendmentsPanel
+      adapter={adapter}
+      flow={recordOf(records, "flow", "flow-demo")!}
+      records={records}
+      can={() => true}
+      onDone={() => undefined}
+    />,
+  );
+  expect(screen.getAllByText("Integration verification").length).toBeGreaterThan(0);
+  fireEvent.change(screen.getByRole("textbox", { name: "Decision reason" }), {
+    target: { value: "Withdraw after cancellation" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Withdraw whole set" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(body.expectedVersions).toEqual({ "flow-demo": 1, i1: 1, i2: 2 });
 });
