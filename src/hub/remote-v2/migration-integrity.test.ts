@@ -22,7 +22,7 @@ test("an actual startup migration failure rolls back all rebuilt remote tables a
     expect(() => openHubStore(dir)).toThrow("injected migration fault");
     const after = new Database(database); expect(after.query("SELECT version FROM remote_schema_version").get()).toEqual({ version: 1 }); expect(after.query("SELECT body FROM hub_state").get()).toEqual({ body: aggregate }); expect(after.query("PRAGMA foreign_key_list(remote_event)").all()).toHaveLength(0); after.exec("DROP TRIGGER migration_fault"); after.close();
     const recovered = openHubStore(dir); expect(recovered.load().sessions.legacy?.principal.id).toBe("cloudflare:original"); recovered.close();
-    const ready = new Database(database); expect(ready.query("SELECT version FROM remote_schema_version").get()).toEqual({ version: 2 }); expect(ready.query("PRAGMA foreign_key_check").all()).toHaveLength(0); ready.close();
+    const ready = new Database(database); expect(ready.query("SELECT version FROM remote_schema_version").get()).toEqual({ version: 5 }); expect(ready.query("PRAGMA foreign_key_check").all()).toHaveLength(0); ready.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

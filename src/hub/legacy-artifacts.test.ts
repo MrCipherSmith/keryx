@@ -22,7 +22,7 @@ test('revision bytes are content addressed once, replay stores a reference, and 
         const stored=db.query<{body:string},[]>('SELECT body FROM hub_state WHERE id=1').get()!.body;
         expect(stored.includes(contentBase64)).toBe(false);
         expect(db.query('SELECT count(*) AS n FROM hub_revision_blobs').get()).toEqual({n:1});
-        expect(db.query('SELECT version FROM remote_schema_version').get()).toEqual({version:4});
+        expect(db.query('SELECT version FROM remote_schema_version').get()).toEqual({version:5});
         db.close();
         const store=openHubStore(dir), state=store.load();
         for(const record of state.revisions) for(const file of record.files) Object.defineProperty(file,'contentBase64',{enumerable:true,configurable:true,get(){throw Error('Unexpected cold artifact hydration');}});
@@ -34,7 +34,7 @@ test('revision bytes are content addressed once, replay stores a reference, and 
     }finally{app.close();rmSync(dir,{recursive:true,force:true});}
 });
 
-test('migrates inline bytes and replay references atomically, preserves a rollback copy, and the actual previous writer refuses v4', async()=>{
+test('migrates inline bytes and replay references atomically, preserves a rollback copy, and the actual previous writer refuses the activated minimum writer', async()=>{
     const {mkdirSync}=await import('node:fs');
     const {createHash}=await import('node:crypto');
     const {migrateRemote:previousWriter}=await import('./fixtures/writer-v3-migration.test-support');
@@ -54,7 +54,7 @@ test('migrates inline bytes and replay references atomically, preserves a rollba
         expect(migrated.load().replays.old!.body).toEqual(revision);
         migrated.close();
         const candidate=new Database(join(dir,'hub.sqlite'));
-        expect(candidate.query('SELECT version FROM remote_schema_version').get()).toEqual({version:4});
+        expect(candidate.query('SELECT version FROM remote_schema_version').get()).toEqual({version:5});
         expect(()=>previousWriter(candidate)).toThrow('Unsupported remote schema version');candidate.close();
         const restored=new Database(rollback);expect(()=>previousWriter(restored)).not.toThrow();
         expect(JSON.parse(restored.query<{body:string},[]>('SELECT body FROM hub_state').get()!.body).revisions[0]).toEqual(revision);restored.close();

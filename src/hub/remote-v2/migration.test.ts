@@ -14,7 +14,7 @@ test("additive migration preserves the exact legacy aggregate and rejects unsupp
     before.save(state); before.close();
     const migrated = openHubStore(dir); expect(migrated.load()).toEqual(state); migrated.close();
     const db = new Database(join(dir, "hub.sqlite"));
-    expect(db.query("SELECT version FROM remote_schema_version").get()).toEqual({ version: 2 });
+    expect(db.query("SELECT version FROM remote_schema_version").get()).toEqual({ version: 5 });
     db.exec("UPDATE remote_schema_version SET version=999"); db.close();
     expect(() => openHubStore(dir)).toThrow("Unsupported remote schema");
   } finally { rmSync(dir, { recursive: true, force: true }); }

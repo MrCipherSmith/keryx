@@ -37,3 +37,21 @@ test('activates legacy review storage on a trial copy, fences the actual v0.4.5 
     expect(restored.load().flows.find(flow => flow.id === 'accepted')).toEqual(state.flows[0]); restored.close();
   } finally { source?.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test('a failed review-writer activation rolls back its additive tables and leaves v0.4.5 able to read the backup', () => {
+  const dir=mkdtempSync(join(tmpdir(),'hub-review-activation-fault-'));
+  try {
+    const before=openHubStore(dir), state=before.load(); before.close();
+    const db=new Database(join(dir,'hub.sqlite'));
+    db.exec("DROP TABLE hub_legacy_review_guards; DROP TABLE hub_legacy_review_decisions; UPDATE remote_schema_version SET version=4; CREATE TRIGGER review_activation_fault BEFORE UPDATE OF version ON remote_schema_version WHEN NEW.version=5 BEGIN SELECT RAISE(ABORT,'review-activation-fault'); END");
+    db.close();
+    expect(()=>openHubStore(dir)).toThrow('review-activation-fault');
+    const failed=new Database(join(dir,'hub.sqlite'));
+    try {
+      expect(failed.query('SELECT version FROM remote_schema_version').get()).toEqual({version:4});
+      expect(failed.query("SELECT name FROM sqlite_master WHERE name='hub_legacy_review_decisions'").get()).toBeNull();
+      expect(()=>migrateV045(failed)).not.toThrow();
+      expect(JSON.parse(failed.query<{body:string},[]>('SELECT body FROM hub_state WHERE id=1').get()!.body)).toMatchObject(state);
+    } finally {failed.close();}
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});

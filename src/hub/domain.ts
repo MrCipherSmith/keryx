@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
+import { legacyReviewCriterionId } from "./review-guide";
+import { validateLegacyGuideForSubmission, validateLegacyGuideStructure } from "./review-guide-validation";
+import { parseLegacyReturn } from "./legacy-review-contract";
 import { legacyStorageLimits } from "./legacy-limits";
 import { canTransition } from "../flow/machine";
-import type { CodeRevision, GitDeliveryAdapter, GitDeliveryRequest, GitDeliveryResult, HubConfig, HubDocument, HubFlow, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
+import type { CodeRevision, GitDeliveryAdapter, GitDeliveryRequest, GitDeliveryResult, HubConfig, HubDocument, HubFlow, LegacyReviewReceipt, Principal, Project, Proposal, Receipt, RevisionChange, RevisionFile } from "./contracts";
 import type { HubState } from "./store";
 export class HubFailure extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -219,7 +222,20 @@ export async function hubMutate(state: HubState, actor: Principal, path: string[
       case "freeze": transition(f, "ready"); f.frozenBy = actor.id; break;
       case "start": transition(f, "in-progress"); break;
       case "submit-for-review": {
-        const r = scopedRevision(state, p, body.subjectRevisionId); successfulEvidence(state, f, r.id); transition(f, "implemented"); f.subjectRevisionId = r.id; break;
+        const r = scopedRevision(state, p, body.subjectRevisionId);
+        if (f.lastReturnDecisionId && !f.returnResolved) {
+          if (Object.keys(body).some(key=>!['expectedVersion','subjectRevisionId','afterReturnDecisionId'].includes(key))) fail(400,'invalid-request','Expected the closed resubmission body');
+          if (body.afterReturnDecisionId!==f.lastReturnDecisionId) fail(409,'return-decision-required','Resubmission must reference the current return decision');
+          // The returned immutable revision is kept separately from the now-cleared current subject.
+          const decision = state.legacyReviewDecision?.(p.id,f.id,f.lastReturnDecisionId);
+          if (!decision) fail(409,'review-history-unavailable','Return history is unavailable');
+          if (r.id===decision.subjectRevisionId) fail(409,'subject-changed','Submit a new immutable result after changes');
+        }
+        const guide = validateLegacyGuideForSubmission(r,f.criteria.map((_,index)=>legacyReviewCriterionId(f.specContentDigest,index+1)));
+        if (guide && !guide.ok) fail(400,'invalid-review-guide','The designated review guide is invalid for the pinned criteria');
+        successfulEvidence(state, f, r.id); transition(f, "implemented"); f.subjectRevisionId = r.id;
+        if (f.lastReturnDecisionId) f.returnResolved=true;
+        break;
       }
       case "accept": {
         if (body.subjectRevisionId !== f.subjectRevisionId) fail(409, "subject-conflict", "Review subject changed");
@@ -272,6 +288,22 @@ export function completeGitDelivery(state: HubState, actor: Principal, request: 
   return recordGitDeliveryResult(state, actor, request, result);
 }
 
+/** Human review return is synchronous so facts, Flow, event and operation commit together. */
+export function returnLegacyFlow(state: HubState, actor: Principal, projectId: string, flowId: string, input: unknown, operationId: string): LegacyReviewReceipt {
+  if (actor.kind !== 'human' || !['operator','reviewer'].includes(actor.role)) fail(403,'human-required','This review action requires an authorized human');
+  const flow = found(state.flows.find(record => record.projectId===projectId && record.id===flowId));
+  assertLegacyFlowWritable(state,projectId,flowId);
+  const body = parseLegacyReturn(input,flow);
+  if (body.expectedVersion!==flow.version) fail(409,'stale-version','Review target changed; reload before deciding');
+  if (flow.status!=='implemented') fail(409,'invalid-transition','Only work awaiting review can be returned');
+  if (body.subjectRevisionId!==flow.subjectRevisionId) fail(409,'subject-changed','Review subject changed; reload before deciding');
+  currentSpec(state,flow);
+  const decision = {id:randomUUID(),flowId,subjectRevisionId:body.subjectRevisionId,specContentDigest:flow.specContentDigest,comment:body.comment,criterionRefs:body.criterionRefs,actorId:actor.id,actorKind:'human' as const,createdAt:new Date().toISOString()};
+  flow.status='in-progress'; flow.subjectRevisionId=null; flow.lastReturnDecisionId=decision.id; flow.returnResolved=false; flow.version++;
+  event(state,actor,projectId,'flow-request-changes',flowId);
+  return {status:'committed',operationId,flowVersion:flow.version,flowState:'in-progress',decision};
+}
+
 /** Shared synchronous revision construction; callers supply their own authority and transaction. */
 export function buildRevisionRecord(state: HubState, projectId: string, actorId: string, input: unknown): CodeRevision {
   const p = found(state.projects.find((project) => project.id === projectId)); const body = object(input);
@@ -292,5 +324,7 @@ export function buildRevisionRecord(state: HubState, projectId: string, actorId:
     if (tree.length > 5000 || tree.reduce((sum, f) => sum + Buffer.byteLength(f.contentBase64, "base64"), 0) > 20 * 1024 * 1024) fail(413, "quota-exceeded", "Snapshot exceeds quota");
     for (const f of tree) if (tree.some((other) => other.path.startsWith(`${f.path}/`))) fail(400, "path-conflict", "File and directory paths collide");
     const r: CodeRevision = { id: randomUUID(), projectId: p.id, baseRevisionId: base?.id ?? null, gitBaseSha, message: text(body.message, "message"), files: tree, createdBy: actorId, createdAt: new Date().toISOString(), treeDigest: sha256(JSON.stringify(tree.map(({ path, mode, contentDigest }) => ({ path, mode, contentDigest })))), ...(purpose ? { purpose } : {}) };
+    const guide = validateLegacyGuideStructure(r);
+    if (guide && !guide.ok) fail(400,'invalid-review-guide','The designated review guide is malformed or exceeds its bounds');
     state.revisions.push(r); return r;
 }

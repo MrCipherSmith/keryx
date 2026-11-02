@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { legacyReviewRepository } from "./legacy-review-storage";
 import { legacyArtifacts } from "./legacy-artifacts";
 import { deliveryJobs } from "./delivery-jobs";
 import { fail } from "./domain";
@@ -16,6 +17,7 @@ export type HubState = {
   projects: Project[]; documents: HubDocument[]; proposals: Proposal[]; flows: HubFlow[];
   evidence: Evidence[]; revisions: CodeRevision[]; deliveries: Delivery[]; events: HubEvent[];
   documentChanges: { projectId: string; revision: number; document: HubDocument }[];
+  legacyReviewDecision?: (projectId: string, flowId: string, id: string) => import("./contracts").LegacyReviewDecision | undefined;
   legacyConversions?: Record<string,{projectId:string;managedFlowId:string}>;
   sessions: Record<string, StoredSession>; replays: Record<string, StoredReplay>;
 };
@@ -38,8 +40,10 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   const work = workRepository(db);
   const deliveries = deliveryJobs(db);
   const artifacts = legacyArtifacts(db);
+  let legacyReview: ReturnType<typeof legacyReviewRepository> | undefined;
   const withConversionProjection = (state: HubState): HubState => {
     delete state.legacyConversions;
+    Object.defineProperty(state,'legacyReviewDecision',{configurable:true,enumerable:false,value:(projectId:string,flowId:string,id:string)=>legacyReview?.decision(projectId,flowId,id)});
     const conversions = new Proxy<Record<string, {projectId:string;managedFlowId:string}>>({}, {
       get(_target, key) { return typeof key === 'string' ? work.conversionForLegacy(key) : undefined; },
     });
@@ -115,6 +119,7 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     setProjectionDigest(persisted?.body ?? '');
   })();
   const persist = db.transaction((state: HubState, previous?: HubState, allowExisting = false, prepared?: {body:string;previousBytes:number}) => {
+    legacyReview?.assertGuards(state.flows);
     syncProjectReferences(db, state.projects);
     syncLegacy(state, previous);
     const body = artifacts.persist(state, allowExisting, previous, prepared);
@@ -183,6 +188,7 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
       db.query("INSERT INTO hub_work_settings(key,value) VALUES('legacy-artifacts-v1','1')").run();
     })();
   } catch (error) { db.close(); throw error; }
+  try { legacyReview = legacyReviewRepository(db); } catch (error) { db.close(); throw error; }
   let closed = false;
   const backup = (destination: string): void => {
     if (closed) throw new Error("Hub store is closed");
@@ -206,6 +212,6 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
       fsyncSync(descriptor);
     } finally { closeSync(descriptor); rmSync(temporaryDirectory, { recursive: true, force: true }); }
   };
-  return { load, save, remote, work, deliveries, project, session, workLegacyContext, workTransaction, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
+  return { load, save, remote, work, deliveries, legacyReview, project, session, workLegacyContext, workTransaction, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
 }
 export type HubStore = ReturnType<typeof openHubStore>;

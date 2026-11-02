@@ -1,12 +1,13 @@
 // Frozen acceptance spec v0.1.1: real authenticated HTTP and durable SQLite, no domain mocks.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CodeRevision, Evidence, HubApplication, HubConfig, HubFlow, ImportResponse, Project } from './contracts';
 import { createHubApplication } from './server';
+import { legacyReviewOpenApi } from './legacy-review-contract';
 
 const operator = 'review-operator-' + 'a'.repeat(64);
 const reviewer = 'review-human-' + 'b'.repeat(64);
@@ -71,6 +72,8 @@ describe('legacy commented return HTTP contract', () => {
     expect(receipt).toMatchObject({ status: 'committed', operationId: key, flowVersion: f.version + 1, flowState: 'in-progress', decision: {
       flowId: f.id, subjectRevisionId: r.id, specContentDigest: f.specContentDigest, comment: body.comment.trim(), criterionRefs: body.criterionRefs, actorKind: 'human',
     } });
+    expect(Object.keys(receipt).sort()).toEqual(Object.keys(legacyReviewOpenApi.components.schemas.receipt.properties).sort());
+    expect(Object.keys(receipt.decision).sort()).toEqual(Object.keys(legacyReviewOpenApi.components.schemas.ReviewDecision.properties).sort());
     expect(receipt.decision.id).toBeTruthy(); expect(receipt.decision.actorId).toBeTruthy();
     expect(Number.isNaN(Date.parse(receipt.decision.createdAt))).toBe(false);
     app.close(); app = createHubApplication(config);
@@ -237,6 +240,93 @@ describe('legacy commented return HTTP contract', () => {
     expect(current.lastReturnDecisionId).toBe(receipt.decision.id);
     expect(current.reviewFeedback).toEqual(receipt.decision);
     expect(current.subjectRevisionId).toBeNull();
+  });
+
+  test('rejects a newly designated malformed review guide before persistence, without scanning ordinary JSON files', async () => {
+    const { p } = await fixture();
+    const revisionPath = `/projects/${p.id}/revisions`;
+    const body = (path: string) => ({baseRevisionId:null,gitBaseSha:'a'.repeat(40),message:'guide',changes:[{path,contentBase64:Buffer.from('{malformed').toString('base64')}]});
+    const ordinary = await request(revisionPath,body('fixtures/data.json'),agent);
+    expect(ordinary.status).toBe(200);
+    const rejected = await request(revisionPath,body('attempt/review-guide.json'),agent);
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toMatchObject({error:{code:'invalid-review-guide'}});
+    const revisions = await success<{revisions: CodeRevision[]}>(await request(revisionPath));
+    expect(revisions.revisions.some(revision => revision.files.some(file => file.path==='attempt/review-guide.json'))).toBe(false);
+  });
+
+  test('checks designated guide membership against the pinned legacy criteria when submitting a new result', async () => {
+    const { p, f, path } = await fixture(false);
+    const guide = {format:'review-guide/v1',summary:'Added review',userImpact:'Human reviews work',limitations:[],prerequisites:[],steps:[{stepId:'check',criterionIds:['foreign-criterion'],location:'Browser',instruction:'Open the result',expectedResult:'The expected result is shown'}]};
+    const created = await success<CodeRevision>(await request(`/projects/${p.id}/revisions`,{baseRevisionId:null,gitBaseSha:'a'.repeat(40),message:'guide with wrong membership',changes:[{path:'attempt/review-guide.json',contentBase64:Buffer.from(JSON.stringify(guide)).toString('base64')}]},agent));
+    await evidence(p,f,created);
+    const response = await request(path+'/submit-for-review',{expectedVersion:f.version,subjectRevisionId:created.id},agent);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({error:{code:'invalid-review-guide'}});
+    expect((await success<HubFlow>(await request(path))).status).toBe('in-progress');
+    guide.steps[0]!.criterionIds=[`legacy:${f.specContentDigest}:1`];
+    const valid = await success<CodeRevision>(await request(`/projects/${p.id}/revisions`,{baseRevisionId:null,gitBaseSha:'a'.repeat(40),message:'valid guide',changes:[{path:'attempt/review-guide.json',contentBase64:Buffer.from(JSON.stringify(guide)).toString('base64')}]},agent));
+    await evidence(p,f,valid);
+    expect((await request(path+'/submit-for-review',{expectedVersion:f.version,subjectRevisionId:valid.id},agent)).status).toBe(200);
+  });
+
+  test('refuses a newly scoped human before recovering an older committed return operation', async () => {
+    const {p,body,path} = await fixture(), key='scoped-operation';
+    await success<ReviewReceipt>(await request(path+'/request-changes',body,reviewer,key));
+    const login = await app.fetch(new Request('http://hub.test/hub/v1/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:reviewer})}));
+    expect(login.status).toBe(200);
+    const cookie=login.headers.get('set-cookie')!.split(';')[0]!, value=cookie.slice(cookie.indexOf('=')+1);
+    const {openHubStore}=await import('./store'), store=openHubStore(dir), state=store.load();
+    const session=state.sessions[createHash('sha256').update(value).digest('hex')]!;
+    session.principal.projectIds=['another-project'];
+    try {store.save(state);} finally {store.close();}
+    const forbidden=await app.fetch(new Request('http://hub.test/hub/v1'+path+'/review-operations/'+key,{headers:{cookie}}));
+    expect(forbidden.status).toBe(403);
+    expect(await forbidden.text()).not.toContain(body.comment.trim());
+    expect((await request(`/projects/${p.id}/flows`,undefined,agent)).status).toBe(200);
+  });
+
+  test('keeps the original receipt after event pruning and at replay quota, while rejecting a new return atomically', async () => {
+    const {openHubStore}=await import('./store'), {legacyStorageLimits}=await import('./legacy-limits');
+    const first=await fixture(), second=await fixture(), key='retained-operation';
+    const receipt=await success<ReviewReceipt>(await request(first.path+'/request-changes',first.body,reviewer,key));
+    const store=openHubStore(dir), state=store.load();
+    const existing=Object.keys(state.replays).length;
+    for (let i=existing;i<legacyStorageLimits.maxReplayRecords;i++) state.replays['retained-'+i]={digest:'fixture',status:200,body:null};
+    state.events=Array.from({length:legacyStorageLimits.retainedEvents+5},(_,index)=>({projectId:first.p.id,sequence:index+1,type:'fixture-invalidation',entityId:first.f.id,actorId:'fixture',createdAt:'2026-01-01T00:00:00.000Z'}));
+    try {store.save(state);} finally {store.close();}
+    app.close();app=createHubApplication(config);
+    expect(await success<ReviewReceipt>(await request(first.path+'/review-operations/'+key,undefined,reviewer))).toEqual(receipt);
+    expect(await success<ReviewReceipt>(await request(first.path+'/request-changes',first.body,reviewer,key))).toEqual(receipt);
+    expect((await request(second.path+'/request-changes',second.body,reviewer,'over-cap')).status).toBe(413);
+    expect((await success<HubFlow>(await request(second.path))).version).toBe(second.f.version);
+    expect((await request(second.path+'/review-operations/over-cap',undefined,reviewer)).status).toBe(404);
+    const db=new Database(join(dir,'hub.sqlite'),{readonly:true});
+    try {expect(db.query<{n:number},[]>('SELECT count(*) AS n FROM hub_legacy_review_decisions').get()!.n).toBe(1);} finally {db.close();}
+  });
+
+  test('rejects an oversized review request with the documented bounded-body error and no state change', async () => {
+    const {f,body,path}=await fixture();
+    const response=await request(path+'/request-changes',{...body,comment:'x'.repeat(70*1024)});
+    expect(response.status).toBe(413);expect(await response.json()).toMatchObject({error:{code:'request-too-large'}});
+    expect((await success<HubFlow>(await request(path))).version).toBe(f.version);
+  });
+
+  test('recovers an operation key containing printable URL separators through one encoded opaque segment', async () => {
+    const {body,path}=await fixture(), key='review/a?b#c%';
+    const receipt=await success<ReviewReceipt>(await request(path+'/request-changes',body,reviewer,key));
+    expect(await success<ReviewReceipt>(await request(path+'/review-operations/'+encodeURIComponent(key),undefined,reviewer))).toEqual(receipt);
+  });
+
+  for (const key of ['.','..']) test('recovers dot-only operation key '+key+' through the bounded query alias without mutating Flow', async () => {
+    const {body,path}=await fixture();
+    const receipt=await success<ReviewReceipt>(await request(path+'/request-changes',body,reviewer,key));
+    const before=await success<FeedbackFlow>(await request(path));
+    expect(await success<ReviewReceipt>(await request(path+'/review-operations?operationId='+encodeURIComponent(key),undefined,reviewer))).toEqual(receipt);
+    expect((await request(path+'/review-operations?operationId='+encodeURIComponent(key)+'&operationId=another',undefined,reviewer)).status).toBe(400);
+    expect((await request(path+'/review-operations?operationId='+encodeURIComponent(key)+'&extra=1',undefined,reviewer)).status).toBe(400);
+    expect((await request(path+'/review-operations?operationId='+encodeURIComponent(key),undefined,agent)).status).toBe(403);
+    expect(await success<FeedbackFlow>(await request(path))).toEqual(before);
   });
 
 });
