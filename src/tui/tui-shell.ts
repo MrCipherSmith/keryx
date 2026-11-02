@@ -9431,6 +9431,9 @@ export async function launchTuiAgentShell(opts: {
     // dispatch instead of growing a second one. A notification-started turn
     // carries no operator text, so it skips the empty-line guard and the user
     // echo — there is nobody to echo.
+    // Flow 481: `skipSlashRouting` is set only for the positional startup prompt, a task for the
+    // model whatever it starts with (`/Users/me/app/log.txt shows the failure`): it never reaches
+    // the slash-command router. A typed line keeps slash routing.
     let consecutiveAutoWakes = 0;
     const runLine = (
       line: string,
@@ -9441,9 +9444,6 @@ export async function launchTuiAgentShell(opts: {
       origin: "operator" | "task-notification" | "bus-message" = "operator",
       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
       source?: typeof TG_SOURCE,
-      // Flow 481: the positional startup prompt is a task for the model, whatever it starts with
-      // (`/Users/me/app/log.txt shows the failure`): it never reaches the slash-command router.
-      // A typed line keeps slash routing.
       skipSlashRouting = false,
     ): void => {
       if (line.length === 0 && origin === "operator") {
