@@ -146,7 +146,7 @@ test("more sessions appends a page without hiding the first page", async () => {
   );
 });
 
-test("Flow association comes only from the active run and approval state is distinct from idle", async () => {
+test("a collapsed row shows its active run's approval state and Flow association", async () => {
   const original = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async (url, init) => {
     const path = String(url);
@@ -175,18 +175,19 @@ test("Flow association comes only from the active run and approval state is dist
     return original(url, init);
   });
   show();
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Details: Test session" }),
+  // The row stays collapsed: a pending approval must be visible at a glance.
+  expect(await screen.findByText("Waiting for approval")).toHaveClass(
+    "needs-action",
   );
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Active run Flow: f" }),
-  );
+  expect(
+    screen.getByRole("button", { name: "Details: Test session" }),
+  ).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(screen.getByRole("button", { name: "Active run Flow: f" }));
   expect(navigate).toHaveBeenCalledWith({
     projectId: "p",
     tab: "flows",
     flowId: "f",
   });
-  expect(screen.getByText("Waiting for approval")).toBeVisible();
 });
 
 test("machine metadata resolves a candidate digest to provider and model without displaying the full digest", async () => {
@@ -237,7 +238,7 @@ test("machine metadata resolves a candidate digest to provider and model without
   expect(screen.queryByText(candidateId)).not.toBeInTheDocument();
 });
 
-test("one hundred machine sessions fetch details only for an explicitly expanded row", async () => {
+test("one hundred machine sessions fetch runs only for active runs and routing only for an expanded row", async () => {
   const original = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async (url, init) =>
     String(url).includes("/projects/p/sessions?")
@@ -246,7 +247,7 @@ test("one hundred machine sessions fetch details only for an explicitly expanded
             ...sessionFixture,
             sessionId: "s" + index,
             title: "Session " + index,
-            activeRunId: "r" + index,
+            activeRunId: index < 3 ? "r" + index : null,
           })),
           cursor: 100,
           hasMore: false,
@@ -255,17 +256,13 @@ test("one hundred machine sessions fetch details only for an explicitly expanded
   );
   show();
   await screen.findByRole("button", { name: "Session 99" });
-  expect(
-    requests.filter(
-      (path) => path.includes("/routing") || path.includes("/runs/"),
-    ),
-  ).toHaveLength(0);
+  await waitFor(() =>
+    expect(requests.filter((path) => path.includes("/runs/"))).toHaveLength(3),
+  );
+  expect(requests.filter((path) => path.includes("/routing"))).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Details: Session 0" }));
   await waitFor(() =>
-    expect(
-      requests.filter(
-        (path) => path.includes("/routing") || path.includes("/runs/"),
-      ),
-    ).toHaveLength(2),
+    expect(requests.filter((path) => path.includes("/routing"))).toHaveLength(1),
   );
+  expect(requests.filter((path) => path.includes("/runs/"))).toHaveLength(3);
 });
