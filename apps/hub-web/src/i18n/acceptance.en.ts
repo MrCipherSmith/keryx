@@ -1,4 +1,5 @@
 export default {
+ rejectFlowEffect:'This terminally rejects the exact reviewed Flow composition. Accepted deliverables remain unchanged.',flowRejected:'Flow result rejected',
  evidenceLoading:'Loading evidence…',evidenceUnavailable:'Evidence is unavailable. Load it before deciding.',evidenceRetry:'Retry evidence',
  historyTitle:'Review decision history',historyLoading:'Loading review history…',historyUnavailable:'Review history is unavailable',historyRetry:'Retry history',historyEmpty:'No recorded return decisions',historyResult:'Reviewed result',historyDecision:'Return decision',historyCriterion:'Criterion {{position}}',historyMore:'Load older decisions',
  returnedReadonly:'Returned result — awaiting a new submission',

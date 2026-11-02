@@ -1,3 +1,6 @@
+import { useRef, useState } from 'react';
+import { Button, Field, Textarea } from '../../components/ui';
+import { useDraft } from '../../state/drafts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useHub } from '../../app/hub-context';
@@ -7,7 +10,7 @@ import { resolveCanonicalReviewGuide } from '../../../../../src/hub/review-guide
 import { aggregateVersions, exactPassingCoverage, pendingAmendments, recordOf, recordsOf, requirementDrift } from '../managed-work/model';
 import type { WorkAdapter } from '../managed-work/adapter';
 import type { Attempt, FlowSubmission, ReviewSubmission, WorkFlow, WorkIntent, WorkRecord } from '../managed-work/types';
-import { useWorkOperation } from '../managed-work/operation';
+import { useWorkOperation, WorkOperationStatus } from '../managed-work/operation';
 import { ReviewPresentation } from './presentation';
 import { canonicalCriteria, returnReason, type ReviewCriterion } from './model';
 import type { ReactNode } from 'react';
@@ -39,7 +42,7 @@ export function CanonicalIntentReview({adapter,flow,intent,attempt,submission,re
 export function CanonicalFlowReview({adapter,flow,submission,records,can,refresh}:{adapter:WorkAdapter;flow:WorkFlow;submission:FlowSubmission;records:WorkRecord[];can:(command:string)=>boolean;refresh:()=>void}){
  const hub=useHub();const {t}=useTranslation('acceptance');const op=useWorkOperation(adapter,refresh);
  const pendingCommand=op.operation.command;
- const ownPending=pendingCommand?.command==='review.decide'&&pendingCommand.payload.targetType==='flow-review'&&pendingCommand.payload.targetId===flow.id&&pendingCommand.payload.submissionId===submission.id&&pendingCommand.payload.submissionDigest===submission.contentDigest;
+ const ownPending=pendingCommand?.command==='review.decide'&&(pendingCommand.payload.decision==='accept'||pendingCommand.payload.decision==='request-changes')&&pendingCommand.payload.targetType==='flow-review'&&pendingCommand.payload.targetId===flow.id&&pendingCommand.payload.submissionId===submission.id&&pendingCommand.payload.submissionDigest===submission.contentDigest;
  const foreignPending=op.operation.status==='unknown'&&!!pendingCommand&&!ownPending;
  const pendingDecision=ownPending&&pendingCommand.command==='review.decide'&&(pendingCommand.payload.decision==='accept'||pendingCommand.payload.decision==='request-changes')?pendingCommand.payload.decision:undefined;
  const revision=recordOf(records,'flow-revision',submission.flowRevisionId);
@@ -53,7 +56,27 @@ export function CanonicalFlowReview({adapter,flow,submission,records,can,refresh
   const status=supports.some(row=>row.status==='conflicting')?'conflicting':supports.some(row=>row.status==='fail')?'fail':supports.some(row=>row.status==='inconclusive')?'inconclusive':supports.length&&supports.every(row=>row.status==='reportedPass')?'reportedPass':'missing';
   return {id:criterion.criterionId,text:criterion.text,status,reports:supports.flatMap(row=>row.reports),waivers:supports.flatMap(row=>row.waivers)};
  });
+ const versions={...aggregateVersions(flow),...Object.fromEntries(intents.map(intent=>[intent.id,intent.version]))};
  const evidence=[...new Map(criteria.flatMap(row=>row.reports).map(report=>[report.id,report])).values()];
  const scope=JSON.stringify([window.location.origin,hub.projectId,'canonical-flow',flow.id,hub.principal.id]);
- return <ReviewPresentation title={flow.title} summary={revision?.expectedOutcome??''} author={submission.createdBy} submittedAt={submission.createdAt} guide={{status:'missing',reason:'aggregate-manifest'}} criteria={criteria} technical={<><code>{submission.contentDigest}</code><pre>{JSON.stringify(submission,null,2)}</pre>{evidence.map(report=><details id={'review-evidence-'+report.id} key={report.id}><summary>{report.method}</summary><p>{report.report}</p><code>{report.subjectDigest}</code><p>{report.createdBy}</p></details>)}</>} decision={{scope,subjectKey:submission.id+":"+submission.contentDigest,targetKey:JSON.stringify([submission.id,submission.contentDigest,flow.version,...intents.map(intent=>intent.version)]),criteria,effect:'effectFlow',acceptAllowed:eligible,returnAllowed:eligible,blockedReason:!human?'permission':!eligible?'blocked':undefined,readonly:flow.state==='accepted'?'acceptedReadonly':undefined,pending:op.blocked,pendingCode:foreignPending?"foreign-pending":op.operation.status==="sending"?"sending":op.operation.code??undefined,pendingDecision,refresh,onCheck:foreignPending?undefined:()=>op.run(),onRetry:foreignPending?undefined:op.retry,onDecision:input=>op.run({command:'review.decide',expectedVersions:{...aggregateVersions(flow),...Object.fromEntries(intents.map(intent=>[intent.id,intent.version]))},payload:{targetType:'flow-review',targetId:flow.id,submissionId:submission.id,submissionDigest:submission.contentDigest,decision:input.decision,reason:input.decision==='accept'?t('acceptedReason'):returnReason(input.comment,input.criterionIds),waivers:[]}})}}><h3>{t('aggregate')}</h3><ul aria-label={t('aggregate')}>{submission.acceptedIntents.map(entry=><li key={entry.intentId}>{recordOf(records,'intent',entry.intentId)?.title??entry.intentId}</li>)}</ul></ReviewPresentation>;
+ return <ReviewPresentation title={flow.title} summary={revision?.expectedOutcome??''} author={submission.createdBy} submittedAt={submission.createdAt} guide={{status:'missing',reason:'aggregate-manifest'}} criteria={criteria} technical={<><FlowRejection key={JSON.stringify([submission.id,submission.contentDigest,versions])} adapter={adapter} flow={flow} submission={submission} versions={versions} eligible={eligible} refresh={refresh}/><code>{submission.contentDigest}</code><pre>{JSON.stringify(submission,null,2)}</pre>{evidence.map(report=><details id={'review-evidence-'+report.id} key={report.id}><summary>{report.method}</summary><p>{report.report}</p><code>{report.subjectDigest}</code><p>{report.createdBy}</p></details>)}</>} decision={{scope,subjectKey:submission.id+":"+submission.contentDigest,targetKey:JSON.stringify([submission.id,submission.contentDigest,flow.version,...intents.map(intent=>intent.version)]),criteria,effect:'effectFlow',acceptAllowed:eligible,returnAllowed:eligible,blockedReason:!human?'permission':!eligible?'blocked':undefined,readonly:flow.state==='accepted'?'acceptedReadonly':undefined,pending:op.blocked,pendingCode:foreignPending?"foreign-pending":op.operation.status==="sending"?"sending":op.operation.code??undefined,pendingDecision,refresh,onCheck:foreignPending?undefined:()=>op.run(),onRetry:foreignPending?undefined:op.retry,onDecision:input=>op.run({command:'review.decide',expectedVersions:{...aggregateVersions(flow),...Object.fromEntries(intents.map(intent=>[intent.id,intent.version]))},payload:{targetType:'flow-review',targetId:flow.id,submissionId:submission.id,submissionDigest:submission.contentDigest,decision:input.decision,reason:input.decision==='accept'?t('acceptedReason'):returnReason(input.comment,input.criterionIds),waivers:[]}})}}><h3>{t('aggregate')}</h3><ul aria-label={t('aggregate')}>{submission.acceptedIntents.map(entry=><li key={entry.intentId}>{recordOf(records,'intent',entry.intentId)?.title??entry.intentId}</li>)}</ul></ReviewPresentation>;
+}
+
+/** Terminal rejection retains its own confirmation and exact target outside the primary return path. */
+function FlowRejection({adapter,flow,submission,versions,eligible,refresh}:{adapter:WorkAdapter;flow:WorkFlow;submission:FlowSubmission;versions:Record<string,number>;eligible:boolean;refresh:()=>void}){
+ const hub=useHub(),{t}=useTranslation('work'),{t:ta}=useTranslation('acceptance');
+ const [open,setOpen]=useState(false),[saved,setSaved]=useState(false);
+ const [reason,setReason,clearReason]=useDraft(JSON.stringify([window.location.origin,hub.projectId,'flow-reject',flow.id,submission.id,submission.contentDigest,hub.principal.id]),'');
+ const op=useWorkOperation(adapter,refresh),sending=useRef(false);
+ const command=op.operation.command;
+ const own=command?.command==='review.decide'&&command.payload.decision==='reject'&&command.payload.targetType==='flow-review'&&command.payload.targetId===flow.id&&command.payload.submissionId===submission.id&&command.payload.submissionDigest===submission.contentDigest;
+ const disabled=!eligible||op.blocked;
+ return <section><Button variant="danger" disabled={disabled} onClick={()=>{setOpen(true);setSaved(false);}}>{t('reject')}</Button>
+  {open&&<form aria-label={t('reject')} onSubmit={event=>{event.preventDefault();if(disabled||sending.current||!reason.trim()||reason.trim().length>4000)return;const submitted=reason;sending.current=true;void op.run({command:'review.decide',expectedVersions:versions,payload:{targetType:'flow-review',targetId:flow.id,submissionId:submission.id,submissionDigest:submission.contentDigest,decision:'reject',reason:reason.trim(),waivers:[]}}).then(result=>{if(result?.status==='committed'){clearReason(submitted);setSaved(true);setOpen(false);}}).finally(()=>{sending.current=false;});}}>
+   <p>{ta('rejectFlowEffect')}</p><Field label={t('reason')}><Textarea required maxLength={4000} disabled={disabled} value={reason} onChange={event=>setReason(event.target.value)}/></Field>
+   <Button type="submit" disabled={disabled||!reason.trim()||reason.trim().length>4000}>{t('confirm')}</Button><Button variant="ghost" disabled={op.blocked} onClick={()=>setOpen(false)}>{t('cancel')}</Button>
+  </form>}
+  {saved&&<p role="status">{ta('flowRejected')}</p>}
+  {(own||op.operation.status==='rejected')&&<WorkOperationStatus adapter={adapter} onCommitted={refresh}/>}
+ </section>;
 }
