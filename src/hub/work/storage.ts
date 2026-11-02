@@ -174,6 +174,28 @@ export function workRepository(db: Database) {
         return stateFromRows(projectId, [...found.values()].sort((a, b) => a.rowid - b.rowid), typeof command.operationId === 'string' ? operation(projectId, actorId, command.operationId) : undefined);
     };
     const recordState = (projectId: string, id: string): WorkState => commandState(projectId, { command: 'attempt.report', payload: { recordId: id } }, '');
+    const addIncidentSupport = (projectId: string, state: WorkState, incidents: WorkRecord[]): void => {
+        const ids = new Set(state.records.map(record => record.id));
+        const add = (record: WorkRecord) => { if (!ids.has(record.id)) { state.records.push(record); ids.add(record.id); } };
+        const loadedAttempts = new Set<string>();
+        for (const incident of incidents) {
+            if (incident.kind !== 'evidence') continue;
+            add(incident);
+            if (loadedAttempts.has(incident.attemptId)) continue;
+            loadedAttempts.add(incident.attemptId);
+            const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptId: incident.attemptId } }, '');
+            related.records.forEach(add);
+            // The original acceptance may differ from the Intent's current selected submission.
+            const attempt = related.records.find(record => record.kind === 'attempt' && record.id === incident.attemptId);
+            if (attempt?.kind === 'attempt') addRowsForAcceptance(attempt.intentId,attempt.id);
+            function addRowsForAcceptance(intentId: string, attemptId: string): void {
+                const decisions = db.query<StoredRow,[string,string,string]>(`SELECT decision.rowid,decision.body FROM hub_work_records decision
+                    WHERE decision.project_id=? AND json_extract(decision.body,'$.targetId')=? AND json_extract(decision.body,'$.targetType')='intent-review' AND json_extract(decision.body,'$.kind')='decision'
+                    AND EXISTS(SELECT 1 FROM hub_work_records submission WHERE submission.project_id=decision.project_id AND json_extract(submission.body,'$.attemptId')=? AND json_extract(submission.body,'$.kind')='submission' AND json_extract(submission.body,'$.contentDigest')=json_extract(decision.body,'$.targetDigest'))`).all(projectId,intentId,attemptId);
+                decisions.map(parse).forEach(add);
+            }
+        }
+    };
     /** Bounded read projections retain the public cursor and aggregate contracts. */
     const readState = (projectId: string, path: string[], url: URL, supportAttention = true): WorkState => {
         const kinds: Record<string, string> = { flows: 'flow', intents: 'intent', attempts: 'attempt', contexts: 'context', subjects: 'subject', submissions: 'submission', 'flow-submissions': 'flow-submission', decisions: 'decision', amendments: 'amendment' };
@@ -201,6 +223,10 @@ export function workRepository(db: Database) {
                 if (children.length > 200) fail(413,'projection-too-large','Use scoped history pages for this aggregate');
                 const ids = new Set(state.records.map(r => r.id));
                 for (const child of children) if (!ids.has(parse(child).id)) state.records.push(parse(child));
+                const incidentField = r.kind === 'flow' ? 'flow_id' : r.kind === 'intent' ? 'intent_id' : 'attempt_id';
+                const incidents = db.query<StoredRow,[string,string]>(`SELECT evidence.rowid,evidence.body FROM hub_work_incidents incident JOIN hub_work_records evidence ON evidence.project_id=incident.project_id AND evidence.id=incident.evidence_id WHERE incident.project_id=? AND incident.${incidentField}=? ORDER BY evidence.rowid LIMIT 201`).all(projectId,r.id);
+                if (incidents.length > 200) fail(413,'projection-too-large','Use scoped attention pages for incident history');
+                addIncidentSupport(projectId,state,incidents.map(parse));
             }
             return state;
         }
@@ -217,16 +243,7 @@ export function workRepository(db: Database) {
         const rows = db.query<StoredRow, (string | number)[]>(`SELECT rowid,body FROM hub_work_records WHERE project_id=? AND (${clause}) ORDER BY rowid LIMIT ?`).all(projectId,...args,limit+2);
         if (parent) rows.unshift(parent);
         const state = stateFromRows(projectId,rows);
-        if (path[0] === 'attention' && supportAttention) {
-            const ids = new Set(state.records.map(r => r.id));
-            for (const item of [...state.records]) if (item.kind === 'evidence') {
-                const related = commandState(projectId, { command: 'attempt.submit', payload: { attemptId: item.attemptId } }, '');
-                for (const record of related.records) if (!ids.has(record.id)) { state.records.push(record); ids.add(record.id); }
-                // Historical acceptance may differ from the Intent's current decision.
-                for (const record of related.records) if (record.kind === 'submission')
-                    for (const row of rowsWhere(projectId, "json_extract(body,'$.kind')='decision' AND json_extract(body,'$.targetId')=? AND json_extract(body,'$.targetDigest')=?", [related.records.find((item): item is import('./model').Attempt => item.kind === 'attempt' && item.id === record.attemptId)?.intentId ?? '',record.contentDigest])) if (!ids.has(parse(row).id)) { state.records.push(parse(row)); ids.add(parse(row).id); }
-            }
-        }
+        if (path[0] === 'attention' && supportAttention) addIncidentSupport(projectId,state,[...state.records]);
         return state;
     };
     const attentionPage = (projectId: string, url: URL) => {
