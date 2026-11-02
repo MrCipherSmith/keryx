@@ -160,11 +160,19 @@ export function WorkAttention({
       ) : (
         <div className="work-attention-items">
           {items.map((item) => {
+            // Incident Evidence opens the Attempt it contradicts.
+            const target =
+              item.kind === "evidence"
+                ? records.find(
+                    (r) => r.kind === "attempt" && r.id === item.attemptId,
+                  )
+                : item;
+            if (!target) return null;
             const flowId =
-              item.kind === "flow"
-                ? item.id
-                : "flowId" in item
-                  ? item.flowId
+              target.kind === "flow"
+                ? target.id
+                : "flowId" in target
+                  ? target.flowId
                   : null;
             if (!flowId) return null;
             const parent = records.find(
@@ -176,12 +184,12 @@ export function WorkAttention({
                 onClick={() =>
                   onSelect(
                     flowId,
-                    item.kind === "intent"
-                      ? item.id
-                      : item.kind === "attempt"
-                        ? item.intentId
+                    target.kind === "intent"
+                      ? target.id
+                      : target.kind === "attempt"
+                        ? target.intentId
                         : undefined,
-                    item.kind === "attempt" ? item.id : undefined,
+                    target.kind === "attempt" ? target.id : undefined,
                   )
                 }
               >

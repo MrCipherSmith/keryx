@@ -8857,6 +8857,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/Attempt"
+                },
+                {
+                  "$ref": "#/components/schemas/EvidenceRecord"
                 }
               ]
             }

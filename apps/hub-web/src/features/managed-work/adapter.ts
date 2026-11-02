@@ -284,12 +284,8 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
       );
       if (
         !isObject(data) ||
-        !pageOf(data, "records", isWorkRecord, ATTENTION_PAGE_LIMIT, (record) => record.projectId === projectId) ||
-        data.records.some(
-          (r) =>
-            r.projectId !== projectId ||
-            !["flow", "intent", "attempt"].includes(r.kind),
-        ) ||
+        // Post-acceptance contradictory Evidence is an attention item (OpenAPI AttentionPage).
+        !pageOf(data, "records", isWorkRecord, ATTENTION_PAGE_LIMIT, (record) => record.projectId === projectId && ["flow", "intent", "attempt", "evidence"].includes(record.kind)) ||
         !isCursor(data.nextCursor)
       )
         return invalid();

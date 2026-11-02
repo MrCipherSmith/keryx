@@ -526,6 +526,21 @@ test("Intent approval exposes approach, exclusions, exact parent digest and crit
   ).toBeEnabled();
 });
 
+test("incident Evidence in attention is accepted and opens the Attempt it contradicts", async () => {
+  const evidence = recordOf(records, "evidence", "ev-agent")!;
+  vi.mocked(fetch).mockImplementation(async (path) => {
+    if (String(path).endsWith("/capabilities")) return Response.json(capabilities);
+    if (String(path).includes("/snapshot")) return Response.json({ records, eventCursor: "cursor1", nextCursor: null });
+    if (String(path).includes("/attention")) return Response.json({ records: [evidence], eventCursor: "cursor1", nextCursor: null });
+    return Response.json({ error: { code: "not-found" } }, { status: 404 });
+  });
+  const navigate = vi.fn();
+  const value: HubContextValue = { principal: { id: "human:test", kind: "human", role: "operator" }, projectId: "p", scopeKey: 66, location: { projectId: "p", tab: "work" }, navigate, refresh: async () => undefined };
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><HubContext.Provider value={value}><ManagedWorkView /></HubContext.Provider></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: /ev-agent/ }));
+  const attempt = recordOf(records, "attempt", evidence.attemptId)!;
+  expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ flowId: attempt.flowId, intentId: attempt.intentId, attemptId: attempt.id }));
+});
 test("unsubmitted Attempt detail shows the latest exact subject selected by submission preparation",async()=>{
  const attempt=recordOf(records,"attempt","a-agent")!;attempt.submissionId=null;
  const subject=recordOf(records,"subject","subject-agent")!;subject.report="Older result marker";
