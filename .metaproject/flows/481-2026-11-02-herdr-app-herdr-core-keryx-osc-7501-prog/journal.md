@@ -144,3 +144,4 @@
   - Review-tooling follow-ups found on the way: a PR round's slices come from the working tree, and
     `keryx review verdict` before ingest reports "no findings" because `review start` writes
     findings.json as `[]`.
+- 2026-11-02T13:55:53.042Z - decision d-mvzbnjm1-30797f [review decide-premise, ordinary]: chose dismiss; no recommendation
