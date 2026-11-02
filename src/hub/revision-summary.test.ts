@@ -12,7 +12,7 @@ test('revision metadata projection omits file bytes and keeps full immutable rea
   expect(summary).toEqual({ revisions: [{ ...metadata, fileCount: files.length }] });
   expect(JSON.stringify(summary)).not.toContain('contentBase64');
   expect(hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test'))).toEqual({ revisions: [revision] });
-  expect(hubRead(state, ['projects', 'p', 'revisions', 'r'], new URL('http://hub.test?summary=1'))).toEqual(revision);
+  expect(hubRead(state, ['projects', 'p', 'revisions', 'r'], new URL('http://hub.test?summary=1'))).toEqual({ ...metadata, fileCount: files.length });
   expect(state).toEqual(before);
 });
 
@@ -46,5 +46,24 @@ test('full revision collection quota includes file paths and metadata even when 
   const files = Array.from({ length: 5000 }, (_, index) => ({ path: 'x'.repeat(960) + '-' + index, mode: '100644' as const, contentBase64: '', contentDigest: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }));
   const state: HubState = { projects: [{ id: 'p', name: 'P', version: 1, lineRevisionId: null, lineVersion: 0, contextRevision: 0 }], documents: [], proposals: [], flows: [], evidence: [], events: [], documentChanges: [], sessions: {}, replays: {}, deliveries: [], revisions: Array.from({ length: 8 }, (_, index) => ({ id: 'r' + index, projectId: 'p', baseRevisionId: null, gitBaseSha: 'a'.repeat(40), message: 'Revision', createdBy: 'h', createdAt: 'then', treeDigest: 'a'.repeat(64), files })) };
   expect(() => hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test'))).toThrow('Use summary=1');
-  expect(hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1'))).toMatchObject({ revisions: Array.from({ length: 8 }, (_, index) => expect.objectContaining({ id: 'r' + index, fileCount: 5000 })) });
+  expect(hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1'))).toMatchObject({ revisions: Array.from({ length: 8 }, (_, index) => expect.objectContaining({ id: 'r' + (7-index), fileCount: 5000 })) });
+});
+
+test('more than fifty revisions page newest-first with stable exclusive continuation and exact selected-line summary', () => {
+  const template: CodeRevision = { id: 'r0', projectId: 'p', baseRevisionId: null, gitBaseSha: 'a'.repeat(40), message: 'Candidate', files: [{ path: 'a.txt', contentBase64: 'YQ==', contentDigest: 'digest', mode: '100644' }], createdBy: 'agent', createdAt: 'same timestamp', treeDigest: 'tree' };
+  const state: HubState = { projects: [{ id: 'p', name: 'P', version: 1, lineRevisionId: 'r0', lineVersion: 1, contextRevision: 0 }], revisions: Array.from({ length: 57 }, (_, n) => ({ ...template, id: 'r' + n })), documents: [], proposals: [], flows: [], evidence: [], deliveries: [], events: [], documentChanges: [], sessions: {}, replays: {} };
+  const read = (query: string) => hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1' + query)) as { revisions: Array<{id:string;fileCount:number}>; nextCursor?:string };
+  const first = read('');
+  expect(first.revisions.map(r => r.id)).toEqual(Array.from({ length: 50 }, (_, n) => 'r' + (56 - n)));
+  expect(first.nextCursor).toBe('r7');
+  state.revisions.push({ ...template, id: 'new-head' });
+  const second = read('&afterId=' + first.nextCursor);
+  expect(second.revisions.map(r => r.id)).toEqual(['r6','r5','r4','r3','r2','r1','r0']);
+  expect(second.nextCursor).toBeUndefined();
+  expect(read('&limit=2').revisions.map(r => r.id)).toEqual(['new-head','r56']);
+  expect(() => read('&afterId=missing')).toThrow('cursor');
+  expect(() => read('&limit=51')).toThrow('limit');
+  const selected = hubRead(state, ['projects','p','revisions','r0'], new URL('http://hub.test?summary=1'));
+  expect(selected).toMatchObject({ id: 'r0', fileCount: 1 });
+  expect(JSON.stringify(selected)).not.toContain('contentBase64');
 });

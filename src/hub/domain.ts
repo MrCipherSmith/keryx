@@ -110,7 +110,7 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
     }
     case "revisions": {
       if (!path[3]) {
-        const all = state.revisions.filter((r) => r.projectId === p.id), after = url.searchParams.get('afterId');
+        const all = state.revisions.filter((r) => r.projectId === p.id).reverse(), after = url.searchParams.get('afterId');
         const index = after ? all.findIndex(revision => revision.id === after) : -1;
         if (after && index < 0) fail(400,'invalid-cursor','Revision cursor not found');
         const rawLimit = url.searchParams.get('limit'), limit = rawLimit === null ? legacyStorageLimits.maxRevisionPageSize : Number(rawLimit);
@@ -127,7 +127,10 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
         return { revisions: url.searchParams.get("summary") === "1" ? revisions.map(({ files, ...metadata }) => ({ ...metadata, fileCount: files.length })) : revisions, ...(nextCursor ? {nextCursor} : {}) };
       }
       const r = scopedRevision(state, p, path[3]);
-      if (path[4] !== "changes") return r;
+      if (path[4] !== "changes") {
+        if (url.searchParams.get("summary") === "1") { const {files,...metadata} = r; return {...metadata,fileCount:files.length}; }
+        return r;
+      }
       const from = url.searchParams.get("from"); const base = from ? scopedRevision(state, p, from) : null;
       const changes: RevisionChange[] = r.files.filter((file) => !base?.files.some((f) => f.path === file.path && f.contentDigest === file.contentDigest && f.mode === file.mode)).map(({ path, mode, contentBase64 }) => ({ path, mode, contentBase64 }));
       for (const f of base?.files ?? []) if (!r.files.some((n) => n.path === f.path)) changes.push({ path: f.path, deleted: true });
