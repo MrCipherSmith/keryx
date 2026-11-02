@@ -58,6 +58,26 @@ describe("parseShellCliFlags initial prompt", () => {
     expect(flags.printPrompt).toBe("hello");
     expect(flags.initialPrompt).toBeUndefined();
   });
+
+  test("a bare -r keeps taking the next word as the session (titles may hold spaces)", () => {
+    const flags = parseShellCliFlags(["-r", "Parser cleanup"]);
+    expect(flags.resumeId).toBe("Parser cleanup");
+    expect(flags.initialPrompt).toBeUndefined();
+  });
+
+  test("a prompt goes with the resume picker when written before -r or after --", () => {
+    for (const args of [["fix it", "-r"], ["-r", "--", "fix it"]]) {
+      const flags = parseShellCliFlags(args);
+      expect(flags.initialPrompt).toBe("fix it");
+      expect(flags.resumePick).toBe(true);
+      expect(flags.resumeId).toBeUndefined();
+    }
+  });
+
+  test("a lone `help` prints help instead of becoming a one-word first turn", () => {
+    expect(parseShellCliFlags(["help"]).help).toBe(true);
+    expect(parseShellCliFlags(["help me fix the parser"]).initialPrompt).toBe("help me fix the parser");
+  });
 });
 
 describe("withInitialLine (readline fallback)", () => {
@@ -125,11 +145,22 @@ describe("TUI wiring (source audit)", () => {
   });
 
   test("the readline fallback feeds the prompt to the REPL alone, never to a picker", () => {
-    expect(shell).toMatch(/const replLines: AsyncIterable<string> =\s+oneShotPrompt === undefined \? withInitialLine\(takeInitialPrompt\(\), lineIterator\) : sharedLines;/);
+    expect(shell).toMatch(/const readlineInitialPrompt = oneShotPrompt === undefined \? takeInitialPrompt\(\) : undefined;/);
+    expect(shell).toMatch(/const replLines: AsyncIterable<string> =\s+oneShotPrompt === undefined \? withInitialLine\(readlineInitialPrompt, lineIterator\) : sharedLines;/);
     expect(shell).toMatch(/await runAgentRepl\(replLines, /);
     // The pickers read `io.lines`, which stays the plain shared iterator.
     expect(shell).toMatch(/createRichIo\(sharedLines, versionCheck\)/);
     expect(shell).toMatch(/\? \{ \[Symbol\.asyncIterator\]: \(\) => lineIterator \}/);
+  });
+
+  test("with a prompt the readline agent/chat question is skipped, so chat cannot drop it (AC7)", () => {
+    // Only the agent REPL reads `replLines`; the chat REPL reads `io.lines`. Picking chat after
+    // the prompt was taken used to lose it without a word.
+    expect(shell).toMatch(
+      /if \(modeFlag === undefined\) \{\s+if \(readlineInitialPrompt !== undefined\) \{\s+modeFlag = true;\s+io\.write\("Agent mode: the initial prompt runs as the first turn\.\\n"\);\s+\} else \{\s+modeFlag = await pickAgentMode\(io\);/,
+    );
+    // pickAgentMode has exactly one call site, the guarded one above.
+    expect(shell.match(/await pickAgentMode\(/g)?.length).toBe(1);
   });
 
   test("help text mentions the positional prompt", () => {

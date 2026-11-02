@@ -4,9 +4,14 @@
 # never addressed: those variables are removed, HC_SESSION selects a separate core
 # (~/.local/state/herdr-core/keryx481), and XDG_CONFIG_HOME points templates and
 # config.toml at a scratch dir. PATH puts the dev-keryx wrapper first.
-S=/private/tmp/claude-502/-Users-tsaitler-aleksandr-goodea-keryx/471f0119-3094-4a52-8b5e-d403c1962c80/scratchpad/k481
+#
+# K481_SCRATCH: a scratch directory holding xdg-config/, bin/ (keryx -> keryx-wrapper.sh)
+# and project/. Required: nothing here falls back to a real config directory.
+S="${K481_SCRATCH:?set K481_SCRATCH to the scratch directory of the run}"
+HC="${K481_HC:-$(command -v hc)}"
+[ -n "$HC" ] || { echo "hc not found on PATH; set K481_HC" >&2; exit 1; }
 exec env -u HC_SOCKET -u HC_TERMINAL_SOCKET -u HC_SCOPE -u HC_TERMINAL_ID \
   HC_SESSION=keryx481 \
   XDG_CONFIG_HOME="$S/xdg-config" \
   PATH="$S/bin:$PATH" \
-  /Users/tsaitler.aleksandr/.local/bin/hc "$@"
+  "$HC" "$@"

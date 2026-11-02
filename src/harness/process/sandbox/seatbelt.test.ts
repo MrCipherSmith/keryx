@@ -78,36 +78,33 @@ describe("buildSeatbeltProfile", () => {
   });
 });
 
-// Flow 481 T8: the herdr-core socket is never part of a sandbox profile. `hc`
-// cannot reach the core from a sandboxed shell, and that is deliberate.
-describe("herdr-core socket stays out of the profile", () => {
-  const HC_ENV = {
-    HC_SOCKET: "/Users/u/.local/state/herdr-core/core.sock",
-    HC_TERMINAL_SOCKET: "/Users/u/.local/state/herdr-core/t13.sock",
-    HC_TERMINAL_ID: "t13",
-  } as const;
+// Flow 481: Keryx adds nothing to the sandbox for herdr-core. These pin that, and
+// the mode matrix docs/docs/guides/herdr.md ("The sandbox caveat") states: only a
+// network-off profile denies the unix socket; a network-on profile (the interactive
+// shell's `workspace` mode) leaves it reachable, so the sandbox does not contain `hc`.
+describe("herdr-core and the sandbox profile", () => {
+  const profiles = {
+    off: workspaceWrite,
+    default: defaultSandboxProfile("/work/repo", "/tmp/session", "/home/u"),
+    on: { ...workspaceWrite, network: "on" as const },
+  };
 
-  test("the generated profile names neither socket, whatever the process env holds", () => {
-    const saved: Record<string, string | undefined> = {};
-    for (const [key, value] of Object.entries(HC_ENV)) {
-      saved[key] = process.env[key];
-      process.env[key] = value;
+  test("no profile names a herdr-core path or allows a unix socket", () => {
+    for (const p of Object.values(profiles)) {
+      const sb = buildSeatbeltProfile(p);
+      expect(sb).not.toContain("herdr-core");
+      expect(sb).not.toContain("core.sock");
+      expect(sb).not.toMatch(/\(allow network[^)]*\(?(remote unix|unix-socket|path-literal)/);
     }
-    try {
-      for (const p of [workspaceWrite, defaultSandboxProfile("/work/repo", "/tmp/session", "/home/u")]) {
-        const sb = buildSeatbeltProfile(p);
-        expect(sb).not.toContain(HC_ENV.HC_SOCKET);
-        expect(sb).not.toContain(HC_ENV.HC_TERMINAL_SOCKET);
-        expect(sb).not.toContain("herdr-core");
-        expect(sb).not.toContain("core.sock");
-        expect(sb).not.toMatch(/\(allow network[^)]*\(?(remote unix|unix-socket|path-literal)/);
-      }
-    } finally {
-      for (const [key, value] of Object.entries(saved)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    }
+  });
+
+  test("network off denies all network, the socket included; network on has no network rule at all", () => {
+    expect(buildSeatbeltProfile(profiles.off)).toContain("(deny network*)");
+    expect(buildSeatbeltProfile(profiles.default)).toContain("(deny network*)");
+    // `workspace` mode: under (allow default) nothing stops a connect to the herdr-core socket.
+    const on = buildSeatbeltProfile(profiles.on);
+    expect(on).toContain("(allow default)");
+    expect(on).not.toMatch(/\(deny network/);
   });
 
   test("no sandbox source file references the herdr-core socket variables", () => {

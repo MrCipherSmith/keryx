@@ -1,14 +1,19 @@
 // herdr-core status reporter. The herdr-core runtime reads a program's status only
-// from an OSC 7501 sequence the program prints to its own terminal (the wire format
-// of herdr-core `status.rs` `Status::encode`):
+// from an OSC 7501 sequence the program prints to its own terminal:
 //
 //   ESC ] 7501 ; state=<word> [:kind=..][:progress=..][:app=..][:title=<b64>][:msg=<b64>] ESC \
+//
+// Provenance: the field set and order follow `hc --skill` and the upstream herdr-core
+// encoder as read on 2026-11-02; the bytes were confirmed live against hc 0.1.16 (`hc get`
+// decoded every state, kind and msg this module sends; flow 481 live/README.md). herdr-core
+// is preview (0.x), so the encoder test pins the exact bytes.
 //
 // Pure encoder + state mapper + a best-effort reporter. Inert unless the pane was
 // launched by herdr-core (`HC_TERMINAL_ID` set). Never throws into the shell.
 
 import { redactSensitiveText } from "../security/redact";
 import { debugEvent } from "./debug-log";
+import type { FleetWorkerStatus } from "./worker-fleet";
 
 export type HerdrCoreState = "idle" | "working" | "done" | "blocked" | "error" | "clear";
 export type HerdrCoreKind = "permission" | "question" | "auth";
@@ -70,7 +75,7 @@ export interface HerdrCoreAttention {
 
 /** Map the TUI's `setMainAgent` status vocabulary onto herdr-core's states. */
 export function herdrCoreStateFor(
-  status: "queued" | "running" | "done" | "failed" | "blocked",
+  status: FleetWorkerStatus,
   attention?: HerdrCoreAttention,
 ): HerdrCoreReport {
   switch (status) {
@@ -92,6 +97,13 @@ export function herdrCoreStateFor(
 }
 
 /**
+ * How much of the one-line text the redactor sees. Far above the 200 kept, so a secret
+ * that straddles the 200-character cut is still whole when it is redacted; bounded, so a
+ * multi-megabyte approval command is not scanned in full for 200 characters of status.
+ */
+export const MSG_REDACT_WINDOW_CHARS = 4096;
+
+/**
  * Prepare a blocked-report message: collapse whitespace to one line, redact secrets,
  * cut to 200 characters on a code-point boundary. Base64 happens in the encoder.
  *
@@ -104,8 +116,10 @@ export function prepareStatusMessage(
   redact: (s: string) => string = redactSensitiveText,
 ): string {
   const oneLine = text.replace(/\s+/g, " ").trim();
-  // Redact BEFORE cutting so a secret straddling the limit is never half-kept.
-  const redacted = redact(oneLine).replace(/\s+/g, " ").trim();
+  // Redact BEFORE the 200-character cut so a secret straddling it is never half-kept,
+  // but only over a bounded window (see MSG_REDACT_WINDOW_CHARS).
+  const window = oneLine.length <= MSG_REDACT_WINDOW_CHARS ? oneLine : oneLine.slice(0, MSG_REDACT_WINDOW_CHARS);
+  const redacted = redact(window).replace(/\s+/g, " ").trim();
   const points = Array.from(redacted);
   return points.length <= MSG_MAX_CHARS ? redacted : points.slice(0, MSG_MAX_CHARS).join("");
 }
@@ -137,9 +151,11 @@ export function createHerdrCoreReporter(opts: HerdrCoreReporterOptions): HerdrCo
         report.msg !== undefined ? { ...report, msg: prepareStatusMessage(report.msg, redact) } : report;
       const bytes = encodeOsc7501(prepared);
       if (bytes === last) return;
-      last = bytes;
       debugEvent("herdr-core.report", { state: report.state });
       opts.write(bytes);
+      // Only a write that went through is remembered: a failed one is retried by the next
+      // identical report instead of being suppressed as a duplicate.
+      last = bytes;
     } catch {
       // best-effort: a status line must never take the shell down.
     }

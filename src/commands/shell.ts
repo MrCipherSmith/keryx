@@ -3538,7 +3538,8 @@ export class ShellFlagError extends Error {
  * Session flags (`-c`/`-r`) are per-project only.
  */
 export function parseShellCliFlags(args: string[]): ShellCliFlags {
-  if (args.includes("--help") || args.includes("-h")) {
+  // A lone `help` asks for help, as `keryx herdr help` does; it is not a one-word first turn.
+  if (args.includes("--help") || args.includes("-h") || (args.length === 1 && args[0] === "help")) {
     return { help: true, wantTui: true };
   }
   const invalid = (message: string): never => {
@@ -3603,6 +3604,8 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       continueLast = true;
     } else if (arg === "-r" || arg === "--resume") {
       const next = args[i + 1];
+      // The next bare word is the session id, prefix or title (findSession matches titles, which
+      // may hold spaces). An initial prompt therefore goes before a bare -r, or after `--`.
       if (next !== undefined && !next.startsWith("-")) {
         resumeId = next;
         i += 1;
@@ -3871,7 +3874,8 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   if (flags.help) {
     console.log(`Usage: keryx shell [options] [prompt]
 
-  prompt                        Submit this as the first turn of the session (quote it; use -- before one starting with -)
+  prompt                        Submit this as the first turn of the session (quote it; use -- before one starting with -;
+                                a bare -r takes the next word as the session, so put the prompt first or after --)
 
   --help, -h                    Show this help without starting a session
   --provider <name>             Use this provider (otherwise choose interactively)
@@ -4572,8 +4576,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // Flow 481 T7: the positional prompt reaches the REPL alone. The provider/mode pickers read
   // `io.lines` (= `sharedLines`) and the held-session choice reads `lineIterator`, so neither can
   // take the task as a menu answer. `takeInitialPrompt()` is empty if the TUI already submitted it.
+  const readlineInitialPrompt = oneShotPrompt === undefined ? takeInitialPrompt() : undefined;
   const replLines: AsyncIterable<string> =
-    oneShotPrompt === undefined ? withInitialLine(takeInitialPrompt(), lineIterator) : sharedLines;
+    oneShotPrompt === undefined ? withInitialLine(readlineInitialPrompt, lineIterator) : sharedLines;
 
   const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
 
@@ -4618,10 +4623,17 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       if (picked.baseUrl !== undefined) {
         baseUrl = picked.baseUrl;
       }
-      // Offer the agent/chat choice only when no explicit flag was given.
+      // Offer the agent/chat choice only when no explicit flag was given. An initial prompt is
+      // agent-mode only (parseShellCliFlags refuses it with --chat), and only the agent REPL reads
+      // it, so there is nothing to choose: picking chat here would drop the task without a word.
       if (modeFlag === undefined) {
-        modeFlag = await pickAgentMode(io);
-        io.write("\n");
+        if (readlineInitialPrompt !== undefined) {
+          modeFlag = true;
+          io.write("Agent mode: the initial prompt runs as the first turn.\n");
+        } else {
+          modeFlag = await pickAgentMode(io);
+          io.write("\n");
+        }
       }
     } else {
       provider = providerArg;

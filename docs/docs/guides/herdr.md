@@ -166,8 +166,23 @@ your words. The transcript labels it with the sender:
 The model receives it with a header that names the sender and says the text is
 another agent's output. With a `reach` attribute, the header says it is a task
 from the parent and keeps the reply instruction verbatim. The session history
-stores what the model received. Any other line, including one with text around
-an `<hc>` block, reaches the model unchanged.
+stores what the model received, and a resumed session lists it with the sender.
+
+herdr-core does not authenticate the sender, so Keryx checks the shape:
+
+- `from` must look like an hc address and name, for example `t7 review`;
+- `reach` must be one `hc send` line;
+- neither may hold a line break or a `]`.
+
+A line that starts like an `<hc` block but fails these checks, or has text after
+the block, still does not reach the model as your words. It gets a header
+saying it is agent-shaped text from an unknown sender.
+
+A line that does not start with `<hc`, including one with text before a block,
+reaches the model unchanged. A line from the Telegram topic is always yours,
+whatever its shape. An agent's message also skips the prompts meant for a
+person: it never opens the wiki-enrich picker. While a turn runs, it goes to the
+main queue instead of the "Main agent is busy" choice.
 
 ## Let Keryx delegate through hc
 
@@ -189,14 +204,25 @@ other shell command.
 
 ## The sandbox caveat
 
-With the interactive shell sandbox on (`KERYX_SANDBOX_SHELL`), a sandboxed
-`shell_exec` has no network and cannot reach the herdr-core socket, so `hc`
-fails there. The herdr-core section says so. Delegating through `hc` needs the
-sandbox off for that session.
+Anyone who can connect to the herdr-core socket can make it run any command
+with your rights, outside any sandbox. The interactive shell sandbox
+(`KERYX_SANDBOX_SHELL`) was not built with herdr-core in mind, and Keryx adds
+nothing to it for herdr-core. Whether a sandboxed `shell_exec` can reach the
+socket depends on the mode:
 
-Keryx will not open the socket from inside the sandbox. Anyone who can connect
-to the herdr-core socket can make it run any command with your rights, outside
-any sandbox, so allowing it would be a complete escape.
+- `strict` on macOS: the profile denies all network, the unix socket included,
+  so `hc` fails. Delegating through `hc` needs the sandbox off for that session.
+- `workspace` (also `1` and `on`): the profile keeps the network on, so `hc`
+  reaches the socket. Whatever it starts through herdr-core runs outside the
+  sandbox.
+- Linux (bubblewrap): `strict` unshares the network namespace, which does not
+  isolate unix sockets reached by path. Do not count on it to keep `hc` out.
+
+Where `hc` can reach the core, the sandbox does not contain it. The agent's
+herdr-core section says so, and tells it never to use `hc` to get around a
+sandbox refusal. Every `hc` call also goes through your
+[approval mode](permission-modes.md). Both are policy, not containment. To
+contain an agent, run it outside an herdr-core terminal:
 [Run an agent without giving it my machine](contain-an-agent.md) covers the
 containment model.
 

@@ -86,3 +86,40 @@
 - 2026-11-02T09:05:51.165Z - ac-confirmed: AC13: Live, isolated hc session keryx481 (hc 0.1.16, dev keryx f3a30d440): idle after start (k4), working->done on hc send --wait (k1), blocked kind=permission msg=<cmd> on a shell approval (k1), status null 20 ms before exit (k4), no 7501 text in any hc read screen. Evidence: flows/481-*/live/README.md, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-11-02T09:05:53.217Z - ac-confirmed: AC14: Live, isolated hc session: template run 'hc run --bg --name k2 keryx <task>' returned first_message.sent=true, task became turn 1 (READY, done); positional 'hc run --bg --name k3 <keryx> shell <task>' idle->working->done with the prompt as the first turn. Evidence: flows/481-*/live/README.md, k2/k3 screens, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-11-02T09:05:55.603Z - task-done: T11: Live verification under isolated herdr-core session: status sequence, template first_message.sent, positional prompt, screen integrity (AC13, AC14)
+- 2026-11-02T09:12:13.588Z - task-done: T10: Docs: herdr guide, CLI reference, upstream programs.json snippet
+- 2026-11-02T09:12:27.976Z - ac-confirmed: AC16: bun run docs:check: 2012 relative links / 672 files, 0 broken; retired spellings 0 undeclared; cli-reference-coverage + commands-by-task + help-groups 67 pass. Guide docs/docs/guides/herdr.md (commit 51de6ad24) covers status protocol, keryx herdr install/remove/status, template, delegation via hc, sandbox caveat, old Herdr TUI coexistence, upstream programs.json entry + icon; cli-reference lists keryx herdr and the positional shell prompt. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-02T11:46:57.167Z - ac-updated: T4 review round 1: AC9's 'hc cannot reach the core from the sandbox' is false in workspace mode (network on keeps the herdr-core socket reachable; degradation F-001), so the section now says the sandbox does not contain hc. AC8 gains the review's hardening: from/reach shape checks, fail-closed framing of unparsed hc-shaped lines, operator-only routes skipped, Telegram lines never framed.
+- 2026-11-02T11:47:35.248Z - ac-confirmed: AC13: Re-confirmed after the AC8/AC9 re-freeze; evidence unchanged. Live, isolated hc session keryx481 (hc 0.1.16, dev keryx f3a30d440): idle after start (k4), working->done on hc send --wait (k1), blocked kind=permission msg=<cmd> on a shell approval (k1), status null 20 ms before exit (k4), no 7501 text in any hc read screen. Later review fixes move the exit clear earlier in teardown and retry a failed write; neither changes the observed sequence. Evidence: flows/481-*/live/README.md, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-02T11:47:37.928Z - ac-confirmed: AC14: Re-confirmed after the AC8/AC9 re-freeze; evidence unchanged. Live, isolated hc session: template run 'hc run --bg --name k2 keryx <task>' returned first_message.sent=true, task became turn 1 (READY, done); positional 'hc run --bg --name k3 <keryx path> shell <task>' idle->working->done with the prompt as the first turn. Evidence: flows/481-*/live/README.md, k2/k3 screens, events.jsonl (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-02T11:47:40.610Z - ac-confirmed: AC16: Re-run after the review fixes rewrote the guide's sandbox and agent-message sections: bun run docs:check: 2013 relative links / 672 files, 0 broken; retired spellings 0 undeclared; cli-reference-coverage + commands-by-task + help-groups 67 pass. Guide docs/docs/guides/herdr.md covers status protocol, keryx herdr install/remove/status, template and its shadowing, delegation via hc, agent-message framing and its shape checks, the per-mode sandbox caveat, old Herdr TUI coexistence, upstream programs.json entry + icon; cli-reference lists keryx herdr and the positional shell prompt. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- T8, T10, T11 results (recorded together with the T4 review round 1 fixes):
+  - T8: hc framing and the herdr-core section shipped in 51de6ad; live check in T11 covered the
+    report form only (`hc send` injected one `<hc from>` line), the `reach` task form is unit-tested.
+  - T11 found that the `keryx` template shadows the program: once installed, `hc run keryx shell`
+    runs the template with the task `shell`. The guide warns about it, and the agent's hc section
+    now names the template form (`hc run --bg --name <name> keryx "<task>"`) instead of
+    `keryx shell "<task>"`.
+  - T10: guide and CLI reference; AC16 re-confirmed after the review rewrote two guide sections.
+- T4 review round 1 (package 2026-11-02-review-flow-github-com-mrciphersmith-keryx-pull-1116, 73
+  findings, 7 major). Fixed in the working tree, one commit to follow:
+  1. Sandbox claim corrected (degradation-w2 F-001, verified): `workspace` mode (also `1`/`on`)
+     builds a network-on Seatbelt profile under `(allow default)`, so the herdr-core socket stays
+     reachable and whatever hc starts runs outside the sandbox; only macOS `strict` denies it, and
+     bubblewrap's `--unshare-net` never isolated path unix sockets. Guide, the agent's hc section,
+     AC9 and the PR body now say the sandbox does not contain hc. Containing the socket is a
+     follow-up, not this flow.
+  2. Readline: a positional prompt skips the agent/chat question (picking chat used to drop it).
+  3. hc messages: `from`/`reach` shape checks; fail-closed framing of a line that starts like
+     `<hc` but does not parse; an empty body is named; agent-shaped lines skip the wiki-enrich
+     picker and the busy dialog (main queue instead); Telegram lines are never framed and keep
+     `tg ❯`; the scroll pin and the resume summary show the sender like the live echo.
+  4. TUI startup: with a positional prompt (and on the read-only view, same loss on main) the
+     R700-01 hook notices go to the transcript, not into a splash removed before its first frame.
+  5. herdr-core status: redaction over a bounded 4096-char window before the 200-char cut; a
+     failed write is not remembered; the status is cleared first in the shell's finally.
+  6. `keryx herdr`: an invalid programs.json stops the run before the icon and template; the
+     backup never writes through a symlink; a symlinked programs.json stays a link; each
+     subcommand takes only its listed flags.
+  7. Source-text audit inventory gains the three new readers (CI typecheck/AC8 root cause); the
+     live scripts lost their personal paths.
+- AC8 and AC9 re-frozen with the corrected wording (journaled above); AC13, AC14, AC16 re-confirmed.

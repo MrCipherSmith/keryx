@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync, lstatSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -168,11 +168,44 @@ describe("herdr install failure paths", () => {
     }
     expect(process.exitCode).toBe(1);
     expect(errLines.join("\n")).toContain(programs);
+    expect(errLines.join("\n")).toContain("each target marked error was left untouched");
     expect(readFileSync(programs, "utf8")).toBe(garbage);
     expect(existsSync(`${programs}.keryx-backup`)).toBe(false);
     const report = await runHerdr("install", {}, deps);
     expect(report.targets[0]?.action).toBe("error");
     expect(report.targets[0]?.reason).toContain(programs);
+  });
+
+  test("an invalid programs.json stops install: the icon and the template are not written either", async () => {
+    makeHomes();
+    writeFileSync(programs, "nope");
+    const report = await runHerdr("install", {}, deps);
+    expect(actions(report)).toEqual({ programs: "error", icon: "skipped", template: "skipped" });
+    expect(report.targets[1]?.reason).toContain("programs.json");
+    expect(existsSync(icon)).toBe(false);
+    expect(existsSync(template)).toBe(false);
+  });
+
+  test("a symlinked programs.json stays a link; the change lands in its target", async () => {
+    makeHomes();
+    const dotfiles = path.join(root, "dotfiles");
+    mkdirSync(dotfiles, { recursive: true });
+    const real = path.join(dotfiles, "programs.json");
+    writeFileSync(real, JSON.stringify({ shells: ["zsh"] }));
+    symlinkSync(real, programs);
+    await runHerdr("install", {}, deps);
+    expect(lstatSync(programs).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(readFileSync(real, "utf8")).programs.keryx).toEqual(HERDR_PROGRAM_ENTRY);
+  });
+
+  test("a dangling symlink at the backup path is never written through", async () => {
+    makeHomes();
+    writeFileSync(programs, JSON.stringify({ shells: ["zsh"] }));
+    const elsewhere = path.join(root, "elsewhere.json");
+    symlinkSync(elsewhere, `${programs}.keryx-backup`);
+    await runHerdr("install", {}, deps);
+    expect(existsSync(elsewhere)).toBe(false);
+    expect(JSON.parse(readFileSync(programs, "utf8")).programs.keryx).toEqual(HERDR_PROGRAM_ENTRY);
   });
 
   test("a non-object programs value is invalid too", async () => {
@@ -309,12 +342,15 @@ describe("herdr remove", () => {
     expect(snapshot(root)).toEqual(before);
   });
 
-  test("an invalid programs.json fails remove and stays byte-identical", async () => {
+  test("an invalid programs.json fails remove, stays byte-identical and stops the other removals", async () => {
     makeHomes();
+    await runHerdr("install", {}, deps);
     writeFileSync(programs, "nope");
     const report = await runHerdr("remove", {}, deps);
-    expect(report.targets[0]?.action).toBe("error");
+    expect(actions(report)).toEqual({ programs: "error", icon: "skipped", template: "skipped" });
     expect(readFileSync(programs, "utf8")).toBe("nope");
+    expect(readFileSync(icon, "utf8")).toBe(HERDR_ICON_SVG);
+    expect(readFileSync(template, "utf8")).toBe(HERDR_TEMPLATE_MD);
   });
 });
 
@@ -355,6 +391,34 @@ describe("herdr CLI", () => {
       process.exitCode = 0;
       await herdrCommand(["install", "--wat"], deps);
       expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = original;
+      console.log = log;
+    }
+  });
+
+  test("each subcommand takes only the flags its usage lists", async () => {
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...a: unknown[]) => void errors.push(a.join(" "));
+    const log = console.log;
+    console.log = () => undefined;
+    try {
+      for (const args of [["remove", "--force"], ["status", "--force"], ["status", "--dry-run"]]) {
+        process.exitCode = 0;
+        await herdrCommand(args, deps);
+        expect(process.exitCode).toBe(1);
+      }
+      expect(errors).toEqual([
+        "Unknown option for herdr remove: --force",
+        "Unknown option for herdr status: --force",
+        "Unknown option for herdr status: --dry-run",
+      ]);
+      process.exitCode = 0;
+      await herdrCommand(["install", "--dry-run", "--force", "--json"], deps);
+      await herdrCommand(["remove", "--dry-run", "--json"], deps);
+      await herdrCommand(["status", "--json"], deps);
+      expect(process.exitCode ?? 0).toBe(0);
     } finally {
       console.error = original;
       console.log = log;

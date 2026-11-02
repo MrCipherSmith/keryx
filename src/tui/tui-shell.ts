@@ -344,7 +344,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
-import { frameSubmittedLine, hcTranscriptEcho } from "./hc-message";
+import { frameSubmittedLine, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -7461,11 +7461,15 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         for (const m of history.filter((x) => x.role === "user").slice(-5)) {
-          const t = m.content.length > 100 ? `${m.content.slice(0, 97)}…` : m.content;
+          // An hc message is stored framed (flow 481); show it as the live echo did, sender and
+          // body, so the long frame header does not fill the 100 characters.
+          const hc = hcHistoryEcho(m.content);
+          const text = hc?.line ?? m.content;
+          const t = text.length > 100 ? `${text.slice(0, 97)}…` : text;
           transcript.add(
             new otui.TextRenderable(r, {
               id: `sessu${uid++}`,
-              content: otui.t`${dimChunk(otui, `  ❯ ${t}`)}`,
+              content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${t}`)}`,
             }),
           );
         }
@@ -7606,8 +7610,12 @@ export async function launchTuiAgentShell(opts: {
      * right home for it. Used for the startup notices only: a mid-session
      * message has a transcript to belong to.
      */
+    // A positional prompt (flow 481: `runLine(initialPrompt)` below) and the read-only view both
+    // remove the splash in this same synchronous run, before any frame could draw what it holds.
+    // Startup notices then go to the transcript, never into a splash nobody will see.
+    const splashRemovedBeforeFirstFrame = viewedReadOnly || opts.takeInitialPrompt !== undefined;
     const announceStartupNotice = (text: string): void => {
-      if (splash?.addStatusIfShown(text) !== true) {
+      if (splashRemovedBeforeFirstFrame || splash?.addStatusIfShown(text) !== true) {
         io.onSystem?.(`${text}\n`);
       }
     };
@@ -9720,6 +9728,15 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
+        // Flow 481: a line herdr-core typed for another agent goes to the main queue, which re-enters
+        // runLine and frames it when it drains. The recipient dialog below is for a person at the
+        // keyboard, and its Side-1 answer would hand the raw, unframed text to a worker outside the
+        // main history. A Telegram line is the operator's, so it keeps the dialog.
+        if (source === undefined && looksLikeHcMessage(line)) {
+          const position = turnLoop.enqueue(line, displayLine, source);
+          io.onSystem?.(`◇ agent message queued as q${position}; the main agent reads it when this turn ends.\n`);
+          return;
+        }
         void (async () => {
           let blockedByOpenDialog = false;
           const chosen = await journaledPick(
@@ -10567,15 +10584,19 @@ export async function launchTuiAgentShell(opts: {
       }
       // Flow 481 T8: an `<hc from="…">…</hc>` line is another agent talking, not the
       // operator, so it is labelled with the sender instead of the user's own mark.
-      const hcEcho = hcTranscriptEcho(line);
+      // A Telegram line is the operator's own words, whatever its shape: it keeps
+      // its `tg ❯` mark and is never treated as an agent message.
+      const agentShaped = source === undefined && looksLikeHcMessage(line);
+      const hcEcho = source === undefined ? hcTranscriptEcho(line) : undefined;
+      const echoLine = hcEcho !== undefined ? summarizeSubmittedLine(hcEcho.line) : displayLine;
       const userEcho = appendUserEcho(otui, r, transcript, {
         id: `ub${uid++}`,
-        line: hcEcho !== undefined ? summarizeSubmittedLine(hcEcho.line) : displayLine,
+        line: echoLine,
         fullWidth: true,
         // Flow 376: a line from the Telegram topic says so (`tg ❯ ...`).
-        ...(hcEcho !== undefined ? { marker: hcEcho.marker } : source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : {}),
+        ...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : hcEcho !== undefined ? { marker: hcEcho.marker } : {}),
       });
-      chrome.registerUserPrompt(userEcho, displayLine);
+      chrome.registerUserPrompt(userEcho, echoLine, hcEcho?.marker);
       transcript.add(
         new otui.TextRenderable(r, {
           id: `h${uid++}`,
@@ -10586,8 +10607,9 @@ export async function launchTuiAgentShell(opts: {
 
       // Hard pre-router: "обогати вики" → list pages + interactive plan, then run
       // wikiEnrich in-process (no model thrash on search_code).
-      // (Not for a line from Telegram: that path opens a local picker nobody there can answer.)
-      if (source === undefined && isWikiEnrichIntent(line)) {
+      // (Not for a line from Telegram: that path opens a local picker nobody there can answer.
+      // Not for an agent's hc message either, for the same reason: it goes to the model framed.)
+      if (source === undefined && !agentShaped && isWikiEnrichIntent(line)) {
         const startedAt = Date.now();
         const operation = foregroundOperation.begin();
         // The busy flag is `startBusy`/`stopBusy` now (the chrome owns it); the
@@ -10977,8 +10999,9 @@ export async function launchTuiAgentShell(opts: {
         // wakes up from its `await`, a NEW turn may already be active, whose
         // signal would say nothing about whether THIS turn was cancelled.
         // Flow 481 T8: an hc agent message reaches the model framed as one (and the
-        // history stores that framed text); every other line is passed as typed.
-        const modelLine = frameSubmittedLine(line);
+        // history stores that framed text); every other line is passed as typed. A
+        // Telegram line is the operator's own words and is never framed.
+        const modelLine = source === undefined ? frameSubmittedLine(line) : line;
         void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
         signal: turnSignal,
         recovery: {},
@@ -11478,6 +11501,9 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
+    // herdr-core: remove the status first (sync, never throws, no-op outside a herdr-core pane), so a
+    // slow or failing teardown await below cannot leave a stale `working`/`blocked` in the core.
+    hostStatus.exit();
     const preservation = await finalizeShell?.();
     // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
     // Idempotent: the destroy hook above usually started it already.
@@ -11490,7 +11516,6 @@ export async function launchTuiAgentShell(opts: {
       releaseLease: () => sessionLease.release(),
     });
     await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
-    hostStatus.exit(); // herdr-core: remove the status (no-op outside a herdr-core pane)
     try {
       renderer?.destroy();
     } catch {

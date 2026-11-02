@@ -16,7 +16,8 @@
 // A target whose home directory does not exist is `skipped` and nothing is
 // created: Herdr not being installed is not something `keryx` should paper over.
 
-import { copyFile, readFile, rmdir, stat, unlink } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { copyFile, lstat, readFile, realpath, rmdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { isNotFound, writeFileAtomic } from "../lib/fs";
@@ -184,11 +185,20 @@ function serialize(doc: unknown): string {
   return `${JSON.stringify(doc, null, 2)}\n`;
 }
 
-/** Copy the current file beside itself once, before the first modification. */
+/**
+ * Copy the current file beside itself once, before the first modification. Any existing entry at
+ * the backup path counts, a dangling symlink included (lstat, not a read), and the copy refuses
+ * to replace whatever appears there in between (COPYFILE_EXCL), so it never writes through a link.
+ */
 async function backupOnce(file: string): Promise<void> {
   const backup = `${file}${BACKUP_SUFFIX}`;
-  if ((await readIfExists(backup)) !== undefined) return;
-  await copyFile(file, backup);
+  if (await lstat(backup).then(() => true, () => false)) return;
+  await copyFile(file, backup, fsConstants.COPYFILE_EXCL);
+}
+
+/** Where a write to `file` should land: its link target when it is a symlink (dotfile managers), so the link survives. */
+async function writeTarget(file: string): Promise<string> {
+  return realpath(file).catch(() => file);
 }
 
 function skipReason(home: string, what: string): string {
@@ -219,7 +229,7 @@ async function installPrograms(p: Paths, opts: HerdrOptions): Promise<HerdrRow> 
   if (!opts.dryRun) {
     await backupOnce(p.programs);
     const next = { ...loaded.doc, programs: { ...loaded.programs, keryx: HERDR_PROGRAM_ENTRY } };
-    await writeFileAtomic(p.programs, serialize(next));
+    await writeFileAtomic(await writeTarget(p.programs), serialize(next));
   }
   return row("updated", existing === undefined ? "added programs.keryx" : "overwrote programs.keryx (--force)");
 }
@@ -258,7 +268,7 @@ async function removePrograms(p: Paths, opts: HerdrOptions): Promise<HerdrRow> {
   if (!opts.dryRun) {
     await backupOnce(p.programs);
     const { keryx: _own, ...rest } = loaded.programs;
-    await writeFileAtomic(p.programs, serialize({ ...loaded.doc, programs: rest }));
+    await writeFileAtomic(await writeTarget(p.programs), serialize({ ...loaded.doc, programs: rest }));
   }
   return row("removed", "deleted programs.keryx; programs.json itself is kept");
 }
@@ -349,14 +359,27 @@ export async function runHerdr(command: HerdrCommandName, opts: HerdrOptions = {
   };
 
   const rows: HerdrRow[] = [];
+  // An invalid programs.json stops install and remove before anything else is written, so the
+  // run either changes the set as a whole or names the one file that blocked it.
+  const stopped = (target: HerdrTarget, file: string): HerdrRow => ({
+    target,
+    path: file,
+    action: "skipped",
+    reason: "not written: programs.json could not be changed (see above)",
+  });
+  let programsFailed = false;
   if (!appOk) {
     rows.push(appSkip("programs", p.programs), appSkip("icon", p.icon));
   } else if (command === "install") {
-    rows.push(await guarded("programs", p.programs, () => installPrograms(p, eff)));
-    rows.push(await guarded("icon", p.icon, () => installFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff)));
+    const programs = await guarded("programs", p.programs, () => installPrograms(p, eff));
+    programsFailed = programs.action === "error";
+    rows.push(programs);
+    rows.push(programsFailed ? stopped("icon", p.icon) : await guarded("icon", p.icon, () => installFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff)));
   } else if (command === "remove") {
-    rows.push(await guarded("programs", p.programs, () => removePrograms(p, eff)));
-    rows.push(await guarded("icon", p.icon, () => removeFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff)));
+    const programs = await guarded("programs", p.programs, () => removePrograms(p, eff));
+    programsFailed = programs.action === "error";
+    rows.push(programs);
+    rows.push(programsFailed ? stopped("icon", p.icon) : await guarded("icon", p.icon, () => removeFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff)));
   } else {
     rows.push(await guarded("programs", p.programs, () => statusPrograms(p)));
     rows.push(await guarded("icon", p.icon, () => statusFile("icon", p.icon, HERDR_ICON_SVG)));
@@ -364,6 +387,8 @@ export async function runHerdr(command: HerdrCommandName, opts: HerdrOptions = {
 
   if (!coreOk) {
     rows.push(coreSkip);
+  } else if (programsFailed) {
+    rows.push(stopped("template", p.template));
   } else if (command === "install") {
     rows.push(await guarded("template", p.template, () => installFile("template", p.template, HERDR_TEMPLATE_MD, "keryx.md", eff)));
   } else if (command === "remove") {
@@ -389,7 +414,7 @@ export function renderHerdrReport(report: HerdrReport): string {
   lines.push("");
   const actions = report.targets.map((row) => row.action);
   if (hasHerdrError(report)) {
-    lines.push("Finished with errors; the files named above were left untouched.");
+    lines.push("Finished with errors; each target marked error was left untouched.");
   } else if (report.command === "install" && actions.every((a) => a === "unchanged")) {
     lines.push("Already installed: nothing to change.");
   } else if (report.command === "install" && actions.includes("kept")) {
@@ -412,15 +437,20 @@ Targets (config home honours XDG_CONFIG_HOME, default ~/.config):
   template  herdr-core/templates/keryx.md   herdr-core agent template (command: keryx shell)
 
 A target whose herdr-app or herdr-core directory does not exist is skipped and
-nothing is created. An invalid programs.json stops install with a non-zero exit
-and is left byte-identical. A programs.keryx entry, keryx.svg or keryx.md that
+nothing is created. An invalid programs.json stops install and remove with a
+non-zero exit before anything is written, and is left byte-identical. A programs.keryx entry, keryx.svg or keryx.md that
 differs from keryx's own is kept unless --force. The first change to an existing
 programs.json leaves programs.json${BACKUP_SUFFIX} beside it. remove deletes only
 what still equals keryx's own and never deletes programs.json itself.
 `);
 }
 
-const FLAGS = new Set(["--dry-run", "--force", "--json"]);
+/** The flags each subcommand takes, as its usage line lists them; anything else is refused. */
+const FLAGS: Record<HerdrCommandName, ReadonlySet<string>> = {
+  install: new Set(["--dry-run", "--force", "--json"]),
+  remove: new Set(["--dry-run", "--json"]),
+  status: new Set(["--json"]),
+};
 
 export async function herdrCommand(args: string[] = [], deps: HerdrDeps = {}): Promise<void> {
   const sub = args[0];
@@ -435,7 +465,7 @@ export async function herdrCommand(args: string[] = [], deps: HerdrDeps = {}): P
     return;
   }
   const rest = args.slice(1);
-  const unknown = rest.find((arg) => !FLAGS.has(arg));
+  const unknown = rest.find((arg) => !FLAGS[sub].has(arg));
   if (unknown !== undefined) {
     console.error(`Unknown option for herdr ${sub}: ${unknown}`);
     process.exitCode = 1;

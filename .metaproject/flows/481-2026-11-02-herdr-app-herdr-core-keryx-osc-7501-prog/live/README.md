@@ -15,6 +15,12 @@ limit for unix socket paths. `keryx-wrapper.sh` is the `keryx` the isolated core
 restores `XDG_CONFIG_HOME` (provider credentials), runs from a scratch project and fixes
 provider/model/`--ask` for `shell` so no picker can hold the start.
 
+To rerun: make a scratch directory with `xdg-config/`, `project/` and `bin/keryx` (a link to
+`keryx-wrapper.sh`), export `K481_SCRATCH` as its path, and drive the session with `hci.sh`.
+`hc` and `bun` come from PATH (`K481_HC`, `K481_BUN` override); the worktree defaults to the
+checkout holding the scripts (`K481_WORKTREE` overrides). The run above used the scripts with
+those values fixed to the author's paths.
+
 The template and the Herdr app entry were installed into the scratch config with the dev
 `keryx herdr install` (`programs created`, `icon created`, `template created`); `hc templates`
 then listed `keryx` (`command: keryx shell`).

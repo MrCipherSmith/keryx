@@ -5,6 +5,7 @@ import {
   encodeOsc7501,
   HERDR_CORE_CLEAR,
   herdrCoreStateFor,
+  MSG_REDACT_WINDOW_CHARS,
   prepareStatusMessage,
   type HerdrCoreState,
 } from "./herdr-core-status";
@@ -46,6 +47,15 @@ describe("encodeOsc7501", () => {
     expect(() => encodeOsc7501({ state: "working", kind: "permission" })).toThrow(/blocked/);
     expect(() => encodeOsc7501({ state: "working", progress: 101 })).toThrow(/progress/);
     expect(() => encodeOsc7501({ state: "working", progress: 1.5 })).toThrow(/progress/);
+    expect(() => encodeOsc7501({ state: "working", progress: -1 })).toThrow(/progress/);
+    expect(() => encodeOsc7501({ state: "blocked", kind: "bogus" as "auth" })).toThrow(/unknown kind/);
+  });
+
+  test("the remaining branches: empty app, auth kind, progress bounds", () => {
+    expect(encodeOsc7501({ state: "idle" }, "")).toBe("\x1b]7501;state=idle\x1b\\");
+    expect(encodeOsc7501({ state: "blocked", kind: "auth" })).toBe("\x1b]7501;state=blocked:kind=auth:app=keryx\x1b\\");
+    expect(encodeOsc7501({ state: "working", progress: 0 })).toBe("\x1b]7501;state=working:progress=0:app=keryx\x1b\\");
+    expect(encodeOsc7501({ state: "working", progress: 100 })).toBe("\x1b]7501;state=working:progress=100:app=keryx\x1b\\");
   });
 });
 
@@ -96,6 +106,24 @@ describe("prepareStatusMessage (AC4)", () => {
     expect(Array.from(out)).toHaveLength(200);
     expect(out).toBe("😀".repeat(200));
   });
+
+  test("redacts before the 200-character cut: a secret straddling the cut leaves no prefix behind", () => {
+    // An exact-match redactor only recognises the WHOLE token. Cutting first would keep `ghp_AAA…`.
+    const out = prepareStatusMessage(`${"x".repeat(190)} ${FAKE_TOKEN}`, (s) => s.replace(FAKE_TOKEN, "[REDACTED]"));
+    expect(out).not.toContain("ghp_");
+    expect(out.endsWith("[REDACTED]".slice(0, 200 - 191))).toBe(true);
+  });
+
+  test("the redactor sees a bounded window, far above the 200 kept", () => {
+    let seen = -1;
+    const out = prepareStatusMessage("y".repeat(1_000_000), (s) => {
+      seen = s.length;
+      return s;
+    });
+    expect(seen).toBe(MSG_REDACT_WINDOW_CHARS);
+    expect(MSG_REDACT_WINDOW_CHARS).toBeGreaterThan(1000);
+    expect(out).toBe("y".repeat(200));
+  });
 });
 
 describe("createHerdrCoreReporter", () => {
@@ -133,6 +161,31 @@ describe("createHerdrCoreReporter", () => {
     });
     expect(() => r.report({ state: "working" })).not.toThrow();
     expect(() => r.clear()).not.toThrow();
+  });
+
+  test("a failed write is not remembered: the next identical report tries again", () => {
+    const attempts: string[] = [];
+    let fail = true;
+    const r = createHerdrCoreReporter({
+      env: { HC_TERMINAL_ID: "t1" },
+      write: (b) => {
+        attempts.push(b);
+        if (fail) throw new Error("EAGAIN");
+      },
+    });
+    r.report({ state: "working" });
+    fail = false;
+    r.report({ state: "working" });
+    r.report({ state: "working" });
+    expect(attempts).toHaveLength(2);
+  });
+
+  test("clear forgets the last report on its own: a second clear writes again", () => {
+    const writes: string[] = [];
+    const r = createHerdrCoreReporter({ env: { HC_TERMINAL_ID: "t1" }, write: (b) => writes.push(b) });
+    r.clear();
+    r.clear();
+    expect(writes).toEqual([encodeOsc7501(HERDR_CORE_CLEAR), encodeOsc7501(HERDR_CORE_CLEAR)]);
   });
 });
 

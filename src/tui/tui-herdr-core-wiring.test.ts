@@ -82,6 +82,24 @@ describe("createAgentHostStatus", () => {
     expect(writes).toHaveLength(count);
   });
 
+  test("exit before ready writes only the clear; a later markReady emits nothing", () => {
+    const { host, writes } = harness();
+    host.status("running");
+    host.exit();
+    host.markReady();
+    host.status("done");
+    expect(writes).toEqual([encodeOsc7501({ state: "clear" })]);
+  });
+
+  test("markReady after exit cannot bring the status back", () => {
+    const { host, writes } = harness();
+    host.markReady();
+    host.exit();
+    const count = writes.length;
+    host.markReady();
+    expect(writes).toHaveLength(count);
+  });
+
   test("inert without HC_TERMINAL_ID", () => {
     const { host, writes } = harness({});
     host.status("running");
@@ -166,6 +184,27 @@ describe("tui-shell wiring (source audit)", () => {
     const exits = source.split("hostStatus.exit();").length - 1;
     expect(releases).toBeGreaterThan(0);
     expect(exits).toBe(releases);
-    expect(source).toMatch(/await herdr\.release\(\);[^\n]*\n\s*hostStatus\.exit\(\);/);
+  });
+
+  test("the shell's finally clears the status before its first await", () => {
+    expect(source).toMatch(
+      /\} finally \{\n(?:\s*\/\/[^\n]*\n)*\s*hostStatus\.exit\(\);\n\s*const preservation = await finalizeShell\?\.\(\);/,
+    );
+  });
+
+  test("with a positional prompt the startup notices go to the transcript, not the splash it removes", () => {
+    expect(source).toContain(
+      "const splashRemovedBeforeFirstFrame = viewedReadOnly || opts.takeInitialPrompt !== undefined;",
+    );
+    expect(source).toContain(
+      "if (splashRemovedBeforeFirstFrame || splash?.addStatusIfShown(text) !== true) {",
+    );
+    const decided = source.indexOf("const splashRemovedBeforeFirstFrame");
+    const notices = source.indexOf("hooks?.takeNotices?.()");
+    // The call, not the comment above the notice decision that names it.
+    const submitted = source.lastIndexOf("runLine(initialPrompt);");
+    expect(decided).toBeGreaterThan(-1);
+    expect(notices).toBeGreaterThan(decided);
+    expect(submitted).toBeGreaterThan(notices);
   });
 });

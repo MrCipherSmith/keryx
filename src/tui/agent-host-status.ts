@@ -11,8 +11,10 @@ import {
   type HerdrCoreAttention,
   type HerdrCoreReporter,
 } from "./herdr-core-status";
+import type { FleetWorkerStatus } from "./worker-fleet";
 
-export type MainAgentStatus = "queued" | "running" | "done" | "failed" | "blocked";
+/** The main agent shares the worker fleet's status vocabulary (`setMainAgent` feeds both). */
+export type MainAgentStatus = FleetWorkerStatus;
 
 export interface AgentHostStatus {
   /** Record a main-agent status; emitted only once the composer is ready. */
