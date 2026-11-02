@@ -20,6 +20,20 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+/**
+ * Leaves kept per run: the same size class as the proxy's 64 live terminators
+ * (`MAX_TERMINATORS`). Unbounded, every distinct host a wildcard allowlist let
+ * a contained command reach stayed resident (about 3 KB each) for the whole run.
+ * Least recently used goes first; an evicted host is simply issued again.
+ */
+export const MAX_CACHED_LEAVES = 64;
+
+/**
+ * Concurrent `openssl` issuances (two processes each). 100 distinct hosts at
+ * once used to start 100 issuances, 58 of them running openssl together.
+ */
+export const MAX_CONCURRENT_ISSUANCES = 4;
+
 /** Issued key material for one host. */
 export interface LeafCertificate {
   certPem: string;
@@ -135,6 +149,30 @@ export async function createRunCa(options: CreateRunCaOptions = {}): Promise<Run
   // is dropped on rejection so a transient openssl failure can be retried.
   const inflight = new Map<string, Promise<LeafCertificate>>();
 
+  // A counting semaphore over `issue`: at most MAX_CONCURRENT_ISSUANCES run, the rest wait in order.
+  let running = 0;
+  const waiting: Array<() => void> = [];
+  const acquire = (): Promise<void> => {
+    if (running < MAX_CONCURRENT_ISSUANCES) {
+      running += 1;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => waiting.push(resolve));
+  };
+  const release = (): void => {
+    const next = waiting.shift();
+    if (next) next(); // hand the slot straight over: `running` is unchanged
+    else running -= 1;
+  };
+  const issueLimited = async (key: string): Promise<LeafCertificate> => {
+    await acquire();
+    try {
+      return await issue(key);
+    } finally {
+      release();
+    }
+  };
+
   const issue = async (key: string): Promise<LeafCertificate> => {
     // A private working directory per issuance: two issuances (even for the same host
     // after a rejection) never share a key/CSR/cert/config file name.
@@ -181,12 +219,22 @@ export async function createRunCa(options: CreateRunCaOptions = {}): Promise<Run
     issueLeaf(host: string): Promise<LeafCertificate> {
       const key = host.toLowerCase();
       const hit = cache.get(key);
-      if (hit) return Promise.resolve(hit);
+      if (hit) {
+        // Refresh recency: a Map iterates in insertion order, so re-inserting makes this the newest.
+        cache.delete(key);
+        cache.set(key, hit);
+        return Promise.resolve(hit);
+      }
       const pending = inflight.get(key);
       if (pending) return pending;
-      const started = issue(key).then(
+      const started = issueLimited(key).then(
         (issued) => {
           cache.set(key, issued);
+          while (cache.size > MAX_CACHED_LEAVES) {
+            const oldest = cache.keys().next().value;
+            if (oldest === undefined) break;
+            cache.delete(oldest);
+          }
           inflight.delete(key);
           return issued;
         },

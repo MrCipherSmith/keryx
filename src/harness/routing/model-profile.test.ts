@@ -578,7 +578,7 @@ test("stripModelProfilesFromAuthJsonUnlocked: a concurrent write caught by the p
   expect(after.oauthGrants).toEqual({ grok: { method: "device-code", access: "tok", obtainedAt: "2026-01-01T00:00:00.000Z" } });
 });
 
-test("stripModelProfilesFromAuthJsonUnlocked: a collision on BOTH the attempt and the retry gives up — modelProfiles stays in auth.json (harmless; the next locked write re-migrates it), and the last writer's content is never clobbered", async () => {
+test("stripModelProfilesFromAuthJsonUnlocked: a collision on EVERY attempt gives up — modelProfiles stays in auth.json (harmless; the next locked write re-migrates it), and the last writer's content is never clobbered", async () => {
   const dir = await tempDir("keryx-strip-giveup-");
   const before = { provider: "anthropic", modelProfiles: { [profileKey("legacy", "old-model")]: legacyProfileFixture() } };
   await writeFile(shellConfigPath(dir), `${JSON.stringify(before, null, 2)}\n`, { mode: 0o600 });
@@ -594,10 +594,12 @@ test("stripModelProfilesFromAuthJsonUnlocked: a collision on BOTH the attempt an
 
   stripModelProfilesFromAuthJsonUnlocked(dir, raceHook);
 
-  expect(hookCalls).toBe(2); // one attempt, one retry — never more than one retry
+  // Bounded retries (`updateConfigFile`'s attempt cap), then it gives up.
+  expect(hookCalls).toBeGreaterThan(1);
+  expect(hookCalls).toBeLessThanOrEqual(8);
   const after = JSON.parse(await readFile(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
   expect("modelProfiles" in after).toBe(true); // gave up — never wrote, left in place
-  expect(after.model).toBe("race-2"); // the last concurrent write is exactly what's on disk, untouched by the strip
+  expect(after.model).toBe(`race-${hookCalls}`); // the last concurrent write is exactly what's on disk, untouched by the strip
 });
 
 test("concurrency: two providers refreshing at the same time both persist their entries — neither clobbers the other", async () => {

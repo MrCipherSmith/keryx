@@ -10,7 +10,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, type ConfigReadResult } from "./config-dir";
-import { updateConfigFile } from "./config-update";
+import { updateConfigFile, type ConfigUpdateOutcome } from "./config-update";
 
 export interface ShellConfig {
   provider?: string;
@@ -250,9 +250,14 @@ export function loadShellConfig(dir?: string): ShellConfig {
  * it — the reason the earlier `Atomics.wait` lock (PR #718) was removed.
  *
  * `mutate` may run more than once; it must derive its result from its
- * argument alone.
+ * argument alone. Returns the outcome so a caller whose user expects the
+ * write can report `"failed"` (the file kept changing, or the write threw)
+ * instead of assuming it landed.
  */
-export function updateShellConfig(mutate: (current: ShellConfig) => ShellConfig | undefined, dir?: string): void {
+export function updateShellConfig(
+  mutate: (current: ShellConfig) => ShellConfig | undefined,
+  dir?: string,
+): ConfigUpdateOutcome {
   try {
     // `ensureKeryxConfigDir`, not `mkdirSync`: this is usually the first writer
     // to create the shared directory, and creating it mode-less under `umask
@@ -267,12 +272,13 @@ export function updateShellConfig(mutate: (current: ShellConfig) => ShellConfig 
     // has no recovery. Rename also sidesteps the "existing file keeps its old
     // mode" trap `writeOwnerOnlyFile` had to `chmodSync` around: the renamed-in
     // temp file's 0600 mode becomes the destination's mode outright.
-    updateConfigFile(shellConfigPath(dir), (read) => {
+    return updateConfigFile(shellConfigPath(dir), (read) => {
       const next = mutate(parseShellConfig(read));
       return next === undefined ? undefined : `${JSON.stringify(withLegacyKeyMigrated(next), null, 2)}\n`;
     });
   } catch {
     // best-effort persistence — a failure just means the user re-enters next time
+    return "failed";
   }
 }
 
@@ -284,9 +290,8 @@ export function updateShellConfig(mutate: (current: ShellConfig) => ShellConfig 
  * must use `updateShellConfig` instead of reading the map, editing it and
  * passing the whole map here: the map it read may already be stale.
  *
- * `model-profile.ts`'s one-time `modelProfiles` migration strip still writes
- * this file on its own lock-free read/verify/write
- * (`stripModelProfilesFromAuthJsonUnlocked`); see that function's doc.
+ * `model-profile.ts`'s one-time `modelProfiles` migration strip also goes
+ * through `updateConfigFile` (`stripModelProfilesFromAuthJsonUnlocked`).
  */
 export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void {
   updateShellConfig((current) => ({ ...current, ...patch }), dir);

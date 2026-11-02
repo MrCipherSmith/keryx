@@ -11,7 +11,7 @@
 import path from "node:path";
 import { pathExists, writeFileAtomic } from "../../lib/fs";
 import { readJsonObjectFile } from "../../lib/json";
-import { loadShellConfig, saveShellConfig } from "../../lib/shell-config";
+import { loadShellConfig, saveShellConfig, updateShellConfig } from "../../lib/shell-config";
 import { isRoutingCategory, ROUTING_CATEGORIES, type CategoryAssignment, type RoutingCategory, type RoutingTable } from "./table";
 import { isProjectRoutingApproved, ROUTING_TRUST_NOTICE } from "./trust";
 
@@ -227,6 +227,19 @@ export async function saveRoutingConfig(layer: RoutingConfigLayer, location: Rou
 }
 
 /**
+ * Change the user layer's table as it is on disk when the write happens. The
+ * table is validated and rewritten inside `updateShellConfig`'s mutate, never
+ * read first and saved whole: a category another process set in between was
+ * dropped by the stale whole-table write.
+ */
+function updateUserRoutingTable(location: RoutingConfigLocation, change: (table: RoutingTable) => RoutingTable): void {
+  updateShellConfig((current) => {
+    const table = current.routing === undefined ? {} : validateRoutingConfig({ categories: current.routing }).table;
+    return { ...current, routing: change(table) };
+  }, location.userConfigDir);
+}
+
+/**
  * Set one category's assignment in a layer, preserving every other category
  * already set there. Merges against `loadRoutingConfigRaw` (AC11 note on that
  * function): an unapproved project file's OTHER entries must survive a write
@@ -238,12 +251,23 @@ export async function setRoutingCategory(
   category: RoutingCategory,
   assignment: CategoryAssignment,
 ): Promise<void> {
+  if (layer === "user") {
+    updateUserRoutingTable(location, (table) => ({ ...table, [category]: assignment }));
+    return;
+  }
   const current = await loadRoutingConfigRaw(layer, location);
   await saveRoutingConfig(layer, location, { ...current.table, [category]: assignment });
 }
 
 /** Clear one category back to unset (`session-default` falls through to it) in a layer. Same raw-merge-base note as `setRoutingCategory`. */
 export async function unsetRoutingCategory(layer: RoutingConfigLayer, location: RoutingConfigLocation, category: RoutingCategory): Promise<void> {
+  if (layer === "user") {
+    updateUserRoutingTable(location, (table) => {
+      const { [category]: _gone, ...kept } = table;
+      return kept;
+    });
+    return;
+  }
   const current = await loadRoutingConfigRaw(layer, location);
   const { [category]: _removed, ...rest } = current.table;
   await saveRoutingConfig(layer, location, rest);

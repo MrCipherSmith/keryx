@@ -28,8 +28,9 @@ import {
   ensureKeryxConfigDir,
   isDefiniteAbsence,
   readConfigFile,
-  writeOwnerOnlyFileAtomic,
+  type ConfigReadResult,
 } from "../lib/config-dir";
+import { updateConfigFile } from "../lib/config-update";
 import { parseJsonTolerant, type ResolvedMcpServer } from "./config";
 import { displayUrl } from "./http-headers";
 
@@ -165,27 +166,68 @@ export type TrustResult =
   | { readonly ok: true; readonly file: string }
   | { readonly ok: false; readonly error: string };
 
+/** The approvals in `read`, by the same fail-closed rules as {@link loadTrustStore}. */
+function approvalsOf(read: ConfigReadResult): Record<string, string> {
+  if (!read.ok) return {};
+  try {
+    const approvals = (parseJsonTolerant(read.text) as McpTrustStore).approvals;
+    const clean: Record<string, string> = {};
+    for (const [key, value] of Object.entries(approvals ?? {})) {
+      if (typeof value === "string") clean[key] = value;
+    }
+    return clean;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Change the approvals as they are on disk at write time, under the store lock
+ * (`updateConfigFile`). Approving or revoking used to load the map, edit it and
+ * rename a whole new file over the old one, so two keryx processes approving
+ * different servers at once each wrote a map built from the same snapshot and
+ * one approval vanished (or a revoked one came back).
+ */
+function updateApprovals(
+  configDir: string | undefined,
+  change: (approvals: Record<string, string>) => void,
+  refuseUnreadable: boolean,
+): TrustResult {
+  const file = trustFile(configDir);
+  let unreadable: string | undefined;
+  try {
+    const outcome = updateConfigFile(file, (read) => {
+      unreadable = undefined;
+      if (refuseUnreadable && !read.ok && !isDefiniteAbsence(read.reason)) {
+        unreadable = read.reason;
+        return undefined;
+      }
+      const approvals = approvalsOf(read);
+      change(approvals);
+      return `${JSON.stringify({ approvals }, null, 2)}\n`;
+    });
+    if (unreadable !== undefined) return { ok: false, error: `${file} could not be read (${unreadable}); nothing was written` };
+    if (outcome === "failed") {
+      return { ok: false, error: `${file} kept changing under the write; nothing was written. Try again` };
+    }
+    return { ok: true, file };
+  } catch (cause) {
+    return { ok: false, error: `${file} could not be written: ${cause instanceof Error ? cause.message : String(cause)}` };
+  }
+}
+
 /** Record approval for exactly this server as it is written today. */
 export function approveServer(server: ResolvedMcpServer, configDir?: string): TrustResult {
-  const file = trustFile(configDir);
-  const read = readConfigFile(file);
-  if (!read.ok && !isDefiniteAbsence(read.reason)) {
-    return { ok: false, error: `${file} could not be read (${read.reason}); nothing was written` };
-  }
-
-  const approvals = loadTrustStore(configDir);
-  approvals[trustKey(server)] = serverFingerprint(server);
-  writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ approvals }, null, 2)}\n`);
-  return { ok: true, file };
+  return updateApprovals(configDir, (approvals) => {
+    approvals[trustKey(server)] = serverFingerprint(server);
+  }, true);
 }
 
 /** Withdraw approval. A server no longer approved is not started. */
 export function revokeServer(server: ResolvedMcpServer, configDir?: string): TrustResult {
-  const file = trustFile(configDir);
-  const approvals = loadTrustStore(configDir);
-  delete approvals[trustKey(server)];
-  writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ approvals }, null, 2)}\n`);
-  return { ok: true, file };
+  return updateApprovals(configDir, (approvals) => {
+    delete approvals[trustKey(server)];
+  }, false);
 }
 
 /**
