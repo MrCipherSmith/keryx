@@ -1,0 +1,9 @@
+# Storage implementation and verification
+
+- HL-R03-W5-001: `addIncidentSupport` seeds one `attempt.submit` projection with all distinct incident Attempt IDs; the existing traversal deduplicates shared records, and criterion-waiver lookups deduplicate criterion IDs across revisions. SQL remains parameterized. The legitimate two-Intent, two-Attempt regression returns both incident Evidence, submissions and acceptance decisions, and measures exactly 2 waiver queries (distinct `fc` and `ic` IDs), down from 4. The shared path also serves attention reads.
+- Waiver coverage: `incident support retains the exact accepted waiver and submission on Flow and attention reads` creates a failed submitted criterion and accepts it with a human waiver, records later failing Evidence, then checks exact waiver, acceptance, submission and incident records in both projections and confirms the incident appears in each domain read.
+- W2-005, W2-007, W2-011: tests and exact-mutant evidence remain as recorded in `storage-red.md`; production managed binding code is unchanged.
+
+Verification: `bun test src/hub/work/storage.incidents.test.ts src/hub/work/storage.amendment-resolution.test.ts src/hub/work/storage.incremental.test.ts src/hub/work/storage.lifecycle.test.ts src/hub/work/storage.scenarios.test.ts src/hub/work/storage.test.ts src/hub/work/execution.reconciliation.test.ts src/hub/work/execution.test.ts` — 60 passed, 0 failed (before two additional domain-read assertions); final incident-only run — 3 passed, 0 failed, 21 assertions. Parent owns full lint/typecheck gates. No commits.
+
+Files modified: `src/hub/work/storage.ts`, `src/hub/work/storage.incidents.test.ts`. No project skill specifically covers Hub work storage. Routing: graph_used yes (previous phase; graph reported untracked node_modules), wiki_used not-relevant (explicit fix mechanism), ctx_used yes, raw_rg_used no.
