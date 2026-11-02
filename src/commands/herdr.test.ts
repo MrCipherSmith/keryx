@@ -198,6 +198,47 @@ describe("herdr install failure paths", () => {
     expect(JSON.parse(readFileSync(real, "utf8")).programs.keryx).toEqual(HERDR_PROGRAM_ENTRY);
   });
 
+  test("a dangling programs.json symlink stays a link on install; its target gets the content", async () => {
+    makeHomes();
+    const dotfiles = path.join(root, "dotfiles");
+    const real = path.join(dotfiles, "programs.json");
+    symlinkSync(path.join("..", "..", "dotfiles", "programs.json"), programs); // relative and dangling
+    const report = await runHerdr("install", {}, deps);
+    expect(report.targets[0]?.action).toBe("created");
+    expect(lstatSync(programs).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(readFileSync(real, "utf8")).programs.keryx).toEqual(HERDR_PROGRAM_ENTRY);
+  });
+
+  test("a symlinked icon and template stay links under --force; the content lands in the targets", async () => {
+    makeHomes();
+    mkdirSync(path.dirname(icon), { recursive: true });
+    mkdirSync(path.dirname(template), { recursive: true });
+    const dotfiles = path.join(root, "dotfiles");
+    mkdirSync(dotfiles, { recursive: true });
+    const realIcon = path.join(dotfiles, "keryx.svg");
+    const realTemplate = path.join(dotfiles, "keryx.md");
+    writeFileSync(realIcon, "<svg/>");
+    writeFileSync(realTemplate, "mine");
+    symlinkSync(realIcon, icon);
+    symlinkSync(realTemplate, template);
+    const report = await runHerdr("install", { force: true }, deps);
+    expect(report.targets.map((t) => t.action)).toEqual(["created", "updated", "updated"]);
+    expect(lstatSync(icon).isSymbolicLink()).toBe(true);
+    expect(lstatSync(template).isSymbolicLink()).toBe(true);
+    expect(readFileSync(realIcon, "utf8")).toBe(HERDR_ICON_SVG);
+    expect(readFileSync(realTemplate, "utf8")).toBe(HERDR_TEMPLATE_MD);
+  });
+
+  test("a dangling icon symlink is created through, and stays a link", async () => {
+    makeHomes();
+    mkdirSync(path.dirname(icon), { recursive: true });
+    const realIcon = path.join(root, "dotfiles", "keryx.svg");
+    symlinkSync(realIcon, icon);
+    await runHerdr("install", {}, deps);
+    expect(lstatSync(icon).isSymbolicLink()).toBe(true);
+    expect(readFileSync(realIcon, "utf8")).toBe(HERDR_ICON_SVG);
+  });
+
   test("a dangling symlink at the backup path is never written through", async () => {
     makeHomes();
     writeFileSync(programs, JSON.stringify({ shells: ["zsh"] }));

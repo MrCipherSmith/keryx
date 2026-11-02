@@ -17,8 +17,11 @@ provider/model/`--ask` for `shell` so no picker can hold the start.
 
 To rerun: make a scratch directory with `xdg-config/`, `project/` and `bin/keryx` (a link to
 `keryx-wrapper.sh`), export `K481_SCRATCH` as its path, and drive the session with `hci.sh`.
-`hc` and `bun` come from PATH (`K481_HC`, `K481_BUN` override); the worktree defaults to the
-checkout holding the scripts (`K481_WORKTREE` overrides). The run above used the scripts with
+`hc` and `bun` come from PATH (`K481_HC`, `K481_BUN` override). The wrapper resolves its own
+real path through the `bin/keryx` symlink and defaults the checkout to the one holding the
+script file; `K481_WORKTREE` overrides it, and the wrapper exits with a message when
+`src/cli.ts` is not under the checkout. The other variables: `K481_SCRATCH` (required),
+`K481_PROVIDER` and `K481_MODEL` (default deepseek / deepseek-chat). The run above used the scripts with
 those values fixed to the author's paths.
 
 The template and the Herdr app entry were installed into the scratch config with the dev

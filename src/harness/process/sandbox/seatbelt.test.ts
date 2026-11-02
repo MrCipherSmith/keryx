@@ -4,6 +4,7 @@ import path from "node:path";
 import { SANDBOX_EXEC_PATH, buildSeatbeltProfile, wrapSeatbelt } from "./seatbelt";
 import { defaultSandboxProfile, type SandboxProfile } from "./profile";
 import type { ContainedCommand } from "../executor";
+import { resolveShellSpawn } from "../shell-spawn";
 
 const workspaceWrite: SandboxProfile = {
   mode: "workspace-write",
@@ -106,6 +107,43 @@ describe("herdr-core and the sandbox profile", () => {
     expect(on).toContain("(allow default)");
     expect(on).not.toMatch(/\(deny network/);
   });
+
+  // With allowed domains configured, shellSandboxProfile returns `network: "restricted"` in EVERY
+  // mode (`workspace` included), so the profile denies all network but the loopback proxy and the
+  // herdr-core socket is unreachable. Built through resolveShellSpawn (the only caller of the
+  // private shellSandboxProfile), not with a hand-set network value; seatbelt output is darwin-only.
+  test.skipIf(process.platform !== "darwin")(
+    "allowed domains: workspace mode becomes restricted and denies the socket too",
+    async () => {
+      const keys = ["KERYX_SANDBOX_SHELL", "KERYX_SANDBOX_ALLOWED_DOMAINS"] as const;
+      const prev = keys.map((k) => process.env[k]);
+      process.env.KERYX_SANDBOX_SHELL = "workspace";
+      process.env.KERYX_SANDBOX_ALLOWED_DOMAINS = "api.github.com";
+      let netClose: (() => Promise<void>) | undefined;
+      try {
+        const resolved = await resolveShellSpawn("/work/repo", "hc ls", { PATH: "/usr/bin" }, { platform: "darwin", existsSync: () => true });
+        expect(resolved.ok).toBe(true);
+        if (!resolved.ok) return;
+        netClose = resolved.plan.netClose;
+        const sb = resolved.plan.spawnArgs[2] ?? "";
+        expect(sb).toContain("(allow default)");
+        expect(sb).toContain("(deny network*)");
+        // The only network allowance is the loopback proxy; nothing opens a unix socket.
+        expect(sb).not.toMatch(/\(allow network[^)]*\(?(remote unix|unix-socket|path-literal)/);
+        expect(sb).not.toContain("core.sock");
+        for (const line of sb.split("\n").filter((l) => l.includes("(allow network"))) {
+          expect(line).toMatch(/remote ip "localhost:\d+"/);
+        }
+      } finally {
+        await netClose?.();
+        keys.forEach((k, i) => {
+          const value = prev[i];
+          if (value === undefined) delete process.env[k];
+          else process.env[k] = value;
+        });
+      }
+    },
+  );
 
   test("no sandbox source file references any herdr-core variable (HC_*)", () => {
     const dir = import.meta.dir;

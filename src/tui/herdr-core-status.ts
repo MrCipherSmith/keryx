@@ -110,6 +110,10 @@ export function herdrCoreStateFor(
  */
 export const MSG_REDACT_WINDOW_CHARS = 4096;
 
+const PEM_BEGIN = "-----BEGIN";
+/** The mask `redactSensitiveText` puts over a secret (`src/security/redact.ts`). */
+const KEY_PLACEHOLDER = "[REDACTED:secret]";
+
 /**
  * Prepare a blocked-report message: collapse whitespace to one line, redact secrets,
  * cut to 200 characters on a code-point boundary. Base64 happens in the encoder.
@@ -126,7 +130,11 @@ export function prepareStatusMessage(
   // Redact BEFORE the 200-character cut so a secret straddling it is never half-kept,
   // but only over a bounded window (see MSG_REDACT_WINDOW_CHARS).
   const window = oneLine.length <= MSG_REDACT_WINDOW_CHARS ? oneLine : oneLine.slice(0, MSG_REDACT_WINDOW_CHARS);
-  const redacted = redact(window).replace(/\s+/g, " ").trim();
+  let redacted = redact(window).replace(/\s+/g, " ").trim();
+  // The private-key rule needs the END marker. A BEGIN marker that survives redaction is a key whose
+  // END lies outside the window (or is missing): none of it may reach the status line.
+  const keyStart = redacted.indexOf(PEM_BEGIN);
+  if (keyStart !== -1) redacted = `${redacted.slice(0, keyStart)}${KEY_PLACEHOLDER}`;
   const points = Array.from(redacted);
   return points.length <= MSG_MAX_CHARS ? redacted : points.slice(0, MSG_MAX_CHARS).join("");
 }

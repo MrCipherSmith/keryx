@@ -5,11 +5,25 @@
 # - `shell` gets a fixed provider/model so no interactive picker can hold the start
 #   (the herdr-core template command is still exactly `keryx shell`).
 #
-# K481_SCRATCH: the same scratch directory hci.sh uses (needs project/).
-# K481_WORKTREE: the keryx checkout to run; defaults to the checkout holding this script.
+# Environment:
+#   K481_SCRATCH  required; the same scratch directory hci.sh uses (needs project/).
+#   K481_WORKTREE the keryx checkout to run; default: the checkout holding this script's
+#                 real file (the script is usually run through a scratch bin/keryx symlink).
+#   K481_BUN      bun binary (default: bun on PATH).
+#   K481_PROVIDER, K481_MODEL  provider/model fixed for `shell` (deepseek / deepseek-chat).
 S="${K481_SCRATCH:?set K481_SCRATCH to the scratch directory of the run}"
-HERE=$(dirname "$0")
-WT="${K481_WORKTREE:-$(git -C "$HERE" rev-parse --show-toplevel)}"
+# Real directory of this script, resolved through symlinks (portable: no readlink -f).
+SELF="$0"
+while [ -h "$SELF" ]; do
+  LINK=$(readlink "$SELF")
+  case "$LINK" in
+    /*) SELF="$LINK" ;;
+    *) SELF="$(dirname "$SELF")/$LINK" ;;
+  esac
+done
+HERE=$(cd "$(dirname "$SELF")" && pwd -P) || exit 1
+WT="${K481_WORKTREE:-$(git -C "$HERE" rev-parse --show-toplevel 2>/dev/null)}"
+[ -n "$WT" ] && [ -f "$WT/src/cli.ts" ] || { echo "keryx checkout not found (looked for src/cli.ts in '${WT:-<none>}'); set K481_WORKTREE" >&2; exit 1; }
 BUN="${K481_BUN:-$(command -v bun)}"
 [ -n "$BUN" ] || { echo "bun not found on PATH; set K481_BUN" >&2; exit 1; }
 cd "$S/project" || exit 1

@@ -118,6 +118,21 @@ describe("prepareStatusMessage (AC4)", () => {
     expect(out.endsWith("[REDACTED]".slice(0, 200 - 191))).toBe(true);
   });
 
+  test("a private key whose END marker lies past the redaction window leaves no prefix behind", () => {
+    const key = `-----BEGIN RSA PRIVATE KEY----- ${"MIIEowIBAAKCAQEA".repeat(400)} -----END RSA PRIVATE KEY-----`;
+    expect(key.length).toBeGreaterThan(MSG_REDACT_WINDOW_CHARS);
+    const out = prepareStatusMessage(`cat key: ${key}`);
+    expect(out).not.toContain("BEGIN");
+    expect(out).not.toContain("MIIEow");
+    expect(out).toBe("cat key: [REDACTED:secret]");
+  });
+
+  test("a whole key inside the window is still masked by the redactor itself", () => {
+    const out = prepareStatusMessage("-----BEGIN PRIVATE KEY----- abc -----END PRIVATE KEY-----");
+    expect(out).not.toContain("BEGIN");
+    expect(out).not.toContain("abc");
+  });
+
   test("the redactor sees a bounded window, far above the 200 kept", () => {
     let seen = -1;
     const out = prepareStatusMessage("y".repeat(1_000_000), (s) => {

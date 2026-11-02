@@ -170,13 +170,19 @@ describe("tui-shell wiring (source audit)", () => {
     expect(source).toContain('setMainAgent("blocked", "ask", { kind: "question", text: req.question })');
   });
 
-  test("markReady runs after the resume-picker branch, before the session binds", () => {
+  test("markReady runs after the resume picker and the submit handler, before the positional prompt", () => {
     const picker = source.indexOf("opts.session?.pickOnStart === true && opts.session.resumeId === undefined");
     const ready = source.indexOf("hostStatus.markReady();");
+    const onSubmit = source.indexOf("chrome.onSubmit((line) => {");
+    const initial = source.indexOf("opts.takeInitialPrompt?.()");
     expect(picker).toBeGreaterThan(0);
     expect(ready).toBeGreaterThan(picker);
     expect(source.indexOf("hostStatus.markReady();", ready + 1)).toBe(-1);
-    expect(source.slice(ready, ready + 120)).toContain("bindSlateToLiveSession();");
+    // `idle` is the signal herdr-core types a line on: the handler that receives it must exist already,
+    // with no await between the two (a line typed on the first `idle` would be cleared and dropped).
+    expect(ready).toBeGreaterThan(onSubmit);
+    expect(initial).toBeGreaterThan(ready);
+    expect(source.slice(onSubmit, ready)).not.toMatch(/\bawait\b/);
   });
 
   test("every herdr.release() is paired with the composite's exit", () => {
@@ -202,7 +208,7 @@ describe("tui-shell wiring (source audit)", () => {
     const decided = source.indexOf("const splashRemovedBeforeFirstFrame");
     const notices = source.indexOf("hooks?.takeNotices?.()");
     // The call, not the comment above the notice decision that names it.
-    const submitted = source.lastIndexOf("runLine(initialPrompt);");
+    const submitted = source.lastIndexOf('runLine(initialPrompt, "operator", undefined, true);');
     expect(decided).toBeGreaterThan(-1);
     expect(notices).toBeGreaterThan(decided);
     expect(submitted).toBeGreaterThan(notices);

@@ -7590,16 +7590,20 @@ export async function launchTuiAgentShell(opts: {
       await done;
       return true;
     }
-    // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen
-    // any more: only now may herdr-core see `idle` (it types a template's first task on the first report).
-    hostStatus.markReady();
     bindSlateToLiveSession();
     splash = createSplashLifecycle({
       mount: () => mountEmptyTranscriptSplash(otui, r, transcript),
       initialHistoryLength: history.length,
     });
+    // A positional prompt (flow 481: `runLine(initialPrompt, …)` below) and the read-only view both
+    // remove the splash in this same synchronous run, before any frame could draw what it holds.
+    // Startup notices then go to the transcript, never into a splash nobody will see.
+    const splashRemovedBeforeFirstFrame = viewedReadOnly || opts.takeInitialPrompt !== undefined;
     /**
-     * A STARTUP notice that belongs to the splash while one is up.
+     * A STARTUP notice that belongs to the splash while one is up. With a
+     * positional prompt or the read-only view no splash survives to its first
+     * frame (`splashRemovedBeforeFirstFrame`), so the notice goes to the
+     * transcript instead.
      *
      * On a genuinely empty transcript a system line added to the transcript is
      * full-width by construction, so it can never be centred there and lands
@@ -7610,10 +7614,6 @@ export async function launchTuiAgentShell(opts: {
      * right home for it. Used for the startup notices only: a mid-session
      * message has a transcript to belong to.
      */
-    // A positional prompt (flow 481: `runLine(initialPrompt)` below) and the read-only view both
-    // remove the splash in this same synchronous run, before any frame could draw what it holds.
-    // Startup notices then go to the transcript, never into a splash nobody will see.
-    const splashRemovedBeforeFirstFrame = viewedReadOnly || opts.takeInitialPrompt !== undefined;
     const announceStartupNotice = (text: string): void => {
       if (splashRemovedBeforeFirstFrame || splash?.addStatusIfShown(text) !== true) {
         io.onSystem?.(`${text}\n`);
@@ -9441,6 +9441,10 @@ export async function launchTuiAgentShell(opts: {
       origin: "operator" | "task-notification" | "bus-message" = "operator",
       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
       source?: typeof TG_SOURCE,
+      // Flow 481: the positional startup prompt is a task for the model, whatever it starts with
+      // (`/Users/me/app/log.txt shows the failure`): it never reaches the slash-command router.
+      // A typed line keeps slash routing.
+      skipSlashRouting = false,
     ): void => {
       if (line.length === 0 && origin === "operator") {
         return;
@@ -9456,6 +9460,10 @@ export async function launchTuiAgentShell(opts: {
         splash?.removeIfShown();
       }
       const displayLine = summarizeSubmittedLine(line);
+      // Flow 481: another agent's line (herdr-core typed it), not the operator's. A Telegram line is
+      // the operator's whatever its shape. Decided once: the busy branch and the wiki-enrich route below
+      // both read it.
+      const agentShaped = source === undefined && looksLikeHcMessage(line);
 
       // While main is in progress: control slash still works; anything else → side worker.
       // "In progress" is the chrome's own spinner state, which `startBusy` /
@@ -9732,7 +9740,7 @@ export async function launchTuiAgentShell(opts: {
         // runLine and frames it when it drains. The recipient dialog below is for a person at the
         // keyboard, and its Side-1 answer would hand the raw, unframed text to a worker outside the
         // main history. A Telegram line is the operator's, so it keeps the dialog.
-        if (source === undefined && looksLikeHcMessage(line)) {
+        if (agentShaped) {
           const position = turnLoop.enqueue(line, displayLine, source);
           io.onSystem?.(`◇ agent message queued as q${position}; the main agent reads it when this turn ends.\n`);
           return;
@@ -9800,7 +9808,7 @@ export async function launchTuiAgentShell(opts: {
 
       // Echo a slash command so it is clear WHICH command ran (turns echo their
       // own `❯ …` user box below).
-      if (line.startsWith("/")) {
+      if (!skipSlashRouting && line.startsWith("/")) {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `c${uid++}`,
@@ -9810,7 +9818,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      const command = findAgentCommand(line, "agent");
+      const command = skipSlashRouting ? undefined : findAgentCommand(line, "agent");
       if (command !== undefined) {
         if (command.name === "/exit") {
           // SLATE-5 close trigger: shell exit (explicit command).
@@ -10553,7 +10561,7 @@ export async function launchTuiAgentShell(opts: {
         openHelp(); // /help
         return;
       }
-      if (line.startsWith("/")) {
+      if (!skipSlashRouting && line.startsWith("/")) {
         // A real command belonging to the OTHER mode (`/models`)
         // says so; only a genuinely unknown token is "unknown" (S4 parity with
         // the readline surfaces).
@@ -10587,7 +10595,6 @@ export async function launchTuiAgentShell(opts: {
       // (one shaped like that which does not parse, as an unknown agent).
       // A Telegram line is the operator's own words, whatever its shape: it keeps
       // its `tg ❯` mark and is never treated as an agent message.
-      const agentShaped = source === undefined && looksLikeHcMessage(line);
       const hcEcho = source === undefined ? hcTranscriptEcho(line) : undefined;
       const echoLine = hcEcho !== undefined ? summarizeSubmittedLine(hcEcho.line) : displayLine;
       const userEcho = appendUserEcho(otui, r, transcript, {
@@ -11489,12 +11496,17 @@ export async function launchTuiAgentShell(opts: {
       runLine(line);
     });
 
+    // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen
+    // any more, and the submit handler above exists: only now may herdr-core see `idle` (it types a
+    // template's first task on the first report; a line typed before `onSubmit` would be cleared and dropped).
+    hostStatus.markReady();
+
     // Flow 481 T7: the positional prompt is the first turn. Submitted only here — after
     // `hostStatus.markReady()` and any resume picker / held-session choice, with `runLine`
     // defined — through `runLine`, the very function a typed line + Enter reaches.
     const initialPrompt = opts.takeInitialPrompt?.()?.trim();
     if (initialPrompt !== undefined && initialPrompt.length > 0) {
-      runLine(initialPrompt);
+      runLine(initialPrompt, "operator", undefined, true);
     }
 
     await done;

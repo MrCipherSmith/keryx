@@ -113,6 +113,12 @@ describe("withInitialLine (readline fallback)", () => {
     expect(pulled).toBe(0);
   });
 
+  test("a prompt that starts with `/` is yielded byte for byte, before any typed line", async () => {
+    const prompt = "/Users/me/app/log.txt shows the failure, fix it";
+    const it = source("/help")[Symbol.asyncIterator]();
+    expect(await collect(withInitialLine(prompt, it))).toEqual([prompt, "/help"]);
+  });
+
   test("the prompt is delivered once in total, even to a second iterator", async () => {
     const it = source("typed")[Symbol.asyncIterator]();
     const lines = withInitialLine("task", it);
@@ -137,11 +143,35 @@ describe("TUI wiring (source audit)", () => {
     const submit = tui.indexOf("opts.takeInitialPrompt?.()");
     expect(ready).toBeGreaterThan(-1);
     expect(submit).toBeGreaterThan(ready);
-    // The same `runLine` the composer's onSubmit handler calls, registered before it.
+    // The same `runLine` the composer's onSubmit handler calls; `idle` is reported only once that
+    // handler is registered (a line typed on the first `idle` must find it).
     const onSubmit = tui.indexOf("chrome.onSubmit((line) => {");
-    expect(onSubmit).toBeGreaterThan(ready);
-    expect(submit).toBeGreaterThan(onSubmit);
-    expect(tui).toMatch(/runLine\(initialPrompt\)/);
+    expect(onSubmit).toBeGreaterThan(-1);
+    expect(ready).toBeGreaterThan(onSubmit);
+    expect(submit).toBeGreaterThan(ready);
+    expect(tui).toMatch(/runLine\(initialPrompt, "operator", undefined, true\)/);
+  });
+
+  test("a prompt that starts with `/` is a model turn in the TUI: only the startup call skips slash routing", () => {
+    expect(tui).toMatch(/skipSlashRouting = false,\n\s+\): void => \{/);
+    expect(tui).toContain('if (!skipSlashRouting && line.startsWith("/")) {');
+    expect(tui).toContain('const command = skipSlashRouting ? undefined : findAgentCommand(line, "agent");');
+    // Typed lines (and `/`-menu selections) still route: onSubmit passes no flag.
+    expect(tui).toMatch(/chrome\.onSubmit\(\(line\) => \{\n\s+runLine\(line\);/);
+    // No `startsWith("/")` route is left that the startup prompt could reach.
+    const routes = tui.split('line.startsWith("/")').length - 1;
+    const guarded = tui.split('!skipSlashRouting && line.startsWith("/")').length - 1;
+    expect(guarded).toBe(2);
+    expect(routes).toBe(2);
+  });
+
+  test("a prompt that starts with `/` is a model turn in the readline REPL: only the first line, equal to the prompt", () => {
+    expect(shell).toContain("let initialPromptPending = rich.initialPrompt !== undefined;");
+    expect(shell).toContain("const isInitialPrompt = initialPromptPending && line === rich.initialPrompt;");
+    expect(shell).toContain('if (!isInitialPrompt && line.startsWith("/")) {');
+    // Pending is cleared on the first line, so a typed `/help` later routes as a command.
+    expect(shell).toMatch(/initialPromptPending = false;\n\s+if \(!isInitialPrompt/);
+    expect(shell).toContain("initialPrompt: readlineInitialPrompt");
   });
 
   test("the readline fallback feeds the prompt to the REPL alone, never to a picker", () => {

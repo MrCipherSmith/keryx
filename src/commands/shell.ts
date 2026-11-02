@@ -1715,6 +1715,12 @@ export async function runAgentRepl(
     onCompletionWaitersSize?: (size: number) => void;
     /** Shutdown cancels a stream or recovery timer before cleanup. */
     signal?: AbortSignal;
+    /**
+     * Flow 481: the positional startup prompt, the first line `lines` yields. It is always a model
+     * turn: it skips the slash-command router (`/Users/me/app/log.txt shows the failure` is a task,
+     * not an unknown command). Typed lines keep slash routing.
+     */
+    initialPrompt?: string;
     /** Deterministic interactive recovery test seams. */
     recovery?: import("./agent").InteractiveRecovery;
   },
@@ -2657,6 +2663,9 @@ export async function runAgentRepl(
     flushSessionCheckpoint();
   };
 
+  // Only the very first line read can be the positional prompt (`withInitialLine` yields it first).
+  let initialPromptPending = rich.initialPrompt !== undefined;
+
   /** One main-agent turn from an operator line — extracted so it can run either straight away or drained from `heldQueue` below. */
   const runOperatorLine = async (typedLine: string): Promise<void> => {
     // An `<hc from="…">` agent message reaches the model framed as such (and the
@@ -2821,7 +2830,9 @@ export async function runAgentRepl(
     }
     rich.safeBoundary?.();
     if (line.trim() !== "/rewind confirm") rewindCommand.cancelPending();
-    if (line.startsWith("/")) {
+    const isInitialPrompt = initialPromptPending && line === rich.initialPrompt;
+    initialPromptPending = false;
+    if (!isInitialPrompt && line.startsWith("/")) {
       const parts = line.trim().split(/\s+/);
       const command = parts[0] ?? "";
       const rest = parts.slice(1).join(" ").trim();
@@ -4887,7 +4898,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }
         let endReason = "normal";
         try {
-          await runAgentRepl(replLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+          await runAgentRepl(replLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal, ...(readlineInitialPrompt !== undefined ? { initialPrompt: readlineInitialPrompt } : {}) }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
         } catch (cause) {
           endReason = "error";
           throw cause;

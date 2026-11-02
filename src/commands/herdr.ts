@@ -17,7 +17,7 @@
 // created: Herdr not being installed is not something `keryx` should paper over.
 
 import { constants as fsConstants } from "node:fs";
-import { copyFile, lstat, readFile, realpath, rmdir, stat, unlink } from "node:fs/promises";
+import { copyFile, lstat, readFile, readlink, realpath, rmdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { isNotFound, writeFileAtomic } from "../lib/fs";
@@ -196,9 +196,32 @@ async function backupOnce(file: string): Promise<void> {
   await copyFile(file, backup, fsConstants.COPYFILE_EXCL);
 }
 
-/** Where a write to `file` should land: its link target when it is a symlink (dotfile managers), so the link survives. */
+/**
+ * Where a write to `file` should land: its link target when it is a symlink (dotfile managers), so
+ * the link survives. A dangling link resolves to the path it points at, which the write then creates.
+ */
 async function writeTarget(file: string): Promise<string> {
-  return realpath(file).catch(() => file);
+  try {
+    return await realpath(file);
+  } catch {
+    // Not resolvable: either missing (write `file` itself) or a dangling link chain; follow it by hand.
+  }
+  let current = file;
+  for (let hops = 0; hops < 40; hops++) {
+    let link: string;
+    try {
+      link = await readlink(current);
+    } catch {
+      return current; // not a link (or missing): this is where the write lands
+    }
+    current = path.resolve(path.dirname(current), link);
+  }
+  throw new Error(`${file}: too many levels of symbolic links`);
+}
+
+/** Every write onto a user path goes through here, so none can replace a symlink with a plain file. */
+async function writeLinked(file: string, content: string): Promise<void> {
+  await writeFileAtomic(await writeTarget(file), content);
 }
 
 function skipReason(home: string, what: string): string {
@@ -218,7 +241,7 @@ async function installPrograms(p: Paths, opts: HerdrOptions): Promise<HerdrRow> 
   if (loaded.kind === "invalid") return row("error", loaded.reason);
 
   if (loaded.kind === "missing") {
-    if (!opts.dryRun) await writeFileAtomic(p.programs, serialize({ programs: { keryx: HERDR_PROGRAM_ENTRY } }));
+    if (!opts.dryRun) await writeLinked(p.programs, serialize({ programs: { keryx: HERDR_PROGRAM_ENTRY } }));
     return row("created");
   }
   const existing = loaded.programs.keryx;
@@ -229,7 +252,7 @@ async function installPrograms(p: Paths, opts: HerdrOptions): Promise<HerdrRow> 
   if (!opts.dryRun) {
     await backupOnce(p.programs);
     const next = { ...loaded.doc, programs: { ...loaded.programs, keryx: HERDR_PROGRAM_ENTRY } };
-    await writeFileAtomic(await writeTarget(p.programs), serialize(next));
+    await writeLinked(p.programs, serialize(next));
   }
   return row("updated", existing === undefined ? "added programs.keryx" : "overwrote programs.keryx (--force)");
 }
@@ -246,7 +269,7 @@ async function installFile(target: HerdrTarget, file: string, content: string, w
   if (current !== undefined && opts.force !== true) {
     return row("kept", `${what} differs from keryx's (user-modified); re-run with --force to overwrite`);
   }
-  if (!opts.dryRun) await writeFileAtomic(file, content);
+  if (!opts.dryRun) await writeLinked(file, content);
   return row(current === undefined ? "created" : "updated", current === undefined ? undefined : `overwrote ${what} (--force)`);
 }
 
@@ -268,7 +291,7 @@ async function removePrograms(p: Paths, opts: HerdrOptions): Promise<HerdrRow> {
   if (!opts.dryRun) {
     await backupOnce(p.programs);
     const { keryx: _own, ...rest } = loaded.programs;
-    await writeFileAtomic(await writeTarget(p.programs), serialize({ ...loaded.doc, programs: rest }));
+    await writeLinked(p.programs, serialize({ ...loaded.doc, programs: rest }));
   }
   return row("removed", "deleted programs.keryx; programs.json itself is kept");
 }
@@ -368,18 +391,22 @@ export async function runHerdr(command: HerdrCommandName, opts: HerdrOptions = {
     reason: "not written: programs.json could not be changed (see above)",
   });
   let programsFailed = false;
+  // install and remove: run the programs step, and stop before the icon when it failed.
+  const programsThenIcon = async (
+    programsStep: () => Promise<HerdrRow>,
+    iconStep: () => Promise<HerdrRow>,
+  ): Promise<void> => {
+    const programs = await guarded("programs", p.programs, programsStep);
+    programsFailed = programs.action === "error";
+    rows.push(programs);
+    rows.push(programsFailed ? stopped("icon", p.icon) : await guarded("icon", p.icon, iconStep));
+  };
   if (!appOk) {
     rows.push(appSkip("programs", p.programs), appSkip("icon", p.icon));
   } else if (command === "install") {
-    const programs = await guarded("programs", p.programs, () => installPrograms(p, eff));
-    programsFailed = programs.action === "error";
-    rows.push(programs);
-    rows.push(programsFailed ? stopped("icon", p.icon) : await guarded("icon", p.icon, () => installFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff)));
+    await programsThenIcon(() => installPrograms(p, eff), () => installFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff));
   } else if (command === "remove") {
-    const programs = await guarded("programs", p.programs, () => removePrograms(p, eff));
-    programsFailed = programs.action === "error";
-    rows.push(programs);
-    rows.push(programsFailed ? stopped("icon", p.icon) : await guarded("icon", p.icon, () => removeFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff)));
+    await programsThenIcon(() => removePrograms(p, eff), () => removeFile("icon", p.icon, HERDR_ICON_SVG, "keryx.svg", eff));
   } else {
     rows.push(await guarded("programs", p.programs, () => statusPrograms(p)));
     rows.push(await guarded("icon", p.icon, () => statusFile("icon", p.icon, HERDR_ICON_SVG)));

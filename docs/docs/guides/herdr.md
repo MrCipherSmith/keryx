@@ -136,7 +136,9 @@ The template's text tells Keryx to stay inside the task's scope, and to report
 the result or a blocker with `hc send` when another agent assigned the task.
 
 `keryx shell` also takes the task itself as one positional argument. It is
-submitted as the first turn, and the session stays open afterwards:
+submitted as the first turn, and the session stays open afterwards. The text
+always goes to the model as a turn, even when it starts with `/`: a leading `/`
+is not read as a slash command.
 
 ```console
 $ keryx shell "Fix the failing test in src/parser.test.ts"
@@ -213,9 +215,13 @@ socket depends on the mode:
 
 - `strict` on macOS: the profile denies all network, the unix socket included,
   so `hc` fails. Delegating through `hc` needs the sandbox off for that session.
-- `workspace` (also `1` and `on`): the profile keeps the network on, so `hc`
+- `workspace` (also `1` and `on`) with no allowed domains: the profile keeps the network on, so `hc`
   reaches the socket. Whatever it starts through herdr-core runs outside the
   sandbox.
+- Any mode, once allowed domains are configured (`KERYX_SANDBOX_ALLOWED_DOMAINS`
+  or a trusted project policy): the profile becomes network-restricted, which on
+  macOS is `deny network*` plus the loopback proxy. That denies the unix socket
+  too, so `hc` fails even under `workspace`.
 - Linux (bubblewrap): `strict` unshares the network namespace, which does not
   isolate unix sockets reached by path. Do not count on it to keep `hc` out.
 

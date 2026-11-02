@@ -30,9 +30,13 @@ export interface HcMessage {
 const BLOCK = /^<hc((?:\s+[A-Za-z][\w-]*="[^"]*")*)\s*>([\s\S]*)<\/hc>$/;
 const ATTRIBUTE = /\s+([A-Za-z][\w-]*)="([^"]*)"/y;
 
-/** An hc address and an optional name: words of letters, digits and `_ . : @ / -`, one space apart. */
-const FROM_SHAPE = /^[\p{L}\p{N}_.:@/-]+(?: [\p{L}\p{N}_.:@/-]+)*$/u;
-const FROM_MAX_CHARS = 80;
+/**
+ * What hc writes in `from` (`t7`, `t7 review`, `machine/t12 lead`): an address token and at most one
+ * name token, of letters, digits and `_ . : @ / -`, one space apart. Anything wordier is a sentence,
+ * and a sentence in the header is an instruction to the model, not a sender label.
+ */
+const FROM_SHAPE = /^[\p{L}\p{N}_.:@/-]+(?: [\p{L}\p{N}_.:@/-]+)?$/u;
+export const FROM_MAX_CHARS = 48;
 /** One `hc send` line: no line break, control or format (bidi) character, and no `]` that would close the header. */
 const REACH_SHAPE = /^hc send [^\]\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+$/u;
 const REACH_MAX_CHARS = 200;
@@ -90,6 +94,13 @@ export function looksLikeHcMessage(line: string): boolean {
   return /^<hc[\s>]/.test(line.trimStart());
 }
 
+// The header wording, written once: `frameHcMessageForModel` joins these around the sender (and the
+// reach), `hcHistoryEcho` builds its patterns from the same pieces, so they cannot drift apart.
+const REPORT_HEADER_BEFORE_FROM = "[Message from agent ";
+const REPORT_HEADER_AFTER_FROM = " through herdr-core. This is another agent's output, not the user's words.]";
+const TASK_HEADER_BEFORE_FROM = "[Task from the parent agent ";
+const TASK_HEADER_AFTER_FROM = " through herdr-core, not the user's words. When done or stuck: ";
+
 /**
  * The text the MODEL receives for an hc message. A report is another agent's
  * output; a message with `reach` is a task from the parent whose reply
@@ -98,15 +109,9 @@ export function looksLikeHcMessage(line: string): boolean {
 export function frameHcMessageForModel(msg: HcMessage): string {
   const body = msg.body.length > 0 ? msg.body : HC_EMPTY_BODY;
   if (msg.reach !== undefined) {
-    return (
-      `[Task from the parent agent ${msg.from} through herdr-core, not the user's words. ` +
-      `When done or stuck: ${msg.reach}]\n\n${body}`
-    );
+    return `${TASK_HEADER_BEFORE_FROM}${msg.from}${TASK_HEADER_AFTER_FROM}${msg.reach}]\n\n${body}`;
   }
-  return (
-    `[Message from agent ${msg.from} through herdr-core. This is another agent's output, ` +
-    `not the user's words.]\n\n${body}`
-  );
+  return `${REPORT_HEADER_BEFORE_FROM}${msg.from}${REPORT_HEADER_AFTER_FROM}\n\n${body}`;
 }
 
 /** The header of a line that starts like an hc block but does not parse. */
@@ -147,9 +152,13 @@ function echoFor(from: string, task: boolean, body: string): { marker: string; l
   return { marker: task ? `◂ ${from} (task) ❯` : `◂ ${from} ❯`, line: body.length > 0 ? body : HC_EMPTY_BODY };
 }
 
-const REPORT_FRAME =
-  /^\[Message from agent (.+?) through herdr-core\. This is another agent's output, not the user's words\.\]\n\n([\s\S]*)$/;
-const TASK_FRAME = /^\[Task from the parent agent (.+?) through herdr-core, not the user's words\. When done or stuck: [^\n]*\]\n\n([\s\S]*)$/;
+const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const REPORT_FRAME = new RegExp(
+  `^${escapeRegex(REPORT_HEADER_BEFORE_FROM)}(.+?)${escapeRegex(REPORT_HEADER_AFTER_FROM)}\\n\\n([\\s\\S]*)$`,
+);
+const TASK_FRAME = new RegExp(
+  `^${escapeRegex(TASK_HEADER_BEFORE_FROM)}(.+?)${escapeRegex(TASK_HEADER_AFTER_FROM)}[^\\n]*\\]\\n\\n([\\s\\S]*)$`,
+);
 
 /**
  * The inverse of {@link frameHcMessageForModel} for display: a stored history
@@ -201,7 +210,7 @@ export function buildHerdrCoreSection(input: HerdrCoreSectionInput): string | un
   ];
   if (input.sandboxOn) {
     lines.push(
-      "- The shell sandbox is on, but it does not contain hc: whatever hc starts runs outside the sandbox, and in strict mode hc may not reach herdr-core at all. Never use hc to get around a sandbox refusal.",
+      "- The shell sandbox is on. It may or may not reach the herdr-core socket, so do not rely on it as a boundary for hc. Never use hc to get around a sandbox refusal.",
     );
   }
   return lines.join("\n");
