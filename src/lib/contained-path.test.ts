@@ -56,6 +56,20 @@ describe("resolveContainedPath", () => {
     expect(result.ok).toBe(true);
   });
 
+  test("resolves a relative candidate against the caller's cwd, not the project root", async () => {
+    const cwd = path.join(root, "src");
+    await writeFile(path.join(root, "top.ts"), "export const t = 1;\n", "utf8");
+    const result = await resolveContainedPath(root, "../top.ts", cwd);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.path).toBe(path.join(root, "top.ts"));
+    const sync = resolveContainedPathSync(root, "../top.ts", cwd);
+    expect(sync.ok).toBe(true);
+    // Containment is still judged against the project root.
+    const outside = await resolveContainedPath(root, "../../elsewhere/secret.txt", cwd);
+    expect(outside.ok).toBe(false);
+    if (!outside.ok) expect(outside.reason).toBe("outside-project");
+  });
+
   test("refuses a relative traversal", async () => {
     const result = await resolveContainedPath(root, "../elsewhere/secret.txt");
     expect(result.ok).toBe(false);

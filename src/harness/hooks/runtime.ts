@@ -442,8 +442,12 @@ class HookRuntimeImpl implements HookRuntime {
       const re = new RegExp(`^(?:${reg.matcher})$`);
       return re.test(toolName);
     } catch {
-      // An invalid matcher regex never matches (fail closed on selection).
-      return false;
+      // An invalid matcher can never be proven NOT to apply. A gate hook that
+      // silently never ran would be fail-open, so gate/gate-advisory hooks
+      // select for every tool; observers and context hooks simply do not match.
+      // (Config load rejects an invalid matcher outright; this covers
+      // registrations that reach the runtime some other way.)
+      return reg.class === "gate" || reg.class === "gate-advisory";
     }
   }
 
@@ -477,6 +481,7 @@ class HookRuntimeImpl implements HookRuntime {
       // has no fire in flight yet (byte-identical when no `ctx.profileId`
       // override is given, which is every existing failure-matrix test).
       profileId: fireProfileId,
+      isolationRequired: isIsolationRequired(fireProfileId),
       ...(decideOutcome !== undefined ? { decideOutcome } : {}),
     });
     const decision: PolicyOutcome | undefined = effect.effect === "deny" ? "deny" : undefined;

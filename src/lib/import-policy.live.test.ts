@@ -104,6 +104,7 @@ const OWNER_IMPORTS_CLIENT_ALLOWLIST = [
   "sac/preservation-replay.ts -> session/paths.ts",
   "sac/preservation-replay.ts -> session/preservation.ts",
   "sac/preserved-wrap-up.ts -> session/preservation.ts",
+  "sac/propose-from-session.ts -> session/store.ts",
   "sac/service.ts -> session/external-slate.ts",
   "sac/service.ts -> session/slate.ts",
   "sac/service.ts -> session/store.ts",
