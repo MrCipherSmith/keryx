@@ -107,13 +107,14 @@ describe("herdr-core and the sandbox profile", () => {
     expect(on).not.toMatch(/\(deny network/);
   });
 
-  test("no sandbox source file references the herdr-core socket variables", () => {
+  test("no sandbox source file references any herdr-core variable (HC_*)", () => {
     const dir = import.meta.dir;
     const files = readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const text = readFileSync(path.join(dir, file), "utf8");
-      expect(text).not.toMatch(/HC_SOCKET|HC_TERMINAL_SOCKET/);
+      // Any HC_* name, not only today's socket variables: a new hc variable is caught too.
+      expect(text).not.toMatch(/\bHC_[A-Z0-9_]+/);
     }
   });
 });

@@ -123,3 +123,24 @@
   7. Source-text audit inventory gains the three new readers (CI typecheck/AC8 root cause); the
      live scripts lost their personal paths.
 - AC8 and AC9 re-frozen with the corrected wording (journaled above); AC13, AC14, AC16 re-confirmed.
+- T4 round 1, post-fix (fix commit f4995a7fb):
+  - Wave C: the post-fix verifier refuted all 24 acted-on findings at f4995a7fb by execution,
+    each citing its saved `keryx review verify-run` output. It named three residuals, closed in the
+    follow-up commit: an unparsed `<hc`-shaped line is echoed as `◂ unknown agent ❯` (SECO3-F-001);
+    the main-agent status uses FleetWorkerStatus and the herdr-core mapper is exhaustive
+    (ARCH3-F-001); the sandbox source scan rejects any `HC_*` name (TEPR1-F-004).
+  - Wave D: the premise judge (claude-opus-5-5, reading the reviewed head 51de6ad) upheld 25 of 26
+    and challenged TEPR1-F-002 on the source-text audit inventory. Operator MrCipherSmith answered:
+    TEPR1-F-002 dismiss (keep the recorded audit for P2), DEGR1-F-001 dismissed out of scope (the
+    package slice was cut from the working tree, a review-tooling issue, not PR code).
+  - CI on f4995a7fb was red on one test in both jobs: the import-policy ratchet counted 151 avoidable
+    facade bypasses (ceiling 150). Cause: herdr-core-status.ts imported security/redact.ts directly;
+    it now imports through security/service.ts (back to 150).
+  - Mutation pass 1 overstated kills: `(delete line)` replacements were inserted literally, so those
+    mutants died of a SyntaxError. Pass 2 applies them as deletions, re-anchors the four invalidated
+    ones, and adds CLI tests for herdr `--dry-run`/`--force` (M-09, M-10 survived). M6 was
+    equivalent: the herdr-core section peaks at 1,158 chars, so its runtime 1,500 cut was removed
+    (the test keeps the ceiling). M-21 is presentation-only (the rewind label).
+  - Review-tooling follow-ups found on the way: a PR round's slices come from the working tree, and
+    `keryx review verdict` before ingest reports "no findings" because `review start` writes
+    findings.json as `[]`.

@@ -128,14 +128,19 @@ export function frameSubmittedLine(line: string): string {
   return looksLikeHcMessage(line) ? `${HC_UNPARSED_HEADER}\n\n${line.trim()}` : line;
 }
 
+/** The transcript mark of a line that starts like an hc block but did not parse: no sender to name. */
+export const HC_UNPARSED_MARKER = "◂ unknown agent ❯";
+
 /**
  * How the TUI transcript shows an hc message: the body, labelled with the
- * sender instead of the user's own `❯` mark. `undefined` for any other line.
+ * sender instead of the user's own `❯` mark. A line that starts like an hc block
+ * but does not parse is labelled {@link HC_UNPARSED_MARKER}, as the model is told
+ * the same. `undefined` for any other line.
  */
 export function hcTranscriptEcho(line: string): { marker: string; line: string } | undefined {
   const msg = parseHcMessage(line);
-  if (msg === undefined) return undefined;
-  return echoFor(msg.from, msg.reach !== undefined, msg.body);
+  if (msg !== undefined) return echoFor(msg.from, msg.reach !== undefined, msg.body);
+  return looksLikeHcMessage(line) ? { marker: HC_UNPARSED_MARKER, line: line.trim() } : undefined;
 }
 
 function echoFor(from: string, task: boolean, body: string): { marker: string; line: string } {
@@ -157,10 +162,16 @@ export function hcHistoryEcho(content: string): { marker: string; line: string }
   if (report !== null) return echoFor(report[1] ?? "", false, report[2] ?? "");
   const task = TASK_FRAME.exec(content);
   if (task !== null) return echoFor(task[1] ?? "", true, task[2] ?? "");
+  const unparsedPrefix = `${HC_UNPARSED_HEADER}\n\n`;
+  if (content.startsWith(unparsedPrefix)) return { marker: HC_UNPARSED_MARKER, line: content.slice(unparsedPrefix.length) };
   return undefined;
 }
 
-/** The section is re-billed on every turn, so it has a hard ceiling. */
+/**
+ * The section is re-billed on every turn, so it has a hard ceiling. Its longest
+ * form (a 64-character address, sandbox on) stays under it, which a test pins;
+ * the text is never cut, because a cut would drop a line without saying so.
+ */
 export const HERDR_CORE_SECTION_MAX_CHARS = 1500;
 
 export interface HerdrCoreSectionInput {
@@ -193,8 +204,7 @@ export function buildHerdrCoreSection(input: HerdrCoreSectionInput): string | un
       "- The shell sandbox is on, but it does not contain hc: whatever hc starts runs outside the sandbox, and in strict mode hc may not reach herdr-core at all. Never use hc to get around a sandbox refusal.",
     );
   }
-  const text = lines.join("\n");
-  return text.length <= HERDR_CORE_SECTION_MAX_CHARS ? text : text.slice(0, HERDR_CORE_SECTION_MAX_CHARS);
+  return lines.join("\n");
 }
 
 /** {@link buildHerdrCoreSection} over a live env, using the codebase's own sandbox switch. */

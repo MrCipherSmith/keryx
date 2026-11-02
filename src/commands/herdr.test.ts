@@ -424,4 +424,26 @@ describe("herdr CLI", () => {
       console.log = log;
     }
   });
+
+  test("--dry-run and --force on the command line reach install", async () => {
+    const log = console.log;
+    console.log = () => undefined;
+    try {
+      makeHomes();
+      const before = snapshot(root);
+      await herdrCommand(["install", "--dry-run"], deps);
+      expect(snapshot(root)).toEqual(before);
+      expect(existsSync(programs)).toBe(false);
+
+      const modified = { programs: { keryx: { name: "Mine", run: ["keryx", "shell", "--x"] } } };
+      writeFileSync(programs, JSON.stringify(modified));
+      await herdrCommand(["install"], deps);
+      expect(JSON.parse(readFileSync(programs, "utf8"))).toEqual(modified);
+      await herdrCommand(["install", "--force"], deps);
+      expect(JSON.parse(readFileSync(programs, "utf8")).programs.keryx).toEqual(HERDR_PROGRAM_ENTRY);
+      expect(process.exitCode ?? 0).toBe(0);
+    } finally {
+      console.log = log;
+    }
+  });
 });

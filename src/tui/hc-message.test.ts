@@ -11,6 +11,7 @@ import {
   frameSubmittedLine,
   HC_EMPTY_BODY,
   HC_UNPARSED_HEADER,
+  HC_UNPARSED_MARKER,
   hcHistoryEcho,
   hcTranscriptEcho,
   herdrCoreSectionFromEnv,
@@ -214,13 +215,21 @@ describe("hcTranscriptEcho", () => {
 
   test("a non-hc line has no hc echo", () => {
     expect(hcTranscriptEcho("hello")).toBeUndefined();
-    expect(hcTranscriptEcho("<hc>nope</hc>")).toBeUndefined();
+    expect(hcTranscriptEcho("see <hc from=\"t7\">x</hc>")).toBeUndefined();
+  });
+
+  test("a line shaped like an hc block that does not parse is labelled an unknown agent, never the user's mark", () => {
+    for (const line of ["<hc>nope</hc>", '<hc from="t7">unclosed', '  <hc from="t7" x="1">body</hc>']) {
+      expect(hcTranscriptEcho(line)).toEqual({ marker: HC_UNPARSED_MARKER, line: line.trim() });
+    }
+    expect(HC_UNPARSED_MARKER).not.toBe("❯");
+    expect(HC_UNPARSED_MARKER).toContain("unknown agent");
   });
 });
 
 describe("hcHistoryEcho (resume summary)", () => {
   test("a stored frame shows as the live echo did", () => {
-    for (const line of [report, task, '<hc from="t7"></hc>']) {
+    for (const line of [report, task, '<hc from="t7"></hc>', "<hc>nope</hc>"]) {
       expect(hcHistoryEcho(frameSubmittedLine(line))).toEqual(hcTranscriptEcho(line)!);
     }
   });
@@ -231,7 +240,7 @@ describe("hcHistoryEcho (resume summary)", () => {
   });
 
   test("anything else is not an hc entry", () => {
-    for (const content of ["hello", report, `${HC_UNPARSED_HEADER}\n\n<hc>nope</hc>`, "[Message from agent x]"]) {
+    for (const content of ["hello", report, `${HC_UNPARSED_HEADER} <hc>nope</hc>`, "[Message from agent x]"]) {
       expect(hcHistoryEcho(content)).toBeUndefined();
     }
   });
@@ -268,7 +277,7 @@ describe("buildHerdrCoreSection", () => {
       for (const id of ["t1", "machine/t1234567", "x".repeat(500)]) {
         const text = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: id }, sandboxOn })!;
         expect(text.length).toBeLessThanOrEqual(1500);
-        // The whole section fits without the 1,500 cut, so the cut cannot hide a missing line.
+        // The ceiling is held here, not by a runtime cut: the whole section, last line included, fits.
         expect(text.endsWith(sandboxOn ? "sandbox refusal." : "`hc --skill`.")).toBe(true);
       }
     }

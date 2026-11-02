@@ -11,7 +11,7 @@
 // Pure encoder + state mapper + a best-effort reporter. Inert unless the pane was
 // launched by herdr-core (`HC_TERMINAL_ID` set). Never throws into the shell.
 
-import { redactSensitiveText } from "../security/redact";
+import { redactSensitiveText } from "../security/service";
 import { debugEvent } from "./debug-log";
 import type { FleetWorkerStatus } from "./worker-fleet";
 
@@ -91,8 +91,15 @@ export function herdrCoreStateFor(
         kind: attention?.kind ?? "permission",
         ...(attention !== undefined ? { msg: attention.text } : {}),
       };
-    default:
+    case "queued":
       return { state: "idle" };
+    default: {
+      // A new FleetWorkerStatus fails typecheck here instead of reporting idle unnoticed;
+      // at runtime an unknown value still reads as idle, so the reporter never throws.
+      const unmapped: never = status;
+      debugEvent("herdr-core-unmapped-status", { status: String(unmapped) });
+      return { state: "idle" };
+    }
   }
 }
 

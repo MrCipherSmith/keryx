@@ -176,7 +176,8 @@ herdr-core does not authenticate the sender, so Keryx checks the shape:
 
 A line that starts like an `<hc` block but fails these checks, or has text after
 the block, still does not reach the model as your words. It gets a header
-saying it is agent-shaped text from an unknown sender.
+saying it is agent-shaped text from an unknown sender, and the transcript marks
+it `◂ unknown agent ❯` instead of your own `❯`.
 
 A line that does not start with `<hc`, including one with text before a block,
 reaches the model unchanged. A line from the Telegram topic is always yours,

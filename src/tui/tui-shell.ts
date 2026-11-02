@@ -466,7 +466,7 @@ import { mountExecutionPlanPanel } from "./execution-plan-panel";
 import { runScheduleSlashCommand } from "./schedule-command";
 import { openExecutionPlanInspector } from "./execution-plan-inspector";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
-import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer } from "./worker-fleet";
+import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer, type FleetWorkerStatus } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
 // Flow 273 (agent bus P2, T7): join/heartbeat/poll/leave all live in the
 // surface-independent client; this file only wires status/activity in and
@@ -5678,12 +5678,12 @@ export async function launchTuiAgentShell(opts: {
     // status/detail the Activity panel and herdr already track, so the bus
     // presence record can never say something different from what the
     // operator's own sidebar shows.
-    let lastMainAgentStatus: "queued" | "running" | "done" | "failed" | "blocked" = "queued";
+    let lastMainAgentStatus: FleetWorkerStatus = "queued";
     let lastMainAgentDetail: string | undefined;
 
     /** Update the pinned main-agent slot (Activity panel). */
     const setMainAgent = (
-      status: "queued" | "running" | "done" | "failed" | "blocked",
+      status: FleetWorkerStatus,
       detail?: string,
       attention?: HerdrCoreAttention,
     ): void => {
@@ -10583,7 +10583,8 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       // Flow 481 T8: an `<hc from="…">…</hc>` line is another agent talking, not the
-      // operator, so it is labelled with the sender instead of the user's own mark.
+      // operator, so it is labelled with the sender instead of the user's own mark
+      // (one shaped like that which does not parse, as an unknown agent).
       // A Telegram line is the operator's own words, whatever its shape: it keeps
       // its `tg ❯` mark and is never treated as an agent message.
       const agentShaped = source === undefined && looksLikeHcMessage(line);

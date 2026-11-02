@@ -78,6 +78,10 @@ describe("herdrCoreStateFor", () => {
     });
     expect(HERDR_CORE_CLEAR).toEqual({ state: "clear" });
   });
+
+  test("a status outside the type (an untyped caller) still maps to idle and never throws", () => {
+    expect(herdrCoreStateFor("paused" as never)).toEqual({ state: "idle" });
+  });
 });
 
 describe("prepareStatusMessage (AC4)", () => {
