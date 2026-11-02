@@ -118,18 +118,32 @@ cmd_upgrade 0.4.5 --yes
   expect(result.stderr.toString()).toContain('v0.4.5 is not newer than v0.4.6');
 });
 
-test('frequent safety backups are count bounded while retaining the explicit restore pointer', () => {
+test('safety backups retain every young copy plus the newest three and the explicit restore pointer', () => {
   const { directory, result } = libraryFixture(`
 mkdir -p "$ROOT/backups"
 for n in 1 2 3 4 5 6 7 8; do mkdir "$ROOT/backups/upgrade-$n"; done
+mkdir "$ROOT/backups/pre-restore-young" "$ROOT/backups/manual-old"
+# Portable fixed timestamps: ancient directories are older than 14 days on every supported runner.
+for n in 1 2 3 4 5 6 7 8; do touch -t 2000010"$n"0000 "$ROOT/backups/upgrade-$n"; done
+touch -t 200001010000 "$ROOT/backups/manual-old"
 state_get() { printf '%s/backups/upgrade-1' "$ROOT"; }
 prune_safety_backups
 find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d > "$ROOT/remaining"
 `);
   expect(result.exitCode).toBe(0);
   const remaining = readFileSync(join(directory, 'remaining'), 'utf8').trim().split('\n');
-  expect(remaining.length).toBeLessThanOrEqual(4);
+  expect(remaining).toContain(join(directory, 'backups/pre-restore-young'));
   expect(remaining).toContain(join(directory, 'backups/upgrade-1'));
+  expect(remaining).toContain(join(directory, 'backups/manual-old'));
+  expect(remaining.length).toBeGreaterThanOrEqual(5);
+  expect(remaining.length).toBeLessThanOrEqual(6);
+});
+test('frequent young safety backups are never pruned by count', () => {
+ const {directory,result}=libraryFixture(`mkdir -p "$ROOT/backups"; for n in 1 2 3 4 5 6 7 8; do mkdir "$ROOT/backups/upgrade-$n"; done
+state_get() { :; }
+prune_safety_backups
+find "$ROOT/backups" -mindepth 1 -maxdepth 1 -type d > "$ROOT/remaining"`);
+ expect(result.exitCode).toBe(0);expect(readFileSync(join(directory,'remaining'),'utf8').trim().split('\n')).toHaveLength(8);
 });
 
 test('rollback refuses to silently drop a legacy per-release Access overlay', () => {

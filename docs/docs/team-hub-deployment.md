@@ -231,7 +231,7 @@ The installer schedules `hubctl backup --quiet` at 03:17 server time (skip it wi
 
 - **Kept on the server:** the 14 newest daily backups in `backups/daily/` and the 8 newest weekly ones in `backups/weekly/` (one per ISO week, the last of that week). Change the counts with `KERYX_HUB_BACKUP_DAILY` and `KERYX_HUB_BACKUP_WEEKLY` in `secrets/hub.env`.
 - **They are on the same machine as the data.** A lost disk loses both. Copy `backups/` somewhere else on a schedule you own.
-- They hold every project's content and the Hub's session records, though not the tokens. Files are mode 0600. The safety backups an upgrade, restore or rollback takes (`upgrade-*`, `pre-restore-*`, `pre-rollback-*`, full copies of the volume) are kept: the three newest, and **any younger than 14 days however many there are**, because the newest can be the only copy of the newest data. They are the big ones; remove older ones yourself when disk gets tight. `manual-*` backups are never pruned.
+- They hold every project's content and the Hub's session records, though not the tokens. Files are mode 0600. The safety backups an upgrade, restore or rollback takes (`upgrade-*`, `pre-restore-*`, `pre-rollback-*`, full copies of the volume) are kept: the three newest, the explicitly referenced pre-upgrade backup needed by `rollback --restore-data`, and **any younger than 14 days however many there are**, because the newest can be the only copy of the newest data. They are the big ones; remove older ones yourself when disk gets tight. `manual-*` backups are never pruned.
 - An online backup holds the database in the Hub container's memory (limit 512 MB). Above about 150 MB `hubctl backup` refuses; use `hubctl backup --offline`, which stops the Hub and saves the whole volume as `backups/manual-<time>/hub-data.tar`.
 
 Restore:
@@ -283,5 +283,3 @@ Pushing a `v*` tag runs the existing release job first (the whole suite and gate
 The first time the package is published to GitHub Container Registry it may be private. The job fails at its anonymous-pull step in that case; make the package public once in its settings and re-run the job.
 
 CI (`team-hub-distribution` in `ci.yml`) builds the image from the packaged archive on every pull request and runs the same checks, so a change that breaks the image fails before a tag does.
-
-Safety backups from upgrade, restore and rollback retain the three newest directories plus the explicitly referenced pre-upgrade backup. Retention has a count bound even during frequent operations; manual and legacy-adoption backups remain operator-managed.
