@@ -116,6 +116,11 @@ test("SDK mutations preserve replay/conflict, exact revision Evidence and human 
   expect(data(await c.callTool({ name: "hub_create_revision", arguments: create }))).toEqual(revision);
   const conflict = await c.callTool({ name: "hub_create_revision", arguments: { ...create, message: "changed" } }); expect(conflict.isError).toBe(true); expect(JSON.stringify(conflict)).toContain("idempotency-conflict");
   const summary = data(await c.callTool({ name: "hub_list_revisions", arguments: { projectId: project.id } })); expect(JSON.stringify(summary)).not.toContain("contentBase64");
+  const newer = data(await c.callTool({ name: "hub_create_revision", arguments: { ...create, message: "newer", operationId: "revision-two" } }));
+  const head = data(await c.callTool({ name: "hub_list_revisions", arguments: { projectId: project.id, limit: 1 } }));
+  expect((head.revisions as CodeRevision[]).map(item => item.id)).toEqual([newer.id as string]); expect(head.nextCursor).toBe(newer.id as string);
+  const older = data(await c.callTool({ name: "hub_list_revisions", arguments: { projectId: project.id, afterId: head.nextCursor, limit: 1 } }));
+  expect((older.revisions as CodeRevision[]).map(item => item.id)).toEqual([revision.id as string]); expect(older.nextCursor).toBeUndefined();
   expect(data(await c.callTool({ name: "hub_get_revision", arguments: { projectId: project.id, revisionId: revision.id } })).id).toBe(revision.id);
   const evidence = data(await c.callTool({ name: "hub_add_evidence", arguments: { projectId: project.id, flowId: flow.id, subjectRevisionId: revision.id, checkId: "sdk", command: "test", exitCode: 0, output: "pass", operationId: "evidence-one" } })); expect(evidence.actorId).toBe("agent:connector");
   const submitted = data(await c.callTool({ name: "hub_submit_for_review", arguments: { projectId: project.id, flowId: flow.id, expectedVersion: started.version, subjectRevisionId: revision.id, operationId: "submit-one" } })); expect(submitted.status).toBe("implemented");

@@ -46,5 +46,19 @@ test('full revision collection quota includes file paths and metadata even when 
   const files = Array.from({ length: 5000 }, (_, index) => ({ path: 'x'.repeat(960) + '-' + index, mode: '100644' as const, contentBase64: '', contentDigest: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }));
   const state: HubState = { projects: [{ id: 'p', name: 'P', version: 1, lineRevisionId: null, lineVersion: 0, contextRevision: 0 }], documents: [], proposals: [], flows: [], evidence: [], events: [], documentChanges: [], sessions: {}, replays: {}, deliveries: [], revisions: Array.from({ length: 8 }, (_, index) => ({ id: 'r' + index, projectId: 'p', baseRevisionId: null, gitBaseSha: 'a'.repeat(40), message: 'Revision', createdBy: 'h', createdAt: 'then', treeDigest: 'a'.repeat(64), files })) };
   expect(() => hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test'))).toThrow('Use summary=1');
-  expect(hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1'))).toMatchObject({ revisions: Array.from({ length: 8 }, (_, index) => expect.objectContaining({ id: 'r' + index, fileCount: 5000 })) });
+  expect(hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1'))).toMatchObject({ revisions: Array.from({ length: 8 }, (_, index) => expect.objectContaining({ id: 'r' + (7 - index), fileCount: 5000 })) });
+});
+
+test('revision list pages newest-first so the default page holds the latest revisions', () => {
+  const revisions: CodeRevision[] = Array.from({ length: 55 }, (_, index) => ({ id: 'r' + index, projectId: 'p', baseRevisionId: null, gitBaseSha: 'a'.repeat(40), message: 'Revision ' + index, files: [], createdBy: 'h', createdAt: 'then', treeDigest: 'a'.repeat(64) }));
+  const state: HubState = { projects: [{ id: 'p', name: 'P', version: 1, lineRevisionId: 'r54', lineVersion: 1, contextRevision: 0 }], documents: [], proposals: [], flows: [], evidence: [], events: [], documentChanges: [], sessions: {}, replays: {}, deliveries: [], revisions };
+  const first = hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1')) as { revisions: Array<{ id: string }>; nextCursor?: string };
+  expect(first.revisions.map(item => item.id)).toEqual(Array.from({ length: 50 }, (_, index) => 'r' + (54 - index)));
+  expect(first.nextCursor).toBe('r5');
+  const rest = hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1&afterId=r5')) as { revisions: Array<{ id: string }>; nextCursor?: string };
+  expect(rest.revisions.map(item => item.id)).toEqual(['r4', 'r3', 'r2', 'r1', 'r0']);
+  expect(rest.nextCursor).toBeUndefined();
+  const exact = hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1&limit=5')) as { revisions: Array<{ id: string }>; nextCursor?: string };
+  expect(exact.nextCursor).toBe('r50');
+  expect((hubRead(state, ['projects', 'p', 'revisions'], new URL('http://hub.test?summary=1&afterId=r50&limit=50')) as { nextCursor?: string }).nextCursor).toBeUndefined();
 });

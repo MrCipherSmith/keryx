@@ -73,4 +73,4 @@ Revision requests may carry `purpose: "review-bundle"` for a review-only patch p
 
 ## React frontend revision metadata projection
 
-`GET /projects/:p/revisions?summary=1` returns `{revisions: CodeRevisionSummary[]}`: existing revision metadata and `fileCount`, without `files` or base64 code bytes. The default list and `GET /projects/:p/revisions/:r` remain unchanged. The React frontend uses summaries for overview counts, pickers and lists, and loads a full tree only when inspecting a selected revision.
+`GET /projects/:p/revisions?summary=1` returns `{revisions: CodeRevisionSummary[], nextCursor?}`: existing revision metadata and `fileCount`, without `files` or base64 code bytes. The list (summary or full) is newest first, in pages of at most 50 (`limit` 1-50); when `nextCursor` is present, pass it as `afterId` to read the next, older page. `GET /projects/:p/revisions/:r` remains unchanged. The React frontend uses summaries for overview counts, pickers and lists, and loads a full tree only when inspecting a selected revision.

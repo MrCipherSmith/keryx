@@ -110,7 +110,8 @@ export function hubRead(state: HubState, path: string[], url: URL): unknown {
     }
     case "revisions": {
       if (!path[3]) {
-        const all = state.revisions.filter((r) => r.projectId === p.id), after = url.searchParams.get('afterId');
+        // Newest first: the default page holds the revisions people select, review and deliver; afterId walks back to older ones.
+        const all = state.revisions.filter((r) => r.projectId === p.id).reverse(), after = url.searchParams.get('afterId');
         const index = after ? all.findIndex(revision => revision.id === after) : -1;
         if (after && index < 0) fail(400,'invalid-cursor','Revision cursor not found');
         const rawLimit = url.searchParams.get('limit'), limit = rawLimit === null ? legacyStorageLimits.maxRevisionPageSize : Number(rawLimit);
