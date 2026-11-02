@@ -1,6 +1,6 @@
 import { ApiError } from "../../api/client";
 import type { WorkAdapter } from "./adapter";
-import type { WorkRecord, WorkReceipt } from "./types";
+import type { WorkEvent, WorkRecord, WorkReceipt } from "./types";
 
 const digest = "a".repeat(64);
 export function demoWorkAdapter(projectId: string): WorkAdapter {
@@ -196,13 +196,36 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
     ]),
   ];
   const receipts = new Map<string, { body: string; receipt: WorkReceipt }>();
+  // Like the live server, side effects reach the board through the event
+  // feed; a receipt carries only the command's own result.
+  const log: WorkEvent[] = [];
+  const emit = (record: WorkRecord, type: WorkEvent["type"], operationId: string) =>
+    log.push({
+      protocolVersion: 1,
+      projectId,
+      sequence: log.length + 1,
+      eventId: "demo-event-" + (log.length + 1),
+      operationId,
+      actorId: "human:demo",
+      actorKind: "human",
+      occurredAt: new Date().toISOString(),
+      type,
+      entityType: record.kind as WorkEvent["entityType"],
+      entityId: record.id,
+      entityVersion: "version" in record ? record.version : null,
+      contentDigest: "contentDigest" in record ? record.contentDigest : null,
+      causationId: null,
+    });
   return {
     mode: "demo",
     async document() {
       throw new ApiError(404, "not-found", "No archived demo document");
     },
     async events(cursor) {
-      return { events: [], nextCursor: cursor };
+      return {
+        events: structuredClone(log.slice(Number(cursor) || 0)),
+        nextCursor: String(log.length),
+      };
     },
     async attention() {
       return {
@@ -254,7 +277,7 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
       return structuredClone({
         records,
         actions: [],
-        eventCursor: String(receipts.size),
+        eventCursor: String(log.length),
       });
     },
     async operation(id) {
@@ -287,6 +310,7 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
           throw new ApiError(409, "version-conflict", "Refresh demo state");
       }
       const p = command.payload;
+      let result: WorkRecord;
       if (
         command.command === "attempt.select" ||
         command.command === "review.decide"
@@ -329,21 +353,18 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
             "Evidence is not passing",
           );
         const decisionId = "decision-" + command.operationId;
-        records = records.map((r) =>
-          r.id === intent.id
-            ? {
-                ...intent,
-                version: intent.version + 1,
-                selectedSubmissionId: submission.id,
-                state: p.decision === "accept" ? "accepted" : intent.state,
-                acceptanceDecisionId:
-                  p.decision === "accept"
-                    ? decisionId
-                    : intent.acceptanceDecisionId,
-              }
-            : r,
-        );
-        records.push({
+        const changed: WorkRecord = {
+          ...intent,
+          version: intent.version + 1,
+          selectedSubmissionId: submission.id,
+          state: p.decision === "accept" ? "accepted" : intent.state,
+          acceptanceDecisionId:
+            p.decision === "accept"
+              ? decisionId
+              : intent.acceptanceDecisionId,
+        };
+        records = records.map((r) => (r.id === intent.id ? changed : r));
+        result = {
           ...stamp,
           id: decisionId,
           kind: "decision",
@@ -367,7 +388,10 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
           actorKind: "human",
           operationId: command.operationId,
           contentDigest: digest,
-        });
+        };
+        records.push(result);
+        emit(changed, "intent-changed", command.operationId);
+        emit(result, "decision-recorded", command.operationId);
       } else
         throw new ApiError(
           400,
@@ -378,8 +402,8 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
         operationId: command.operationId,
         receiptId: "demo-" + command.operationId,
         status: "committed" as const,
-        entities: structuredClone(records),
-        eventCursor: String(receipts.size + 1),
+        entities: [structuredClone(result)],
+        eventCursor: String(log.length),
       };
       receipts.set(command.operationId, {
         body: JSON.stringify(command),

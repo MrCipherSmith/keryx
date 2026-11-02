@@ -6,7 +6,7 @@ import { useHub } from "../../app/hub-context";
 import { Button } from "../../components/ui";
 import type { WorkAdapter } from "./adapter";
 import type { WorkRecord, WorkSnapshot } from "./types";
-import { fetchEventRecords, mergeWorkCache, workSnapshotKey } from "./cache";
+import { EVENT_RECORD_LIMIT, changedEventIds, fetchEventRecords, loadWorkSnapshot, mergeWorkCache, onWorkPollRequest, workSnapshotKey } from "./cache";
 
 const ACTIVE_POLL_MS = 2000;
 const HIDDEN_POLL_MS = 15000;
@@ -28,35 +28,50 @@ export function useWorkEvents(
   initialCursor.current = eventCursor;
   const hasCursor = !!eventCursor;
   useEffect(() => {
-    if (adapter.mode === "demo" || !hasCursor) return;
+    if (!hasCursor) return;
     const controller = new AbortController();
     const key = workSnapshotKey(hub.scopeKey, projectId, adapter.mode);
+    const attentionKey = [hub.scopeKey, projectId, "work", adapter.mode, "attention"];
+    const observationsKey = [hub.scopeKey, projectId, "work", adapter.mode, "observations"];
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cursor = initialCursor.current!;
     let failures = 0;
     let idlePages = 0;
+    let busy = false;
+    let again = false;
     const poll = async () => {
       if (controller.signal.aborted) return;
       if (document.visibilityState === "hidden") {
         timer = setTimeout(() => void poll(), HIDDEN_POLL_MS);
         return;
       }
+      busy = true;
       try {
         const page = await adapter.events(cursor, controller.signal);
         if (controller.signal.aborted) return;
-        const records = await fetchEventRecords(adapter, client.getQueryData<WorkSnapshot>(key), page.events, controller.signal);
-        if (controller.signal.aborted) return;
-        mergeWorkCache(client, key, records);
+        const snapshot = client.getQueryData<WorkSnapshot>(key);
+        if (changedEventIds(snapshot, page.events).length > EVENT_RECORD_LIMIT) {
+          // One canonical read replaces a per-record fan-out on bursts.
+          const fresh = await loadWorkSnapshot(client, key, adapter, controller.signal);
+          if (controller.signal.aborted) return;
+          client.setQueryData(key, fresh);
+        } else {
+          const records = await fetchEventRecords(adapter, snapshot, page.events, controller.signal);
+          if (controller.signal.aborted) return;
+          mergeWorkCache(client, key, records);
+        }
         if (page.events.some((event) => event.entityType === "git-observation")) {
           // Observations have a separate read model, not a WorkRecord ID. Only
           // active subject queries are refreshed; exact documents stay untouched.
-          void client.invalidateQueries({queryKey:[hub.scopeKey,projectId,"work",adapter.mode,"observations"],refetchType:"active"});
+          void client.invalidateQueries({ queryKey: observationsKey, refetchType: "active" });
         }
+        // Any event can change attention, including one whose record a receipt
+        // already merged, so it does not depend on records being fetched.
+        if (page.events.length) void client.invalidateQueries({ queryKey: attentionKey, exact: true });
         cursor = page.nextCursor;
         failures = 0;
         idlePages = page.events.length ? 0 : idlePages + 1;
         setStatus("connected");
-        if (records.length || page.events.some((event) => event.entityType === "git-observation")) void client.invalidateQueries({queryKey:[hub.scopeKey, projectId,"work",adapter.mode,"attention"],exact:true});
       } catch (error) {
         if (controller.signal.aborted) return;
         failures++;
@@ -66,26 +81,44 @@ export function useWorkEvents(
             // Retention gaps require one canonical resync. Keep the loop alive even
             // when the server returns the same opaque cursor or the resync fails.
             if (client.getQueryData(key)) {
-              const snapshot = await adapter.snapshot(controller.signal);
+              const snapshot = await loadWorkSnapshot(client, key, adapter, controller.signal);
               if (controller.signal.aborted) return;
               client.setQueryData(key, snapshot);
               cursor = snapshot.eventCursor;
+              // Events lost in the gap never arrive, so derived read models refresh too.
+              void client.invalidateQueries({ queryKey: attentionKey, exact: true });
+              void client.invalidateQueries({ queryKey: observationsKey, refetchType: "active" });
             } else {
               const page = await adapter.attention(undefined, controller.signal);
               if (controller.signal.aborted) return;
-              client.setQueryData([hub.scopeKey, projectId, "work", adapter.mode, "attention"], {pages:[page],pageParams:[""]});
+              client.setQueryData(attentionKey, { pages: [page], pageParams: [""] });
               if (page.eventCursor) cursor = page.eventCursor;
             }
           } catch {
             if (controller.signal.aborted) return;
           }
         }
+      } finally {
+        busy = false;
       }
-      timer = setTimeout(() => void poll(), Math.min(MAX_POLL_MS, ACTIVE_POLL_MS * 2 ** Math.min(failures || idlePages, 4)));
+      const delay = again ? 0 : Math.min(MAX_POLL_MS, ACTIVE_POLL_MS * 2 ** Math.min(failures || idlePages, 4));
+      again = false;
+      timer = setTimeout(() => void poll(), delay);
     };
+    // A local commit polls now instead of waiting out the idle back-off.
+    const stopWaking = onWorkPollRequest(client, key, () => {
+      idlePages = 0;
+      if (busy) {
+        again = true;
+        return;
+      }
+      if (timer) clearTimeout(timer);
+      void poll();
+    });
     void poll();
     return () => {
       controller.abort();
+      stopWaking();
       if (timer) clearTimeout(timer);
     };
   }, [adapter, hasCursor, hub.scopeKey, projectId, client]);

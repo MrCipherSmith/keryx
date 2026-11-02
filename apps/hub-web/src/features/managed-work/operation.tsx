@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { mergeWorkCache, workSnapshotKey } from "./cache";
+import { mergeWorkCache, requestWorkPoll, workSnapshotKey } from "./cache";
 import { useTranslation } from "react-i18next";
 import { ApiError, getClientScope } from "../../api/client";
 import { useHub } from "../../app/hub-context";
@@ -57,7 +57,10 @@ export function useWorkOperation(
       else {
         if (!pending.put(null)) return;
         setOperation({ ...initial, lastReceipt: receipt });
-        if (receipt.entities) mergeWorkCache(client, workSnapshotKey(hub.scopeKey, hub.projectId, adapter.mode), receipt.entities.filter((record) => record.projectId === hub.projectId));
+        const key = workSnapshotKey(hub.scopeKey, hub.projectId, adapter.mode);
+        if (receipt.entities) mergeWorkCache(client, key, receipt.entities.filter((record) => record.projectId === hub.projectId));
+        // The receipt holds only the command result; the other records it changed arrive as events.
+        requestWorkPoll(client, key);
         onCommitted(receipt);
       }
     } catch (e) {

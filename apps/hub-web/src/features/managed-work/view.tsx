@@ -7,7 +7,7 @@ import { indexWorkRecords } from "./record-index";
 import type { PreparedAction } from "./work-types";
 import "./work-identifiers.css";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
@@ -34,6 +34,7 @@ import { LegacyConversion } from "./legacy";
 import { RevisionReview} from "./revision-review";
 import { AmendmentsPanel } from "./amendments";
 import { WorkAttention, useWorkEvents } from "./updates";
+import { workSnapshotQuery } from "./cache";
 import { FlowReview } from "./flow-review";
 import "./work.css";
 
@@ -129,9 +130,9 @@ function WorkBoard({
     setAction(null);
     setCreating(false);
   }, [flowId, hub.location.intentId, hub.location.attemptId]);
+  const client = useQueryClient();
   const snapshot = useQuery({
-    queryKey: [hub.scopeKey, hub.projectId, "work", adapter.mode, "snapshot"],
-    queryFn: ({ signal }) => adapter.snapshot(signal),
+    ...workSnapshotQuery(client, hub.scopeKey, hub.projectId, adapter),
     retry: false,
     staleTime: Infinity,
   });
