@@ -3,7 +3,7 @@
 // processes, sandbox opted out so the test needs no launcher.
 import { describe, expect, test } from "bun:test";
 
-async function runExec(args: string[]): Promise<{ kind: string | undefined; elapsedMs: number }> {
+async function runExec(args: string[]): Promise<{ kind: string | undefined; reason?: string | undefined; elapsedMs: number }> {
   const { harnessCommand } = await import("./harness");
   const logs: string[] = [];
   const original = console.log;
@@ -22,8 +22,8 @@ async function runExec(args: string[]): Promise<{ kind: string | undefined; elap
   const elapsedMs = Date.now() - startedAt;
   for (let i = logs.length - 1; i >= 0; i--) {
     try {
-      const parsed = JSON.parse(logs[i] ?? "") as { outcome?: { kind?: string } };
-      return { kind: parsed.outcome?.kind, elapsedMs };
+      const parsed = JSON.parse(logs[i] ?? "") as { outcome?: { kind?: string; reason?: string } };
+      return { kind: parsed.outcome?.kind, reason: parsed.outcome?.reason, elapsedMs };
     } catch {
       // not the result line
     }
@@ -42,4 +42,17 @@ describe("harness exec runtime budget", () => {
     const result = await runExec(["--max-runtime-ms", "20000", "--", "/bin/sleep", "6"]);
     expect(result.kind).toBe("completed");
   }, 20_000);
+
+  test.each(["0", "-5", "1.5", "abc", "1e3", ""])("--max-runtime-ms %p is refused with no spawn", async (value) => {
+    const result = await runExec(["--max-runtime-ms", value, "--", "/bin/sleep", "4"]);
+    expect(result.kind).toBe("blocked");
+    expect(result.reason).toContain("--max-runtime-ms");
+    expect(result.elapsedMs).toBeLessThan(2_000);
+  });
+
+  test("a missing value is refused too", async () => {
+    const result = await runExec(["--max-runtime-ms"]);
+    expect(result.kind).toBe("blocked");
+    expect(result.reason).toContain("--max-runtime-ms");
+  });
 });

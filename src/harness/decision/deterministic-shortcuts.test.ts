@@ -16,7 +16,16 @@ test("classifyDeterministic: short chit-chat resolves quick", () => {
   expect(classifyDeterministic("hi")).toBe("quick");
   expect(classifyDeterministic("thanks!")).toBe("quick");
   expect(classifyDeterministic("  thx  ")).toBe("quick");
-  expect(classifyDeterministic("got it")).toBe("quick");
+  for (const line of ["hello", "hey", "yo", "thank you", "ty", "good morning", "good night", "gm", "lol", "haha", "welcome", "you're welcome"]) {
+    expect(classifyDeterministic(line)).toBe("quick");
+  }
+});
+
+test("classifyDeterministic: approvals and acknowledgements are NOT shortcut (they answer the previous turn)", () => {
+  const words = ["great", "cool", "awesome", "nice", "np", "no problem", "got it", "perfect", "alright", "k", "fine", "done", "good", "lgtm", "go ahead", "proceed", "agreed", "right"];
+  for (const word of words) {
+    for (const line of [word, `${word}!`, word.toUpperCase()]) expect(classifyDeterministic(line)).toBeUndefined();
+  }
 });
 
 test("classifyDeterministic: a bare approval or refusal is NOT shortcut (its meaning is the previous turn)", () => {

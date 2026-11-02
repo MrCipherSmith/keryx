@@ -70,6 +70,11 @@ test("the cap follows the deadline the call was granted, not the fixed default",
   expect(resolveSubagentHardCapMs({ task: "x", timeout_ms: -5 }, {})).toBe(SUBAGENT_CHILD_RESERVATION_MS + SUBAGENT_HARD_CAP_GRACE_MS);
 });
 
+test("a huge model-supplied timeout_ms is clamped to the largest timer delay (2^31-1)", () => {
+  // Past 2^31-1 a setTimeout fires after ~1 ms, which would abandon the child at once.
+  expect(resolveSubagentHardCapMs({ task: "x", timeout_ms: Number.MAX_SAFE_INTEGER }, {})).toBe(2 ** 31 - 1);
+});
+
 test("a cap of zero runs the call directly with the caller's own context", async () => {
   const ctx = { signal: new AbortController().signal };
   let seen: unknown;

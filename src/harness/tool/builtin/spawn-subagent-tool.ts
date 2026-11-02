@@ -509,6 +509,9 @@ export function resolveSubagentTimeoutMs(
   return Math.min(n, reservationMs);
 }
 
+/** Longest delay a timer can hold: past 2^31-1 ms Node/Bun fire it after 1 ms instead. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
+
 /** Slack past the child deadline for setup, hooks and slate cleanup before the harness stops waiting. */
 export const SUBAGENT_HARD_CAP_GRACE_MS = 3 * 60_000;
 
@@ -525,7 +528,7 @@ export function resolveSubagentHardCapMs(
     ? Reflect.get(runtime, "timeoutMs") : undefined;
   const requested = [input.timeout_ms, nativeTimeout].find((v) => typeof v === "number" && Number.isSafeInteger(v) && v >= 1);
   const deadline = resolveSubagentTimeoutMs(typeof requested === "number" ? requested : SUBAGENT_CHILD_RESERVATION_MS, env);
-  return deadline === 0 ? 0 : deadline + SUBAGENT_HARD_CAP_GRACE_MS;
+  return deadline === 0 ? 0 : Math.min(deadline + SUBAGENT_HARD_CAP_GRACE_MS, MAX_TIMER_DELAY_MS);
 }
 
 /**
@@ -544,7 +547,7 @@ export async function invokeWithBackstop(
   const composed = composeAbortSignals(ctx?.signal, cap.signal);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<"expired">((resolve) => {
-    timer = setTimeout(() => resolve("expired"), capMs);
+    timer = setTimeout(() => resolve("expired"), Math.min(capMs, MAX_TIMER_DELAY_MS));
   });
   tracePhase(`spawn backstop armed ${capMs}ms`);
   const run = invoke(input, { ...ctx, signal: composed.signal });
@@ -2348,7 +2351,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         if (deadlineMs > 0) {
           let timer: ReturnType<typeof setTimeout> | undefined;
           const expired = new Promise<"timeout">((resolve) => {
-            timer = setTimeout(() => resolve("timeout"), deadlineMs);
+            timer = setTimeout(() => resolve("timeout"), Math.min(deadlineMs, MAX_TIMER_DELAY_MS));
           });
           let outcome: "done" | "timeout";
           try {

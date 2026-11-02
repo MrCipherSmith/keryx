@@ -1113,6 +1113,9 @@ describe("promote ceiling (review-highload-w6:F-001)", () => {
     if (!third.ok) {
       expect(third.error).toContain("watch-a");
       expect(third.error).toContain("watch-b");
+      // The registry kills nothing, so it must not claim it did: /demote shows this text too.
+      expect(third.error).not.toMatch(/was stopped|stopped/);
+      expect(third.error).toContain("still running");
     }
     // The refused task stays foreground; the registry itself kills nothing.
     expect(registry.get(started[2]!)?.phase).toBe("foreground");

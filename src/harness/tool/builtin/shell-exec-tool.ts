@@ -577,7 +577,7 @@ export function shellExecTool(
           // Refused (the background set is full past its ceiling): the task is
           // still foreground and nobody awaits it, so end it rather than leak it.
           await jobRegistry.kill(taskId, "over-cap");
-          return { output: promoted.error, isError: true };
+          return { output: `${promoted.error}; shell_exec then stopped this command, so nothing is left running`, isError: true };
         }
         const notice =
           outcome === "aborted"

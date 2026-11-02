@@ -1059,14 +1059,14 @@ export function createJobRegistry(options?: {
       }
       // Hard ceiling: past `PROMOTE_CEILING_FACTOR * maxConcurrent` other running
       // background tasks the promotion is refused (the task stays foreground and
-      // the caller ends it), so slow foreground commands cannot grow the running
+      // keeps running; the caller decides whether to end it), so slow foreground commands cannot grow the running
       // set without bound.
       const running = backgroundRunningJobs().filter((j) => j.info.jobId !== jobId);
       if (job.info.status === "running" && running.length >= PROMOTE_CEILING_FACTOR * maxConcurrent) {
         const names = running.map((j) => j.info.command).join(", ");
         return {
           ok: false,
-          error: `background task limit reached (${running.length} running: ${names}); this command outlived its wait and cannot become another background task, so it was stopped — wait for one to finish or kill it with shell_job_kill first`,
+          error: `background task limit reached (${running.length} running: ${names}); refused to make this command another background task; it is still running in the foreground — wait for one of those to finish or kill it with shell_job_kill first`,
         };
       }
       job.info.phase = "background";

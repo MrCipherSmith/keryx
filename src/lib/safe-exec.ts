@@ -642,10 +642,14 @@ function watchParentPid(deps: Pick<SafeExecDeps, "env" | "getPpid" | "setUnrefIn
   delete deps.env[REEXEC_PARENT_PID_ENV];
   const parentPid = Number(recorded);
   if (!Number.isInteger(parentPid) || parentPid <= 0) return;
-  // Trust the marker only when it names our actual parent at startup. A value
-  // that arrived through an inherited environment (a grandchild, a test
-  // runner) names some other process; watching it would kill this one.
-  if (deps.getPpid() !== parentPid) return;
+  // Trust the marker when it names our actual parent at startup, or when we were
+  // ALREADY reparented to init (ppid 1): the wrapper died before this ran, and
+  // skipping the watchdog then would leave exactly the orphan it exists to end
+  // (the first poll sees ppid 1 !== parentPid and exits). Any other live parent
+  // means the value arrived through an inherited environment (a grandchild, a
+  // test runner) and names some other process; watching it would kill this one.
+  const startPpid = deps.getPpid();
+  if (startPpid !== parentPid && startPpid !== 1) return;
   const handle = deps.setUnrefInterval(() => {
     const currentPpid = deps.getPpid();
     if (currentPpid === parentPid) return;
