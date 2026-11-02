@@ -48,7 +48,7 @@ export interface RemoteQueueWiringDeps {
   /** One line in the transcript. */
   say(text: string): void;
   /** Run a line as the operator's, labelled with where it came from. */
-  runLine(line: string, origin: "operator", source?: typeof TG_SOURCE): void;
+  runLine(line: string, origin: "operator" | "agent-message", source?: typeof TG_SOURCE): void;
 }
 
 export interface RemoteQueueWiring {
@@ -168,7 +168,7 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
     runQueued(item) {
       startingUpdateId = item.source === TG_SOURCE ? updateIds.get(item.id) : undefined;
       updateIds.delete(item.id);
-      deps.runLine(item.question, "operator", item.source);
+      deps.runLine(item.question, item.origin ?? "operator", item.source);
     },
 
     turnStarted(source) {

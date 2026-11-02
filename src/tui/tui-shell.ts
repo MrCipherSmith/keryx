@@ -344,7 +344,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
-import { frameSubmittedLine, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
+import { frameSubmittedLine, HC_UNPARSED_HEADER, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -9454,7 +9454,7 @@ export async function launchTuiAgentShell(opts: {
       // busInbox holds a wake-eligible peer message — same shape as
       // `"task-notification"`, and shares the SAME `consecutiveAutoWakes`
       // counter/cap (specification §5.3).
-      origin: "operator" | "task-notification" | "bus-message" = "operator",
+      origin: "operator" | "task-notification" | "bus-message" | "agent-message" = "operator",
       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
       source?: typeof TG_SOURCE,
       skipSlashRouting = false,
@@ -9466,17 +9466,18 @@ export async function launchTuiAgentShell(opts: {
       // not only the main agent turn — supersedes whatever next-step
       // suggestion request was still in flight from the PREVIOUS one.
       suggestionGate.cancel("new turn started");
-      if (origin === "operator") {
+      // Flow 481: another agent's line (herdr-core typed it), not the operator's. A Telegram line is
+      // the operator's whatever its shape. Decided once: the busy branch and the wiki-enrich route below
+      // both read it.
+      const agentShaped = source !== TG_SOURCE && (origin === "agent-message" || looksLikeHcMessage(line));
+
+      if (origin === "operator" && !agentShaped) {
         // A human is here: the auto-wake budget starts over.
         consecutiveAutoWakes = 0;
         // ...and the first thing they send replaces the wordmark (AC10).
         splash?.removeIfShown();
       }
       const displayLine = summarizeSubmittedLine(line);
-      // Flow 481: another agent's line (herdr-core typed it), not the operator's. A Telegram line is
-      // the operator's whatever its shape. Decided once: the busy branch and the wiki-enrich route below
-      // both read it.
-      const agentShaped = source === undefined && looksLikeHcMessage(line);
 
       // While main is in progress: control slash still works; anything else → side worker.
       // "In progress" is the chrome's own spinner state, which `startBusy` /
@@ -9735,7 +9736,7 @@ export async function launchTuiAgentShell(opts: {
         // the very next busy submit, skipping the recipient selector entirely
         // (the item is already committed to the main queue by definition).
         // (`remoteQueue` holds the pending edit: `/queue edit` set it, this takes it.)
-        if (remoteQueue.requeuePendingEdit(line, displayLine)) {
+        if (!agentShaped && remoteQueue.requeuePendingEdit(line, displayLine)) {
           return;
         }
         // Flow 275 T7 (specification §4.3, AC4): "dispatches no side worker
@@ -9745,7 +9746,7 @@ export async function launchTuiAgentShell(opts: {
         // goes straight to the main queue, same as the idle-path hold below,
         // skipping the Main-queue/Side-1 choice entirely.
         if (leaseView()?.held() === true) {
-          const position = turnLoop.enqueue(line, displayLine, source);
+          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
@@ -9754,7 +9755,7 @@ export async function launchTuiAgentShell(opts: {
         // keyboard, and its Side-1 answer would hand the raw, unframed text to a worker outside the
         // main history. A Telegram line is the operator's, so it keeps the dialog.
         if (agentShaped) {
-          const position = turnLoop.enqueue(line, displayLine, source);
+          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);
           io.onSystem?.(`◇ agent message queued as q${position}; the main agent reads it when this turn ends.\n`);
           return;
         }
@@ -10597,8 +10598,8 @@ export async function launchTuiAgentShell(opts: {
       // this point by their own wake sites' `isIdle` ("not held"); this is a
       // defensive no-op for either, never an empty-line turn or a queue push.
       if (leaseView()?.held() === true) {
-        if (origin === "operator") {
-          const position = turnLoop.enqueue(line, displayLine, source);
+        if (origin === "operator" || origin === "agent-message") {
+          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position}.\n`);
         }
         return;
@@ -10945,7 +10946,7 @@ export async function launchTuiAgentShell(opts: {
         let deps = sessionDeps;
         const turnSignal = foregroundOperation.signal;
         let routingOutcome: RoutingClassifierTurnResult | undefined;
-        if (routingEnabled && origin === "operator" && line.trim().length > 0) {
+        if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {
           try {
             routingOutcome = await runRoutingClassifierForTurn(line, {
               enabled: routingEnabled,
@@ -11022,11 +11023,13 @@ export async function launchTuiAgentShell(opts: {
         // Flow 481 T8: an hc agent message reaches the model framed as one (and the
         // history stores that framed text); every other line is passed as typed. A
         // Telegram line is the operator's own words and is never framed.
-        const modelLine = source === undefined ? frameSubmittedLine(line) : line;
+        const modelLine = source === undefined
+          ? agentShaped && !looksLikeHcMessage(line) ? `${HC_UNPARSED_HEADER}\n\n${line}` : frameSubmittedLine(line)
+          : line;
         void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
         signal: turnSignal,
         recovery: {},
-        ...(origin === "operator" ? {} : { origin }),
+        ...(agentShaped ? { origin: "agent-message" as const } : origin === "operator" ? {} : { origin }),
         // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       })).finally(() => {

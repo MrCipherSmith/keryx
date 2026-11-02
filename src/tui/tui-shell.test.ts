@@ -4141,7 +4141,7 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
     expect(bodyStart).toBeGreaterThan(runLineStart);
     expect(dispatchStart).toBeGreaterThan(bodyStart);
     expect(nextStepSource.slice(runLineStart, bodyStart)).toContain(
-      'origin: "operator" | "task-notification" | "bus-message" = "operator"',
+      'origin: "operator" | "task-notification" | "bus-message" | "agent-message" = "operator"',
     );
 
     // An empty operator line starts no turn. Every dispatched line must cancel

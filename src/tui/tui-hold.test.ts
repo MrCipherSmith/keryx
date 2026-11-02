@@ -28,10 +28,10 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     const between = source.slice(gateIdx, echoIdx);
     // Only origin "operator" pushes to the queue; every other origin (a
     // defensive no-op for task-notification/bus-message) just returns.
-    expect(between).toContain('if (origin === "operator")');
+    expect(between).toContain('if (origin === "operator" || origin === "agent-message")');
     // Flow 376: a Telegram line keeps its `tg` label through the hold queue.
     // (`enqueue` repaints; the position it returns goes into the notice.)
-    expect(between).toContain("const position = turnLoop.enqueue(line, displayLine, source);");
+    expect(between).toContain("const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? \"agent-message\" : undefined);");
     expect(between).toContain("queued as q${position}.\\n");
     expect(between).toContain("return;");
     // And it must return BEFORE the echo ever runs — i.e. this whole gate
@@ -42,12 +42,12 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
   test("the busy-branch side-worker dispatch is gated before the Main-queue/Side-1 composer choice, with no choice offered while held", () => {
     const choiceIdx = source.indexOf('title: "Main agent is busy"');
     expect(choiceIdx).toBeGreaterThan(0);
-    const pendingEditIdx = source.indexOf("if (remoteQueue.requeuePendingEdit(line, displayLine))");
+    const pendingEditIdx = source.indexOf("if (!agentShaped && remoteQueue.requeuePendingEdit(line, displayLine))");
     expect(pendingEditIdx).toBeGreaterThan(0);
     expect(pendingEditIdx).toBeLessThan(choiceIdx);
     const block = source.slice(pendingEditIdx, choiceIdx);
     expect(block).toContain("leaseView()?.held() === true");
-    expect(block).toContain("const position = turnLoop.enqueue(line, displayLine, source);");
+    expect(block).toContain("const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? \"agent-message\" : undefined);");
     expect(block).toContain("queued as q${position} (no side worker while held).\\n");
     // The held branch must return BEFORE the composer-choice IIFE below it.
     const heldIdx = block.indexOf("leaseView()?.held() === true");

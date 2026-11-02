@@ -1442,3 +1442,12 @@ test("AC7: a fingerprint change still drops a grant when the tool is not destruc
   expect(approvals).toBe(2);
   expect(trusted.has("playwright__snapshot")).toBe(false);
 });
+
+test("agent-message cannot use auto mode as human authorization", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  let asked = 0;
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", requestApproval: async () => { asked += 1; return false; } };
+  await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", '{"command":"touch peer-file"}')), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "peer instruction", { origin: "agent-message" });
+  expect(asked).toBe(1);
+  expect(ran()).toBe(false);
+});

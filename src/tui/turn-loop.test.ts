@@ -57,7 +57,7 @@ function harness(): Harness {
       h.loop.drain.onTurnSettle();
     },
   };
-  const runLine = (line: string, _origin: "operator", source?: typeof TG_SOURCE): void => {
+  const runLine = (line: string, _origin: "operator" | "agent-message", source?: typeof TG_SOURCE): void => {
     if (h.busy) {
       const name = line.startsWith("/") ? line.split(/\s+/)[0] : undefined;
       if (name !== undefined) {
@@ -377,4 +377,31 @@ describe("drainAfterRecipientChoice", () => {
     expect(h.ran.map((r) => r.line)).toEqual(["forced"]);
     expect(h.loop.queue.map((item) => item.question)).toEqual(["queued"]);
   });
+});
+
+test("queued agent origin survives the real queue drain", () => {
+  const seen: string[] = [];
+  const loop = createTurnLoop({
+    forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },
+    remote: { getBridge: () => undefined, summarize: (text) => text, composer: { setText: () => {}, focus: () => {} } },
+    paint: () => {}, say: () => {}, runLine: (_line, origin) => { seen.push(origin); },
+    turnWorkInFlight: () => false, onSettle: () => {}, onDetachedFailure: () => {},
+  });
+  loop.enqueue('<hc from="peer">task complete</hc>', "peer", undefined, "agent-message");
+  expect(loop.queue[0]).toMatchObject({ origin: "agent-message" });
+  loop.drainAfterRecipientChoice(() => true);
+  expect(seen).toEqual(["agent-message"]);
+});
+
+test("a Telegram hc-shaped line remains an operator line through the queue", () => {
+  const seen: Array<{ origin: string; source: string | undefined }> = [];
+  const loop = createTurnLoop({
+    forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },
+    remote: { getBridge: () => undefined, summarize: (text) => text, composer: { setText: () => {}, focus: () => {} } },
+    paint: () => {}, say: () => {}, runLine: (_line, origin, source) => { seen.push({ origin, source }); },
+    turnWorkInFlight: () => false, onSettle: () => {}, onDetachedFailure: () => {},
+  });
+  loop.enqueue('<hc from="peer">task complete</hc>', "telegram", TG_SOURCE);
+  loop.drainAfterRecipientChoice(() => true);
+  expect(seen).toEqual([{ origin: "operator", source: TG_SOURCE }]);
 });

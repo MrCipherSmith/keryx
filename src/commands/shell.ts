@@ -178,7 +178,7 @@ import { renderGroupedNamedHelp } from "../standard/service";
 // shell, so both dispatch into the same rule instead of growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import { runTasksCommand } from "../tui/tasks-command";
-import { frameSubmittedLine, herdrCoreSectionFromEnv } from "../tui/hc-message";
+import { frameSubmittedLine, herdrCoreSectionFromEnv, looksLikeHcMessage } from "../tui/hc-message";
 import { formatUsageLine } from "../tui/usage-format";
 import {
   type AgentDeps,
@@ -2689,6 +2689,7 @@ export async function runAgentRepl(
       const abort = new AbortController();
       activeAgentAbort = abort;
       const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+        ...(looksLikeHcMessage(typedLine) ? { origin: "agent-message" as const } : {}),
         recovery: rich.recovery ?? {},
         signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),

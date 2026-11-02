@@ -905,7 +905,7 @@ export interface RunAgentTurnOptions {
    * busInbox holds a wake-eligible peer message — the same "no operator line,
    * the input IS the notification" shape as `"task-notification"`.
    */
-  origin?: "operator" | "task-notification" | "bus-message";
+  origin?: "operator" | "task-notification" | "bus-message" | "agent-message";
   /**
    * Whether this turn belongs to an automatic review. Absent: decided from the
    * operator's own line (`isAutomaticReviewRequest`) for an operator turn, and
@@ -3116,6 +3116,9 @@ async function runAgentTurnCore(
     history.push({ role: "user", content: scrub(buildPeerMessageNotification(delivered)), provenance: "tool", ts: now() });
     io.onHistoryChange?.("user");
     deps.busAck?.(delivered);
+  } else if (options.origin === "agent-message") {
+    history.push({ role: "user", content: scrub(userLine), provenance: "tool", ts: now() });
+    io.onHistoryChange?.("user");
   } else {
     // Flow 306 (W6 T9): `UserPromptSubmit` fires ONLY for a genuine operator
     // line — never for the synthesized task-notification/bus-message
@@ -3244,7 +3247,7 @@ async function runAgentTurnCore(
     // on any failure, skip slate lifecycle bookkeeping for this turn and let
     // the real request proceed.
     try {
-      if (options.skipCloseTrigger !== true && isClosePhrase(userLine)) {
+      if ((options.origin ?? "operator") === "operator" && options.skipCloseTrigger !== true && isClosePhrase(userLine)) {
         // SLATE-18 "explicit" trigger: a human declared the task done in
         // plain language ("wrap up", "task complete", …) — dispatch BEFORE
         // the close archives the slate, so there is still a live Slate to
@@ -3389,7 +3392,7 @@ async function runAgentTurnCore(
   // within one user request is still caught). Only gates non-`read` tool calls
   // (see the `risk !== "read"` check) — a `read` tool cannot carry out a side
   // effect an injected instruction asked for, so it stays usable.
-  let untrustedContentSeen = false;
+  let untrustedContentSeen = options.origin === "agent-message";
   // Flow 425: the review arbiter runs one tier below this model. Only a turn that can ask the operator reports it,
   // so a reviewer subagent on a lighter model does not move the arbiter's tier.
   if (deps.tools.some((tool) => tool.definition.name === "ask_user")) {

@@ -32,6 +32,7 @@ export interface QueuedMainQuestion {
    * Absent for everything the operator typed.
    */
   source?: "tg";
+  origin?: "agent-message";
 }
 
 export type QueueCommandAction = "remove" | "edit" | "force";
@@ -135,10 +136,11 @@ export interface PendingQueueEdit {
   id: string;
   at: number;
   source?: "tg";
+  origin?: "agent-message";
 }
 
 export function pendingQueueEditFor(removed: QueuedMainQuestion, at: number): PendingQueueEdit {
-  return { id: removed.id, at, ...(removed.source !== undefined ? { source: removed.source } : {}) };
+  return { id: removed.id, at, ...(removed.source !== undefined ? { source: removed.source } : {}), ...(removed.origin !== undefined ? { origin: removed.origin } : {}) };
 }
 
 /** Re-queue the edited text where it was, keeping the id and the source of the item it replaces. */
@@ -153,6 +155,7 @@ export function reinsertEditedMainQueueItem<T extends QueuedMainQuestion>(
     question,
     displayQuestion,
     ...(edit.source !== undefined ? { source: edit.source } : {}),
+    ...(edit.origin !== undefined ? { origin: edit.origin } : {}),
   });
 }
 

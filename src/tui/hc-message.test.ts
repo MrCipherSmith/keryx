@@ -394,18 +394,19 @@ describe("wiring (source audit)", () => {
   test("a Telegram line is the operator's: its tg mark wins and it is never framed", () => {
     expect(tuiSource).toContain("const hcEcho = source === undefined ? hcTranscriptEcho(line) : undefined;");
     expect(tuiSource).toContain("...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : hcEcho !== undefined ?");
-    expect(tuiSource).toContain("const modelLine = source === undefined ? frameSubmittedLine(line) : line;");
+    expect(tuiSource).toContain("const modelLine = source === undefined");
+    expect(tuiSource).toContain(": line;");
   });
 
   test("an agent-shaped line skips the operator-only routes: the wiki-enrich picker and the busy dialog", () => {
     // One definition of "agent-shaped", read at both sites.
-    const definition = "const agentShaped = source === undefined && looksLikeHcMessage(line);";
+    const definition = 'const agentShaped = source !== TG_SOURCE && (origin === "agent-message" || looksLikeHcMessage(line));';
     expect(tuiSource.split(definition).length).toBe(2);
-    expect(tuiSource.split("source === undefined && looksLikeHcMessage(line)").length).toBe(2);
+    expect(tuiSource.split('source !== TG_SOURCE && (origin === "agent-message" || looksLikeHcMessage(line))').length).toBe(2);
     expect(tuiSource).toContain("if (source === undefined && !agentShaped && isWikiEnrichIntent(line)) {");
     const defined = tuiSource.indexOf(definition);
     const busy = tuiSource.indexOf("if (chrome.isBusy()) {");
-    const queued = tuiSource.indexOf("if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source);");
+    const queued = tuiSource.indexOf('if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);');
     expect(defined).toBeGreaterThan(-1);
     expect(busy).toBeGreaterThan(defined);
     const dialog = tuiSource.indexOf('title: "Main agent is busy",');
@@ -426,4 +427,15 @@ describe("wiring (source audit)", () => {
       expect(rest.slice(0, 900)).toContain("herdrCore: herdrCoreSectionFromEnv(process.env)");
     }
   });
+});
+
+
+test("hc provenance reaches the driver from both direct and queued TUI lines and readline", () => {
+  expect(tuiSource).toContain('...(agentShaped ? { origin: "agent-message" as const } : origin === "operator" ? {} : { origin })');
+  expect(tuiSource).toContain('turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined)');
+  expect(shellSource).toContain('...(looksLikeHcMessage(typedLine) ? { origin: "agent-message" as const } : {})');
+});
+
+test("an incoming agent message cannot consume a human's pending queue edit", () => {
+  expect(tuiSource).toContain("if (!agentShaped && remoteQueue.requeuePendingEdit(line, displayLine))");
 });

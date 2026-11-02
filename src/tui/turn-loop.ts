@@ -45,7 +45,7 @@ export interface TurnLoop {
   /** Swap the queue array for `next`; the drain and the remote wiring read the new one from the next call on. */
   replaceQueue(next: QueuedMainQuestion[]): void;
   /** Append a line and repaint; returns its 1-based position. */
-  enqueue(line: string, displayLine: string, source?: QueuedMainQuestion["source"]): number;
+  enqueue(line: string, displayLine: string, source?: QueuedMainQuestion["source"], origin?: QueuedMainQuestion["origin"]): number;
   /**
    * A slash line typed while a turn runs. Unlike `enqueue` it asks `deferredBusyAction` first: a command
    * that would replace the session under the turn is not queued and this returns false (the caller
@@ -69,8 +69,8 @@ export function createTurnLoop(deps: TurnLoopDeps): TurnLoop {
   let seq = 0;
   const nextId = (): string => `mq${seq++}`;
 
-  const enqueue: TurnLoop["enqueue"] = (line, displayLine, source) => {
-    queue.push({ id: nextId(), question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
+  const enqueue: TurnLoop["enqueue"] = (line, displayLine, source, origin) => {
+    queue.push({ id: nextId(), question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}), ...(origin !== undefined ? { origin } : {}) });
     deps.paint();
     return queue.length;
   };

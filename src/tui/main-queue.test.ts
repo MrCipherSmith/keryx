@@ -248,3 +248,9 @@ test("AC6: the listing is the row text plus one line that explains Force", () =>
   expect(QUEUE_FORCE_HELP.includes("\n")).toBe(false);
   expect(formatQueueListing([], { kind: "turn" })).toEqual(["main queue is empty."]);
 });
+
+test("editing a queued agent message preserves its non-operator origin", () => {
+  const original = { ...q("peer", "<hc from=\"peer\">hi</hc>"), origin: "agent-message" as const };
+  const edit = pendingQueueEditFor(original, 0);
+  expect(reinsertEditedMainQueueItem([], edit, "edited", "edited")[0]).toMatchObject({ origin: "agent-message" });
+});
