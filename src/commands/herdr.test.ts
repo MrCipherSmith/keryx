@@ -383,6 +383,20 @@ describe("herdr remove", () => {
     expect(snapshot(root)).toEqual(before);
   });
 
+  test("remove keeps a symlinked programs.json a link; the entry leaves its target", async () => {
+    makeHomes();
+    const dotfiles = path.join(root, "dotfiles");
+    mkdirSync(dotfiles, { recursive: true });
+    const real = path.join(dotfiles, "programs.json");
+    writeFileSync(real, JSON.stringify({ shells: ["zsh"] }));
+    symlinkSync(real, programs);
+    await runHerdr("install", {}, deps);
+    const report = await runHerdr("remove", {}, deps);
+    expect(report.targets[0]?.action).toBe("removed");
+    expect(lstatSync(programs).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(readFileSync(real, "utf8"))).toEqual({ programs: {}, shells: ["zsh"] });
+  });
+
   test("an invalid programs.json fails remove, stays byte-identical and stops the other removals", async () => {
     makeHomes();
     await runHerdr("install", {}, deps);
