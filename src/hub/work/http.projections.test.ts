@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { createHubApplication } from '../server';
 import type { HubApplication } from '../contracts';
 import { createWorkClient } from './client';
+import { matchesWorkSchema } from './openapi';
 import { context, scopedFixture } from './storage.fixture.test-support';
 
 const directories:string[]=[],apps:HubApplication[]=[];
@@ -29,4 +30,16 @@ test('live Flow and Intent aggregates expose a late contradictory Evidence incid
         const projection=await client.read(route,'p',parameters);
         expect(projection.records.filter(record=>record.id===late.id)).toHaveLength(1);
     }
+});
+test('live attention Evidence response satisfies the closed API schema and Work client',async()=>{
+    const {client,get,late}=acceptedIncident();
+    const response=await get('attention');expect(response.status).toBe(200);
+    const page=await response.json();expect(matchesWorkSchema(page,{$ref:'#/components/schemas/AttentionPage'})).toBe(true);
+    const parsed=await client.read('attention','p');expect(parsed.records.some(record=>record.id===late.id&&record.kind==='evidence')).toBe(true);
+});
+test('live capabilities expose the published closed limit contract to the Work client',async()=>{
+    const {client}=acceptedIncident();
+    const capabilities=await client.read('capabilities','p');
+    expect(capabilities.limits.maxCommandBytes).toBe(65536);
+    expect(Object.keys(capabilities.limits).sort()).toEqual(['maxCommandBytes','defaultPageSize','maxPageSize','maxEventPageSize','maxEventBytes','maxSnapshotBytes'].sort());
 });

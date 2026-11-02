@@ -5664,7 +5664,7 @@
               "minLength": 1,
               "maxLength": 200
             },
-            "minItems": 1,
+            "minItems": 0,
             "maxItems": 200
           },
           "replacements": {
@@ -6184,7 +6184,7 @@
                       "minLength": 1,
                       "maxLength": 200
                     },
-                    "minItems": 1
+                    "minItems": 0
                   },
                   "reason": {
                     "type": "string",
@@ -8857,6 +8857,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/Attempt"
+                },
+                {
+                  "$ref": "#/components/schemas/EvidenceRecord"
                 }
               ]
             }
