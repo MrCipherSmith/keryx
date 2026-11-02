@@ -11,7 +11,7 @@
   "title": "Implement collaborative Hub work metadata and UI",
   "status": "in-progress",
   "createdAt": "2026-11-01T10:18:40.722Z",
-  "updatedAt": "2026-11-02T07:31:57.702Z",
+  "updatedAt": "2026-11-02T12:58:20.568Z",
   "source": {
     "type": "description",
     "ref": null
@@ -488,14 +488,24 @@
       "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-02T12:54:35.662Z",
+            "outcome": "started",
+            "detail": "R03 provenance reconciliation: attach existing R02 implementation and verification artifacts using current timestamps; this is an audit repair, not a retroactive claim of another R02 implementation run."
+          }
+        ]
       },
       "acRefs": [],
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r03/provenance.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/report.md",
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/dispositions.json"
+      ],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "All 30 A-N majors fixed with regressions; full per-ID dispositions published. Final head d50652ac71030f955c94f84cc5c73589ecf7f02a CI41348630889: 20 successful checks, one expected skipped Pages deployment. F002 bounded-v1 residual and other carry-over follow-ups explicitly disclosed. No merge, release, production cutover or frozen product acceptance."
+      "dispositionReason": "R03 provenance reconciliation only: retain prior R02 completion and attach its existing implementation/verification artifacts; new audit attempt timestamp is current, not backdated. Current R03 fixes remain a separate job."
     },
     {
       "id": "T25",
@@ -1586,6 +1596,16 @@
       "at": "2026-11-02T07:31:57.702Z",
       "event": "task-done",
       "detail": "T44: Reproduce and fix controller-generation queue CI stale-version race"
+    },
+    {
+      "at": "2026-11-02T12:54:35.662Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — R03 provenance reconciliation: attach existing R02 implementation and verification artifacts using current timestamps; this is an audit repair, not a retroactive claim of another R02 implementation run."
+    },
+    {
+      "at": "2026-11-02T12:58:20.568Z",
+      "event": "task-done",
+      "detail": "T24: Fix PR1113 review root causes A-N and triage all linked findings"
     }
   ],
   "acKinds": {

@@ -3236,7 +3236,7 @@
     "tests": [
       "keryx flow status 480; CLI task updates journaled without product acceptance"
     ],
-    "reason": "T4 now names existing DraftPR1113; T21 skipped with owner no-release steering; T22 records prepared review handoff and external CI gate. T24 remains in progress at the publication snapshot until final checks complete.",
+    "reason": "T4 now names existing DraftPR1113; T21 skipped with owner no-release steering; T22 records prepared review handoff and external CI gate. T24 remains in progress at the publication snapshot until final checks complete. Historical qualification from R03: that snapshot wording did not establish a recorded task attempt. A new current-timestamp provenance audit attaches existing R02 evidence without backdating implementation; see review-fixes-r03/provenance.md.",
     "commits": [
       "613e7f7c9561dd0cf5224b3a621b16313c610cba"
     ]
