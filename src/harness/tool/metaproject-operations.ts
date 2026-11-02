@@ -2131,6 +2131,9 @@ export function toToolDefinitions(ops: MetaprojectOperation[]): ToolDefinition[]
  * a short finding list may mean the check could not run rather than that
  * nothing is stale.
  */
+/** Pages in doubt listed before the "+N more" marker. */
+const MAX_FRESHNESS_PAGES = 40;
+
 function formatFreshness(result: WikiFreshnessResult): InteractiveToolResult {
   const lines: string[] = [];
 
@@ -2157,9 +2160,15 @@ function formatFreshness(result: WikiFreshnessResult): InteractiveToolResult {
     lines.push("No page is reported as needing attention in the last report's range.");
   } else {
     lines.push("Pages in doubt (do not treat these as current without checking):");
-    for (const page of result.pages.slice(0, 40)) {
+    for (const page of result.pages.slice(0, MAX_FRESHNESS_PAGES)) {
       lines.push(
         `  - ${page.path}: ${page.category}, ${page.confidence}, ${page.commitsBehind} commit(s) behind`,
+      );
+    }
+    if (result.pages.length > MAX_FRESHNESS_PAGES) {
+      lines.push(
+        `  - … +${result.pages.length - MAX_FRESHNESS_PAGES} more page(s) in doubt not shown ` +
+          `(${result.pages.length} in all) — call wiki_freshness {"page": ...} or run keryx wiki freshness for the full list`,
       );
     }
   }
