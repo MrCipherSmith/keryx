@@ -23,12 +23,14 @@ import {
   MAX_TASK_IDLE_TIMEOUT_MS,
   MIN_TASK_IDLE_TIMEOUT_MS,
   clampTaskIdleTimeoutMs,
+  resolveEnvMs,
 } from "./background-job-registry";
 import {
   SHELL_INLINE_CAP,
+  SHELL_TRANSCRIPT_MAX_CHARS,
+  TranscriptRecorder,
   overInlineCap,
   renderShellOutput,
-  transcriptFromStreams,
   type ShellTranscript,
 } from "./shell-transcript";
 import type { DetectOptions } from "../../process/sandbox/detect";
@@ -79,18 +81,12 @@ export const ENV_SHELL_TIMEOUT_MS = "KERYX_SHELL_TIMEOUT_MS";
 /**
  * Resolve the shell deadline in ms. Unset / empty / non-numeric / negative all
  * fall back to the default — a malformed value must never silently mean "no
- * deadline". `0` disables the deadline, but only when set deliberately.
+ * deadline". `0` disables the deadline, but only when set deliberately. A value
+ * above the largest delay a timer honours (2^31 - 1 ms) is CLAMPED to it:
+ * `setTimeout` would otherwise fire after 1 ms and kill every command.
  */
 export function resolveShellTimeoutMs(env: Record<string, string | undefined> = process.env): number {
-  const raw = env[ENV_SHELL_TIMEOUT_MS];
-  if (raw === undefined || raw.trim().length === 0) {
-    return DEFAULT_SHELL_TIMEOUT_MS;
-  }
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 0) {
-    return DEFAULT_SHELL_TIMEOUT_MS;
-  }
-  return n;
+  return resolveEnvMs(env[ENV_SHELL_TIMEOUT_MS], DEFAULT_SHELL_TIMEOUT_MS);
 }
 
 /**
@@ -117,15 +113,28 @@ export const ENV_SHELL_YIELD_MS = "KERYX_SHELL_YIELD_MS";
  * choice rather than a malformed value.
  */
 export function resolveShellYieldMs(env: Record<string, string | undefined> = process.env): number {
-  const raw = env[ENV_SHELL_YIELD_MS];
-  if (raw === undefined || raw.trim().length === 0) {
-    return DEFAULT_SHELL_YIELD_MS;
-  }
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 0) {
-    return DEFAULT_SHELL_YIELD_MS;
-  }
-  return n;
+  return resolveEnvMs(env[ENV_SHELL_YIELD_MS], DEFAULT_SHELL_YIELD_MS);
+}
+
+/**
+ * The synchronous runner's transcript from its two per-stream recorders: stdout, then stderr,
+ * joined as the old `${stdout}\n${stderr}` so a short result reads exactly as it did. Each
+ * recorder stopped growing at the transcript cap while reading, so memory stays bounded.
+ */
+function transcriptFromRecorders(out: TranscriptRecorder, err: TranscriptRecorder): ShellTranscript {
+  const o = out.snapshot();
+  const e = err.snapshot();
+  const joined = o.full.length > 0 && e.full.length > 0 ? `${o.full}\n${e.full}` : `${o.full}${e.full}`;
+  const over = joined.length > SHELL_TRANSCRIPT_MAX_CHARS;
+  return {
+    full: over ? joined.slice(0, SHELL_TRANSCRIPT_MAX_CHARS) : joined,
+    fullTruncated: over || o.fullTruncated || e.fullTruncated,
+    stdoutBytes: o.stdoutBytes,
+    stdoutLines: o.stdoutLines,
+    stderrBytes: e.stderrBytes,
+    stderrLines: e.stderrLines,
+    stderrTail: e.stderrTail,
+  };
 }
 
 /** Apply the shared 20KB output cap, marking a truncated transcript as such. */
@@ -333,9 +342,18 @@ export function makeCommandRunner(
       // write end and can outlive the shell, so waiting on the pipe would hang
       // past the very deadline we just enforced. Incremental reads also mean the
       // output produced before the timeout is still available to report.
-      const out = { text: "" };
-      const err = { text: "" };
-      const readInto = async (stream: ReadableStream<Uint8Array> | undefined, sink: { text: string }): Promise<void> => {
+      //
+      // Each stream feeds a recorder that stops growing at the transcript cap yet
+      // keeps counting bytes/lines, so a chatty command cannot balloon this process's
+      // memory; the loop keeps reading (discarding) past the cap so the child never
+      // blocks on a full pipe.
+      const out = new TranscriptRecorder();
+      const err = new TranscriptRecorder();
+      const readInto = async (
+        stream: ReadableStream<Uint8Array> | undefined,
+        sink: TranscriptRecorder,
+        which: "stdout" | "stderr",
+      ): Promise<void> => {
         if (stream === undefined) return;
         const reader = stream.getReader();
         const decoder = new TextDecoder();
@@ -343,7 +361,7 @@ export function makeCommandRunner(
           for (;;) {
             const chunk = await reader.read();
             if (chunk.done) break;
-            if (chunk.value !== undefined) sink.text += decoder.decode(chunk.value, { stream: true });
+            if (chunk.value !== undefined) sink.push(decoder.decode(chunk.value, { stream: true }), which);
           }
         } catch {
           // stream torn down by the kill — keep what we have
@@ -354,7 +372,7 @@ export function makeCommandRunner(
 
       let exit = 0;
       try {
-        const drained = Promise.all([readInto(proc.stdout, out), readInto(proc.stderr, err)]);
+        const drained = Promise.all([readInto(proc.stdout, out, "stdout"), readInto(proc.stderr, err, "stderr")]);
         // Awaited unconditionally, kill path included — flow 301's unattended
         // dispatchers rely on THIS promise not resolving until the killed group has
         // actually exited, so `closeProxy()`/scratch cleanup never races a process
@@ -368,13 +386,16 @@ export function makeCommandRunner(
         }
       } finally {
         if (killTimer !== undefined) clearTimeout(killTimer);
-        if (forceTimer !== undefined) clearTimeout(forceTimer);
+        if (forceTimer !== undefined) {
+          clearTimeout(forceTimer);
+          // The direct child exiting does not mean the GROUP is gone: a grandchild that
+          // ignored the group SIGTERM would otherwise outlive the deadline. Send the
+          // SIGKILL now (ESRCH, when nothing is left, is swallowed by `kill`).
+          if (processGroup) kill("SIGKILL");
+        }
         if (signal !== undefined) signal.removeEventListener("abort", onAbort);
       }
-      const stdout = out.text;
-      const stderr = err.text;
-
-      const transcript = transcriptFromStreams(stdout, stderr);
+      const transcript = transcriptFromRecorders(out, err);
       if (aborted) {
         return transcriptResult(transcript, true, "aborted: run time limit", "");
       }
@@ -553,6 +574,9 @@ export function shellExecTool(
         // WAIT, not the command, so the work survives and is reported later.
         const promoted = jobRegistry.promote(taskId);
         if (!promoted.ok) {
+          // Refused (the background set is full past its ceiling): the task is
+          // still foreground and nobody awaits it, so end it rather than leak it.
+          await jobRegistry.kill(taskId, "over-cap");
           return { output: promoted.error, isError: true };
         }
         const notice =

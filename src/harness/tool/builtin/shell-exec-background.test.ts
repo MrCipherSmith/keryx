@@ -502,6 +502,27 @@ describe("flow 263 AC5: the cap counts background-phase tasks only (through shel
     expect(registry.list().filter((t) => t.status === "running").length).toBeLessThanOrEqual(2);
     await registry.sweepAll();
   });
+
+  test("a foreground task past twice the cap is not promoted: the call errors and the task is killed (review-highload-w6:F-001)", async () => {
+    const { spawn, kills } = scriptedSpawner(route);
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, maxConcurrent: 1, killGraceMs: 200 });
+    const tool = shellExecTool("/proj", unusedRun, registry, { yieldMs: 50 });
+
+    expect((await tool.invoke({ command: "npm run dev", background: true })).isError).toBe(false);
+    const over = await tool.invoke({ command: "bun test --watch" });
+    expect(typeof (JSON.parse(over.output) as TaskHandleJson).over_cap).toBe("string");
+
+    const refused = await tool.invoke({ command: "tail -f app.log" });
+    expect(refused.isError).toBe(true);
+    expect(refused.output).toContain("npm run dev");
+    expect(refused.output).toContain("bun test --watch");
+    const stopped = registry.list().find((t) => t.command === "tail -f app.log");
+    expect(stopped).toMatchObject({ status: "killed", killReason: "over-cap" });
+    expect(kills.get(stopped?.pid as number)?.[0]).toBe("SIGTERM");
+    // Still bounded: nothing past the ceiling is left running.
+    expect(registry.list().filter((t) => t.status === "running").length).toBeLessThanOrEqual(2);
+    await registry.sweepAll();
+  });
 });
 
 describe("flow 263: idle kill and lost-task results (fakes, every platform)", () => {
