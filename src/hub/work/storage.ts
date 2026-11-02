@@ -282,14 +282,21 @@ export function workRepository(db: Database) {
         const usage = db.query<{ records: number; operations: number; bytes: number }, [string]>('SELECT records,operations,bytes FROM hub_work_usage WHERE project_id=?').get(projectId);
         if (usage && (usage.records > workStorageLimits.maxRecords || usage.operations > workStorageLimits.maxOperations || usage.bytes > workStorageLimits.maxHistoryBytes)) fail(413, 'quota-exceeded', 'Managed work durable history quota exceeded; archive the project before adding more history');
     });
-    const archiveDocument = db.transaction((document: HubDocument): void => {
-        const result = db.query('INSERT OR IGNORE INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId, document.id, document.version, document.contentDigest, JSON.stringify(document));
-        // Existing old histories are preserved during the one-time archival migration.
-        // Once that completes, refuse new growth rather than silently dropping immutable wiki/spec pins.
-        if (result.changes && db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get()) {
+    /** Returns false when an unpinned version was skipped because the archive is full. */
+    const archiveDocument = db.transaction((document: HubDocument, pinned = true): boolean => {
+        const body = JSON.stringify(document);
+        const enforced = !!db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-artifacts-v1'").get();
+        const over = (bytes: number, count: number) => {
             const usage = db.query<{bytes:number;count:number},[]>('SELECT bytes,count FROM hub_work_document_usage WHERE id=1').get()!;
-            if (usage.bytes > workStorageLimits.maxArchivedDocumentBytes || usage.count > workStorageLimits.maxArchivedDocumentVersions) fail(413,'quota-exceeded','Immutable document archive quota exceeded; explicit archival is required');
-        }
+            return usage.bytes + bytes > workStorageLimits.maxArchivedDocumentBytes || usage.count + count > workStorageLimits.maxArchivedDocumentVersions;
+        };
+        // An unpinned legacy version that does not fit stays readable from legacy state and is archived if a pin needs it.
+        if (!pinned && enforced && over(Buffer.byteLength(body), 1) && !db.query('SELECT 1 FROM hub_work_documents WHERE project_id=? AND document_id=? AND version=?').get(document.projectId, document.id, document.version)) return false;
+        const result = db.query('INSERT OR IGNORE INTO hub_work_documents(project_id,document_id,version,content_digest,body) VALUES(?,?,?,?,?)').run(document.projectId, document.id, document.version, document.contentDigest, body);
+        // Existing old histories are preserved during the one-time archival migration.
+        // Once that completes, refuse new pinned growth rather than silently dropping immutable wiki/spec pins.
+        if (result.changes && enforced && over(0, 0)) fail(413,'quota-exceeded','Immutable document archive quota exceeded; explicit archival is required');
+        return true;
     });
     const documentVersion = (projectId: string, reference: {
         documentId: string;

@@ -2,6 +2,7 @@ import { legacyArtifacts } from "./legacy-artifacts";
 import { deliveryJobs } from "./delivery-jobs";
 import { fail } from "./domain";
 import { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import { migrateWork, workRepository } from "./work/storage";
 import { migrateRemote, syncProjectReferences, remoteRepository, type RemoteRepository } from "./remote-v2/storage";
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
@@ -85,17 +86,20 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
       previousSessions.delete(id);
     }
     for (const id of previousSessions.keys()) db.query('DELETE FROM hub_sessions WHERE id=?').run(id);
-    for (const document of state.documents) work.archiveDocument(document);
-    for (const change of state.documentChanges) work.archiveDocument(change.document);
+    // Legacy versions are archived eagerly but unpinned: a full archive skips them rather than refusing the edit.
+    for (const document of state.documents) work.archiveDocument(document, false);
+    for (const change of state.documentChanges) work.archiveDocument(change.document, false);
   };
-  // The projection is additive. Bootstrap once from old databases, never on a work request.
-  if (!db.query("SELECT 1 FROM hub_work_settings WHERE key='legacy-projection-v1'").get()) db.transaction(() => {
+  // The projections are derived from hub_state and record the digest of the body they were derived from.
+  // A writer that does not know them (a rolled-back release) changes hub_state alone, so rebuild on any mismatch.
+  const stateDigest = (body: string | undefined) => createHash('sha256').update(body ?? '').digest('hex');
+  const recordProjectionDigest = (body: string | undefined) => db.query("INSERT INTO hub_work_settings(key,value) VALUES('legacy-projection-digest',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(stateDigest(body));
+  db.transaction(() => {
+    const body = db.query<{ body: string }, []>("SELECT body FROM hub_state WHERE id=1").get()?.body;
+    if (db.query<{ value: string }, []>("SELECT value FROM hub_work_settings WHERE key='legacy-projection-digest'").get()?.value === stateDigest(body)) return;
+    db.exec('DELETE FROM hub_legacy_records; DELETE FROM hub_sessions');
     syncLegacy(load());
-    db.query("INSERT INTO hub_work_settings(key,value) VALUES('legacy-projection-v1','1')").run();
-  })();
-  if (!db.query("SELECT 1 FROM hub_work_settings WHERE key='session-projection-v1'").get()) db.transaction(() => {
-    for (const [id, value] of Object.entries(load().sessions)) db.query('INSERT OR REPLACE INTO hub_sessions(id,body) VALUES(?,?)').run(id,JSON.stringify(value));
-    db.query("INSERT INTO hub_work_settings(key,value) VALUES('session-projection-v1','1')").run();
+    recordProjectionDigest(body);
   })();
   const session = (id: string): StoredSession | undefined => {
     const row = db.query<{body:string},[string]>('SELECT body FROM hub_sessions WHERE id=?').get(id);
@@ -124,6 +128,7 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     syncLegacy(state, previous);
     const body = artifacts.persist(state, allowExisting, previous, previousBody);
     db.query("INSERT INTO hub_state(id,body) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body WHERE body<>excluded.body").run(body);
+    recordProjectionDigest(body);
     return body;
   });
   const save = (state: HubState) => {
