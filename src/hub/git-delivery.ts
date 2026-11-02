@@ -42,10 +42,15 @@ async function saveReceipt(path: string, value: unknown): Promise<void> {
     await rename(tmp, path);
 }
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+export class UncertainGitPublication extends Error {
+    constructor() { super('Git publication outcome is uncertain; inspect the original managed branch'); }
+}
 /** The delivery over a git runner: production runs hubGit; a test wraps it to see each argv or answer for the remote. */
 export const createGitDelivery = (git: HubGitRunner): GitDeliveryAdapter => async (request) => {
     let workspace: string | undefined;
     let lock: string | undefined;
+    let publicationAttempted = false;
+    let knownPublication: Extract<GitDeliveryResult, {status:'published'}> | undefined;
     try {
         const { revision, remoteUrl, baseBranch } = request;
         validateHubRemote(remoteUrl);
@@ -98,6 +103,7 @@ export const createGitDelivery = (git: HubGitRunner): GitDeliveryAdapter => asyn
             const result: GitDeliveryResult = {
                 status: "published", branch, commitSha: remote, treeSha: String(await git(cache, ["rev-parse", "--verify", ...revisionOperand(`${remote}^{tree}`)])).trim()
             };
+            knownPublication = result;
             await saveReceipt(receiptPath, { fingerprint, result });
             return result;
         }
@@ -147,14 +153,18 @@ export const createGitDelivery = (git: HubGitRunner): GitDeliveryAdapter => asyn
         const mergedTree = String(await git(work, ["write-tree"])).trim();
         const parent = String(await git(work, ["rev-parse", "HEAD"])).trim();
         const commitSha = String(await git(work, ["commit-tree", mergedTree, "-p", parent], `${revision.message}\n\nHub-Operation: ${fingerprint}\n`)).trim();
+        publicationAttempted = true;
         await git(work, ["push", "--end-of-options", remoteUrl, `${commitSha}:refs/heads/${branch}`]);
         const result: GitDeliveryResult = {
             status: "published", branch, commitSha, treeSha: mergedTree
         };
+        knownPublication = result;
         await saveReceipt(receiptPath, { fingerprint, result });
         return result;
     }
     catch (error) {
+        if (knownPublication) return knownPublication;
+        if (publicationAttempted) throw new UncertainGitPublication();
         return { status: "failed", error: error instanceof Error ? error.message : "Git delivery failed" };
     }
     finally {
@@ -165,3 +175,30 @@ export const createGitDelivery = (git: HubGitRunner): GitDeliveryAdapter => asyn
     }
 };
 export const deliverRevision: GitDeliveryAdapter = createGitDelivery(hubGit);
+
+/** Read-only external reconciliation: verify this exact operation's immutable marker; never push or create a commit. */
+export const createGitPublicationInspector = (git: HubGitRunner): GitDeliveryAdapter => async request => {
+    let directory: string | undefined;
+    try {
+        validateHubRemote(request.remoteUrl);
+        const root = join(resolve(request.dataDir), 'git-inspection');
+        await mkdir(root, { recursive: true, mode: 0o700 });
+        directory = await mkdtemp(join(root, 'operation-'));
+        await git(directory, ['init','--bare','inspection.git']);
+        const cache = join(directory, 'inspection.git');
+        const branch = `codex/hub-${hash(request.projectId).slice(0,12)}-${hash(request.operationId).slice(0,20)}`;
+        const remote = String(await git(cache, ['ls-remote','--end-of-options',request.remoteUrl,`refs/heads/${branch}`])).trim().split(/\s/)[0];
+        if (!remote || !/^[a-f0-9]{40,64}$/.test(remote)) throw Error('Original managed publication is not present');
+        await git(cache, ['fetch','--no-tags','--end-of-options',request.remoteUrl,`refs/heads/${branch}`]);
+        const observed = String(await git(cache, ['rev-parse','--verify','FETCH_HEAD'])).trim();
+        if (observed !== remote) throw Error('Managed publication changed during inspection');
+        const marker = String(await git(cache, ['show','-s','--format=%B',...revisionOperand(remote)]));
+        if (!marker.split('\n').includes(`Hub-Operation: ${hash(JSON.stringify(request))}`)) throw Error('Managed branch does not prove the original operation');
+        const treeSha = String(await git(cache, ['rev-parse','--verify',...revisionOperand(`${remote}^{tree}`)])).trim();
+        if (!/^[a-f0-9]{40,64}$/.test(treeSha)) throw Error('Invalid managed publication tree');
+        return {status:'published',branch,commitSha:remote,treeSha};
+    } catch {
+        return {status:'failed',error:'Original managed publication could not be verified'};
+    } finally { if (directory) await rm(directory, {recursive:true,force:true}); }
+};
+export const inspectGitPublication: GitDeliveryAdapter = createGitPublicationInspector(hubGit);

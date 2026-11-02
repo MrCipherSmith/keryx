@@ -239,11 +239,10 @@ export async function hubMutate(state: HubState, actor: Principal, path: string[
     p.lineRevisionId = r.id; p.lineVersion++; event(state, actor, p.id, "line-selected", r.id); return p;
   }
   if (path.length === 3 && path[2] === "deliveries") {
-    const request = prepareGitDelivery(state, actor, p.id, body, config.dataDir, operationId);
-    let result: GitDeliveryResult;
-    try { result = await deliveryAdapter(request); }
-    catch { result = { status: 'failed', error: 'Git delivery failed; inspect managed repository state before retry' }; }
-    return completeGitDelivery(state, actor, request, result, Number(body.expectedLineVersion));
+    // External effects require durable reservation/reconciliation owned by the
+    // delivery service. Refuse direct domain invocation before any Git call.
+    void deliveryAdapter; void operationId; void config;
+    fail(409, 'delivery-service-required', 'Use the durable delivery service endpoint');
   }
   fail(404, "not-found", "Route not found");
 }
@@ -256,14 +255,21 @@ export function prepareGitDelivery(state: HubState, actor: Principal, projectId:
   if (p.lineRevisionId !== revision.id) fail(409, 'line-conflict', 'Revision is not the selected integration line');
   return { dataDir, projectId, operationId, revision, remoteUrl: text(body.remoteUrl,'remoteUrl'), baseBranch: text(body.baseBranch,'baseBranch',200) };
 }
+/** Record the server-observed external effect independently of integration-line CAS. */
+export function recordGitDeliveryResult(state: HubState, actor: Principal, request: GitDeliveryRequest, result: GitDeliveryResult) {
+  const existing = state.deliveries.find(delivery => delivery.id === request.operationId);
+  if (existing) return existing;
+  const p = found(state.projects.find(project => project.id === request.projectId));
+  const delivery = { id: request.operationId, projectId: p.id, revisionId: request.revision.id, remoteUrl: request.remoteUrl, baseBranch: request.baseBranch, ...result, receipt: receipt(actor) };
+  state.deliveries.push(delivery); event(state, actor, p.id, `delivery-${result.status}`, delivery.id);
+  return delivery;
+}
 /** Finalize against current authority state, never the pre-network legacy snapshot. */
 export function completeGitDelivery(state: HubState, actor: Principal, request: GitDeliveryRequest, result: GitDeliveryResult, expectedLineVersion: number) {
   const p = found(state.projects.find(project => project.id === request.projectId));
   human(actor); version(expectedLineVersion, p.lineVersion);
   if (p.lineRevisionId !== request.revision.id) fail(409,'line-conflict','Selected integration line changed during Git delivery; inspect the recorded external result');
-  const delivery = { id: request.operationId, projectId: p.id, revisionId: request.revision.id, remoteUrl: request.remoteUrl, baseBranch: request.baseBranch, ...result, receipt: receipt(actor) };
-  state.deliveries.push(delivery); event(state, actor, p.id, `delivery-${result.status}`, delivery.id);
-  return delivery;
+  return recordGitDeliveryResult(state, actor, request, result);
 }
 
 /** Shared synchronous revision construction; callers supply their own authority and transaction. */

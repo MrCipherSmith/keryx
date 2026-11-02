@@ -11,6 +11,7 @@ Build the missing product-work layer over Keryx0.4.0 remote execution: Flow → 
 
 - [Candidate implementation status](implementation-status.md)
 - [Native execution binding](execution.md)
+- [Durable Git delivery recovery and cold archival](delivery-recovery.md)
 - [Git/CI observations](observer.md)
 - [PRD](prd.md)
 - [Normative implementation specification](specification.md)

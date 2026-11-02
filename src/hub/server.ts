@@ -1,3 +1,4 @@
+import { createDeliveryService } from "./delivery-service";
 import { createWorkExecution } from "./work/execution";
 import { createMutationQueue, type MutationQueueLimits } from "./mutation-queue";
 import { createWorkHttp, validateWorkRepositories, type WorkRepositoryConfig } from "./work/http";
@@ -7,8 +8,8 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import type { HubApplication, HubConfig, Principal } from "./contracts";
 import { createAccessVerifier, readAccessRoles, validateAccessConfig, type AccessDependencies, type CloudflareAccessConfig, type VerifiedAccessIdentity } from "./cloudflare-access";
-import { completeGitDelivery, prepareGitDelivery, fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
-import { deliverRevision } from "./git-delivery";
+import { fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
+import { deliverRevision, inspectGitPublication } from "./git-delivery";
 import { openHubStore } from "./store";
 import { webAssets } from "./web";
 import { authorizeAgentRequest, resolveNamedAgent, validateAgentCredentialsConfiguration } from "./agent-credentials";
@@ -64,8 +65,6 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   const now = config.accessDependencies?.now ?? Date.now;
   const mutationQueue = createMutationQueue(config.mutationQueue);
   const serialized = mutationQueue.serialized;
-  const inFlightDeliveries = new Set<string>();
-  const deliverySettlers = new Set<() => void>();
   const cookieName = "keryx_hub_session";
   function sessionKey(request: Request): string | undefined {
     return request.headers.get("cookie")?.split(";").map((p) => p.trim()).find((p) => p.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
@@ -131,68 +130,11 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   const work = createWorkHttp({ store, enabled: workEnabled, repositories: workRepositories,
     ...(config.workManagement?.observerFetch ? {observerFetch:config.workManagement.observerFetch} : {}),
     protectedValues, authenticate, checkOrigin, serialized, now });
-  async function externalDelivery(request: Request, path: string[], url: URL, body: unknown, key: string, bodyDigest: string): Promise<Response> {
-    const prepared = await serialized(async () => {
-      const identity = await authenticate(request);
-      authorizeAgentRequest(identity.actor, path, request.method);
-      const replayKey = sha256(JSON.stringify([identity.actor.id, request.method, url.pathname, key]));
-      return store.workTransaction(() => {
-        const state = store.load(), replay = state.replays[replayKey];
-        if (replay) {
-          if (replay.digest !== bodyDigest) fail(409,'idempotency-conflict','Idempotency key was already used for another payload');
-          return { response: json(replay.body,replay.status) };
-        }
-        const id = 'delivery-' + replayKey.slice(0,32), existing = store.deliveries.get(id);
-        if (existing) {
-          if (existing.actorId !== identity.actor.id || existing.requestDigest !== bodyDigest) fail(409,'idempotency-conflict','Delivery operation payload changed');
-          if (existing.status === 'completed') return { response: json(existing.response,existing.httpStatus ?? 200) };
-          if (existing.status === 'pending' || existing.status === 'uncertain') {
-            if (inFlightDeliveries.has(id)) return { response: json({operationId:id,status:'pending'},202,{'Retry-After':'1'}) };
-            existing.status = 'uncertain'; store.deliveries.save(existing);
-            return { response: json({error:{code:'delivery-uncertain',message:'Delivery may have affected Git before interruption; inspect the managed branch and recorded operation before starting another'}},409) };
-          }
-          const revision = state.revisions.find(revision => revision.projectId === existing.projectId && revision.id === existing.revisionId);
-          if (!revision) fail(409,'delivery-revision-unavailable','Reserved immutable revision is unavailable');
-          return { job: existing, deliveryRequest: { dataDir: config.dataDir, projectId: existing.projectId, operationId: existing.id, revision, remoteUrl: existing.remoteUrl, baseBranch: existing.baseBranch } };
-        }
-        const deliveryRequest = prepareGitDelivery(state,identity.actor,path[1]!,body,config.dataDir,id);
-        const job: import('./delivery-jobs').DeliveryJob = { id, replayKey, actorId: identity.actor.id, projectId: path[1]!, requestDigest: bodyDigest, expectedLineVersion: Number(object(body).expectedLineVersion), revisionId: deliveryRequest.revision.id, remoteUrl: deliveryRequest.remoteUrl, baseBranch: deliveryRequest.baseBranch, status: 'pending' };
-        store.deliveries.reserve(job); inFlightDeliveries.add(id);
-        return { job, deliveryRequest };
-      });
-    });
-    if ('response' in prepared && prepared.response) return prepared.response;
-    if (!prepared.job || !prepared.deliveryRequest) fail(503,'delivery-unavailable','Delivery reservation unavailable');
-    const { job, deliveryRequest } = prepared;
-    try {
-      if (!job.result) {
-        try { job.result = await (config.gitDelivery ?? deliverRevision)(deliveryRequest); }
-        catch { job.result = {status:'failed',error:'Git delivery failed; inspect managed repository state before retry'}; }
-        job.status = 'result';
-        store.workTransaction(() => store.deliveries.save(job));
-      }
-      return await serialized(async () => {
-        const identity = await authenticate(request);
-        authorizeAgentRequest(identity.actor,path,request.method);
-        if (identity.actor.id !== job.actorId) fail(403,'identity-changed','Current delivery authority changed');
-        return store.writeTransaction(state => {
-          const replay = state.replays[job.replayKey];
-          if (replay) return json(replay.body,replay.status);
-          let response: unknown, status = 200;
-          try { response = completeGitDelivery(state,identity.actor,deliveryRequest,job.result!,job.expectedLineVersion); }
-          catch (error) {
-            if (!(error instanceof HubFailure)) throw error;
-            status = error.status; response = {error:{code:error.code,message:error.message}};
-          }
-          job.status='completed'; job.response=response; job.httpStatus=status; store.deliveries.save(job);
-          state.replays[job.replayKey]={digest:job.requestDigest,body:response,status};
-          return json(response,status);
-        });
-      });
-    } finally {
-      inFlightDeliveries.delete(job.id);
-      if (!inFlightDeliveries.size) { for (const resolve of deliverySettlers) resolve(); deliverySettlers.clear(); }
-    }
+  const deliveries = createDeliveryService({store,dataDir:config.dataDir,serialized,deliver:config.gitDelivery ?? deliverRevision,inspect:inspectGitPublication});
+  async function externalDelivery(request: Request, path: string[], body: unknown, key: string, digest: string): Promise<Response> {
+    const actor = (await authenticate(request)).actor;
+    const result = await deliveries.run({actor,projectId:path[1]!,body,key,digest,reauthorize:async () => (await authenticate(request)).actor});
+    return json(result.body,result.status,result.headers);
   }
   async function handle(request: Request): Promise<Response> {
     if (closed) fail(503, "closed", "Hub is closed");
@@ -271,8 +213,10 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
       });
       fail(405, "method-not-allowed", "Unsupported method");
     }
+    if (path[0] === 'projects' && path[2] === 'delivery-jobs') deliveries.authorize(identity.actor,path[1]!);
     authorizeAgentRequest(identity.actor, path, request.method);
     if (request.method === "GET") {
+      if (path[0] === 'projects' && path[2] === 'delivery-jobs' && path.length <= 4) return json(path[3] ? deliveries.read(identity.actor,path[1]!,path[3]) : {jobs:deliveries.list(identity.actor,path[1]!)});
       const state = store.load();
       const projectIds = identity.actor.projectIds;
       if (projectIds !== undefined && path.length === 1 && path[0] === "projects") return json({ projects: state.projects.filter((p) => projectIds.includes(p.id)) });
@@ -293,7 +237,9 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
         if (typeof value === "string") evidenceBody[field] = value.replaceAll(incomingToken, "[REDACTED]");
       }
     }
-    if (path.length === 3 && path[2] === 'deliveries') return externalDelivery(request,path,url,body,key,bodyDigest);
+    if (path.length === 5 && path[0] === 'projects' && path[2] === 'delivery-jobs' && path[4] === 'archive') return json(await deliveries.archive({actor:identity.actor,projectId:path[1]!,jobId:path[3]!,body,reauthorize:async () => (await authenticate(request)).actor}));
+    if (path.length === 5 && path[0] === 'projects' && path[2] === 'delivery-jobs' && path[4] === 'reconcile') return json(await deliveries.reconcile({actor:identity.actor,projectId:path[1]!,jobId:path[3]!,body,reauthorize:async () => (await authenticate(request)).actor}));
+    if (path.length === 3 && path[2] === 'deliveries') return externalDelivery(request,path,body,key,bodyDigest);
     return serialized(async () => {
       const currentIdentity = await authenticate(request);
       authorizeAgentRequest(currentIdentity.actor, path, request.method);
@@ -316,7 +262,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     websocket: remote.websocket,
     closeTransports() { remote.close(); },
     transportsClosed() { return remote.transportsClosed(); },
-    async settle() { await mutationQueue.settle(); if (inFlightDeliveries.size) await new Promise<void>(resolve => deliverySettlers.add(resolve)); await mutationQueue.settle(); },
+    async settle() { await mutationQueue.settle(); await deliveries.settle(); await mutationQueue.settle(); },
     close() { if (!closed) { closed = true; mutationQueue.close(); work.close(); remote.close(); store.close(); } },
   };
   return application;
