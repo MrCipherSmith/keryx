@@ -29,14 +29,15 @@ test('external Git delivery never holds the global mutation queue and same-key r
     const {p,body} = await selected(f.request);
     const pending = f.request('/projects/'+p.id+'/deliveries',body,'delivery-one');
     await started;
-    let concurrentFinished=false;
-    const concurrent=f.request('/projects',{name:'Unrelated'}).then(response=>{concurrentFinished=true;return response;});
-    await new Promise(resolve=>setTimeout(resolve,30));
-    const wasBlocked=!concurrentFinished;
+    // The delivery gate stays closed until the unrelated write settles: a held queue cannot finish it, a slow disk only delays it.
+    const concurrent=f.request('/projects',{name:'Unrelated'});
+    let guard: ReturnType<typeof setTimeout> | undefined;
+    const finished=await Promise.race([concurrent.then(()=>true),new Promise<boolean>(resolve=>{guard=setTimeout(()=>resolve(false),5000);})]);
+    clearTimeout(guard);
     release();
     expect((await pending).status).toBe(200);
     expect((await concurrent).status).toBe(200);
-    expect(wasBlocked).toBe(false);
+    expect(finished).toBe(true);
     expect((await f.request('/projects/'+p.id+'/deliveries',body,'delivery-one')).status).toBe(200);
     expect(calls).toBe(1);
 });
