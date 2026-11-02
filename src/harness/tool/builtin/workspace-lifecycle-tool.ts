@@ -31,14 +31,12 @@
 // same way `slate_write_seed` does — see that file's own doc comment before
 // revisiting this classification.
 import { randomUUID } from "node:crypto";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createHarnessProposalLifecycleService, listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, normalizeProposalLifecycleResult, proposalNotePath, sessionEvidenceRef, WorkspaceService } from "../../../sac/harness-facade";
+import { listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, WorkspaceService } from "../../../sac/harness-facade";
+import { proposeFromSession } from "../../../sac/propose-from-session";
 import { writeSlate } from "../../../session/slate";
 import { normalizeWorkspaceReference } from "../../../sac/service";
-import { findSession } from "../../../session/store";
 import type { InteractiveTool } from "./interactive-tools";
-import { guardOutput, prepareOutputForPersistence } from "../../../security/guard";
 
 // Mirrors PROPOSAL_KINDS in src/commands/workspace.ts exactly — every kind a
 // real owner writer exists for (ownerFor in proposal-lifecycle.ts).
@@ -234,45 +232,11 @@ export function workspaceProposeTool(cwd: string, getSessionDir: () => string | 
         return { output: "workspace_propose: no 'sessionId' given and no active session in this run", isError: true };
       }
       try {
-        // Resolve the human-friendly id/prefix to a canonical session id ONLY
-        // to build a schema-valid `sourceRef` path — resolveSessionWrapUp
-        // (inside wrapUpAuthority.issue below) independently re-looks this
-        // session up itself and never trusts this resolution as evidence.
-        // Mirrors src/commands/workspace.ts's `propose` handler exactly.
-        const session = findSession(cwd, sessionRef);
-        if (!session) return { output: `workspace_propose: no session matching "${sessionRef}" in this project`, isError: true };
-        const proposalId = `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
-        const notePath = proposalNotePath(cwd, workspaceId, proposalId);
-        const materializedNote = note === undefined
-          ? undefined
-          : prepareOutputForPersistence(
-              await guardOutput({ cwd, content: note, target: "task", source: "generated", path: notePath }),
-              note,
-            );
-        if (materializedNote !== undefined && !materializedNote.allowed) {
-          return { output: materializedNote.reason, isError: true };
+        const proposed = await proposeFromSession({ cwd, workspaceId, kind, sessionRef, note });
+        if (!proposed.ok) {
+          return { output: proposed.reason === "note-refused" ? proposed.message : `workspace_propose: ${proposed.message}`, isError: true };
         }
-        const persistedNote = materializedNote?.allowed ? materializedNote.content : undefined;
-        const { service: lifecycle, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(persistedNote ? { note: persistedNote } : {}) });
-        const requestCorrelationId = randomUUID();
-        const actor = await authorizationServer.actorContextFor(undefined, requestCorrelationId);
-        if (!actor) return { output: "workspace_propose: trusted ActorContext is required", isError: true };
-        const wrapUp = await wrapUpAuthority.issue({ actor, source: "session", sourceRef: sessionEvidenceRef(workspaceId, session.id) });
-        const proposal = await lifecycle.create({
-          request: undefined,
-          requestCorrelationId,
-          workspaceId,
-          id: proposalId,
-          proposalRevision: "1",
-          kind: kind as never,
-          wrapUp,
-        });
-        // The note is not part of the frozen proposal schema — it lives in a
-        // sidecar the memory/wiki/skill owner-writers read back at accept
-        // time, since accept may happen in a different process/reviewer
-        // session. Mirrors src/commands/workspace.ts's `propose` handler.
-        if (persistedNote) await writeFile(notePath, persistedNote, "utf8");
-        return { output: JSON.stringify(normalizeProposalLifecycleResult(proposal), null, 2), isError: false };
+        return { output: JSON.stringify(proposed.result, null, 2), isError: false };
       } catch (cause) {
         return errorOutput("workspace_propose failed", cause);
       }

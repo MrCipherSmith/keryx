@@ -983,3 +983,92 @@ describe("Finding 2 (MAJOR, logic): handleSlateOpen degrades gracefully when the
     expect(workspacesDirExists).toBe(false);
   });
 });
+
+describe("slate.open validates a caller-supplied workspaceId before storing it", () => {
+  const open = (externalSessionId: string, workspaceId: string) =>
+    tool("slate.open").invoke(cwd, { externalSessionId, workspaceId, anchors: { root: "/work" } }, { transport: "stdio" });
+
+  for (const bad of ["../../../../tmp/x", "", "a/b", "workspace-..", "Workspace-UPPER", ".hidden"]) {
+    test(`rejects ${JSON.stringify(bad)} and writes no slate`, async () => {
+      const id = `ext-bad-ws-${randomUUID().slice(0, 8)}`;
+      await expect(open(id, bad)).rejects.toThrow(/workspaceId/);
+      expect(await pathExists(externalSlatePath(id))).toBe(false);
+    });
+  }
+
+  test("rejects a well-formed id of a workspace that does not exist", async () => {
+    const id = "ext-missing-ws";
+    await expect(open(id, "workspace-0000000000000000")).rejects.toThrow(/sac_workspace_not_found/);
+    expect(await pathExists(externalSlatePath(id))).toBe(false);
+  });
+
+  test("accepts and stores the id of a real workspace", async () => {
+    const workspaceId = await createWorkspace("explicit bind");
+    const opened = (await open("ext-real-ws", workspaceId)) as { workspaceId?: string };
+    expect(opened.workspaceId).toBe(workspaceId);
+    expect((await readExternalSlateFile("ext-real-ws")).workspaceId).toBe(workspaceId);
+  });
+
+  test("a resolver-returned id with an invalid shape is not bound", async () => {
+    const opened = await handleSlateOpen({
+      cwd,
+      externalSessionId: "ext-resolver-bad-id",
+      anchors: { root: "/work" },
+      resolveWorkspace: async () => ({ ok: true, workspaceId: "../../escape", action: "created" }),
+    });
+    expect(opened.workspaceId).toBeUndefined();
+  });
+});
+
+describe("slate.open never hands back a closed slate, and concurrent opens converge on one slate", () => {
+  test("open after close returns a fresh live slate that accepts Seeds", async () => {
+    const id = "ext-reopen-after-close";
+    await tool("slate.open").invoke(cwd, { externalSessionId: id, anchors: { root: "/work" } }, { transport: "stdio" });
+    await tool("slate.writeSeed").invoke(cwd, { externalSessionId: id, text: "first life" }, { transport: "stdio" });
+    await tool("slate.close").invoke(cwd, { externalSessionId: id }, { transport: "stdio" });
+    expect((await readExternalSlateFile(id)).closedAt).toBeDefined();
+
+    const reopened = (await tool("slate.open").invoke(cwd, { externalSessionId: id, anchors: { root: "/work" } }, { transport: "stdio" })) as {
+      closedAt?: string;
+      seeds: unknown[];
+    };
+    expect(reopened.closedAt).toBeUndefined();
+    expect(reopened.seeds).toEqual([]);
+    await expect(
+      tool("slate.writeSeed").invoke(cwd, { externalSessionId: id, text: "second life" }, { transport: "stdio" }),
+    ).resolves.toBeDefined();
+  });
+
+  test("an open that overlaps another open for the same id returns the committed slate instead of wiping its Seeds", async () => {
+    const id = "ext-concurrent-open";
+    let releaseSlow!: () => void;
+    const slowGate = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const slow = handleSlateOpen({
+      cwd,
+      externalSessionId: id,
+      anchors: { root: "/slow" },
+      resolveWorkspace: async () => {
+        await slowGate;
+        return { ok: true, workspaceId: "workspace-slow-open", action: "created" };
+      },
+    });
+    // Let the slow open pass its existence check before the fast one commits.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const fast = await handleSlateOpen({
+      cwd,
+      externalSessionId: id,
+      anchors: { root: "/fast" },
+      resolveWorkspace: async () => ({ ok: true, workspaceId: "workspace-fast-open", action: "created" }),
+    });
+    await tool("slate.writeSeed").invoke(cwd, { externalSessionId: id, text: "committed between the two opens" }, { transport: "stdio" });
+    releaseSlow();
+    const slowResult = await slow;
+
+    expect(slowResult.workspaceId).toBe(fast.workspaceId);
+    const persisted = await readExternalSlateFile(id);
+    expect(persisted.workspaceId).toBe("workspace-fast-open");
+    expect((persisted.seeds as unknown[]).length).toBe(1);
+  });
+});

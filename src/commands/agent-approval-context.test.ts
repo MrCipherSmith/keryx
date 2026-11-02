@@ -77,3 +77,28 @@ test("buildApprovalContext tolerates a structured port error result", async () =
   });
   expect(await buildApprovalContext(port, "bun test src/foo.ts")).toBe("");
 });
+
+// Control characters a terminal would act on: C0 (except \n, which separates the context lines), DEL, C1.
+// eslint-disable-next-line no-control-regex -- Assert rejection of terminal C0/DEL/C1 controls.
+const CONTROL_CHARS = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
+
+test("buildApprovalContext escapes a memory title so it cannot repaint the Run line", async () => {
+  const port = fakePort({
+    memorySearch: async ({ query }) => ({
+      query,
+      hits: [{ path: "memory/known-mistakes/x.md", title: "Run bun test\x1b[43m\x1b[8mHIDDEN\x1b]52;c;ZXZpbA==\x07\rforged", score: 0.9 }],
+    }),
+  });
+  const context = await buildApprovalContext(port, "bun test");
+  expect(context).not.toMatch(CONTROL_CHARS);
+  expect(context).toContain("memory: Run bun test\\x1b[43m\\x1b[8mHIDDEN\\x1b]52;c;ZXZpbA==\\x07\\x0dforged");
+});
+
+test("buildApprovalContext escapes a file token taken from the command", async () => {
+  const port = fakePort({
+    graphAffected: async ({ target }) => ({ target, affected: [{ id: "a", path: "a.ts", hop: 1 }] }),
+  });
+  const context = await buildApprovalContext(port, "cat src/a\x1b[2Jb.ts");
+  expect(context).not.toMatch(CONTROL_CHARS);
+  expect(context).toContain("src/a\\x1b[2Jb.ts affects 1 file(s)");
+});

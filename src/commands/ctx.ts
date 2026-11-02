@@ -434,6 +434,8 @@ async function runPassthrough(command: string[]): Promise<number> {
   try {
     const proc = Bun.spawn(command, {
       cwd: process.cwd(),
+      // Bun's implicit native environment can retain keys deleted from process.env.
+      env: { ...process.env },
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",
@@ -674,6 +676,8 @@ export function isMissingExecutableError(cause: unknown): boolean {
 async function runCommand(command: string[]): Promise<CommandResult> {
   const proc = Bun.spawn(command, {
     cwd: process.cwd(),
+    // Use the current JS environment, including consumed re-exec marker removal.
+    env: { ...process.env },
     stdout: "pipe",
     stderr: "pipe",
   });

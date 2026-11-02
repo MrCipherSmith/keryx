@@ -8,7 +8,7 @@
 // must still reach the unix peer.
 import { afterEach, describe, expect, test } from "bun:test";
 import net from "node:net";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -59,4 +59,82 @@ describe("runForwarder", () => {
     });
     expect(received).toContain("GET / HTTP/1.1");
   }, 10_000);
+
+  const TOTAL = 48 * 1024 * 1024; // far past any socket buffer
+  const CHUNK = 256 * 1024;
+
+  /** Deterministic non-repeating payload chunks, so a dropped or reordered chunk changes the hash. */
+  function* payload(): Generator<Buffer> {
+    for (let offset = 0; offset < TOTAL; offset += CHUNK) {
+      const chunk = Buffer.alloc(CHUNK);
+      for (let i = 0; i < CHUNK; i += 4) chunk.writeUInt32LE(((offset + i) / 4) >>> 0, i);
+      yield chunk;
+    }
+  }
+  const expectedHash = (): string => {
+    const h = createHash("sha256");
+    for (const c of payload()) h.update(c);
+    return h.digest("hex");
+  };
+
+  /** Write every chunk to `sock`, honouring its backpressure, then end it. */
+  async function writeAll(sock: net.Socket): Promise<void> {
+    for (const chunk of payload()) {
+      if (!sock.write(chunk)) await new Promise<void>((r) => sock.once("drain", () => r()));
+    }
+    sock.end();
+  }
+
+  test("backpressure: a payload far larger than the socket buffers reaches a SLOW unix reader byte-for-byte (TCP -> unix)", async () => {
+    sockPath = path.join(tmpdir(), `keryx-fwd-test-${randomUUID()}.sock`);
+    const result = await new Promise<{ bytes: number; hash: string }>((resolve, reject) => {
+      unixServer = net.createServer((sock) => {
+        const hash = createHash("sha256");
+        let bytes = 0;
+        sock.pause(); // a deliberately slow reader: nothing is consumed for a while
+        setTimeout(() => sock.resume(), 400);
+        sock.on("data", (d) => {
+          bytes += d.length;
+          hash.update(d);
+        });
+        sock.on("end", () => resolve({ bytes, hash: hash.digest("hex") }));
+        sock.on("error", reject);
+      });
+      unixServer.on("error", reject);
+      unixServer.listen(sockPath, () => {
+        forwarder = runForwarder({ port: 0, unixSocketPath: sockPath });
+        const tcp = net.connect(forwarder.port, "127.0.0.1", () => void writeAll(tcp));
+        tcp.on("error", reject);
+      });
+    });
+    expect(result.bytes).toBe(TOTAL);
+    expect(result.hash).toBe(expectedHash());
+  }, 60_000);
+
+  test("backpressure: a large unix -> TCP response reaches a SLOW TCP reader byte-for-byte", async () => {
+    sockPath = path.join(tmpdir(), `keryx-fwd-test-${randomUUID()}.sock`);
+    const result = await new Promise<{ bytes: number; hash: string }>((resolve, reject) => {
+      unixServer = net.createServer((sock) => {
+        sock.on("error", () => {});
+        void writeAll(sock);
+      });
+      unixServer.on("error", reject);
+      unixServer.listen(sockPath, () => {
+        forwarder = runForwarder({ port: 0, unixSocketPath: sockPath });
+        const tcp = net.connect(forwarder.port, "127.0.0.1");
+        const hash = createHash("sha256");
+        let bytes = 0;
+        tcp.pause();
+        setTimeout(() => tcp.resume(), 400);
+        tcp.on("data", (d) => {
+          bytes += d.length;
+          hash.update(d);
+        });
+        tcp.on("end", () => resolve({ bytes, hash: hash.digest("hex") }));
+        tcp.on("error", reject);
+      });
+    });
+    expect(result.bytes).toBe(TOTAL);
+    expect(result.hash).toBe(expectedHash());
+  }, 60_000);
 });

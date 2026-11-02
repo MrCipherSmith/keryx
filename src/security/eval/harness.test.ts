@@ -1,6 +1,8 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   DEFAULT_CORPORA,
   formatEvalReport,
@@ -105,4 +107,56 @@ test("AC6.3: model-augmented run improves injection recall over the pure baselin
   });
   const modelInj = modelReport.detectors.find((d) => d.detector === "prompt-injection")!;
   expect(modelInj.fnRate).toBeLessThan(pureInj.fnRate);
+});
+
+// review-backend-slice-35:F-002: a missing, unparseable or wrong-shaped corpus
+// used to load as [] and drop out of the report, so the gate passed with that
+// corpus never evaluated.
+describe("an unreadable corpus fails the gate", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-eval-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function corpus(name: string, body: string): Promise<void> {
+    await mkdir(path.join(root, name), { recursive: true });
+    await writeFile(path.join(root, name, "cases.json"), body, "utf8");
+  }
+
+  async function gateFor(corpora: string[]): Promise<{ status: string; reasons: string[] }> {
+    const report = await runEval({ fixturesRoot: root, corpora, detect: pure });
+    return gateEval(report, {});
+  }
+
+  const GOOD = JSON.stringify({
+    cases: [{ id: "a", input: "nothing here", expected: "negative", detector: "secret" }],
+  });
+
+  test("a readable corpus still passes", async () => {
+    await corpus("good", GOOD);
+    expect((await gateFor(["good"])).status).toBe("pass");
+  });
+
+  for (const [label, setup, reason] of [
+    ["missing", async () => {}, "missing"],
+    ["corrupt JSON", () => corpus("broken", '{"cases": [ {"id": "a",} ]'), "not valid JSON"],
+    ["wrong shape", () => corpus("broken", '{"items": []}'), "cases array"],
+    ["empty", () => corpus("broken", '{"cases": []}'), "no cases"],
+    [
+      "malformed entry",
+      () => corpus("broken", JSON.stringify([{ id: "a", input: "x", expected: "maybe", detector: "secret" }])),
+      "entry 0",
+    ],
+  ] as const) {
+    test(`${label} corpus fails the gate with a named reason`, async () => {
+      await corpus("good", GOOD);
+      await setup();
+      const gate = await gateFor(["good", "broken"]);
+      expect(gate.status).toBe("fail");
+      expect(gate.reasons.some((r) => r.includes('corpus "broken"') && r.includes(reason))).toBe(true);
+    });
+  }
 });

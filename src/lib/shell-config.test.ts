@@ -30,11 +30,11 @@ test("saveShellConfig writes and loadShellConfig reads back (merge semantics)", 
   saveShellConfig({ provider: "openrouter", model: "openai/gpt-4o-mini" }, dir);
   expect(loadShellConfig(dir)).toEqual({ provider: "openrouter", model: "openai/gpt-4o-mini" });
   // A patch merges, not replaces.
-  saveShellConfig({ openrouterKey: "sk-or-xyz" }, dir);
+  saveShellConfig({ apiKeys: { OPENROUTER_API_KEY: "sk-or-xyz" } }, dir);
   expect(loadShellConfig(dir)).toEqual({
     provider: "openrouter",
     model: "openai/gpt-4o-mini",
-    openrouterKey: "sk-or-xyz",
+    apiKeys: { OPENROUTER_API_KEY: "sk-or-xyz" },
   });
 });
 
@@ -58,16 +58,9 @@ test("saveShellConfig writes atomically: same content and mode as before, and no
   expect(entries).toEqual(["auth.json"]); // no `*.tmp` sibling left behind
 });
 
-// Round 2 item 2 added, then round 3 removed, a shared `auth.json` sync lock
-// (`withAuthFileLockSync`) `saveShellConfig` and `model-profile.ts`'s
-// migration strip used to take — it could block every `saveShellConfig`
-// call, including hot TUI paths, for up to its own 2s timeout on
-// contention. `saveShellConfig` is back to its pre-lock, unconditional
-// read-merge-write (see its own doc); the migration strip now protects
-// itself with a narrow, lock-free read/verify/write instead
-// (`stripModelProfilesFromAuthJsonUnlocked`,
-// `../harness/routing/model-profile.ts` — its own tests, in
-// `model-profile.test.ts`, cover that retry/verify window directly).
+// Cross-process lost updates (several keryx processes writing auth.json at
+// once) are pinned in `user-store-race.test.ts` with real processes; the
+// bounded, non-blocking lock behind every writer here in `config-update.test.ts`.
 
 test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)", () => {
   if (process.platform === "win32") {
@@ -230,4 +223,40 @@ test("loadShellConfig tolerates malformed JSON → {}", () => {
   saveShellConfig({ provider: "x" }, dir);
   require("node:fs").writeFileSync(shellConfigPath(dir), "{not json", { mode: 0o600 });
   expect(loadShellConfig(dir)).toEqual({});
+});
+
+// review-logic-w23:F-002 — the legacy flow-080 `openrouterKey` was "migrated
+// on read" only into the env, so nothing in the product could revoke it.
+function writeLegacyAuth(dir: string, body: Record<string, unknown>): void {
+  require("node:fs").writeFileSync(shellConfigPath(dir), JSON.stringify(body), { mode: 0o600 });
+}
+
+test("loadShellConfig presents a legacy openrouterKey as apiKeys.OPENROUTER_API_KEY", () => {
+  const dir = tempDir();
+  writeLegacyAuth(dir, { openrouterKey: "sk-or-legacy", provider: "openrouter" });
+  expect(loadShellConfig(dir)).toEqual({ provider: "openrouter", apiKeys: { OPENROUTER_API_KEY: "sk-or-legacy" } });
+});
+
+test("a saved apiKeys.OPENROUTER_API_KEY wins over the legacy field, which is dropped", () => {
+  const dir = tempDir();
+  writeLegacyAuth(dir, { openrouterKey: "sk-or-legacy", apiKeys: { OPENROUTER_API_KEY: "sk-or-new" } });
+  expect(loadShellConfig(dir).apiKeys).toEqual({ OPENROUTER_API_KEY: "sk-or-new" });
+});
+
+test("removeApiKey(OPENROUTER_API_KEY) revokes a legacy openrouterKey for good", () => {
+  const dir = tempDir();
+  writeLegacyAuth(dir, { openrouterKey: "sk-or-legacy", provider: "openrouter" });
+  removeApiKey("OPENROUTER_API_KEY", dir);
+  expect(envWithSavedApiKeys({}, dir).OPENROUTER_API_KEY).toBeUndefined();
+  const onDisk = JSON.parse(require("node:fs").readFileSync(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
+  expect(onDisk.openrouterKey).toBeUndefined();
+  expect(onDisk.provider).toBe("openrouter");
+});
+
+test("any write persists the legacy key migration", () => {
+  const dir = tempDir();
+  writeLegacyAuth(dir, { openrouterKey: "sk-or-legacy" });
+  saveShellConfig({ model: "m" }, dir);
+  const onDisk = JSON.parse(require("node:fs").readFileSync(shellConfigPath(dir), "utf8")) as Record<string, unknown>;
+  expect(onDisk).toEqual({ apiKeys: { OPENROUTER_API_KEY: "sk-or-legacy" }, model: "m" });
 });

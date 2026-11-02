@@ -3,9 +3,16 @@ import { canonicalDigest, validateControl, type Control, type ProtocolResult } f
 import { fail } from "../domain";
 import type { HubState } from "../store";
 import type { RemoteRepository } from "./storage";
-import type { HumanAuthority, MachineRecord, SessionRow } from "./model";
+import type { HumanAuthority, MachineRecord, RunRow, SessionRow, StoredCommand } from "./model";
 export const iso = (now = Date.now()) => new Date(now).toISOString();
 export const id = () => randomUUID();
+/** The run a command addresses: a start-turn's own run or a run-scoped command's target; none for a session-scoped command. */
+export function commandRunId(envelope: StoredCommand["envelope"]): string | undefined { return "target" in envelope ? (envelope.target.scope === "run" ? envelope.target.runId : undefined) : envelope.runId; }
+/** Ends a run Hub itself decides is over: announces the new state, stamps terminalAt once, saves the run and frees its run capacity. */
+export function endRun(repo: RemoteRepository, run: RunRow, state: RunRow["state"]): void {
+  run.state = state; run.version++; run.notificationVersion = (run.notificationVersion ?? 0) + 1; run.terminalAt ??= iso();
+  repo.put("remote_run", run.runId, run); repo.releaseRunCapacity(run.runId);
+}
 export function unwrap<T>(result: ProtocolResult<T>): T { if (!result.ok) fail(result.error.code === "quota-exceeded" ? 413 : 400, result.error.code, result.error.message); return result.value; }
 export function control<K extends keyof Control>(name: K, value: unknown): Control[K] { return unwrap(validateControl(name, value)); }
 export function machine(repo: RemoteRepository, machineId: string): MachineRecord { const row = repo.get<MachineRecord>("remote_machine", machineId); if (!row || row.revoked) fail(401, "unauthorized", "Machine credentials unavailable"); return row; }

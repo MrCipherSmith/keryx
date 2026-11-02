@@ -260,8 +260,10 @@ test("R3-01: an unquoted glob character or a word-initial ~ in a git or keryx se
 test("R3-01: the glob in `git log --o*` never reaches git, so the planted --output=injected file is not written", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "r3-01-"));
   try {
-    execFileSync("git", ["init", "-q"], { cwd: dir });
-    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"], { cwd: dir });
+    // Hermetic git: the host's global config and init template (and any commit hook in it) must not run.
+    const env = { PATH: process.env.PATH ?? "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+    execFileSync("git", ["init", "-q", "--template="], { cwd: dir, env });
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "-q", "--allow-empty", "-m", "x"], { cwd: dir, env });
     writeFileSync(path.join(dir, "--output=injected"), "");
     expect(isTrustRoutineCommand("git log --o*", { cwd: dir })).toBe(false);
     expect(hasUnquotedExpansion("git log --o*")).toBe(true);
@@ -813,5 +815,60 @@ test("review next lists what is left and is routine; --apply writes drivers and 
 test("R3-02: a chunks command that carries --answer or --quote is not routine on the table's own account", () => {
   for (const flag of ["--answer yes", "--answer=yes", "--quote x", "--quote=x"]) {
     expect(isTrustRoutineCommand(`keryx review chunks next --package .metaproject/reviews/r1 ${flag}`)).toBe(false);
+  }
+});
+
+test("git reads that print a file from outside the project are not routine (--no-index, --contents, outside operands)", () => {
+  const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-git-")));
+  try {
+    for (const command of [
+      "git diff --no-index /dev/null /Users/u/.ssh/id_ed25519",
+      "git diff --no-ind /dev/null /etc/hosts",
+      "git blame --contents /etc/hosts README.md",
+      "git blame --contents=/etc/hosts README.md",
+      "git diff /etc/hosts /etc/passwd",
+      "git diff -- ../../outside.txt",
+      "git show HEAD -- /etc/hosts",
+    ]) {
+      expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+    }
+    for (const command of ["git diff", "git diff HEAD~1..HEAD", "git log origin/main..HEAD", "git diff -- src/a.ts", "git blame src/a.ts", `git diff -- ${cwd}/src/a.ts`]) {
+      expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+    }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("a git read after a cd that leaves the project is not routine (review-logic-w5:F-002, review-security-code-w4:F-002)", () => {
+  const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-git-cd-")));
+  const project = path.join(base, "project");
+  const outside = path.join(base, "outside");
+  mkdirSync(path.join(project, ".metaproject"), { recursive: true });
+  mkdirSync(path.join(project, "sub"), { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(path.join(project, ".metaproject", "index.md"), "# index\n");
+  writeFileSync(path.join(outside, "a"), "SECRET-A\n");
+  writeFileSync(path.join(outside, "b"), "SECRET-B\n");
+  symlinkSync(outside, path.join(project, "out-link"));
+  try {
+    for (const command of [
+      `cd ${outside} && git diff a b`,
+      "cd /etc && git diff passwd hosts",
+      "cd /private/etc && git diff passwd hosts",
+      `cd ${outside} && git show HEAD:secrets.env`,
+      `cd ${outside} && git log -p`,
+      "cd .. && git diff a b",
+      "cd ~ && git status",
+      "git diff out-link/a out-link/b",
+    ]) {
+      expect(isTrustRoutineCommand(command, { cwd: project }), command).toBe(false);
+      expect(isTrustRoutineCommand(command, { cwd: project, untrustedContent: true }), command).toBe(false);
+    }
+    for (const command of ["git diff a b", "cd sub && git diff a b", `cd ${project}/sub && git log -p`, "cd sub && cd .. && git show HEAD:README.md"]) {
+      expect(isTrustRoutineCommand(command, { cwd: project }), command).toBe(true);
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 });

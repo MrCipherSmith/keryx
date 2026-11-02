@@ -1093,6 +1093,58 @@ describe("flow 263: promote (foreground → background)", () => {
   });
 });
 
+describe("promote ceiling (review-highload-w6:F-001)", () => {
+  test("a foreground promote past twice the cap is refused, naming the running tasks, and nothing is killed", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, maxConcurrent: 1 });
+    const started: string[] = [];
+    for (const command of ["watch-a", "watch-b", "watch-c"]) {
+      const fg = await registry.start(command, { phase: "foreground" });
+      expect(fg.ok).toBe(true);
+      if (fg.ok) started.push(fg.jobId);
+    }
+    expect(registry.promote(started[0]!)).toEqual({ ok: true });
+    const second = registry.promote(started[1]!);
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.overCap).toContain("watch-a");
+
+    const third = registry.promote(started[2]!);
+    expect(third.ok).toBe(false);
+    if (!third.ok) {
+      expect(third.error).toContain("watch-a");
+      expect(third.error).toContain("watch-b");
+      // The registry kills nothing, so it must not claim it did: /demote shows this text too.
+      expect(third.error).not.toMatch(/was stopped|stopped/);
+      expect(third.error).toContain("still running");
+    }
+    // The refused task stays foreground; the registry itself kills nothing.
+    expect(registry.get(started[2]!)?.phase).toBe("foreground");
+    for (const handle of handles.values()) expect(handle.kills).toEqual([]);
+  });
+});
+
+describe("registry-wide idle timeout settings", () => {
+  test("an explicit idleMs of 0 disables the idle rail even when the env sets one", async () => {
+    const prev = process.env.KERYX_SHELL_IDLE_MS;
+    process.env.KERYX_SHELL_IDLE_MS = "5000";
+    try {
+      const registry = createJobRegistry({ spawn: fakeSpawner().spawn, initialBufferMs: 0, idleMs: 0 });
+      const started = await registry.start("sleep 120");
+      expect(started.ok).toBe(true);
+      if (started.ok) expect(registry.get(started.jobId)?.idleTimeoutMs).toBe(0);
+    } finally {
+      if (prev === undefined) delete process.env.KERYX_SHELL_IDLE_MS;
+      else process.env.KERYX_SHELL_IDLE_MS = prev;
+    }
+  });
+
+  test("an idle env value above the largest timer delay is clamped, not passed through", () => {
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "3000000000" })).toBe(2_147_483_647);
+    expect(resolveShellIdleMs({ KERYX_SHELL_TIMEOUT_MS: "99999999999" })).toBe(2_147_483_647);
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "2500" })).toBe(2500);
+  });
+});
+
 describe("flow 263 AC3: idle timer (fakes)", () => {
   test('a task producing no output for its idle timeout is killed with killReason "idle"', async () => {
     const { spawn } = fakeSpawner({ exitOnKill: true });

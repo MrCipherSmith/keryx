@@ -589,6 +589,27 @@ test("ctx run from a subdirectory writes artifacts to the project root, not besi
   }
 }, 60_000);
 
+test.each([false, true])("ctx run (raw=%s) does not pass the consumed re-exec marker to commands", async (raw) => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ctx-env-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    // Start without Bun's safe flags so the CLI really re-execs and consumes
+    // its wrapper marker before starting the command under test.
+    const proc = Bun.spawn(
+      [process.execPath, CLI, "ctx", "run", ...(raw ? ["--raw"] : []), "--", "sh", "-c",
+        'test -z "${KERYX_REEXEC_PARENT_PID+x}" && test "$KERYX_CTX_ENV_PROBE" = retained && printf marker-absent'],
+      { cwd: root, env: { ...process.env, KERYX_CTX_ENV_PROBE: "retained" }, stdout: "pipe", stderr: "pipe" },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited,
+    ]);
+    expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" });
+    expect(stdout).toContain("marker-absent");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
 test("ctx run --raw streams stdout/stderr unmodified, keeps the exit code and writes no artifact", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-ctx-raw-"));
   try {

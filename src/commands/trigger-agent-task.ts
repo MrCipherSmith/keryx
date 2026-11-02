@@ -35,7 +35,7 @@
 
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
@@ -325,6 +325,39 @@ export function agentTaskScratchParent(env: Record<string, string | undefined> =
   return path.join(tmpdir(), `keryx-agent-tasks-${uid}`);
 }
 
+/**
+ * Longest unix socket path the proxy may bind, in bytes without the NUL: `sun_path` is 104
+ * bytes on macOS/BSD and 108 on Linux, each counting the terminating NUL.
+ */
+export function maxUnixSocketPathBytes(platform: NodeJS.Platform = process.platform): number {
+  return platform === "linux" ? 107 : 103;
+}
+
+/**
+ * A short, private (0700, random) directory for the proxy socket. The socket must NOT live under
+ * the run's scratch directory: that path carries the schedule name, so a name past ~10 bytes
+ * overflowed `sun_path` on macOS on every run. Refuses a directory that still cannot fit.
+ */
+export async function makeProxySocketDir(
+  tmp: string = tmpdir(),
+  platform: NodeJS.Platform = process.platform,
+): Promise<{ dir: string; socketPath: string }> {
+  // mkdtemp creates the directory 0700 and with a random suffix; the explicit chmod keeps that
+  // true under any umask or platform default. Callers pass the run's private 0700 scratch
+  // PARENT (verified owned-by-us, not a symlink) so a sibling run or another local user that
+  // can list a shared tmpdir still cannot reach another run's allowlist proxy socket.
+  const dir = await mkdtemp(path.join(tmp, "kx-"));
+  await chmod(dir, 0o700).catch(() => {});
+  const socketPath = path.join(dir, "p.sock");
+  const bytes = Buffer.byteLength(socketPath);
+  const limit = maxUnixSocketPathBytes(platform);
+  if (bytes > limit) {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    throw new Error(`its socket path is ${bytes} bytes, past the ${limit}-byte unix socket limit`);
+  }
+  return { dir, socketPath };
+}
+
 function lastAssistantText(history: readonly NormalizedMessage[]): string {
   for (let i = history.length - 1; i >= 0; i -= 1) {
     const message = history[i]!;
@@ -423,8 +456,16 @@ async function runLocked(
       // plan is built — the socket file must exist for bwrap to bind-mount it, and no
       // shell_exec may run before the proxy that governs it is up. A failure here
       // refuses the whole run; it never falls back to `off` or `full`.
-      const proxySocketPath = path.join(scratch, "net-proxy.sock");
+      let proxySocketPath = "";
       try {
+        // A path past `sun_path` may be truncated by a bind and so bind somewhere else: the
+        // socket lives in its own short directory (not under `scratch`, whose name carries the
+        // schedule name) and a path that still cannot fit is refused with a reason.
+        const socketDir = await makeProxySocketDir(scratchParent).catch(() => makeProxySocketDir());
+        proxySocketPath = socketDir.socketPath;
+        closeProxy = async () => {
+          await rm(socketDir.dir, { recursive: true, force: true }).catch(() => {});
+        };
         const proxy = await createAllowlistProxy({
           allowedDomains: [...action.grants.domains],
           unixSocketPath: proxySocketPath,
@@ -443,7 +484,10 @@ async function runLocked(
             });
           },
         });
-        closeProxy = proxy.close;
+        closeProxy = async () => {
+          await proxy.close();
+          await rm(socketDir.dir, { recursive: true, force: true }).catch(() => {});
+        };
         networkInput = { mode: "allowlist", proxySocketPath, forwarderArgv: [...invocation.argv, "__sandbox-net-forward"] };
       } catch (error) {
         return refusal(

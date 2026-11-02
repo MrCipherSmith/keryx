@@ -352,7 +352,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig, updateShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -6039,8 +6039,10 @@ export async function launchTuiAgentShell(opts: {
      */
     const setRoutingEnabled = (next: boolean): void => {
       routingEnabled = next;
-      const existing = loadShellConfig().routingClassifier ?? {};
-      saveShellConfig({ routingClassifier: { ...existing, enabled: next } });
+      // Applied to the value on disk at write time (`updateShellConfig`), not
+      // to one read here: a `routingClassifier` snapshot taken a moment earlier
+      // put `enabled` back after another process had flipped it.
+      updateShellConfig((current) => ({ ...current, routingClassifier: { ...(current.routingClassifier ?? {}), enabled: next } }));
       refreshRoutingSidebar();
       io.onSystem?.(`Route: ${next ? "on" : "off"}\n`);
     };
@@ -8652,7 +8654,18 @@ export async function launchTuiAgentShell(opts: {
     const showTools = (): void => {
       void (async () => {
         const cwd = inspectorCwd();
-        const runtimes = await mcpClientStatus(cwd, mcpRuntimeIds());
+        // A status read that fails must not take the panel (or the session,
+        // via an unhandled rejection) with it: open with what was read and say
+        // what could not be.
+        let runtimes: Awaited<ReturnType<typeof mcpClientStatus>> = [];
+        try {
+          runtimes = await mcpClientStatus(cwd, mcpRuntimeIds());
+        } catch (error) {
+          io.onSystem?.(`tools: MCP client status unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+        for (const runtime of runtimes) {
+          if (runtime.error !== undefined) io.onSystem?.(`tools: ${runtime.id}: ${runtime.error}\n`);
+        }
         openMcpTools(otui, chrome, {
           tools: deps.tools.map((t) => t.definition),
           runtimes,
@@ -11338,8 +11351,8 @@ export async function launchTuiAgentShell(opts: {
         // makes the shell busy without making that answer incomplete.
         turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
         sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(true)) }),
-        runLine: (text) => remoteQueue.runTelegramLine(text),
-        enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
+        runLine: (text, updateId) => remoteQueue.runTelegramLine(text, updateId),
+        enqueue: (text, updateId) => remoteQueue.enqueueTelegramLine(text, updateId),
         notice: (text) => io.onSystem?.(`${text}\n`),
         cancelTurn: () => foregroundOperation.cancel("remote run time limit"),
         recordOn: (name) => {

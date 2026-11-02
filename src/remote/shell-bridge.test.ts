@@ -32,7 +32,9 @@ interface FakeClient extends RemoteClientLike {
   heartbeat: number | undefined;
 }
 
-function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs?: number; closeGate?: Promise<void>; queuedTelegram?: string[] } = {}) {
+function harness(
+  opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs?: number; closeGate?: Promise<void>; startGate?: Promise<void>; queuedTelegram?: string[] } = {},
+) {
   const calls: string[] = [];
   const state = { busy: opts.busy ?? false, now: 1_000_000 };
   const host: RemoteBridgeHost = {
@@ -84,6 +86,7 @@ function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs
         },
         start: async () => {
           calls.push("start");
+          await opts.startGate;
           return startResult;
         },
         close: async () => {
@@ -147,6 +150,25 @@ test("a failed start leaves remote control off, records no history and reports t
   expect(h.calls.some((c) => c.startsWith("on:"))).toBe(false);
   expect(h.calls).toContain("close");
   expect(h.bridge.status().events.at(-1)).toMatchObject({ kind: "error" });
+});
+
+// Perimeter review (backend-24 / highload-24 F-001): a disable during a slow start wins; the late start
+// result must not reopen the history interval or report remote control on.
+test("turned off while it was starting: the late start does not turn it on", async () => {
+  let open!: () => void;
+  const startGate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  const h = harness({ startGate });
+  const enabling = h.bridge.enable();
+  await Promise.resolve();
+  expect(await h.bridge.disable()).toBe(true);
+  open();
+  const result = await enabling;
+  expect(result.ok).toBe(false);
+  expect(h.calls.filter((c) => c.startsWith("on:"))).toEqual([]);
+  expect(h.bridge.status().state).toBe("off");
+  expect(h.bridge.active).toBe(false);
 });
 
 test("disable records history first, then deregisters; a second disable after it is a no-op", async () => {

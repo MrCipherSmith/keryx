@@ -122,19 +122,57 @@ async function mergeAdapter(
 // Drop a lower-confidence match whose span is fully contained by a
 // higher-confidence match of the same category (e.g. entropy inside an exact
 // secret). Keeps the strongest signal per region.
-function dedupeOverlaps(matches: DetectorMatch[]): DetectorMatch[] {
+//
+// "Is it inside a kept span?" is a prefix-max query: among kept spans of the
+// category that start at or before the candidate, does the furthest end reach
+// the candidate's end? A Fenwick tree over each category's starts answers it in
+// O(log n). The linear `kept.some` it replaces was O(n^2) on a dense tool
+// result, e.g. a log with an IP address on every line
+// (review-performance-slice-35:F-003).
+export function dedupeOverlaps(matches: DetectorMatch[]): DetectorMatch[] {
+  const trees = new Map<string, { starts: number[]; maxEnd: number[] }>();
+  for (const match of matches) {
+    const tree = trees.get(match.category) ?? { starts: [], maxEnd: [] };
+    tree.starts.push(match.start);
+    trees.set(match.category, tree);
+  }
+  for (const tree of trees.values()) {
+    tree.starts = [...new Set(tree.starts)].sort((a, b) => a - b);
+    tree.maxEnd = new Array<number>(tree.starts.length + 1).fill(-Infinity);
+  }
+
   const kept: DetectorMatch[] = [];
   const sorted = [...matches].sort((a, b) => b.confidence - a.confidence);
   for (const candidate of sorted) {
-    const covered = kept.some(
-      (existing) =>
-        existing.category === candidate.category &&
-        candidate.start >= existing.start &&
-        candidate.end <= existing.end,
-    );
-    if (!covered) {
-      kept.push(candidate);
+    const tree = trees.get(candidate.category) as { starts: number[]; maxEnd: number[] };
+    // 1-based position of the candidate's start among the category's starts.
+    const position = upperBound(tree.starts, candidate.start);
+    let furthest = -Infinity;
+    for (let i = position; i > 0; i -= i & -i) {
+      furthest = Math.max(furthest, tree.maxEnd[i] as number);
+    }
+    if (furthest >= candidate.end) {
+      continue;
+    }
+    kept.push(candidate);
+    for (let i = position; i < tree.maxEnd.length; i += i & -i) {
+      tree.maxEnd[i] = Math.max(tree.maxEnd[i] as number, candidate.end);
     }
   }
   return kept.sort((a, b) => a.start - b.start);
+}
+
+// The number of values in the sorted array that are <= value.
+function upperBound(sorted: number[], value: number): number {
+  let low = 0;
+  let high = sorted.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if ((sorted[mid] as number) <= value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
 }

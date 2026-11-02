@@ -2,7 +2,7 @@
 // Secrets live only in this file. Status/list surfaces never copy them.
 
 import { codexTokenMetadata } from "./openai-token";
-import { loadShellConfig, noteSavedCredentialEnv, saveShellConfig } from "../shell-config";
+import { loadShellConfig, noteSavedCredentialEnv, updateShellConfig } from "../shell-config";
 
 export type OAuthGrantMethod = "device-code" | "oauth-pkce-loopback";
 
@@ -40,19 +40,23 @@ export function loadOAuthGrant(provider: string, dir?: string): OAuthGrant | und
   return grant;
 }
 
+// Both apply their one-provider change to auth.json as it is at write time
+// (`updateShellConfig`), never to a map read earlier: a refresh in one session
+// and any settings write in another used to put a spent refresh token back.
 export function saveOAuthGrant(provider: string, grant: OAuthGrant, dir?: string): void {
-  const existing = loadShellConfig(dir).oauthGrants ?? {};
-  saveShellConfig({ oauthGrants: { ...existing, [provider]: grant } }, dir);
+  updateShellConfig((current) => ({ ...current, oauthGrants: { ...(current.oauthGrants ?? {}), [provider]: grant } }), dir);
 }
 
 export function deleteOAuthGrant(provider: string, dir?: string): void {
-  const existing = { ...(loadShellConfig(dir).oauthGrants ?? {}) };
-  if (existing[provider] === undefined && !(provider === "openai-codex" && existing.openai !== undefined)) {
-    return;
-  }
-  delete existing[provider];
-  if (provider === "openai-codex") delete existing.openai;
-  saveShellConfig({ oauthGrants: existing }, dir);
+  updateShellConfig((current) => {
+    const existing = { ...(current.oauthGrants ?? {}) };
+    if (existing[provider] === undefined && !(provider === "openai-codex" && existing.openai !== undefined)) {
+      return undefined;
+    }
+    delete existing[provider];
+    if (provider === "openai-codex") delete existing.openai;
+    return { ...current, oauthGrants: existing };
+  }, dir);
 }
 
 export function listOAuthGrantProviders(dir?: string): string[] {

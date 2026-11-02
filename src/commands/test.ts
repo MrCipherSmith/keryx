@@ -83,7 +83,7 @@ async function runSuggest(args: string[]): Promise<void> {
   // Contain before opening. This file's contents are sent to a model provider,
   // so an uncontained path does not just read something local — it ships it off
   // the machine.
-  const contained = await resolveContainedPath(resolveProjectRoot(cwd), target);
+  const contained = await resolveContainedPath(resolveProjectRoot(cwd), target, cwd);
   if (!contained.ok) {
     console.error(contained.message);
     process.exitCode = 1;

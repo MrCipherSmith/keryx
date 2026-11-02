@@ -13,6 +13,7 @@ import {
   checkAgentMissingModelTier,
   checkAgentUnrestrictedTools,
   checkAutoRunDirective,
+  checkBypassFlagPresent,
   checkHookRemoteExec,
   checkInjectionInText,
   checkRemoteExecInText,
@@ -93,6 +94,17 @@ test("W8-AC3: an unpinned npx MCP server is flagged high; the same entry pinned 
   expect(isPinnedPackageSpec("left-pad")).toBe(false);
   expect(isPinnedPackageSpec("left-pad@1.0.0")).toBe(true);
   expect(isPinnedPackageSpec("left-pad@latest")).toBe(false);
+  // Dist-tags and ranges float with the registry: not pins.
+  for (const floating of ["next", "beta", "latest", "^1.2", "~1.2", "*", ">=1", "1.x", "1", "1.2", "x"]) {
+    expect(isPinnedPackageSpec(`left-pad@${floating}`)).toBe(false);
+    expect(isPinnedPackageSpec(`@scope/pkg@${floating}`)).toBe(false);
+  }
+  expect(isPinnedPackageSpec("@scope/pkg")).toBe(false);
+  expect(isPinnedPackageSpec("@scope/pkg@1.2.3")).toBe(true);
+  expect(isPinnedPackageSpec("left-pad@1.2.3-beta.1+build.5")).toBe(true);
+  expect(isPinnedPackageSpec("@scope/pkg@v1.2.3")).toBe(true);
+  expect(isPinnedPackageSpec(`left-pad@${"a".repeat(40)}`)).toBe(true);
+  expect(isPinnedPackageSpec("left-pad@sha512-abc123==")).toBe(true);
 
   const config = {
     mcpServers: {
@@ -2252,4 +2264,23 @@ describe("R3-F5: documented-placeholder secrets and quoted injection examples", 
     expect(findings.length).toBeGreaterThan(0);
     expect(findings.every((f) => f.severity === "high")).toBe(true);
   });
+});
+
+test("a root-level defaultMode cannot mask permissions.defaultMode: bypassPermissions", () => {
+  const hidden = checkBypassFlagPresent("settings.json", {
+    defaultMode: "default",
+    permissions: { defaultMode: "bypassPermissions" },
+  });
+  expect(hidden).toHaveLength(1);
+  expect(hidden[0]?.location).toMatchObject({ pointer: "/permissions/defaultMode" });
+  const root = checkBypassFlagPresent("settings.json", { defaultMode: "bypassPermissions" });
+  expect(root).toHaveLength(1);
+  expect(root[0]?.location).toMatchObject({ pointer: "/defaultMode" });
+  expect(checkBypassFlagPresent("settings.json", { defaultMode: "default", permissions: { defaultMode: "default" } })).toEqual([]);
+});
+
+test("an out-of-range numeric HTML entity does not abort normalization", () => {
+  for (const text of ["&#x110000; hello", "&#99999999; hello"]) {
+    expect(() => checkInjectionInText("instructions", "prompt-injection-in-instructions", "CLAUDE.md", text, "high")).not.toThrow();
+  }
 });

@@ -11,10 +11,49 @@ type Rule = {
   severity: SecuritySeverity;
   confidence: number;
   remediation: string;
-  // For assignment-style rules the captured group 1 is the sensitive value; the
-  // whole match otherwise.
+  // For assignment-style rules the sensitive value is the first defined capture
+  // group from `valueGroup` on (the quoted and unquoted value forms are separate
+  // alternatives); the whole match otherwise.
   valueGroup?: number;
+  // A non-regex scanner returning [start, end) spans, for shapes a regex cannot
+  // scan in linear time. `regex` is unused when this is set.
+  scan?: (content: string) => Array<[number, number]>;
 };
+
+// Private key blocks. `-----BEGIN (RSA |EC |…)PRIVATE KEY-----`, PGP's
+// `PRIVATE KEY BLOCK`, and PKCS#8 `ENCRYPTED PRIVATE KEY`. Public keys and
+// certificates are not matched. The headers are bounded literals; the body is
+// found by searching forward for the END line once per block, never by a lazy
+// `[\s\S]*?` from every header. A lazy scan made k unclosed headers cost k*n
+// (review-performance-slice-35:F-002).
+const PRIVATE_KEY_BEGIN = /-----BEGIN (?:[A-Z0-9]{1,16} ){0,3}PRIVATE KEY(?: BLOCK)?-----/g;
+const PRIVATE_KEY_END = /-----END (?:[A-Z0-9]{1,16} ){0,3}PRIVATE KEY(?: BLOCK)?-----/g;
+
+function scanPrivateKeyBlocks(content: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  PRIVATE_KEY_BEGIN.lastIndex = 0;
+  let begin: RegExpExecArray | null;
+  while ((begin = PRIVATE_KEY_BEGIN.exec(content)) !== null) {
+    PRIVATE_KEY_END.lastIndex = begin.index + begin[0].length;
+    const end = PRIVATE_KEY_END.exec(content);
+    if (end === null) {
+      // No END line (`head -20 id_rsa`, a cut-off paste): fail closed and mask
+      // to the end of the input. No later header can close either, so stop.
+      spans.push([begin.index, content.length]);
+      break;
+    }
+    const stop = end.index + end[0].length;
+    spans.push([begin.index, stop]);
+    PRIVATE_KEY_BEGIN.lastIndex = stop;
+  }
+  return spans;
+}
+
+// The value of a `NAME = value` assignment. A quoted value runs to its closing
+// quote, so a passphrase with spaces or a `#` is masked whole; an unquoted one
+// stops at whitespace or `#` (a trailing comment is kept). The last alternative
+// keeps an unclosed opening quote (`PASSWORD="abcdefgh`) masked as before.
+const ASSIGNED_VALUE = String.raw`(?:"([^"\n]{6,})"|'([^'\n]{6,})'|["']?([^\s"'#]{6,}))`;
 
 const RULES: Rule[] = [
   // Provider-shaped API keys.
@@ -41,6 +80,14 @@ const RULES: Rule[] = [
   {
     policyId: "secrets.github-token",
     regex: /\bgh[pousr]_[A-Za-z0-9]{36,255}\b/g,
+    severity: "critical",
+    confidence: 0.97,
+    remediation: "Revoke the GitHub token and rotate it.",
+  },
+  {
+    // Fine-grained personal access tokens.
+    policyId: "secrets.github-token",
+    regex: /\bgithub_pat_[A-Za-z0-9_]{50,255}\b/g,
     severity: "critical",
     confidence: 0.97,
     remediation: "Revoke the GitHub token and rotate it.",
@@ -76,16 +123,20 @@ const RULES: Rule[] = [
   // Private key blocks.
   {
     policyId: "secrets.private-key-block",
-    regex:
-      /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g,
+    regex: PRIVATE_KEY_BEGIN,
+    scan: scanPrivateKeyBlocks,
     severity: "critical",
     confidence: 0.99,
     remediation: "Remove the private key and rotate the corresponding key pair.",
   },
-  // URL credentials (scheme://user:pass@host).
+  // URL credentials (scheme://user:pass@host). The scheme is bounded and has
+  // no `\b`: `[a-z0-9+.-]*` after `\b` restarted at every `.`/`-`/`+` of a long
+  // run with no `://` and backtracked over the rest of it, which is quadratic
+  // (review-performance-slice-35:F-001). A longer scheme still matches, from a
+  // later start, and the credentials are inside the span either way.
   {
     policyId: "secrets.url-credentials",
-    regex: /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:([^/\s:@]+)@[^\s/]+/gi,
+    regex: /[a-z][a-z0-9+.-]{0,31}:\/\/[^/\s:@]+:([^/\s:@]+)@[^\s/]+/gi,
     severity: "high",
     confidence: 0.92,
     remediation: "Remove inline credentials from URLs; use a secrets store.",
@@ -149,8 +200,11 @@ const RULES: Rule[] = [
   // that mangles legitimate text gets turned off.
   {
     policyId: "secrets.credential-file-assignment",
-    regex:
-      /\b((?:aws_)?secret_access_key|aws_session_token|aws_secret_key|client_secret)\s*[:=]\s*["']?([^\s"'#]{6,})/gi,
+    regex: new RegExp(
+      String.raw`\b((?:aws_)?secret_access_key|aws_session_token|aws_secret_key|client_secret)\s*[:=]\s*` +
+        ASSIGNED_VALUE,
+      "gid",
+    ),
     severity: "critical",
     confidence: 0.95,
     remediation: "Rotate the credential; it was read from a credentials file into agent-visible output.",
@@ -158,8 +212,11 @@ const RULES: Rule[] = [
   },
   {
     policyId: "secrets.env-assignment",
-    regex:
-      /\b([A-Z0-9_]*(?:DATABASE_URL|JWT_SECRET|SECRET(?:_KEY)?|API_?KEY|ACCESS_?KEY|ACCESS_?TOKEN|AUTH_?TOKEN|PASSWORD|PRIVATE_?KEY|TOKEN))["']?\s*[:=]\s*["']?([^\s"'#]{6,})/g,
+    regex: new RegExp(
+      String.raw`\b([A-Z0-9_]*(?:DATABASE_URL|JWT_SECRET|SECRET(?:_KEY)?|API_?KEY|ACCESS_?KEY|ACCESS_?TOKEN|AUTH_?TOKEN|PASSWORD|PRIVATE_?KEY|TOKEN))["']?\s*[:=]\s*` +
+        ASSIGNED_VALUE,
+      "gd",
+    ),
     severity: "high",
     confidence: 0.85,
     remediation: "Move the secret to an untracked env file or secrets manager.",
@@ -169,32 +226,55 @@ const RULES: Rule[] = [
 
 export function detectSecrets(content: string): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
+  const push = (rule: Rule, start: number, end: number): void => {
+    matches.push({
+      category: "secret",
+      policyId: rule.policyId,
+      severity: rule.severity,
+      confidence: rule.confidence,
+      start,
+      end,
+      value: content.slice(start, end),
+      mask: "secret",
+      remediation: rule.remediation,
+    });
+  };
   for (const rule of RULES) {
+    if (rule.scan) {
+      for (const [start, end] of rule.scan(content)) {
+        push(rule, start, end);
+      }
+      continue;
+    }
     rule.regex.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = rule.regex.exec(content)) !== null) {
-      const group = rule.valueGroup ?? 0;
-      const value = m[group];
-      if (value === undefined || value.length === 0) {
+      const group = valueGroupOf(rule, m);
+      const value = group === undefined ? undefined : m[group];
+      if (group === undefined || value === undefined || value.length === 0) {
         continue;
       }
       // Span covers only the sensitive value so redaction never reveals a prefix.
-      const start = group === 0 ? m.index : m.index + m[0].indexOf(value);
-      matches.push({
-        category: "secret",
-        policyId: rule.policyId,
-        severity: rule.severity,
-        confidence: rule.confidence,
-        start,
-        end: start + value.length,
-        value,
-        mask: "secret",
-        remediation: rule.remediation,
-      });
+      // The `d` flag gives the group's own offset; `indexOf` would find the value
+      // inside the name when they are equal (`PASSWORD=PASSWORD`).
+      const start = group === 0 ? m.index : (m.indices?.[group]?.[0] ?? m.index + m[0].indexOf(value));
+      push(rule, start, start + value.length);
       if (m.index === rule.regex.lastIndex) {
         rule.regex.lastIndex += 1;
       }
     }
   }
   return matches;
+}
+
+function valueGroupOf(rule: Rule, m: RegExpExecArray): number | undefined {
+  if (rule.valueGroup === undefined) {
+    return 0;
+  }
+  for (let group = rule.valueGroup; group < m.length; group += 1) {
+    if (m[group] !== undefined) {
+      return group;
+    }
+  }
+  return undefined;
 }

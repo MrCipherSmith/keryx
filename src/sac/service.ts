@@ -22,6 +22,7 @@ export {
 } from "./proposal-lifecycle";
 export { sessionEvidenceRef } from "./session-wrap-up";
 export { proposalNotePath } from "./proposal-evidence";
+export { proposeFromSession } from "./propose-from-session";
 export { findSession } from "../session/store";
 export { createLocalCollaborationService, normalizeCollaborationResult, type CollaborationActivity } from "./collaboration-service";
 export {
@@ -29,6 +30,7 @@ export {
   WorkspaceServiceError,
   localWorkspaceAuthorizationServer,
   newWorkspaceId,
+  isWorkspaceId,
   // The two shared lookups `keryx workspace list`/`show` and MCP
   // `sac.workspaceList`/`sac.workspaceShow` both run, so the CLI and the tool
   // boundary answer the same question the same way at the same moment.
