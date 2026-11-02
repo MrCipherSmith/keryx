@@ -1,6 +1,6 @@
 ---
 Title: OS Sandbox
-Version: 1.1.0
+Version: 1.2.0
 Type: architecture
 Status: accepted
 Summary: ""
@@ -8,7 +8,7 @@ Summary: ""
 ```markdown
 ---
 Title: OS Sandbox
-Version: 1.1.0
+Version: 1.2.0
 Type: architecture
 Status: accepted
 Summary: Kernel-enforced containment layer that constrains what a process can do after the policy engine approves it. Uses macOS Seatbelt or Linux bubblewrap to restrict filesystem access, network reach, and credential exposure. Containment is mandatory for autonomous runs and opt-in for interactive agent sessions. When containment cannot be applied, execution is refused rather than silently degraded.
@@ -156,6 +156,119 @@ The first three rules deliberately apply to the **command**, not the pattern. A 
 
 3. **Heredocs and redirects trigger prompts**: A heredoc or redirect (`cat > f <<'EOF'`) carries metacharacters, so it asks every time. Separating a redirect from a heredoc body needs a shell parser, which is a worse failure surface than one extra confirmation.
 
+## Repository Control Paths (`git-protect.ts`)
+
+`workspace-write` makes the whole cwd writable, `.git` included. Some files in a
+git dir are code the **host** runs on its next git command, outside any sandbox,
+so one contained write would become uncontained execution. Both launchers make
+them read-only again after the writable-root rules.
+
+### What is protected
+
+| Path | Why git runs code from it |
+|---|---|
+| `hooks/` | hook scripts (`post-checkout`, `pre-commit`, …) |
+| `config` | `core.fsmonitor`, `core.hooksPath`, `core.sshCommand`, filter and diff drivers, `!` aliases |
+| `config.worktree` | the same keys, per worktree, once `extensions.worktreeConfig` is on |
+| `commondir` | git reads it for **any** git dir and takes config and hooks from where it points |
+| the `.git` gitdir **file** of a linked worktree or submodule root | repointing it picks a different repository |
+
+Each is protected **whether or not it exists yet**: creating `.git/hooks/post-checkout`
+in a repo that has no hooks dir, or a `.git/commondir` in an ordinary checkout, is as
+good as editing an existing one (both confirmed live on macOS in review round 2).
+The set follows the repository: a gitdir file into a writable root, that gitdir's
+`commondir`, a submodule gitdir, and each `.git/worktrees/<name>/` (its `commondir`
+and `config.worktree`).
+
+**Anchors.** Each protected git dir, and every directory between it and the
+outermost writable root, must also stay in place: renaming `.git` away and creating a
+fresh one sidesteps every rule on the old path.
+
+Not protected, on purpose: `info/` (`info/attributes` can only *name* a filter or
+diff driver; the command comes from config, and a working-tree `.gitattributes` can
+name the same drivers), `objects/`, `refs/`, `logs/`, the index and the lock files
+git creates beside them — a contained `git add` / `git commit` needs those.
+
+### macOS (Seatbelt)
+
+`(deny file-write* (subpath <p>))` for every control path, existing or not — SBPL
+denies a missing path just as well. A symlinked entry is denied under its name and
+its target. Anchors get `(deny file-write* (literal <dir>))`, which blocks renaming
+or removing the directory but not writing inside it. Verified live
+(`containment.smoke.test.ts`, gated on `KERYX_ALLOW_REAL_SUBPROCESS=1`).
+
+### Linux (bubblewrap)
+
+bwrap protects by mounting, and a mount needs an existing mount point.
+
+- **Anchors** are bound onto themselves (`--bind d d`). Linux refuses `rename(2)` of
+  a dentry that is itself a mount point (`EBUSY`), so `mv .git x && git init` fails.
+  Being only an ancestor of a mount point is not enough — that was the round-2 gap.
+- **Existing** control paths: `--ro-bind p p`.
+- **Missing** ones need a mount point, which bwrap creates through the writable bind,
+  so it is **left behind on the host**. That is done only where the leftover is
+  inert: `hooks` gets an empty read-only tmpfs (an empty `hooks/` is what `git init`
+  makes), `config` / `config.worktree` get `/dev/null` (an empty config file is
+  valid).
+- **A missing `commondir` stays creatable on Linux.** Any mount point there — an
+  empty file or a directory — makes git die with `failed to read .git/commondir`,
+  inside the sandbox and on the host afterwards, so there is no inert placeholder.
+- **Why not "`.git` read-only, re-bind the writable parts"?** git creates its lock
+  files (`index.lock`, `HEAD.lock`, `packed-refs.lock`, `ORIG_HEAD`, `COMMIT_EDITMSG`, …)
+  as **new** entries at the top of `.git` and renames them into place; a read-only
+  `.git` makes `git add` and `git commit` fail, and a lock file that does not exist
+  yet cannot be pre-bound.
+- Closing `commondir` on Linux needs a check outside the sandbox after the run (the
+  contained process tree is gone once bwrap exits, so a "did a control path appear?"
+  check in the spawner is race-free). Not built yet.
+
+The Linux side is verified only by unit tests over the generated argv; no Linux
+kernel ran it in this change.
+
+### Accepted cost: `.git/config` is read-only
+
+git rewrites config by writing `config.lock` and renaming it over `config`, which
+the protection refuses. Inside the sandbox these fail with
+`error: could not write config file .git/config`:
+`git config <key> <value>`, `git remote add`, `git push -u` / `--set-upstream`,
+`git branch --set-upstream-to`, `git checkout -b X origin/X` (tracking), `git submodule add|init`.
+
+This is deliberate. `config` is a code-execution vector (`core.fsmonitor`,
+`core.hooksPath`, `core.sshCommand`, filters, `!` aliases); making it writable and
+re-checking it afterwards means parsing git config (includes, conditional includes,
+every key that runs a command) to the same standard as git itself. Workarounds:
+per-command config (`git -c user.email=… commit`), the environment
+(`GIT_AUTHOR_NAME`, `GIT_COMMITTER_EMAIL`, …), or running the config-writing step
+outside the sandbox with an approval. There is no sandbox-aware refusal message yet;
+the error is git's own. The cost is pinned by a live smoke test, so changing it is a
+decision, not an accident.
+
+### Still open (not closable by protecting `.git`)
+
+- **Nested repositories registered as submodules.** A contained command can create
+  `sub/.git` (a full repo with `core.fsmonitor`), a `.gitmodules` entry and a gitlink
+  in the index — all in the writable tree. The host's next `git status` in the
+  superproject recurses into `sub` and runs the fsmonitor (reproduced with git 2.51).
+- **Hooks that run working-tree code** (husky, lefthook, pre-commit, `core.hooksPath`
+  inside the repo): the hook itself may be protected, the scripts it runs are not.
+- **A gitdir symlinked from `.git`, or a symlinked control entry, on Linux**: a mount
+  follows the link, so the link itself can still be replaced.
+- **`include.path` in `.git/config` naming a file in the working tree.**
+
+These need a host-side git policy (for example running host git with
+`-c core.fsmonitor= -c core.hooksPath=/dev/null -c submodule.recurse=false` after a
+contained run), not a sandbox rule.
+
+### The `/run` hide and PATH (Linux, interactive)
+
+The interactive bwrap profile hides `/run` (and `/var/run`, `$XDG_RUNTIME_DIR`)
+behind an empty tmpfs, because host service sockets live there. NixOS also keeps
+the system PATH there (`/run/current-system/sw/bin`, setuid wrappers in
+`/run/wrappers/bin`). Each PATH entry under a hidden dir is bound back read-only —
+the entry itself, never a parent — unless it resolves to a hidden dir, the runtime
+dir or a parent of one, or holds a unix socket. The unattended profile has the same
+`/run` hide and does not bind PATH entries back yet.
+
 ## Fail-Closed Behavior
 
 A missing launcher or an unsupported posture produces a `blocked` outcome with a stated reason. There is no code path that runs a command uncontained after containment was requested.
@@ -222,6 +335,7 @@ Full documentation lives in `docs/requirements/keryx-os-sandbox/`:
 
 | Version | Changes |
 |---|---|
+| 1.2.0 | Added repository control paths: what is protected (existing or not), anchors, the Seatbelt vs bubblewrap mechanics and why a missing `commondir` stays open on Linux, the read-only `.git/config` cost and its workarounds, vectors that protecting `.git` cannot close, and the NixOS PATH bind-back under the `/run` hide. |
 | 1.1.0 | Added the approval-gate / allowlist permission model and its limits: the page described containment but not the layer that is load-bearing when containment is off (the default) or unavailable. |
 | 1.0.0 | Documented the implemented OS sandbox: postures, restricted network, credential masking, TLS termination, platform matrix, fail-closed contract, and the documentation package. |
 | 0.1.0 | Initial version. |

@@ -15,7 +15,7 @@
 // followed by "allow <roots>" yields writes only under the roots.
 
 import type { ContainedCommand } from "../executor";
-import { gitProtectAnchors, resolveGitProtectedPaths } from "./git-protect";
+import { resolveGitProtection, type GitProtection } from "./git-protect";
 import type { SandboxProfile } from "./profile";
 
 /** Absolute path to the macOS sandbox launcher. */
@@ -56,14 +56,15 @@ const LAUNCHER_BINARIES = ["/usr/bin/open", "/usr/bin/osascript"];
 /**
  * Build the Seatbelt (.sb) profile text for `profile`. Allow-default, then:
  *   - deny all writes, re-allow writable roots + stdio devices;
- *   - re-deny the git hooks/config inside those roots (see git-protect.ts);
+ *   - re-deny the git control paths inside those roots, existing or not, and
+ *     pin the git dirs in place (see git-protect.ts);
  *   - deny the LaunchServices IPC that starts programs outside the sandbox;
  *   - deny reads of the secret deny-list;
  *   - deny all network when `profile.network === "off"`.
  */
 export function buildSeatbeltProfile(
   profile: SandboxProfile,
-  gitProtected: readonly string[] = resolveGitProtectedPaths(profile.writableRoots),
+  git: GitProtection = resolveGitProtection(profile.writableRoots),
 ): string {
   const lines: string[] = [
     "(version 1)",
@@ -82,15 +83,24 @@ export function buildSeatbeltProfile(
     `(allow file-write-data ${DEVICE_WRITE_LITERALS.map((d) => `(literal ${sbplString(d)})`).join(" ")})`,
   );
 
-  // Last match wins: re-deny the files the host would later execute (a git hook,
-  // `core.fsmonitor` in config). The git dir itself is denied by name too, so it
-  // cannot be renamed away and replaced by one with a hook in it.
-  if (gitProtected.length > 0) {
-    lines.push("", ";; --- git hooks/config stay read-only inside the writable roots ---");
-    for (const guarded of gitProtected) {
-      lines.push(`(deny file-write* (subpath ${sbplString(guarded)}))`);
+  // Last match wins: re-deny what the host would later execute (a git hook,
+  // `core.fsmonitor` in config, a `commondir` pointing at a foreign config). A
+  // subpath deny holds for a path that does not exist yet, so a missing hooks dir
+  // or commondir cannot be created. A symlinked entry is denied under both names:
+  // the link cannot be replaced, the target cannot be written. The git dirs (and
+  // their parents inside the root) are denied by name too, so they cannot be
+  // renamed away and replaced by ones carrying a hook.
+  if (git.controls.length > 0 || git.anchors.length > 0) {
+    lines.push("", ";; --- git control paths stay read-only inside the writable roots ---");
+    const denied = new Set<string>();
+    for (const control of git.controls) {
+      for (const p of [control.path, control.real]) {
+        if (denied.has(p)) continue;
+        denied.add(p);
+        lines.push(`(deny file-write* (subpath ${sbplString(p)}))`);
+      }
     }
-    for (const anchor of gitProtectAnchors(gitProtected)) {
+    for (const anchor of git.anchors) {
       lines.push(`(deny file-write* (literal ${sbplString(anchor)}))`);
     }
   }

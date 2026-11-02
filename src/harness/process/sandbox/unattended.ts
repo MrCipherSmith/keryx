@@ -37,7 +37,9 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
+import { gitProtectBwrapArgs } from "./bwrap";
 import { detectSandboxLauncher, type DetectOptions } from "./detect";
+import { resolveGitProtection } from "./git-protect";
 import { defaultReadDenyList } from "./profile";
 
 /** Environment variables an unattended command inherits, by name. Nothing else passes. */
@@ -305,6 +307,10 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   for (const extra of input.readOnly) if (hostExists(extra)) readOnly.add(hostReal(extra));
   for (const root of readOnly) args.push("--ro-bind", root, root);
   for (const rw of [input.worktree, input.scratchHome]) args.push("--bind", hostReal(rw), hostReal(rw));
+  // The worktree's `.git` (a gitdir FILE for a linked worktree) and any git
+  // control path inside the RW binds stay read-only, so a contained write cannot
+  // repoint the repository the host runs git in afterwards (see git-protect.ts).
+  args.push(...gitProtectBwrapArgs(resolveGitProtection([hostReal(input.worktree), hostReal(input.scratchHome)])));
 
   // Known secret paths, masked inside anything bound back (e.g. a toolchain
   // root that happens to hold a credentials file).

@@ -7,7 +7,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath as realpathAsync, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { planUnattendedSandbox, toolchainRoots, UNATTENDED_ENV_ALLOWLIST, type UnattendedSandboxInput } from "./unattended";
@@ -55,6 +55,27 @@ describe("AC13: an unattended run never runs uncontained — every opt-out and e
     const plan = planUnattendedSandbox(input({ probe: () => false }));
     expect(plan.ok).toBe(false);
     if (!plan.ok) expect(plan.reason).toContain("cannot create a sandbox");
+  });
+});
+
+// review-logic-w3:F-002 (3): the RW worktree's `.git` gitdir FILE must not be repointable.
+describe("the worktree's git control paths stay read-only", () => {
+  test("a linked worktree's .git file is bound read-only after the RW worktree bind", async () => {
+    const base = await realpathAsync(await mkdtemp(path.join(tmpdir(), "keryx-unatt-git-")));
+    const wt = path.join(base, "wt");
+    try {
+      await mkdir(wt);
+      await writeFile(path.join(wt, ".git"), "gitdir: /elsewhere/.git/worktrees/wt\n");
+      const plan = planUnattendedSandbox(input({ worktree: wt, scratchHome: path.join(base, "home") }));
+      if (!plan.ok) throw new Error(plan.reason);
+      const dotGit = path.join(wt, ".git");
+      const rw = plan.args.findIndex((a, i) => a === "--bind" && plan.args[i + 1] === wt);
+      const ro = plan.args.findIndex((a, i) => a === "--ro-bind" && plan.args[i + 1] === dotGit && plan.args[i + 2] === dotGit);
+      expect(rw).toBeGreaterThan(-1);
+      expect(ro).toBeGreaterThan(rw);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
   });
 });
 
