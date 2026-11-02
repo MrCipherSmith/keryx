@@ -286,3 +286,25 @@ test('accepted legacy receipt metadata stays inside a closed accessible technica
  summary.focus();expect(summary).toHaveFocus();fireEvent.click(summary);
  expect(receipt).toBeVisible();
 });
+
+
+test('own legacy return keeps focused feedback and a read only previous result until a new submission',async()=>{
+ const decision=returnedDecision(fixture);
+ fixture.respond=request=>{
+  if(request.method==='POST'&&request.url.endsWith('/request-changes')){
+   Object.assign(fixture.legacyFlow,{status:'in-progress',version:5,subjectRevisionId:null,lastReturnDecisionId:decision.id,reviewFeedback:decision});
+   return Response.json({status:'committed',operationId:request.headers.get('Idempotency-Key'),flowVersion:5,flowState:'in-progress',decision});
+  }
+ };
+ mountAcceptance('legacy');fireEvent.change(await openReturn(),{target:{value:decision.comment}});
+ fireEvent.click(screen.getByRole('checkbox',{name:'Relate to: Keyboard focus remains visible'}));confirmReturn();
+ const status=await screen.findByText('Returned for changes',{selector:'[role=status]'});
+ await waitFor(()=>expect(screen.getByText(decision.comment)).toBeVisible());
+ expect(status).toHaveFocus();
+ expect(screen.queryByRole('button',{name:'Review updated result'})).not.toBeInTheDocument();
+ expect(screen.queryByText(/The reviewed result changed/)).not.toBeInTheDocument();
+ expect(screen.getByText('Returned result — awaiting a new submission')).toBeVisible();
+ expect(screen.queryByText('Completed result — read only')).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Accept result'})).not.toBeInTheDocument();
+ expect(mutationRequests(fixture)).toHaveLength(1);
+});

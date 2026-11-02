@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDraft } from '../../state/drafts';
 import { Button, Field, Textarea } from '../../components/ui';
 import { returnReason, type DecisionInput, type DecisionOutcome, type ReviewCriterion } from './model';
-export type ReviewDecisionProps={scope:string;targetKey:string;subjectKey?:string;criteria:ReviewCriterion[];effect:'effectIntent'|'effectFlow'|'effectLegacy';acceptAllowed:boolean;returnAllowed:boolean;blockedReason?:string;readonly?:'acceptedReadonly'|'doneReadonly';legacy?:boolean;pending?:boolean;pendingCode?:string;pendingDecision?:"accept"|"request-changes";onDecision:(input:DecisionInput)=>Promise<DecisionOutcome|undefined>;onCheck?:()=>Promise<DecisionOutcome|undefined>;onRetry?:()=>Promise<DecisionOutcome|undefined>;refresh:()=>void;extraActions?:ReactNode};
+export type ReviewDecisionProps={scope:string;targetKey:string;subjectKey?:string;criteria:ReviewCriterion[];effect:'effectIntent'|'effectFlow'|'effectLegacy';acceptAllowed:boolean;returnAllowed:boolean;blockedReason?:string;readonly?:'acceptedReadonly'|'doneReadonly'|'returnedReadonly';legacy?:boolean;pending?:boolean;pendingCode?:string;pendingDecision?:"accept"|"request-changes";onDecision:(input:DecisionInput)=>Promise<DecisionOutcome|undefined>;onCheck?:()=>Promise<DecisionOutcome|undefined>;onRetry?:()=>Promise<DecisionOutcome|undefined>;refresh:()=>void;extraActions?:ReactNode};
 /** The draft key pins the reviewed subject; a changed target never silently retargets it. */
 export function DecisionControls(props:ReviewDecisionProps){
  const {t}=useTranslation('acceptance');
