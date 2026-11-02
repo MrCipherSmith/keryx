@@ -1,0 +1,39 @@
+{
+  "task": {
+    "task_id": "task-41",
+    "task_name": "Preserve browser served-response assertion in UI suite",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Real CI bothjobs and strict gate fail root src/hub/work/http.contract.test.ts browser-adapter case because apps/api/client imports i18next absent root deps. Move exactly that meaningful served production-handler\u2192liveWorkAdapter assertion into hub-web Vitest suite with UI dependencies. Retain root server/schema/WorkClient cases. No installing UI deps in root, no NODE_PATH masks, no weakening/dropping assertion. If needed extract framework-neutral small fixture helper without UI/Bun-test imports, or local UI fixture using actual production createWorkHttp; avoid unnecessary refactor. Capture existing RED from logs then verify root contract with UI dep symlink absent plus full UI, types/lint, assetfreshness (no production UI changes needed).",
+    "target_files": [
+      "src/hub/work/http.contract.test.ts",
+      "apps/hub-web/tests/work-server-contract.case.ts"
+    ],
+    "acceptance_criteria": [
+      "All owned conflicts resolved with chosen coherent contract and valuable tests from both sides preserved.",
+      "Newly combined behavior is covered by meaningful green focused regressions; report discarded duplicate/obsolete assertions explicitly.",
+      "No source modifications outside ownership, no Git index/commit/push or production."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx",
+    "branch": "feat-hub-1113-r02-integration"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 1
+  }
+}

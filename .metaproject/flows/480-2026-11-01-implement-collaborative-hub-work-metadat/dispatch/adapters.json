@@ -1,0 +1,33 @@
+{
+  "task": {
+    "task_id": "task-3",
+    "task_name": "Managed work client OpenAPI and contributor MCP",
+    "task_type": "service_api",
+    "complexity": "high",
+    "description": "Managed work client OpenAPI and contributor MCP following docs/requirements/hub-work-management and prior explicit bounded dispatch. No deployment or self acceptance.",
+    "target_files": [
+      "src/hub/work/client.ts",
+      "src/hub/work/openapi.ts",
+      "src/hub/mcp.ts"
+    ],
+    "acceptance_criteria": [
+      "Typed live transport and exact OpenAPI envelopes match runtime",
+      "Contributor MCP never exposes protected human commands and respects existing auth"
+    ],
+    "existing_tests": [],
+    "existing_stories": [],
+    "context": "Reviewed 0.1.1 specification, current main0.4.1; shared state protocol with separate ownership lanes."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-work-management/keryx",
+    "branch": "feat-hub-work-management"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_tests": true,
+    "verify_types": true,
+    "verify_lint": true,
+    "max_self_fix_attempts": 3
+  }
+}

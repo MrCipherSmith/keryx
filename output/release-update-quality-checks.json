@@ -1,0 +1,71 @@
+[
+  {
+    "name": "release-health",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun --no-env-file src/cli.ts health run --changed --source eslint,typescript",
+    "started": "2026-11-01T15:24:43.428Z",
+    "completedObservation": "2026-11-01T15:25:35.759Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-25-27-027Z-da96ee_run.log"
+  },
+  {
+    "name": "release-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck",
+    "started": "2026-11-01T15:24:43.431Z",
+    "completedObservation": "2026-11-01T15:25:35.760Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-25-18-493Z-8b215a_run.log"
+  },
+  {
+    "name": "release-script-types",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run typecheck:scripts",
+    "started": "2026-11-01T15:24:43.431Z",
+    "completedObservation": "2026-11-01T15:25:35.760Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-24-51-264Z-3590ab_run.log"
+  },
+  {
+    "name": "release-lint",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun node_modules/eslint/bin/eslint.js src/cli-registry.ts src/commands/hub.ts src/commands/hub-update.ts src/commands/hub-update.test.ts scripts/hubctl-release.test.ts",
+    "started": "2026-11-01T15:24:43.431Z",
+    "completedObservation": "2026-11-01T15:25:35.760Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-24-45-138Z-199b79_run.log"
+  },
+  {
+    "name": "release-cli-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test src/commands/hub-update.test.ts src/commands/hub-machine.test.ts src/hub/status.test.ts src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts scripts/hubctl-release.test.ts",
+    "started": "2026-11-01T15:24:43.431Z",
+    "completedObservation": "2026-11-01T15:25:35.760Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-24-52-823Z-89ec62_run.log"
+  },
+  {
+    "name": "release-package-tests",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun test scripts/package-team-hub.test.ts",
+    "started": "2026-11-01T15:24:43.431Z",
+    "completedObservation": "2026-11-01T15:25:35.760Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-24-50-793Z-910c44_run.log"
+  },
+  {
+    "name": "release-assets",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun scripts/build-hub-web.ts --check",
+    "started": "2026-11-01T15:24:43.431Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-24-44-360Z-c549d3_run.log"
+  },
+  {
+    "name": "release-doc-links",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bun run check:doc-links",
+    "started": "2026-11-01T15:24:43.431Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-24-44-647Z-7afeb6_run.log"
+  },
+  {
+    "name": "release-shell-syntax",
+    "command": "bun --no-env-file src/cli.ts ctx run -- bash -n deploy/team-hub/hubctl deploy/team-hub/release/e2e.sh",
+    "started": "2026-11-01T15:24:43.432Z",
+    "exitCode": 0,
+    "rawLog": ".metaproject/data/gdctx/raw/2026-11-01T15-24-44-307Z-4b019d_run.log"
+  }
+]

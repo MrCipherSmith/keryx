@@ -84,7 +84,17 @@ export function bridgeHarness(){
   const projectId=hub().project.id;const sessionPath=`/hub/v2/projects/${projectId}/sessions/${sessionId}`;
   const read=()=>get<Control['SessionRecord']>(sessionPath);
   const binding=(lease:Control['ControllerLease'])=>({controllerLeaseId:lease.controllerLeaseId,expectedControllerVersion:lease.version});
-  const claim=async(seconds=60,mode:'claim'|'takeover'='claim',extra:Record<string,unknown>={})=>{const current=await read();const receipt=await success<Control['ControllerReceipt']>(await post(`${sessionPath}/controller/claim`,{expectedSessionVersion:current.version,expectedControllerVersion:current.controller?.version??0,requestedLeaseSeconds:seconds,mode,...extra}));await wait(read,v=>v.controller?.controllerLeaseId===receipt.lease.controllerLeaseId&&v.controller.state==='held');return receipt;};
+  const claim=async(seconds=60,mode:'claim'|'takeover'='claim',extra:Record<string,unknown>={})=>{
+   // A native event may overtake the GET before the claim CAS. Refresh only
+   // that stale snapshot; authority/lease conflicts must fail immediately.
+   for(let attempt=0;;attempt++){
+    const current=await read();
+    const response=await post(`${sessionPath}/controller/claim`,{expectedSessionVersion:current.version,expectedControllerVersion:current.controller?.version??0,requestedLeaseSeconds:seconds,mode,...extra});
+    if(response.status===409&&attempt<3){const body=await response.clone().json() as {error?:{code?:string}};if(body.error?.code==='stale-version')continue;}
+    const receipt=await success<Control['ControllerReceipt']>(response);
+    await wait(read,v=>v.controller?.controllerLeaseId===receipt.lease.controllerLeaseId&&v.controller.state==='held');return receipt;
+   }
+  };
   const message=async(lease:Control['ControllerLease'],text:string,options:{key?:string;busyPolicy?:'enqueue'|'reject';association?:Control['FlowAssociation'];current?:Control['SessionRecord']}={})=>{const current=options.current??await read();return post(`${sessionPath}/messages`,{expectedSessionVersion:current.version,expectedConfigVersion:current.config.configVersion,controller:binding(lease),text,interpretation:'literal-message',busyPolicy:options.busyPolicy??'enqueue',association:options.association??{mode:'ad-hoc',profileConsentVersion:1}},options.key);};
   const turn=async(lease:Control['ControllerLease'],text:string,options:Parameters<typeof message>[2]={})=>success<Control['TurnReceipt']>(await message(lease,text,options));
   const invoke=async(lease:Control['ControllerLease'],commandName:string,args:Record<string,unknown>={},options:{association?:Control['FlowAssociation'];busyPolicy?:'reject'|'queue-at-idle';current?:Control['SessionRecord']}={})=>{const current=options.current??await read();return post(`${sessionPath}/commands/invoke`,{expectedSessionVersion:current.version,expectedConfigVersion:current.config.configVersion,controller:binding(lease),catalogueDigest,commandName,arguments:args,busyPolicy:options.busyPolicy??'reject',...(options.association?{association:options.association}:{})});};

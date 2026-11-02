@@ -1,0 +1,28 @@
+{
+  "head": "af2e67accf65d954a625b4891bec15e9cc3daea4",
+  "run": 41398386845,
+  "checkedAt": "2026-11-02T06:24:26.138232+00:00",
+  "mode": "read-only secondary-check monitor",
+  "counts": {
+    "skipped": 1,
+    "success": 17,
+    "in_progress": 2,
+    "failure": 1
+  },
+  "newFailures": [],
+  "knownFailure": "team-hub-distribution; offline install cache fix owned by storage worker",
+  "pending": [
+    {
+      "name": "AC8 full suite (5000 ms, preload)",
+      "startedAt": "2026-11-02T06:11:43Z",
+      "url": "https://github.com/MrCipherSmith/keryx/actions/runs/41398386845/job/125124613367"
+    },
+    {
+      "name": "typecheck-and-tests",
+      "startedAt": "2026-11-02T06:11:44Z",
+      "url": "https://github.com/MrCipherSmith/keryx/actions/runs/41398386845/job/125124613139"
+    }
+  ],
+  "monitorWindow": "bounded approximately five minutes; no source edits, logs for known failure not repeated",
+  "rawChecks": "/tmp/pr1113-integration-ci-secondary-check-runs.json"
+}

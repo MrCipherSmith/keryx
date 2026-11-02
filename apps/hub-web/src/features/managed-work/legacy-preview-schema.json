@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "receiptId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "contentDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "legacyFlowId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "sourceVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sourceDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": {
+      "const": "eligible"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "flowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "specification": {
+          "$ref": "#/components/schemas/DocumentRef"
+        },
+        "criteria": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "status": {
+          "enum": ["initializing", "ready"]
+        }
+      },
+      "required": ["flowId", "title", "specification", "criteria", "status"]
+    }
+  },
+  "required": [
+    "receiptId",
+    "contentDigest",
+    "legacyFlowId",
+    "sourceVersion",
+    "sourceDigest",
+    "status",
+    "source"
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "status": "DONE",
+  "task": "task-37",
+  "root": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx",
+  "branch": "feat-hub-1113-r02-integration",
+  "incomingCandidate": "33ef4c0f1",
+  "firstParentRemote": "8dcb765f072c5e8cb287175af7d7c9ce300ce322",
+  "filesResolvedOrComposed": [
+    "src/hub/store.ts",
+    "src/hub/legacy-artifacts.ts",
+    "src/hub/legacy-artifacts.test.ts",
+    "src/hub/store.projections.test.ts",
+    "src/hub/work/storage.ts",
+    "src/hub/work/http.ts",
+    "src/hub/work/openapi.ts",
+    "src/hub/work/handlers-attempts.ts",
+    "src/hub/work/cli.ts",
+    "src/hub/work/help.ts",
+    "src/commands/hub.ts",
+    "src/commands/hub-update.test.ts",
+    "deploy/team-hub/hubctl",
+    "deploy/team-hub/migrate-legacy.py",
+    "deploy/team-hub/release/e2e.sh",
+    "deploy/team-hub/release/migrate-legacy-boundaries.test.py",
+    "deploy/team-hub/release/migrate-legacy.test.py",
+    "scripts/package-team-hub.test.ts",
+    "scripts/hubctl-rollback.test.ts",
+    "scripts/hub-runtime-cache.test-support.ts",
+    "scripts/prepare-team-hub-runtime-cache.ts",
+    ".github/workflows/ci.yml",
+    "docs/docs/team-hub-deployment.md",
+    "docs/requirements/hub-work-management/metadata-protocol.md",
+    "docs/requirements/hub-work-management/openapi.json",
+    "docs/requirements/hub-work-management/schemas/command.schema.json",
+    "docs/requirements/hub-work-management/schemas/domain.schema.json",
+    "apps/hub-web/src/features/managed-work/command-schema.json",
+    "apps/hub-web/src/features/managed-work/domain-schema.json"
+  ],
+  "choices": [
+    {
+      "area": "store bootstrap and legacy hot paths",
+      "choice": "Compose remote single digest-driven startup rebuild with candidate lazy/prepared transactions. Legacy/session old bootstrap blocks removed; absent canonical body handled.",
+      "tests": "Both store.projections remote suite and store.incremental candidate suite preserved."
+    },
+    {
+      "area": "archive",
+      "choice": "Candidate OPTIONAL boolean retained atomically across store/work repository; exact old version conflicting content/metadata returns typed409, identical reordered JSON stays idempotent. Existing archive never rewritten.",
+      "tests": "Remote quota/projection tests retained; new immutable conflict RED oldcandidate\u2192GREEN integrated."
+    },
+    {
+      "area": "scoped storage and public contracts",
+      "choice": "Candidate bounded201 incidents, per-Attempt acceptance join, pending execution reservation APIs and compositeDecision index; six public limits and Evidence attention union; Flow-only[] schemas preserved.",
+      "tests": "Both remote http.contract/scenario and candidate real app/scoped matrix suites retained."
+    },
+    {
+      "area": "participant policy",
+      "choice": "Candidate guard semantics (matching actor identity and method); remote full positive-owner suite retained alongside candidate same-ID agent rejection matrix.",
+      "tests": "handlers-attempts.test.ts and participant.authorization.test.ts both68-test focused pass."
+    },
+    {
+      "area": "help",
+      "choice": "Remote lightweight help.ts and CLI import/re-export; candidate main CLI root/deep spawn regressions.",
+      "tests": "Dedicated Work help root/deep tests pass; duplicate remote root-only test replaced by equivalent stronger candidate test."
+    },
+    {
+      "area": "ops/runtime",
+      "choice": "Candidate conservative old-schema/malformed-queue migration, pinned cache validation/loopback registry proof and explicit CI network preparation. Safety age+count+pointer policy coherent; remote explicit old-copy pruning test retained.",
+      "tests": "Migration29pass; retention18pass; package9pass including actual offline SDK/MCP."
+    }
+  ],
+  "checks": [
+    {
+      "name": "storage both suites",
+      "passed": 68,
+      "failed": 0,
+      "assertions": 3182,
+      "files": 11,
+      "log": "/tmp/pr1113-integration-storage-tests.log"
+    },
+    {
+      "name": "ops CLI initial",
+      "passed": 32,
+      "failed": 0,
+      "assertions": 112,
+      "log": "/tmp/pr1113-integration-ops-tests.log"
+    },
+    {
+      "name": "retention final combined",
+      "passed": 18,
+      "failed": 0,
+      "assertions": 61,
+      "log": "/tmp/pr1113-integration-retention-combined.log"
+    },
+    {
+      "name": "migration boundaries",
+      "passed": 29,
+      "failed": 0,
+      "log": "/tmp/pr1113-integration-migration-tests.log"
+    },
+    {
+      "name": "actual archive and offline runtime",
+      "passed": 9,
+      "failed": 0,
+      "assertions": 61,
+      "log": "/tmp/pr1113-integration-package-final.log"
+    },
+    {
+      "name": "archive conflict",
+      "red": "/tmp/pr1113-integration-archive-conflict-red.log",
+      "green": "/tmp/pr1113-integration-archive-conflict-green.log",
+      "passed": 1,
+      "assertions": 6
+    },
+    {
+      "name": "owned eslint",
+      "status": "pass",
+      "log": "/tmp/pr1113-integration-storage-lint.log"
+    },
+    {
+      "name": "docs contracts",
+      "status": "pass",
+      "log": "/tmp/pr1113-integration-doc-contract.log"
+    },
+    {
+      "name": "global typecheck",
+      "status": "pass after native legacy fixture adaptation",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-46-18-224Z-6e9861_run.log",
+      "evidenceOwner": "fix_deploy_d_m"
+    }
+  ],
+  "assertionsAdapted": [
+    "Remote no-op serialization expectation strengthened1parse/1serialize\u21920/0 for lazy callbacks.",
+    "Remote mutation serialization expectation strengthened2/2\u21922/1 via shared prepared body.",
+    "Remote duplicate root Work --help spawn case covered by candidate root+deep tests; help constant itself from remote."
+  ],
+  "environmentNote": "Package probe initially refused parent-created apps/hub-web/node_modules symlink. Relocated ONLY that dependency symlink temporarily during package proof and restored it in finally; no allowlist change, source edit or dependency install.",
+  "rootOwnedPlan": "Candidate header restored before parent clarified ownership; parent then took over plan.md, not included in owned final paths.",
+  "noGitIndexChanges": true,
+  "noCommitsPushProduction": true,
+  "frozen": true,
+  "routingAudit": {
+    "graph_used": "Not rebuilt during conflicted merge per parent; known owned paths and prior graph comparison used.",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}

@@ -7774,6 +7774,7 @@ Team Hub prototype for canonical project context, immutable code snapshots and h
 ```bash
 keryx hub serve
 keryx hub status
+keryx hub update [version] [--check|--dry-run] [--install-dir path] [--yes]
 keryx hub mcp --url https://hub.example.com/mcp [--token-env NAME]
 keryx hub connect --url http://127.0.0.1:7331 --project <id> [--token-env NAME]
 keryx hub import [--token-env NAME]
@@ -7786,6 +7787,8 @@ keryx hub fetch --delivery <id> [--token-env NAME]
 `serve` uses the `KERYX_HUB_*` server environment. Client credentials use `KERYX_HUB_TOKEN` or the named environment variable; they are never saved in the checkout. `connect` explicitly binds each checkout with a distinct identity and records the authoritative binding in permission-restricted user configuration outside the repository. HTTPS is required for non-loopback URLs.
 
 `status` reads only this checkout's authoritative local binding and prints `url`, `projectId` and `checkoutId`. It requires no token, makes no HTTP requests and does not change project/configuration files or Git state. An unconnected checkout prints a clear message; a malformed or unreadable binding fails with a sanitized error. The repository mirror is never used as a fallback.
+
+`update` operates on a release-installed Hub on this computer, outside the checkout. Run it on the Hub server, for example through an existing SSH session. The default installation is `~/keryx-team-hub`; choose another with `--install-dir`. An omitted version means the latest stable published release; explicit stable versions accept an optional `v` prefix. `--check` reports release availability and `--dry-run` validates/previews without changing the installation, data or services. Normal update delegates to the installation-owned `hubctl` with its lock, artifact verification, consistent backup, copied-data trial and health checks. It inherits the terminal so the tool can request confirmation; `--yes` is the explicit noninteractive confirmation and cannot be combined with check/dry-run. CI builds the image; the server does not pull source or rebuild a checkout. A legacy source-build installation is refused until migrated. The tool and installation directories must be owned by root or the invoking Unix user and must not be writable by other users; root does not implicitly trust another account's executable. No project binding, Hub bearer or MCP privilege authorizes an update; the operator needs local installation/Docker access. The installed tool's failure status is preserved. Use `keryx hub update --help` for the complete syntax.
 
 `mcp` is a local stdio bridge to the shared Hub MCP endpoint. It needs no checkout or local binding. The agent key comes from `KERYX_HUB_TOKEN` or `--token-env NAME`; optional Cloudflare Service Auth uses both `KERYX_CF_ACCESS_CLIENT_ID` and `KERYX_CF_ACCESS_CLIENT_SECRET`. Credentials are never accepted as raw flags. Remote URLs require HTTPS; loopback HTTP is allowed for local testing. Redirects are refused, stdout contains only MCP messages, and network failures do not automatically retry writes. See [Hub MCP clients](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/hub-mcp/clients.md) for configuration and compatibility limits.
 
@@ -7801,7 +7804,7 @@ An older globally installed CLI may not have `hub`; use the prototype source/rel
 bun --no-env-file --config=/dev/null /absolute/path/to/keryx/src/hub/client-main.ts --help
 ```
 
-The standalone client has no `machine` subcommands. They are described next.
+The standalone context client has no `update` or `machine` subcommands; use the full Keryx CLI on the appropriate host. Machine commands are described next.
 
 ### hub machine
 

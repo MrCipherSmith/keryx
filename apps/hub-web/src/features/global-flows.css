@@ -1,0 +1,123 @@
+.hub-flow-overview {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.hub-flow-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.hub-flow-toolbar > :first-child {
+  flex: 1;
+  min-width: 180px;
+}
+.hub-flow-toolbar > :nth-child(2) {
+  min-width: 170px;
+}
+.hub-flow-count {
+  font-size: 12px;
+  color: var(--hub-muted, #65756c);
+  padding-bottom: 9px;
+}
+.hub-flow-table {
+  overflow: hidden;
+  border: 1px solid var(--hub-border, #dce5de);
+  border-radius: 10px;
+  background: var(--hub-surface, #fff);
+}
+.hub-flow-table-heading,
+.hub-flow-table-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.8fr) minmax(100px, 0.8fr) minmax(
+      140px,
+      1fr
+    ) minmax(140px, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 12px 16px;
+}
+.hub-flow-table-heading {
+  background: var(--hub-subtle, #f4f7f5);
+  color: var(--hub-muted, #65756c);
+  font-size: 11px;
+}
+.hub-flow-table-row {
+  border-top: 1px solid var(--hub-border, #dce5de);
+  font-size: 12px;
+}
+.hub-flow-table-row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hub-flow-link {
+  display: block;
+  color: var(--hub-text, #20352b);
+  text-align: start;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding-block: 3px;
+}
+.hub-flow-link:hover {
+  color: var(--hub-accent, #265f50);
+  text-decoration: underline;
+}
+.hub-flow-meta {
+  display: block;
+  color: var(--hub-muted, #65756c);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.hub-project-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 12px;
+  padding: 16px;
+}
+.hub-project-card > :first-child {
+  margin: 0;
+  grid-row: span 2;
+}
+.hub-project-card > :nth-child(2) {
+  font-size: 14px;
+}
+.hub-project-card > :nth-child(3) {
+  margin-top: 0;
+  font-size: 12px;
+}
+.hub-project-metrics > button {
+  padding: 14px 16px;
+}
+.hub-project-metrics > button > :last-child {
+  margin-top: 6px;
+  font-size: 24px;
+}
+@media (max-width: 760px) {
+  .hub-flow-table-heading {
+    display: none;
+  }
+  .hub-flow-table-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 16px;
+    padding: 14px;
+  }
+  .hub-flow-table-row:first-of-type {
+    border-top: 0;
+  }
+  .hub-flow-table-row > :nth-child(4) {
+    text-align: end;
+  }
+  .hub-flow-toolbar > :nth-child(2) {
+    min-width: 140px;
+  }
+}
+@media (max-width: 420px) {
+  .hub-flow-toolbar > :first-child,
+  .hub-flow-toolbar > :nth-child(2) {
+    flex: 1 1 100%;
+  }
+}

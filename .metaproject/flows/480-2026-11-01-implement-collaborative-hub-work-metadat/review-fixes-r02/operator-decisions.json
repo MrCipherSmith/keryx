@@ -1,0 +1,15 @@
+{
+  "source": "Explicit owner chat answers on 2026-11-02; original review decision input is read-only",
+  "backupRetention": {
+    "decision": "restore-14-day-protection",
+    "instruction": "Keep every safety backup younger than14 days and align documentation."
+  },
+  "flowOnlyAmendments": {
+    "decision": "allow",
+    "instruction": "affectedIntentIds=[] is valid in every schema, UI and API."
+  },
+  "reviewPremises": {
+    "review-security-code-w32:SEC-W32-001": "uphold",
+    "review-degradation-w8:F-002": "uphold"
+  }
+}

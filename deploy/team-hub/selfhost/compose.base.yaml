@@ -25,6 +25,9 @@ services:
       KERYX_HUB_AGENT_TOKEN: ${KERYX_HUB_AGENT_TOKEN:?Run install.sh, or set an agent token in secrets/hub.env}
       KERYX_HUB_REVIEWER_TOKEN: ${KERYX_HUB_REVIEWER_TOKEN:-}
       KERYX_HUB_PUBLIC_ORIGIN: ${KERYX_HUB_PUBLIC_ORIGIN:-}
+      # Opt-in managed work; install-owned env survives every release switch.
+      KERYX_HUB_WORK_ENABLED: ${KERYX_HUB_WORK_ENABLED:-false}
+      KERYX_HUB_WORK_REPOSITORIES: ${KERYX_HUB_WORK_REPOSITORIES:-[]}
       # Named agent keys (`hubctl agent-key`). The Hub re-reads this file on every
       # request, so issuing or revoking a key needs no restart.
       KERYX_HUB_AGENT_CREDENTIALS_FILE: /run/keryx-agents/agents.json

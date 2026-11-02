@@ -1,0 +1,60 @@
+{
+  "ours": "bb65652ca",
+  "verifiedProduct": "2aadf1165",
+  "remote": "8dcb765f072c5e8cb287175af7d7c9ce300ce322",
+  "base": "d50652ac",
+  "readOnly": true,
+  "rows": [
+    {
+      "area": "legacy transactions",
+      "recommendation": "ours",
+      "reason": "Zero legacy materialization for repo-only callbacks versus remote1parse/1serialize; preserve remote save/listener tests"
+    },
+    {
+      "area": "projection bootstrap",
+      "recommendation": "compose",
+      "reason": "Remote unified digest initialization; retain ours lazy/prepared transaction paths and remote session-preservation assertions"
+    },
+    {
+      "area": "archive policy",
+      "recommendation": "compose",
+      "reason": "Boolean parameter polarity inverted; compose store/storage atomically and keep fail-closed exact-version integrity"
+    },
+    {
+      "area": "amendment and incidents",
+      "recommendation": "ours+tests",
+      "reason": "Same resolution guard, ours indexed bounded incident201 limit and per-attempt acceptance join; keep remote pin assertion"
+    },
+    {
+      "area": "public API schemas",
+      "recommendation": "equivalent+tests",
+      "reason": "Six limits/Evidence union/Flow-only[] equivalent; preserve remote served-browser-adapter regression"
+    },
+    {
+      "area": "participant authorization",
+      "recommendation": "equivalent+tests",
+      "reason": "Same ID and human-method guards; keep remote positive owner and ours same-ID-agent negatives"
+    },
+    {
+      "area": "migration readiness",
+      "recommendation": "ours",
+      "reason": "Old body-less schema and malformed JSON remain conservatively unresolved"
+    },
+    {
+      "area": "backup retention",
+      "recommendation": "equivalent+tests",
+      "reason": "Same14day+3newest+pointer policy; combine young/pruning and old-count coverage"
+    },
+    {
+      "area": "package and CI",
+      "recommendation": "ours",
+      "reason": "Explicit private-cache prep, pin+URL validation, loopback fail-closed zero-request proof"
+    },
+    {
+      "area": "help routing",
+      "recommendation": "remote+tests",
+      "reason": "Lightweight work/help.ts avoids command implementation import; retain root/deep CLI spawn cases"
+    }
+  ],
+  "report": "/tmp/pr1113-r02-compare-storage-ops.md"
+}

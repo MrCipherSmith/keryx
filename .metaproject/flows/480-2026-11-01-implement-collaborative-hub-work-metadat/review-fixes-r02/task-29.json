@@ -1,0 +1,123 @@
+{
+  "task": {
+    "task_id": "task-29",
+    "task_name": "Round2 ops mechanism repairs",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Reproduce RED then minimalfix GREEN each assigned canonical mechanism. Follow parent scope. For ops restore 14-day protection and align docs (owner decision), handle terminal queue history, help routing, version metadata, offline deterministic package tests. For delivery implement durable observable recoverable delivery jobs, retain external facts on line changes, one canonical use-case path, fair bounded actual body admission with auth/deadline and no MCP double counting; websocket overload must not masquerade authorization loss. No unrelated refactor or production actions.",
+    "target_files": [
+      "deploy/team-hub/hubctl",
+      "deploy/team-hub/migrate-legacy.py",
+      "docs/docs/team-hub-deployment.md",
+      "docs/requirements/hub-work-management/plan.md",
+      "scripts/package-team-hub.test.ts",
+      "src/commands/hub.ts"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "review-architecture-w8:F-001",
+        "file": "docs/docs/team-hub-deployment.md",
+        "severity": "CRITICAL",
+        "message": "This PR changed prune_safety_backups to a pure count bound (three newest plus the referenced pre-upgrade backup; the 14-day guard was deleted) and appended the new rule to the maintainers 'Releasing' section of the same document, but left the operator-facing Backup-and-restore contract and the frozen distribution requirement (#17 'Safety backups younger than 14 days are never pruned') stating the old guarantee. The documented contract and the implementation now disagree.",
+        "suggested_fix": "Replace the Backup-and-restore bullet with the count rule (three newest plus the referenced pre-upgrade backup; copy older safety backups off-host if needed), move the maintainers-section sentence there, and amend requirement 17 of team-hub-distribution/specification.md through its change process (or restore the age guard with a separate disk bound if the 14-day guarantee is still required).",
+        "line": 234
+      },
+      {
+        "id": "review-clean-code-w7:F-001",
+        "file": "docs/requirements/hub-work-management/plan.md",
+        "severity": "CRITICAL",
+        "message": "The new 'Historical milestone record' paragraph was inserted between the H1 title and the `Version: 0.2.0` metadata line. The package's documentation verifier requires the version line directly under the H1: `check(/^# .+\\nVersion: \\d+\\.\\d+\\.\\d+\\n/.test(text),`Version not under H1: ${name}`)`, applied to every .md in docs/requirements/hub-work-management.",
+        "suggested_fix": "Move the note below the version line in all three files (`# Title`, `Version: 0.2.0`, blank line, note), then run `node docs/requirements/hub-work-management/verify.cjs`.",
+        "line": 3
+      },
+      {
+        "id": "review-degradation-w10:F-001",
+        "file": "deploy/team-hub/hubctl",
+        "severity": "CRITICAL",
+        "message": "The fix for review-performance-w6:F-002 (980bb58b5) removed the 14-day protection from prune_safety_backups (base had `[ -n \"$(find \"$_d\" -maxdepth 0 -mtime +14 ...)\" ] || continue`), so any safety backup beyond the three newest (except the restore pointer) is now deleted immediately. The requirements spec (docs/requirements/team-hub-distribution/specification.md item 17: 'Safety backups younger than 14 days are never pruned') and the operator section of docs/docs/team-hub-deployment.md ('any younger than 14 days however many there are, because the newest can be the only copy of the newest data') still promise the old retention; only the maintainers' 'Releasing' paragraph added in this slice states the new count-only rule, so the same document now contradicts itself.",
+        "suggested_fix": "Either keep the age guard together with a hard count ceiling (e.g. never prune younger than 14 days unless more than N exist), or keep the count-only rule and update specification.md item 17 and the 'Backup and restore' bullet in team-hub-deployment.md to state that safety backups beyond the three newest plus the restore pointer are deleted regardless of age, warning that a pre-rollback copy must be moved off-host before further operations.",
+        "line": 820
+      },
+      {
+        "id": "review-highload-w7:HL-R2-W7-001",
+        "file": "docs/docs/team-hub-deployment.md",
+        "severity": "CRITICAL",
+        "message": "prune_safety_backups (deploy/team-hub/hubctl) deliberately dropped the 14-day age floor and now keeps the three newest upgrade-*/pre-restore-*/pre-rollback-* directories plus the last-upgrade-backup pointer. It deletes every other one regardless of age. The reason, a count bound on disk during frequent operations, is valid, and this slice appends a sentence saying so near the end of the same page. The retention contract operators read was not updated. The Backup and restore paragraph of the same page still says backups younger than 14 days are kept 'however many there are', and docs/requirements/team-hub-distribution/specification.md requirement 17 still states 'Safety backups younger than 14 days are never pruned.' The page now contradicts itself, and the requirement no longer matches the code.",
+        "suggested_fix": "Make one contract true everywhere. Either (a) keep the count bound and rewrite the deployment-page paragraph and specification requirement 17 to say 'the three newest plus the referenced pre-upgrade backup; older safety copies are deleted regardless of age \u2014 copy any pre-rollback/pre-restore backup you need elsewhere', and have rollback --restore-data / restore print that the replaced data's copy is subject to this rotation; or (b) also exempt the newest pre-rollback-* and pre-restore-* directories from pruning, as last-upgrade-backup already is, so the copy of discarded work survives the count bound.",
+        "line": 234
+      },
+      {
+        "id": "review-logic-w11:F-001",
+        "file": "deploy/team-hub/migrate-legacy.py",
+        "severity": "CRITICAL",
+        "message": "info_for() adds the count of ALL remote_queue rows to unresolvedWork, regardless of item state. The Hub never deletes remote_queue rows: ingestSessionEvent re-puts each queue-changed item with the native state (src/hub/remote-v2/events.ts repo.put(\"remote_queue\", ...)), and the protocol's terminal queue states are applied, rejected and removed (src/hub/remote-v2/flow-settledness.ts settledQueueStates). The only remote_queue delete in the repo is in a test (src/hub/work/legacy.test.ts).",
+        "suggested_fix": "Count only unsettled queue rows, using the same vocabulary as flow-settledness.ts: `SELECT count(*) FROM remote_queue WHERE COALESCE(json_extract(body,'$.item.state'),'unknown') NOT IN ('applied','rejected','removed')` (optionally also excluding 'admitted' rows whose admission command's run is terminal, as flowExecutionUnsettled does). Add info_for fixtures: one queue row in state 'applied' -> 0, one in 'queued' -> 1, one in 'suspended' -> 1.",
+        "line": 381
+      },
+      {
+        "id": "review-logic-w23:F-001",
+        "file": "src/commands/hub.ts",
+        "severity": "CRITICAL",
+        "message": "`keryx hub work --help` (and `keryx hub work <family> <action> --help`) never reaches runWorkCommand's own help branch. src/cli.ts:148 calls shouldInterceptHelp('hub', ['work','--help']), which is true because `hub` is neither in DEEP_HELP_GROUPS nor in HELP_SAFE_VERBS/SAFE_SUBCOMMAND_HELP; printCommandHelp then calls the RICH_GROUP_HELP entry printHubHelp(rest), which special-cases only rest[0] === 'update' and otherwise prints HUB_HELP. WORK_HELP is therefore never printed for --help through the main CLI.",
+        "suggested_fix": "Make printHubHelp choose WORK_HELP when rest[0] === 'work' (e.g. `rest[0] === 'update' ? HUB_UPDATE_HELP : rest[0] === 'work' ? WORK_HELP : HUB_HELP`, importing WORK_HELP from ../hub/work/cli or moving the text to a small constants module), and add a spawn test like the existing `hub update --help` one in src/commands/hub-update.test.ts asserting `keryx hub work --help` prints `keryx hub work \u2014 Managed work metadata`.",
+        "line": 4
+      },
+      {
+        "id": "review-regression-w8:F-001",
+        "file": "docs/docs/team-hub-deployment.md",
+        "severity": "CRITICAL",
+        "message": "The PR changed hubctl prune_safety_backups (deploy/team-hub/hubctl) from 'keep the three newest, never remove one younger than 14 days' to a count-only bound: the three newest plus last-upgrade-backup, which the code comment says is at most four. The `find -mtime +14` guard was deleted. Two existing statements of the old behaviour were left in place. The operator deployment guide's Backup section (unchanged context in this changed file) still promises that every safety backup younger than 14 days is kept. Requirement 17 of docs/requirements/team-hub-distribution/specification.md, which this PR does not touch, still says 'Safety backups younger than 14 days are never pruned.' The PR also added a contradicting sentence to the same guide (Releasing section: 'retain the three newest directories plus the explicitly referenced pre-upgrade backup'), so the guide now gives two incompatible retention rules.",
+        "suggested_fix": "Choose one contract. If the count bound is intended (as the tests and commit 8e8262fb0 suggest), rewrite team-hub-deployment.md line 234 to say 'the three newest plus the pre-upgrade backup that rollback --restore-data needs; older ones are removed regardless of age'. Update specification.md requirement 17 the same way, with a decision note, and add a CHANGELOG entry saying that retention of safety backups younger than 14 days was removed. Otherwise restore the age guard in prune_safety_backups.",
+        "line": 234
+      },
+      {
+        "id": "review-style-w10:F-001",
+        "file": "docs/docs/team-hub-deployment.md",
+        "severity": "CRITICAL",
+        "message": "The operator Backup section still documents the old safety-backup retention (three newest plus every backup younger than 14 days). The PR replaced that policy with a hard count bound (three newest plus the referenced pre-upgrade backup, at most four) in hubctl prune_safety_backups, and documented the new rule only in a new paragraph appended under 'Releasing (maintainers)'. The same page now states two contradictory retention contracts, and the operator-facing one is the wrong one. The distribution specification carries the same stale rule.",
+        "suggested_fix": "Rewrite the Backup-section bullet to the count-bounded rule ('kept: the three newest plus the backup `rollback --restore-data` points at, at most four; copy older ones off-host if you need them') and move the new sentence out of 'Releasing (maintainers)' (or delete it there). Update docs/requirements/team-hub-distribution/specification.md item 17 ('Safety backups younger than 14 days are never pruned') to the same contract.",
+        "line": 234
+      },
+      {
+        "id": "review-style-w10:F-002",
+        "file": "docs/requirements/hub-work-management/plan.md",
+        "severity": "CRITICAL",
+        "message": "The 'Historical milestone record' paragraph was inserted between the H1 and the 'Version: 0.2.0' line in three documents. The package convention, enforced by its own verifier, is that the Version line sits directly under the H1. In plan.md the note is also copy-pasted text that does not fit: plan.md has no test counts for 'the counts below' to refer to.",
+        "suggested_fix": "Move the note below the Version line in all three files (\"# Title\\nVersion: 0.2.0\\n\\nHistorical milestone record: ...\"). In plan.md reword it to what is actually historical there (e.g. 'Historical plan: task status reflects the pre-review candidate') or drop it. Re-run verify.cjs."
+      },
+      {
+        "id": "review-testing-practices-w1:F-003",
+        "file": "scripts/package-team-hub.test.ts",
+        "severity": "CRITICAL",
+        "message": "Fix for review-orchestrator:O-001 (and testing-practices-w3:F-002, degradation-w19:F-002, architecture-w10:F-005). The host Bun cache dependency was replaced by a non-offline `bun install` into an empty private BUN_INSTALL_CACHE_DIR. That install has to download every runtime package from the npm registry, and it runs inside the default `bun test` (ci.yml:45 runs `bun test --timeout 5000` over the whole tree, and this file is not excluded). The comment at the call site acknowledges it ('Network is allowed in this explicit preparation step'). The project has recorded the opposite decision for network-dependent gates: ci.yml:319-329 (dependency-audit) says a check that 'needs the network' belongs in 'one job, on a networked runner' and not in every local run, because 'a gate that fails on a plane teaches people to bypass gates'.",
+        "suggested_fix": "Move the network preparation out of the default suite. Either gate the test behind an explicit opt-in (for example `test.skipIf(!process.env.KERYX_NETWORK_TESTS)`) and run it in a dedicated networked CI job, the same way dependency-audit is handled, or have a CI step warm a cache directory and pass it in through an env var, so that the test itself only performs the --offline install and skips with a stated reason when no prepared cache is supplied.",
+        "line": 129
+      }
+    ],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

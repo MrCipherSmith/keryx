@@ -1,0 +1,38 @@
+.session-run-context {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.session-run-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.session-run-state {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hub-ink);
+}
+.session-run-hint,
+.session-run-empty {
+  font-size: 12px;
+  color: var(--hub-muted);
+}
+.session-run-empty p + p {
+  margin-top: 6px;
+}
+.session-run-empty > .hub-button {
+  margin-top: 8px;
+}
+.session-result-id {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.session-run-context .hub-button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}

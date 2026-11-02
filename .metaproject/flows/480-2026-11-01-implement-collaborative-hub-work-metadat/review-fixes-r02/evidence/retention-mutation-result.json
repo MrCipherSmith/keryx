@@ -1,0 +1,190 @@
+{
+  "scratch": "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i",
+  "results": [
+    {
+      "variant": "baseline",
+      "suite": "current repository assertions unchanged, fixture source redirected to isolated actual pruner",
+      "command": [
+        "bun",
+        "test",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/baseline.test.ts",
+        "--test-name-pattern",
+        "safety backups"
+      ],
+      "exitCode": 0,
+      "verdict": "baseline-pass",
+      "log": "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/baseline.log"
+    },
+    {
+      "variant": "count-one",
+      "suite": "current repository assertions unchanged, fixture source redirected to isolated actual pruner",
+      "command": [
+        "bun",
+        "test",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/count-one.test.ts",
+        "--test-name-pattern",
+        "safety backups"
+      ],
+      "exitCode": 1,
+      "verdict": "killed",
+      "log": "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/count-one.log"
+    },
+    {
+      "variant": "no-age-guard",
+      "suite": "current repository assertions unchanged, fixture source redirected to isolated actual pruner",
+      "command": [
+        "bun",
+        "test",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/no-age-guard.test.ts",
+        "--test-name-pattern",
+        "safety backups"
+      ],
+      "exitCode": 1,
+      "verdict": "killed",
+      "log": "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/no-age-guard.log"
+    },
+    {
+      "variant": "baseline",
+      "suite": "supplemental all-old",
+      "command": [
+        "sh",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/baseline-all-old/run.sh"
+      ],
+      "exitCode": 0,
+      "expected": [
+        "upgrade-1",
+        "upgrade-4",
+        "upgrade-5",
+        "upgrade-6"
+      ],
+      "actual": [
+        "upgrade-1",
+        "upgrade-4",
+        "upgrade-5",
+        "upgrade-6"
+      ],
+      "verdict": "baseline-pass"
+    },
+    {
+      "variant": "baseline",
+      "suite": "supplemental young-fourth",
+      "command": [
+        "sh",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/baseline-young-fourth/run.sh"
+      ],
+      "exitCode": 0,
+      "expected": [
+        "upgrade-1",
+        "upgrade-2",
+        "upgrade-3",
+        "upgrade-4",
+        "upgrade-5"
+      ],
+      "actual": [
+        "upgrade-1",
+        "upgrade-2",
+        "upgrade-3",
+        "upgrade-4",
+        "upgrade-5"
+      ],
+      "verdict": "baseline-pass"
+    },
+    {
+      "variant": "count-one",
+      "suite": "supplemental all-old",
+      "command": [
+        "sh",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/count-one-all-old/run.sh"
+      ],
+      "exitCode": 0,
+      "expected": [
+        "upgrade-1",
+        "upgrade-4",
+        "upgrade-5",
+        "upgrade-6"
+      ],
+      "actual": [
+        "upgrade-1",
+        "upgrade-6"
+      ],
+      "verdict": "killed"
+    },
+    {
+      "variant": "count-one",
+      "suite": "supplemental young-fourth",
+      "command": [
+        "sh",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/count-one-young-fourth/run.sh"
+      ],
+      "exitCode": 0,
+      "expected": [
+        "upgrade-1",
+        "upgrade-2",
+        "upgrade-3",
+        "upgrade-4",
+        "upgrade-5"
+      ],
+      "actual": [
+        "upgrade-1",
+        "upgrade-2",
+        "upgrade-3",
+        "upgrade-4",
+        "upgrade-5"
+      ],
+      "verdict": "survived-on-this-axis"
+    },
+    {
+      "variant": "no-age-guard",
+      "suite": "supplemental all-old",
+      "command": [
+        "sh",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/no-age-guard-all-old/run.sh"
+      ],
+      "exitCode": 0,
+      "expected": [
+        "upgrade-1",
+        "upgrade-4",
+        "upgrade-5",
+        "upgrade-6"
+      ],
+      "actual": [
+        "upgrade-1",
+        "upgrade-4",
+        "upgrade-5",
+        "upgrade-6"
+      ],
+      "verdict": "survived-on-this-axis"
+    },
+    {
+      "variant": "no-age-guard",
+      "suite": "supplemental young-fourth",
+      "command": [
+        "sh",
+        "/var/folders/dr/0zsc52nd5yn7p2htt__lxshw0000gp/T/pr1113-retention-mutation-hxx3db1i/no-age-guard-young-fourth/run.sh"
+      ],
+      "exitCode": 0,
+      "expected": [
+        "upgrade-1",
+        "upgrade-2",
+        "upgrade-3",
+        "upgrade-4",
+        "upgrade-5"
+      ],
+      "actual": [
+        "upgrade-1",
+        "upgrade-2",
+        "upgrade-3",
+        "upgrade-4"
+      ],
+      "verdict": "killed"
+    }
+  ],
+  "sharedSourceWrites": false,
+  "conclusion": "Both requested mutations are killed by current unchanged tests. Supplemental all-old and young-fourth+old-pointer matrix also verifies independent axes. Repository tests have indirect minimum-count assertions rather than exact old-three identities; optional hardening would assert upgrade-6/5/4 directly in an all-old fixture.",
+  "routing": {
+    "graph_used": "yes; graph predates unrelated in-flight changes",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "task": {
+    "task_id": "task-28",
+    "task_name": "Round2 delivery mechanism repairs",
+    "task_type": "fix",
+    "complexity": "high",
+    "description": "Reproduce RED then minimalfix GREEN each assigned canonical mechanism. Follow parent scope. For ops restore 14-day protection and align docs (owner decision), handle terminal queue history, help routing, version metadata, offline deterministic package tests. For delivery implement durable observable recoverable delivery jobs, retain external facts on line changes, one canonical use-case path, fair bounded actual body admission with auth/deadline and no MCP double counting; websocket overload must not masquerade authorization loss. No unrelated refactor or production actions.",
+    "target_files": [
+      "src/hub/delivery-jobs.ts",
+      "src/hub/delivery-queue.test.ts",
+      "src/hub/domain.ts",
+      "src/hub/mutation-queue.ts",
+      "src/hub/remote-v2/index.ts",
+      "src/hub/server.ts"
+    ],
+    "acceptance_criteria": [
+      "Every assigned confirmed mechanism has a failing-before/passing-after behavior regression.",
+      "All assigned canonical findings mapped to test names and evidence; no unrelated changes.",
+      "Relevant existing regressions, lint and types pass; no commit or push by worker."
+    ],
+    "context": "Flow480 plan: .metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes-r02/plan.md. Canonical /tmp/pr1113-r02-findings.json. Shared-file ownership as parent dispatch.",
+    "module_patterns": "Follow existing local APIs; use targeted indexed data reads and transactional invariants; preserve public contracts."
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/.codex/worktrees/hub-1113-review-fixes/keryx",
+    "branch": "feat-hub-1113-review-fixes"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  },
+  "fix_context": {
+    "review_feedback": [
+      {
+        "id": "review-architecture-w9:F-001",
+        "file": "src/hub/server.ts",
+        "severity": "CRITICAL",
+        "message": "Answering round-1 root cause D, the Git delivery use case (reserve job, replay lookup, pending/result/uncertain/completed state machine, in-flight fence, authority re-check, finalize) was written inline in the HTTP composition root (server.ts externalDelivery, ~60 lines bound to Request/authenticate). The domain entry point hubMutate still has its own 'deliveries' branch that calls the adapter inline with no durable job, no uncertain fence and the Git effect inside the caller's mutation. Two implementations of one use case now exist, and the production one is a controller.",
+        "suggested_fix": "Move the reservation/execute/finalize flow into a delivery service next to delivery-jobs.ts (inputs: store, actor resolver, adapter; no Request), call it from server.ts, delete the deliveries branch from hubMutate (or make it delegate to the same service), and point review-bundle.test.ts at the service or the HTTP route.",
+        "line": 134
+      },
+      {
+        "id": "review-backend-w10:BE-W10-001",
+        "file": "src/hub/server.ts",
+        "severity": "CRITICAL",
+        "message": "Answering round-1 root cause D, Git delivery now runs outside the mutation queue and is finalized afterwards against the current line (completeGitDelivery rechecks expectedLineVersion and lineRevisionId). When that recheck fails after the adapter already published, the catch turns the HubFailure into a stored 409 replay and marks the job 'completed', but nothing records the external effect where Hub can show it: state.deliveries gets no entry, the 409 body carries no branch/commitSha/prUrl, and the published result exists only inside hub_delivery_jobs.body, which no HTTP route, MCP tool or hubctl command reads. The error text itself tells the user to 'inspect the recorded external result'.",
+        "suggested_fix": "Never drop a known external effect. In the finalize, when the adapter result is 'published' and the line recheck fails, still append a Delivery record (status 'published' plus a flag such as `lineConflict: true` or `stale: true`, without touching lineRevisionId/lineVersion) and return it with 409 or 200 + flag, so GET /deliveries shows branch/commitSha/prUrl; at minimum include the result fields in the 409 body and expose the job via GET /projects/<id>/deliveries/<operationId>. Alternatively fence POST /line with 409 'delivery-in-progress' while the project has a pending/result job. Extend delivery-queue.test.ts test 2 to assert the published branch is visible after the conflict.",
+        "line": 182
+      },
+      {
+        "id": "review-backend-w7:F-001",
+        "file": "src/hub/delivery-jobs.ts",
+        "severity": "CRITICAL",
+        "message": "A delivery job in 'uncertain' (or a stuck 'result') state blocks every later delivery for the project, but nothing can ever move it out of that state: no HTTP route, MCP tool, CLI or hubctl command reads or resolves hub_delivery_jobs. The 409 'delivery-uncertain' message tells the operator to 'inspect ... the recorded operation before starting another', yet the recorded operation is unreadable and starting another is refused forever. Separately, when completeGitDelivery fails its line CAS after a successful push, the stored/returned response is only {error:{code,message}}: the published branch/commitSha is persisted solely in the unreadable job row.",
+        "suggested_fix": "Add an operator-only, idempotent reconciliation endpoint (and MCP-excluded/CLI command) that reads a delivery job (status, revisionId, remoteUrl, baseBranch, result incl. branch/commitSha) and lets a human record its outcome as 'published' (with observed commit) or 'abandoned', moving it to 'completed' and appending state.deliveries/event. Include job.result (branch, commitSha) in the error response when finalization fails its CAS. Test: restart mid-delivery -> resolve -> new delivery succeeds.",
+        "line": 23
+      },
+      {
+        "id": "review-backend-w7:F-002",
+        "file": "src/hub/domain.ts",
+        "severity": "CRITICAL",
+        "message": "GET /hub/v1/projects/<id>/revisions changed from returning every revision to returning the first 50 in creation order plus nextCursor, and the cap also applies to summary=1. No consumer passes afterId or follows nextCursor, and the page starts at the OLDEST revision.",
+        "suggested_fix": "Keep summary=1 unbounded-in-count but bounded-in-bytes (metadata only, as before), or page newest-first and make every consumer follow nextCursor: add afterId/limit to hub_list_revisions, iterate pages in useRevisions/project overview (or add server-side search by id). Add a >50-revision regression test for the UI query and the MCP tool.",
+        "line": 116
+      },
+      {
+        "id": "review-backend-w7:F-003",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "Every POST/PUT/PATCH/DELETE outside /hub/work/v1 (legacy /hub/v1, remote /hub/v2 browser/machine HTTP, and /mcp) reserves 32 MiB of the 128 MiB budget for the entire request lifetime \u2014 including the up-to-10 s serialized-queue wait, the external Git push in externalDelivery, and MCP tool execution. MCP tools call application.fetch for their inner API request, which reserves again, so one MCP legacy write holds 64 MiB.",
+        "suggested_fix": "Reserve the parser allowance only while the body is being buffered (move accounting into readJson/body readers, or release the reservation once the body is parsed), size reservations per route actually parsed (/mcp has its own bound; GET-like JSON-RPC reads need none), and exempt in-process nested apiFetch calls (mark them, e.g. via AsyncLocalStorage) from a second reservation. Add a test: 5 concurrent MCP writes and 2 slow deliveries + 3 remote POSTs all succeed under defaults.",
+        "line": 51
+      },
+      {
+        "id": "review-degradation-w11:F-001",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "The new request memory admission (4bd296f54, round 2) reserves a flat 32 MiB for EVERY mutating request outside /hub/work/v1 \u2014 tiny legacy and /hub/v2 control POSTs (login, messages, approvals, controller actions, machine result/reconciliation uploads), every POST /mcp, and the Git delivery POST \u2014 against a 128 MiB default budget, and holds the reservation for the whole action, including the up-to-10 s wait in the serialized queue and the external git push of a delivery. The Hub therefore admits at most four concurrent non-work mutations and answers the fifth with 503 'hub-busy' instead of queueing it (maxPending:32 is unreachable for these routes). MCP is counted twice: server.ts routes /mcp through application.fetch (32 MiB) and handleHubMcp calls the inner API through application.fetch again (another 32 MiB for a /hub/v1 write), so two concurrent agent MCP writes consume the whole budget. On base there was no admission refusal: concurrent mutations queued.",
+        "suggested_fix": "Reserve by declared/route-specific body ceilings (a small allowance for JSON control routes, the 32 MiB allowance only for revision/result upload routes), release the reservation once the body has been read rather than after the action completes, and do not re-admit the inner apiFetch of an already-admitted /mcp request (pass a flag or call handle() directly). Keep queueing, not refusing, for requests whose bodies are already buffered.",
+        "line": 51
+      },
+      {
+        "id": "review-degradation-w13:F-001",
+        "file": "src/hub/delivery-jobs.ts",
+        "severity": "CRITICAL",
+        "message": "The durable delivery job turns any interrupted Git delivery into a permanent project-wide fence with no way out. createHubApplication calls markInterrupted() at startup, flipping every 'pending' job to 'uncertain'; reserve() then refuses every new delivery for that project while an 'uncertain' (or never-finalized 'result') job exists; a retry of the original key only re-answers 409 'delivery-uncertain' (server.ts externalDelivery). No route, CLI command, MCP tool or document resolves an uncertain job \u2014 the restart test resolves it by editing the SQLite row directly ('Operator/provider reconciliation supplies the known immutable result'). On base a delivery ran inline in the mutation; an interrupted request was simply lost and the next delivery proceeded.",
+        "suggested_fix": "Add an explicit human-operator reconciliation operation (REST + CLI) that records the inspected outcome of an uncertain job (published with commit/branch, or not published) and completes it, and document it next to the deployment upgrade steps; alternatively scope the fence to the same revision/line so an operator can deliver a newly selected line after inspection.",
+        "line": 23
+      },
+      {
+        "id": "review-degradation-w16:F-001",
+        "file": "src/hub/delivery-jobs.ts",
+        "severity": "CRITICAL",
+        "message": "The Git delivery that slice-17 removes from hubMutate's serialized turn (domain.ts deliveries hunk) now runs as a durable job (server.ts externalDelivery). A job left in 'uncertain' or 'result' blocks every later delivery of the project, and nothing can move it to 'completed' except the same actor's successful completion: markInterrupted() turns every 'pending' job into 'uncertain' at Hub start, a retry of an uncertain job returns 409 delivery-uncertain forever (server.ts sets/keeps status 'uncertain'), and a completion that throws before its writeTransaction (re-authentication 401, authorizeAgentRequest, 403 identity-changed) leaves status 'result'. No HTTP route, CLI, MCP tool or hubctl command reads or resolves hub_delivery_jobs (searched src/hub, deploy, scripts, docs).",
+        "suggested_fix": "Add an operator-authorized reconcile route (and hubctl/CLI wrapper) that inspects the managed branch and marks an uncertain/result job completed with the observed outcome (recording a Delivery), and let completion by any current authorized human finalize a 'result' job whose original actor lost authority. Cover with a test: reserve, simulate restart (markInterrupted), reconcile, then a new delivery succeeds.",
+        "line": 23
+      },
+      {
+        "id": "review-degradation-w16:F-002",
+        "file": "src/hub/domain.ts",
+        "severity": "CRITICAL",
+        "message": "Because the push now runs outside the mutation queue, POST /line (hubMutate, no check of in-flight delivery jobs) can change p.lineVersion or p.lineRevisionId while a delivery is pushing. completeGitDelivery then rechecks `version(expectedLineVersion, p.lineVersion)` and the line revision and throws 409 AFTER the branch was already published; externalDelivery catches it, stores the error as the replay and marks the job completed, so no Delivery is pushed to state.deliveries.",
+        "suggested_fix": "On a line CAS failure after the push, still record the Delivery (with a 'line-changed' marker and the published branch/commit) and return it with a distinct status, or refuse POST /line while the project has a pending/result delivery job.",
+        "line": 260
+      },
+      {
+        "id": "review-highload-w8:HL-W8-001",
+        "file": "src/hub/remote-v2/index.ts",
+        "severity": "CRITICAL",
+        "message": "Machine WebSocket frames (index.ts `void ports.serialized(async () => {` in websocket.message), disconnect persistence and maintenance all go through `ports.serialized`, which is now `createMutationQueue().serialized` with `maxPending:32` and `maxWaitMs:10000`. When the queue is full or a frame waits >10 s, the frame is refused with HubFailure(503,'hub-busy'). 'hub-busy' is not in the native error union (no match in src/remote-control), so this line rewrites it to 'internal-error', and the next line closes the machine socket with 1008 'Authorization changed'. Before this PR the queue was an unbounded chain, so a stall delayed frames instead of dropping the connection.",
+        "suggested_fix": "Do not subject machine frames to the HTTP admission cap: give WebSocket frame processing its own bounded per-socket inbox (backpressure by pausing reads / applying per-machine flow control) on the same serial executor, or exempt internal callers (frames, disconnect, maintenance) from maxPending/maxWaitMs. If a frame must be refused, map 'hub-busy' to a retryable protocol outcome that does not close the socket. Separately, move Access/JWKS verification out of the serialized section (authenticate before enqueueing, re-check only cached state inside).",
+        "line": 426
+      },
+      {
+        "id": "review-highload-w8:HL-W8-002",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "Every non-GET request outside /hub/work/v1/ reserves 32 MiB of a 128 MiB Hub-wide budget (and one of 32 request slots) for its entire lifetime: body parse, up to 10 s waiting in the serialized queue, and \u2014 for /hub/v1/.../deliveries \u2014 the whole out-of-queue Git delivery (clone/fetch/cherry-pick/push, each git step up to 30 s). The reservation is never reduced to the actual body size once parsed. MCP doubles it: POST /mcp reserves 32 MiB, and handleHubMcp calls `context.apiFetch(new Request(... method: 'POST' ...))` = application.fetch, which reserves another 32 MiB for the inner legacy route.",
+        "suggested_fix": "Reserve the parser allowance only around body buffering: release (or shrink to the actual buffered size) as soon as readJson/body() returns, before serialized wait and before Git delivery. Exempt the internal MCP apiFetch re-entry from a second reservation (e.g. a trusted internal-call marker via AsyncLocalStorage, or route the inner call to handle() directly), and size the /mcp reservation to the MCP parser's own cap. Add an HTTP test with 4 concurrent MCP mutation calls and with 2 in-flight deliveries + 1 browser POST.",
+        "line": 51
+      },
+      {
+        "id": "review-highload-w8:HL-W8-003",
+        "file": "src/hub/delivery-jobs.ts",
+        "severity": "CRITICAL",
+        "message": "On every Hub start, server.ts calls `store.deliveries.markInterrupted()`, turning any in-flight delivery job into 'uncertain'; a same-key retry of a pending job not in this process's `inFlightDeliveries` also writes 'uncertain'. `reserve` then refuses every new delivery for that project while a job is in ('pending','result','uncertain'). Nothing ever moves a job out of 'uncertain': the only writers of status are reserve/save in server.ts (\u2192pending, \u2192result, \u2192completed, \u2192uncertain) and markInterrupted; there is no API, CLI, MCP tool or maintenance path to reconcile it. Same shape for the audit cap: `count(*) ... >=10000` \u2192 413 'explicit archival is required' with no archival path.",
+        "suggested_fix": "Add an operator-only reconcile operation (HTTP + CLI) that, for an 'uncertain' job, records an inspected outcome (published with commitSha / not-published) and moves it to 'completed' with a receipt and event, mirroring completeGitDelivery; optionally auto-reconcile by checking whether the deterministic branch/`Hub-Operation:` fingerprint exists on the remote. Count only active jobs against the concurrency cap and give completed audit rows an archival/retention path (or count per project) instead of a global permanent 413.",
+        "line": 14
+      },
+      {
+        "id": "review-logic-w35:F-001",
+        "file": "src/hub/domain.ts",
+        "severity": "CRITICAL",
+        "message": "GET /projects/:id/revisions now returns only the OLDEST maxRevisionPageSize (50) revisions plus a nextCursor, but no consumer follows the cursor: hub-web RevisionsView and DeliveryView call `revisions?summary=1` once and type the response as `{ revisions }` only, and the MCP tool hub_list_revisions has no afterId argument. Revisions are stored in creation order, so the page that is returned is the oldest one and the newest revisions are the ones dropped.",
+        "suggested_fix": "Either keep summary=1 unpaged (summary rows carry no bytes; bound them by maxCollectionRecords instead) and page only full-body listings, or make every consumer paginate: hub-web uses an infinite query following nextCursor (or a newest-first order with explicit 'load older'), DeliveryView reads the selected line by exact id (`revisions/${lineRevisionId}`) instead of searching a list, and hub_list_revisions gains an afterId/limit argument and documents nextCursor.",
+        "line": 118
+      },
+      {
+        "id": "review-logic-w35:F-002",
+        "file": "src/hub/delivery-jobs.ts",
+        "severity": "CRITICAL",
+        "message": "A delivery job that is interrupted becomes 'uncertain' (markInterrupted at every Hub start, or server.ts on a same-key retry with no in-flight job) and stays in the active set forever: reserve() refuses any new delivery for the project while an 'uncertain' (or unfinished 'result') job exists, but nothing in the codebase ever moves a job out of 'uncertain' \u2014 there is no route, CLI, MCP tool or UI to resolve it, and no reader exposes the job.",
+        "suggested_fix": "Add an explicit, human-only, audited resolution command (e.g. POST /projects/:id/deliveries/:operationId/resolve with outcome published|not-published plus the observed branch/commit, recorded as a delivery receipt), expose the job (status, remote, branch, any recorded result) on GET deliveries so the UI can show it, and document the recovery. Optionally let resolution re-probe the managed branch for the Hub-Operation fingerprint to settle automatically.",
+        "line": 23
+      },
+      {
+        "id": "review-logic-w38:F-001",
+        "file": "src/hub/delivery-jobs.ts",
+        "severity": "CRITICAL",
+        "message": "The durable delivery-job replacement for the removed in-queue delivery (domain.ts deliveries hunk) can put a job in status 'uncertain' (markInterrupted on every startup for 'pending' jobs; server.ts externalDelivery on a retry of a pending job that is not in flight). Nothing in the repository ever moves a job out of 'uncertain'. reserve() refuses every new delivery for a project that has any 'pending', 'result' or 'uncertain' job.",
+        "suggested_fix": "Add an operator-only reconciliation path for one delivery job, for example POST /hub/v1/projects/:id/deliveries/:operationId/resolve with {outcome: 'published'|'not-published', commitSha?} and a human receipt. It moves an 'uncertain' job to 'completed', records a Delivery (or an explicit abandoned record) and an event, and stores the replay. Also expose GET /hub/v1/projects/:id/deliveries/:operationId so that the job's recorded result can be inspected as the error messages say. Document the step in the deployment runbook. A test should restart the Hub during a delivery, resolve the job, and then show that a new delivery is admitted.",
+        "line": 23
+      },
+      {
+        "id": "review-performance-w8:F-001",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "mutationQueue.request() reserves 32 MiB of the 128 MiB maxRequestBytes budget for every POST/PUT/PATCH/DELETE outside /hub/work/v1/ and releases it only when the whole action settles (finally after `await requests.run(...)`). application.fetch wraps every request in it, so the reservation is held (a) while the request waits up to maxWaitMs=10 s in the serialized queue, (b) for the entire Git clone/cherry-pick/push network operation in externalDelivery, which deliberately runs outside the global queue but still inside application.fetch, and (c) twice for MCP: the outer POST /mcp reserves 32 MiB and handleHubMcp's inner context.apiFetch(...) re-enters application.fetch, reserving another 32 MiB for any legacy /hub/v1 write. The effective concurrency for all legacy, remote-v2 browser/machine-HTTP and MCP mutations is therefore 4, or 2 for MCP legacy writes.",
+        "suggested_fix": "Account for parser memory only while the body is being buffered: take the reservation inside readJson/remote-v2 body()/mcp readBody and release it once the bytes are parsed (or size it from the bytes actually read, refusing when the running total would exceed the budget). Exempt the in-process MCP apiFetch re-entry from a second reservation (pass an internal marker or call handle() directly with the already-parsed body). At minimum, release before externalDelivery's Git step and before waiting in serialized().",
+        "line": 51
+      },
+      {
+        "id": "review-security-code-w31:SEC-W31-001",
+        "file": "src/hub/mutation-queue.ts",
+        "severity": "CRITICAL",
+        "message": "createMutationQueue().request(), which application.fetch wraps around every request, reserves 32 MiB of the 128 MiB aggregate budget (and 1 of 32 request slots) for any POST/PUT/PATCH/DELETE outside /hub/work/v1, before any authentication. The reservation is held until handle() returns. On the legacy /hub/v1 POST path readJson(request) streams the whole body before authenticate() runs (server.ts: body read, then serialized(... authenticate ...)). On the remote path remote-v2/index.ts reads body(request) before resolveMachine/ports.human. Neither reader has a total read deadline. Four concurrent unauthenticated non-work mutations that trickle their bodies therefore exhaust requestBytes, and every other mutation returns 503 'Request memory budget exhausted' while they stay open. That includes operator browser commands, machine HTTP result uploads, enrollment and work commands.",
+        "suggested_fix": "Authenticate from headers (bearer or session cookie) before reserving budget, and reserve per authenticated principal, keeping a small separate pre-auth allowance for the intrinsically unauthenticated session-login and machine-enroll bodies. Independently, add a total body-read deadline (for example AbortSignal.timeout of about 30 s) in readJson and remote-v2 body(), and set an explicit Bun.serve idleTimeout. Alternatively reserve bytes incrementally as chunks arrive instead of the route maximum up front. Add a test that holds 4 slow unauthenticated POSTs open and asserts an authenticated mutation still succeeds.",
+        "line": 51
+      },
+      {
+        "id": "review-testing-practices-w5:F-001",
+        "file": "src/hub/delivery-queue.test.ts",
+        "severity": "CRITICAL",
+        "message": "The test that proves external Git delivery does not hold the global mutation queue decides the outcome with a fixed 30 ms sleep: an unrelated POST /projects must finish within 30 ms of being issued, otherwise `wasBlocked` is true and the test fails. Fixed sleeps that race a backend write are the flaky-test shape the testing rubric names.",
+        "suggested_fix": "Remove the timing judgement: while the delivery gate is still closed, await the concurrent request directly with a generous guard, e.g. `const finished = await Promise.race([concurrent.then(() => true), new Promise(r => setTimeout(() => r(false), 5000))]); expect(finished).toBe(true);` then `release()`. A regression that holds the queue then fails deterministically (the concurrent request cannot finish before release), and a slow-but-correct run passes.",
+        "line": 34
+      }
+    ],
+    "original_task_ids": [
+      "task-24"
+    ],
+    "iteration": 2
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "status": "DONE",
+  "mode": "read-only oldhead CI triage",
+  "ci_head": "8dcb765f072c5e8cb287175af7d7c9ce300ce322",
+  "current_local_head": "9a0f4641efc9c4b3c70822637e7b420d9427ba3d",
+  "run": "https://github.com/MrCipherSmith/keryx/actions/runs/41392782982",
+  "counts": {
+    "success": 16,
+    "failure": 2
+  },
+  "distinct_failures": 1,
+  "failure": {
+    "test": "the Team Hub adapter accepts the served attention page with incident Evidence",
+    "file": "src/hub/work/http.contract.test.ts:39",
+    "error": "Cannot find package 'i18next' from '/home/runner/work/keryx/keryx/apps/hub-web/src/api/client.ts'",
+    "cause": "Root Bun test dynamically imports browser adapter, importing UI-only dependency absent from root install. UI node_modules available locally masks it.",
+    "already_fixed_in_current": false,
+    "current_evidence": [
+      "http.contract.test.ts:44 imports browser adapter using computed path",
+      "adapter.ts imports ../../api/client",
+      "api/client.ts:1 imports i18next",
+      "apps/hub-web/package.json declares i18next; root package.json does not; CI root install does not install hub-web dependency set"
+    ]
+  },
+  "core": {
+    "pass": 27723,
+    "fail": 1,
+    "skip": 21,
+    "todo": 1,
+    "files": 1269
+  },
+  "ac8": {
+    "pass": 37942,
+    "fail": 1,
+    "skip": 55,
+    "todo": 1,
+    "files": 1946
+  },
+  "recommendation": "Preserve assertion, move the actual browser adapter/served attention integration into hub-web suite with UI dependencies; root retains published schema+WorkClient server tests. Alternative explicitly install UI dependencies in both root CI jobs; do not remove meaningful assertion or mock adapter parsing.",
+  "bounded_red_probe_proposal": "Run ONLY this exact root test in a disposable fixture with actual source files and root-only installed dependencies (no apps/hub-web/node_modules), reproducing module resolution failure; then run relocated UI integration with its declared dependency set. Wait for parent before writes.",
+  "source_edits": false,
+  "full_tests_started": false,
+  "logs": [
+    "/tmp/pr1113-integration-old-ci-failed.log",
+    "/tmp/pr1113-integration-old-ci-core.log",
+    "/tmp/pr1113-integration-old-ci-ac8.log"
+  ]
+}

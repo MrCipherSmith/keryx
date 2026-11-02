@@ -1,0 +1,124 @@
+{
+  "task_id": "task-38",
+  "status": "success",
+  "root": "/Users/Goodea/.codex/worktrees/hub-1113-r02-integration/keryx",
+  "mergeParentRemote": "8dcb765f072c5e8cb287175af7d7c9ce300ce322",
+  "candidate": "33ef4c0f1",
+  "paths": [
+    "src/hub/delivery-service.ts",
+    "src/hub/delivery-jobs.ts",
+    "src/hub/git-delivery.ts",
+    "src/hub/domain.ts",
+    "src/hub/server.ts",
+    "src/hub/contracts.ts",
+    "src/hub/revision-summary.test.ts",
+    "src/hub/review-bundle.test.ts",
+    "src/hub/delivery-queue.test.ts",
+    "src/hub/mutation-queue.ts",
+    "src/hub/mutation-queue.test.ts",
+    "src/hub/mutation-queue.http.test.ts",
+    "src/hub/remote-v2/index.ts",
+    "src/hub/remote-v2/queue.ts",
+    "src/hub/remote-v2/sessions.ts",
+    "src/hub/remote-v2/managed-execution.ts",
+    "src/hub/remote-v2/storage.ts",
+    "src/hub/work/execution.ts",
+    "src/hub/work/execution.test.ts",
+    "docs/requirements/hub-work-management/execution.md",
+    "docs/requirements/hub-work-management/delivery-recovery.md",
+    "src/hub/remote-v2/frame-admission.test.ts",
+    "src/hub/work/legacy.test.ts",
+    "docs/requirements/team-hub-prototype/api.md"
+  ],
+  "index_changed_by_worker": false,
+  "commits": [],
+  "semantic_decisions": [
+    "Owner-approved candidate delivery service, CAS/reason/audit, cold archive, uncertain push, read-only inspection preserved together",
+    "Remote marker-idempotency already present candidate and actual Git replay test preserved",
+    "Selected-line drift retains external fact with409 externalResult; obsolete lineChanged success field removed",
+    "Native guard refusal never releases managed reservation; terminal native facts own release; indexed managed lineage preserved",
+    "Actual-chunk accounting, nested root slot/abort/inner bytes, auth-before-body, bounded WebSocket1013 and actual TCP cleanup preserved",
+    "Remote frame-admission test retained and adapted to assert no unbounded internal bypass",
+    "Remote recovery meaningful assertions adapted to delivery-jobs reconcile contract, including departed-original-actor and same-key replay",
+    "Preserved same-key recovery/archive response guarantee with atomically persisted receipts, current auth before replay, changed payload409, no extra inspector/Git/archive"
+  ],
+  "tests": {
+    "red": {
+      "command": "keryx ctx run -- bun test src/hub/delivery-queue.test.ts --test-name-pattern 'adapted remote'",
+      "result": "2 failed: identical recovery key returned409 before receipt fix",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-43-29-147Z-49dd61_run.log"
+    },
+    "green": {
+      "result": "85pass 0fail 883assertions 13files incl actual TCP MCP, Git lost reply, scoped SQLite/native queue",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-46-31-393Z-f6ad14_run.log"
+    },
+    "lint": {
+      "result": "PASS entire owned source20paths then final6delta paths",
+      "raw": [
+        ".metaproject/data/gdctx/raw/2026-11-02T05-44-46-844Z-890d0e_run.log",
+        ".metaproject/data/gdctx/raw/2026-11-02T05-46-38-475Z-aa8131_run.log",
+        ".metaproject/data/gdctx/raw/2026-11-02T05-48-38-376Z-23b86f_run.log",
+        ".metaproject/data/gdctx/raw/2026-11-02T05-49-38-106Z-3d7e0a_run.log"
+      ]
+    },
+    "types": {
+      "result": "PASS final frozen source",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-49-48-964Z-f5ee82_run.log"
+    },
+    "receipt_validation_order": {
+      "red": "2 failures: changed invalid decision/extra field returned400 instead of409",
+      "red_raw": ".metaproject/data/gdctx/raw/2026-11-02T05-48-29-973Z-cfeadb_run.log",
+      "green": "14 delivery tests pass119assertions after validation moved after authorized replay",
+      "green_raw": ".metaproject/data/gdctx/raw/2026-11-02T05-48-37-398Z-8a2c79_run.log"
+    },
+    "diff_check": {
+      "result": "PASS all owned paths",
+      "raw": ".metaproject/data/gdctx/raw/2026-11-02T05-49-56-111Z-0b5f14_run.log"
+    }
+  },
+  "adapted_or_superseded_assertions": [
+    {
+      "remote": "delivery-queue line drift200+lineChanged",
+      "replacement": "candidate409+externalResult, durable Delivery fact, newer selected line unchanged; existing delivery completion test"
+    },
+    {
+      "remote": "resolve action retry invokes adapter after interruption",
+      "replacement": "chosen inspect-publication exact original marker proves publication without second push; actual Git HTTP test and inspector receipt counter"
+    },
+    {
+      "remote": "resolve action abandon plus delivery-abandoned event",
+      "replacement": "confirm-no-effect exact CAS/reason and persisted reconciliation audit plus original delivery-no-effect replay; adapted remote recovery test preserves fence exit and role checks"
+    },
+    {
+      "remote": "same-key resolve repeat returns200",
+      "replacement": "preserved, atomic recovery receipt; RED thenGREEN; changed body409 and revoked auth denied"
+    },
+    {
+      "remote": "definitive pre-admission refusal releases reservation",
+      "replacement": "explicit owner-selected terminal-fact-only policy; native configuration recovery test and retained reservation tests"
+    },
+    {
+      "remote": "frame serialization uses internal:true to bypass capacity",
+      "replacement": "retained test now asserts no bypass; real full/expired queue regressions assert1013"
+    },
+    {
+      "remote": "fake-clock scheduling/declared reservation/exemption implementation assertions",
+      "replacement": "deadline, actual aggregate capacity, small concurrency, cancellation/nested semantics preserved by candidate actual behavior tests; no fake clock API added or internal-unbounded policy retained"
+    },
+    {
+      "remote": "zero pending reads, queue read once",
+      "replacement": "candidate zero pending reads plus stronger indexed relevant-lineage/cold-history test"
+    },
+    {
+      "remote": "native in-place edit/removal, replacement edit and released edit",
+      "replacement": "candidate real network matrix tests preserved and pass for reserved/released plus in-place remove"
+    }
+  ],
+  "routing_audit": {
+    "graph_used": "not used: active merge graph stale, exact known snapshot paths",
+    "wiki_used": true,
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "frozen": true
+}
