@@ -89,3 +89,69 @@ describe("keryx hub machine grants are operator decisions (chunk-017:RG-C017-02)
     }
   });
 });
+
+describe("a keryx command path the shell has yet to expand is operator-only (review-security-code-w1:F-001)", () => {
+  for (const command of [
+    "H=hub; keryx $H machine pair --url https://a.example --code-env C",
+    "H=hub && env -u KERYX_TOOL_CALL keryx $H machine pair --url https://a.example --code-env C",
+    "M=machine; keryx hub $M pair --url https://a.example",
+    "keryx hub $(printf machine) pair --url https://a.example",
+    "keryx hub \"$(printf machine)\" allow --path .",
+    "keryx ${H} machine unpair",
+    "keryx `printf hub` machine configure --candidate current",
+    "keryx $X",
+    "bun src/cli.ts $H machine pair --url https://a.example",
+    "$K $H machine pair --url https://a.example",
+    "keryx agents $E apply --id x",
+    "keryx review comments $V --final",
+  ]) {
+    test(command, () => {
+      expect(touchesOperatorDecision(command)).toBe(true);
+      expect(touchesHumanConfirmation(command)).toBe(true);
+    });
+  }
+  test("an expansion in a flag value, or in a command that is not keryx, does not ask", () => {
+    for (const command of [
+      "keryx review status --package $P",
+      "keryx hub machine readiness --hub $H",
+      "keryx ctx rg \"$PATTERN\" src",
+      "$PY $SCRIPT",
+      "\"$VENV/bin/python\" \"$ROOT/x.py\"",
+      "echo $H machine pair",
+    ]) {
+      expect(touchesOperatorDecision(command), command).toBe(false);
+    }
+  });
+});
+
+describe("review operator floors match what the handlers refuse (review-regression-w4:F-001)", () => {
+  test("forms the handlers allow without a terminal do not ask", () => {
+    for (const command of [
+      "keryx review comments reply --final --dry-run --package P",
+      "keryx review comments reply --final --fixtures f.json --package P",
+      "keryx review chunks estimate --mode manual --package P",
+      "keryx review chunks estimate --mode=manual --package P",
+      "keryx review chunks plan --mode automatic --package P",
+      "keryx review ingest --unattended --package P",
+      "keryx review status --unattended --package P",
+    ]) {
+      expect(touchesOperatorDecision(command), command).toBe(false);
+      expect(touchesHumanConfirmation(command), command).toBe(false);
+    }
+  });
+  test("the operator acts stay gated", () => {
+    for (const command of [
+      "keryx review comments reply --final --package P",
+      "keryx review comments reply --final --fixtures $F --package P",
+      "keryx review chunks estimate --mode automatic --package P",
+      "keryx review chunks estimate --mode=Automatic --package P",
+      "keryx review chunks estimate --mode $M --package P",
+      "keryx review start --unattended --package P",
+      "keryx review attach --unattended --package P",
+      "keryx review plan --target x --unattended",
+      "keryx review estimate --package P --confirm --quote ok",
+    ]) {
+      expect(touchesOperatorDecision(command), command).toBe(true);
+    }
+  });
+});

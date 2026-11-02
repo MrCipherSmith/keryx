@@ -343,22 +343,27 @@ function isOutsideReadFlag(word: string): boolean {
   return name.length >= 3 && name.startsWith("--") && GIT_OUTSIDE_READ_FLAGS.some((flag) => flag.startsWith(name));
 }
 
-/** A path operand that could name something outside the project: absolute, or with a `..` component. */
-function isEscapingOperand(word: string, walk: Walk): boolean {
-  if (!path.isAbsolute(word) && !word.split(/[\\/]/).includes("..")) return false;
-  if (walk.cwd === undefined) return true;
-  const resolved = realOrResolved(path.resolve(walk.cwd, word));
-  const relative = path.relative(walk.projectRoot, resolved);
+function isOutsideRoot(projectRoot: string, target: string): boolean {
+  const relative = path.relative(projectRoot, target);
   return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
 }
 
+/** An operand whose real path, resolved from the working directory, lies outside the project (a symlink is followed). */
+function isEscapingOperand(word: string, cwd: string, projectRoot: string): boolean {
+  return isOutsideRoot(projectRoot, realOrResolved(path.resolve(cwd, word)));
+}
+
 /**
- * A git read stays routine only while it cannot print a file from outside the project: no `--no-index` or `--contents`
- * (nor an abbreviation of them), and no absolute or `..` operand that resolves outside the project root.
+ * A git read stays routine only while it cannot print a file from outside the project: it runs in a known directory
+ * inside the project root (outside a work tree `git diff a b` is an implicit `--no-index`, and inside another repository
+ * `git show`/`git log` read that one, so a `cd` out of the project is never followed), carries no `--no-index` or
+ * `--contents` (nor an abbreviation of them), and no operand resolves outside the project root.
  */
 function isGitReadConfined(words: readonly string[], walk: Walk): boolean {
+  const cwd = walk.cwd;
+  if (cwd === undefined || isOutsideRoot(walk.projectRoot, cwd)) return false;
   if (words.slice(2).some(isOutsideReadFlag)) return false;
-  return !words.slice(2).some((w) => !w.startsWith("-") && isEscapingOperand(w, walk));
+  return !words.slice(2).some((w) => !w.startsWith("-") && isEscapingOperand(w, cwd, walk.projectRoot));
 }
 
 function isRoutineSegment(words: readonly string[], walk: Walk): boolean {

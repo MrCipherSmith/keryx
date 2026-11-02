@@ -53,6 +53,10 @@ export async function hubMachineCommand(args: string[], options: CommandOptions 
     if (!command || !allowed[command])
         throw new MachineError(`Use hub machine ${MACHINE_SUBCOMMANDS.join(' | ')}`);
     // A keryx started from an agent's shell_exec (KERYX_TOOL_CALL=1) never grants lasting remote execution on its own say.
+    // Defence in depth only: the agent controls its child's environment (`env -u KERYX_TOOL_CALL keryx hub machine pair`
+    // removes the marker), so the gate that holds is the approval floor in command-risk.ts (touchesOperatorDecision),
+    // which asks in every permission mode. A terminal check would not hold either: a pseudo-terminal driver
+    // (`script -q /dev/null keryx …`) hands the agent one.
     if (OPERATOR_SUBCOMMANDS.has(command)) {
         const nested = nestedAgentCardRefusal(env);
         if (nested)

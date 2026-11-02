@@ -839,3 +839,36 @@ test("git reads that print a file from outside the project are not routine (--no
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("a git read after a cd that leaves the project is not routine (review-logic-w5:F-002, review-security-code-w4:F-002)", () => {
+  const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-git-cd-")));
+  const project = path.join(base, "project");
+  const outside = path.join(base, "outside");
+  mkdirSync(path.join(project, ".metaproject"), { recursive: true });
+  mkdirSync(path.join(project, "sub"), { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(path.join(project, ".metaproject", "index.md"), "# index\n");
+  writeFileSync(path.join(outside, "a"), "SECRET-A\n");
+  writeFileSync(path.join(outside, "b"), "SECRET-B\n");
+  symlinkSync(outside, path.join(project, "out-link"));
+  try {
+    for (const command of [
+      `cd ${outside} && git diff a b`,
+      "cd /etc && git diff passwd hosts",
+      "cd /private/etc && git diff passwd hosts",
+      `cd ${outside} && git show HEAD:secrets.env`,
+      `cd ${outside} && git log -p`,
+      "cd .. && git diff a b",
+      "cd ~ && git status",
+      "git diff out-link/a out-link/b",
+    ]) {
+      expect(isTrustRoutineCommand(command, { cwd: project }), command).toBe(false);
+      expect(isTrustRoutineCommand(command, { cwd: project, untrustedContent: true }), command).toBe(false);
+    }
+    for (const command of ["git diff a b", "cd sub && git diff a b", `cd ${project}/sub && git log -p`, "cd sub && cd .. && git show HEAD:README.md"]) {
+      expect(isTrustRoutineCommand(command, { cwd: project }), command).toBe(true);
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
