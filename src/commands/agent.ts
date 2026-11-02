@@ -1851,6 +1851,12 @@ export interface AgentInstructionContext {
    * answer questions with `reply`, tools it cannot call.
    */
   busJoined?: boolean;
+  /**
+   * Flow 481 T8: the herdr-core block (`buildHerdrCoreSection`), present only in
+   * an hc terminal. It depends on the env alone, so it is stable for the session
+   * and does not disturb the cached prompt prefix.
+   */
+  herdrCore?: string | undefined;
 }
 
 /**
@@ -2080,7 +2086,8 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     " A `keryx …` command that answers `index-incomplete` or nothing is not a finding about this " +
     "project — that is what an unbuilt or uninitialized workspace looks like, and `keryx init` (or " +
     "`keryx update`) is what creates the workspace those tools read." +
-    (ctx.busJoined === true ? buildBusConductBlock() : "");
+    (ctx.busJoined === true ? buildBusConductBlock() : "") +
+    (ctx.herdrCore !== undefined && ctx.herdrCore.length > 0 ? `\n\n${ctx.herdrCore}` : "");
 
   const trimmed = orient?.trim() ?? "";
   if (trimmed.length === 0) {

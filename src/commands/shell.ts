@@ -178,6 +178,7 @@ import { renderGroupedNamedHelp } from "../standard/service";
 // shell, so both dispatch into the same rule instead of growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import { runTasksCommand } from "../tui/tasks-command";
+import { frameSubmittedLine, herdrCoreSectionFromEnv } from "../tui/hc-message";
 import { formatUsageLine } from "../tui/usage-format";
 import {
   type AgentDeps,
@@ -2507,6 +2508,7 @@ export async function runAgentRepl(
             providerId: deps.providerId,
             modelId: deps.modelId,
             toolNames: interactiveAgentToolNames(rebuiltTools),
+            herdrCore: herdrCoreSectionFromEnv(process.env),
             busJoined: true,
           }),
         };
@@ -2656,7 +2658,10 @@ export async function runAgentRepl(
   };
 
   /** One main-agent turn from an operator line — extracted so it can run either straight away or drained from `heldQueue` below. */
-  const runOperatorLine = async (operatorLine: string): Promise<void> => {
+  const runOperatorLine = async (typedLine: string): Promise<void> => {
+    // An `<hc from="…">` agent message reaches the model framed as such (and the
+    // history stores that framed text); any other line is passed as typed.
+    const operatorLine = frameSubmittedLine(typedLine);
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
     turnUsage = undefined;
@@ -2664,8 +2669,8 @@ export async function runAgentRepl(
     turnText = "";
     turnError = undefined;
     syncArchive();
-    rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: operatorLine });
-    events?.emit({ type: "turn_start", prompt: operatorLine, provider: deps.providerId, model: deps.modelId });
+    rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: typedLine });
+    events?.emit({ type: "turn_start", prompt: typedLine, provider: deps.providerId, model: deps.modelId });
     deps.resetSubagentBudget?.();
     startSpinner();
     busWorking = true;
@@ -4319,6 +4324,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             providerId: sel.provider,
             modelId: sel.model,
             toolNames: interactiveAgentToolNames(deps.tools),
+            herdrCore: herdrCoreSectionFromEnv(process.env),
             // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
             // resolves. `tui-shell.ts` rebuilds via this same function right
             // after its own join settles, so a session that starts before the
@@ -4814,6 +4820,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: provider,
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
+          herdrCore: herdrCoreSectionFromEnv(process.env),
           // Flow 274 (T6/T7 contract): always `false` here — the bus join
           // happens later, inside `runAgentRepl` (`busBox.current` is still
           // empty at this point, and `agentDepsBase.tools` above was built

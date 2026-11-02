@@ -344,6 +344,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
+import { frameSubmittedLine, hcTranscriptEcho } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -10564,12 +10565,15 @@ export async function launchTuiAgentShell(opts: {
         }
         return;
       }
+      // Flow 481 T8: an `<hc from="…">…</hc>` line is another agent talking, not the
+      // operator, so it is labelled with the sender instead of the user's own mark.
+      const hcEcho = hcTranscriptEcho(line);
       const userEcho = appendUserEcho(otui, r, transcript, {
         id: `ub${uid++}`,
-        line: displayLine,
+        line: hcEcho !== undefined ? summarizeSubmittedLine(hcEcho.line) : displayLine,
         fullWidth: true,
         // Flow 376: a line from the Telegram topic says so (`tg ❯ ...`).
-        ...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : {}),
+        ...(hcEcho !== undefined ? { marker: hcEcho.marker } : source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : {}),
       });
       chrome.registerUserPrompt(userEcho, displayLine);
       transcript.add(
@@ -10972,7 +10976,10 @@ export async function launchTuiAgentShell(opts: {
         // and by the time the guard's own deferred continuation (further down)
         // wakes up from its `await`, a NEW turn may already be active, whose
         // signal would say nothing about whether THIS turn was cancelled.
-        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {
+        // Flow 481 T8: an hc agent message reaches the model framed as one (and the
+        // history stores that framed text); every other line is passed as typed.
+        const modelLine = frameSubmittedLine(line);
+        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
         signal: turnSignal,
         recovery: {},
         ...(origin === "operator" ? {} : { origin }),

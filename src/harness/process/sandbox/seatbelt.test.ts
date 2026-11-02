@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { SANDBOX_EXEC_PATH, buildSeatbeltProfile, wrapSeatbelt } from "./seatbelt";
-import type { SandboxProfile } from "./profile";
+import { defaultSandboxProfile, type SandboxProfile } from "./profile";
 import type { ContainedCommand } from "../executor";
 
 const workspaceWrite: SandboxProfile = {
@@ -73,6 +75,49 @@ describe("buildSeatbeltProfile", () => {
   test("string escaping of a path with a quote", () => {
     const sb = buildSeatbeltProfile({ ...workspaceWrite, writableRoots: ['/w/a"b'] });
     expect(sb).toContain('\\"');
+  });
+});
+
+// Flow 481 T8: the herdr-core socket is never part of a sandbox profile. `hc`
+// cannot reach the core from a sandboxed shell, and that is deliberate.
+describe("herdr-core socket stays out of the profile", () => {
+  const HC_ENV = {
+    HC_SOCKET: "/Users/u/.local/state/herdr-core/core.sock",
+    HC_TERMINAL_SOCKET: "/Users/u/.local/state/herdr-core/t13.sock",
+    HC_TERMINAL_ID: "t13",
+  } as const;
+
+  test("the generated profile names neither socket, whatever the process env holds", () => {
+    const saved: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(HC_ENV)) {
+      saved[key] = process.env[key];
+      process.env[key] = value;
+    }
+    try {
+      for (const p of [workspaceWrite, defaultSandboxProfile("/work/repo", "/tmp/session", "/home/u")]) {
+        const sb = buildSeatbeltProfile(p);
+        expect(sb).not.toContain(HC_ENV.HC_SOCKET);
+        expect(sb).not.toContain(HC_ENV.HC_TERMINAL_SOCKET);
+        expect(sb).not.toContain("herdr-core");
+        expect(sb).not.toContain("core.sock");
+        expect(sb).not.toMatch(/\(allow network[^)]*\(?(remote unix|unix-socket|path-literal)/);
+      }
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  test("no sandbox source file references the herdr-core socket variables", () => {
+    const dir = import.meta.dir;
+    const files = readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const text = readFileSync(path.join(dir, file), "utf8");
+      expect(text).not.toMatch(/HC_SOCKET|HC_TERMINAL_SOCKET/);
+    }
   });
 });
 
