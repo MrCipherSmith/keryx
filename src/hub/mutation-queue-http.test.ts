@@ -19,3 +19,18 @@ test('HTTP four public login trickles expire with408 without starving an authent
  if(!responses)for(const source of sources)source.error(new Error('test cleanup'));
  await finished;expect(valid.status).toBe(200);expect(responses?.map(response=>response.status)).toEqual([408,408,408,408]);
 });
+
+test('real TCP MCP initialization and tool listing survive native incoming-body cleanup',async()=>{
+    const app=hub();const server=Bun.serve({hostname:'127.0.0.1',port:0,fetch:app.fetch});
+    const { Client }=await import('@modelcontextprotocol/sdk/client/index.js');
+    const { StreamableHTTPClientTransport }=await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    const client=new Client({name:'admission-http-regression',version:'1'},{capabilities:{}});
+    try{
+        const transport=new StreamableHTTPClientTransport(new URL('/mcp',server.url),{requestInit:{headers:{Authorization:'Bearer '+agent}}});
+        // Match the existing SDK exactOptionalPropertyTypes compatibility boundary.
+        const link:Omit<typeof transport,'sessionId'>=transport;
+        await client.connect(link);
+        const listed=await client.listTools();expect(listed.tools.some(tool=>tool.name==='hub_list_projects')).toBe(true);
+        const result=await client.callTool({name:'hub_list_projects',arguments:{}});expect(result.isError).not.toBe(true);
+    }finally{await client.close();server.stop(true);}
+});

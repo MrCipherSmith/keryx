@@ -60,7 +60,7 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
         let timer:ReturnType<typeof setTimeout>|undefined, finished=false, failure:HubFailure|undefined;
         let target:ReadableStreamDefaultController<Uint8Array>|undefined;
         const clearDeadline=()=>{if(timer!==undefined){clearTimeout(timer);timer=undefined;}};
-        const cancelSource=()=>{try{void (reader?reader.cancel():original.body?.cancel())?.catch(()=>undefined);}catch{/* A closed source owns no retained reader. */}};
+        const cancelSource=()=>{try{void (reader?reader.cancel():original.body?.cancel())?.catch(()=>undefined);return true;}catch{return false;}};
         const refuse=(error:HubFailure)=>{
             if(finished)return;
             failure=error;finished=true;clearDeadline();
@@ -69,6 +69,7 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
         const abort=()=>refuse(new HubFailure(499,'request-aborted','Request was aborted'));
         original.signal.addEventListener('abort',abort,{once:true});
         parent?.signal.addEventListener('abort',abort,{once:true});
+        let result:T, cleanupError:{error:unknown}|undefined;
         try{
             const body=original.body?new ReadableStream<Uint8Array>({
                 start(controller){target=controller;},
@@ -89,19 +90,31 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
                 cancel(){finished=true;clearDeadline();cancelSource();},
             },{highWaterMark:0}):null;
             const admitted=body?new Request(original,{body,signal}):original;
-            const result=await requests.run({signal,admitted:true},()=>action(admitted));
+            result=await requests.run({signal,admitted:true},()=>action(admitted));
             // A parser may translate stream errors to invalid-json. Admission
             // failures retain their real status even through such adapters.
             if(failure)throw failure;
-            return result;
         }catch(error){
             if(failure)throw failure;
             throw error;
         }finally{
             clearDeadline();original.signal.removeEventListener('abort',abort);parent?.signal.removeEventListener('abort',abort);
-            finished=true;cancelSource();reader?.releaseLock();
-            requestBytes-=bytes;if(ownsSlot)requestCount--;
+            finished=true;
+            const cancellationRequested=cancelSource();
+            try{
+                try{reader?.releaseLock();}catch(error){
+                    // Bun 1.3.14 native HTTP readers can throw TypeError here,
+                    // even after EOF. Cancellation already owns source cleanup;
+                    // optional lock release must not replace a valid response.
+                    if(!cancellationRequested||!(error instanceof TypeError))cleanupError={error};
+                }
+            }finally{
+                reader=undefined;
+                requestBytes-=bytes;if(ownsSlot)requestCount--;
+            }
         }
+        if(cleanupError)throw cleanupError.error;
+        return result;
     };
     return {serialized,request,settle:()=>!running&&!pending.length?Promise.resolve():new Promise<void>(resolve=>settlers.add(resolve)),close(){closed=true;for(const entry of [...pending])entry.refuse(new HubFailure(503,'hub-stopping','Hub is stopping'));}};
 }
