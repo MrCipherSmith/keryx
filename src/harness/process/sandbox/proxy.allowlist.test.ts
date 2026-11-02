@@ -409,6 +409,103 @@ describe("flow 301 security review F2: the allowlist restricts host AND port", (
     }
   });
 
+  test("CONNECT closes its pending upstream when the client disconnects", async () => {
+    let accepted!: (socket: net.Socket) => void;
+    const acceptedSocket = new Promise<net.Socket>((resolve) => { accepted = resolve; });
+    upstream = net.createServer((socket) => accepted(socket));
+    const upPort: number = await new Promise((resolve) => upstream!.listen(0, "127.0.0.1", () => resolve((upstream!.address() as net.AddressInfo).port)));
+    const originalConnect = net.connect.bind(net);
+    let dial: net.Socket | undefined;
+    const targets: unknown[][] = [];
+    const spy = spyOn(net, "connect").mockImplementation(((...args: unknown[]) => {
+      targets.push(args);
+      const socket = originalConnect(upPort, "127.0.0.1");
+      dial = socket;
+      const once = socket.once.bind(socket);
+      // Let the TCP connection complete while holding back the proxy's connect handler.
+      socket.once = ((event: string, listener: (...args: never[]) => void) => event === "connect" ? socket : Reflect.apply(once, socket, [event, listener])) as typeof socket.once;
+      return socket;
+    }) as unknown as typeof net.connect);
+    let peer: net.Socket | undefined;
+    const client = new net.Socket();
+    client.on("error", () => {});
+    try {
+      proxy = await createAllowlistProxy({ allowedDomains: ["pinned.test"], refuseReservedAddresses: true, resolveHost: async () => "93.184.216.34" });
+      client.connect(proxy.port, proxy.host, () => client.write("CONNECT pinned.test:443 HTTP/1.1\r\nHost: pinned.test:443\r\n\r\n"));
+      peer = await acceptedSocket;
+      expect(targets).toEqual([[443, "93.184.216.34"]]);
+      const upstreamClosed = new Promise<boolean>((resolve) => {
+        dial!.once("close", () => resolve(true));
+        setTimeout(() => resolve(false), 500).unref();
+      });
+      client.destroy();
+      expect(await upstreamClosed).toBe(true);
+    } finally {
+      client.destroy();
+      dial?.destroy();
+      peer?.destroy();
+      spy.mockRestore();
+    }
+  });
+
+  test("CONNECT forwards bytes received while DNS is pending", async () => {
+    let resolveAddress!: (address: string) => void;
+    let resolverStarted!: () => void;
+    const started = new Promise<void>((resolve) => { resolverStarted = resolve; });
+    const address = new Promise<string>((resolve) => { resolveAddress = resolve; });
+    let received!: (data: string) => void;
+    const receivedData = new Promise<string>((resolve) => { received = resolve; });
+    upstream = net.createServer((socket) => socket.once("data", (data) => { received(data.toString()); socket.end(); }));
+    const upPort: number = await new Promise((resolve) => upstream!.listen(0, "127.0.0.1", () => resolve((upstream!.address() as net.AddressInfo).port)));
+    const originalConnect = net.connect.bind(net);
+    const targets: unknown[][] = [];
+    const spy = spyOn(net, "connect").mockImplementation(((...args: unknown[]) => {
+      targets.push(args);
+      return originalConnect(upPort, "127.0.0.1");
+    }) as unknown as typeof net.connect);
+    const client = new net.Socket();
+    client.on("error", () => {});
+    try {
+      proxy = await createAllowlistProxy({ allowedDomains: ["pinned.test"], refuseReservedAddresses: true, resolveHost: () => { resolverStarted(); return address; } });
+      client.connect(proxy.port, proxy.host, () => client.write("CONNECT pinned.test:443 HTTP/1.1\r\nHost: pinned.test:443\r\n\r\n"));
+      await started;
+      client.write("early tunnel bytes");
+      resolveAddress("93.184.216.34");
+      expect(await receivedData).toBe("early tunnel bytes");
+      expect(targets).toEqual([[443, "93.184.216.34"]]);
+    } finally {
+      resolveAddress("93.184.216.34");
+      client.destroy();
+      spy.mockRestore();
+    }
+  });
+
+  test("CONNECT does not dial after the client closes while DNS is pending", async () => {
+    let resolveAddress!: (address: string) => void;
+    let resolverStarted!: () => void;
+    const started = new Promise<void>((resolve) => { resolverStarted = resolve; });
+    const address = new Promise<string>((resolve) => { resolveAddress = resolve; });
+    const spy = spyOn(net, "connect").mockImplementation((() => new net.Socket()) as unknown as typeof net.connect);
+    const client = new net.Socket();
+    client.on("error", () => {});
+    try {
+      proxy = await createAllowlistProxy({ allowedDomains: ["pinned.test"], refuseReservedAddresses: true, resolveHost: () => { resolverStarted(); return address; } });
+      client.connect(proxy.port, proxy.host, () => client.write("CONNECT pinned.test:443 HTTP/1.1\r\nHost: pinned.test:443\r\n\r\n"));
+      await started;
+      client.destroy();
+      await proxy.close();
+      proxy = undefined;
+      resolveAddress("93.184.216.34");
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      resolveAddress("93.184.216.34");
+      client.destroy();
+      for (const result of spy.mock.results) if (result.type === "return") (result.value as net.Socket).destroy();
+      spy.mockRestore();
+    }
+  });
+
   test("AC4: plain HTTP dials the address that passed the check, never the hostname again", async () => {
     const dialled: Array<{ host?: unknown }> = [];
     const spy = spyOn(http, "request").mockImplementation(((opts: { host?: unknown }) => {

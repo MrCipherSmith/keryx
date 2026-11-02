@@ -14,6 +14,7 @@
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
+import { PassThrough } from "node:stream";
 import dns from "node:dns";
 import { unlinkSync } from "node:fs";
 import { isPrivateOrReservedAddress, looksLikeIpHost } from "../../mutation/guard";
@@ -576,7 +577,17 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
       return;
     }
 
+    // Read while resolving/connecting so a peer disconnect is observable. The
+    // bounded stream buffers early tunnel bytes and applies backpressure.
+    const pending = new PassThrough();
+    clientSocket.pipe(pending);
+    const onPendingEnd = (): void => { clientSocket.destroy(); };
+    clientSocket.once("end", onPendingEnd);
+    clientSocket.once("close", () => pending.destroy());
+
     const proceed = (connectHost: string): void => {
+      // DNS may finish after the client has already gone away.
+      if (clientSocket.destroyed) return;
       decide({ host: hostname, allowed: true, kind: "connect", port });
 
       // OPT-IN MITM: terminate TLS with a leaf for this host so contents (and
@@ -586,18 +597,22 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
         void (async () => {
           try {
             const terminatorPort = await mitmPortFor(hostname, port, ca);
+            if (clientSocket.destroyed) return;
             clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
             // The client now speaks TLS; hand the raw bytes to this host's
             // internal HTTPS terminator, which does the handshake and decrypts.
             // `terminatorPort` is this process's OWN ephemeral listen port, never
             // client-controlled, but the whole branch is inside this try anyway.
             const internal = net.connect(terminatorPort, "127.0.0.1", () => {
+              if (clientSocket.destroyed) { internal.destroy(); return; }
+              clientSocket.off("end", onPendingEnd);
               if (head && head.length > 0) internal.write(head);
-              clientSocket.pipe(internal);
+              pending.pipe(internal);
               internal.pipe(clientSocket);
             });
             internal.on("error", () => clientSocket.destroy());
             clientSocket.on("error", () => internal.destroy());
+            clientSocket.on("close", () => internal.destroy());
           } catch {
             clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
             clientSocket.end();
@@ -613,10 +628,12 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
       // F1 defence-in-depth: `port` is already strictly parsed above, but wrap the
       // call anyway — nothing client-controlled may throw synchronously here.
       const onUpstreamConnect = (upstream: net.Socket): void => {
+        if (clientSocket.destroyed) { upstream.destroy(); return; }
+        clientSocket.off("end", onPendingEnd);
         clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         if (head && head.length > 0) upstream.write(head);
         upstream.pipe(clientSocket);
-        clientSocket.pipe(upstream);
+        pending.pipe(upstream);
       };
       const onUpstreamFailure = (): void => {
         clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
@@ -627,6 +644,7 @@ export async function createAllowlistProxy(opts: AllowlistProxyOptions): Promise
       upstream.once("connect", () => onUpstreamConnect(upstream));
       upstream.on("error", onUpstreamFailure);
       clientSocket.on("error", () => upstream.destroy());
+      clientSocket.on("close", () => upstream.destroy());
     };
 
     if (!hardened) {
