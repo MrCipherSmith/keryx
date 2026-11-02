@@ -808,6 +808,8 @@ interface ParsedExecArgs {
   maskMode?: MaskMode;
   /** Set when `--mask-mode` received an invalid value. */
   maskModeError?: string;
+  /** Set when `--max-runtime-ms` is not a positive integer (0 would mean "no deadline"). */
+  maxRuntimeError?: string;
   commandPath: string;
   commandArgs: string[];
 }
@@ -913,6 +915,7 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
   let tlsTerminate = false;
   let maskMode: MaskMode | undefined;
   let maskModeError: string | undefined;
+  let maxRuntimeError: string | undefined;
   let commandPath = "";
   let commandArgs: string[] = [];
 
@@ -929,8 +932,11 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
       if (key !== undefined) allowEnvKeys.push(key);
     } else if (arg === "--max-runtime-ms") {
       const raw = args[++i];
-      const parsed = raw === undefined ? Number.NaN : Number.parseInt(raw, 10);
-      if (Number.isFinite(parsed)) maxRuntimeMs = parsed;
+      // Strict: spawnSync treats timeout 0 as "no deadline" and throws on a negative
+      // one, so only a positive safe integer is a runtime budget.
+      const parsed = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+      if (Number.isSafeInteger(parsed) && parsed > 0) maxRuntimeMs = parsed;
+      else maxRuntimeError = raw ?? "";
     } else if (arg === "--allow-real-subprocess") {
       allowRealSubprocess = true;
     } else if (arg === "--allowed-domains") {
@@ -970,6 +976,7 @@ function parseExecArgs(args: string[]): ParsedExecArgs {
   if (allowedDomains !== undefined) parsed.allowedDomains = allowedDomains;
   if (maskMode !== undefined) parsed.maskMode = maskMode;
   if (maskModeError !== undefined) parsed.maskModeError = maskModeError;
+  if (maxRuntimeError !== undefined) parsed.maxRuntimeError = maxRuntimeError;
   return parsed;
 }
 
@@ -994,6 +1001,7 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
     tlsTerminate,
     maskMode,
     maskModeError,
+    maxRuntimeError,
     commandPath,
     commandArgs,
   } = parsedArgs;
@@ -1008,6 +1016,11 @@ async function harnessExec(args: string[], deps?: HarnessCommandDeps): Promise<v
     }
     console.log(JSON.stringify(body));
   };
+
+  if (maxRuntimeError !== undefined) {
+    emitBlocked(`invalid --max-runtime-ms "${maxRuntimeError}" (expected a positive integer number of milliseconds)`);
+    return;
+  }
 
   if (maskModeError !== undefined) {
     emitBlocked(`invalid --mask-mode "${maskModeError}" (expected auto|manual|off)`);

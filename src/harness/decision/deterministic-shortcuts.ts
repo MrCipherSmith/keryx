@@ -8,16 +8,16 @@
 import type { RoutingCategory } from "../routing/table";
 
 /**
- * A short greeting/thanks/acknowledgement — the "quick" category's cheapest,
- * highest-confidence case. Deliberately NOT here: bare approvals and refusals
- * (`yes`, `ok`, `sure`, `sounds good`, `no`, …). Their meaning is the previous
+ * A short greeting/thanks — the "quick" category's cheapest,
+ * highest-confidence case. Deliberately NOT here: bare approvals, acknowledgements and
+ * refusals (`yes`, `ok`, `sure`, `sounds good`, `great`, `cool`, `nice`, `got it`, `np`, `k`, `no`, …). Their meaning is the previous
  * turn ("yes, run the migration"), and this function sees one line with no
  * conversation context, so shortcutting them to the quick tier would answer a
  * go-ahead for heavy work on the cheapest model. They fall through to the
  * classifier stage, which is given the conversation.
  */
 const CHITCHAT_RE =
-  /^(?:hi|hello|hey|yo|thanks|thank you|thx|ty|cool|nice|great|awesome|got it|good morning|good night|gm|lol|haha|np|no problem|welcome|you're welcome)[.!?]*$/i;
+  /^(?:hi|hello|hey|yo|thanks|thank you|thx|ty|good morning|good night|gm|lol|haha|welcome|you're welcome)[.!?]*$/i;
 
 /** A word-count/character bound so a longer message that merely STARTS with a greeting is never misread as chit-chat. */
 const CHITCHAT_MAX_CHARS = 24;

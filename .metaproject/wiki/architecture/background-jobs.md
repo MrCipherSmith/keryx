@@ -80,6 +80,8 @@ The model can read output, wait for exit, and steer tasks:
 
 - **`/demote <task_id>`** in both shells moves a running foreground command to the background without stopping it and without ending the turn. It is in the TUI's busy-dispatch allow-list on purpose: a turn blocked on its own long command is precisely when an operator wants the command set aside.
 
+- **Ceiling on promotion.** `/demote` (and a `shell_exec` yield that runs out) promotes a foreground command; past twice `maxConcurrent` other running background tasks the promotion is refused. The registry itself kills nothing: after a refused `/demote` the command keeps running in the foreground and the message says so. Only `shell_exec`'s own path then stops the command (`over-cap`) and says it was stopped.
+
 - **Interrupting a turn releases the wait, not the work.** The turn's abort signal reaches a waiting tool (`shell_exec`'s yield, `shell_task_wait`); the task is promoted, keeps running with its output intact, and its completion is still delivered afterwards.
 
 ### Design Notes

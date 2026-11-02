@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { pinGrantedBinary, type BinaryPin } from "../trigger/granted-binary";
 import { execFileSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { runTriggerOnce } from "./trigger";
@@ -407,11 +407,11 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
   });
 
   test("network allowlist whose proxy cannot bind refuses the run with sandbox-unavailable instead of hanging", async () => {
-    // A scratch parent so deep that the proxy's unix socket path exceeds sun_path: the bind fails.
-    const longRuntime = path.join(aside, "r".repeat(60), "r".repeat(60), "r".repeat(60));
-    await mkdir(longRuntime, { recursive: true });
-    const saved = process.env["XDG_RUNTIME_DIR"];
-    process.env["XDG_RUNTIME_DIR"] = longRuntime;
+    // A tmpdir so deep that even the short proxy socket directory cannot fit sun_path: the run is refused.
+    const longTmp = path.join(aside, "r".repeat(60), "r".repeat(60), "r".repeat(60));
+    await mkdir(longTmp, { recursive: true });
+    const saved = process.env["TMPDIR"];
+    process.env["TMPDIR"] = longTmp;
     try {
       const base = entry({ tools: ["gh.pr.list"], bins: { gh: await stubGh() } });
       const action = base["action"] as Record<string, unknown>;
@@ -427,10 +427,33 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
       expect(record.agentTask?.refusal).toBe("sandbox-unavailable");
       expect(provider.calls()).toBe(0);
     } finally {
-      if (saved === undefined) delete process.env["XDG_RUNTIME_DIR"];
-      else process.env["XDG_RUNTIME_DIR"] = saved;
+      if (saved === undefined) delete process.env["TMPDIR"];
+      else process.env["TMPDIR"] = saved;
     }
   }, 30_000);
+
+  test("the proxy socket path does not depend on the schedule name: check-github fits on darwin", async () => {
+    const { makeProxySocketDir, maxUnixSocketPathBytes } = await import("./trigger-agent-task");
+    expect(maxUnixSocketPathBytes("darwin")).toBe(103);
+    expect(maxUnixSocketPathBytes("linux")).toBe(107);
+    // The default tmpdir (on macOS /var/folders/xx/<28 chars>/T, ~50 bytes, no XDG_RUNTIME_DIR):
+    // the path holds no schedule name, so `check-github` and a 60-byte name get the same one.
+    const made = await makeProxySocketDir(undefined, "darwin");
+    try {
+      expect(Buffer.byteLength(made.socketPath)).toBeLessThanOrEqual(103);
+      expect(made.socketPath).not.toContain("check-github");
+    } finally {
+      await rm(made.dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a tmpdir that still cannot fit is refused, and the half-made directory is removed", async () => {
+    const { makeProxySocketDir } = await import("./trigger-agent-task");
+    const longTmp = path.join(aside, "q".repeat(60), "q".repeat(60));
+    await mkdir(longTmp, { recursive: true });
+    await expect(makeProxySocketDir(longTmp, "darwin")).rejects.toThrow(/unix socket limit/);
+    expect(await readdir(longTmp)).toEqual([]);
+  });
 
   test("a schedule edited after confirmation is refused with grants-changed and calls no model", async () => {
     await addConfirmedSchedule(root, entry({ tools: ["gh.pr.list"], bins: { gh: await stubGh() } }));

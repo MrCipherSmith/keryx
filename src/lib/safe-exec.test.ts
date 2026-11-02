@@ -876,6 +876,19 @@ describe("ensureSafeBunExec", () => {
       expect(exited()).toBeUndefined();
     });
 
+    test("arms the watchdog when the wrapper already died before startup (reparented to init), so the orphan exits", async () => {
+      const { deps, fire, exited, currentPpid } = intervalDeps();
+      currentPpid.value = 1; // wrapper died during startup: already adopted by init
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: "555" },
+        spawn: noSpawn,
+        ...deps,
+      });
+      fire();
+      expect(exited()).toBe(1);
+    });
+
     test("consumes the marker so a process spawned later does not inherit it", async () => {
       const { deps, currentPpid } = intervalDeps();
       currentPpid.value = 555;
