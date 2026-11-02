@@ -12,6 +12,7 @@ import { liveWorkAdapter } from "../src/features/managed-work/adapter";
 import { demoWorkAdapter } from "../src/features/managed-work/demo";
 import { recordOf } from "../src/features/managed-work/model";
 import { AmendmentsPanel } from "../src/features/managed-work/amendments";
+import { ContributionPanel } from "../src/features/managed-work/contribute";
 import { GitObservations } from "../src/features/managed-work/observations";
 import { WorkOperationStatus } from "../src/features/managed-work/operation";
 import { ExactDocument } from "../src/features/managed-work/revision-review";
@@ -769,4 +770,41 @@ test("the Flow revision editor neither offers nor keeps a cancelled required Int
   const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
   expect(body.command).toBe("revision.propose");
   expect(body.payload.requiredIntentIds).toEqual(["i1"]);
+});
+
+test("a contribution choice sends the option the form shows, not a stale draft id", async () => {
+  const context = recordOf(records, "context", "ctxi1")!;
+  records.push({ ...context, id: "ctx-second" });
+  const panel = () => (
+    <ContributionPanel
+      adapter={adapter}
+      records={records}
+      flow={recordOf(records, "flow", "flow-demo")!}
+      intent={recordOf(records, "intent", "i1")!}
+      can={(command) => command === "attempt.create"}
+      onDone={() => undefined}
+    />
+  );
+  const first = show(panel());
+  fireEvent.click(screen.getByRole("button", { name: "New attempt" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Context snapshot" }), {
+    target: { value: "ctx-second" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  first.unmount();
+  // The chosen context no longer belongs to the current revision.
+  records = records.filter((record) => record.id !== "ctx-second");
+  show(panel());
+  fireEvent.click(screen.getByRole("button", { name: "New attempt" }));
+  expect(
+    screen.getByRole("combobox", { name: "Context snapshot" }),
+  ).toHaveValue("ctxi1");
+  fireEvent.change(screen.getByRole("textbox", { name: "Approach summary" }), {
+    target: { value: "Implement with the current context" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(body.command).toBe("attempt.create");
+  expect(body.payload.contextSnapshotId).toBe("ctxi1");
 });
