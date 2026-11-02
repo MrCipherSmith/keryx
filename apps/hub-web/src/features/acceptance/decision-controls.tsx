@@ -16,7 +16,7 @@ export function DecisionControls(props:ReviewDecisionProps){
  const [ack,setAck]=useState(false),[error,setError]=useState<string|null>(null),[notice,setNotice]=useState<string|null>(null),[busy,setBusy]=useState(false);
  const [waivers,setWaivers]=useState<Record<string,string>>({}),[waived,setWaived]=useState<string[]>([]);
  const commentRef=useRef<HTMLTextAreaElement>(null),statusRef=useRef<HTMLParagraphElement>(null),inFlight=useRef(false),current=useRef(props.subjectKey??props.targetKey);current.current=props.subjectKey??props.targetKey;
- const stale=pinnedTarget!==props.targetKey||error==='stale';
+ const stale=!props.readonly&&(pinnedTarget!==props.targetKey||error==='stale');
  const reason=props.legacy?comment.trim():returnReason(comment,refs);
  const waiverCriteria=props.criteria.filter(row=>row.waivable&&row.status!=='reportedPass');
  const waiverMissing=waiverCriteria.some(row=>!waived.includes(row.id)||!waivers[row.id]?.trim()||waivers[row.id]!.length>4000);

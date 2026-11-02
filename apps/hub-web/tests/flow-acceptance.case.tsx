@@ -251,3 +251,38 @@ test('canonical return for a nonpassing waivable criterion sends request changes
  expect(screen.queryByRole('button',{name:'Check operation status'})).not.toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'Retry identical operation'})).not.toBeInTheDocument();
 });
+
+
+async function acceptLegacyFixtureResult(){
+ fixture.respond=request=>{
+  if(request.method==='POST'&&request.url.endsWith('/accept')){
+   const accepted={...fixture.legacyFlow,status:'done',version:5,acceptedBy:'human:reviewer',acceptedAt:'2026-11-03T08:10:00Z',receipt:{id:'acceptance-receipt-immutable',actorId:'human:reviewer',actorKind:'human',createdAt:'2026-11-03T08:10:00Z'}};
+   Object.assign(fixture.legacyFlow,accepted);return Response.json(accepted);
+  }
+ };
+ mountAcceptance('legacy');fireEvent.click(await screen.findByRole('button',{name:'Accept result'}));
+ fireEvent.click(screen.getByRole('checkbox',{name:/self.reported|supplied reports/i}));
+ fireEvent.click(screen.getByRole('button',{name:'Confirm acceptance'}));
+ const status=await screen.findByText('Result accepted',{selector:'[role=status]'});
+ await waitFor(()=>expect(screen.getByText(/Completed result.*read only/i)).toBeVisible());
+ return status;
+}
+
+test('own legacy acceptance remains focused and read only after its version increment without a stale review action',async()=>{
+ const status=await acceptLegacyFixtureResult();
+ expect(status).toHaveFocus();
+ expect(screen.queryByRole('button',{name:'Review updated result'})).not.toBeInTheDocument();
+ expect(screen.queryByText(/The reviewed result changed/)).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Accept result'})).not.toBeInTheDocument();
+ expect(mutationRequests(fixture)).toHaveLength(1);
+});
+
+test('accepted legacy receipt metadata stays inside a closed accessible technical disclosure',async()=>{
+ await acceptLegacyFixtureResult();
+ const receipt=screen.getByText('acceptance-receipt-immutable',{selector:'code'});
+ const disclosure=receipt.closest('details');expect(disclosure).not.toBeNull();
+ expect(disclosure).not.toHaveAttribute('open');expect(receipt).not.toBeVisible();
+ const summary=within(disclosure!).getByText('Flow details',{selector:'summary'});
+ summary.focus();expect(summary).toHaveFocus();fireEvent.click(summary);
+ expect(receipt).toBeVisible();
+});
