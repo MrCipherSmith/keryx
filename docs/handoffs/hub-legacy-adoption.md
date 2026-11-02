@@ -7,11 +7,11 @@ The existing Hub is a source-build installation under `/home/operator/keryx-team
 
 ## Download the actual successor release
 
-Run as the installation owner on the Hub host. Set `release` to the version whose release workflow completed successfully; do not use an unpublished version or replace an existing tag. The example assumes the planned successor0.4.4.
+Run as the installation owner on the Hub host. Set `release` to the version whose release workflow completed successfully; do not use an unpublished version or replace an existing tag. Use0.4.5 or newer for source-build adoption. The0.4.4 helper can fail its final read-only SQLite serialization with older Bun runtimes after shutdown; its recovery resumes the original Hub.
 
 ```sh
 umask 077
-release=0.4.4
+release=0.4.5
 mkdir -p "$HOME/keryx-hub-release-$release"
 cd "$HOME/keryx-hub-release-$release"
 base="https://github.com/MrCipherSmith/keryx/releases/download/v$release"
@@ -53,7 +53,7 @@ python3 verified-install/migrate-legacy.py \
 
 The default is also `--check`; `--enable-work` applies to the copied trial configuration during rehearsal. It derives the actual running configuration privately, preserves role and agent mappings, pulls the released images, takes a consistent online SQLite image and copies the data to a disposable volume. The target runs with no network or published port. It checks database integrity, exact legacy Hub state, authenticated reads and an enabled Work write on the disposable copy. It then checks the original container identities, current pointer, Hub state and configuration hashes. Production is neither stopped nor updated.
 
-A successful report contains `REHEARSAL_PASSED`, a pinned image and record counts. If production changes during rehearsal, rerun while quiet rather than ignoring the result. The bounded online rehearsal refuses databases over64MiB; larger installations need a separately planned offline procedure. Temporary trial data is removed; production data is never removed.
+A successful report contains `REHEARSAL_PASSED`, a pinned image and record counts. If production changes during rehearsal, rerun while quiet rather than ignoring the result. The bounded online rehearsal refuses databases over64MiB; larger installations need a separately planned offline procedure. Temporary trial data is removed; production data is never removed. The final stopped-volume snapshot is made from private writable copies of the database and WAL in its full backup archive; the original volume stays read-only. Reused WAL generations are supported. Incomplete frames or inconsistent current-generation checksums refuse adoption and preserve the original installation; checksums are integrity checks, not authentication against coordinated tampering.
 
 ## Owner applies the change
 
