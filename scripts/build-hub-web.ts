@@ -13,7 +13,7 @@ async function files(directory:string):Promise<string[]>{const result:string[]=[
 // The digest must not depend on the platform: POSIX-style relative paths, and text inputs hashed with LF line endings (a Windows checkout may hold CRLF).
 const posix=(path:string)=>relative(root,path).split(sep).join('/');
 const textInput=/\.(?:tsx?|jsx?|css|html|json|lock|svg|md|txt)$/;
-const inputs=[...await files(join(application,'src')),...await files(join(application,'public')),...['package.json','bun.lock','index.html','tsconfig.json','vite.config.ts'].map(name=>join(application,name)),join(root,'scripts/build-hub-web.ts'),join(root,'src/remote-control/owned-controls.ts')].sort((a,b)=>posix(a)<posix(b)?-1:posix(a)>posix(b)?1:0);
+const inputs=[...await files(join(application,'src')),...await files(join(application,'public')),...['package.json','bun.lock','index.html','tsconfig.json','vite.config.ts'].map(name=>join(application,name)),join(root,'scripts/build-hub-web.ts'),join(root,'src/remote-control/owned-controls.ts'),join(root,'src/hub/review-guide.ts'),join(root,'src/hub/review-guide-resolution.ts')].sort((a,b)=>posix(a)<posix(b)?-1:posix(a)>posix(b)?1:0);
 const hash=createHash('sha256');for(const path of inputs){hash.update(posix(path)+'\0');let bytes=await readFile(path);if(textInput.test(path)&&bytes.includes(13))bytes=Buffer.from(bytes.toString('latin1').replaceAll('\r\n','\n'),'latin1');hash.update(String(bytes.length)+'\0');hash.update(bytes);}
 const inputDigest=hash.digest('hex');
 if(check){
