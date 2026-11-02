@@ -111,7 +111,7 @@ describe("herdr-core and the sandbox profile", () => {
 
   // With allowed domains configured, the shell's own profile builder returns `network: "restricted"`
   // in EVERY mode (`workspace` included): the profile denies all network but the loopback proxy, so
-  // the herdr-core socket is unreachable. Built from an explicit env (no process.env, no live proxy).
+  // the herdr-core socket is unreachable. Built from an explicit env object: the process environment is never touched, no proxy starts.
   test("allowed domains: every mode becomes restricted and denies the socket too", () => {
     const env = { KERYX_SANDBOX_ALLOWED_DOMAINS: "api.github.com" };
     for (const mode of ["workspace", "strict"] as const) {
