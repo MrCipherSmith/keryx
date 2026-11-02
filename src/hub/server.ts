@@ -28,16 +28,16 @@ function principalForToken(token: string, config: HubConfig): Principal | undefi
   if (sameToken(token, config.agentToken)) return { id: "agent:connector", kind: "agent", role: "agent" };
 }
 function credentialFor(actor: Principal, config: HubConfig): string { return actor.role === "operator" ? config.operatorToken : actor.role === "reviewer" ? config.reviewerToken ?? "" : config.agentToken; }
-async function readJson(request: Request): Promise<unknown> {
+async function readJson(request: Request, maxBytes = MAX_BODY): Promise<unknown> {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) fail(400, "json-required", "Expected application/json");
-  if (Number(request.headers.get("content-length") ?? "0") > MAX_BODY) fail(413, "quota-exceeded", "Request exceeds quota");
+  if (Number(request.headers.get("content-length") ?? "0") > maxBytes) fail(413, "quota-exceeded", "Request exceeds quota");
   if (!request.body) fail(400, "invalid-json", "JSON body required");
   const reader = request.body.getReader(); const parts: Uint8Array[] = []; let size = 0;
   try {
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY) { await reader.cancel(); fail(413, "quota-exceeded", "Request exceeds quota"); }
+      if (size > maxBytes) { await reader.cancel(); fail(413, "quota-exceeded", "Request exceeds quota"); }
       parts.push(value);
     }
   } finally { reader.releaseLock(); }
@@ -178,7 +178,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
       if (bearer?.kind === "agent") fail(403, "human-required", "Browser sessions require human credentials");
       if (access && request.headers.has("cf-access-jwt-assertion")) fail(403, "local-recovery-only", "Token recovery is available only through the local SSH access path");
       const origin = request.headers.get("origin"); if (origin) checkOrigin(request);
-      const body = object(await readJson(request)); const token = text(body.token, "token"); const actor = principalForToken(token, config);
+      const body = object(await readJson(request,64*1024)); const token = text(body.token, "token"); const actor = principalForToken(token, config);
       if (!actor) fail(401, "unauthorized", "Invalid credentials");
       if (bearer && bearer.id !== actor.id) fail(403, "identity-conflict", "Browser credentials do not match the authenticated principal");
       if (actor.kind !== "human") fail(403, "human-required", "Browser sessions require a human token");
@@ -252,7 +252,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   }
   const application: HubApplication = {
     async fetch(request: Request) {
-      try { return await mutationQueue.request(request, () => handle(request)); } catch (error) {
+      try { return await mutationQueue.request(request, admittedRequest => handle(admittedRequest)); } catch (error) {
         if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status, error.status === 503 ? {"Retry-After":"1"} : undefined);
         console.error("Hub request failed", error instanceof Error ? error.name : "UnknownError");
         return json({ error: { code: "internal-error", message: "Hub request failed" } }, 500);

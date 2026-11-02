@@ -1,13 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { fail, HubFailure } from './domain';
-export const mutationQueueDefaults = { maxPending:32, maxWaitMs:10000, maxRequests:32, maxRequestBytes:128*1024*1024 } as const;
+export const mutationQueueDefaults = { maxPending:32, maxWaitMs:10000, maxRequests:32, maxRequestBytes:128*1024*1024, maxBodyReadMs:30000 } as const;
 export type MutationQueueLimits = { [K in keyof typeof mutationQueueDefaults]: number };
 type Entry = { start:()=>Promise<void>; refuse:(error:HubFailure)=>void };
 /** Bounded admission and removable waiting jobs; cancelled jobs retain neither callback nor request body. */
 export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}) {
     const limits={...mutationQueueDefaults,...overrides};
     for(const value of Object.values(limits)) if(!Number.isSafeInteger(value)||value<1) throw new TypeError('Invalid mutation queue limits');
-    const requests=new AsyncLocalStorage<AbortSignal>(), pending:Entry[]=[], settlers=new Set<()=>void>();
+    const requests=new AsyncLocalStorage<{signal:AbortSignal;admitted:boolean}>(), pending:Entry[]=[], settlers=new Set<()=>void>();
     let running=false, closed=false, requestCount=0, requestBytes=0;
     const idle=()=>{if(!running&&!pending.length){for(const resolve of settlers)resolve();settlers.clear();}};
     const drain=()=>{
@@ -18,7 +18,7 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
     };
     const serialized = <T>(operation:()=>Promise<T>):Promise<T>=>{
         if(closed)return Promise.reject(new HubFailure(503,'hub-stopping','Hub is stopping'));
-        const signal=requests.getStore();
+        const signal=requests.getStore()?.signal;
         if(signal?.aborted)return Promise.reject(new HubFailure(499,'request-aborted','Request was aborted'));
         if(pending.length>=limits.maxPending)return Promise.reject(new HubFailure(503,'hub-busy','Mutation queue is full'));
         return new Promise<T>((resolve,reject)=>{
@@ -43,15 +43,65 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
             pending.push(entry);queueMicrotask(drain);
         });
     };
-    const request = async<T>(request:Request,action:()=>Promise<T>):Promise<T>=>{
-        if(request.signal.aborted)fail(499,'request-aborted','Request was aborted');
-        if(!['POST','PUT','PATCH','DELETE'].includes(request.method))return requests.run(request.signal,action);
-        // Reserve each route's entire parser allowance. Content-Length is not trusted,
-        // so a lying/chunked sender cannot exceed the aggregate memory budget.
-        const bytes=new URL(request.url).pathname.startsWith('/hub/work/v1/')?64*1024:32*1024*1024;
-        if(requestCount>=limits.maxRequests||requestBytes+bytes>limits.maxRequestBytes)fail(503,'hub-busy','Request memory budget exhausted');
-        requestCount++;requestBytes+=bytes;
-        try{return await requests.run(request.signal,action);}finally{requestCount--;requestBytes-=bytes;}
+    const request = async<T>(original:Request,action:(admittedRequest:Request)=>Promise<T>):Promise<T>=>{
+        const parent=requests.getStore();
+        if(original.signal.aborted||parent?.signal.aborted){void original.body?.cancel().catch(()=>undefined);fail(499,'request-aborted','Request was aborted');}
+        const mutating=['POST','PUT','PATCH','DELETE'].includes(original.method);
+        if(!mutating)return requests.run({signal:parent?.signal??original.signal,admitted:parent?.admitted??false},()=>action(original));
+        if(closed)fail(503,'hub-stopping','Hub is stopping');
+        // MCP's internal apiFetch shares the authenticated root request slot. Each
+        // physical body is still metered, including the inner serialized copy.
+        const ownsSlot=!parent?.admitted;
+        if(ownsSlot&&requestCount>=limits.maxRequests)fail(503,'hub-busy','Request slots exhausted');
+        if(ownsSlot)requestCount++;
+        const abortController=new AbortController();
+        const signal=AbortSignal.any([original.signal,abortController.signal,...(parent?[parent.signal]:[])]);
+        let bytes=0, reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
+        let timer:ReturnType<typeof setTimeout>|undefined, finished=false, failure:HubFailure|undefined;
+        let target:ReadableStreamDefaultController<Uint8Array>|undefined;
+        const clearDeadline=()=>{if(timer!==undefined){clearTimeout(timer);timer=undefined;}};
+        const cancelSource=()=>{try{void (reader?reader.cancel():original.body?.cancel())?.catch(()=>undefined);}catch{/* A closed source owns no retained reader. */}};
+        const refuse=(error:HubFailure)=>{
+            if(finished)return;
+            failure=error;finished=true;clearDeadline();
+            target?.error(error);abortController.abort(error);cancelSource();
+        };
+        const abort=()=>refuse(new HubFailure(499,'request-aborted','Request was aborted'));
+        original.signal.addEventListener('abort',abort,{once:true});
+        parent?.signal.addEventListener('abort',abort,{once:true});
+        try{
+            const body=original.body?new ReadableStream<Uint8Array>({
+                start(controller){target=controller;},
+                async pull(controller){
+                    if(finished)return;
+                    if(!reader){reader=original.body!.getReader();timer=setTimeout(()=>refuse(new HubFailure(408,'request-timeout','Request body read timed out')),limits.maxBodyReadMs);}
+                    try{
+                        const part=await reader.read();
+                        if(finished)return;
+                        if(part.done){finished=true;clearDeadline();controller.close();return;}
+                        if(requestBytes+part.value.byteLength>limits.maxRequestBytes){refuse(new HubFailure(503,'hub-busy','Request memory budget exhausted'));return;}
+                        bytes+=part.value.byteLength;requestBytes+=part.value.byteLength;
+                        controller.enqueue(part.value);
+                    }catch(error){
+                        if(!finished){finished=true;clearDeadline();controller.error(error);}
+                    }
+                },
+                cancel(){finished=true;clearDeadline();cancelSource();},
+            },{highWaterMark:0}):null;
+            const admitted=body?new Request(original,{body,signal}):original;
+            const result=await requests.run({signal,admitted:true},()=>action(admitted));
+            // A parser may translate stream errors to invalid-json. Admission
+            // failures retain their real status even through such adapters.
+            if(failure)throw failure;
+            return result;
+        }catch(error){
+            if(failure)throw failure;
+            throw error;
+        }finally{
+            clearDeadline();original.signal.removeEventListener('abort',abort);parent?.signal.removeEventListener('abort',abort);
+            finished=true;cancelSource();reader?.releaseLock();
+            requestBytes-=bytes;if(ownsSlot)requestCount--;
+        }
     };
     return {serialized,request,settle:()=>!running&&!pending.length?Promise.resolve():new Promise<void>(resolve=>settlers.add(resolve)),close(){closed=true;for(const entry of [...pending])entry.refuse(new HubFailure(503,'hub-stopping','Hub is stopping'));}};
 }
