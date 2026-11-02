@@ -79,6 +79,7 @@ test("buildApprovalContext tolerates a structured port error result", async () =
 });
 
 // Control characters a terminal would act on: C0 (except \n, which separates the context lines), DEL, C1.
+// eslint-disable-next-line no-control-regex -- Assert rejection of terminal C0/DEL/C1 controls.
 const CONTROL_CHARS = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
 
 test("buildApprovalContext escapes a memory title so it cannot repaint the Run line", async () => {

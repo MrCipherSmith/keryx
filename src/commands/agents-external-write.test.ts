@@ -190,6 +190,7 @@ describe("agents external review", () => {
     };
     const outcome = { status: "completed", output: "done", acp } as unknown as Parameters<typeof renderRunOutcome>[0];
     const text = renderRunOutcome(outcome).join("\n");
+    // eslint-disable-next-line no-control-regex -- Assert terminal control bytes were escaped.
     expect(text).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/);
     expect(text).toContain("cost: 0.5 USD\\x1b]52;c;ZXZpbA==\\x07\\x0d");
   });

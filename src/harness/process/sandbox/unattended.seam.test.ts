@@ -65,9 +65,18 @@ describe("planUnattendedSandbox host-read seam", () => {
   });
 
   test("a read-only root the fake host lacks is skipped even if the real machine has it", () => {
-    const plan = planUnattendedSandbox(input({ readOnly: [tmpdir()], detect: fakeFs([]) }));
+    const plan = planUnattendedSandbox(input({ readOnly: ["/tmp"], detect: fakeFs([]) }));
     expect(plan.ok).toBe(true);
-    if (plan.ok) expect(plan.args).not.toContain(tmpdir());
+    if (!plan.ok) return;
+    // /tmp is always a scratch tmpfs. Only a host read-only bind would
+    // violate the injected filesystem's refusal to expose this root.
+    const mounts = (args: readonly string[]) => args.flatMap((arg, i) =>
+      arg === "--ro-bind" ? [args.slice(i, i + 3)] : []);
+    expect(mounts(plan.args)).not.toContainEqual(["--ro-bind", "/tmp", "/tmp"]);
+    expect(plan.args.slice(plan.args.indexOf("--tmpfs"), plan.args.indexOf("--tmpfs") + 2)).toEqual(["--tmpfs", "/tmp"]);
+    const present = planUnattendedSandbox(input({ readOnly: ["/tmp"], detect: fakeFs(["/tmp"]) }));
+    expect(present.ok).toBe(true);
+    if (present.ok) expect(mounts(present.args)).toContainEqual(["--ro-bind", "/tmp", "/tmp"]);
   });
 
   test("the config dir derives from the input env and home, not from process state", () => {
