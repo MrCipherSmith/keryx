@@ -8,7 +8,7 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
     const limits={...mutationQueueDefaults,...overrides};
     for(const value of Object.values(limits)) if(!Number.isSafeInteger(value)||value<1) throw new TypeError('Invalid mutation queue limits');
     const requests=new AsyncLocalStorage<{signal:AbortSignal;admitted:boolean}>(), pending:Entry[]=[], settlers=new Set<()=>void>();
-    let running=false, closed=false, requestCount=0, requestBytes=0;
+    let running=false, closed=false, requestCount=0, publicRequestCount=0, requestBytes=0;
     const idle=()=>{if(!running&&!pending.length){for(const resolve of settlers)resolve();settlers.clear();}};
     const drain=()=>{
         if(running)return;
@@ -43,7 +43,7 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
             pending.push(entry);queueMicrotask(drain);
         });
     };
-    const request = async<T>(original:Request,action:(admittedRequest:Request)=>Promise<T>):Promise<T>=>{
+    const request = async<T>(original:Request,action:(admittedRequest:Request)=>Promise<T>, admission: 'public' | 'protected' = 'protected'):Promise<T>=>{
         const parent=requests.getStore();
         if(original.signal.aborted||parent?.signal.aborted){void original.body?.cancel().catch(()=>undefined);fail(499,'request-aborted','Request was aborted');}
         const mutating=['POST','PUT','PATCH','DELETE'].includes(original.method);
@@ -52,8 +52,11 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
         // MCP's internal apiFetch shares the authenticated root request slot. Each
         // physical body is still metered, including the inner serialized copy.
         const ownsSlot=!parent?.admitted;
-        if(ownsSlot&&requestCount>=limits.maxRequests)fail(503,'hub-busy','Request slots exhausted');
-        if(ownsSlot)requestCount++;
+        if(ownsSlot && (requestCount>=limits.maxRequests || (admission==='public' && publicRequestCount>=Math.max(1,Math.floor(limits.maxRequests/2))))) {
+            void original.body?.cancel().catch(()=>undefined);
+            fail(503,'hub-busy','Request slots exhausted');
+        }
+        if(ownsSlot){requestCount++;if(admission==='public')publicRequestCount++;}
         const abortController=new AbortController();
         const signal=AbortSignal.any([original.signal,abortController.signal,...(parent?[parent.signal]:[])]);
         let bytes=0, reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
@@ -110,7 +113,7 @@ export function createMutationQueue(overrides: Partial<MutationQueueLimits> = {}
                 }
             }finally{
                 reader=undefined;
-                requestBytes-=bytes;if(ownsSlot)requestCount--;
+                requestBytes-=bytes;if(ownsSlot){requestCount--;if(admission==='public')publicRequestCount--;}
             }
         }
         if(cleanupError)throw cleanupError.error;

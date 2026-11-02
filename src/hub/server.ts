@@ -136,6 +136,23 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     const result = await deliveries.run({actor,projectId:path[1]!,body,key,digest,reauthorize:async () => (await authenticate(request)).actor});
     return json(result.body,result.status,result.headers);
   }
+  // Match the decoded route segments used by the dispatchers. A client cannot
+  // select this class with headers, including through a nested MCP request.
+  function publicBodyRoute(request: Request): boolean {
+    if (request.method !== "POST") return false;
+    const pathname = new URL(request.url).pathname;
+    try {
+      if (pathname.startsWith("/hub/v1/")) {
+        const path = pathname.slice("/hub/v1/".length).split("/").map(decodeURIComponent);
+        return path.length === 1 && path[0] === "session";
+      }
+      if (pathname.startsWith("/hub/v2/")) {
+        const path = pathname.slice("/hub/v2/".length).split("/").map(decodeURIComponent);
+        return path.length === 2 && path[0] === "machines" && path[1] === "enroll";
+      }
+    } catch { return false; }
+    return false;
+  }
   async function handle(request: Request): Promise<Response> {
     if (closed) fail(503, "closed", "Hub is closed");
     const url = new URL(request.url);
@@ -252,7 +269,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
   }
   const application: HubApplication = {
     async fetch(request: Request) {
-      try { return await mutationQueue.request(request, admittedRequest => handle(admittedRequest)); } catch (error) {
+      try { return await mutationQueue.request(request, admittedRequest => handle(admittedRequest), publicBodyRoute(request) ? "public" : "protected"); } catch (error) {
         if (error instanceof HubFailure) return json({ error: { code: error.code, message: error.message } }, error.status, error.status === 503 ? {"Retry-After":"1"} : undefined);
         console.error("Hub request failed", error instanceof Error ? error.name : "UnknownError");
         return json({ error: { code: "internal-error", message: "Hub request failed" } }, 500);
