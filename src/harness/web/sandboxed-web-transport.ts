@@ -13,6 +13,9 @@ import {
 
 export const WEB_MAX_REDIRECTS = 3;
 export const WEB_MAX_TEXT_BYTES = 128_000;
+/** One budget for DNS, every redirect hop and every worker run of a request. */
+export const WEB_TOTAL_DEADLINE_MS = 20_000;
+const DEADLINE_REASON = "web request deadline exceeded";
 
 export interface WebWorkerRequest {
   url: string;
@@ -48,10 +51,22 @@ export interface WebPageRequest {
   signal?: AbortSignal;
 }
 
+interface FetchRawRequest {
+  url: string;
+  method: "GET" | "POST";
+  body?: Record<string, unknown>;
+  credential?: { injection: "header" | "json-body"; name: string; value: string };
+  signal?: AbortSignal;
+  localOnly?: boolean;
+  browserHeaders?: boolean;
+}
+
 export interface SandboxedWebTransportOptions {
   lookup?: HostLookup;
   runner: WebWorkerRunner;
   now?: () => string;
+  /** Overall deadline for one request across all redirect hops. */
+  deadlineMs?: number;
 }
 
 function defaultLookup(hostname: string): Promise<readonly { address: string }[]> {
@@ -70,11 +85,13 @@ export class SandboxedWebTransport {
   private readonly lookup: HostLookup;
   private readonly runner: WebWorkerRunner;
   private readonly now: () => string;
+  private readonly deadlineMs: number;
 
   constructor(options: SandboxedWebTransportOptions) {
     this.lookup = options.lookup ?? defaultLookup;
     this.runner = options.runner;
     this.now = options.now ?? (() => new Date().toISOString());
+    this.deadlineMs = options.deadlineMs ?? WEB_TOTAL_DEADLINE_MS;
   }
 
   async fetchPage(request: WebPageRequest): Promise<WebPolicyResult<SanitizedWebContent>> {
@@ -122,15 +139,34 @@ export class SandboxedWebTransport {
     };
   }
 
-  private async fetchRaw(request: {
-    url: string;
-    method: "GET" | "POST";
-    body?: Record<string, unknown>;
-    credential?: { injection: "header" | "json-body"; name: string; value: string };
-    signal?: AbortSignal;
-    localOnly?: boolean;
-    browserHeaders?: boolean;
-  }): Promise<WebPolicyResult<{ url: string; response: WebWorkerResponse }>> {
+  /**
+   * Runs the hops under one deadline. The signal given to the runner joins the
+   * caller's signal with the deadline, and the race below also bounds a DNS
+   * lookup, which takes no signal.
+   */
+  private async fetchRaw(request: FetchRawRequest): Promise<WebPolicyResult<{ url: string; response: WebWorkerResponse }>> {
+    const deadline = new AbortController();
+    const timer = setTimeout(() => deadline.abort(), this.deadlineMs);
+    const signal = request.signal !== undefined ? AbortSignal.any([request.signal, deadline.signal]) : deadline.signal;
+    let onAbort: (() => void) | undefined;
+    const aborted = new Promise<"aborted">((resolve) => {
+      onAbort = () => resolve("aborted");
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    });
+    const hops = this.fetchHops({ ...request, signal });
+    hops.catch(() => undefined);
+    try {
+      const winner = await Promise.race([hops, aborted]);
+      if (winner !== "aborted") return winner;
+      return { ok: false, reason: request.signal?.aborted === true ? "cancelled" : DEADLINE_REASON };
+    } finally {
+      clearTimeout(timer);
+      if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  private async fetchHops(request: FetchRawRequest): Promise<WebPolicyResult<{ url: string; response: WebWorkerResponse }>> {
     let parsed = parsePublicHttpsUrl(request.url);
     if (request.localOnly === true) {
       try {
@@ -157,6 +193,7 @@ export class SandboxedWebTransport {
     // choice browsers make for `Authorization` on a cross-origin redirect.
     const originalOrigin = url.origin;
     for (let redirects = 0; redirects <= WEB_MAX_REDIRECTS; redirects += 1) {
+      if (request.signal?.aborted === true) return { ok: false, reason: "cancelled" };
       const target = request.localOnly === true
         ? { ok: true as const, value: { url: url.toString(), hostname: url.hostname, address: url.hostname === "::1" || url.hostname === "[::1]" ? "::1" : "127.0.0.1" } }
         : await validatePublicTarget(url, this.lookup);

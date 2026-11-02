@@ -42,15 +42,19 @@ export interface GuardInput {
  */
 const SHELL_METACHARS = /[;&|`$()<>]/;
 
-/** Private/loopback/link-local/metadata host markers denied at the egress boundary. */
-const PRIVATE_HOST_TOKENS = [
-  "127.0.0.1",
-  "169.254.169.254",
-  "10.",
-  "172.16.",
-  "192.168.",
-  "localhost",
-] as const;
+/**
+ * Private host NAME markers denied at the egress boundary. Numeric ranges are
+ * not listed: a substring such as "10." also sits inside `gpu10.example.com` or
+ * `react@18.10.0`, so addresses are matched by the anchored
+ * {@link PRIVATE_EGRESS_PATTERNS} and the decoded host candidates instead.
+ */
+const PRIVATE_HOST_TOKENS = ["localhost"] as const;
+
+/**
+ * A dotted numeric prefix starts a host/address, never the middle of a label or
+ * of a longer dotted run (`gpu10.`, `v10.`, `18.10.0`, `a-10.`).
+ */
+const ADDR_START = "(?<![\\w.-])";
 
 /**
  * Broadened, purely string/regex private-egress markers. Additive over
@@ -67,7 +71,7 @@ const PRIVATE_EGRESS_PATTERNS: readonly RegExp[] = [
   // longer hex address such as `::1a` / `::10`.
   /::1(?![0-9a-f])/i,
   // IPv4 loopback 127.0.0.0/8: full `127.0.0.1`, short forms `127.1` / `127.0.1`.
-  /(?<![0-9.])127\.\d/,
+  new RegExp(`${ADDR_START}127\\.\\d`),
   // Decimal-encoded loopback `2130706433` (== 127.0.0.1).
   /(?<!\d)2130706433(?!\d)/,
   // Hex-encoded loopback (`0x7f000001`, dotted `0x7f.0.0.1`).
@@ -75,17 +79,17 @@ const PRIVATE_EGRESS_PATTERNS: readonly RegExp[] = [
   // Octal-encoded loopback first octet (`0177.0.0.1`).
   /(?<!\d)0177\./,
   // Link-local / cloud metadata 169.254.0.0/16 (incl. 169.254.169.254).
-  /(?<!\d)169\.254\./,
+  new RegExp(`${ADDR_START}169\\.254\\.`),
   // RFC1918 10.0.0.0/8.
-  /(?<!\d)10\.\d/,
+  new RegExp(`${ADDR_START}10\\.\\d`),
   // RFC1918 172.16.0.0/12 — the FULL 172.16–172.31 range.
-  /(?<!\d)172\.(1[6-9]|2\d|3[01])\./,
+  new RegExp(`${ADDR_START}172\\.(1[6-9]|2\\d|3[01])\\.`),
   // RFC1918 192.168.0.0/16.
-  /(?<!\d)192\.168\./,
+  new RegExp(`${ADDR_START}192\\.168\\.`),
   // Unspecified / "all interfaces" 0.0.0.0.
-  /(?<!\d)0\.0\.0\.0(?!\d)/,
+  new RegExp(`${ADDR_START}0\\.0\\.0\\.0(?!\\d)`),
   // CGNAT shared address space 100.64.0.0/10 (100.64–100.127).
-  /(?<!\d)100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+  new RegExp(`${ADDR_START}100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\.`),
 ];
 
 /** Largest 32-bit IPv4 integer; anything above is not a well-formed encoded IPv4. */
