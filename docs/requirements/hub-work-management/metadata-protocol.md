@@ -48,13 +48,13 @@ Suffix `/commands` handles domain commands below; a single domain service is use
 | `requirements.amend` | flowId, sourceFlowRevisionId, affectedIntentIds, exact replacement entries with target/revision/digest, reason; approved proposal only changes pending guards, not old pins | authorized human |
 | `requirements.resolve-amendment` | amendmentId, manifestDigest, approve/withdraw and reason | authorized human |
 | `attempt.create` | approved intentRevisionId, contextSnapshotId, accountable participant, method, optional predecessor | contributor |
-| `attempt.start` | attemptId and exact context/requirement digests; local required refs resolvable | contributor |
-| `attempt.report` | attemptId, progress/blocked/failed/cancel-request/cancel-confirmed, bounded report; confirmed requires all linked known terminal or zero linked runs | owner/contributor within scope |
+| `attempt.start` | attemptId and exact context/requirement digests; local required refs resolvable | Attempt participant |
+| `attempt.report` | attemptId, progress/blocked/failed/cancel-request/cancel-confirmed, bounded report; confirmed requires all linked known terminal or zero linked runs | Attempt participant |
 | `execution.bind` | attemptId, exact session/run/turn/checkout/machine refs plus association observation | authenticated original operator / verified bridge for own run |
-| `subject.create` | attemptId, bounded immutable report/artifact manifest | contributor |
-| `evidence.record` | attemptId, subjectId/digest, criterion refs, results and claimed source | contributor; server sets actual provenance |
-| `attempt.submit` | attemptId, subjectId/digest, exact Evidence IDs and coverage map, knowledge follow-up; seals ReviewSubmission | contributor |
-| `attempt.withdraw` | attemptId, submissionId/digest, reason; no replacement edits | contributor |
+| `subject.create` | attemptId, bounded immutable report/artifact manifest | Attempt participant |
+| `evidence.record` | attemptId, subjectId/digest, criterion refs, results and claimed source | Attempt participant; server sets actual provenance |
+| `attempt.submit` | attemptId, subjectId/digest, exact Evidence IDs and coverage map, knowledge follow-up; seals ReviewSubmission | Attempt participant |
+| `attempt.withdraw` | attemptId, submissionId/digest, reason; no replacement edits | Attempt participant |
 | `attempt.select` | intentId, attemptId, exact submissionId/digest, reason | authorized human |
 | `review.decide` | Intent or Flow target, exact submission/manifest digest, accept/reject/request-changes, reason, optional permitted exact waivers | authorized human |
 | `flow.submit` | Flow revision and exact accepted Intent Decision set, digest | contributor; server constructs/seals aggregate manifest |
