@@ -231,8 +231,9 @@ export function createWorkExecution(store: HubStore) {
     };
     const context: Pick<WorkContext, 'verifyExecution' | 'inspectExecution' | 'hasPendingExecution'> = { verifyExecution, inspectExecution, hasPendingExecution };
     // Release is proof of non-admission: only refusals no later drain can overturn settle it. Budget, quota, controller,
-    // amendment, context and allocation-uncertainty refusals keep it reserved so the still-queued item can be admitted later.
-    const definitiveAdmissionRefusals = new Set(['forbidden', 'not-found', 'stale-version', 'stale-catalogue', 'session-closed', 'recovery-required', 'work-association-stale', 'work-binding-authority', 'execution-proof-mismatch']);
+    // stale-configuration, amendment, context and allocation-uncertainty refusals keep it reserved so the still-queued
+    // item (or its reauthorized replacement) can be admitted later.
+    const definitiveAdmissionRefusals = new Set(['forbidden', 'not-found', 'stale-catalogue', 'session-closed', 'recovery-required', 'work-association-stale', 'work-binding-authority', 'execution-proof-mismatch']);
     const admissionRefused = (operationId: string, failure: HubFailure) => {
         if (!definitiveAdmissionRefusals.has(failure.code)) return;
         const reservation = store.work.executionReservation(operationId) ?? sourceReservation(operationId);
