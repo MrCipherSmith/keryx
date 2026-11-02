@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-11-02
+
+### Fixed
+- **Legacy Hub adoption takes its final SQLite snapshot from a private copy of the stopped-volume backup.** Some older Bun runtimes fail to serialize a WAL-mode database from a read-only mount after the Hub shuts down. Adoption now retains the original volume read-only, preserves committed WAL data in an isolated writable copy and validates the resulting snapshot before the existing trial and cutover checks. A failed snapshot still resumes the original Hub.
+
+### Upgrade notes
+- Existing source-build installations should use the verified 0.4.5 install bundle for one-time adoption. The application data model and minimum-writer rules are unchanged from 0.4.4.
+
 ## [0.4.4] - 2026-11-01
 
 ### Added
