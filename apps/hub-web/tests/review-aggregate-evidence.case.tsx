@@ -17,4 +17,3 @@ test('F-002 aggregate Read evidence links resolve to exact report DOM targets',a
  for(const observation of observations){expect.soft(observation.targetExists,observation.href+' must have a concrete exact evidence target').toBe(true);expect.soft(observation.technicalOpen).toBe(true);expect.soft(observation.targetText).toContain('Arrow navigation and focus restoration exercised.');}
  mounted.unmount();mounted.cache.clear();
 });
-

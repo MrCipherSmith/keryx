@@ -162,7 +162,7 @@ export function AttemptDetail({
             onDone={refresh}
           />
         )}
-      {submission && <section><h3>{t("knowledge")}</h3><code>{submission.contentDigest}</code><p>{submission.knowledgeFollowup.noUpdateReason??t("noKnowledge")}</p><Button variant="danger" disabled={!eligible||!selected||!can("review.decide")} onClick={()=>make("review.decide",t("reject"),"reject")}>{t("reject")}</Button></section>}
+      {submission && <section><h3>{t("knowledge")}</h3><code>{submission.contentDigest}</code>{submission.knowledgeFollowup.noUpdateReason&&<p>{submission.knowledgeFollowup.noUpdateReason}</p>}{submission.knowledgeFollowup.proposalIds.length>0?<ul>{submission.knowledgeFollowup.proposalIds.map(id=><li key={id}><code>{id}</code></li>)}</ul>:!submission.knowledgeFollowup.noUpdateReason&&<p>{t("noKnowledge")}</p>}<Button variant="danger" disabled={!eligible||!selected||!can("review.decide")} onClick={()=>make("review.decide",t("reject"),"reject")}>{t("reject")}</Button></section>}
       <details>
         <summary>{t("context")}</summary>
         <div className="work-pin">
