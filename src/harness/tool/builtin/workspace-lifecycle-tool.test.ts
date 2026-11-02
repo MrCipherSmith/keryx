@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -85,12 +85,30 @@ describe("workspaceCreateTool", () => {
   });
 
   test("C-11: a failed lazy Slate binding is surfaced as a redaction-safe degraded result", async () => {
-    // The creation path currently catches the lazy `writeSlate` failure and
-    // leaves the workspace listable. This assertion intentionally stays RED
-    // until that catch exposes a safe, observable degraded indicator.
-    const source = await readFile(new URL("./workspace-lifecycle-tool.ts", import.meta.url), "utf8");
+    // A session dir nested under a regular file: the slate write cannot succeed.
+    const blocker = path.join(cwd, "not-a-directory");
+    await writeFile(blocker, "x", "utf8");
+    const brokenDir = path.join(blocker, "session-dir");
 
-    expect(source).toMatch(/(?:binding.*degraded|degraded.*binding)/i);
+    const result = await workspaceCreateTool(cwd, () => brokenDir).invoke({ title: "Degraded bind" });
+
+    // The workspace still exists and the call still succeeds...
+    expect(result.isError).toBe(false);
+    const created = JSON.parse(result.output) as { id: string; bindingStatus?: string };
+    expect(created.bindingStatus).toBe("binding_degraded");
+    const listed = JSON.parse((await workspaceListTool(cwd).invoke({})).output) as Array<{ id: string }>;
+    expect(listed.map((w) => w.id)).toContain(created.id);
+    // ...and the indicator does not leak the session path or the raw failure.
+    expect(result.output).not.toContain(brokenDir);
+    expect(result.output).not.toContain("ENOTDIR");
+  });
+
+  test("a successful binding carries no degraded indicator", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "keryx-workspace-bind-ok-"));
+    const result = await workspaceCreateTool(cwd, () => dir).invoke({ title: "Clean bind" });
+    expect(result.isError).toBe(false);
+    expect(JSON.parse(result.output)).not.toHaveProperty("bindingStatus");
+    await rm(dir, { recursive: true, force: true });
   });
 });
 
@@ -264,6 +282,27 @@ describe("workspaceProposeTool", () => {
     expect(result.isError).toBe(true);
 
     // And nothing durable was created: the refusal is not merely a message.
+    const proposalsDir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals");
+    const landed = await readdir(proposalsDir).catch(() => [] as string[]);
+    expect(landed.filter((entry) => entry.endsWith(".json"))).toEqual([]);
+  });
+
+  test("MCP sac.propose applies the same note guard as the agent tool: a blocked note is refused and no proposal is created", async () => {
+    await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: true } } }), "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "security.config.json"), JSON.stringify({ mode: "enforced" }), "utf8");
+
+    const created = await workspaceCreateTool(cwd).invoke({ title: "Blocked note over MCP" });
+    const { id: workspaceId } = JSON.parse(created.output) as { id: string };
+    const session = realSession("Propose over MCP with a leaking note");
+
+    const call = mcpTool("sac.propose").invoke(
+      cwd,
+      { workspaceId, kind: "memory-entry", sessionId: session.summary.id, note: `aws_key = AKIA${"A".repeat(16)}` },
+      { transport: "stdio" },
+    );
+    await expect(call).rejects.toThrow();
+
     const proposalsDir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals");
     const landed = await readdir(proposalsDir).catch(() => [] as string[]);
     expect(landed.filter((entry) => entry.endsWith(".json"))).toEqual([]);

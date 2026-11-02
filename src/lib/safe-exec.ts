@@ -636,8 +636,16 @@ const PPID_WATCHDOG_INTERVAL_MS = 250;
 function watchParentPid(deps: Pick<SafeExecDeps, "env" | "getPpid" | "setUnrefInterval" | "exit">): void {
   const recorded = deps.env[REEXEC_PARENT_PID_ENV];
   if (recorded === undefined) return;
+  // The marker is for THIS process only. Consume it so a keryx (or `bun test`)
+  // this process spawns does not inherit a pid that is not its own parent and
+  // then exit(1) the moment its first poll sees the real ppid.
+  delete deps.env[REEXEC_PARENT_PID_ENV];
   const parentPid = Number(recorded);
   if (!Number.isInteger(parentPid) || parentPid <= 0) return;
+  // Trust the marker only when it names our actual parent at startup. A value
+  // that arrived through an inherited environment (a grandchild, a test
+  // runner) names some other process; watching it would kill this one.
+  if (deps.getPpid() !== parentPid) return;
   const handle = deps.setUnrefInterval(() => {
     const currentPpid = deps.getPpid();
     if (currentPpid === parentPid) return;

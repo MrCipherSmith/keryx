@@ -5,6 +5,7 @@
 // surrounding lifecycle, per hook `class` and (for `gate` malformed output)
 // the underlying `decide()` outcome, and per security profile for
 // `gate-advisory`. No clock, randomness, network, or filesystem access.
+import { resolveLocalProfile } from "../policy/profiles";
 import type { PolicyOutcome, PolicyProfileId } from "../policy/types";
 import type { HookAnomalyName, HookClass, HookEventName, HookFailureKind } from "./types";
 
@@ -13,6 +14,13 @@ export interface FailureEffectInput {
   event: HookEventName;
   failure: HookFailureKind;
   profileId: PolicyProfileId;
+  /**
+   * Whether the active profile requires fail-closed isolation
+   * (`requiredControls.isolation === "required-fail-closed"`). Absent: derived
+   * from the profile's `requiredControls`, never from the profile id string, so
+   * a profile that carries the control fails closed whatever it is called.
+   */
+  isolationRequired?: boolean;
   /** The `decide()` outcome this hook was gating, when relevant (gate malformed-output asymmetry). */
   decideOutcome?: PolicyOutcome;
 }
@@ -65,7 +73,7 @@ export function failureEffect(input: FailureEffectInput): FailureEffectResult {
     }
     case "gate-advisory": {
       base =
-        input.profileId === "unattended-untrusted"
+        (input.isolationRequired ?? resolveLocalProfile(input.profileId).requiredControls.isolation === "required-fail-closed")
           ? { effect: "deny", reason: "hook-advisory-failed" }
           : { effect: "proceed", warning: "hook-advisory-failed", reason: "hook-advisory-failed" };
       break;

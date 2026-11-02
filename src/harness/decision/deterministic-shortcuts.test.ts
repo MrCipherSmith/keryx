@@ -15,8 +15,14 @@ test("classifyDeterministic: a slash command is left unclassified", () => {
 test("classifyDeterministic: short chit-chat resolves quick", () => {
   expect(classifyDeterministic("hi")).toBe("quick");
   expect(classifyDeterministic("thanks!")).toBe("quick");
-  expect(classifyDeterministic("  ok  ")).toBe("quick");
-  expect(classifyDeterministic("sounds good")).toBe("quick");
+  expect(classifyDeterministic("  thx  ")).toBe("quick");
+  expect(classifyDeterministic("got it")).toBe("quick");
+});
+
+test("classifyDeterministic: a bare approval or refusal is NOT shortcut (its meaning is the previous turn)", () => {
+  for (const line of ["yes", "no", "ok", "  okay  ", "k", "sure", "sounds good", "yep", "yup", "nope", "nah", "да", "нет", "ок", "Sure!"]) {
+    expect(classifyDeterministic(line)).toBeUndefined();
+  }
 });
 
 test("classifyDeterministic: a longer message that merely starts with a greeting is NOT quick", () => {

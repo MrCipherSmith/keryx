@@ -1,19 +1,15 @@
 import { optionValue } from "../lib/args";
 import { requireWorkspaceReference } from "../sac/service";
 import { randomUUID } from "node:crypto";
-import { writeFile } from "node:fs/promises";
 import { listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
 import { createLocalFwkReadService, diagnosePolicyReadiness, normalizeFwkResult } from "../sac/fwk-service";
 import { formatFwkExplain } from "../sac/fwk-explain";
+import { proposeFromSession } from "../sac/propose-from-session";
 import { createHarnessProposalLifecycleService, createLocalProposalLifecycleService, normalizeProposalLifecycleResult, readProposalSecurityGate } from "../sac/proposal-lifecycle";
 import { createLocalCollaborationService } from "../sac/collaboration-service";
-import { sessionEvidenceRef } from "../sac/session-wrap-up";
-import { proposalNotePath } from "../sac/proposal-evidence";
 import { mintConfirmToken } from "../sac/review-confirm-token";
 import { buildCatchUp, dismissUnboundByTarget, type CatchUpReport, type CatchUpUnknownItem } from "../sac/catch-up";
 import { retryProjectPreservation } from "../sac/service";
-import { findSession } from "../session/store";
-import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
 // Every kind a real writer now exists for: wiki-update -> wiki, memory-entry
 // -> memory, everything else -> skill (see ownerFor in proposal-lifecycle.ts).
@@ -119,32 +115,11 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       if (!workspaceId || !kind || !sessionRef) throw new Error(`Usage: keryx workspace propose <workspace-id> --kind <${PROPOSAL_KINDS.join("|")}> --session <session-id> [--note <one-line note>]`);
       if (!(PROPOSAL_KINDS as readonly string[]).includes(kind)) throw new Error(`Unknown --kind "${kind}" — expected one of: ${PROPOSAL_KINDS.join(", ")}`);
       const cwd = process.cwd();
-      // Resolve the human-friendly id/prefix to a canonical session id ONLY to build
-      // a schema-valid `sourceRef` path — resolveSessionWrapUp independently re-looks
-      // this session up itself and never trusts this resolution as evidence.
-      const session = findSession(cwd, sessionRef);
-      if (!session) throw new Error(`no session matching "${sessionRef}" in this project — use \`keryx sessions list\``);
-      const proposalId = `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
-      const notePath = proposalNotePath(cwd, workspaceId, proposalId);
-      const materializedNote = note === undefined
-        ? undefined
-        : prepareOutputForPersistence(
-            await guardOutput({ cwd, content: note, target: "task", source: "generated", path: notePath }),
-            note,
-          );
-      if (materializedNote !== undefined && !materializedNote.allowed) throw new Error(materializedNote.reason);
-      const persistedNote = materializedNote?.allowed ? materializedNote.content : undefined;
-      const { service, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(persistedNote ? { note: persistedNote } : {}) });
-      const requestCorrelationId = randomUUID();
-      const actor = await authorizationServer.actorContextFor(undefined, requestCorrelationId);
-      if (!actor) throw new Error("trusted ActorContext is required");
-      const wrapUp = await wrapUpAuthority.issue({ actor, source: "session", sourceRef: sessionEvidenceRef(workspaceId, session.id) });
-      const proposal = await service.create({ request: undefined, requestCorrelationId, workspaceId, id: proposalId, proposalRevision, kind: kind as never, wrapUp });
-      // The note is not part of the frozen proposal schema (additionalProperties:
-      // false) — it lives in a sidecar the memory owner-writer reads back at accept
-      // time, since accept may happen in a different process/reviewer session.
-      if (persistedNote) await writeFile(notePath, persistedNote, "utf8");
-      console.log(JSON.stringify(normalizeProposalLifecycleResult(proposal), null, 2)); return;
+      const proposed = await proposeFromSession({ cwd, workspaceId, kind, sessionRef, note, proposalRevision });
+      if (!proposed.ok) {
+        throw new Error(proposed.reason === "session-not-found" ? `${proposed.message} — use \`keryx sessions list\`` : proposed.message);
+      }
+      console.log(JSON.stringify(proposed.result, null, 2)); return;
     }
     if (subcommand === "confirm-review") {
       rejectUnknownOptions(args.slice(3), new Set(["--acknowledge-security"]));

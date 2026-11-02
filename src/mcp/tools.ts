@@ -18,7 +18,7 @@ import { createCodeHealthService } from "../health/service";
 import { createGdWikiService } from "../wiki/service";
 import { createFlowService } from "../flow/service";
 import { runValidate } from "../standard/service";
-import { readFile, realpath, writeFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
@@ -30,7 +30,7 @@ import {
   memoryPropose,
   MEMORY_TYPE_VALUES,
 } from "../memory/service";
-import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, proposeFromSession, createLocalCollaborationService, normalizeCollaborationResult, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -332,24 +332,11 @@ export function buildToolRegistry(): ToolEntry[] {
         const sessionRef = stringParam(params, "sessionId") ?? "";
         const note = stringParam(params, "note");
         const proposalRevision = stringParam(params, "proposalRevision") ?? "1";
-        // Resolve the human-friendly id/prefix to a canonical session id ONLY to
-        // build a schema-valid `sourceRef` path — resolveSessionWrapUp (inside
-        // wrapUpAuthority.issue below) independently re-looks this session up
-        // itself and never trusts this resolution as evidence. Mirrors
-        // src/commands/workspace.ts's `propose` handler exactly.
-        const session = findSession(cwd, sessionRef);
-        if (!session) throw new Error(`no session matching "${sessionRef}" in this project`);
-        const { service, wrapUpAuthority, authorizationServer } = createHarnessProposalLifecycleService(cwd, { workspaceId, ...(note ? { note } : {}) });
-        const requestCorrelationId = randomUUID();
-        const actor = await authorizationServer.actorContextFor(undefined, requestCorrelationId);
-        if (!actor) throw new Error("trusted ActorContext is required");
-        const wrapUp = await wrapUpAuthority.issue({ actor, source: "session", sourceRef: sessionEvidenceRef(workspaceId, session.id) });
-        const proposal = await service.create({ request: undefined, requestCorrelationId, workspaceId, id: `proposal-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalRevision, kind: kind as never, wrapUp });
-        // The note is not part of the frozen proposal schema — it lives in a
-        // sidecar the memory/wiki/skill owner-writers read back at accept time,
-        // since accept may happen in a different process/reviewer session.
-        if (note) await writeFile(proposalNotePath(cwd, workspaceId, proposal.id), note, "utf8");
-        return normalizeProposalLifecycleResult(proposal);
+        // Same guarded use case as `keryx workspace propose` and the agent's
+        // `workspace_propose` tool, including the note guard.
+        const proposed = await proposeFromSession({ cwd, workspaceId, kind, sessionRef, note, proposalRevision });
+        if (!proposed.ok) throw new Error(proposed.message);
+        return proposed.result;
       },
     },
     {
@@ -777,7 +764,7 @@ export function buildToolRegistry(): ToolEntry[] {
           source = "untrusted-external";
         } else if (filePath) {
           const projectRoot = resolveProjectRoot(cwd);
-          const contained = await resolveContainedPath(projectRoot, filePath);
+          const contained = await resolveContainedPath(projectRoot, filePath, cwd);
           if (!contained.ok) {
             throw new Error(`security.scan: ${contained.message}`);
           }

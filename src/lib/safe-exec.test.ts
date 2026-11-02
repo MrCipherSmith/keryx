@@ -856,6 +856,39 @@ describe("ensureSafeBunExec", () => {
       expect(exited()).toBe(1);
     });
 
+    test("ignores a recorded parent pid that is not this process's real parent (an inherited, stale marker)", async () => {
+      const { deps, fire, exited, currentPpid } = intervalDeps();
+      currentPpid.value = 999; // the real parent is NOT the pid the env names
+      let intervalStarted = false;
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env: { [REEXEC_PARENT_PID_ENV]: "555" },
+        spawn: noSpawn,
+        getPpid: deps.getPpid,
+        setUnrefInterval: (f, ms) => {
+          intervalStarted = true;
+          return deps.setUnrefInterval(f, ms);
+        },
+        exit: deps.exit,
+      });
+      expect(intervalStarted).toBe(false);
+      fire();
+      expect(exited()).toBeUndefined();
+    });
+
+    test("consumes the marker so a process spawned later does not inherit it", async () => {
+      const { deps, currentPpid } = intervalDeps();
+      currentPpid.value = 555;
+      const env: NodeJS.ProcessEnv = { [REEXEC_PARENT_PID_ENV]: "555" };
+      await ensureSafeBunExec({
+        execArgv: ["--no-env-file", "--config=/dev/null"],
+        env,
+        spawn: noSpawn,
+        ...deps,
+      });
+      expect(env[REEXEC_PARENT_PID_ENV]).toBeUndefined();
+    });
+
     test("ignores a malformed recorded parent pid rather than watching garbage", async () => {
       const { deps, fire, exited } = intervalDeps();
       let intervalStarted = false;
