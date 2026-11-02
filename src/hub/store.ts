@@ -52,12 +52,11 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     const state=row ? JSON.parse(row.body) as HubState : emptyState();
     artifacts.hydrate(state);
     withConversionProjection(state);
-    legacyBaselines.set(state, serializedLegacy(state));
+    legacyBaselines.set(state, row?.body ?? JSON.stringify(emptyState()));
     return state;
   };
   const listeners = new Set<(state: HubState, previous: HubState) => void>();
   const notify = (state: HubState, previous: HubState) => { for (const listener of listeners) { try { listener(state, previous); } catch (error) { console.error("Hub committed notification failed", error instanceof Error ? error.name : "UnknownError"); } } };
-  const serializedLegacy = artifacts.serialize;
   const project = (id: string): Project | undefined => {
     const row = db.query<{ body: string }, [string]>("SELECT body FROM hub_legacy_records WHERE kind='projects' AND id=?").get(id);
     return row ? JSON.parse(row.body) as Project : undefined;
@@ -124,21 +123,23 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     syncLegacy(load());
     setProjectionDigest(persisted.body);
   })();
-  const persist = db.transaction((state: HubState, previous?: HubState, allowExisting = false) => {
+  const persist = db.transaction((state: HubState, previous?: HubState, allowExisting = false, prepared?: {body:string;previousBytes:number}) => {
     syncProjectReferences(db, state.projects);
     syncLegacy(state, previous);
-    const body = artifacts.persist(state, allowExisting, previous);
+    const body = artifacts.persist(state, allowExisting, previous, prepared);
     db.query("INSERT INTO hub_state(id,body) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body WHERE body<>excluded.body").run(body);
     setProjectionDigest(body);
+    return body;
   });
   const save = (state: HubState) => {
     let previous!: HubState;
     db.transaction(() => {
       previous = load();
       const baseline = legacyBaselines.get(state);
-      if (baseline !== undefined && baseline !== serializedLegacy(previous)) fail(409, 'version-conflict', 'Legacy state changed; reload before saving');
-      persist(state, previous);
-      legacyBaselines.set(state, serializedLegacy(state));
+      if (baseline !== undefined && baseline !== legacyBaselines.get(previous)) fail(409, 'version-conflict', 'Legacy state changed; reload before saving');
+      const body = artifacts.prepare(state);
+      persist(state, previous, false, {body,previousBytes:Buffer.byteLength(legacyBaselines.get(previous)!)});
+      legacyBaselines.set(state, body);
     })();
     notify(state, previous);
   };
@@ -149,16 +150,40 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
     return result;
   })();
   const writeTransaction = <T>(action: (state: HubState, remote: RemoteRepository) => T): T => {
-    let previous!: HubState, committed!: HubState, changed = false;
+    let previous!: HubState, committed: HubState | undefined, baseline: string | undefined, changed = false;
+    const materialize = (): HubState => {
+      if (!committed) { committed = load(); baseline = legacyBaselines.get(committed)!; }
+      return committed;
+    };
+    // Most remote frames use only the normalized repository. Do not parse legacy history
+    // until a callback actually reads or writes a legacy field.
+    const state = new Proxy({} as HubState, {
+      get: (_target,key) => Reflect.get(materialize(),key),
+      set: (_target,key,value) => Reflect.set(materialize(),key,value),
+      deleteProperty: (_target,key) => Reflect.deleteProperty(materialize(),key),
+      has: (_target,key) => Reflect.has(materialize(),key),
+      ownKeys: () => Reflect.ownKeys(materialize()),
+      getOwnPropertyDescriptor: (_target,key) => {
+        const descriptor = Reflect.getOwnPropertyDescriptor(materialize(),key);
+        return descriptor ? {...descriptor,configurable:true} : undefined;
+      },
+      defineProperty: (_target,key,descriptor) => Reflect.defineProperty(materialize(),key,descriptor),
+    });
     const result = db.transaction(() => {
-      previous = load(); const state = withConversionProjection(artifacts.hydrate(JSON.parse(serializedLegacy(previous)) as HubState)); committed = state;
-      const result = action(state, remote);
+      let result = action(state, remote);
       if (result instanceof Promise) throw new TypeError('Hub transactions must be synchronous');
-      changed = serializedLegacy(state) !== serializedLegacy(previous);
-      if (changed) persist(state, previous);
+      if (result === state) result = materialize() as T;
+      if (committed) {
+        const body = artifacts.prepare(committed);
+        changed = body !== baseline;
+        if (changed) {
+          previous = withConversionProjection(artifacts.hydrate(JSON.parse(baseline!) as HubState));
+          persist(committed,previous,false,{body,previousBytes:Buffer.byteLength(baseline!)});
+        }
+      }
       return result;
     })();
-    if (changed) notify(committed, previous);
+    if (changed) notify(committed!, previous);
     return result;
   };
   try {
