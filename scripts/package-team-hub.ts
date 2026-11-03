@@ -51,6 +51,8 @@ await include("docs/requirements/hub-remote-sessions/schemas", name => name.ends
 // Keep the source contract reviewable without admitting unrelated job output or private JSON.
 await include("docs/requirements/hub-work-management", name => ["README.md","metadata-protocol.md","migration.md","specification.md","observer.md","openapi.json"].includes(name));
 await include("docs/requirements/hub-work-management/schemas", name => ["domain.schema.json","command.schema.json","event.schema.json"].includes(name));
+await include("docs/requirements/hub-flow-acceptance", name => ["specification.md","execution-api.md"].includes(name));
+await include("docs/requirements/hub-flow-acceptance/schemas", name => ["review-guide.schema.json","review-report.schema.json","legacy-review.schema.json"].includes(name));
 await include("docs/requirements/hub-mcp", name => name.endsWith(".md"));
 await include("docs/requirements/hub-context-watch", name => name.endsWith(".md"));
 await include("docs/requirements/hub-context-watch/schemas", name => name.endsWith(".json"));

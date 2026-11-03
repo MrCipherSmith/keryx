@@ -70,33 +70,21 @@ test('archives an exact authorized document version and retains it across restar
     expect(reopened.work.documentVersion('q', { documentId: 'd', version: 1, contentDigest: 'abc' })).toBeUndefined();
     expect(reopened.work.documentVersion('p', { documentId: 'd', version: 1, contentDigest: 'wrong' })).toBeUndefined();
 });
-test('activates the existing old-writer startup gate only on committed managed writes', () => {
-    const { dir, store } = fixture();
-    const db = new Database(join(dir, 'hub.sqlite'));
-    const oldVersionCheck = () => {
-        const row = db.query<{
-            version: number;
-        }, [
-        ]>('SELECT version FROM remote_schema_version').get();
-        if (row && row.version !== 1 && row.version !== 2)
-            throw Error('Unsupported remote schema version');
-    };
-    expect(oldVersionCheck).not.toThrow();
+test('managed rollback and writes retain the eagerly activated review writer fence', async () => {
+    const {migrateRemote:oldWriter}=await import('../fixtures/writer-v045-migration.test-support');
+    const { dir, store } = fixture(), db = new Database(join(dir, 'hub.sqlite'));
+    expect(()=>oldWriter(db)).toThrow('Unsupported remote schema version');
     expect(() => store.writeTransaction(() => {
         store.work.save('p', state());
         throw Error('rollback');
-    })).toThrow();
-    expect(oldVersionCheck).not.toThrow();
+    })).toThrow('rollback');
+    expect(store.work.load('p').records).toHaveLength(0);
+    expect(()=>oldWriter(db)).toThrow('Unsupported remote schema version');
     store.writeTransaction(() => store.work.save('p', state()));
-    expect(oldVersionCheck).toThrow('Unsupported remote schema version');
-    expect(db.query<{
-        version: number;
-    }, [
-    ]>('SELECT version FROM remote_schema_version').get()?.version).toBe(3);
-    db.close();
-    store.close();
-    const reopened = openHubStore(dir);
-    stores.push(reopened);
+    expect(()=>oldWriter(db)).toThrow('Unsupported remote schema version');
+    expect(db.query<{version:number},[]>('SELECT version FROM remote_schema_version').get()?.version).toBe(5);
+    db.close(); store.close();
+    const reopened = openHubStore(dir); stores.push(reopened);
     expect(reopened.work.load('p').records).toHaveLength(1);
 });
 test('execution reservations survive restart and cannot change principal or allocated run', () => {

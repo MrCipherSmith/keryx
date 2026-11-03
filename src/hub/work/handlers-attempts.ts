@@ -1,5 +1,6 @@
 
 import type { WorkTransaction } from './domain';
+import {validateCanonicalGuideForCreation} from '../review-guide-validation';
 import { fail, sha256 } from '../domain';
 import type { Attempt, WorkCommand } from './model';
 
@@ -132,6 +133,9 @@ export function subjectCreate(transaction: WorkTransaction, command: Extract<Wor
         }
         return v;
     });
+    const revision=find(a.intentRevisionId,'intent-revision');
+    const guide=validateCanonicalGuideForCreation({projectId,report:p.report,artifacts,criterionIds:revision.criteria.map(c=>c.criterionId),resolveDocument});
+    if(guide&&!guide.ok)fail(400,'invalid-review-guide','Designated review guidance must match its immutable artifact and pinned criteria');
     return add(seal({ ...base(), kind: 'subject' as const, attemptId: a.id, artifacts, report: p.report }));
 }
 

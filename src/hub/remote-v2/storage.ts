@@ -5,7 +5,7 @@ export const REMOTE_TABLES = ["remote_project_ref", "remote_machine", "remote_pa
 export type RemoteTable = typeof REMOTE_TABLES[number];
 export class RemoteStorageFailure extends Error {}
 /** All historical values share the old startup gate column, so marker values are reserved globally. */
-export const DATABASE_MARKERS = { legacySchema: 1, remoteSchema: 2, managedWorkWriter: 3, legacyArtifactsWriter: 4 } as const;
+export const DATABASE_MARKERS = { legacySchema: 1, remoteSchema: 2, managedWorkWriter: 3, legacyArtifactsWriter: 4, legacyReviewWriter: 5 } as const;
 export function assertDatabaseMarkerNamespace(markers: Readonly<Record<string,number>> = DATABASE_MARKERS): void {
   const values = Object.values(markers);
   if (values.some(value => !Number.isSafeInteger(value) || value < 1) || new Set(values).size !== values.length) throw new RemoteStorageFailure('Database schema/writer marker collides with a reserved value');
@@ -17,6 +17,8 @@ export const REMOTE_SCHEMA_VERSION = DATABASE_MARKERS.remoteSchema;
 export const MANAGED_WORK_WRITER_VERSION = DATABASE_MARKERS.managedWorkWriter;
 /** Legacy revision bytes/replays require content-addressed hydration; older v3 writers must refuse startup. */
 export const LEGACY_ARTIFACT_WRITER_VERSION = DATABASE_MARKERS.legacyArtifactsWriter;
+/** Commented return guards require this writer; v0.4.5 refuses the reserved marker before serving. */
+export const LEGACY_REVIEW_WRITER_VERSION = DATABASE_MARKERS.legacyReviewWriter;
 function createRemoteTable(db: Database, table: RemoteTable, physical: string = table): void {
   const refs: string[] = [];
   if (table !== "remote_project_ref") refs.push("FOREIGN KEY(projectId) REFERENCES remote_project_ref(id) DEFERRABLE INITIALLY DEFERRED");

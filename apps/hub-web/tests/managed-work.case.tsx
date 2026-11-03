@@ -117,15 +117,13 @@ test("selection and acceptance are separate; agent cannot issue human decisions"
     screen.getByRole("button", { name: "Select this attempt" }),
   ).toBeDisabled();
   expect(
-    screen.getByRole("button", { name: "Accept exact result" }),
+    screen.getByRole("button", { name: "Accept result" }),
   ).toBeDisabled();
   expect(
-    screen.getByText("Only an authorized human can make this decision."),
+    screen.getByText("Only an authorized human reviewer can make this decision."),
   ).toBeVisible();
-  expect(
-    screen.getAllByText(/Contributor report · not independent verification/)
-      .length,
-  ).toBeGreaterThan(0);
+  expect(screen.getByText("Contributor report")).toBeVisible();
+  expect(screen.queryByText("Observed CI")).not.toBeInTheDocument();
 });
 test("human review sends exact digests, all aggregate versions and identical header/body operation ID", async () => {
   vi.mocked(fetch).mockImplementation(async (path, init) => {
@@ -145,7 +143,7 @@ test("human review sends exact digests, all aggregate versions and identical hea
     await screen.findByRole("button", { name: /^Keyboard accessibility/ }),
   );
   expect(
-    screen.getByRole("button", { name: "Accept exact result" }),
+    screen.getByRole("button", { name: "Accept result" }),
   ).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Select this attempt" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Decision reason" }), {
@@ -274,7 +272,8 @@ test("changed requirement pins disable selection and show historical warning", a
   expect(
     screen.getByRole("button", { name: "Select this attempt" }),
   ).toBeDisabled();
-  expect(screen.getByText(/Requirements have changed/)).toBeVisible();
+  expect(screen.getByText(/requirements have changed/i)).toBeInTheDocument();
+  expect(screen.getByText(/Requirements or context changed/)).toBeVisible();
 });
 test("demo acceptance stays separate from final Flow acceptance and does not call live mutation", async () => {
   show();
@@ -287,16 +286,14 @@ test("demo acceptance stays separate from final Flow acceptance and does not cal
     target: { value: "Select candidate" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Accept exact result" }),
-  );
-  fireEvent.change(screen.getByRole("textbox", { name: "Decision reason" }), {
-    target: { value: "Accept candidate" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-  expect(
-    await screen.findByText("Accept candidate", { selector: "p" }),
-  ).toBeVisible();
+  const accept = await screen.findByRole("button", { name: "Accept result" });
+  if (screen.queryByRole("button", { name: "Review updated result" })) fireEvent.click(screen.getByRole("button", { name: "Review updated result" }));
+  await waitFor(() => expect(accept).toBeEnabled());
+  fireEvent.click(accept);
+  fireEvent.click(screen.getByRole("button", { name: "Confirm acceptance" }));
+  expect(await screen.findByText("Result accepted", { selector: "[role=status]" })).toBeVisible();
+  fireEvent.click(screen.getByText("Decision history", { selector: "summary" }));
+  expect(screen.getByText("Human accepted the exact submitted result.", { selector: "p" })).toBeVisible();
   expect(
     screen.getByRole("button", { name: "Submit Flow for final review" }),
   ).toBeDisabled();
@@ -329,19 +326,19 @@ test("human waiver requires an explicit permitted criterion and separate reason,
     await screen.findByRole("button", { name: /^Keyboard accessibility/ }),
   );
   fireEvent.click(screen.getByRole("button", { name: /human:alex/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Accept exact result" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Decision reason" }), {
-    target: { value: "Review exact candidate with explicit exception" },
-  });
-  expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled();
+  const accept = screen.getByRole("button", { name: "Accept result" });
+  if (screen.queryByRole("button", { name: "Review updated result" })) fireEvent.click(screen.getByRole("button", { name: "Review updated result" }));
+  await waitFor(() => expect(accept).toBeEnabled());
+  fireEvent.click(accept);
+  expect(screen.getByRole("button", { name: "Confirm acceptance" })).toBeDisabled();
   fireEvent.click(
-    screen.getByRole("checkbox", { name: "Arrow keys and focus verified" }),
+    screen.getByRole("checkbox", { name: "Waive: Arrow keys and focus verified" }),
   );
   fireEvent.change(
-    screen.getByRole("textbox", { name: /Reason for this exception/ }),
+    screen.getByRole("textbox", { name: /Waiver reason:/ }),
     { target: { value: "Browser matrix will be verified separately" } },
   );
-  fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm acceptance" }));
   await waitFor(() =>
     expect(
       vi

@@ -91,16 +91,16 @@ test("a snapshot refetch that lands after an event keeps the newer merged record
     return Response.json({ error: { code: "not-found" } }, { status: 404 });
   });
   show();
-  expect(await screen.findByRole("heading", { name: "Keyboard accessibility" })).toBeVisible();
+  expect(await screen.findByText("Keyboard accessibility", { selector: ".work-breadcrumb strong" })).toBeVisible();
   // Refresh starts a full export cut at c1; while it is in flight the poller merges v2.
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(snapshots).toBe(2));
   eventsGate.resolve(json({ events: [event(renamed, "flow-changed", "op-rename")], nextCursor: "c2" }));
-  expect(await screen.findByRole("heading", { name: "Keyboard accessibility, renamed" })).toBeVisible();
+  expect(await screen.findByText("Keyboard accessibility, renamed", { selector: ".work-breadcrumb strong" })).toBeVisible();
   slowSnapshot.resolve(json({ records: structuredClone(old), eventCursor: "c1", nextCursor: null }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled());
   await act(async () => { await Promise.resolve(); });
-  expect(screen.getByRole("heading", { name: "Keyboard accessibility, renamed" })).toBeVisible();
+  expect(screen.getByText("Keyboard accessibility, renamed", { selector: ".work-breadcrumb strong" })).toBeVisible();
 });
 
 test("the user's own command refreshes the board immediately from the event feed", async () => {
@@ -154,7 +154,7 @@ test("the user's own command refreshes the board immediately from the event feed
     return Response.json({ error: { code: "not-found" } }, { status: 404 });
   });
   show();
-  const accept = await screen.findByRole("button", { name: "Accept exact result" });
+  const accept = await screen.findByRole("button", { name: "Accept result" });
   expect(accept).toBeDisabled();
   // Let the first poll go idle so the loop is in its back-off before the user acts.
   await waitFor(() => expect(screen.getByText("Work updates connected")).toBeVisible());
@@ -162,6 +162,8 @@ test("the user's own command refreshes the board immediately from the event feed
   fireEvent.click(screen.getByRole("button", { name: "Select this attempt" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Decision reason" }), { target: { value: "Select candidate" } });
   fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Accept exact result" })).toBeEnabled(), { timeout: 1000 });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Review updated result" })).toBeVisible(), { timeout: 1000 });
+  fireEvent.click(screen.getByRole("button", { name: "Review updated result" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Accept result" })).toBeEnabled(), { timeout: 1000 });
   await waitFor(() => expect(attentionCalls).toBeGreaterThan(attentionBefore), { timeout: 1000 });
 });

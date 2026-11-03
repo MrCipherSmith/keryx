@@ -6,9 +6,10 @@ import {remoteBudgets,remoteBudgetsFromEnv} from './remote-v2/budgets';
 import { createRemoteControl, type RemoteSocketData } from "./remote-v2";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
-import type { HubApplication, HubConfig, Principal } from "./contracts";
+import type { HubApplication, HubConfig, HubFlow, Principal } from "./contracts";
 import { createAccessVerifier, readAccessRoles, validateAccessConfig, type AccessDependencies, type CloudflareAccessConfig, type VerifiedAccessIdentity } from "./cloudflare-access";
-import { fail, HubFailure, hubMutate, hubRead, object, sha256, text } from "./domain";
+import { legacyReviewFingerprint, parseLegacyHistoryQuery } from "./legacy-review-contract";
+import { fail, HubFailure, hubMutate, hubRead, object, returnLegacyFlow, sha256, text } from "./domain";
 import { deliverRevision, inspectGitPublication } from "./git-delivery";
 import { openHubStore } from "./store";
 import { webAssets } from "./web";
@@ -173,7 +174,8 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     }
     let path: string[];
     try { path = url.pathname.slice("/hub/v1/".length).split("/").map(decodeURIComponent); } catch { fail(400, "invalid-path", "Malformed URL path"); }
-    if (path.some((v) => !v || v.includes("/") || v.includes("\\"))) fail(404, "not-found", "Route not found");
+    const opaqueReviewOperation = request.method==='GET' && path.length===6 && path[0]==='projects' && path[2]==='flows' && path[4]==='review-operations';
+    if (path.some((value,index) => !value || (!(opaqueReviewOperation && index===5) && (value.includes('/') || value.includes('\\'))))) fail(404,'not-found','Route not found');
     if (path.length === 2 && path[0] === "auth" && path[1] === "config" && request.method === "GET") return json({ cloudflareAccessEnabled: !!access });
     if (path.length === 2 && path[0] === "session" && path[1] === "cloudflare" && request.method === "POST") {
       if (request.headers.has("authorization")) { bearerIdentity(request); fail(403, "browser-required", "Bearer authentication cannot establish a Cloudflare browser session"); }
@@ -232,20 +234,47 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     }
     if (path[0] === 'projects' && path[2] === 'delivery-jobs') deliveries.authorize(identity.actor,path[1]!);
     authorizeAgentRequest(identity.actor, path, request.method);
+    if (path[0]==='projects' && path[1] && identity.actor.projectIds && !identity.actor.projectIds.includes(path[1])) fail(403,'project-scope-denied','Project access denied');
+    const isReviewReturn = path.length===5 && path[0]==='projects' && path[2]==='flows' && path[4]==='request-changes';
+    const reviewReplayKey = (actor: Principal, operationId: string) => sha256(JSON.stringify([actor.id,'POST',`/hub/v1/projects/${encodeURIComponent(path[1]!)}/flows/${encodeURIComponent(path[3]!)}/request-changes`,operationId]));
     if (request.method === "GET") {
+      if (path.length===5 && path[0]==='projects' && path[2]==='flows' && path[4]==='review-decisions') {
+        const {after,limit}=parseLegacyHistoryQuery(url.searchParams);
+        return json(store.legacyReview.history(path[1]!,path[3]!,after,limit));
+      }
+      if ((path.length===5 || path.length===6) && path[0]==='projects' && path[2]==='flows' && path[4]==='review-operations') {
+        if (identity.actor.kind!=='human' || !['operator','reviewer'].includes(identity.actor.role)) fail(403,'human-required','Review operations require an authorized human');
+        const queryIds=url.searchParams.getAll('operationId');
+        if (path.length===5 ? queryIds.length!==1 || [...url.searchParams.keys()].some(key=>key!=='operationId') : !!url.search) fail(400,'invalid-request','Expected one operation identifier');
+        const operationId=path.length===6 ? path[5] : queryIds[0];
+        if (!operationId || operationId.length>200 || [...operationId].some(char => char.charCodeAt(0)<32 || char.charCodeAt(0)===127)) fail(400,'invalid-request','Invalid operation identifier');
+        const state = store.load();
+        hubRead(state,['projects',path[1]!,'flows',path[3]!],url);
+        const operation = state.replays[reviewReplayKey(identity.actor,operationId)];
+        if (!operation) fail(404,'operation-not-found','Review operation not found');
+        return json(operation.body,operation.status);
+      }
       if (path[0] === 'projects' && path[2] === 'delivery-jobs' && path.length <= 4) return json(path[3] ? deliveries.read(identity.actor,path[1]!,path[3]) : {jobs:deliveries.list(identity.actor,path[1]!)});
       const state = store.load();
       const projectIds = identity.actor.projectIds;
       if (projectIds !== undefined && path.length === 1 && path[0] === "projects") return json({ projects: state.projects.filter((p) => projectIds.includes(p.id)) });
-      return json(hubRead(state, path, url));
+      const result = hubRead(state,path,url);
+      if (path[0]==='projects' && path[2]==='flows' && path.length<=4) {
+        if (path[3]) return json(store.legacyReview.projectFlows([result as HubFlow])[0]);
+        return json({flows:store.legacyReview.projectFlows((result as {flows:HubFlow[]}).flows)});
+      }
+      return json(result);
     }
     if (request.method !== "POST") fail(405, "method-not-allowed", "Unsupported method");
     const key = request.headers.get("idempotency-key");
-    if (!key || key.length > 200 || [...key].some((c) => c.charCodeAt(0) < 32)) fail(400, "idempotency-key-required", "A bounded Idempotency-Key is required");
-    const body = await readJson(request);
+    if (!key || key.length > 200 || [...key].some((c) => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127))) fail(400, "idempotency-key-required", "A bounded Idempotency-Key is required");
+    if (isReviewReturn && (identity.actor.kind!=='human' || !['operator','reviewer'].includes(identity.actor.role))) fail(403,'human-required','This review action requires an authorized human');
+    let body: unknown;
+    try { body = await readJson(request,isReviewReturn ? 64*1024 : MAX_BODY); }
+    catch (error) { if (isReviewReturn && error instanceof HubFailure && error.status===413) fail(413,'request-too-large','Review request exceeds quota'); throw error; }
     // Replay identity is the original payload, not its credential-redacted projection.
     // Only the digest and sanitized body/receipt are persisted.
-    const bodyDigest = sha256(JSON.stringify(body));
+    const bodyDigest = sha256(isReviewReturn ? legacyReviewFingerprint(body) : JSON.stringify(body));
     const incomingToken = request.headers.get("authorization")?.slice(7);
     if (incomingToken && path[2] === "flows" && path[4] === "evidence" && typeof body === "object" && body !== null && !Array.isArray(body)) {
       const evidenceBody = object(body);
@@ -260,11 +289,26 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
     return serialized(async () => {
       const currentIdentity = await authenticate(request);
       authorizeAgentRequest(currentIdentity.actor, path, request.method);
+      if (currentIdentity.actor.projectIds && path[1] && !currentIdentity.actor.projectIds.includes(path[1])) fail(403,'project-scope-denied','Project access denied');
+      if (isReviewReturn) {
+        if (currentIdentity.actor.kind!=='human' || !['operator','reviewer'].includes(currentIdentity.actor.role)) fail(403,'human-required','This review action requires an authorized human');
+        return store.writeTransaction(state => {
+          const replayKey = reviewReplayKey(currentIdentity.actor,key);
+          const replay = state.replays[replayKey];
+          if (replay) { if (replay.digest!==bodyDigest) fail(409,'idempotency-conflict','Operation key was already used for another payload'); return json(replay.body,replay.status); }
+          const result = returnLegacyFlow(state,currentIdentity.actor,path[1]!,path[3]!,body,key);
+          store.legacyReview.append(path[1]!,result);
+          state.replays[replayKey]={digest:bodyDigest,body:result,status:200};
+          return json(result);
+        });
+      }
       const replayKey = sha256(JSON.stringify([currentIdentity.actor.id, request.method, url.pathname, key]));
       const state = store.load(); const replay = state.replays[replayKey];
       if (replay) { if (replay.digest !== bodyDigest) fail(409, "idempotency-conflict", "Idempotency key was already used for another payload"); return json(replay.body, replay.status); }
       const result = await hubMutate(state, currentIdentity.actor, path, body, config, config.gitDelivery ?? deliverRevision, `delivery-${replayKey.slice(0, 32)}`);
-      state.replays[replayKey] = { digest: bodyDigest, body: result, status: 200 }; store.save(state); return json(result);
+      const response = path[2]==='flows' && (path.length===3 || path.length===5 && path[4]!=='evidence') ? store.legacyReview.projectFlows([result as HubFlow])[0] : result;
+      state.replays[replayKey] = { digest: bodyDigest, body: response, status: 200 }; store.save(state);
+      return json(response);
     });
   }
   const application: HubApplication = {

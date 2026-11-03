@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:keryx:hub:review-report:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "summary",
+    "body",
+    "reviewGuide"
+  ],
+  "properties": {
+    "format": {
+      "const": "review-report/v1"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "body": {
+      "type": "string",
+      "maxLength": 30000
+    },
+    "reviewGuide": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "documentId",
+            "version",
+            "contentDigest"
+          ],
+          "properties": {
+            "documentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "contentDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

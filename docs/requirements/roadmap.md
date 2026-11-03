@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.27
+Version: 0.29.28
 
 ## Status
 
@@ -781,3 +781,7 @@ carrying the measurement that found it and the reason it was not done then.
 ## Collaborative Hub work metadata — implementation started 2026-11-01
 
 [PRD, specification and implementation plan](hub-work-management/README.md) define Flow / Intent / Attempt / Evidence / Decision. Implementation is tracked in local Flow480 on feat-hub-work-management, UI in feat-hub-workspace-design. Git code exchange is out of scope. Candidate tests/review and owner acceptance remain required; this is not a deployed or accepted release.
+
+## Understandable Hub Flow acceptance — implementation started 2026-11-03
+
+[PRD, frozen specification and plan](hub-flow-acceptance/README.md) define result narrative, reproducible checks, honest criterion coverage and human acceptance/return. Owner froze Hub Flow `01ca60d4-7607-494f-9fcb-c23fa01d6aac` and started implementation. Branch `feat-hub-flow-acceptance` starts from current main; API, migration-on-copy, UI and independent-review gates remain pending. No production deployment or owner acceptance is claimed.

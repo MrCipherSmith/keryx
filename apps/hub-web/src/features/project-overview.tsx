@@ -50,6 +50,7 @@ function QueryFeedback({ query, label }: QueryFeedbackProps) {
 export function ProjectOverview() {
   const hub = useHub();
   const { t } = useTranslation("workflow");
+  const {t:reviewText}=useTranslation("acceptance");
   const projectId = hub.projectId ?? "";
   const prefix = `/projects/${encodeURIComponent(projectId)}`;
   const enabled = !!hub.projectId;
@@ -95,6 +96,7 @@ export function ProjectOverview() {
       ),
   });
   const allFlows = flows.data?.flows ?? [];
+  const returnedFlows=allFlows.filter(flow=>flow.projectId===projectId&&!!flow.reviewFeedback);
   const pendingFlows = allFlows.filter((flow) => flow.status === "implemented");
   const pendingProposals =
     proposals.data?.proposals.filter(
@@ -106,7 +108,7 @@ export function ProjectOverview() {
       (a.status === "implemented" ? -1 : 0) -
       (b.status === "implemented" ? -1 : 0),
   );
-  const decisionCount = pendingFlows.length + pendingProposals.length;
+  const decisionCount = pendingFlows.length + pendingProposals.length + returnedFlows.length;
   const decisionsReady = !!flows.data && !!proposals.data;
   const go = (
     tab: "flows" | "proposals" | "documents" | "machines" | "code" | "history",
@@ -194,6 +196,7 @@ export function ProjectOverview() {
         <QueryFeedback query={flows} label={t("projectFlows")} />
         <QueryFeedback query={proposals} label={t("pendingProposals")} />
         <div className="project-decisions-grid">
+          {returnedFlows.slice(0,3).map(flow=><article className="project-decision" key={"returned:"+flow.id}><div><span className="project-meta">{reviewText("returnedFeedback")}</span><h3>{flow.title}</h3><p>{flow.reviewFeedback!.comment}</p><Button onClick={()=>go("flows",{flowId:flow.id})}>{reviewText("returnedFeedback")}</Button></div></article>)}
           {pendingFlows.slice(0, 3).map((flow) => (
             <article className="project-decision" key={"flow:" + flow.id}>
               <span className="project-decision-icon">

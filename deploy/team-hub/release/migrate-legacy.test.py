@@ -303,6 +303,28 @@ class MigrationSafety(unittest.TestCase):
         self.assertEqual(m.info_for(path)["remoteHistory"]["remote_session"]["count"], 0)
 
 
+    def test_review_decisions_and_guards_are_preserved_by_the_logical_trial_fingerprint(self):
+        path = self.root / "legacy-review.sqlite"
+        db = sqlite3.connect(path)
+        db.execute("CREATE TABLE hub_state(id INTEGER PRIMARY KEY,body TEXT)")
+        state = {"projects": [], "documents": [], "flows": [], "proposals": [], "events": [], "revisions": [], "replays": {}, "documentChanges": []}
+        db.execute("INSERT INTO hub_state VALUES(1,?)", (json.dumps(state),)); db.commit()
+        before = m.info_for(path)
+        db.executescript("CREATE TABLE hub_legacy_review_decisions(id TEXT,project_id TEXT,flow_id TEXT,subject_revision_id TEXT,flow_version INTEGER,body TEXT);CREATE TABLE hub_legacy_review_guards(project_id TEXT,flow_id TEXT,decision_id TEXT,flow_version INTEGER);")
+        self.assertEqual(m.info_for(path)["stateDigest"], before["stateDigest"], "Empty additive tables must not invalidate an old-data migration")
+        decision = json.dumps({"comment": "Original immutable reviewer comment", "actorId": "human:reviewer"})
+        db.execute("INSERT INTO hub_legacy_review_decisions VALUES(?,?,?,?,?,?)", ("d", "p", "f", "r", 5, decision))
+        db.execute("INSERT INTO hub_legacy_review_guards VALUES(?,?,?,?)", ("p", "f", "d", 5)); db.commit()
+        with_history = m.info_for(path)
+        self.assertNotEqual(with_history["stateDigest"], before["stateDigest"])
+        db.execute("UPDATE hub_legacy_review_decisions SET body=?", (decision + " ",)); db.commit()
+        self.assertNotEqual(m.info_for(path)["stateDigest"], with_history["stateDigest"], "Exact immutable JSON representation must be protected")
+        db.execute("UPDATE hub_legacy_review_decisions SET body=?", (decision,))
+        db.execute("UPDATE hub_legacy_review_guards SET flow_version=6"); db.commit()
+        self.assertNotEqual(m.info_for(path)["stateDigest"], with_history["stateDigest"], "Guard changes must not be omitted from the trial")
+        db.execute("DELETE FROM hub_legacy_review_guards"); db.execute("DELETE FROM hub_legacy_review_decisions"); db.commit(); db.close()
+        self.assertEqual(m.info_for(path)["stateDigest"], before["stateDigest"])
+
     def test_v4_artifact_hydration_and_retention_preserve_verified_history_digest(self):
         import base64
         import hashlib
