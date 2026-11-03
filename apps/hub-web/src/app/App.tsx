@@ -304,7 +304,9 @@ function Shell({
   };
   useEffect(() => {
     if (menu)
-      navRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+      navRef.current
+        ?.querySelector<HTMLButtonElement>("button:not(.desktop-rail-toggle)")
+        ?.focus();
   }, [menu]);
   const navTabs = projectId
     ? tabs
@@ -420,10 +422,12 @@ function Shell({
             <Button
               variant="ghost"
               disabled={busy}
+              aria-label={t("signOut")}
+              title={t("signOut")}
               onClick={() => void action(onLogout)}
             >
               <LogOut size={14} />
-              {t("signOut")}
+              <span className="nav-label">{t("signOut")}</span>
             </Button>
           </div>
         </aside>

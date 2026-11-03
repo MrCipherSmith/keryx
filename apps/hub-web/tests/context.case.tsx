@@ -230,6 +230,19 @@ it('loads cursor pages without duplicate events', async () => {
   fireEvent.click(await screen.findByRole('button', { name: en.loadMore }));
   await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/projects/p/events?after=500', expect.any(AbortSignal)));
   expect(await screen.findByRole('button', {name:'Follow-up flow'})).toBeVisible();
+  // The recorded actor stays visible outside the collapsed Identifiers block, even without an actorRole.
+  const actors = screen.getAllByText(/^Actor:/);
+  expect(actors.length).toBeGreaterThan(0);
+  for (const actor of actors) { expect(actor).toHaveTextContent('Actor: agent:connector'); expect(actor).not.toHaveTextContent(en.unknownRole); }
+});
+
+it('tells apart different actors who share a role in History', async () => {
+  const base = { projectId: 'p', type: 'flow-created', entityId: 'x', createdAt: '2026-10-26T00:00:00Z', actorRole: 'operator' };
+  const events = [{ ...base, sequence: 1, actorId: 'human:alice' }, { ...base, sequence: 2, actorId: 'human:bob' }];
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [] } : path.endsWith('/documents') ? { documents: [] } : { events, cursor: 2 }));
+  await mount(<HistoryView />);
+  expect(await screen.findByText('Actor: human:alice')).toBeVisible();
+  expect(screen.getByText('Actor: human:bob')).toBeVisible();
 });
 
 

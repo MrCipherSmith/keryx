@@ -36,7 +36,7 @@ import {
   useController,
   useOperator,
 } from "./shared";
-import { MessageComposer, QueueControls } from "./work";
+import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
 import { ForkSession } from "./fork";
 import { Settings } from "./settings";
 export function SessionsView() {
@@ -127,8 +127,7 @@ function CreateSession() {
   });
   const eligible = flows.data?.flows.filter(flow => flow.status === "in-progress") ?? [];
   const selectedFlow = eligible.find(flow => flow.id === draft.flowId);
-  const ready =
-    operator &&
+  const targetReady =
     m?.connected &&
     !m.revoked &&
     !m.recoveryRequired &&
@@ -136,8 +135,21 @@ function CreateSession() {
     c.clean &&
     !c.busy &&
     profile?.adapter === "keryx-native-v1" &&
-    profile.readiness === "ready" &&
-    !!draft.title.trim() && (!draft.flowId || !!selectedFlow);
+    profile.readiness === "ready";
+  const flowGone = !!draft.flowId && !selectedFlow;
+  const ready = operator && targetReady && !!draft.title.trim() && !flowGone;
+  // Name the first condition that is actually unmet, not a fixed list of all of them.
+  const blocker = ready
+    ? null
+    : !operator
+      ? "sessionLaunchOperatorOnly"
+      : !targetReady
+        ? "sessionLaunchRequirements"
+        : !draft.title.trim()
+          ? "sessionLaunchEnterTitle"
+          : flows.data
+            ? "sessionLaunchFlowGone"
+            : null;
   function submit() {
     if (!ready || !m?.inventory || !c || !profile || !hub.projectId) return;
     action.mutate(
@@ -158,11 +170,10 @@ function CreateSession() {
         onSuccess: async (receipt) => {
           if (selectedFlow) {
             const criteriaDigest = await digestCriteria(selectedFlow.criteria);
-            useDraftStore.getState().put(`remote-message:${hub.scopeKey}:${hub.projectId}:${receipt.sessionId}`, {
-              text: draft.firstMessage, prepared: true, mode: "flow", flowId: selectedFlow.id,
-              flowVersion: selectedFlow.version, specDigest: selectedFlow.specContentDigest, criteriaDigest,
-              consent: false, consentVersion: null, busyPolicy: "reject", sessionVersion: 0, configVersion: 0,
-            });
+            useDraftStore.getState().put(
+              messageDraftKey(hub.scopeKey, hub.projectId, receipt.sessionId),
+              prepareFlowMessageDraft(selectedFlow, criteriaDigest, draft.firstMessage),
+            );
           }
           hub.navigate({ tab: "sessions", sessionId: receipt.sessionId });
         },
@@ -265,7 +276,7 @@ function CreateSession() {
       )}
       <Feedback query={machines} />
       <ActionFeedback action={action} />
-      {!ready && <p className="text-sm text-slate-500">{t("sessionLaunchRequirements")}</p>}
+      {blocker && <p className="text-sm text-slate-500">{t(blocker)}</p>}
       <Button disabled={!ready || action.isPending} onClick={submit}>
         {t("createSession")}
       </Button>
@@ -301,9 +312,14 @@ export function SessionSurface({
   const control = useController(record);
   const action = useRemoteAction();
   const path = sessionPath(record.projectId, record.sessionId);
-  const [outcomes, setOutcomes] = useState<Control["CommandOutcome"][]>([]);
-  const recordOutcome = useCallback((outcome: Control["CommandOutcome"]) => {
-    setOutcomes(previous => [...previous.filter(item => item.operationId !== outcome.operationId), outcome]);
+  // Command outcomes are tab-local (the history endpoint carries only messages); each keeps its
+  // invocation time so History can place it among the messages instead of after all of them.
+  const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
+  const recordOutcome = useCallback((outcome: Control["CommandOutcome"], invokedAt: string) => {
+    setOutcomes(previous => {
+      const kept = previous.find(item => item.outcome.operationId === outcome.operationId);
+      return [...previous.filter(item => item !== kept), { outcome, invokedAt: kept?.invokedAt ?? invokedAt }];
+    });
   }, []);
   const opening = useRemoteQuery<{ errorCode: string | null }>(
     ["opening-status",record.sessionId],path+"/opening-status",record.state==="opening",
@@ -390,7 +406,8 @@ export function SessionSurface({
   );
 }
 
-function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: Control["CommandOutcome"][] }) {
+type CommandEntry = { outcome: Control["CommandOutcome"]; invokedAt: string };
+function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: CommandEntry[] }) {
   const { t, i18n } = useTranslation("remote");
   const hub = useHub();
   const words = useWorkspaceCopy();
@@ -422,6 +439,17 @@ function History({ record, outcomes }: { record: Control["SessionRecord"]; outco
   const ordered = [...messages.values()].sort(
     (a, b) => a.historyCursor - b.historyCursor,
   );
+  // Each outcome goes before the first message created after it was invoked, so later messages
+  // render below it. Ties and clock skew fall back to "after the messages already there".
+  const sortedOutcomes = [...outcomes].sort((a, b) => Date.parse(a.invokedAt) - Date.parse(b.invokedAt));
+  const timeline: Array<{ kind: "message"; message: Control["SessionMessage"] } | { kind: "outcome"; item: CommandEntry }> = [];
+  let nextOutcome = 0;
+  for (const message of ordered) {
+    while (nextOutcome < sortedOutcomes.length && Date.parse(sortedOutcomes[nextOutcome].invokedAt) < Date.parse(message.createdAt))
+      timeline.push({ kind: "outcome", item: sortedOutcomes[nextOutcome++] });
+    timeline.push({ kind: "message", message });
+  }
+  while (nextOutcome < sortedOutcomes.length) timeline.push({ kind: "outcome", item: sortedOutcomes[nextOutcome++] });
   return (
     <section className="session-transcript" aria-label={t("history")}>
       <header className="session-transcript-header">
@@ -434,39 +462,54 @@ function History({ record, outcomes }: { record: Control["SessionRecord"]; outco
           <Notice>{t("gap")}</Notice>
         )}
         <ol>
-          {ordered.map((message) => (
+          {timeline.map((entry) => entry.kind === "outcome" ? (
+            <li key={entry.item.outcome.operationId} className="session-message system">
+              <span className="session-avatar" aria-hidden="true">/</span>
+              <div>
+                <div className="session-message-header">
+                  <strong>/{entry.item.outcome.commandName}</strong>
+                  <time dateTime={entry.item.invokedAt}>{formatDate(entry.item.invokedAt, i18n.language)}</time>
+                </div>
+                <div className="session-message-content">
+                  <p>{t("receiptStatuses." + entry.item.outcome.status, { defaultValue: entry.item.outcome.status })}</p>
+                  {entry.item.outcome.errorCode && <p>{entry.item.outcome.errorCode}</p>}
+                  {entry.item.outcome.result !== null && <pre className="whitespace-pre-wrap break-all">{typeof entry.item.outcome.result === "string" ? entry.item.outcome.result : JSON.stringify(entry.item.outcome.result, null, 2)}</pre>}
+                </div>
+              </div>
+            </li>
+          ) : (
             <li
-              key={message.messageId}
-              className={"session-message " + message.role}
+              key={entry.message.messageId}
+              className={"session-message " + entry.message.role}
             >
               <span className="session-avatar" aria-hidden="true">
-                {message.role === "human"
+                {entry.message.role === "human"
                   ? "H"
-                  : message.role === "assistant"
+                  : entry.message.role === "assistant"
                     ? "K"
                     : "↳"}
               </span>
               <div>
                 <div className="session-message-header">
-                  <strong>{words.role[message.role]}</strong>
-                  <time dateTime={message.createdAt}>
-                    {formatDate(message.createdAt, i18n.language)}
+                  <strong>{words.role[entry.message.role]}</strong>
+                  <time dateTime={entry.message.createdAt}>
+                    {formatDate(entry.message.createdAt, i18n.language)}
                   </time>
                 </div>
                 <div className="session-message-content">
-                  {message.role === "assistant" ? (
-                    <Markdown content={message.text} />
+                  {entry.message.role === "assistant" ? (
+                    <Markdown content={entry.message.text} />
                   ) : (
-                    <pre>{message.text}</pre>
+                    <pre>{entry.message.text}</pre>
                   )}
                 </div>
-                {message.role === "assistant" && message.runId && (
+                {entry.message.role === "assistant" && entry.message.runId && (
                   <Button
                     variant="ghost"
                     onClick={() =>
                       hub.navigate({
                         tab: "runs",
-                        runId: message.runId ?? undefined,
+                        runId: entry.message.runId ?? undefined,
                         sessionId: undefined,
                       })
                     }
@@ -476,19 +519,6 @@ function History({ record, outcomes }: { record: Control["SessionRecord"]; outco
                       : "Open run"}
                   </Button>
                 )}
-              </div>
-            </li>
-          ))}
-          {outcomes.map(outcome => (
-            <li key={outcome.operationId} className="session-message system">
-              <span className="session-avatar" aria-hidden="true">/</span>
-              <div>
-                <div className="session-message-header"><strong>/{outcome.commandName}</strong></div>
-                <div className="session-message-content">
-                  <p>{t("receiptStatuses." + outcome.status, { defaultValue: outcome.status })}</p>
-                  {outcome.errorCode && <p>{outcome.errorCode}</p>}
-                  {outcome.result !== null && <pre className="whitespace-pre-wrap break-all">{typeof outcome.result === "string" ? outcome.result : JSON.stringify(outcome.result, null, 2)}</pre>}
-                </div>
               </div>
             </li>
           ))}

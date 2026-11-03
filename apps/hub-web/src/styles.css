@@ -631,13 +631,20 @@
 @media (min-width:1024px) {
   .nav-item.desktop-rail-toggle { display:flex; }
   .rail-collapsed .sidebar { width:60px; padding-inline:7px; }
-  .rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects,.identity,.nav-label) { display:none; }
+  .rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects,.identity > p,.nav-label) { display:none; }
+  .rail-collapsed .identity { padding-inline:0; }
+  .rail-collapsed .identity .hub-button { width:100%; justify-content:center; min-height:44px; margin-top:0; }
   .rail-collapsed .nav-item { justify-content:center; min-height:44px; padding-inline:0; }
 }
 .hub-select:not([multiple]):not([size]) {
   appearance:none;
   padding-inline-end:2.5rem;
-  background: var(--hub-surface) url("/select-chevron.svg") no-repeat right .75rem center / 1rem;
+  /* Longhands only: the unlayered rule must not reset background-color, or it
+     overrides the layered .hub-input:disabled fill. */
+  background-image: url("/select-chevron.svg");
+  background-repeat: no-repeat;
+  background-position: right .75rem center;
+  background-size: 1rem;
 }
 @media (forced-colors:active) {
   .hub-select:not([multiple]):not([size]) { appearance:auto; background-image:none; }

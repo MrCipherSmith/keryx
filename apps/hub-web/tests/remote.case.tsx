@@ -275,3 +275,43 @@ test("a held receipt waits for machine application and explains a refused claim 
   expect(screen.getByRole("button", {name: "Send message"})).toBeDisabled();
   expect(screen.getByLabelText("Message")).toHaveValue("Keep this message");
 });
+
+const launchDraft = { machineId: "m", checkoutId: "c", profileId: "native", title: "My session", flowId: "", firstMessage: "" };
+test("a non-operator is told only operators can create sessions, not to choose what they already chose", async () => {
+  role = "reviewer";
+  useDraftStore.getState().put("remote-create:2:p", launchDraft);
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByLabelText("Machine")).toHaveValue("m"));
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+  expect(screen.getByText(/Only operators can create sessions/)).toBeVisible();
+  expect(screen.queryByText(/Choose an available machine/)).toBeNull();
+});
+test("a restored draft whose Flow left in-progress names the Flow as the blocker", async () => {
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "gone" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByLabelText("Checkout")).toHaveValue("c"));
+  expect(await screen.findByText(/selected Flow is no longer in progress/)).toBeVisible();
+  expect(screen.queryByText(/Choose an available machine/)).toBeNull();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+});
+test("an empty title is named as the remaining requirement", async () => {
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, title: "" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByText(/Enter a session title/)).toBeVisible();
+});
+test("pressing / in the empty composer refocuses the command search when the catalogue is already open", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  fireEvent.click(screen.getByRole("button", { name: "Native command catalogue" }));
+  const search = await screen.findByLabelText("Search Keryx commands");
+  await waitFor(() => expect(search).toHaveFocus());
+  const message = screen.getByLabelText("Message");
+  message.focus();
+  expect(message).toHaveFocus();
+  fireEvent.keyDown(message, { key: "/" });
+  await waitFor(() => expect(search).toHaveFocus());
+});

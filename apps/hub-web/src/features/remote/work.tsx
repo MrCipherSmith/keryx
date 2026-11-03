@@ -33,6 +33,23 @@ import {
   Feedback,
   type Controller,
 } from "./shared";
+export type MessageDraft = {
+  text: string; prepared: boolean; mode: string; flowId: string; flowVersion: number; specDigest: string;
+  criteriaDigest: string; consent: boolean; consentVersion: number | null; busyPolicy: "reject" | "enqueue";
+  sessionVersion: number; configVersion: number;
+};
+/** The one key the composer reads its draft from; launch code writes through the same helper. */
+export function messageDraftKey(scopeKey: number, projectId: string | null, sessionId: string) {
+  return `remote-message:${scopeKey}:${projectId}:${sessionId}`;
+}
+/** A first message prepared for an exact Flow, seeded by session creation. */
+export function prepareFlowMessageDraft(flow: HubFlow, criteriaDigest: string, text: string): MessageDraft {
+  return {
+    text, prepared: true, mode: "flow", flowId: flow.id, flowVersion: flow.version,
+    specDigest: flow.specContentDigest, criteriaDigest, consent: false, consentVersion: null,
+    busyPolicy: "reject", sessionVersion: 0, configVersion: 0,
+  };
+}
 export function MessageComposer({
   record,
   control,
@@ -40,9 +57,10 @@ export function MessageComposer({
 }: {
   record: Control["SessionRecord"];
   control: Controller;
-  onCommandOutcome?: (outcome: Control["CommandOutcome"]) => void;
+  onCommandOutcome?: (outcome: Control["CommandOutcome"], invokedAt: string) => void;
 }) {
   const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
+  const [focusToken, setFocusToken] = useState(0);
   const commandsId = useId();
   const commandTrigger = useRef<HTMLButtonElement>(null);
   function closeCommands() {
@@ -59,8 +77,8 @@ export function MessageComposer({
   );
   const profileConsentVersion = consent.data?.profileConsentVersion;
   const hasProfileConsent = typeof profileConsentVersion === "number" && Number.isSafeInteger(profileConsentVersion) && profileConsentVersion > 0;
-  const draftKey = `remote-message:${hub.scopeKey}:${record.projectId}:${record.sessionId}`;
-  const [draft, setDraft, clearDraft] = useDraft(
+  const draftKey = messageDraftKey(hub.scopeKey, record.projectId, record.sessionId);
+  const [draft, setDraft, clearDraft] = useDraft<MessageDraft>(
     draftKey,
     {
       text: "",
@@ -71,8 +89,8 @@ export function MessageComposer({
       specDigest: "",
       criteriaDigest: "",
       consent: false,
-      consentVersion: null as number | null,
-      busyPolicy: "reject" as "reject" | "enqueue",
+      consentVersion: null,
+      busyPolicy: "reject",
       sessionVersion: record.version,
       configVersion: record.config.configVersion,
     },
@@ -194,6 +212,8 @@ export function MessageComposer({
                 event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
             event.preventDefault();
             setCommands("open");
+            // Already open: no state change re-runs the focus effect, so ask for it explicitly.
+            setFocusToken(token => token + 1);
           }}
           maxLength={32768}
           onChange={(e) => setDraft({ ...draft, ...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{}), text: e.target.value })}
@@ -213,7 +233,7 @@ export function MessageComposer({
         <div id={commandsId} hidden={commands !== "open"} onKeyDown={(event) => {
           if (event.key === "Escape" && !event.defaultPrevented) closeCommands();
         }}>
-          <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} />
+          <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} focusToken={focusToken} />
         </div>
       )}
       <p className="composer-hint">{t("secretWarning")}</p>

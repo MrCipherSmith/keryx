@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, test, vi } from "vitest";
 import i18n from "../src/i18n";
 import { App, queryClient } from "../src/app/App";
@@ -91,7 +92,33 @@ test("mobile navigation Escape returns focus to the opening button", async () =>
   fireEvent.click(opener);
   const nav = screen.getByRole("navigation");
   await waitFor(() => expect(nav.contains(document.activeElement)).toBe(true));
+  // The rail toggle is display:none below 1024px; focus must not land on it.
+  expect(document.activeElement!.classList).not.toContain(
+    "desktop-rail-toggle",
+  );
   fireEvent.keyDown(document.activeElement!, { key: "Escape" });
   expect(opener).toHaveAttribute("aria-expanded", "false");
   expect(opener).toHaveFocus();
+});
+
+test("collapsed rail keeps an icon-only Sign out reachable", async () => {
+  await act(() => i18n.changeLanguage("en"));
+  navigate({ projectId: null, tab: "overview" }, true);
+  render(<App />);
+  await screen.findByText(principal.email);
+  const signOut = screen.getByRole("button", { name: "Sign out" });
+  expect(signOut.querySelector(".nav-label")).not.toBeNull();
+  expect(signOut).toHaveAttribute("title", "Sign out");
+  const css = readFileSync("src/styles.css", "utf8");
+  expect(css).not.toMatch(/\.rail-collapsed[^{]*\.identity[,)]/);
+});
+
+test("hub-select chevron rule leaves background-color to the layered disabled fill", () => {
+  // jsdom applies no CSS: assert on the stylesheet text instead.
+  const css = readFileSync("src/styles.css", "utf8");
+  const rule = css.match(
+    /\.hub-select:not\(\[multiple\]\):not\(\[size\]\)\s*\{([^}]*)\}/,
+  )![1];
+  expect(rule).not.toMatch(/(^|[;\s])background\s*:/);
+  expect(rule).toMatch(/background-image/);
 });

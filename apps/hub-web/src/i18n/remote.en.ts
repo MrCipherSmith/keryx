@@ -1,6 +1,6 @@
 export default {
   searchCommands: "Search Keryx commands", noCommandsFound: "No matching commands.",
- sessionOpeningFailed: "Could not open", sessionOpeningNextStep: "Check that the machine is available, then create a new session.", sessionLaunchRequirements: "Choose an available machine, a clean checkout and a ready profile, then enter a title.",
+ sessionOpeningFailed: "Could not open", sessionOpeningNextStep: "Check that the machine is available, then create a new session.", sessionLaunchRequirements: "Choose an available machine, a clean checkout and a ready profile, then enter a title.", sessionLaunchOperatorOnly: "Only operators can create sessions. Ask an operator or switch to an operator account.", sessionLaunchEnterTitle: "Enter a session title to continue.", sessionLaunchFlowGone: "The selected Flow is no longer in progress. Choose another Flow or clear the selection.",
  launchFlow: "Session Flow (optional)", launchMessage: "First message (draft)",
   goToController: "Go to session control",
   sessionOpeningRejected: "The machine refused to open this session.",
