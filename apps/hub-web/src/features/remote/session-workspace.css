@@ -267,7 +267,7 @@
   justify-content: space-between;
   border-top: 1px solid var(--hub-border);
 }
-.session-composer .hub-panel-header {
+.session-composer > .hub-panel > .hub-panel-header {
   display: none;
 }
 .session-composer .hub-panel {

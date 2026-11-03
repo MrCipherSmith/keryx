@@ -101,6 +101,58 @@ test("mobile navigation Escape returns focus to the opening button", async () =>
   expect(opener).toHaveFocus();
 });
 
+type CssRule = { selector: string; decls: Map<string, string>; layered: boolean };
+
+// Flattens styles.css into style rules, tracking whether each sits inside an
+// @layer block. jsdom applies no CSS, so the cascade is checked on the parsed
+// rules rather than on the spelling of one old bug.
+function parseCssRules(source: string): CssRule[] {
+  const text = source.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules: CssRule[] = [];
+  const stack: { layer: boolean }[] = [];
+  let buffer = "";
+  for (const ch of text) {
+    if (ch === "{") {
+      const head = buffer.trim();
+      buffer = "";
+      stack.push({ layer: head.startsWith("@layer") });
+      if (!head.startsWith("@")) stack[stack.length - 1]!.layer = false;
+      (stack[stack.length - 1] as { head?: string }).head = head;
+    } else if (ch === "}") {
+      const frame = stack.pop() as { layer: boolean; head?: string };
+      const head = frame.head ?? "";
+      if (!head.startsWith("@")) {
+        const decls = new Map<string, string>();
+        for (const part of buffer.split(";")) {
+          const at = part.indexOf(":");
+          if (at > 0)
+            decls.set(part.slice(0, at).trim().toLowerCase(), part.slice(at + 1).trim());
+        }
+        rules.push({
+          selector: head,
+          decls,
+          layered: stack.some((outer) => outer.layer),
+        });
+      }
+      buffer = "";
+    } else buffer += ch;
+  }
+  return rules;
+}
+
+// Selector alternatives after splitting top-level commas and one :is(...) level.
+function selectorAlternatives(selector: string): string[] {
+  const top = selector.split(/,(?![^()]*\))/).map((part) => part.trim());
+  return top.flatMap((part) => {
+    const is = part.match(/^(.*?):is\(([^()]*)\)(.*)$/);
+    return is
+      ? is[2]!.split(",").map((inner) => `${is[1]}${inner.trim()}${is[3]}`)
+      : [part];
+  });
+}
+
+const css = parseCssRules(readFileSync("src/styles.css", "utf8"));
+
 test("collapsed rail keeps an icon-only Sign out reachable", async () => {
   await act(() => i18n.changeLanguage("en"));
   navigate({ projectId: null, tab: "overview" }, true);
@@ -109,16 +161,31 @@ test("collapsed rail keeps an icon-only Sign out reachable", async () => {
   const signOut = screen.getByRole("button", { name: "Sign out" });
   expect(signOut.querySelector(".nav-label")).not.toBeNull();
   expect(signOut).toHaveAttribute("title", "Sign out");
-  const css = readFileSync("src/styles.css", "utf8");
-  expect(css).not.toMatch(/\.rail-collapsed[^{]*\.identity[,)]/);
+  // No collapsed-rail rule may hide the identity block or its button; only the
+  // text children (.nav-label, .identity > p) are hidden.
+  const hidden = css
+    .filter((rule) => rule.selector.includes(".rail-collapsed"))
+    .filter(
+      (rule) =>
+        /^(none)$/i.test(rule.decls.get("display") ?? "") ||
+        /^hidden$/i.test(rule.decls.get("visibility") ?? ""),
+    )
+    .flatMap((rule) => selectorAlternatives(rule.selector));
+  expect(hidden.length).toBeGreaterThan(0);
+  for (const alternative of hidden) {
+    expect(alternative).not.toMatch(/\.identity$/);
+    expect(alternative).not.toMatch(/\.hub-button$/);
+  }
 });
 
 test("hub-select chevron rule leaves background-color to the layered disabled fill", () => {
-  // jsdom applies no CSS: assert on the stylesheet text instead.
-  const css = readFileSync("src/styles.css", "utf8");
-  const rule = css.match(
-    /\.hub-select:not\(\[multiple\]\):not\(\[size\]\)\s*\{([^}]*)\}/,
-  )![1];
-  expect(rule).not.toMatch(/(^|[;\s])background\s*:/);
-  expect(rule).toMatch(/background-image/);
+  const selectRules = css.filter(
+    (rule) => !rule.layered && /\.hub-select\b/.test(rule.selector),
+  );
+  expect(selectRules.length).toBeGreaterThan(0);
+  for (const rule of selectRules) {
+    expect(rule.decls.has("background")).toBe(false);
+    expect(rule.decls.has("background-color")).toBe(false);
+  }
+  expect(selectRules.some((rule) => rule.decls.has("background-image"))).toBe(true);
 });

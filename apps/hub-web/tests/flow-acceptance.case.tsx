@@ -40,6 +40,7 @@ test.each(['missing-selector','mismatched-artifact','ambiguous-artifact','malfor
  if(mode==='malformed-envelope')fixture.subject.report='{"format":"review-report/v1","summary":42}';
  mountAcceptance('canonical');await screen.findByRole('heading',{name:'How to check'});
  expect(await screen.findByText(mode==='missing-selector'?'No verification steps were supplied':'Verification guidance is unavailable')).toBeVisible();
+ if(mode!=='missing-selector')expect(screen.queryByText(/Criteria without verification steps/)).not.toBeInTheDocument();
  expect(fixture.requests.filter(request=>request.url.includes('/documents/')&&!request.url.includes('/guide-doc/'))).toHaveLength(0);
  expect(mutationRequests(fixture)).toHaveLength(0);
 });
@@ -171,6 +172,7 @@ test('legacy return feedback appears in project Overview without inventing an as
 test.each([403,404])('unavailable canonical guide (%s) stays explicit without inventing steps or granting authority',async(status)=>{
  fixture.documentStatus=status;mountAcceptance('canonical');await screen.findByRole('heading',{name:'How to check'});
  expect(await screen.findByText('Verification guidance is unavailable')).toBeVisible();expect(screen.queryByText('The highlighted result is visible')).not.toBeInTheDocument();expect(mutationRequests(fixture)).toHaveLength(0);
+ expect(screen.queryByText(/Criteria without verification steps/)).not.toBeInTheDocument();
 });
 
 test('an agent cannot accept or return through permissive canonical command hints',async()=>{

@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, test, vi } from "vitest";
 import i18n from "../src/i18n";
 import { HubContext, type HubContextValue } from "../src/app/hub-context";
@@ -175,4 +176,24 @@ test("inspector tabs support keyboard navigation and keep observer controls disa
   await waitFor(() =>
     expect(contextTab).toHaveAttribute("aria-selected", "true"),
   );
+});
+// jsdom applies no CSS, so this pins the selector text and the DOM shape it relies on:
+// only the composer's own panel header is hidden; nested Panels keep their headings.
+test("composer header rule hides only the composer's own panel header", async () => {
+  const { container } = show();
+  await screen.findByText("First message");
+  const css = readFileSync(
+    "src/features/remote/session-workspace.css",
+    "utf8",
+  );
+  const selectors = [...css.matchAll(/([^{}]*)\{\s*display:\s*none;\s*\}/g)]
+    .map((m) => m[1].trim())
+    .filter((s) => s.includes(".session-composer") && s.includes(".hub-panel-header"));
+  expect(selectors).toEqual([
+    ".session-composer > .hub-panel > .hub-panel-header",
+  ]);
+  const composer = container.querySelector(".session-composer");
+  expect(
+    composer?.querySelector(":scope > .hub-panel > .hub-panel-header"),
+  ).not.toBeNull();
 });

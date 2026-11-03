@@ -14,6 +14,7 @@ import { useDraftStore } from "../src/state/drafts";
 import { resetClient } from "../src/api/client";
 import { navigate, useLocation } from "../src/app/navigation";
 import { sessionFixture, machineFixture } from "./remote-fixtures";
+import { messageDraftKey } from "../src/features/remote/work";
 const requests: { url: string; init?: RequestInit }[] = [];
 let role = "operator";
 let claimed = false;
@@ -295,6 +296,58 @@ test("a restored draft whose Flow left in-progress names the Flow as the blocker
   expect(await screen.findByText(/selected Flow is no longer in progress/)).toBeVisible();
   expect(screen.queryByText(/Choose an available machine/)).toBeNull();
   expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+});
+test("a stale Flow can be cleared from the select, which re-enables Create session", async () => {
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "gone", firstMessage: "stale text" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await screen.findByText(/selected Flow is no longer in progress/);
+  const select = screen.getByLabelText("Session Flow (optional)");
+  expect(select).toHaveValue("gone");
+  expect(screen.getByRole("option", { name: "gone · no longer in progress" })).toBeDisabled();
+  expect(screen.queryByLabelText("First message (draft)")).toBeNull();
+  fireEvent.change(select, { target: { value: "" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  expect(screen.queryByText(/no longer in progress/)).toBeNull();
+});
+const flow = { id: "f1", title: "Ship it", version: 4, status: "in-progress", criteria: ["works"], specContentDigest: "d".repeat(64) };
+function serveCreate(flows: unknown[]) {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    const path = String(url);
+    if (path.endsWith("/flows")) return Response.json({ flows });
+    if (path.endsWith("/projects/p/sessions") && init?.method === "POST") {
+      requests.push({ url: path, init });
+      return Response.json({ sessionId: "s2", receiptId: "r2" });
+    }
+    return original(url, init);
+  });
+}
+test("creating a session with a Flow seeds the new session's composer with the prepared first message", async () => {
+  serveCreate([flow]);
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1", firstMessage: "Start with the parser" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByLabelText("Session Flow (optional)")).toHaveValue("f1"));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  const key = messageDraftKey(2, "p", "s2");
+  await waitFor(() => expect(useDraftStore.getState().drafts[key]).toBeDefined());
+  const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(flow.criteria)))), byte => byte.toString(16).padStart(2, "0")).join("");
+  expect(useDraftStore.getState().drafts[key]).toMatchObject({
+    text: "Start with the parser", prepared: true, mode: "flow", flowId: "f1", flowVersion: 4, specDigest: "d".repeat(64), criteriaDigest: digest,
+  });
+  await waitFor(() => expect(window.location.search).toContain("session=s2"));
+});
+test("creating a session without a Flow writes no message draft", async () => {
+  serveCreate([flow]);
+  useDraftStore.getState().put("remote-create:2:p", launchDraft);
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  await waitFor(() => expect(window.location.search).toContain("session=s2"));
+  expect(useDraftStore.getState().drafts[messageDraftKey(2, "p", "s2")]).toBeUndefined();
 });
 test("an empty title is named as the remaining requirement", async () => {
   useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, title: "" });

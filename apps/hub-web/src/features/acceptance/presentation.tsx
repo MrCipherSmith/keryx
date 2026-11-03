@@ -11,7 +11,9 @@ export function ReviewPresentation({title,summary,author,submittedAt,createdTime
  const {t,i18n}=useTranslation('acceptance');const [copyStatus,setCopyStatus]=useState<'copied'|'copyFailed'|null>(null);
  const content=guide?.status==='available'?guide.guide:null;
  const mappedCriteria = new Set(content?.steps.flatMap(step => step.criterionIds));
- const missingSteps = criteria.filter(row => !mappedCriteria.has(row.id)).length;
+ // Only a resolved guide (available or explicitly missing) can say a criterion has no steps; an unavailable or unloaded one says nothing.
+ const guideResolved = guide?.status==='available'||guide?.status==='missing';
+ const missingSteps = guideResolved ? criteria.filter(row => !mappedCriteria.has(row.id)).length : 0;
  const missingEvidence = criteria.filter(row => !row.reports.length && !row.waivers.length).length;
  return <article className="acceptance-review" aria-label={title}>
   <section><h2>{t('what')}</h2><h3>{title}</h3><Markdown safeLinksOnly content={content?.summary||summary||t('noSummary')}/><p>{content?.userImpact||t('impactMissing')}</p><h3>{t('limitations')}</h3>{content?.limitations.length?<ul>{content.limitations.map((item,index)=><li key={index}>{item}</li>)}</ul>:<p>{t('noLimitation')}</p>}<p className="acceptance-byline">{t(createdTime?'created':'submitted',{author,time:Number.isFinite(Date.parse(submittedAt))?formatDate(submittedAt,i18n.language):"—"})}</p>{createdTime&&<p className="acceptance-byline">{t('submittedUnknown')}</p>}</section>

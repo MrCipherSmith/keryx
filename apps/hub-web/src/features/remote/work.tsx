@@ -57,7 +57,7 @@ export function MessageComposer({
 }: {
   record: Control["SessionRecord"];
   control: Controller;
-  onCommandOutcome?: (outcome: Control["CommandOutcome"], invokedAt: string) => void;
+  onCommandOutcome?: (outcome: Control["CommandOutcome"], invokedAt: string, anchor?: number) => void;
 }) {
   const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
   const [focusToken, setFocusToken] = useState(0);
