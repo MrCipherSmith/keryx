@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-11-03
+
+### Added
+- **Understandable Team Hub acceptance.** Canonical and legacy reviews explain the delivered change, user effect, limitations, verification steps and pinned criteria before showing decision controls. IDs, digests and raw reports remain in accessible technical details. Contributor reports, observed CI, human waivers and unmapped legacy evidence keep distinct provenance.
+- **Immutable contributor review guides.** Exact result artifacts can carry a bounded, validated guide with prerequisites, inert copyable instructions and expected results. Missing or invalid guidance is explicit; arbitrary artifacts are never scanned to invent it.
+- **Durable legacy returns for changes.** A human can return an exact candidate with a reason and criterion references, recover a lost response with the original operation, and review a new immutable submission while retaining prior decisions and artifacts. Review history is paginated and available after final acceptance.
+
+### Fixed
+- Review recovery preserves newer comment drafts; aggregate Evidence links reach their exact technical reports; decisions wait for successful Evidence loading and offer retry on failure.
+- Canonical aggregate review retains a separate guarded terminal rejection action. Submitted knowledge proposal references remain accessible, with truthful empty states.
+- English/Russian acceptance states include keyboard/focus feedback and layouts checked at375px. Accepting work never merges Git changes, publishes a review-only packet or approves agent tools.
+
+### Upgrade notes
+- Back up the complete Hub volume and trial the new image on a copy before cutover. Startup activates database minimum writer5 for durable legacy review decisions; older writer4 releases cannot be assumed safe for rollback. The release updater preserves the latest data and refuses an incompatible old reader rather than silently restoring an earlier database.
+- Existing no-guide and completed legacy Flows remain readable. Review-only revisions stay blocked from Git selection/delivery. Product acceptance remains an explicit human decision; this release does not accept existing Flows.
+
 ## [0.4.6] - 2026-11-03
 
 ### Added
