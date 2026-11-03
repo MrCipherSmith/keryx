@@ -221,11 +221,15 @@ it('keeps complete matching Russian and English context catalogs', () => {
 
 it('loads cursor pages without duplicate events', async () => {
   const events = Array.from({ length: 500 }, (_, i) => ({ sequence: i + 1, projectId: 'p', type: 'flow-created', actorId: 'agent:connector', entityId: `flow-${i}`, createdAt: '2026-10-26T00:00:00Z' }));
-  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('after=0') ? { events, cursor: 500 } : { events: [{ ...events[499], sequence: 501, entityId: 'flow-501' }], cursor: 501 }));
+  mocks.get.mockImplementation((path: string) => {
+    if (path.endsWith('/flows')) return Promise.resolve({flows: [{id:'flow-501',title:'Follow-up flow'}]});
+    if (path.endsWith('/documents')) return Promise.resolve({documents: []});
+    return Promise.resolve(path.endsWith('after=0') ? { events, cursor: 500 } : { events: [{ ...events[499], sequence: 501, entityId: 'flow-501' }], cursor: 501 });
+  });
   await mount(<HistoryView />);
   fireEvent.click(await screen.findByRole('button', { name: en.loadMore }));
   await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/projects/p/events?after=500', expect.any(AbortSignal)));
-  expect(await screen.findByText('flow-501')).toBeVisible();
+  expect(await screen.findByRole('button', {name:'Follow-up flow'})).toBeVisible();
 });
 
 

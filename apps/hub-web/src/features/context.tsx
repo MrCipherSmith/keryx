@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { getJson, postJson, errorMessage } from '../api/client';
-import type { CodeRevision, CodeRevisionSummary, Delivery, HubDocument, HubEvent, ImportResponse, Project, Proposal } from '../api/types';
+import type { CodeRevision, CodeRevisionSummary, Delivery, HubDocument, HubEvent, HubFlow, ImportResponse, Project, Proposal } from '../api/types';
 import { useHub } from '../app/hub-context';
 import { useDraft } from '../state/drafts';
 import { Button, EmptyState, Field, Input, Notice, PageHeading, Panel, Select, StatusBadge, Textarea } from '../components/ui';
@@ -326,7 +326,10 @@ function DeliveryForm({ project }: { project: Project }) {
 
 export function HistoryView() {
   const { t, i18n } = useTranslation('context');
-  const { projectId, scopeKey } = useHub();
+  const { projectId, scopeKey, navigate, principal } = useHub();
+  const [eventType, setEventType] = useState('');
+  const flows = useResource<{flows: HubFlow[]}>('flows');
+  const documents = useResource<{documents: HubDocument[]}>('documents');
   const events = useInfiniteQuery({
     queryKey: [scopeKey, projectId, 'events'], initialPageParam: 0,
     queryFn: ({ pageParam, signal }) => getJson<{ events: HubEvent[]; cursor: number }>(`${projectPath(projectId)}/events?after=${pageParam}`, signal),
@@ -334,9 +337,18 @@ export function HistoryView() {
     enabled: Boolean(projectId),
   });
   const items = mergeEvents(events.data?.pages.map(page => page.events) ?? []);
+  const visible = items.filter(event => !eventType || event.type === eventType);
+  const flowNames = new Map(flows.data?.flows?.map(flow => [flow.id, flow.title]));
+  const documentNames = new Map(documents.data?.documents?.map(doc => [doc.id, doc.path]));
   return <><PageHeading title={t('history')} description={t('historyDescription')} />
     <ReadState pending={events.isPending} error={events.error} retry={events.refetch}>
-      {items.length ? <Panel><ol className="space-y-0">{items.map(event => <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div><p className="mt-2 break-all font-mono text-xs text-slate-600">{event.entityId}</p></li>)}</ol></Panel> : <EmptyState>{t('noHistory')}</EmptyState>}
+      {items.length > 0 && <div className="mb-4 max-w-sm"><Field label={t('historyEventType')}><Select value={eventType} onChange={event => setEventType(event.target.value)}>
+        <option value="">{t('all')}</option>
+        {[...new Set(items.map(event => event.type))].sort().map(type => <option key={type} value={type}>{t(`event.${type}`, {defaultValue:type})}</option>)}
+      </Select></Field></div>}
+      {visible.length ? <Panel><ol className="space-y-0">{visible.map(event => <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId === principal.id ? principal.email ?? t('historyYou') : event.actorRole ? t(`common:${event.actorRole}`, {defaultValue:event.actorRole}) : t('unknownRole')}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div>{flowNames.has(event.entityId) && <Button variant="ghost" onClick={() => navigate({tab:'flows',flowId:event.entityId})}>{flowNames.get(event.entityId)}</Button>}
+        {documentNames.has(event.entityId) && <Button variant="ghost" onClick={() => navigate({tab:'documents',documentId:event.entityId})}>{documentNames.get(event.entityId)}</Button>}
+        <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">{t('historyIdentifiers')}</summary><p className="break-all font-mono">{event.entityId} · {event.actorId}</p></details></li>)}</ol></Panel> : <EmptyState>{t(items.length ? 'historyNoMatchingEvents' : 'noHistory')}</EmptyState>}
       <div className="mt-5">{events.hasNextPage ? <Button variant="secondary" disabled={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>{t('loadMore')}</Button> : items.length ? <p className="text-center text-xs text-slate-500">{t('endOfHistory')}</p> : null}</div>
     </ReadState></>;
 }

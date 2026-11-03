@@ -1,4 +1,9 @@
 export default {
+  historyEventType: "Event type",
+  historyYou: "You",
+  historyIdentifiers: "Identifiers",
+  historyNoMatchingEvents: "No events of this type in the loaded history.",
+
   noMatchingProposals: "No proposals match the selected status.", chooseDeliveryRevision: "Browse revisions",
   specifications: 'Specifications',
   backToList: 'Back to list',
