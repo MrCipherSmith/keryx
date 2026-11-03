@@ -1,4 +1,5 @@
 export default {
+  noMatchingProposals: "No proposals match the selected status.", chooseDeliveryRevision: "Browse revisions",
   specifications: 'Specifications',
   backToList: 'Back to list',
   copyCode: 'Copy source',

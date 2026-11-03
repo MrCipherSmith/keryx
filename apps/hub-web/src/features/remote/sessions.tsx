@@ -47,6 +47,9 @@ export function SessionsView() {
     ["sessions"],
     remoteProject(hub.projectId ?? "") + "/sessions",
   );
+  const machines = useRemoteQuery<{ machines: MachineSummary[] }>(
+    ["machines"], "/machines?projectId=" + encodeURIComponent(hub.projectId ?? ""),
+  );
   if (hub.location.sessionId)
     return (
       <SessionDetail
@@ -76,7 +79,9 @@ export function SessionsView() {
             description={t("states." + s.state, { defaultValue: s.state })}
           >
             <dl className="space-y-3">
-              <Definition label={t("machine")}>{s.machineId}</Definition>
+              <Definition label={t("machine")}>
+                {machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId}
+              </Definition>
               <Definition label={t("checkout")}>{s.checkoutId}</Definition>
               <Definition label={t("controller")}>
                 {s.controller?.actorId ?? "—"}
@@ -260,6 +265,7 @@ function CreateSession() {
       )}
       <Feedback query={machines} />
       <ActionFeedback action={action} />
+      {!ready && <p className="text-sm text-slate-500">{t("sessionLaunchRequirements")}</p>}
       <Button disabled={!ready || action.isPending} onClick={submit}>
         {t("createSession")}
       </Button>
@@ -302,12 +308,14 @@ export function SessionSurface({
   const opening = useRemoteQuery<{ errorCode: string | null }>(
     ["opening-status",record.sessionId],path+"/opening-status",record.state==="opening",
   );
+  const openingError = record.state === "opening" ? opening.data?.errorCode : null;
   return (
     <>
-    {record.state === "opening" && opening.data?.errorCode && (
-      <Notice tone="error">{t("sessionOpeningRejected")} ({opening.data.errorCode})</Notice>
+    {openingError && (
+      <Notice tone="error">{t("sessionOpeningRejected")} ({openingError}) {t("sessionOpeningNextStep")}</Notice>
     )}
     <SessionWorkspace
+      openingRejected={!!openingError}
       record={record}
       control={control}
       history={<History record={record} outcomes={outcomes} />}

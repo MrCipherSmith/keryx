@@ -1,4 +1,5 @@
 export default {
+ sessionOpeningFailed: "Не открылась", sessionOpeningNextStep: "Проверьте доступность машины и создайте новую сессию.", sessionLaunchRequirements: "Выберите доступную машину, чистую рабочую копию и готовый профиль, затем введите название.",
  launchFlow: "Flow для сессии (необязательно)", launchMessage: "Первое сообщение (черновик)",
   goToController: "Перейти к управлению сессией",
   sessionOpeningRejected: "Машина отклонила открытие этой сессии.",

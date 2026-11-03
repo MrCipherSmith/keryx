@@ -84,6 +84,7 @@ export function useWorkspaceCopy() {
   return copy[i18n.language.startsWith("ru") ? "ru" : "en"];
 }
 export function SessionWorkspace({
+  openingRejected = false,
   record,
   control,
   history,
@@ -92,6 +93,7 @@ export function SessionWorkspace({
   settings,
   operations,
 }: {
+  openingRejected?: boolean;
   record: Control["SessionRecord"];
   control: Controller;
   history: ReactNode;
@@ -152,7 +154,7 @@ export function SessionWorkspace({
             </h1>
             <div className="session-header-meta">
               <span>
-                {t("states." + record.state, { defaultValue: record.state })}
+                {openingRejected ? t("sessionOpeningFailed") : t("states." + record.state, { defaultValue: record.state })}
               </span>
               <span>{record.agentProfileId}</span>
               <span>{control.active ? words.controlled : words.observer}</span>

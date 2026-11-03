@@ -153,6 +153,7 @@ function ProposalForm({ document: doc }: { document: HubDocument }) {
 
 export function ProposalsView() {
   const { t } = useTranslation('context');
+  const { navigate } = useHub();
   const proposals = useResource<{ proposals: Proposal[] }>('proposals');
   const documents = useResource<{ documents: HubDocument[] }>('documents');
   const [filter, setFilter] = useState('pending');
@@ -160,7 +161,12 @@ export function ProposalsView() {
   return <><PageHeading title={t('proposals')} description={t('proposalsDescription')} />
     <div className="mb-5 max-w-xs"><Field label={t('proposals')}><Select value={filter} onChange={event => setFilter(event.target.value)}>{['all', 'pending', 'accepted', 'rejected'].map(value => <option key={value} value={value}>{t(value)}</option>)}</Select></Field></div>
     <ReadState pending={proposals.isPending || documents.isPending} error={proposals.error || documents.error} retry={() => { void proposals.refetch(); void documents.refetch(); }}>
-      <div className="space-y-5">{filtered.length ? filtered.map(proposal => <ProposalCard key={`${proposal.id}:${proposal.version}:${proposal.contentDigest}`} proposal={proposal} document={documents.data?.documents.find(doc => doc.id === proposal.documentId)} />) : <EmptyState>{t('noProposals')}</EmptyState>}</div>
+      <div className="space-y-5">{filtered.length ? filtered.map(proposal => <ProposalCard key={`${proposal.id}:${proposal.version}:${proposal.contentDigest}`} proposal={proposal} document={documents.data?.documents.find(doc => doc.id === proposal.documentId)} />) : <EmptyState>
+        <p>{t(proposals.data?.proposals.length ? 'noMatchingProposals' : 'noProposals')}</p>
+        <Button variant="secondary" className="mt-3" onClick={() => proposals.data?.proposals.length ? setFilter('all') : navigate({tab:'documents',documentId:undefined})}>
+          {proposals.data?.proposals.length ? t('all') : t('documents')}
+        </Button>
+      </EmptyState>}</div>
     </ReadState></>;
 }
 
@@ -271,7 +277,7 @@ function RevisionFiles({ revision, project }: { revision: CodeRevision; project:
 
 export function DeliveryView() {
   const { t, i18n } = useTranslation('context');
-  const { principal } = useHub();
+  const { principal, navigate } = useHub();
   const project = useResource<Project>('project');
   const deliveries = useResource<{ deliveries: Delivery[] }>('deliveries');
   const revisions = useRevisionSummary(project.data?.lineRevisionId);
@@ -279,7 +285,12 @@ export function DeliveryView() {
   return <><PageHeading title={t('delivery')} description={t('deliveryDescription')} />
     <ReadState pending={project.isPending || (!!project.data?.lineRevisionId && revisions.isPending) || deliveries.isPending} error={project.error || revisions.error || deliveries.error} retry={() => { void project.refetch(); void revisions.refetch(); void deliveries.refetch(); }}>
       {project.data ? <Panel title={t('selectedLine')}><p className="break-all font-mono text-sm text-slate-700">{project.data.lineRevisionId ?? t('noLine')}</p><p className="text-xs text-slate-500">{t('lineVersion')}: {project.data.lineVersion}</p></Panel> : null}
-      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>{t('deliveryUnavailable')}</Notice>}</div>
+      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>
+        <p>{t('deliveryUnavailable')}</p>
+        <Button variant="secondary" className="mt-3" onClick={() => navigate({tab:'code',revisionId:undefined})}>
+          {t('chooseDeliveryRevision')}
+        </Button>
+      </Notice>}</div>
       <div className="space-y-4">{deliveries.data?.deliveries.length ? [...deliveries.data.deliveries].reverse().map(delivery => <Panel key={delivery.id} title={<span className="break-all">{delivery.baseBranch} · {delivery.revisionId.slice(0, 12)}</span>}>
         <StatusBadge status={delivery.status} /><p className="break-all text-sm text-slate-600">{delivery.remoteUrl}</p>
         {delivery.error ? <Notice tone="error"><code>{delivery.error}</code></Notice> : null}

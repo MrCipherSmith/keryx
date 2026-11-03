@@ -1,4 +1,5 @@
 export default {
+  noMatchingProposals: "Нет предложений с выбранным статусом.", chooseDeliveryRevision: "Перейти к ревизиям",
   specifications: 'Спецификации',
   backToList: 'К списку',
   copyCode: 'Копировать код',
