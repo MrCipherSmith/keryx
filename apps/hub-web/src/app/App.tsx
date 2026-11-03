@@ -4,6 +4,8 @@ import {
   QueryClient,
   QueryClientProvider,
   useQuery,
+  useMutation,
+  useQueryClient,
 } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -53,6 +55,8 @@ import {
   Select,
 } from "../components/ui";
 import { ThemeSelect } from "../theme";
+import { ProjectDeletion } from "../features/project-deletion";
+import type { HubPreferences } from "../../../../src/hub/contracts";
 const ManagedWorkView = lazy(() =>
   import("../features/managed-work/view").then((m) => ({
     default: m.ManagedWorkView,
@@ -175,7 +179,35 @@ const icons: Record<Tab, typeof LayoutDashboard> = {
   sessions: MessagesSquare,
   runs: Play,
 };
-function Locale() {
+function PersonalSettings({ principal }: { principal: Principal }) {
+  const { i18n } = useTranslation();
+  const client = useQueryClient();
+  const personal = principal.kind === "human" && !!principal.issuer && !!principal.subject;
+  const key = ["personal-settings", principal.id];
+  const preferences = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => getJson<HubPreferences>("/preferences", signal),
+    enabled: personal,
+  });
+  const save = useMutation({
+    mutationFn: (patch: Partial<HubPreferences>) => postJson<HubPreferences>("/preferences", patch),
+    onSuccess: (value) => client.setQueryData(key, value),
+  });
+  const language = preferences.data?.language;
+  useEffect(() => {
+    if (language) void i18n.changeLanguage(language);
+  }, [i18n, language]);
+  const remote = personal && preferences.isSuccess;
+  const busy = save.isPending || (personal && preferences.isPending);
+  return (
+    <>
+      <ThemeSelect preferred={preferences.data?.theme} disabled={busy} onSelect={remote ? (theme) => save.mutate({ theme }) : undefined} />
+      <Locale disabled={busy} onSelect={remote ? (language) => save.mutate({ language }) : undefined} />
+      {save.error ? <span role="alert">{errorMessage(save.error)}</span> : null}
+    </>
+  );
+}
+function Locale({ onSelect, disabled }: { onSelect?: (language: "ru" | "en") => void; disabled?: boolean } = {}) {
   const { i18n, t } = useTranslation("common");
   return (
     <div
@@ -188,7 +220,8 @@ function Locale() {
           key={lang}
           type="button"
           aria-pressed={i18n.language === lang}
-          onClick={() => void i18n.changeLanguage(lang)}
+          disabled={disabled}
+          onClick={() => onSelect ? onSelect(lang) : void i18n.changeLanguage(lang)}
           className={
             "rounded-md px-2 py-1 text-xs font-bold focus-visible:outline-2 focus-visible:outline-emerald-700 " +
             (i18n.language === lang
@@ -445,8 +478,7 @@ function Shell({
                   </option>
                 ))}
               </Select>
-              <ThemeSelect />
-              <Locale />
+              <PersonalSettings key={principal.id} principal={principal} />
               <Button
                 variant="secondary"
                 aria-label={t("refresh")}
@@ -500,6 +532,12 @@ function Shell({
                     }
                   />
                   {views[location.tab]}
+                  {location.tab === "overview" && active && principal.kind === "human" && principal.role === "operator" && !principal.readOnly ? (
+                    <ProjectDeletion project={active} onDeleted={() => {
+                      navigate({ projectId: null, tab: "overview" });
+                      void projects.refetch();
+                    }} />
+                  ) : null}
                 </div>
               )}
             </Suspense>

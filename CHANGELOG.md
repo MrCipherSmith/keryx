@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-11-03
+
+### Added
+- Approve and start managed Flows with one human confirmation of the exact plan. Simple drafts get one result covering all criteria.
+- Mobile document and revision navigation, document kind filters, and a read-only code viewer with syntax highlighting, wrapping and exact source copying.
+- Personal theme and language preferences for individually authenticated users, a visible theme switcher, and an optional Hub-side Cloudflare sign-in duration cap.
+- Confirmed deletion for empty projects, with server checks for open Flows, attached machines, sessions, unfinished work and retained history.
+
+### Fixed
+- Chat waits for native confirmation of control and shows machine refusals. Compatible machine clients advertise the consent required for plain chat.
+- The native client handles small clock offsets before applying a grant while preserving expiry and binding checks.
+- Completed Flow cards fit narrow screens and show a readable acceptance label. Project overview links directly to managed Flows.
+
+### Upgrade notes
+- Update the native client as well as Hub to use automatic plain-chat consent reporting. Create a fresh session for a previously failed Mac opening.
+- The database adds an isolated preferences table. Existing identity, Flow and session records keep their current format.
+
 ## [0.4.7] - 2026-11-03
 
 ### Added

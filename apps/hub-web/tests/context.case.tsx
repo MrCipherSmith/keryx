@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
@@ -8,7 +9,7 @@ import { useDraftStore } from '../src/state/drafts';
 import ru from '../src/i18n/context.ru';
 import { DocumentsView, ProposalsView, RevisionsView, DeliveryView, HistoryView } from '../src/features/context';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), navigate: vi.fn(), location: { projectId: 'p', tab: 'documents', documentId: 'd', revisionId: 'r' }, principal: { id: 'human:owner', kind: 'human', role: 'operator' } }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), navigate: vi.fn(), location: { projectId: 'p', tab: 'documents', documentId: 'd' as string | undefined, revisionId: 'r' }, principal: { id: 'human:owner', kind: 'human', role: 'operator' } }));
 vi.mock('../src/app/hub-context', () => ({ useHub: () => ({ projectId: 'p', principal: mocks.principal, scopeKey: 1, location: mocks.location, navigate: mocks.navigate, refresh: vi.fn() }) }));
 vi.mock('../src/api/client', () => ({ getJson: mocks.get, postJson: mocks.post, errorMessage: (error: Error) => error.message }));
 
@@ -65,6 +66,71 @@ describe('document provenance and draft version', () => {
     await waitFor(() => expect(screen.getByLabelText(en.proposedContent)).toHaveValue('# Unsent draft'));
     expect(mocks.post).toHaveBeenCalledTimes(1);
   });
+});
+
+it('keeps specification search and returns focus to the same card after reading a document', async () => {
+  const wiki = { ...document, id: 'wiki', path: 'wiki/example.md', kind: 'wiki' };
+  mocks.get.mockImplementation((path: string) => Promise.resolve(
+    path.endsWith('/documents') ? { documents: [document, wiki] } : project,
+  ));
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+  const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+  function TestRoute() {
+    const [documentId, setDocumentId] = useState<string>();
+    mocks.location.documentId = documentId;
+    mocks.navigate.mockImplementation((patch: { documentId?: string }) => setDocumentId(patch.documentId));
+    return <DocumentsView />;
+  }
+  try {
+    await mount(<TestRoute />);
+    fireEvent.click(await screen.findByRole('button', { name: en.specifications }));
+    const search = screen.getByLabelText(en.searchDocuments);
+    fireEvent.change(search, { target: { value: 'example' } });
+    expect(screen.queryByRole('button', { name: /wiki\/example/ })).not.toBeInTheDocument();
+    const card = await screen.findByRole('button', { name: /specs\/example/ });
+    fireEvent.click(card);
+    expect(await screen.findByRole('heading', { name: document.path })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Back to list/ }));
+    expect(card).toHaveFocus();
+    expect(scrollTo).toHaveBeenCalled();
+    expect(search).toHaveValue('example');
+    expect(screen.getByRole('button', { name: en.specifications })).toHaveAttribute('aria-pressed', 'true');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('renders highlighted, numbered source safely and copies the complete revision text', async () => {
+  const source = '\uFEFFconst text = "<img src=x onerror=alert(1)>";\r\n// ' + 'x'.repeat(128_000);
+  const file = {
+    path: 'src/example.ts', mode: '100644', contentDigest: 'content-digest',
+    contentBase64: btoa(String.fromCharCode(0xef, 0xbb, 0xbf) + source.slice(1)),
+  };
+  mocks.get.mockImplementation((path: string) => Promise.resolve(
+    path.endsWith('/revisions?summary=1') ? { revisions: [{ ...revision, fileCount: 1 }] }
+      : path.endsWith('/revisions/r') ? { ...revision, files: [file] } : project,
+  ));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const oldClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  try {
+    await mount(<RevisionsView />);
+    const code = await screen.findByRole('region', { name: file.path });
+    expect(code.querySelector('.hljs-keyword')).toHaveTextContent('const');
+    expect(code.querySelector('img')).toBeNull();
+    expect(code).toHaveTextContent('<img src=x onerror=alert(1)>');
+    expect([...code.querySelectorAll('.revision-code-number')].map(row => row.textContent)).toEqual(['1', '2']);
+    const wrap = screen.getByRole('button', { name: en.wrapLines });
+    expect(wrap).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(wrap);
+    expect(wrap).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: en.copyCode }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(source));
+    expect(await screen.findByText(en.codeCopied)).toBeVisible();
+  } finally {
+    if (oldClipboard) Object.defineProperty(navigator, 'clipboard', oldClipboard);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
 });
 
 it('shows review bundles but never offers integration selection or a snapshot base option', async () => {

@@ -1,5 +1,16 @@
 import type en from "./work.en";
 const ru: typeof en = {
+  revisionTechnicalDetails: "Технические подробности",
+  backToResults: "Назад к результатам",
+  editPlan: "Изменить план и обязательные результаты",
+  advancedFlowFields: "Дополнительные поля плана",
+  defaultExclusions: "Работа за пределами указанного результата.",
+  signedInUser: "Пользователь Hub",
+  approveAndStart: "Утвердить и начать",
+  approveAndStartHelp: "Проверьте критерии Flow и обязательные результаты. Подтвердите, чтобы утвердить этот план и начать работу.",
+  startPlanBlocked: "Разберите ожидающие изменения или обновите обязательные результаты перед запуском.",
+  startCoverageMissing: "Эти критерии Flow ещё не привязаны к обязательным результатам:",
+  planApprovedReason: "План проверен и утверждён, работа начата.",
   addIntent: "Добавить результат работы",
   deliverable: "Что должно быть получено",
   approach: "Подход",

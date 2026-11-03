@@ -1,4 +1,13 @@
 export default {
+  specifications: 'Specifications',
+  backToList: 'Back to list',
+  copyCode: 'Copy source',
+  wrapLines: 'Wrap lines',
+  codeCopied: 'Source copied.',
+  codeCopyFailed: 'Could not copy source.',
+  fileTechnicalDetails: 'File technical details',
+  codeLineLimit: 'Showing the first {{count}} lines. Copy source to get the full file.',
+  missingRevision: 'This revision is unavailable in the selected project.',
   loadMoreRevisions: 'Load more revisions',
   documents: 'Documents', documentsDescription: 'Shared specifications and wiki, with exact versions and review history.',
   searchDocuments: 'Search paths, types or review status', noDocuments: 'No documents match this view.', selectDocument: 'Select a document to read its source and propose a change.', missingDocument: 'This document is unavailable in the selected project.',

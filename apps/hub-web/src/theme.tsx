@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-type ThemeMode = "system" | "light" | "dark";
+export type ThemeMode = "system" | "light" | "dark";
 const themeKey = "keryx.hub.theme";
 function savedMode(): ThemeMode {
   try {
@@ -23,10 +23,11 @@ function apply(mode: ThemeMode) {
     mode === "system" ? (preferredDark() ? "dark" : "light") : mode;
 }
 apply(savedMode());
-export function ThemeSelect() {
+export function ThemeSelect({ preferred, onSelect, disabled }: { preferred?: ThemeMode | null; onSelect?: (mode: ThemeMode) => void; disabled?: boolean } = {}) {
   const { i18n } = useTranslation();
   const ru = i18n.language.startsWith("ru");
-  const [mode, setMode] = useState<ThemeMode>(savedMode);
+  const [localMode, setMode] = useState<ThemeMode>(savedMode);
+  const mode = preferred ?? localMode;
   useEffect(() => {
     apply(mode);
     const media =
@@ -37,26 +38,33 @@ export function ThemeSelect() {
     if (mode === "system") media?.addEventListener("change", update);
     return () => media?.removeEventListener("change", update);
   }, [mode]);
+  const options = [
+    ["system", ru ? "Системная" : "System"],
+    ["light", ru ? "Светлая" : "Light"],
+    ["dark", ru ? "Тёмная" : "Dark"],
+  ] as const;
   return (
-    <select
-      className="theme-select"
-      aria-label={ru ? "Оформление" : "Appearance"}
-      value={mode}
-      onChange={(event) => {
-        const next = event.target.value;
-        if (next !== "system" && next !== "light" && next !== "dark") return;
-        setMode(next);
-        apply(next);
-        try {
-          localStorage.setItem(themeKey, next);
-        } catch {
-          /* Storage is optional. */
-        }
-      }}
-    >
-      <option value="system">{ru ? "Системная" : "System"}</option>
-      <option value="light">{ru ? "Светлая" : "Light"}</option>
-      <option value="dark">{ru ? "Тёмная" : "Dark"}</option>
-    </select>
+    <div className="inline-flex flex-wrap rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label={ru ? "Оформление" : "Appearance"}>
+      {options.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={mode === value}
+          disabled={disabled}
+          className={`rounded-md px-2 py-1 text-xs font-bold focus-visible:outline-2 focus-visible:outline-emerald-700 ${mode === value ? "bg-emerald-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+          onClick={() => {
+            if (onSelect) { onSelect(value); return; }
+            setMode(value);
+            try {
+              localStorage.setItem(themeKey, value);
+            } catch {
+              /* Appearance works without storage. */
+            }
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }

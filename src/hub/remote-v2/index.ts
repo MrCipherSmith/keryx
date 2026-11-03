@@ -43,7 +43,13 @@ export function createRemoteControl(ports: RemotePorts) {
   const attempts = new Map<string, { count: number; reset: number }>();
   const managedExecution=ports.managedExecution;
   const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid, ...(managedExecution?{beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted}:{}) };
-  const humanRead = createRemoteReader(store, deps);
+  const profileConsent = new Map<string, { epoch: number; profiles: Map<string, number> }>();
+  const humanRead = createRemoteReader(store, deps, record => {
+    const machine = store.remote.get<MachineRecord>("remote_machine", record.machineId);
+    const report = profileConsent.get(record.machineId);
+    if (!machine || machine.revoked || !deps.online(machine.machineId) || report?.epoch !== machine.epoch) return null;
+    return report.profiles.get(canonicalDigest([record.projectId, record.checkoutId, record.agentProfileId, record.config.policyDigest])) ?? null;
+  });
   const { queueMutation, lifecycle, invoke } = createSessionOperations(store, deps);
   const resolveMachine = (request: Request): MachineRecord | undefined => { const header = request.headers.get("authorization"); if (!header?.startsWith("Bearer ")) return undefined; const digest = sha256(header.slice(7)); return store.remote.all<MachineRecord>("remote_machine").find((m) => !m.revoked && m.credentialDigest === digest); };
   const scopedMachine = (request: Request) => { const m = resolveMachine(request); if (!m) fail(401, "unauthorized", "Current machine credential required"); return m; };
@@ -209,6 +215,24 @@ export function createRemoteControl(ports: RemotePorts) {
     fail(404, "not-found", "Run action not found");
   }
   async function machineHttp(request: Request, p: string[], input: unknown, m: MachineRecord): Promise<Response> {
+    if (request.method === "POST" && p.length === 3 && p[0] === "machines" && p[1] === m.machineId && p[2] === "chat-consent") {
+      const report = input as { epoch?: unknown; profiles?: unknown } | null;
+      if (!report || report.epoch !== m.epoch || !deps.online(m.machineId) || !Array.isArray(report.profiles) || report.profiles.length > 500)
+        fail(409, "stale-reference", "Current machine connection and bounded profile report required");
+      const profiles = new Map<string, number>();
+      for (const profile of report.profiles) {
+        if (!profile || typeof profile !== "object" || typeof profile.projectId !== "string" || !m.projectIds.includes(profile.projectId) ||
+          typeof profile.checkoutId !== "string" || profile.checkoutId.length > 200 || typeof profile.profileId !== "string" || profile.profileId.length > 200 ||
+          typeof profile.policyDigest !== "string" || !/^[a-f0-9]{64}$/.test(profile.policyDigest) ||
+          !Number.isSafeInteger(profile.consentVersion) || profile.consentVersion < 1)
+          fail(400, "invalid-arguments", "Invalid local chat consent report");
+        const key = canonicalDigest([profile.projectId, profile.checkoutId, profile.profileId, profile.policyDigest]);
+        if (profiles.has(key)) fail(400, "invalid-arguments", "Duplicate local chat profile");
+        profiles.set(key, profile.consentVersion);
+      }
+      profileConsent.set(m.machineId, { epoch: m.epoch, profiles });
+      return json({ reported: profiles.size });
+    }
     if (request.method === "GET" && p[0] === "projects" && p[1] && p[2] === "sessions" && p[3]) {
       const row = session(store.remote, p[1], p[3]); if (row.record.machineId !== m.machineId || !m.projectIds.includes(p[1])) fail(404, "not-found", "Session not found");
       if (!p[4]) {

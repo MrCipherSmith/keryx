@@ -11,7 +11,7 @@ export function flowCreate(transaction: WorkTransaction, command: Extract<WorkCo
     return add({ ...base(), id, kind: 'flow', title: p.title, ownerId: p.ownerId, version: 1, state: 'draft', currentRevisionId: r.id, approvedRevisionId: null, acceptanceDecisionId: null, legacyFlowId: null, updatedAt: now });
 }
 
-export function intentCreate(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'intent.create' }>): unknown {
+export function intentCreate(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'intent.create' }>): WorkIntent {
     const { now, base, find, cas, add, seal, change, open, mappings } = transaction;
     const p = command.payload, f = find(p.flowId, 'flow');
     cas(f);
@@ -131,6 +131,84 @@ export function flowStart(transaction: WorkTransaction, command: Extract<WorkCom
     f.state = 'in-progress';
     change(f);
     return f;
+}
+
+/** Approve the plan the operator reviewed and start it as one staged work mutation. */
+export function flowApproveAndStart(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'flow.approve-and-start' }>): unknown {
+    const { state, find, cas, pin, pending, unique, mappings } = transaction;
+    const payload = command.payload;
+    const flow = find(payload.flowId, 'flow');
+    cas(flow);
+    pending(flow.id);
+    const draft = flow.state === 'draft' && !flow.approvedRevisionId;
+    const ready = flow.state === 'ready' && flow.approvedRevisionId === flow.currentRevisionId;
+    if (!draft && !ready)
+        fail(409, 'invalid-state', 'The current Flow plan must be a draft or approved and ready');
+    const source = find(flow.currentRevisionId, 'flow-revision');
+    pin(source.contentDigest, payload.flowRevisionDigest);
+    const required = state.records.filter((record): record is WorkIntent => record.kind === 'intent' && record.flowId === flow.id && record.required && record.state !== 'cancelled' && (draft || source.requiredIntentIds.includes(record.id)));
+    unique(payload.intents.map(intent => intent.intentId));
+    if (required.length !== payload.intents.length || (ready && required.length !== source.requiredIntentIds.length))
+        fail(409, 'required-intents-mismatch', 'The required results changed. Review the plan again.');
+    const plan = required.map(intent => {
+        cas(intent);
+        const reviewed = payload.intents.find(entry => entry.intentId === intent.id);
+        const revision = find(intent.currentRevisionId, 'intent-revision');
+        if (!reviewed || reviewed.revisionId !== revision.id || (intent.approvedRevisionId && (intent.approvedRevisionId !== revision.id || revision.flowRevisionId !== source.id)))
+            fail(409, 'required-intent-stale', 'Result requirements changed. Review the plan again.');
+        pin(revision.contentDigest, reviewed.revisionDigest);
+        mappings(revision, source);
+        return { intent, revision };
+    });
+    if (ready && !plan.length)
+        fail(409, 'required-intents-missing', 'The approved Flow must have a required result');
+    const mapped = new Set(plan.flatMap(({ revision }) => revision.criterionMappings.map(mapping => mapping.flowCriterionId)));
+    if (plan.length && source.criteria.some(criterion => !mapped.has(criterion.criterionId)))
+        fail(409, 'flow-coverage-incomplete', 'Required results must cover every Flow criterion');
+    // Every pre-existing mutable record has already passed CAS. All subsequent
+    // writes happen inside this command's isolated staging state.
+    const checked = { ...transaction, cas: () => {} };
+    const { operationId, expectedVersions } = command;
+    const envelope = { operationId, expectedVersions };
+    if (!plan.length) {
+        const intent = intentCreate(checked, { ...envelope, command: 'intent.create', payload: {
+            flowId: flow.id, title: flow.title, deliverable: source.expectedOutcome,
+            approach: source.scope, outOfScope: source.outOfScope, ownerId: flow.ownerId,
+            required: true, criteria: source.criteria, flowCriterionIds: source.criteria.map(criterion => criterion.criterionId),
+            criterionMappings: source.criteria.map(criterion => ({ intentCriterionId: criterion.criterionId, flowCriterionId: criterion.criterionId })),
+        } });
+        plan.push({ intent, revision: find(intent.currentRevisionId, 'intent-revision') });
+    }
+    if (draft && transaction.canonical([...source.requiredIntentIds].sort()) !== transaction.canonical(plan.map(({ intent }) => intent.id).sort())) {
+        revisionPropose(checked, { ...envelope, command: 'revision.propose', payload: {
+            targetType: 'flow', flowId: flow.id, problem: source.problem, expectedOutcome: source.expectedOutcome,
+            scope: source.scope, outOfScope: source.outOfScope, specification: source.specification,
+            criteria: source.criteria, requiredIntentIds: plan.map(({ intent }) => intent.id),
+        } });
+    }
+    const current = find(flow.currentRevisionId, 'flow-revision');
+    if (draft) requirementsApprove(checked, { ...envelope, command: 'requirements.approve', payload: {
+        targetType: 'flow-revision', revisionId: current.id, revisionDigest: current.contentDigest,
+        flowRevisionId: current.id, reason: payload.reason,
+    } });
+    for (const { intent, revision } of plan) {
+        if (intent.approvedRevisionId) continue;
+        if (revision.flowRevisionId !== current.id) {
+            revisionPropose(checked, { ...envelope, command: 'revision.propose', payload: {
+                targetType: 'intent', intentId: intent.id, flowRevisionId: current.id,
+                deliverable: revision.deliverable, approach: revision.approach, outOfScope: revision.outOfScope,
+                criteria: revision.criteria, flowCriterionIds: revision.flowCriterionIds, criterionMappings: revision.criterionMappings,
+            } });
+        }
+        const pinned = find(intent.currentRevisionId, 'intent-revision');
+        requirementsApprove(checked, { ...envelope, command: 'requirements.approve', payload: {
+            targetType: 'intent-revision', revisionId: pinned.id, revisionDigest: pinned.contentDigest,
+            flowRevisionId: current.id, reason: payload.reason,
+        } });
+    }
+    return flowStart(checked, { ...envelope, command: 'flow.start', payload: {
+        flowId: flow.id, flowRevisionDigest: current.contentDigest,
+    } });
 }
 
 export function requirementsAmend(transaction: WorkTransaction, command: Extract<WorkCommand, { command: 'requirements.amend' }>): unknown {

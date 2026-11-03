@@ -221,6 +221,7 @@ export class MachineBridge {
             this.ledger!.reconcileCursor(`session:${session.sessionId}`, session.sessionEventCursor);
         await this.context?.initialize();
         this.publishInventory();
+        void this.reportChatConsent(this.connection);
         this.replay();
         const deadline = performance.now() + 5000;
         while (this.ledger!.cursors().some(c => this.ledger!.pendingEvents(c.stream).length) && performance.now() < deadline) {
@@ -334,6 +335,23 @@ export class MachineBridge {
             this.inventoryObserved = undefined;
             this.inventoryContent = undefined;
             this.notice(cause);
+        }
+    }
+    private async reportChatConsent(connection: MachineConnection): Promise<void> {
+        const policy = this.options.policy;
+        const enrollment = this.options.enrollment;
+        const profiles = policy.allowAdHocSessions ? enrollment.mappings.flatMap(mapping => {
+            const consent = policy.profiles.find(profile => profile.profileId === mapping.profileId);
+            const profile = this.profiles.get(mapping.checkoutId);
+            if (!consent?.allowAdHocTurns || !profile) return [];
+            return [{ projectId: mapping.projectId, checkoutId: mapping.checkoutId, profileId: mapping.profileId,
+                policyDigest: profile.policyDigest, consentVersion: consent.consentVersion }];
+        }) : [];
+        try {
+            await connection.request(`/hub/v2/machines/${enrollment.machineId}/chat-consent`, { epoch: connection.currentEpoch, profiles });
+        } catch (cause) {
+            // Older Hub versions have no consent report route.
+            if (!(cause instanceof MachineError && cause.code === 'machine-http-404')) this.notice(cause);
         }
     }
     /** `force`: every (re)connect publishes the complete projection, changed or not. */

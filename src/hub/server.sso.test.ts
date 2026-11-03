@@ -145,3 +145,55 @@ test("environment configuration fails startup on incomplete SSO and missing role
   expect(() => createHubApplication({ ...config, cloudflareAccess: { issuer, audience, rolesFile: join(directory, "missing") } })).toThrow("role mapping");
   expect(() => loadHubConfig({ ...env, KERYX_HUB_ACCESS_ENABLED: "yes" })).toThrow();
 });
+
+test("personal settings survive restart and are isolated by verified subject", async () => {
+  const first = await login();
+  const firstHeaders = { Cookie: first.cookie, "Cf-Access-Jwt-Assertion": first.jwt, Origin: origin };
+  expect((await call("/preferences", "POST", firstHeaders, { theme: "dark" })).status).toBe(200);
+  expect(await (await call("/preferences", "POST", firstHeaders, { language: "en" })).json()).toEqual({ theme: "dark", language: "en" });
+  expect((await call("/preferences", "POST", firstHeaders, { theme: "dark", actorId: "other" })).status).toBe(400);
+  expect((await call("/preferences", "GET", { Authorization: `Bearer ${operatorToken}` })).status).toBe(403);
+  const other = await login(token({ sub: "other" }));
+  expect(await (await call("/preferences", "GET", { Cookie: other.cookie, "Cf-Access-Jwt-Assertion": other.jwt })).json()).toEqual({ theme: null, language: null });
+  app.close(); app = createHubApplication(config);
+  expect(await (await call("/preferences", "GET", firstHeaders)).json()).toEqual({ theme: "dark", language: "en" });
+});
+
+test("configured Access session lifetime stays bounded by the signed assertion", async () => {
+  app.close(); app = createHubApplication({ ...config, accessSessionSeconds: 86_400 });
+  const long = await login(token({ exp: Math.floor(clock / 1000) + 172_800 }));
+  expect(long.response.headers.get("set-cookie")).toContain("Max-Age=86400");
+  const short = await login();
+  expect(Number(/Max-Age=(\d+)/.exec(short.response.headers.get("set-cookie")!)?.[1])).toBeLessThanOrEqual(3600);
+});
+
+test("empty project deletion validates actor, confirmation, and work created after preview", async () => {
+  const s = await login();
+  const request = (path: string, method = "GET", body?: unknown) =>
+    call(path, method, { Cookie: s.cookie, "Cf-Access-Jwt-Assertion": s.jwt, Origin: origin, "Idempotency-Key": randomUUID() }, body);
+  const create = async (name: string) => {
+    const response = await request("/projects", "POST", { name });
+    expect(response.status).toBe(200);
+    return await response.json();
+  };
+  const empty = await create("Empty");
+  const path = `/projects/${empty.id}/deletion`;
+  expect((await request(path)).status).toBe(200);
+  expect((await request(path, "POST", { name: "Other", expectedVersion: empty.version })).status).toBe(409);
+  expect((await call(path, "GET", { Authorization: `Bearer ${agentToken}` })).status).toBe(403);
+  expect((await request(path, "POST", { name: empty.name, expectedVersion: empty.version })).status).toBe(200);
+  expect((await request(`/projects/${empty.id}`)).status).toBe(404);
+
+  const busy = await create("Busy");
+  const busyPath = `/projects/${busy.id}/deletion`;
+  expect((await (await request(busyPath)).json()).blockers).toEqual([]);
+  const imported = await request(`/projects/${busy.id}/import`, "POST", {
+    expectedVersion: busy.version, sourceRevision: "test",
+    documents: [{ path: "spec.md", kind: "spec", content: "# Spec" }],
+  });
+  expect(imported.status).toBe(200);
+  const current = await (await request(`/projects/${busy.id}`)).json();
+  const blocked = await request(busyPath, "POST", { name: busy.name, expectedVersion: current.version });
+  expect(blocked.status).toBe(409);
+  expect((await blocked.json()).error.code).toBe("project-deletion-blocked");
+});

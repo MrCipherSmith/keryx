@@ -1,4 +1,13 @@
 export default {
+  specifications: 'Спецификации',
+  backToList: 'К списку',
+  copyCode: 'Копировать код',
+  wrapLines: 'Перенос строк',
+  codeCopied: 'Код скопирован.',
+  codeCopyFailed: 'Не удалось скопировать код.',
+  fileTechnicalDetails: 'Технические данные файла',
+  codeLineLimit: 'Показаны первые {{count}} строк. Кнопка копирования сохраняет весь файл.',
+  missingRevision: 'Эта ревизия недоступна в выбранном проекте.',
   loadMoreRevisions: 'Загрузить ещё ревизии',
   documents: 'Документы', documentsDescription: 'Общие спецификации и вики с точными версиями и историей проверки.',
   searchDocuments: 'Поиск по пути, типу или статусу проверки', noDocuments: 'В этом представлении документов нет.', selectDocument: 'Выберите документ, чтобы прочитать исходник и предложить изменение.', missingDocument: 'Документ недоступен в выбранном проекте.',

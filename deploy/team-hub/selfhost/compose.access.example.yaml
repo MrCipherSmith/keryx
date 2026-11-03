@@ -19,6 +19,8 @@ services:
   hub:
     environment:
       KERYX_HUB_ACCESS_ENABLED: "true"
+      # Optional maximum in seconds. Cloudflare Access can expire sooner.
+      KERYX_HUB_ACCESS_SESSION_SECONDS: "${KERYX_HUB_ACCESS_SESSION_SECONDS:-43200}"
       KERYX_HUB_ACCESS_ISSUER: https://${CF_ACCESS_TEAM:?CF_ACCESS_TEAM is set by install.sh --access-team}.cloudflareaccess.com
       KERYX_HUB_ACCESS_AUDIENCE: ${CF_ACCESS_AUD:?CF_ACCESS_AUD is set by install.sh --access-aud}
       KERYX_HUB_ACCESS_ROLES_FILE: /run/keryx-access/roles.json

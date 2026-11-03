@@ -56,7 +56,7 @@ test("Flow-only amendment actually crosses the live command boundary with an emp
 test("cancelled required Intents do not disable Flow approval or appear in revision membership choices",()=>{
  const flow=recordOf(records,"flow","flow-demo")!;flow.state="draft";flow.approvedRevisionId=null;recordOf(records,"intent","i1")!.state="draft";recordOf(records,"intent","i1")!.approvedRevisionId=null;const cancelled=recordOf(records,"intent","i2")!;cancelled.state="cancelled";
  recordOf(records,"flow-revision",flow.currentRevisionId)!.requiredIntentIds=["i1"];
- const rendered=show(<FlowSummary adapter={adapter} flow={flow} records={records} can={()=>true} human prepare={()=>undefined}/>);
+ const rendered=show(<FlowSummary adapter={adapter} flow={flow} records={records} can={command=>command==="requirements.approve"} human prepare={()=>undefined}/>);
  expect(screen.getByRole("button",{name:"Approve requirements"})).toBeEnabled();rendered.unmount();
  show(<RevisionEditor adapter={adapter} flow={flow} records={records} onDone={()=>undefined}/>);
  expect(screen.queryByRole("checkbox",{name:cancelled.title})).not.toBeInTheDocument();

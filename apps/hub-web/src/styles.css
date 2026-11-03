@@ -312,16 +312,6 @@
     padding-inline: 0;
     font-size: 11px;
   }
-  .theme-select {
-    border: 1px solid var(--hub-border);
-    background: var(--hub-surface);
-    color: var(--hub-ink);
-    border-radius: 6px;
-    padding: 5px 8px;
-    max-width: 110px;
-    min-height: 32px;
-    font-size: 12px;
-  }
   .mobile-menu {
     display: none;
     align-items: center;
@@ -561,17 +551,14 @@
   .workspace-tools {
     width: 100%;
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
   }
   .workspace-tools .hub-input {
-    flex: 1;
+    flex: 1 1 8rem;
     max-width: none;
     width: 0;
     font-size: 16px;
-  }
-  .theme-select {
-    font-size: 16px;
-    max-width: 115px;
   }
   .workspace-main {
     padding: 14px 12px;

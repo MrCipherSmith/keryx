@@ -194,7 +194,9 @@ export function FlowRows({
             {flow.acceptedBy ? (
               <>
                 <span>
-                  {t("acceptedBy")}: {flow.acceptedBy}
+                  {flow.acceptedBy.startsWith("cloudflare:")
+                    ? t("acceptedBySignedInUser")
+                    : `${t("acceptedBy")}: ${flow.acceptedBy}`}
                 </span>
                 {flow.acceptedAt && (
                   <span className="hub-flow-meta">

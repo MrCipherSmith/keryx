@@ -89,13 +89,6 @@ export function RevisionReview({
         ];
   const content = (
     <>
-      <div className="work-pin">
-        <span>
-          {t("revision")} {revision.revision}
-        </span>
-        <code>{revision.id}</code>
-        <code>{revision.contentDigest}</code>
-      </div>
       <dl>
         {fields.map((field) => (
           <div key={field.label}>
@@ -119,17 +112,13 @@ export function RevisionReview({
           <ul>
             {revision.requiredIntentIds.map((id) => (
               <li key={id}>
-                {recordOf(records, "intent", id)?.title ?? id} ·{" "}
-                <code>{id}</code>
+                {recordOf(records, "intent", id)?.title ?? id}
               </li>
             ))}
           </ul>
         </>
       ) : (
         <>
-          <h4>{t("parentFlowRevision")}</h4>
-          <code>{revision.flowRevisionId}</code>
-          <code>{parent?.contentDigest ?? "—"}</code>
           <h4>{t("criterionMapping")}</h4>
           <ul>
             {revision.criterionMappings.map((m) => (
@@ -143,16 +132,9 @@ export function RevisionReview({
                 {parent?.criteria.find(
                   (c) => c.criterionId === m.flowCriterionId,
                 )?.text ?? m.flowCriterionId}
-                <code>
-                  {m.intentCriterionId} → {m.flowCriterionId}
-                </code>
               </li>
             ))}
           </ul>
-          <h4>{t("flowCriterionIds")}</h4>
-          {revision.flowCriterionIds.map((id) => (
-            <code key={id}>{id}</code>
-          ))}
         </>
       )}
       <h4>{t("criteria")}</h4>
@@ -160,11 +142,31 @@ export function RevisionReview({
         {revision.criteria.map((c) => (
           <li key={c.criterionId}>
             <strong>{c.text}</strong>
-            <code>{c.criterionId}</code>
             <small>{t(c.waivable ? "allowWaivers" : "unwaivable")}</small>
           </li>
         ))}
       </ul>
+      <details>
+        <summary>{t("revisionTechnicalDetails")}</summary>
+        <div className="work-pin">
+          <span>{t("revision")} {revision.revision}</span>
+          <code>{revision.id}</code>
+          <code>{revision.contentDigest}</code>
+        </div>
+        {revision.kind === "intent-revision" && (
+          <>
+            <h4>{t("parentFlowRevision")}</h4>
+            <code>{revision.flowRevisionId}</code>
+            <code>{parent?.contentDigest ?? "—"}</code>
+            <h4>{t("flowCriterionIds")}</h4>
+            <ul>{revision.criterionMappings.map((mapping) => (
+              <li key={mapping.intentCriterionId + ":" + mapping.flowCriterionId}>
+                <code>{mapping.intentCriterionId} → {mapping.flowCriterionId}</code>
+              </li>
+            ))}</ul>
+          </>
+        )}
+      </details>
     </>
   );
   return expanded ? (

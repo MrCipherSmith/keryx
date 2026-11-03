@@ -25,7 +25,8 @@ export default {
   projectSnapshot: "Снимок",
 
   projectFlows: "Flows проекта",
-  viewAllFlows: "Все Flows проекта",
+  viewAllFlows: "Прежние Flows",
+  viewManagedFlows: "Открыть работу над проектом",
 
   allFlows: "Все Flows",
   allFlowsDescription:
@@ -130,6 +131,7 @@ export default {
   acknowledgment:
     "Я проверил ревизию {{revision}} и подтверждаю, что всё Evidence предоставлено самим исполнителем.",
   acceptExact: "Принять точную ревизию и завершить",
+  acceptedBySignedInUser: "Принято пользователем",
   acceptedBy: "Принял",
   acceptedAt: "Время приёмки",
   receipt: "Подтверждение",

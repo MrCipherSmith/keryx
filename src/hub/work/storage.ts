@@ -117,7 +117,7 @@ export function workRepository(db: Database) {
     const commandState = (projectId: string, input: unknown, actorId: string): WorkState => {
         const command = input as { command?: string; payload?: unknown; expectedVersions?: Record<string, unknown>; operationId?: string };
         const kind = command.command ?? '';
-        const membership = ['revision.propose', 'flow.start', 'flow.submit', 'review.decide', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'work.cancel'].includes(kind);
+        const membership = ['revision.propose', 'flow.start', 'flow.approve-and-start', 'flow.submit', 'review.decide', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'work.cancel'].includes(kind);
         const found = new Map<string, StoredRow>();
         const addRows = (rows: StoredRow[]) => { for (const row of rows) found.set(parse(row).id, row); };
         const visit = (value: unknown, key = ''): void => {
@@ -153,7 +153,7 @@ export function workRepository(db: Database) {
                     loadedFlows.add(r.id);
                     // Only unresolved amendments block work. Resolved history is immutable audit data.
                     addRows(db.query<StoredRow,[string,string]>('SELECT r.rowid,r.body FROM hub_work_pending_amendment p JOIN hub_work_records r ON r.project_id=p.project_id AND r.id=p.amendment_id WHERE p.project_id=? AND p.flow_id=? ORDER BY r.rowid').all(projectId,r.id));
-                    if (['requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'work.cancel'].includes(kind))
+                    if (['flow.approve-and-start', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'work.cancel'].includes(kind))
                         addRows(rowsWhere(projectId, "json_extract(body,'$.kind')='intent' AND json_extract(body,'$.flowId')=?", [r.id]));
                     if (kind === 'requirements.approve') {
                     const first = db.query<StoredRow, [string, string]>('SELECT r.rowid,r.body FROM hub_work_first_approval p JOIN hub_work_records r ON r.project_id=p.project_id AND r.id=p.decision_id WHERE p.project_id=? AND p.flow_id=?').get(projectId,r.id);

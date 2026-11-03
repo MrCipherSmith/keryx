@@ -68,8 +68,10 @@ beforeEach(async () => {
         lease: sessionFixture.controller,
       });
     }
+    if (path.includes("/controller-claims/")) return Response.json({applied: claimed});
     if (path.endsWith("/machines?projectId=p"))
       return Response.json({ machines: [machineFixture] });
+    if (path.endsWith("/chat-consent")) return Response.json({profileConsentVersion: 7});
     if (path.endsWith("/flows")) return Response.json({ flows: [] });
     if (path.endsWith("/sessions/s/history?after=0"))
       return Response.json({
@@ -168,11 +170,9 @@ test("message conflict preserves draft and sends exact controller and frozen bas
   fireEvent.change(screen.getByLabelText("Message"), {
     target: { value: "Keep my draft" },
   });
-  fireEvent.change(screen.getByLabelText("Work mode"), {
-    target: { value: "ad-hoc" },
-  });
+  expect(screen.getByLabelText("Work mode")).toHaveValue("ad-hoc");
   fireEvent.click(
-    screen.getByLabelText("I explicitly choose locally permitted ad-hoc work"),
+    screen.getByLabelText("Send messages in this session without a Flow."),
   );
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   await waitFor(() =>
@@ -188,7 +188,7 @@ test("message conflict preserves draft and sends exact controller and frozen bas
   });
   expect(body.association).toEqual({
     mode: "ad-hoc",
-    profileConsentVersion: 1,
+    profileConsentVersion: 7,
   });
   expect(screen.getByLabelText("Message")).toHaveValue("Keep my draft");
 });
@@ -248,4 +248,30 @@ test("suspended queue item offers explicit new-controller reauthorization rather
       name: "Reauthorize under current controller",
     }),
   ).toBeDisabled();
+});
+
+test("a held receipt waits for machine application and explains a refused claim without losing the draft", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  let claimKey: string | null = null;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    const path = String(url);
+    if (path.endsWith("/controller/claim")) {
+      claimKey = new Headers(init?.headers).get("idempotency-key");
+      return Response.json({receiptId: "pending", sessionVersion: 3, lease: sessionFixture.controller});
+    }
+    if (path.includes("/controller-claims/")) {
+      expect(path.endsWith("/" + claimKey)).toBe(true);
+      return Response.json({error: {code: "recovery-required", message: "Machine refused"}}, {status: 409});
+    }
+    return original(url, init);
+  });
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  fireEvent.change(screen.getByLabelText("Message"), {target: {value: "Keep this message"}});
+  fireEvent.click(screen.getByRole("button", {name: "Claim control"}));
+  await screen.findByText(/\(recovery-required\)/);
+  expect(screen.queryByRole("button", {name: "Release control"})).not.toBeInTheDocument();
+  expect(screen.getByRole("button", {name: "Send message"})).toBeDisabled();
+  expect(screen.getByLabelText("Message")).toHaveValue("Keep this message");
 });

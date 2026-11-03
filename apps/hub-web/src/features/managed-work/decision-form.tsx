@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHub } from "../../app/hub-context";
 import {
@@ -52,9 +53,17 @@ export function DecisionForm({
       waivers[c.criterionId].trim().length > 0,
   );
   const { blocked, run } = useWorkOperation(adapter, onDone);
+  const fastStart = action.command === "flow.approve-and-start";
+  const needsReason = action.command !== "flow.start" && !fastStart;
+  const confirmation = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (fastStart) confirmation.current?.focus();
+  }, [fastStart]);
   return (
     <form
       className="work-decision-form"
+      ref={confirmation}
+      tabIndex={fastStart ? -1 : undefined}
       aria-label={action.title}
       onSubmit={(e) => {
         e.preventDefault();
@@ -75,7 +84,7 @@ export function DecisionForm({
               : {}),
             ...(action.command === "flow.start"
               ? {}
-              : { reason: reason.trim() }),
+              : { reason: fastStart ? t("planApprovedReason") : reason.trim() }),
           },
         });
       }}
@@ -88,7 +97,21 @@ export function DecisionForm({
       {typeof action.payload.revisionDigest === "string" && (
         <code>{action.payload.revisionDigest}</code>
       )}
-      {action.command !== "flow.start" && (
+      {action.plan && (
+        <div>
+          <h3>{t("criteria")}</h3>
+          <ul>{action.plan.criteria.map((criterion, index) => <li key={index}>{criterion}</li>)}</ul>
+          <h3>{t("requiredIntents")}</h3>
+          {action.plan.results.map((result, index) => (
+            <section key={index}>
+              <h4>{result.title}</h4>
+              <p>{result.deliverable}</p>
+              {result.criteria.length > 0 && <ul>{result.criteria.map((criterion, offset) => <li key={offset}>{criterion}</li>)}</ul>}
+            </section>
+          ))}
+        </div>
+      )}
+      {needsReason && (
         <Field label={t("reason")}>
           <Textarea
             autoFocus
@@ -146,10 +169,10 @@ export function DecisionForm({
           disabled={
             blocked ||
             !completeWaivers ||
-            (action.command !== "flow.start" && !reason.trim())
+            (needsReason && !reason.trim())
           }
         >
-          {t("confirm")}
+          {t(fastStart ? "approveAndStart" : "confirm")}
         </Button>
         <Button variant="secondary" disabled={blocked} onClick={onCancel}>
           {t("cancel")}

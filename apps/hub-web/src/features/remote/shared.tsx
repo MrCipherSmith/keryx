@@ -1,3 +1,5 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { remoteGet } from '../../api/remote';
 import { useEffect,useRef,useState,type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHub } from '../../app/hub-context';
@@ -15,18 +17,52 @@ export function Definition({label,children}:{label:string;children:ReactNode}){r
 export function useOperator(){const{principal}=useHub();return principal.kind==='human'&&principal.role==='operator';}
 export function useController(record:Control['SessionRecord']){
  const hub=useHub();const operator=useOperator();const path=sessionPath(record.projectId,record.sessionId);const action=useRemoteAction<Control['ControllerReceipt']>();
- const[control,setControl]=useDraft<{lease:Control['ControllerLease']|null;renewals?:RenewalEdge[]}>(`remote-controller:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,{lease:null});const[now,setNow]=useState(Date.now());const[failed,setFailed]=useState(false);const[pendingRenewal,setPendingRenewal]=useState<{before:Control['SessionRecord'];receipt:Control['ControllerReceipt']}|null>(null);const latest=useRef(record);latest.current=record;const updateControl=useRef(setControl);updateControl.current=setControl;
+ const client=useQueryClient();
+ const[control,setControl]=useDraft<{lease:Control['ControllerLease']|null;renewals?:RenewalEdge[];claim?:{operationId:string;beforeVersion:number;sessionVersion:number}}>(`remote-controller:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,{lease:null});const[now,setNow]=useState(Date.now());const[failed,setFailed]=useState(false);const[pendingRenewal,setPendingRenewal]=useState<{before:Control['SessionRecord'];receipt:Control['ControllerReceipt']}|null>(null);const latest=useRef(record);latest.current=record;const updateControl=useRef(setControl);updateControl.current=setControl;
  const proof=useRemoteQuery<Control['SessionEventPage']>(['renewal-proof',record.sessionId,pendingRenewal?.receipt.receiptId],path+'/events?after='+(pendingRenewal?.before.sessionEventCursor??0),!!pendingRenewal&&record.version>=pendingRenewal.receipt.sessionVersion&&record.sessionEventCursor>=pendingRenewal.before.sessionEventCursor+2);
  useEffect(()=>{if(!pendingRenewal||!proof.data)return;const edge=renewalEdge(pendingRenewal.before,pendingRenewal.receipt,proof.data);if(edge)updateControl.current(previous=>({...previous,renewals:[...(previous.renewals??[]).filter(e=>e.receiptId!==edge.receiptId),edge].slice(-128)}));setPendingRenewal(null);},[pendingRenewal,proof.data]);
- const lease=control.lease;const active=operator&&!failed&&lease?.state==='held'&&Date.parse(lease.expiresAt)>now&&record.controller?.controllerLeaseId===lease.controllerLeaseId&&record.controller.version===lease.version;
+ const lease=control.lease;
+ const leaseLive=operator&&!failed&&lease?.state==='held'&&Date.parse(lease.expiresAt)>now;
+ const claimToVerify=leaseLive&&control.claim&&control.claim.sessionVersion>control.claim.beforeVersion ? control.claim : undefined;
+ const outcome=useQuery({
+  queryKey:[hub.scopeKey,record.projectId,'remote','controller-claim',claimToVerify?.operationId],
+  queryFn:({signal})=>remoteGet<{applied:boolean}>(path+'/controller-claims/'+claimToVerify!.operationId,signal),
+  enabled:!!claimToVerify,
+  staleTime:Infinity,
+  retry:false,
+  refetchInterval:query=>query.state.error||query.state.data?.applied ? false : 1000,
+ });
+ const applied=outcome.data?.applied===true;
+ const active=leaseLive&&(!claimToVerify||applied)&&record.controller?.controllerLeaseId===lease.controllerLeaseId&&record.controller.version===lease.version;
  const binding:Control['ControllerBinding']|null=active&&lease?{controllerLeaseId:lease.controllerLeaseId,expectedControllerVersion:lease.version}:null;
+ const pendingClaim=!!claimToVerify&&!outcome.error&&!active;
+ useEffect(()=>{
+  if(!claimToVerify||!applied) return;
+  void client.invalidateQueries({queryKey:[hub.scopeKey,record.projectId,'remote','session',record.sessionId],exact:true});
+ },[client,hub.scopeKey,record.projectId,record.sessionId,claimToVerify,applied]);
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
  useEffect(()=>{if(!active||!lease)return;let running=false;const timer=setInterval(()=>{if(running)return;running=true;const current=latest.current;action.mutateAsync({path:path+'/controller/renew',body:{expectedSessionVersion:current.version,expectedControllerVersion:lease.version,requestedLeaseSeconds:60,mode:'renew',controllerLeaseId:lease.controllerLeaseId} satisfies Control['ControllerClaim']}).then(receipt=>{updateControl.current(previous=>({...previous,lease:receipt.lease}));setPendingRenewal({before:structuredClone(current),receipt});}).catch(()=>setFailed(true)).finally(()=>{running=false;});},20000);return()=>clearInterval(timer);},[active,lease,path,action.mutateAsync]);
- function claim(){setFailed(false);action.mutate({path:path+'/controller/claim',body:{expectedSessionVersion:record.version,expectedControllerVersion:record.controller?.version??0,requestedLeaseSeconds:60,mode:'claim'} satisfies Control['ControllerClaim']},{onSuccess:receipt=>setControl({lease:receipt.lease,renewals:[]})});}
+ function claim() {
+  if (pendingClaim && !outcome.error) return;
+  setFailed(false);
+  const claimPath=path+'/controller/claim';
+  const key=crypto.randomUUID();
+  action.mutate({
+   path:claimPath,operationId:key,
+   body:{expectedSessionVersion:record.version,expectedControllerVersion:record.controller?.version??0,requestedLeaseSeconds:60,mode:'claim'} satisfies Control['ControllerClaim'],
+  },{onSuccess:receipt=>setControl({lease:receipt.lease,renewals:[],claim:{operationId:key,beforeVersion:record.version,sessionVersion:receipt.sessionVersion}})});
+ }
+
  function release(){if(!binding)return;action.mutate({path:path+'/controller/release',body:{expectedSessionVersion:record.version,controller:binding} satisfies Control['ControllerRelease']},{onSuccess:()=>setControl({lease:null,renewals:[]})});}
  function takeover(receipt:Control['ControllerReceipt']){if(!operator||receipt.lease.state!=='released'||receipt.lease.controllerLeaseId!==record.controller?.controllerLeaseId||receipt.lease.version!==record.controller.version)return;setFailed(false);action.mutate({path:path+'/controller/claim',body:{expectedSessionVersion:record.version,expectedControllerVersion:receipt.lease.version,requestedLeaseSeconds:60,mode:'takeover',previousReleaseReceiptId:receipt.receiptId} satisfies Control['ControllerClaim']},{onSuccess:next=>setControl({lease:next.lease,renewals:[]})});}
  function recover(proof:Control['ReconciliationReceipt']){const age=Date.now()-Date.parse(proof.receivedAt);const current=record.controller;if(!operator||!current||current.state==='released'||Date.parse(current.expiresAt)>Date.now()||proof.observation!=='confirmed-stopped'||proof.sessionId!==record.sessionId||proof.machineId!==record.machineId||proof.checkoutId!==record.checkoutId||proof.projectId!==record.projectId||age< -5000||age>30000)return;setFailed(false);action.mutate({path:path+'/controller/claim',body:{expectedSessionVersion:record.version,expectedControllerVersion:current.version,requestedLeaseSeconds:60,mode:'takeover',previousReleaseReceiptId:proof.reconciliationId} satisfies Control['ControllerClaim']},{onSuccess:next=>setControl({lease:next.lease,renewals:[]})});}
- return{binding,active,claim,release,takeover,recover,action,failed,operator,advanceVersion:(base:number)=>advanceKnownRenewals(base,record,control.renewals??[])};
+ const advanceVersion = (base:number) => {
+  const claim = control.claim;
+  const appliedClaim = claim && active && claim.beforeVersion === base && claim.sessionVersion === base + 1;
+  const advanced = advanceKnownRenewals(appliedClaim ? claim.sessionVersion : base,record,control.renewals??[]);
+  return advanced === record.version ? advanced : base;
+ };
+ return{binding,active,claim,release,takeover,recover,action,failed,operator,advanceVersion,claimPending:pendingClaim,claimError:outcome.error};
 }
 export type Controller=ReturnType<typeof useController>;
 export async function digestCriteria(criteria:string[]){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(criteria)));return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');}

@@ -161,6 +161,19 @@ function WorkBoard({
     capabilities.allowedCommands.includes(command);
   const human = hub.principal.kind === "human";
   const refresh = () => undefined;
+  const prework = flow && ["draft", "ready"].includes(flow.state);
+  const simpleApproval = can("flow.approve-and-start") && prework;
+  const contribution = flow && (
+    <ContributionPanel
+      adapter={adapter}
+      records={records}
+      flow={flow}
+      intent={intent}
+      attempt={attempt}
+      can={can}
+      onDone={() => void refresh()}
+    />
+  );
   return (
     <>
       {adapter.mode === "live" && (
@@ -236,8 +249,11 @@ function WorkBoard({
       {creating && (
         <CreateFlow
           adapter={adapter}
-          onDone={() => {
+          fast={can("flow.approve-and-start")}
+          onDone={(receipt) => {
             setCreating(false);
+            const created = receipt.entities?.find((record) => record.kind === "flow");
+            if (created) setFlow(created.id);
             void refresh();
           }}
         />
@@ -258,15 +274,6 @@ function WorkBoard({
       ) : (
         <>
           <details open={!(flow.approvedRevisionId&&flow.state!=="draft"&&(attempt?.submissionId||flow.state==="in-review"))}><summary>{acceptanceText("workContext")}</summary>
-          <ContributionPanel
-            adapter={adapter}
-            records={records}
-            flow={flow}
-            intent={intent}
-            attempt={attempt}
-            can={can}
-            onDone={() => void refresh()}
-          />
           <FlowSummary
             adapter={adapter}
             flow={flow}
@@ -275,10 +282,40 @@ function WorkBoard({
             human={human}
             prepare={(next) => setAction({ ...next, scopeFlowId: flow.id })}
           />
+          {simpleApproval ? (
+            <details>
+              <summary>{t("editPlan")}</summary>
+              {contribution}
+            </details>
+          ) : contribution}
           </details>
-          <div className="work-detail-grid">
-            <IntentColumn intents={intents} selectedIntentId={intent?.id} onSelect={(id) => { setIntent(id); setAttempt(null); setAction(null); }} />
+          {action && action.scopeFlowId === flowId && (
+            <DecisionForm
+              key={[
+                hub.scopeKey,
+                hub.projectId,
+                flowId,
+                JSON.stringify(action),
+              ].join(":")}
+              adapter={adapter}
+              action={action}
+              onCancel={() => setAction(null)}
+              onDone={() => {
+                setAction(null);
+                void refresh();
+              }}
+            />
+          )}
+          <div className={`work-detail-grid ${intentId ? "work-result-open" : ""}`}>
+            <IntentColumn intents={intents} selectedIntentId={intent?.id} onSelect={(id) => {
+              hub.navigate({ intentId: id, attemptId: undefined });
+            }} />
             <section className="work-attempts">
+              {intentId && <div className="work-result-back">
+                <Button variant="ghost" onClick={() => hub.navigate({ intentId: undefined, attemptId: undefined })}>
+                  <ArrowLeft size={13} /> {t("backToResults")}
+                </Button>
+              </div>}
               {intent && (
                 <>
                   <header className="work-section-heading">
@@ -328,7 +365,8 @@ function WorkBoard({
                       </button>
                     ))}
                   </div>
-                  {intent.state === "draft" && !intent.approvedRevisionId && (
+                  {intent.state === "draft" && !intent.approvedRevisionId &&
+                    !(intent.required && simpleApproval) && (
                     <IntentApproval
                       adapter={adapter}
                       flow={flow}
@@ -363,23 +401,6 @@ function WorkBoard({
               )}
             </section>
           </div>
-          {action && action.scopeFlowId === flowId && (
-            <DecisionForm
-              key={[
-                hub.scopeKey,
-                hub.projectId,
-                flowId,
-                JSON.stringify(action),
-              ].join(":")}
-              adapter={adapter}
-              action={action}
-              onCancel={() => setAction(null)}
-              onDone={() => {
-                setAction(null);
-                void refresh();
-              }}
-            />
-          )}
           <AmendmentsPanel
             adapter={adapter}
             records={records}
@@ -387,6 +408,7 @@ function WorkBoard({
             can={can}
             onDone={() => void refresh()}
           />
+          {!simpleApproval && (
           <FlowReview
             key={flow.id + ":" + flow.version}
             adapter={adapter}
@@ -395,6 +417,7 @@ function WorkBoard({
             can={can}
             onDone={() => void refresh()}
           />
+          )}
           <details><summary>{t("decisions")}</summary><DecisionHistory records={records} flow={flow}/></details>
         </>
       )}

@@ -63,7 +63,7 @@ export function FlowList({ flows, intentsByFlow, onSelect }: {flows: WorkFlow[];
                       <span>
                         <strong>{f.title}</strong>
                         <small>
-                          {t("owner")}: {f.ownerId ?? "—"}
+                          {t("owner")}: {f.ownerId?.startsWith("cloudflare:") ? t("signedInUser") : f.ownerId ?? "—"}
                         </small>
                       </span>
                       <WorkBadge value={f.state} />
@@ -111,7 +111,7 @@ export function IntentColumn({intents,selectedIntentId,onSelect}:{intents:WorkIn
                   <WorkBadge value={i.state} />
                   <small>
                     {t(i.required ? "required" : "optional")} ·{" "}
-                    {i.ownerId ?? "—"}
+                    {i.ownerId?.startsWith("cloudflare:") ? t("signedInUser") : i.ownerId ?? "—"}
                   </small>
                 </button>
               ))}

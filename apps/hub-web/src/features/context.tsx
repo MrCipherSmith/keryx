@@ -7,6 +7,8 @@ import { useHub } from '../app/hub-context';
 import { useDraft } from '../state/drafts';
 import { Button, EmptyState, Field, Input, Notice, PageHeading, Panel, Select, StatusBadge, Textarea } from '../components/ui';
 import { Markdown } from '../components/Markdown';
+import { RecordBrowser } from './record-browser';
+import { RevisionCodeViewer } from './revision-code-viewer';
 import { formatDate } from '../i18n/format';
 import { decodeRevisionFile, mergeEvents, parseRevisionChanges, safeExternalUrl } from './context-model';
 
@@ -54,21 +56,41 @@ export function DocumentsView() {
   const docs = useResource<{ documents: HubDocument[] }>('documents');
   const project = useResource<Project>('project');
   const [search, setSearch] = useState('');
+  const [kind, setKind] = useState<'all' | HubDocument['kind']>('all');
   const documents = docs.data?.documents ?? [];
   const selected = documents.find(item => item.id === location.documentId);
-  const filtered = documents.filter(item => `${item.path} ${item.kind} ${item.approval} ${t(item.kind === 'spec' ? 'specification' : 'wiki')} ${t(`common:status.${item.approval}`)}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = documents.filter(item => (kind === 'all' || item.kind === kind) && `${item.path} ${item.kind} ${item.approval} ${t(item.kind === 'spec' ? 'specification' : 'wiki')} ${t(`common:status.${item.approval}`)}`.toLowerCase().includes(search.toLowerCase()));
   return <>
     <PageHeading title={t('documents')} description={t('documentsDescription')} />
     {project.data ? <ImportForm key={`${scopeKey}:${projectId}`} project={project.data} /> : <ErrorNotice error={project.error} />}
-    <div className="mt-6 grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(0,2fr)]">
-      <Panel>
+    <RecordBrowser
+      selectedId={location.documentId}
+      onBack={() => navigate({ documentId: undefined })}
+      list={<Panel>
+        <div className="flex w-fit flex-wrap rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label={t('kind')}>
+          {(['all', 'spec', 'wiki'] as const).map(value => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={kind === value}
+              onClick={() => setKind(value)}
+              className={`rounded-md px-2 py-2 text-xs font-bold focus-visible:outline-2 focus-visible:outline-emerald-700 ${kind === value ? 'bg-emerald-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+            >
+              {t(value === 'spec' ? 'specifications' : value)}
+            </button>
+          ))}
+        </div>
         <Field label={t('searchDocuments')}><Input value={search} onChange={event => setSearch(event.target.value)} type="search" /></Field>
         <ReadState pending={docs.isPending} error={docs.error} retry={docs.refetch}>
-          {filtered.length ? <div className="max-h-[38rem] space-y-2 overflow-y-auto">{filtered.map(doc => <button key={doc.id} type="button" aria-pressed={doc.id === selected?.id} onClick={() => navigate({ documentId: doc.id })} className={`w-full rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${doc.id === selected?.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}><span className="block break-all text-sm font-medium text-slate-900">{doc.path}</span><span className="mt-2 flex flex-wrap items-center gap-2"><StatusBadge status={doc.approval} /><span className="text-xs text-slate-500">{t(doc.kind === 'spec' ? 'specification' : 'wiki')} · {t('version')} {doc.version}</span></span></button>)}</div> : <EmptyState>{t('noDocuments')}</EmptyState>}
+          {filtered.length ? <div className="space-y-2 xl:max-h-[38rem] xl:overflow-y-auto">{filtered.map(doc => <button key={doc.id} type="button" data-record-open aria-pressed={doc.id === selected?.id} onClick={() => navigate({ documentId: doc.id })} className={`w-full rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${doc.id === selected?.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}><span className="block break-words text-sm font-medium text-slate-900 [overflow-wrap:anywhere]">{doc.path}</span><span className="mt-2 flex flex-wrap items-center gap-2"><StatusBadge status={doc.approval} /><span className="text-xs text-slate-500">{t(doc.kind === 'spec' ? 'specification' : 'wiki')} · {t('version')} {doc.version}</span></span></button>)}</div> : <EmptyState>{t('noDocuments')}</EmptyState>}
         </ReadState>
-      </Panel>
-      <div className="min-w-0">{selected ? <DocumentDetail key={`${scopeKey}:${projectId}:${selected.id}`} document={selected} /> : <EmptyState>{t(location.documentId ? 'missingDocument' : 'selectDocument')}</EmptyState>}</div>
-    </div>
+      </Panel>}
+      detail={location.documentId ? (
+        <ReadState pending={docs.isPending} error={docs.error} retry={docs.refetch}>
+          {selected ? <DocumentDetail key={`${scopeKey}:${projectId}:${selected.id}`} document={selected} /> : !docs.error && <EmptyState>{t('missingDocument')}</EmptyState>}
+        </ReadState>
+      ) : <EmptyState>{t('selectDocument')}</EmptyState>}
+    />
   </>;
 }
 
@@ -176,9 +198,14 @@ export function RevisionsView() {
   return <><PageHeading title={t('revisions')} description={t('revisionsDescription')} />
     {revisions.data && project.data ? <RevisionForm key={`${scopeKey}:${projectId}`} revisions={revisions.data.revisions} /> : null}
     <ReadState pending={revisions.isPending || project.isPending} error={revisions.error || project.error || (!listed && exact.error)} retry={() => { void revisions.refetch(); void project.refetch(); if (!listed) void exact.refetch(); }}>
-      <div className="mt-6 grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(0,2fr)]"><Panel>
-        {(revisions.data?.revisions.length ?? 0) > 0 ? <div className="space-y-2">{revisions.data?.revisions.map(revision => <button key={revision.id} type="button" className={`w-full rounded-xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-emerald-700 ${selected?.id === revision.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`} onClick={() => navigate({ revisionId: revision.id })}><span className="block break-words text-sm font-semibold text-slate-900">{revision.message}</span><span className="mt-1 block break-all font-mono text-xs text-slate-500">{revision.id}</span><span className="mt-1 block text-xs text-slate-500">{t('files')}: {revision.fileCount}</span><span className={`mt-2 inline-block rounded px-2 py-1 text-[11px] font-medium ${revision.purpose === 'review-bundle' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{t(revision.purpose === 'review-bundle' ? 'reviewBundle' : 'snapshot')}</span></button>)}</div> : <EmptyState>{t('noRevisions')}</EmptyState>}<MoreRevisions query={revisions} />
-      </Panel><div className="min-w-0">{selected && project.data ? <RevisionDetail key={`${scopeKey}:${projectId}:${selected.id}`} revision={selected} project={project.data} /> : <EmptyState>{t('selectRevision')}</EmptyState>}</div></div>
+      <RecordBrowser
+        selectedId={location.revisionId}
+        onBack={() => navigate({ revisionId: undefined })}
+        list={<Panel>
+        {(revisions.data?.revisions.length ?? 0) > 0 ? <div className="space-y-2">{revisions.data?.revisions.map(revision => <button key={revision.id} type="button" data-record-open aria-pressed={selected?.id === revision.id} className={`w-full rounded-xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-emerald-700 ${selected?.id === revision.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`} onClick={() => navigate({ revisionId: revision.id })}><span className="block break-words text-sm font-semibold text-slate-900">{revision.message}</span><span className="mt-1 block break-all font-mono text-xs text-slate-500">{revision.id}</span><span className="mt-1 block text-xs text-slate-500">{t('files')}: {revision.fileCount}</span><span className={`mt-2 inline-block rounded px-2 py-1 text-[11px] font-medium ${revision.purpose === 'review-bundle' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{t(revision.purpose === 'review-bundle' ? 'reviewBundle' : 'snapshot')}</span></button>)}</div> : <EmptyState>{t('noRevisions')}</EmptyState>}<MoreRevisions query={revisions} />
+        </Panel>}
+        detail={selected && project.data ? <RevisionDetail key={`${scopeKey}:${projectId}:${selected.id}`} revision={selected} project={project.data} /> : <EmptyState>{t(location.revisionId ? exact.isPending ? 'common:loading' : 'missingRevision' : 'selectRevision')}</EmptyState>}
+      />
     </ReadState></>;
 }
 
@@ -232,8 +259,13 @@ function RevisionFiles({ revision, project }: { revision: CodeRevision; project:
     </div> : <Notice>{t('humanRequired')}</Notice> : null}
   </Panel><Panel title={t('files')}>
     {revision.files.length ? <Field label={t('selectFile')}><Select value={filePath} onChange={event => setFilePath(event.target.value)}>{revision.files.map(item => <option key={item.path} value={item.path}>{item.path}</option>)}</Select></Field> : <EmptyState>{t('selectFile')}</EmptyState>}
-    {file ? <p className="break-all font-mono text-xs text-slate-500">{file.mode} · {file.contentDigest}</p> : null}
-    {preview?.kind === 'binary' ? <Notice>{t('binaryFile', { size: preview.size })}</Notice> : preview ? <>{preview.truncated ? <Notice>{t('truncated')}</Notice> : null}<pre className={`${codeClass} max-h-[36rem]`}>{preview.text}</pre></> : null}
+    {preview?.kind === 'binary' ? <Notice>{t('binaryFile', { size: preview.size })}</Notice> : file && preview ? (
+      <RevisionCodeViewer key={file.path} file={file} preview={preview} />
+    ) : null}
+    {file && <details className="text-xs text-slate-500">
+      <summary className="cursor-pointer">{t('fileTechnicalDetails')}</summary>
+      <p className="mt-2 break-all font-mono">{file.mode} · {file.contentDigest}</p>
+    </details>}
   </Panel></div>;
 }
 

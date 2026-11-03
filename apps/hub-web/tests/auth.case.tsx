@@ -34,7 +34,13 @@ describe('React authentication and locale',()=>{
   render(<App/>);await screen.findByText(principal.email);denied=true;fireEvent.click(screen.getByRole('button',{name:'Refresh'}));await screen.findByRole('alert');expect(screen.getByText(principal.email)).toBeInTheDocument();
  });
  test('language changes labels without altering identity or private draft',async()=>{
-  vi.spyOn(globalThis,'fetch').mockImplementation(async(input)=>authenticated(String(input)));render(<App/>);await screen.findByText(principal.email);useDraftStore.getState().put('draft',{content:'Original user content'});fireEvent.click(screen.getAllByRole('button',{name:'RU'})[0]!);expect(await screen.findByText('Подтверждённая учётная запись')).toBeInTheDocument();expect(document.documentElement.lang).toBe('ru');expect(useDraftStore.getState().drafts.draft).toEqual({content:'Original user content'});
+  const saved = vi.fn();
+  vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+   const path=String(input);
+   if(!path.endsWith('/preferences'))return authenticated(path);
+   if(init?.method==='POST'){const patch=JSON.parse(String(init.body));saved(patch);return reply({theme:null,...patch});}
+   return reply({theme:null,language:'en'});
+  });render(<App/>);await screen.findByText(principal.email);useDraftStore.getState().put('draft',{content:'Original user content'});const button=screen.getByRole('button',{name:'RU'});await waitFor(()=>expect(button).toBeEnabled());fireEvent.click(button);await waitFor(()=>expect(saved).toHaveBeenCalledWith({language:'ru'}));expect(await screen.findByText('Подтверждённая учётная запись')).toBeInTheDocument();expect(document.documentElement.lang).toBe('ru');expect(useDraftStore.getState().drafts.draft).toEqual({content:'Original user content'});
  });
  test('legacy shared token principal is not presented as a verified personal identity',async()=>{
   const legacy={id:'human:operator',kind:'human',role:'operator'};vi.spyOn(globalThis,'fetch').mockImplementation(async(input)=>String(input).endsWith('/session')?reply({principal:legacy}):authenticated(String(input)));

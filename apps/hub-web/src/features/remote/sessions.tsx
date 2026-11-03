@@ -267,7 +267,14 @@ export function SessionSurface({
   const control = useController(record);
   const action = useRemoteAction();
   const path = sessionPath(record.projectId, record.sessionId);
+  const opening = useRemoteQuery<{ errorCode: string | null }>(
+    ["opening-status",record.sessionId],path+"/opening-status",record.state==="opening",
+  );
   return (
+    <>
+    {record.state === "opening" && opening.data?.errorCode && (
+      <Notice tone="error">{t("sessionOpeningRejected")} ({opening.data.errorCode})</Notice>
+    )}
     <SessionWorkspace
       record={record}
       control={control}
@@ -342,6 +349,7 @@ export function SessionSurface({
         </>
       }
     />
+    </>
   );
 }
 

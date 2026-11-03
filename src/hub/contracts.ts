@@ -2,6 +2,7 @@ import type { Server, WebSocketHandler } from "bun";
 import type { RemoteSocketData } from "./remote-v2";
 /** Team Hub v1 wire contract. IDs are opaque; digests are lowercase SHA256 hex. */
 export type Principal = { id: string; kind: "human" | "agent"; role: "operator" | "reviewer" | "agent"; email?: string; issuer?: string; subject?: string; projectIds?: string[]; readOnly?: boolean };
+export type HubPreferences = { theme: "system" | "light" | "dark" | null; language: "ru" | "en" | null };
 export type HubError = { error: { code: string; message: string } };
 export type Receipt = { id: string; actorId: string; createdAt: string };
 export type Project = { id: string; name: string; version: number; lineRevisionId: string | null; lineVersion: number; contextRevision: number };
