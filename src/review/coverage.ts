@@ -101,16 +101,17 @@ export const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
   "review-testing-practices": (f) => TEST_FILE.test(f) || /\.msw\.ts$/.test(f),
   "review-frontend-conventions": (f) => FRONTEND_EXT.test(f) || /\.stories\.tsx$/.test(f) || CODE_FILE.test(f),
   "review-layout": (f) => /\.(tsx|jsx|css|scss)$/.test(f),
+  "review-ui-ux": (f) => /\.(tsx|jsx|vue|svelte|html|css|scss)$/.test(f),
 };
 
 /**
- * The path gates that mark the risk class. `review-testing-practices` (any test file) and `review-frontend-conventions`
- * (any .ts/.js/.tsx file) are in BUNDLED_PATH_GATES but fire on almost every diff, so counting them would make a light
- * round unreachable; they are left out here. A data/migration file, a project-declared reviewer path gate, and the
+ * The path gates that mark the risk class. `review-testing-practices` (any test file), `review-frontend-conventions`
+ * (any .ts/.js/.tsx file) and `review-ui-ux` (any UI file) are in BUNDLED_PATH_GATES but fire on almost every diff, so
+ * counting them would make a light round unreachable; they are left out here. A data/migration file, a project-declared reviewer path gate, and the
  * remaining bundled gates (core/shared, flow graph, layout) do count.
  */
 export const RISK_PATH_GATES: Record<string, (file: string) => boolean> = Object.fromEntries(
-  Object.entries(BUNDLED_PATH_GATES).filter(([name]) => name !== "review-testing-practices" && name !== "review-frontend-conventions"),
+  Object.entries(BUNDLED_PATH_GATES).filter(([name]) => name !== "review-testing-practices" && name !== "review-frontend-conventions" && name !== "review-ui-ux"),
 );
 
 export type DepthDecision = {

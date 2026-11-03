@@ -837,7 +837,7 @@ If the repository has local convention docs such as `CLAUDE.md`, `AGENTS.md`,
 | `**/*.test.*`, `**/*.spec.*`, `**/*.integration.test.*`, `**/*.msw.ts`, `src/test/**`, `test/**`, `e2e/**` | `review-testing-practices` |
 | `src/core/**`, `core/**`, `shared/**`, `foundation/**` | `review-core-boundaries` |
 | `src/core/flow/**`, `src/graph/**`, `src/shared/flow/**` | `review-flow-graph` |
-| A `.tsx`/`.jsx`/`.css`/`.scss` hunk that adds or changes a sizing or spacing utility on a rendered element — `w-*`, `min-w-*`, `max-w-*`, `flex-*`, `basis-*`, `grid-cols-*`, `truncate`, `line-clamp-*`, `overflow-*`, `p*`/`m*`/`gap-*` and their logical `ps-*`/`pe-*`/`ms-*`/`me-*` forms, or an inline `style` carrying a dimension | `review-layout` |
+| A `.tsx`/`.jsx`/`.css`/`.scss` hunk that adds or changes a sizing or spacing utility on a rendered element — `w-*`, `min-w-*`, `max-w-*`, `flex-*`, `basis-*`, `grid-cols-*`, `truncate`, `line-clamp-*`, `overflow-*`, `p*`/`m*`/`gap-*` and their logical `ps-*`/`pe-*`/`ms-*`/`me-*` forms, or an inline `style` carrying a dimension | `review-layout` (and `review-ui-ux` for any non-test, non-story `.tsx`/`.jsx`/`.vue`/`.svelte`/`.html`/`.css`/`.scss` change to user-facing UI) |
 | `pr-context.md` is in the package | `review-pr-contract` |
 
 These convention reviewers are additive: keep the generic reviewers selected by normal detection,
@@ -1010,7 +1010,7 @@ Review Plan Preview must include an `Optional legacy/profile reviewers` group (e
 | `--testing-practices` | `review-testing-practices` |
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
-| `--layout` | `review-layout` |
+| `--layout` / `--ui-ux` | `review-layout` / `review-ui-ux` (UI/UX and AI-slop; live mode too when a URL or dev server is available) |
 | `--pr-contract` | `review-pr-contract` |
 | `--all` | all reviewers above (including `review-highload` and project convention reviewers when local convention docs exist; `review-clean-code` and `review-style` only when the round started with `--style`, and nothing a project lists under `reviewRoles.disabled` in `routing.config.json`); never the legacy/profile reviewers, which stay flag-only |
 | `--verify` | `review-verifier`, started on the first blocker or major and re-run for each later one (`SKILL.detail.md` § "Early verifier"); checks the findings by running something. Delete-only. |

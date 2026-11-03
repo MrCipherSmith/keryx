@@ -55,6 +55,7 @@ Resolution order:
 | patterns-researcher | planning | Find architecture and implementation patterns for selected stack, domain, and project constraints. | gdskills/planning/patterns-researcher/SKILL.md |
 | planner | planning | Produce roadmap, milestones, task breakdown, dependency graph, and sequencing. | gdskills/planning/planner/SKILL.md |
 | prd-creator | planning | Convert vague requests into structured PRD and acceptance criteria. | gdskills/planning/prd-creator/SKILL.md |
+| ui-direction | planning | Choose a distinctive visual concept before UI code and persist it as DESIGN.md. | gdskills/planning/ui-direction/SKILL.md |
 | problem-definer | planning | Define goals, non-goals, risks, constraints, and success metrics. | gdskills/planning/problem-definer/SKILL.md |
 | project-discovery | planning | Collect initial project facts, modules, constraints, stakeholders, and source references. | gdskills/planning/project-discovery/SKILL.md |
 | spec-writer | planning | Write PRD, technical spec, or implementation plan constrained by decisions and evidence. | gdskills/planning/spec-writer/SKILL.md |
@@ -85,6 +86,7 @@ Resolution order:
 | security-audit | quality | Run dependency and secret/security checks and normalize findings. | gdskills/quality/security-audit/SKILL.md |
 | test-gen | quality | Generate tests for a file or module using local patterns and existing test stack. | gdskills/quality/test-gen/SKILL.md |
 | tests-creator | quality | Create test scenarios before implementation from acceptance criteria and project patterns. | gdskills/quality/tests-creator/SKILL.md |
+| ui-craft | quality | Build or restyle UI from DESIGN.md: tokens first, every state, purposeful motion, WCAG 2.2 AA, verified in a browser. | gdskills/quality/ui-craft/SKILL.md |
 | code-ai-review | review | Run the legacy strict AI review profile. | gdskills/review/code-ai-review/SKILL.md |
 | code-learned-review | review | Review against conventions this project learned from its own pull-request comments. | gdskills/review/code-learned-review/SKILL.md |
 | code-mobx-store-review | review | Run focused MobX store and state logic review. | gdskills/review/code-mobx-store-review/SKILL.md |
@@ -105,6 +107,7 @@ Resolution order:
 | review-jev-rules | review | Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx. | gdskills/review/review-jev-rules/SKILL.md |
 | review-jev-scenarios | review | Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario. | gdskills/review/review-jev-scenarios/SKILL.md |
 | review-layout | review | Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry. | gdskills/review/review-layout/SKILL.md |
+| review-ui-ux | review | Review UI/UX quality and AI-slop: usability heuristics, system states, forms, hierarchy, WCAG 2.2 AA floor, and a slop score. | gdskills/review/review-ui-ux/SKILL.md |
 | review-logic | review | Review logic correctness, contracts, edge cases, nullability, and async behavior. | gdskills/review/review-logic/SKILL.md |
 | review-orchestrator | review | Route review requests to specialized reviewers and consolidate findings. | gdskills/review/review-orchestrator/SKILL.md |
 | review-performance | review | Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk. | gdskills/review/review-performance/SKILL.md |

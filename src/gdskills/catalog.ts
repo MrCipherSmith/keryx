@@ -275,6 +275,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Measure the worst real case: the longest translation, the narrowest supported host, the state where the sibling is absent.",
     "An unmeasured layout claim is info, marked unverified — never promoted on confidence.",
   ]),
+  skill("review-ui-ux", "review", ["recommended", "full"], "Review UI/UX quality and AI-slop: usability heuristics, system states, forms, hierarchy, WCAG 2.2 AA floor, and a slop score.", [
+    "Run deterministic checks first (focus, contrast, targets, reduced motion, forms, tell catalog), then heuristics, then hierarchy.",
+    "Measure contrast, target size and fonts on the render when one is available; an unmeasured visual claim is info.",
+    "Score AI-slop as a stack of tells by tier; honor DESIGN.md exemptions; list every check not run.",
+  ]),
   skill("review-style", "review", ["recommended", "full"], "Review naming, readability, duplication, dead code, and maintainability.", [
     "Focus on clarity and local consistency.",
     "Separate style findings from correctness findings.",
@@ -403,6 +408,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Map scenarios to the existing test stack.",
     "Prefer tests that fail for the missing behavior before implementation.",
   ]),
+  skill("ui-craft", "quality", ["recommended", "full"], "Build or restyle UI from DESIGN.md: tokens first, every state, purposeful motion, WCAG 2.2 AA, verified in a browser.", [
+    "Define semantic tokens before components; never introduce a second styling system.",
+    "Implement hover, focus-visible, active, disabled, loading, empty, error, sparse and dense states.",
+    "Verify renders at 1440, 768 and 390 px, fix the top three problems, at most three rounds; state checks not run.",
+  ]),
   skill("dependency-update", "quality", ["full"], "Plan and verify dependency upgrades.", [
     "Classify updates by risk.",
     "Apply small compatible groups first.",
@@ -466,6 +476,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Extract users, goals, non-goals, constraints, and risks.",
     "Ask clarifying questions when needed.",
     "Write testable requirements and acceptance criteria.",
+  ]),
+  skill("ui-direction", "planning", ["recommended", "full"], "Choose a distinctive visual concept before UI code and persist it as DESIGN.md.", [
+    "Mine 8-12 facts about the subject and deal three directions before choosing one.",
+    "Test the idea sentence against the nearest competitor and the logo-swap test.",
+    "Plan palette with computed contrast, type, ASCII layout, motion, and exactly one signature element.",
   ]),
   skill("project-discovery", "planning", ["full"], "Collect initial project facts, modules, constraints, stakeholders, and source references.", [
     "Inventory available docs, code modules, and entrypoints.",

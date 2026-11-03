@@ -221,11 +221,14 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Flow 479 added `review-degradation` with four positives, all ranking
  * first: 338/341 + 4 = 342/345.
  *
+ * `review-ui-ux`, `ui-direction` and `ui-craft` added four positives each, all
+ * ranking first: 342/345 + 12 = 354/357.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 342;
-export const RANK1_TOTAL = 345;
+export const RANK1_FIRST = 354;
+export const RANK1_TOTAL = 357;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -683,6 +686,45 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "check performance", owner: "perf-check" },
       { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-ui-ux",
+    positives: [
+      "ui/ux review of the new onboarding screen",
+      "does this landing page look like generic ai slop",
+      "audit the dashboard screens for usability: missing empty states, weak contrast, invisible focus",
+      "проверь юзабилити экрана оплаты: состояния, контраст, фокус",
+    ],
+    negatives: [
+      { prompt: "frontend review of these components", owner: "review-frontend" },
+      { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "ui-direction",
+    positives: [
+      "pick a design direction for the landing page before we code it",
+      "our product looks generic and ai-made, come up with a distinctive concept and palette before any ui code",
+      "choose fonts, colors and one signature element for the new product page before building it",
+      "придумай визуальный концепт для лендинга, чтобы это был не нейрослоп",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "write a prd for the checkout feature", owner: "prd-creator" },
+    ],
+  },
+  {
+    skill: "ui-craft",
+    positives: [
+      "build this page from DESIGN.md with every state and real content",
+      "make the settings screen look designed, not templated",
+      "implement the landing page layout with tokens, focus rings and reduced motion",
+      "сверстай страницу настроек по дизайну",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "frontend review of these components", owner: "review-frontend" },
     ],
   },
   {

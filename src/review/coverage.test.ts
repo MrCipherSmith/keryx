@@ -39,13 +39,14 @@ afterEach(async () => {
 const frontendFiles = ["src/app/page.tsx", "src/app/page.store.ts"];
 
 describe("derivedFromFiles", () => {
-  test("frontend files pick logic, frontend and style, plus the convention and layout gates", () => {
+  test("frontend files pick logic, frontend and style, plus the convention, layout and ui-ux gates", () => {
     expect([...derivedFromFiles(frontendFiles)].sort()).toEqual([
       "review-frontend",
       "review-frontend-conventions",
       "review-layout",
       "review-logic",
       "review-style",
+      "review-ui-ux",
     ]);
   });
 

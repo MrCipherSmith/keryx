@@ -126,6 +126,7 @@ const CEILINGS_BY_KEY = {
   "planning/patterns-researcher": 254,
   "planning/planner": 208,
   "planning/prd-creator": 210,
+  "planning/ui-direction": 177,
   "planning/problem-definer": 170,
   "planning/project-discovery": 183,
   "planning/spec-writer": 248,
@@ -151,6 +152,7 @@ const CEILINGS_BY_KEY = {
   "quality/security-audit": 129,
   "quality/test-gen": 101,
   "quality/tests-creator": 360,
+  "quality/ui-craft": 173,
   "review/code-ai-review": 238,
   "review/code-learned-review": 283,
   "review/code-mobx-store-review": 301,
@@ -181,6 +183,7 @@ const CEILINGS_BY_KEY = {
   "review/review-security-code": 359,
   "review/review-style": 353,
   "review/review-testing-practices": 293,
+  "review/review-ui-ux": 268,
   "review/review-verifier": 299,
 } satisfies Record<string, number>;
 
