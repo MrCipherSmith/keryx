@@ -26,6 +26,8 @@ let messages: Control["SessionMessage"][] = [];
 let claimed = false;
 let appliedOperations = new Set<string>();
 let invokeCount = 0;
+let pagedHistory = false;
+let failHistory = false;
 let onInvoke: (() => void) | undefined;
 const fetched: string[] = [];
 function Harness() {
@@ -39,6 +41,8 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   claimed = false;
   invokeCount = 0;
+  pagedHistory = false;
+  failHistory = false;
   onInvoke = undefined;
   fetched.length = 0;
   appliedOperations = new Set();
@@ -53,7 +57,13 @@ beforeEach(async () => {
     if (path.endsWith("/machines?projectId=p")) return Response.json({ machines: [machineFixture] });
     if (path.endsWith("/chat-consent")) return Response.json({ profileConsentVersion: 7 });
     if (path.endsWith("/flows")) return Response.json({ flows: [] });
-    if (path.endsWith("/sessions/s/history?after=0")) return Response.json({ messages, cursor: messages.length, hasMore: false, historyVersion: 1, retainedFromCursor: 0, gap: false });
+    // Paged mode serves messages oldest first in two pages (1..3, then 4..5), as the Hub does.
+    if (path.endsWith("/sessions/s/history?after=0")) {
+      if (failHistory) return Response.json({ error: { code: "unavailable", message: "history down" } }, { status: 503 });
+      const page = pagedHistory ? messages.slice(0, 3) : messages;
+      return Response.json({ messages: page, cursor: page.length, hasMore: pagedHistory, historyVersion: 1, retainedFromCursor: 0, gap: false });
+    }
+    if (path.endsWith("/sessions/s/history?after=3")) return Response.json({ messages: messages.slice(3), cursor: messages.length, hasMore: false, historyVersion: 1, retainedFromCursor: 0, gap: false });
     if (path.endsWith("/sessions/s/queue")) return Response.json({ items: [], queueVersion: 0, cursor: 0, hasMore: false });
     if (path.endsWith("/sessions/s/routing")) return Response.json({ version: 1, policyDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), candidates: [], profileIds: [] });
     if (path.endsWith("/sessions/s/commands")) return Response.json({ catalogueVersion: 1, catalogueDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), entries: [entry("status"), entry("help")] });
@@ -64,7 +74,7 @@ beforeEach(async () => {
     }
     const operation = /\/operations\/([^/?]+)$/.exec(path);
     if (operation) return Response.json(outcome(operation[1], operation[1].split("-")[1], appliedOperations.has(operation[1]) ? "applied" : "queued"));
-    if (path.endsWith("/sessions/s")) return Response.json({ ...sessionFixture, version: claimed ? 3 : 2, controller: claimed ? sessionFixture.controller : null });
+    if (path.endsWith("/sessions/s")) return Response.json({ ...sessionFixture, version: claimed ? 3 : 2, controller: claimed ? sessionFixture.controller : null, historyCursor: messages.length });
     return Response.json({ error: { code: "not-found", message: "no" } }, { status: 404 });
   });
 });
@@ -115,4 +125,50 @@ test("every invoked command keeps following its own operation, not only the late
   await waitFor(() => expect(itemFor("status")).toHaveTextContent(applied()));
   expect(itemFor("help")).toHaveTextContent(queued());
   expect(fetched.some(path => path.endsWith("/operations/op-status-1"))).toBe(true);
+});
+const fiveMessages = () => [1, 2, 3, 4, 5].map(n => message(n, n % 2 ? "human" : "assistant", "2026-01-01T00:00:0" + n + "Z", n === 1 ? "first message" : "msg " + n));
+const after = (items: string[], needle: string, other: string) =>
+  items.findIndex(text => text.includes(needle)) > items.findIndex(text => text.includes(other));
+test("an outcome invoked before the next history page is loaded still follows every earlier message", async () => {
+  pagedHistory = true;
+  messages = fiveMessages();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  await open(client);
+  expect(screen.queryByText("msg 5")).toBeNull();
+  await invoke("status");
+  fireEvent.click(screen.getByRole("button", { name: i18n.t("more", { ns: "remote" }) }));
+  await screen.findByText("msg 5");
+  expect(after(order(), "/status", "msg 5")).toBe(true);
+});
+test("an outcome invoked before any history has loaded is not drawn above the messages that already existed", async () => {
+  messages = fiveMessages();
+  failHistory = true;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "Claim control" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Release control" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Native command catalogue" }));
+  await screen.findByRole("option", { name: "status · available" });
+  expect(client.getQueryData([2, "p", "remote", "history", "s", "workspace"])).toBeUndefined();
+  await invoke("status");
+  failHistory = false;
+  await act(async () => { await client.invalidateQueries({ queryKey: [2, "p", "remote", "history"] }); });
+  await screen.findByText("msg 5");
+  expect(after(order(), "/status", "msg 5")).toBe(true);
+});
+test("a settled outcome stops being fetched on later invalidations, while a queued one keeps following", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  await open(client);
+  await invoke("status");
+  await invoke("help");
+  appliedOperations.add("op-status-1");
+  await act(async () => { await client.invalidateQueries(); });
+  await waitFor(() => expect(itemFor("status")).toHaveTextContent(applied()));
+  const count = (id: string) => fetched.filter(path => path.endsWith("/operations/" + id)).length;
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+  const before = { status: count("op-status-1"), help: count("op-help-2") };
+  await act(async () => { await client.invalidateQueries(); });
+  await waitFor(() => expect(count("op-help-2")).toBeGreaterThan(before.help));
+  expect(count("op-status-1")).toBe(before.status);
+  expect(itemFor("status")).toHaveTextContent(applied());
 });

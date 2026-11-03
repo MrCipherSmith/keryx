@@ -323,6 +323,13 @@ function serveCreate(flows: unknown[]) {
     return original(url, init);
   });
 }
+test("a stale Flow that still exists is named by its title, not its id", async () => {
+  serveCreate([{ ...flow, id: "f9", title: "Ship it", status: "completed" }]);
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f9" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByRole("option", { name: "Ship it · no longer in progress" })).toBeDisabled();
+});
 test("creating a session with a Flow seeds the new session's composer with the prepared first message", async () => {
   serveCreate([flow]);
   useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1", firstMessage: "Start with the parser" });

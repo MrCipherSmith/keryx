@@ -2,6 +2,7 @@ import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
+import type { CommandOutcomeListener } from "./session-timeline";
 import {ApiError,getClientScope, getJson } from "../../api/client";
 import {NativeAttemptPicker,useNativeWorkSelection} from "../managed-work/native-selection";
 import { remoteProject } from "../../api/remote";
@@ -57,7 +58,7 @@ export function MessageComposer({
 }: {
   record: Control["SessionRecord"];
   control: Controller;
-  onCommandOutcome?: (outcome: Control["CommandOutcome"], invokedAt: string, anchor?: number) => void;
+  onCommandOutcome?: CommandOutcomeListener;
 }) {
   const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
   const [focusToken, setFocusToken] = useState(0);

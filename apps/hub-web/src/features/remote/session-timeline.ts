@@ -2,10 +2,14 @@ import type { InfiniteData } from "@tanstack/react-query";
 import type { Control } from "../../api/remote";
 
 /**
- * A command invocation kept for the chat. `anchor` is the highest `historyCursor` the history had
- * loaded when the command was invoked: a position in the Hub's own message order, not a clock.
+ * A command invocation kept for the chat. `anchor` is the session's latest `historyCursor` when the
+ * command was invoked (the session record's cursor, or the loaded pages if they are ahead): a position
+ * in the Hub's own message order, not a clock, and not just the pages this tab has paged in.
  */
 export type CommandEntry = { outcome: Control["CommandOutcome"]; invokedAt: string; anchor: number };
+
+/** How the command panel reports an outcome: the outcome, when it was invoked, and its placement anchor. */
+export type CommandOutcomeListener = (outcome: Control["CommandOutcome"], invokedAt: string, anchor?: number) => void;
 
 export type TimelineEntry =
   | { kind: "message"; message: Control["SessionMessage"] }

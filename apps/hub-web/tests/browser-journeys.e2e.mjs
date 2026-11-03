@@ -89,6 +89,8 @@ async function runCell(browser,id){
   const runState=(runId,done,ms=30000)=>until(()=>read(`/hub/v2/projects/${fx.projectId}/runs/${runId}`),done,ms,`run ${runId}`);
   // In-app navigation only: a full reload makes this tab an observer again (its explicit controller claim is not persisted).
   const openSession=async()=>{await navButton(page,L.sessions).click();await panel(page,`Browser ${id}`).getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.controller).waitFor();};
+  /** The command catalogue lives in the composer and mounts only after its toggle (or '/') opens it. */
+  const openCommands=async()=>{const toggle=page.getByRole('button',{name:L.commands,exact:true});if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();const commands=panel(page,L.commands);await commands.waitFor();return commands;};
   const openRun=async runId=>{await navButton(page,L.runs).click();const card=panel(page,runId);await card.getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.actual).waitFor();};
   /** The session version this tab displays (Versions panel), to wait until the page caught up with Hub. */
   const shownVersion=()=>page.evaluate(label=>{const dt=[...document.querySelectorAll('dt')].find(d=>d.textContent?.trim()===label);return dt?Number(dt.nextElementSibling?.textContent):NaN;},L.sessionVersion);
@@ -146,7 +148,7 @@ async function runCell(browser,id){
   const j3=begin(3,'Typed help, settings inspection and a real allowed read through one command surface; malformed command reports validation; inspection stays Flow-free');
   await attempt(j3,async()=>{
    if(!j2.receipts.controllerLeaseId)throw new JourneyFailure('no controller from journey 2');
-   await openSession();await until(sessionRecord,v=>v.state==='idle',20000,'idle');const commands=panel(page,L.commands);const operations=[];
+   await openSession();await until(sessionRecord,v=>v.state==='idle',20000,'idle');const commands=await openCommands();const operations=[];
    for(const name of ['settings','status']){await commands.getByLabel(L.command,{exact:true}).selectOption(name);await rebase('commands');await commands.getByLabel(L.arguments,{exact:true}).fill('{}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();await commands.getByText(L.receiptStatuses.applied,{exact:true}).waitFor({timeout:20000});
     const receipt=JSON.parse(await commands.locator('details pre').last().textContent());operations.push({commandName:receipt.commandName,operationId:receipt.operationId,status:receipt.status});check(j3,`${name} applied by the machine through the shared handler`,receipt.commandName===name&&receipt.status==='applied'&&receipt.errorCode===null,{status:receipt.status});}
    j3.receipts.operations=operations;
@@ -242,7 +244,7 @@ async function runCell(browser,id){
    await navButton(page,L.sessions).click();await page.getByRole('button',{name:L.newSession,exact:true}).click();const form=panel(page,L.newSession);await form.getByLabel(L.machine,{exact:true}).selectOption(m2.machineId);await form.getByLabel(L.checkout,{exact:true}).selectOption(m2.checkoutId);await form.getByLabel(L.profile,{exact:true}).selectOption('remote-restricted');await form.getByLabel(L.title,{exact:true}).fill(`Help ${id}`);await form.getByRole('button',{name:L.createSession,exact:true}).click();
    await until(()=>page.evaluate(()=>new URLSearchParams(window.location.search).get('session')),v=>!!v&&v!==sessionId,20000,'help session');const helpSession=await page.evaluate(()=>new URLSearchParams(window.location.search).get('session'));j3.receipts.helpSessionId=helpSession;const helpPath=`/hub/v2/projects/${fx.projectId}/sessions/${helpSession}`;
    await until(()=>read(helpPath),v=>v.state==='idle',20000,'help session idle');const controller=panel(page,L.controller);await controller.getByRole('button',{name:L.claim,exact:true}).click();await controller.getByRole('button',{name:L.release,exact:true}).waitFor({timeout:20000});
-   const commands=panel(page,L.commands);await commands.getByLabel(L.command,{exact:true}).selectOption('help');await commands.getByLabel(L.arguments,{exact:true}).fill('{}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();
+   const commands=await openCommands();await commands.getByLabel(L.command,{exact:true}).selectOption('help');await commands.getByLabel(L.arguments,{exact:true}).fill('{}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();
    const outcome=await until(async()=>{const text=await commands.locator('details pre').last().textContent().catch(()=>'');try{const receipt=JSON.parse(text);return receipt.operationId?await read(`${helpPath}/operations/${receipt.operationId}`):null;}catch{return null;}},v=>v!==null&&v.status!=='queued'&&v.status!=='pending',20000,'help outcome').catch(error=>({status:'unsettled',error:String(error.message).slice(0,200)}));
    j3.receipts.help={status:outcome.status,errorCode:outcome.errorCode??null};check(j3,'help applied by the machine through the shared handler',outcome.status==='applied',j3.receipts.help);
   });

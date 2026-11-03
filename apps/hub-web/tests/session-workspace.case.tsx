@@ -15,6 +15,7 @@ import { SessionSurface } from "../src/features/remote/sessions";
 import { sessionFixture, machineFixture } from "./remote-fixtures";
 import { resetClient } from "../src/api/client";
 import { useDraftStore } from "../src/state/drafts";
+import { parseCssRules, selectorAlternatives } from "./css-rules";
 const navigate = vi.fn();
 const context: HubContextValue = {
   projectId: "p",
@@ -177,23 +178,34 @@ test("inspector tabs support keyboard navigation and keep observer controls disa
     expect(contextTab).toHaveAttribute("aria-selected", "true"),
   );
 });
-// jsdom applies no CSS, so this pins the selector text and the DOM shape it relies on:
-// only the composer's own panel header is hidden; nested Panels keep their headings.
+// jsdom applies no CSS, so this checks the parsed stylesheet rules and the DOM shape they rely on:
+// only the composer's own panel header may be hidden; the nested Commands and Confirmation Panels keep their headings.
 test("composer header rule hides only the composer's own panel header", async () => {
   const { container } = show();
   await screen.findByText("First message");
-  const css = readFileSync(
-    "src/features/remote/session-workspace.css",
-    "utf8",
+  const rules = parseCssRules(
+    readFileSync("src/features/remote/session-workspace.css", "utf8"),
   );
-  const selectors = [...css.matchAll(/([^{}]*)\{\s*display:\s*none;\s*\}/g)]
-    .map((m) => m[1].trim())
-    .filter((s) => s.includes(".session-composer") && s.includes(".hub-panel-header"));
-  expect(selectors).toEqual([
-    ".session-composer > .hub-panel > .hub-panel-header",
-  ]);
-  const composer = container.querySelector(".session-composer");
-  expect(
-    composer?.querySelector(":scope > .hub-panel > .hub-panel-header"),
-  ).not.toBeNull();
+  const hiding = rules
+    .filter(
+      (rule) =>
+        /^none(\s*!important)?$/i.test(rule.decls.get("display") ?? "") ||
+        /^hidden(\s*!important)?$/i.test(rule.decls.get("visibility") ?? ""),
+    )
+    .flatMap((rule) => selectorAlternatives(rule.selector))
+    .filter((alternative) => alternative.includes(".hub-panel-header"));
+  expect(hiding.length).toBeGreaterThan(0);
+  for (const alternative of hiding)
+    expect(alternative).toBe(".session-composer > .hub-panel > .hub-panel-header");
+  const composer = container.querySelector(".session-composer") as HTMLElement;
+  fireEvent.click(
+    within(composer).getByRole("button", { name: "Native command catalogue" }),
+  );
+  await waitFor(() =>
+    expect(composer.querySelectorAll(".hub-panel .hub-panel .hub-panel-header").length).toBeGreaterThan(0),
+  );
+  const own = [...composer.querySelectorAll(":scope > .hub-panel > .hub-panel-header")];
+  expect(own.length).toBeGreaterThan(0);
+  for (const header of composer.querySelectorAll(".hub-panel .hub-panel .hub-panel-header"))
+    expect(own).not.toContain(header);
 });

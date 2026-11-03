@@ -2,7 +2,7 @@ import { getJson } from '../../api/client';
 import type { HubFlow } from '../../api/types';
 import { digestCriteria } from './shared';
 import { Textarea } from '../../components/ui';
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { remoteGet } from "../../api/remote";
 import { formatDate } from "../../i18n/format";
@@ -40,7 +40,7 @@ import {
 import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
 import { ForkSession } from "./fork";
 import { Settings } from "./settings";
-import { historyQueryKey, mergeTimeline, type CommandEntry } from "./session-timeline";
+import { historyQueryKey, mergeTimeline, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
 export function SessionsView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
@@ -104,11 +104,11 @@ export function SessionsView() {
   );
 }
 /** The first launch requirement that is not met, in the order the operator should fix them. */
-function firstUnmetLaunchCondition(c: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowGone: boolean }) {
-  if (!c.operator) return "sessionLaunchOperatorOnly";
-  if (!c.targetReady) return "sessionLaunchRequirements";
-  if (!c.hasTitle) return "sessionLaunchEnterTitle";
-  if (c.flowGone) return "sessionLaunchFlowGone";
+function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowGone }: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowGone: boolean }) {
+  if (!operator) return "sessionLaunchOperatorOnly";
+  if (!targetReady) return "sessionLaunchRequirements";
+  if (!hasTitle) return "sessionLaunchEnterTitle";
+  if (flowGone) return "sessionLaunchFlowGone";
   return null;
 }
 function CreateSession() {
@@ -258,7 +258,7 @@ function CreateSession() {
       <Field label={t("launchFlow")}>
         <Select value={draft.flowId} onChange={event => setDraft({ ...draft, flowId: event.target.value })}>
           <option value="">{t("choose")}</option>
-          {flowGone && flows.data && <option value={draft.flowId} disabled>{t("launchFlowGone", { id: draft.flowId })}</option>}
+          {flowGone && flows.data && <option value={draft.flowId} disabled>{t("launchFlowGone", { title: flows.data.flows.find(flow => flow.id === draft.flowId)?.title ?? draft.flowId })}</option>}
           {eligible.map(flow => <option key={flow.id} value={flow.id}>{flow.title} · v{flow.version}</option>)}
         </Select>
       </Field>
@@ -318,7 +318,7 @@ export function SessionSurface({
   // invocation time for display and the history cursor at invocation for placement; the first report
   // of an operation fixes both, later reports only refresh the outcome.
   const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
-  const recordOutcome = useCallback((outcome: Control["CommandOutcome"], invokedAt: string, anchor?: number) => {
+  const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
     setOutcomes(previous => {
       const index = previous.findIndex(item => item.outcome.operationId === outcome.operationId);
       if (index < 0) return [...previous, { outcome, invokedAt, anchor: anchor ?? Number.POSITIVE_INFINITY }];
@@ -471,11 +471,20 @@ function History({ record, outcomes }: { record: Control["SessionRecord"]; outco
 function formatResult(result: unknown) {
   return typeof result === "string" ? result : JSON.stringify(result, null, 2);
 }
+const isSettled = (status: Control["CommandOutcome"]["status"]) => status === "applied" || status === "rejected";
 /** One command outcome, followed through its own operation so it moves from queued to applied or rejected. */
 function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item: CommandEntry }) {
   const { t, i18n } = useTranslation("remote");
-  const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, item.outcome);
-  const outcome = followed.data ?? item.outcome;
+  // Follow the operation only until it settles: an applied or rejected record cannot change, and a live
+  // query per outcome would be refetched on every invalidation for the tab's lifetime.
+  const [settled, setSettled] = useState<Control["CommandOutcome"] | undefined>();
+  const done = settled !== undefined || isSettled(item.outcome.status);
+  const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, done ? undefined : item.outcome);
+  const seen = followed.data;
+  useEffect(() => {
+    if (seen && isSettled(seen.status)) setSettled(seen);
+  }, [seen]);
+  const outcome = settled ?? seen ?? item.outcome;
   return (
     <li className="session-message system">
       <span className="session-avatar" aria-hidden="true">/</span>
