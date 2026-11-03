@@ -1,5 +1,9 @@
-import { useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { getJson } from '../../api/client';
+import type { HubFlow } from '../../api/types';
+import { digestCriteria } from './shared';
+import { Textarea } from '../../components/ui';
+import { useCallback, useState } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { remoteGet } from "../../api/remote";
 import { formatDate } from "../../i18n/format";
 import { Markdown } from "../../components/Markdown";
@@ -14,7 +18,7 @@ import {
   useRemoteQuery,
 } from "../../api/remote-hooks";
 import { useHub } from "../../app/hub-context";
-import { useDraft } from "../../state/drafts";
+import { useDraft, useDraftStore } from "../../state/drafts";
 import {
   Button,
   EmptyState,
@@ -103,7 +107,7 @@ function CreateSession() {
   const action = useRemoteAction<Control["SessionOperationReceipt"]>();
   const [draft, setDraft] = useDraft(
     `remote-create:${hub.scopeKey}:${hub.projectId}`,
-    { machineId: "", checkoutId: "", profileId: "", title: "" },
+    { machineId: "", checkoutId: "", profileId: "", title: "", flowId: "", firstMessage: "" },
   );
   const m = machines.data?.machines.find(
     (m) => m.machineId === draft.machineId,
@@ -112,6 +116,12 @@ function CreateSession() {
     (c) => c.projectId === hub.projectId && c.checkoutId === draft.checkoutId,
   );
   const profile = c?.agentProfiles.find((p) => p.profileId === draft.profileId);
+  const flows = useQuery({
+    queryKey: [hub.scopeKey, hub.projectId, "flows"],
+    queryFn: ({ signal }) => getJson<{ flows: HubFlow[] }>(remoteProject(hub.projectId ?? "") + "/flows", signal),
+  });
+  const eligible = flows.data?.flows.filter(flow => flow.status === "in-progress") ?? [];
+  const selectedFlow = eligible.find(flow => flow.id === draft.flowId);
   const ready =
     operator &&
     m?.connected &&
@@ -122,7 +132,7 @@ function CreateSession() {
     !c.busy &&
     profile?.adapter === "keryx-native-v1" &&
     profile.readiness === "ready" &&
-    !!draft.title.trim();
+    !!draft.title.trim() && (!draft.flowId || !!selectedFlow);
   function submit() {
     if (!ready || !m?.inventory || !c || !profile || !hub.projectId) return;
     action.mutate(
@@ -140,8 +150,17 @@ function CreateSession() {
         } satisfies Control["SessionCreate"],
       },
       {
-        onSuccess: (receipt) =>
-          hub.navigate({ tab: "sessions", sessionId: receipt.sessionId }),
+        onSuccess: async (receipt) => {
+          if (selectedFlow) {
+            const criteriaDigest = await digestCriteria(selectedFlow.criteria);
+            useDraftStore.getState().put(`remote-message:${hub.scopeKey}:${hub.projectId}:${receipt.sessionId}`, {
+              text: draft.firstMessage, prepared: true, mode: "flow", flowId: selectedFlow.id,
+              flowVersion: selectedFlow.version, specDigest: selectedFlow.specContentDigest, criteriaDigest,
+              consent: false, consentVersion: null, busyPolicy: "reject", sessionVersion: 0, configVersion: 0,
+            });
+          }
+          hub.navigate({ tab: "sessions", sessionId: receipt.sessionId });
+        },
       },
     );
   }
@@ -219,6 +238,15 @@ function CreateSession() {
           onChange={(e) => setDraft({ ...draft, title: e.target.value })}
         />
       </Field>
+      <Field label={t("launchFlow")}>
+        <Select value={draft.flowId} onChange={event => setDraft({ ...draft, flowId: event.target.value })}>
+          <option value="">{t("choose")}</option>
+          {eligible.map(flow => <option key={flow.id} value={flow.id}>{flow.title} · v{flow.version}</option>)}
+        </Select>
+      </Field>
+      {draft.flowId && <Field label={t("launchMessage")}>
+        <Textarea value={draft.firstMessage} maxLength={32768} onChange={event => setDraft({ ...draft, firstMessage: event.target.value })}/>
+      </Field>}
       {c && (
         <dl className="space-y-2">
           <Definition label={t("head")}>{c.headSha}</Definition>
@@ -267,6 +295,10 @@ export function SessionSurface({
   const control = useController(record);
   const action = useRemoteAction();
   const path = sessionPath(record.projectId, record.sessionId);
+  const [outcomes, setOutcomes] = useState<Control["CommandOutcome"][]>([]);
+  const recordOutcome = useCallback((outcome: Control["CommandOutcome"]) => {
+    setOutcomes(previous => [...previous.filter(item => item.operationId !== outcome.operationId), outcome]);
+  }, []);
   const opening = useRemoteQuery<{ errorCode: string | null }>(
     ["opening-status",record.sessionId],path+"/opening-status",record.state==="opening",
   );
@@ -278,13 +310,13 @@ export function SessionSurface({
     <SessionWorkspace
       record={record}
       control={control}
-      history={<History record={record} />}
+      history={<History record={record} outcomes={outcomes} />}
       composer={<MessageComposer record={record} control={control} />}
       queue={<QueueControls record={record} control={control} />}
       settings={
         <>
           <Settings record={record} control={control} />
-          <Commands record={record} control={control} />
+          <Commands record={record} control={control} onOutcome={recordOutcome} />
         </>
       }
       operations={
@@ -353,7 +385,7 @@ export function SessionSurface({
   );
 }
 
-function History({ record }: { record: Control["SessionRecord"] }) {
+function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: Control["CommandOutcome"][] }) {
   const { t, i18n } = useTranslation("remote");
   const hub = useHub();
   const words = useWorkspaceCopy();
@@ -442,8 +474,21 @@ function History({ record }: { record: Control["SessionRecord"] }) {
               </div>
             </li>
           ))}
+          {outcomes.map(outcome => (
+            <li key={outcome.operationId} className="session-message system">
+              <span className="session-avatar" aria-hidden="true">/</span>
+              <div>
+                <div className="session-message-header"><strong>/{outcome.commandName}</strong></div>
+                <div className="session-message-content">
+                  <p>{t("receiptStatuses." + outcome.status, { defaultValue: outcome.status })}</p>
+                  {outcome.errorCode && <p>{outcome.errorCode}</p>}
+                  {outcome.result !== null && <pre className="whitespace-pre-wrap break-all">{typeof outcome.result === "string" ? outcome.result : JSON.stringify(outcome.result, null, 2)}</pre>}
+                </div>
+              </div>
+            </li>
+          ))}
         </ol>
-        {query.data && !ordered.length && <EmptyState>{t("empty")}</EmptyState>}
+        {query.data && !ordered.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
       </div>
       {query.hasNextPage && (
         <footer className="session-history-pages">

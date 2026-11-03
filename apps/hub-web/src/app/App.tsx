@@ -1,3 +1,4 @@
+import { PanelLeft } from "lucide-react";
 import { clearPending } from "../state/pending";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
@@ -256,6 +257,7 @@ function Shell({
   onRefresh: () => Promise<void>;
   onLogout: () => Promise<void>;
 }) {
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const { t, i18n } = useTranslation("common");
   const ru = i18n.language.startsWith("ru");
   const location = useLocation();
@@ -326,7 +328,7 @@ function Shell({
         refresh: onRefresh,
       }}
     >
-      <div className="app-shell">
+      <div className={"app-shell" + (railCollapsed ? " rail-collapsed" : "")}>
         <a className="skip-link" href="#main-content">
           {ru ? "К содержимому" : "Skip to content"}
         </a>
@@ -351,6 +353,7 @@ function Shell({
             </button>
           </div>
           <nav ref={navRef} className="nav-list" aria-label={t("appName")}>
+            <button type="button" className="nav-item desktop-rail-toggle" aria-label={ru ? (railCollapsed ? "Развернуть меню" : "Свернуть меню") : (railCollapsed ? "Expand menu" : "Collapse menu")} aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(!railCollapsed)}><PanelLeft size={17} aria-hidden="true"/></button>
             {navTabs.map((tab) => {
               const Icon = icons[tab];
               return (
@@ -370,13 +373,15 @@ function Shell({
                     setMenu(false);
                     document.getElementById("main-content")?.focus();
                   }}
+                  aria-label={label(tab)}
+                  title={label(tab)}
                   aria-current={location.tab === tab ? "page" : undefined}
                   className={
                     "nav-item " + (location.tab === tab ? "nav-active" : "")
                   }
                 >
                   <Icon size={17} aria-hidden="true" />
-                  {label(tab)}
+                  <span className="nav-label">{label(tab)}</span>
                 </button>
               );
             })}

@@ -1,4 +1,5 @@
 export default {
+ launchFlow: "Flow для сессии (необязательно)", launchMessage: "Первое сообщение (черновик)",
   goToController: "Перейти к управлению сессией",
   sessionOpeningRejected: "Машина отклонила открытие этой сессии.",
 

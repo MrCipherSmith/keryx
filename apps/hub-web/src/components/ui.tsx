@@ -97,7 +97,7 @@ export function Select({
   className = "",
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={inputClass + " " + className} {...props} />;
+  return <select className={inputClass + " hub-select " + className} {...props} />;
 }
 export function Textarea({
   className = "",

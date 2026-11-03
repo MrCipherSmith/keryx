@@ -160,6 +160,11 @@ export function SessionWorkspace({
           </div>
         </div>
         <div className="session-header-actions">
+          <Button variant="secondary" onClick={() => {
+            setTab("settings");
+            document.getElementById(id + "-inspector")?.scrollIntoView({ block: "start" });
+            document.getElementById(id + "-settings")?.focus({ preventScroll: true });
+          }}>{words.settings}</Button>
           <Button
             variant="secondary"
             aria-expanded={navigationOpen}

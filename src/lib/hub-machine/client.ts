@@ -26,6 +26,8 @@ export async function enrollMachine(hubUrl: string, request: Control['Enrollment
         throw new MachineError('invalid-enrollment');
     return { machineId: v.machineId, secret: v.secret };
 }
+const MAX_HUB_CLOCK_LEAD_MS = 250;
+
 export function verifyAuthorizationGrant(value: unknown, expected: Control['AuthorizeCommand'] & {
     commandId: string;
     authorizedBy: string;
@@ -35,7 +37,15 @@ export function verifyAuthorizationGrant(value: unknown, expected: Control['Auth
         return false;
     const g = checked.value;
     const issued = Date.parse(g.authorizedAt), expires = Date.parse(g.expiresAt);
-    return elapsed >= 0 && elapsed < LIMITS.grantMs && issued <= now && expires > now && expires - issued <= LIMITS.grantMs && g.commandId === expected.commandId && g.authorizedBy === expected.authorizedBy && g.commandDigest === expected.commandDigest && g.policyDigest === expected.policyDigest && g.actionFingerprint === expected.actionFingerprint && canonicalDigest(g.target) === canonicalDigest(expected.target) && canonicalDigest(g.controller) === canonicalDigest(expected.controller);
+    // The Hub can be slightly ahead of the machine. Keep the expiry and local request age strict.
+    return elapsed >= 0 && elapsed < LIMITS.grantMs
+        && issued <= now + MAX_HUB_CLOCK_LEAD_MS && expires > now
+        && expires > issued && expires - issued <= LIMITS.grantMs
+        && g.commandId === expected.commandId && g.authorizedBy === expected.authorizedBy
+        && g.commandDigest === expected.commandDigest && g.policyDigest === expected.policyDigest
+        && g.actionFingerprint === expected.actionFingerprint
+        && canonicalDigest(g.target) === canonicalDigest(expected.target)
+        && canonicalDigest(g.controller) === canonicalDigest(expected.controller);
 }
 // lib.dom masks Bun's documented constructor options in this project.
 const NativeWebSocket = WebSocket as unknown as {

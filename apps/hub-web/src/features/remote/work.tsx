@@ -12,7 +12,7 @@ import {
 } from "../../api/remote-hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useHub } from "../../app/hub-context";
-import { useDraft } from "../../state/drafts";
+import { useDraft, useDraftStore } from "../../state/drafts";
 import { pendingScope, usePending } from "../../state/pending";
 import { validNativeSubmission, type NativeSubmission } from "./work-pending";
 import {
@@ -49,10 +49,12 @@ export function MessageComposer({
   );
   const profileConsentVersion = consent.data?.profileConsentVersion;
   const hasProfileConsent = typeof profileConsentVersion === "number" && Number.isSafeInteger(profileConsentVersion) && profileConsentVersion > 0;
+  const draftKey = `remote-message:${hub.scopeKey}:${record.projectId}:${record.sessionId}`;
   const [draft, setDraft, clearDraft] = useDraft(
-    `remote-message:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,
+    draftKey,
     {
       text: "",
+      prepared: false,
       mode: "",
       flowId: hub.location.flowId ?? "",
       flowVersion: 0,
@@ -83,9 +85,9 @@ export function MessageComposer({
     flows.data?.flows.filter((f) => f.status === "in-progress") ?? [];
   const [validation, setValidation] = useState("");
   const [preserved, setPreserved] = useState(false);
-  const stale =
+  const stale = !!draft.text && !draft.prepared && (
     control.advanceVersion(draft.sessionVersion) !== record.version ||
-    draft.configVersion !== record.config.configVersion;
+    draft.configVersion !== record.config.configVersion);
   const selected = eligible.find((f) => f.id === draft.flowId);
   async function selectFlow(id: string) {
     const flow = eligible.find((f) => f.id === id);
@@ -158,12 +160,12 @@ export function MessageComposer({
     if(!control.binding||!control.active||stale||!assoc||!draft.text.trim()) {setValidation(t('required'));return;}
     if(mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
     const submitted=draft;
-    const body={expectedSessionVersion:control.advanceVersion(submitted.sessionVersion),controller:control.binding,expectedConfigVersion:submitted.configVersion,text:submitted.text,interpretation:'literal-message',association:assoc,busyPolicy:submitted.busyPolicy} satisfies Control['MessageSubmit'];
+    const body={expectedSessionVersion:submitted.prepared?record.version:control.advanceVersion(submitted.sessionVersion),controller:control.binding,expectedConfigVersion:submitted.prepared?record.config.configVersion:submitted.configVersion,text:submitted.text,interpretation:'literal-message',association:assoc,busyPolicy:submitted.busyPolicy} satisfies Control['MessageSubmit'];
     if(mode==='managed'&&managed.hint){
       if(assoc.mode!=='ad-hoc'){setValidation(workT('nativeConsentRequired'));return;}
       const original:NativeSubmission={scope:nativeScope,operationId:crypto.randomUUID(),path:sessionPath(record.projectId,record.sessionId)+'/messages',body:structuredClone(body),hint:Object.freeze({...managed.hint}),phase:'sending'};
       sendNative(original,submitted);
-    }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:()=>setPreserved(!clearDraft(submitted))});
+    }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:receipt=>{if(receipt.status==='rejected')return;const store=useDraftStore.getState();const current=store.drafts[draftKey];if(current===submitted)store.put(draftKey,{...submitted,text:"",prepared:false});setPreserved(current!==undefined&&current!==submitted);}});
   }
 
   return (
@@ -178,10 +180,12 @@ export function MessageComposer({
           value={draft.text}
           rows={3}
           maxLength={32768}
-          onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+          onChange={(e) => setDraft({ ...draft, ...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{}), text: e.target.value })}
         />
       </Field>
       <p className="composer-hint">{t("secretWarning")}</p>
+      <details open={!association()} className="composer-work-context">
+        <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>
       <div className="composer-controls">
         <Field label={t("workMode")}>
           <Select
@@ -210,6 +214,7 @@ export function MessageComposer({
           </Field>
         ) : null}
       </div>
+      </details>
       {mode === "flow" ? (
         <>
           {selected && !draft.criteriaDigest && (

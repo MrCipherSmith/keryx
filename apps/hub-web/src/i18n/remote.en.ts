@@ -1,4 +1,5 @@
 export default {
+ launchFlow: "Session Flow (optional)", launchMessage: "First message (draft)",
   goToController: "Go to session control",
   sessionOpeningRejected: "The machine refused to open this session.",
 
