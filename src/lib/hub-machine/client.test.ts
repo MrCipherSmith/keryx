@@ -112,3 +112,39 @@ test('a Hub request the network refuses or resets is a typed transport failure, 
   const aborted:unknown=await pending;expect(aborted).toMatchObject({name:'AbortError'});expect(machineNoticeCode(aborted,false)).toBe('machine-request-aborted');expect(machineNoticeCode(aborted,true)).toBe('machine-stopping');
  }finally{await held.server.stop(true);}
 });
+
+test('fresh authorization waits for a slightly future server timestamp and still rejects other targets', async () => {
+    let skew = 150;
+    let commandId = 'claim';
+    const server = Bun.serve({
+        port: 0,
+        fetch(req, socket) {
+            if (req.method === 'POST') {
+                const issued = Date.now() + skew;
+                return Response.json({ ...authorization, grantId: 'grant', commandId, authorizedBy: 'human',
+                    authorizedAt: new Date(issued).toISOString(), expiresAt: new Date(issued + 1000).toISOString() });
+            }
+            if (socket.upgrade(req)) return;
+            return new Response(null, { status: 400 });
+        },
+        websocket: { message(ws) {
+            ws.send(JSON.stringify({ v: 2, type: 'welcome', messageId: 'welcome', epoch: 1,
+                payload: { machineId: 'machine-a', heartbeatSeconds: 20, heartbeatTimeoutSeconds: 60, resumeMode: 'replay', hubSequence: 0 } }));
+        } },
+    });
+    const client = new MachineConnection({ hubUrl: server.url.origin, machineId: 'machine-a',
+        secret: 's'.repeat(43), ledgerId: 'ledger-a', daemonId: 'daemon-a', agentVersion: 'test', onFrame: () => {} });
+    try {
+        await client.connect();
+        const grant = await client.authorize('claim', authorization, 'human');
+        expect(Date.parse(grant.authorizedAt)).toBeLessThanOrEqual(Date.now());
+        skew = 10000;
+        await expect(client.authorize('claim', authorization, 'human')).rejects.toThrow('authorization-not-applied');
+        skew = -1;
+        commandId = 'other';
+        await expect(client.authorize('claim', authorization, 'human')).rejects.toThrow('authorization-not-applied');
+    } finally {
+        client.close();
+        server.stop(true);
+    }
+});

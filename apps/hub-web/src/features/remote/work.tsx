@@ -19,7 +19,6 @@ import {
   Button,
   EmptyState,
   Field,
-  Input,
   Notice,
   Panel,
   Select,
@@ -44,23 +43,30 @@ export function MessageComposer({
   const { t } = useTranslation("remote");
   const {t:workT}=useTranslation("work");
   const action = useRemoteAction<Control["TurnReceipt"]>();
+  const consent = useRemoteQuery<{ profileConsentVersion: number | null }>(
+    ["chat-consent",record.sessionId,record.config.policyDigest],
+    sessionPath(record.projectId,record.sessionId)+"/chat-consent",
+  );
+  const profileConsentVersion = consent.data?.profileConsentVersion;
+  const hasProfileConsent = typeof profileConsentVersion === "number" && Number.isSafeInteger(profileConsentVersion) && profileConsentVersion > 0;
   const [draft, setDraft, clearDraft] = useDraft(
     `remote-message:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,
     {
       text: "",
-      mode: "flow",
+      mode: "",
       flowId: hub.location.flowId ?? "",
       flowVersion: 0,
       specDigest: "",
       criteriaDigest: "",
       consent: false,
-      consentVersion: "1",
+      consentVersion: null as number | null,
       busyPolicy: "reject" as "reject" | "enqueue",
       sessionVersion: record.version,
       configVersion: record.config.configVersion,
     },
   );
-  const managed=useNativeWorkSelection(record,draft.mode,control.active);
+  const mode = draft.mode || (hasProfileConsent ? "ad-hoc" : "flow");
+  const managed=useNativeWorkSelection(record,mode,control.active);
   const nativeScope=pendingScope("native",hub.principal.id,record.projectId,record.sessionId);
   const nativeScopeRef=useRef(nativeScope);nativeScopeRef.current=nativeScope;
   const nativePending=usePending<NativeSubmission>(nativeScope,(value):value is NativeSubmission=>validNativeSubmission(value,nativeScope,sessionPath(record.projectId,record.sessionId)+"/messages"),(value)=>({...value,phase:"unknown"}));
@@ -104,17 +110,17 @@ export function MessageComposer({
   }
   function association(): Control["FlowAssociation"] | null {
     if (
-      (draft.mode === "ad-hoc" || draft.mode === "managed") &&
+      (mode === "ad-hoc" || mode === "managed") &&
       draft.consent &&
-      Number.isSafeInteger(Number(draft.consentVersion)) &&
-      Number(draft.consentVersion) > 0
+      hasProfileConsent &&
+      draft.consentVersion === profileConsentVersion
     )
       return {
         mode: "ad-hoc",
-        profileConsentVersion: Number(draft.consentVersion),
+        profileConsentVersion,
       };
     if (
-      draft.mode === "flow" &&
+      mode === "flow" &&
       selected &&
       draft.flowVersion === selected.version &&
       draft.specDigest === selected.specContentDigest &&
@@ -150,10 +156,10 @@ export function MessageComposer({
     const assoc=association();
     if(nativeOperation||nativePending.error)return;
     if(!control.binding||!control.active||stale||!assoc||!draft.text.trim()) {setValidation(t('required'));return;}
-    if(draft.mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
+    if(mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
     const submitted=draft;
     const body={expectedSessionVersion:control.advanceVersion(submitted.sessionVersion),controller:control.binding,expectedConfigVersion:submitted.configVersion,text:submitted.text,interpretation:'literal-message',association:assoc,busyPolicy:submitted.busyPolicy} satisfies Control['MessageSubmit'];
-    if(draft.mode==='managed'&&managed.hint){
+    if(mode==='managed'&&managed.hint){
       if(assoc.mode!=='ad-hoc'){setValidation(workT('nativeConsentRequired'));return;}
       const original:NativeSubmission={scope:nativeScope,operationId:crypto.randomUUID(),path:sessionPath(record.projectId,record.sessionId)+'/messages',body:structuredClone(body),hint:Object.freeze({...managed.hint}),phase:'sending'};
       sendNative(original,submitted);
@@ -162,6 +168,11 @@ export function MessageComposer({
 
   return (
     <Panel title={t("message")}>
+      {record.state === "opening" || record.state === "recovery-required" ? (
+        <Notice>{t(record.state === "opening" ? "sessionNotOpen" : "sessionNeedsRecovery")}</Notice>
+      ) : control.claimPending ? <Notice>{t("controlApplying")}</Notice> : !control.active && !record.controller && (
+        <Notice>{t("observer")} {control.operator && <a href="#session-controller" className="underline">{t("goToController")}</a>}</Notice>
+      )}
       <Field label={t("message")}>
         <Textarea
           value={draft.text}
@@ -174,16 +185,16 @@ export function MessageComposer({
       <div className="composer-controls">
         <Field label={t("workMode")}>
           <Select
-            value={draft.mode}
+            value={mode}
             disabled={!!nativeOperation}
             onChange={(e) => setDraft({ ...draft, mode: e.target.value,consent:false })}
           >
             <option value="flow">{t("flow")}</option>
-            <option value="ad-hoc">{t("adHoc")}</option>
-            {(managed.available||draft.mode==='managed')&&<option value="managed" disabled={!managed.available||!managed.operator}>{workT("managedAttempt")}</option>}
+            <option value="ad-hoc" disabled={!hasProfileConsent}>{t("adHoc")}</option>
+            {(managed.available||mode==='managed')&&<option value="managed" disabled={!managed.available||!managed.operator}>{workT("managedAttempt")}</option>}
           </Select>
         </Field>
-        {draft.mode === "flow" ? (
+        {mode === "flow" ? (
           <Field label={t("chooseFlow")}>
             <Select
               value={draft.flowId}
@@ -197,21 +208,9 @@ export function MessageComposer({
               ))}
             </Select>
           </Field>
-        ) : (
-          <Field label={t("consentVersion")}>
-            <Input
-              type="number"
-              min="1"
-              step="1"
-              value={draft.consentVersion}
-              onChange={(e) =>
-                setDraft({ ...draft, consentVersion: e.target.value })
-              }
-            />
-          </Field>
-        )}
+        ) : null}
       </div>
-      {draft.mode === "flow" ? (
+      {mode === "flow" ? (
         <>
           {selected && !draft.criteriaDigest && (
             <Button
@@ -230,17 +229,17 @@ export function MessageComposer({
             </Definition>
           </details>
         </>
-      ) : (
+      ) : hasProfileConsent ? (
         <label className="flex gap-2 text-xs">
           <input
             type="checkbox"
-            checked={draft.consent}
-            onChange={(e) => setDraft({ ...draft, consent: e.target.checked })}
+            checked={draft.consent && draft.consentVersion === profileConsentVersion}
+            onChange={(e) => setDraft({ ...draft, consent: e.target.checked, consentVersion: profileConsentVersion })}
           />
-          {t("adHocConsent")}
+          {t("chatConsent")}
         </label>
-      )}
-      {draft.mode==='managed' && <><NativeAttemptPicker value={managed} locked={!!nativeOperation}/>{!association()&&<p className="composer-hint">{workT("nativeConsentRequired")}</p>}</>}
+      ) : <Notice>{t("adHocUnavailable")}</Notice>}
+      {mode==='managed' && <><NativeAttemptPicker value={managed} locked={!!nativeOperation}/>{!association()&&<p className="composer-hint">{workT("nativeConsentRequired")}</p>}</>}
       {nativePending.error&&<Notice tone="error">{workT("pendingStorageError")}</Notice>}
       {nativeOperation && <Notice>{workT(nativeOperation.phase==='sending'?"pending":"nativeOutcomeUnknown")}<p>{workT("operation")}: <code>{nativeOperation.operationId}</code></p><p>{workT("managedAttempt")}: <code>{nativeOperation.hint.attemptId}</code> · v{nativeOperation.hint.attemptVersion}</p>{nativeOperation.phase==='unknown'&&<Button variant="secondary" disabled={!managed.operator||!control.active||action.isPending} onClick={()=>sendNative(nativeOperation,undefined,true)}>{workT("retryOriginalMessage")}</Button>}</Notice>}
       {stale && (
@@ -262,10 +261,13 @@ export function MessageComposer({
       )}
       {preserved && <Notice>{t("common:draftPreserved")}</Notice>}
       {validation && <Notice tone="error">{validation}</Notice>}
-      <Feedback query={flows} />
+      {mode === "flow" && <Feedback query={flows} />}
+      <Feedback query={consent} />
       <ActionFeedback action={action} />
       <div className="composer-footer">
-        <Field label={t("busyPolicy")}>
+        <details>
+          <summary>{t("chatOptions")}</summary>
+          <Field label={t("busyPolicy")} hint={t("busyPolicyHelp")}>
           <Select
             value={draft.busyPolicy}
             onChange={(e) =>
@@ -278,15 +280,17 @@ export function MessageComposer({
             <option value="reject">{t("reject")}</option>
             <option value="enqueue">{t("enqueue")}</option>
           </Select>
-        </Field>
+          </Field>
+        </details>
         <Button
           disabled={
+            record.state === "opening" || record.state === "recovery-required" || record.state === "closed" ||
             !control.active ||
             stale ||
             action.isPending ||
             !!nativeOperation ||
             nativePending.error ||
-            (draft.mode==='managed'&&!managed.valid) ||
+            (mode==='managed'&&!managed.valid) ||
             !draft.text.trim() ||
             !association()
           }

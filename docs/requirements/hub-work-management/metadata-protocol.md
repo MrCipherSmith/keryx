@@ -106,3 +106,10 @@ Attempt contribution authority is checked for every follow-on mutation, not infe
 Document archival has two policies. Exact versions pinned by managed Work are mandatory immutable records: a new pin fails atomically with `quota-exceeded` if the document archive reaches 512 MiB or 100,000 versions. Reusing an already archived exact version remains idempotent at capacity. Legacy wiki/import writes populate the same archive opportunistically; when full, they continue updating current documents and the bounded legacy delta window without archiving additional unpinned versions. Existing archives and frozen pins are never deleted or rewritten. An exact-version request for a version that was never archived returns `document-version-unavailable`; current wiki content remains available through the legacy document API. There is no automatic archival command or promise of complete unpinned history beyond these retention windows.
 
 An already archived project/document/version is immutable: conflicting content or metadata returns HTTP 409 (`document-version-conflict`) and preserves the original record. Replaying the same document with a different JSON object-key order remains idempotent.
+
+
+## Approve a plan and start
+
+The human-only `flow.approve-and-start` command uses the reviewed Flow revision digest, the current Flow version, and each required result's revision ID, digest, and version. It commits approval decisions and the transition to `in-progress` in the same transaction. An agent may prepare the draft and proposed results.
+
+For a draft with no required results, the confirmation displays a default result derived from the Flow outcome and criteria. The server creates it and maps every criterion during confirmation. For an explicit plan, a changed result, incomplete coverage, or a pending amendment blocks the operation without writing any decisions. A ready Flow keeps its approved membership and reuses existing decisions for results already approved on the current parent revision.

@@ -1,3 +1,4 @@
+import type { HubPreferences } from "./contracts";
 import { createHash } from "node:crypto";
 import { legacyReviewRepository } from "./legacy-review-storage";
 import { legacyArtifacts } from "./legacy-artifacts";
@@ -5,7 +6,7 @@ import { deliveryJobs } from "./delivery-jobs";
 import { fail } from "./domain";
 import { Database } from "bun:sqlite";
 import { migrateWork, workRepository } from "./work/storage";
-import { migrateRemote, syncProjectReferences, remoteRepository, type RemoteRepository } from "./remote-v2/storage";
+import { REMOTE_TABLES, migrateRemote, syncProjectReferences, remoteRepository, type RemoteRepository } from "./remote-v2/storage";
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import {remoteBudgets as normalizeRemoteBudgets,type RemoteBudgets} from './remote-v2/budgets';
@@ -36,6 +37,19 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
   for (const path of [databasePath, databasePath + '-wal', databasePath + '-shm']) if (existsSync(path)) chmodSync(path, 0o600);
   db.exec('CREATE TABLE IF NOT EXISTS hub_legacy_records(kind TEXT NOT NULL,id TEXT NOT NULL,project_id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id)); CREATE INDEX IF NOT EXISTS hub_legacy_project ON hub_legacy_records(project_id,kind); CREATE INDEX IF NOT EXISTS hub_legacy_id ON hub_legacy_records(project_id,id)');
   db.exec('CREATE TABLE IF NOT EXISTS hub_sessions(id TEXT PRIMARY KEY,body TEXT NOT NULL)');
+  db.exec("CREATE TABLE IF NOT EXISTS hub_user_preferences (actor_id TEXT PRIMARY KEY, theme TEXT, language TEXT)");
+  const readPreferences = db.query<HubPreferences, [string]>("SELECT theme, language FROM hub_user_preferences WHERE actor_id=?");
+  const updatePreferences = db.query<HubPreferences, [string, HubPreferences["theme"], HubPreferences["language"]]>(
+    "INSERT INTO hub_user_preferences(actor_id, theme, language) VALUES (?, ?, ?) ON CONFLICT(actor_id) DO UPDATE SET theme=coalesce(excluded.theme, theme), language=coalesce(excluded.language, language) RETURNING theme, language",
+  );
+  const preferences = {
+    read(actorId: string): HubPreferences {
+      return readPreferences.get(actorId) ?? { theme: null, language: null };
+    },
+    update(actorId: string, patch: Partial<HubPreferences>): HubPreferences {
+      return updatePreferences.get(actorId, patch.theme ?? null, patch.language ?? null)!;
+    },
+  };
   const remote = remoteRepository(db,budgetConfig);
   const work = workRepository(db);
   const deliveries = deliveryJobs(db);
@@ -212,6 +226,33 @@ export function openHubStore(dataDir: string,budgets:Partial<RemoteBudgets>={}) 
       fsyncSync(descriptor);
     } finally { closeSync(descriptor); rmSync(temporaryDirectory, { recursive: true, force: true }); }
   };
-  return { load, save, remote, work, deliveries, legacyReview, project, session, workLegacyContext, workTransaction, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
+  const projectDeletionBlockers = (state: HubState, projectId: string): string[] => {
+    const blockers: string[] = [];
+    const exists = (sql: string) => !!db.query(sql).get(projectId);
+    const openFlow = state.flows.some(flow => flow.projectId === projectId && flow.status !== "done") ||
+      exists("SELECT 1 FROM hub_work_records WHERE project_id=? AND json_extract(body,'$.kind')='flow' AND json_extract(body,'$.state') NOT IN ('accepted','cancelled') LIMIT 1");
+    if (openFlow) blockers.push("open-flows");
+    if (exists("SELECT 1 FROM remote_machine, json_each(remote_machine.body,'$.projectIds') WHERE value=? AND json_extract(remote_machine.body,'$.revoked')=0 LIMIT 1") ||
+        exists("SELECT 1 FROM remote_pairing, json_each(remote_pairing.body,'$.projectIds') WHERE value=? AND json_extract(remote_pairing.body,'$.consumed')=0 AND json_extract(remote_pairing.body,'$.expiresAt')>strftime('%Y-%m-%dT%H:%M:%fZ','now') LIMIT 1"))
+      blockers.push("machines");
+    if (exists("SELECT 1 FROM remote_session WHERE projectId=? AND coalesce(json_extract(body,'$.record.state'),'unknown') NOT IN ('closed','failed') LIMIT 1"))
+      blockers.push("sessions");
+    if (exists("SELECT 1 FROM remote_run WHERE projectId=? AND coalesce(json_extract(body,'$.state'),'unknown') NOT IN ('succeeded','failed','cancelled','rejected','lost') LIMIT 1") ||
+        state.proposals.some(proposal => proposal.projectId === projectId && proposal.status === "pending") ||
+        exists("SELECT 1 FROM hub_delivery_jobs WHERE project_id=? AND status IN ('queued','running','uncertain') LIMIT 1") ||
+        exists("SELECT 1 FROM hub_work_execution_reservations WHERE project_id=? LIMIT 1"))
+      blockers.push("unfinished-work");
+    const retained = [state.documents, state.flows, state.proposals, state.revisions, state.evidence, state.deliveries, state.documentChanges]
+      .some(records => records.some(record => record.projectId === projectId)) ||
+      ["hub_work_records", "hub_work_documents", "hub_delivery_jobs"].some(table => exists(`SELECT 1 FROM ${table} WHERE project_id=? LIMIT 1`)) ||
+      REMOTE_TABLES.some(table => table !== "remote_project_ref" && exists(`SELECT 1 FROM ${table} WHERE projectId=? LIMIT 1`));
+    if (retained && blockers.length === 0) blockers.push("retained-history");
+    return blockers;
+  };
+  const removeEmptyProject = (state: HubState, projectId: string) => {
+    db.query("DELETE FROM remote_project_ref WHERE id=?").run(projectId);
+    state.projects = state.projects.filter(project => project.id !== projectId);
+  };
+  return { load, save, preferences, projectDeletionBlockers, removeEmptyProject, remote, work, deliveries, legacyReview, project, session, workLegacyContext, workTransaction, writeTransaction, backup, subscribe(listener: (state: HubState, previous: HubState) => void) { listeners.add(listener); return () => listeners.delete(listener); }, close() { if (!closed) { closed = true; listeners.clear(); db.close(); } } };
 }
 export type HubStore = ReturnType<typeof openHubStore>;

@@ -20,12 +20,12 @@ export function parseRevisionChanges(input: string): RevisionChange[] {
   });
 }
 
-export function decodeRevisionFile(content: string): { kind: 'text'; text: string; truncated: boolean; size: number } | { kind: 'binary'; size: number } {
+export function decodeRevisionFile(content: string, maxChars = 128_000): { kind: 'text'; text: string; truncated: boolean; size: number } | { kind: 'binary'; size: number } {
   try {
     const bytes = Uint8Array.from(atob(content), char => char.charCodeAt(0));
     if (bytes.some(byte => byte === 0)) return { kind: 'binary', size: bytes.length };
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    return { kind: 'text', text: text.slice(0, 128_000), truncated: text.length > 128_000, size: bytes.length };
+    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    return { kind: 'text', text: text.slice(0, maxChars), truncated: text.length > maxChars, size: bytes.length };
   } catch { return { kind: 'binary', size: Math.floor(content.length * 3 / 4) }; }
 }
 

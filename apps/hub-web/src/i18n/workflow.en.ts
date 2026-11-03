@@ -25,7 +25,8 @@ export default {
   projectSnapshot: "Snapshot",
 
   projectFlows: "Project Flows",
-  viewAllFlows: "View all Flows",
+  viewAllFlows: "Previous Flows",
+  viewManagedFlows: "Open project work",
 
   allFlows: "All Flows",
   allFlowsDescription:
@@ -130,6 +131,7 @@ export default {
   acknowledgment:
     "I reviewed revision {{revision}} and acknowledge that all evidence is self-reported.",
   acceptExact: "Accept exact revision & finish",
+  acceptedBySignedInUser: "Accepted by a signed-in user",
   acceptedBy: "Accepted by",
   acceptedAt: "Accepted at",
   receipt: "Receipt",

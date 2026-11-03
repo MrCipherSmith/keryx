@@ -416,7 +416,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "db02bd3007410bff54888dbb39a6f45741762f73aa10f2322030ca96b1efa72e",
+          "sha256": "f60f808aff12e2a74c84adae7b61d1d319eab55b7dbe190a980ec238f978e1e1",
           "anchor": "line:1"
         },
         {
@@ -516,7 +516,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "db02bd3007410bff54888dbb39a6f45741762f73aa10f2322030ca96b1efa72e",
+          "sha256": "f60f808aff12e2a74c84adae7b61d1d319eab55b7dbe190a980ec238f978e1e1",
           "anchor": "line:1"
         },
         {
@@ -573,7 +573,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "db02bd3007410bff54888dbb39a6f45741762f73aa10f2322030ca96b1efa72e",
+          "sha256": "f60f808aff12e2a74c84adae7b61d1d319eab55b7dbe190a980ec238f978e1e1",
           "anchor": "line:1"
         },
         {
@@ -3467,7 +3467,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "db02bd3007410bff54888dbb39a6f45741762f73aa10f2322030ca96b1efa72e",
+          "sha256": "f60f808aff12e2a74c84adae7b61d1d319eab55b7dbe190a980ec238f978e1e1",
           "anchor": "line:1"
         },
         {
@@ -12752,7 +12752,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "ed0d0803810a85711620c154dab32438986c28f1f1b75d394bcdea503a977cfb"
+      "receiptDigest": "84c40f774dd81e1c2a06644b6e57f2ef3dc32031451f290f35e309c91685e225"
     },
     {
       "variantId": "goal.-workspace",
@@ -12776,7 +12776,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d0d260c801c87d88059fa3a31318c73516b8ab9822fa9ded556b378d783ff09a"
+      "receiptDigest": "3f18aa61198c5d71a293202e9af47c705d39a8ce63abe402d2b0ebfa1789c28d"
     },
     {
       "variantId": "sessions.picker",
@@ -12784,7 +12784,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "9aab09c2625d5a7b3b0c2776d205ee7b93479b5fa4b75e70a0bec88bff4af71c"
+      "receiptDigest": "810d0e6bd4a1195a3cf8eb51caa91ede2322f40a607c44a80616225f389df079"
     },
     {
       "variantId": "sessions.open",
@@ -12792,7 +12792,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "aea2969c4545274f80df31f6313d2df76a8ae4efcac91f18f8390198044c3958"
+      "receiptDigest": "665cc657e7f67a86db96f67a9b90c42bc96ae108f816fa38c83668d6c46d8a5b"
     },
     {
       "variantId": "sessions.resume",
@@ -12800,7 +12800,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1ba15b057d0a9fa53bc36bf62fbbe18a7007520d0359d576d02d544eb69c9cae"
+      "receiptDigest": "0f6ded0966c4a8d16bb746cbb76394cdabb6f8122d16abd579b170141fce7432"
     },
     {
       "variantId": "sessions.fork",
@@ -12808,7 +12808,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c224447dee0edde047630e84ad1c08d28c99fdb078bbddeba4a80b9ca3f5cc41"
+      "receiptDigest": "7883cf63d9e08028faf73bc0c7e4faf449bc9a341bfd27803a137f84d2f8b0a1"
     },
     {
       "variantId": "status.default",
@@ -12856,7 +12856,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d6b59733dced10eabeeba53124d421f5a8c40279f79944536c6be3b49080894e"
+      "receiptDigest": "6f5e32de6441a1e36bce822bbc3220b3b18b60057cb82a4b5d4b7c672f470705"
     },
     {
       "variantId": "setup.init",
@@ -12864,7 +12864,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5ea19485cd8cf9faddd13fa9b4f056c6a039848bcde83d6b11a7016de616c554"
+      "receiptDigest": "88a50b491bcbc7c773d8db07e1b48f9e6cbe3de06f9d4d72930edfdd964396a9"
     },
     {
       "variantId": "setup.refresh",
@@ -12872,7 +12872,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "75aa648461c889801cef74b1bbe44919f539b3c231d406f70aa64652c0376132"
+      "receiptDigest": "0edd78705d18e35154cec658c7b0c0c1655f7cc0e20a3d32423f126c1d894501"
     },
     {
       "variantId": "setup.repair",
@@ -12880,7 +12880,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "93fc7f2bf2a72a43ab7da590516d613aa9e484c95ab5aca72673861f40de9642"
+      "receiptDigest": "001be998bd2faca3451cfa43cf99dc76f22b4145cc26143300ba0347a5744cbe"
     },
     {
       "variantId": "ac.cached",
@@ -13064,7 +13064,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "8cd55f015f212194123cee9a9796c37849e9d23894486e36a457643e2813dd51"
+      "receiptDigest": "d443a5d4b85b5287a4fa9059b5b7eadf70293067d10b971c6ec3ac8c05f0850c"
     },
     {
       "variantId": "intake.list",
@@ -13072,7 +13072,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "f1ae719c48446b80d1c17cc739b7d128ca8130a8f8c2eddbd4ec9d1eb9fb7d25"
+      "receiptDigest": "adc558659524e9bb0561301c37afb3cd62ee362ff20068aa569fbc97217189af"
     },
     {
       "variantId": "intake.pause",
@@ -14120,7 +14120,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "30dd74494c9ef2e437f5d174b27f48b250b949e17f544e535f9b3d0bedcaa552"
+      "receiptDigest": "4183605cdee8feee890fab78323563f2c6dff4990dfc29968f8f52a966aa5047"
     },
     {
       "variantId": "interrupt.default",
@@ -14216,7 +14216,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6c02fba9de0edcd233a38dfe0a896d36a256fd91830e437c9f4f30654594bee6"
+      "receiptDigest": "52f663d4d84a93fdd227cb4982d406899e8d31deb9d64b3cdf06c36d9fc45735"
     },
     {
       "variantId": "bus.-name-text",

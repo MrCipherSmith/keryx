@@ -111,7 +111,7 @@ export function ProjectOverview() {
   const decisionCount = pendingFlows.length + pendingProposals.length + returnedFlows.length;
   const decisionsReady = !!flows.data && !!proposals.data;
   const go = (
-    tab: "flows" | "proposals" | "documents" | "machines" | "code" | "history",
+    tab: "work" | "flows" | "proposals" | "documents" | "machines" | "code" | "history",
     extra: { flowId?: string; documentId?: string; revisionId?: string } = {},
   ) =>
     hub.navigate({
@@ -157,8 +157,8 @@ export function ProjectOverview() {
         title={project.data?.name ?? t("overviewTitle")}
         description={t("projectWorkspaceDescription")}
         action={
-          <Button variant="secondary" onClick={() => go("flows")}>
-            {t("viewAllFlows")}
+          <Button onClick={() => go("work")}>
+            {t("viewManagedFlows")}
           </Button>
         }
       />

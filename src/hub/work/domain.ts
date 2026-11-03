@@ -73,8 +73,8 @@ function canonical(value: unknown): string {
     return JSON.stringify(value);
 }
 export function workDigest(value: unknown): string { return sha256(canonical(value)); }
-const humanCommands = new Set(['requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'attempt.select', 'review.decide', 'work.cancel', 'legacy.preview', 'legacy.convert']);
-export const supportedWorkCommands = ['flow.create', 'flow.start', 'intent.create', 'revision.propose', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'context.create', 'attempt.create', 'attempt.start', 'attempt.report', 'subject.create', 'evidence.record', 'attempt.submit', 'attempt.withdraw', 'attempt.select', 'review.decide', 'flow.submit', 'work.cancel'] as const;
+const humanCommands = new Set(['flow.approve-and-start', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'attempt.select', 'review.decide', 'work.cancel', 'legacy.preview', 'legacy.convert']);
+export const supportedWorkCommands = ['flow.create', 'flow.start', 'flow.approve-and-start', 'intent.create', 'revision.propose', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'context.create', 'attempt.create', 'attempt.start', 'attempt.report', 'subject.create', 'evidence.record', 'attempt.submit', 'attempt.withdraw', 'attempt.select', 'review.decide', 'flow.submit', 'work.cancel'] as const;
 export function allowedWorkCommands(actor: Principal): string[] { return actor.readOnly ? [] : supportedWorkCommands.filter(c => !humanCommands.has(c) || (actor.kind === 'human' && (actor.role === 'operator' || actor.role === 'reviewer'))); }
 function authorize(actor: Principal, projectId: string, context: WorkContext, write: boolean) {
     if (!context.legacy.projects.some(p => p.id === projectId) || actor.projectIds && !actor.projectIds.includes(projectId))
@@ -301,6 +301,7 @@ function execute(state: WorkState, actor: Principal, projectId: string, command:
         case 'revision.propose': return handlers.revisionPropose(transaction, command);
         case 'requirements.approve': return handlers.requirementsApprove(transaction, command);
         case 'flow.start': return handlers.flowStart(transaction, command);
+        case 'flow.approve-and-start': return handlers.flowApproveAndStart(transaction, command);
         case 'context.create': return handlers.contextCreate(transaction, command);
         case 'attempt.create': return handlers.attemptCreate(transaction, command);
         case 'attempt.start': return handlers.attemptStart(transaction, command);

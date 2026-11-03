@@ -516,6 +516,9 @@ test("Intent approval exposes approach, exclusions, exact parent digest and crit
   expect(
     review.getByText("Intent exclusions marker", { selector: "dd" }),
   ).toBeVisible();
+  const technical = review.getByText("Revision technical details");
+  expect(review.getByText("Pinned parent Flow revision")).not.toBeVisible();
+  fireEvent.click(technical);
   expect(review.getByText("Pinned parent Flow revision")).toBeVisible();
   expect(review.getByText("ci1 → fc1")).toBeVisible();
   expect(
@@ -574,4 +577,44 @@ test("a cancelled required Intent does not block approving the exact live requir
   expect(
     screen.queryByRole("button", { name: "Pin required deliverables" }),
   ).not.toBeInTheDocument();
+});
+
+test("agent-created draft can be reviewed and started with a single confirmation", async () => {
+  const flow = recordOf(records, "flow", "flow-demo")!;
+  flow.state = "draft";
+  flow.approvedRevisionId = null;
+  const revision = recordOf(records, "flow-revision", flow.currentRevisionId)!;
+  revision.requiredIntentIds = [];
+  records = [flow, revision];
+  vi.mocked(fetch).mockImplementation(async (path, init) => {
+    if (String(path).endsWith("/capabilities")) {
+      return Response.json({ ...capabilities, allowedCommands: ["flow.approve-and-start"] });
+    }
+    if (String(path).endsWith("/commands")) {
+      return Response.json({
+        operationId: JSON.parse(String(init?.body)).operationId,
+        entities: [],
+        eventCursor: "cursor2",
+        receiptId: "receipt",
+      });
+    }
+    return Response.json({ records, eventCursor: "cursor1", nextCursor: null });
+  });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: /^Keyboard accessibility/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Approve and start" }));
+  const confirmation = screen.getByRole("form", { name: "Approve and start" });
+  expect(within(confirmation).getByText(revision.criteria[0].text)).toBeInTheDocument();
+  expect(within(confirmation).getByText(flow.title)).toBeInTheDocument();
+  expect(within(confirmation).queryByRole("textbox")).not.toBeInTheDocument();
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Approve and start" }));
+  await waitFor(() => {
+    const [, request] = vi.mocked(fetch).mock.calls.find(([path]) => String(path).endsWith("/commands")) ?? [];
+    expect(request).toBeDefined();
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      command: "flow.approve-and-start",
+      expectedVersions: { [flow.id]: flow.version },
+      payload: { flowId: flow.id, flowRevisionDigest: revision.contentDigest, intents: [] },
+    });
+  });
 });

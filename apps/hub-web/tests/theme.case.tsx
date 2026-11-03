@@ -6,14 +6,11 @@ import { ThemeSelect } from "../src/theme";
 test("explicit theme changes document and persists only appearance preference", async () => {
   await act(() => i18n.changeLanguage("en"));
   render(<ThemeSelect />);
-  fireEvent.change(screen.getByLabelText("Appearance"), {
-    target: { value: "dark" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "Dark" }));
+  expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
   expect(document.documentElement.dataset.theme).toBe("dark");
   expect(localStorage.getItem("keryx.hub.theme")).toBe("dark");
-  fireEvent.change(screen.getByLabelText("Appearance"), {
-    target: { value: "light" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "Light" }));
   expect(document.documentElement.dataset.theme).toBe("light");
 });
 
@@ -23,14 +20,13 @@ test("system mode follows OS changes but explicit mode ignores them", async () =
   Object.defineProperty(media, "matches", { get: () => dark });
   vi.stubGlobal("matchMedia", () => media);
   render(<ThemeSelect />);
-  const selector = screen.getByLabelText("Appearance");
-  fireEvent.change(selector, { target: { value: "system" } });
+  fireEvent.click(screen.getByRole("button", { name: "System" }));
   act(() => {
     dark = true;
     media.dispatchEvent(new Event("change"));
   });
   expect(document.documentElement.dataset.theme).toBe("dark");
-  fireEvent.change(selector, { target: { value: "light" } });
+  fireEvent.click(screen.getByRole("button", { name: "Light" }));
   act(() => {
     dark = false;
     media.dispatchEvent(new Event("change"));

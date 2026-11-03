@@ -85,6 +85,17 @@ beforeEach(async () => {
     );
   });
 });
+test("project overview opens the managed Flow list and separately labels the legacy board", async () => {
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "Open project work" }));
+  expect(navigate).toHaveBeenLastCalledWith(
+    expect.objectContaining({ projectId: "p", tab: "work", flowId: undefined }),
+  );
+  fireEvent.click((await screen.findAllByRole("button", { name: "Previous Flows" }))[0]);
+  expect(navigate).toHaveBeenLastCalledWith(
+    expect.objectContaining({ projectId: "p", tab: "flows" }),
+  );
+});
 test("project decisions navigate to the exact Flow and actual proposal queue with project scope", async () => {
   show();
   fireEvent.click(await screen.findByRole("button", { name: "Review result" }));

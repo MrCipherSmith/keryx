@@ -188,12 +188,17 @@ export class MachineConnection {
             throw new MachineError('machine-offline');
         const generation = this.generation, epoch = this.epoch, started = performance.now();
         const result = await this.request(`/hub/v2/machines/${encodeURIComponent(this.options.machineId)}/commands/${encodeURIComponent(commandId)}/authorize`, request);
-        if (!this.connected || generation !== this.generation || epoch !== this.epoch || !verifyAuthorizationGrant(result, { ...request, commandId, authorizedBy }, Date.now(), performance.now() - started))
+        const grant = validateControl('AuthorizationGrant', result);
+        if (!grant.ok)
             throw new MachineError('authorization-not-applied');
-        return (validateControl('AuthorizationGrant', result) as {
-            ok: true;
-            value: Control['AuthorizationGrant'];
-        }).value;
+        // Small clock differences can place an otherwise valid grant slightly in the future.
+        // Wait for its actual start time. The wall deadline and request-age budget still apply.
+        const wait = Date.parse(grant.value.authorizedAt) - Date.now();
+        if (wait > 0 && wait <= 500)
+            await Bun.sleep(wait);
+        if (!this.connected || generation !== this.generation || epoch !== this.epoch || !verifyAuthorizationGrant(grant.value, { ...request, commandId, authorizedBy }, Date.now(), performance.now() - started))
+            throw new MachineError('authorization-not-applied');
+        return grant.value;
     }
     async authorization(commandId: string, request: Control['AuthorizeCommand'], authorizedBy: string): Promise<GrantApplication> {
         const startedAt = performance.now(), generation = this.generation, epoch = this.epoch;

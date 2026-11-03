@@ -1,10 +1,10 @@
 import { runEventPage } from "./retention";
 import { releasedControllerAlias } from "./controller-recovery";
 import type { ReconciliationRow } from "./recovery";
-import { type Control, type FrameOf } from "../../remote-control/protocol";
-import { fail } from "../domain";
+import { validateControl, type Control, type FrameOf } from "../../remote-control/protocol";
+import { fail, sha256 } from "../domain";
 import type { HubStore } from "../store";
-import type { ApprovalRow, HumanAuthority, MachineRecord, OperationRecord, QueueRow, RunRow, SessionRow } from "./model";
+import type { ApprovalRow, HumanAuthority, MachineRecord, OperationRecord, QueueRow, RunRow, SessionRow, StoredCommand } from "./model";
 import { control, scoped, session } from "./guards";
 import { completeProjection, type SessionDependencies } from "./sessions";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
@@ -13,7 +13,7 @@ function boundedRecords<T>(records:T[]): {records:T[];hasMore:boolean} {
   for(const record of records) { const size=Buffer.byteLength(JSON.stringify(record))+1; if(selected.length>=100 || bytes+size>512*1024)break; selected.push(record); bytes+=size; }
   return {records:selected,hasMore:selected.length<records.length};
 }
-export function createRemoteReader(store: HubStore, deps: SessionDependencies) {
+export function createRemoteReader(store: HubStore, deps: SessionDependencies, chatConsent: (record: Control["SessionRecord"]) => number | null) {
   function humanRead(p: string[], url: URL, auth: HumanAuthority): Response {
     if (p[0] === "machines") {
       const metadata = (m: MachineRecord) => ({ machineId: m.machineId, version: m.version, displayName: m.displayName, projectIds: m.projectIds.filter((projectId) => !auth.actor.projectIds || auth.actor.projectIds.includes(projectId)), revoked: m.revoked, createdAt: m.createdAt, lastSeenAt: m.lastSeenAt, connected: deps.online(m.machineId), recoveryRequired: m.recoveryRequired, inventory: (() => { const inventory = store.remote.get<FrameOf<"inventory">["payload"]>("remote_inventory", m.machineId); return inventory ? { ...inventory, checkouts: inventory.checkouts.filter((checkout) => (!auth.actor.projectIds || auth.actor.projectIds.includes(checkout.projectId)) && (!url.searchParams.get("projectId") || checkout.projectId === url.searchParams.get("projectId"))) } : null; })() });
@@ -42,6 +42,27 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies) {
     const row = session(store.remote, projectId, p[3]); const suffix = p[4];
     if (!suffix) return json(row.record);
     if (suffix === "operations" && p[5]) { const release = releasedControllerAlias(store.remote, row, p[5]); if (release) return json(release); const operation = store.remote.get<OperationRecord>("remote_operation", p[5]); if (!operation || operation.projectId !== projectId || (operation.sessionId && operation.sessionId !== row.record.sessionId)) fail(404, "not-found", "Operation not found"); return json(operation.deliveryFailure ?? operation.response,operation.status); }
+    if (suffix === "controller-claims" && p[5] && p.length === 6) {
+      const route = `/hub/v2/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(row.record.sessionId)}/controller/claim`;
+      const operationId = sha256(JSON.stringify([auth.actor.id, "POST", route, p[5]]));
+      const operation = store.remote.get<OperationRecord>("remote_operation", operationId);
+      if (!operation || operation.projectId !== projectId || operation.sessionId !== row.record.sessionId)
+        fail(404, "not-found", "Controller request not found");
+      if (operation.deliveryFailure) return json(operation.deliveryFailure, operation.status);
+      const receipt = validateControl("ControllerReceipt", operation.response);
+      if (!receipt.ok) fail(409, "stale-reference", "Controller receipt is unavailable");
+      const controller = row.record.controller;
+      return json({ applied: row.pending?.operationId !== operationId &&
+        row.record.version >= receipt.value.sessionVersion &&
+        controller?.controllerLeaseId === receipt.value.lease.controllerLeaseId &&
+        controller.version === receipt.value.lease.version && controller.state === "held" });
+    }
+    if (suffix === "opening-status" && !p[5]) {
+      const opening = store.remote.all<StoredCommand>("remote_command", { projectId, sessionId: row.record.sessionId }).find(command => command.envelope.kind === "create-session");
+      const operation = opening && store.remote.get<OperationRecord>("remote_operation", opening.operationId);
+      return json({ errorCode: operation?.deliveryFailure?.error.code ?? null });
+    }
+    if (suffix === "chat-consent" && !p[5]) return json({ profileConsentVersion: chatConsent(row.record) });
     if (suffix === "config") return json(row.record.config);
     if (suffix === "commands") { const projection = completeProjection(store.remote, row); return json(control("CommandCatalogue", { catalogueVersion: projection.catalogueVersion, catalogueDigest: projection.catalogueDigest, capabilityDigest: projection.capabilityDigest, entries: projection.catalogue })); }
     if (suffix === "routing") { const projection = completeProjection(store.remote, row); return json(control("RoutingAvailability", { version: projection.projectionVersion, policyDigest: projection.policyDigest, capabilityDigest: projection.capabilityDigest, candidates: projection.candidates, profileIds: projection.profileIds })); }

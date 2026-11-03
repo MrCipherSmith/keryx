@@ -8043,6 +8043,94 @@
                 }
               },
               "command": {
+                "const": "flow.approve-and-start"
+              },
+              "payload": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "flowId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "flowRevisionDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "intents": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "intentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "revisionId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "revisionDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      },
+                      "required": [
+                        "intentId",
+                        "revisionId",
+                        "revisionDigest"
+                      ]
+                    }
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "flowId",
+                  "flowRevisionDigest",
+                  "intents",
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "operationId",
+              "expectedVersions",
+              "command",
+              "payload"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "operationId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "expectedVersions": {
+                "type": "object",
+                "maxProperties": 210,
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "command": {
                 "const": "legacy.preview"
               },
               "payload": {
@@ -8275,7 +8363,7 @@
           },
           "actions": {
             "type": "array",
-            "maxItems": 22,
+            "maxItems": 23,
             "items": {
               "type": "object",
               "additionalProperties": false,
@@ -8303,6 +8391,7 @@
                     "context.create",
                     "revision.propose",
                     "flow.start",
+                    "flow.approve-and-start",
                     "legacy.preview"
                   ]
                 },
@@ -8450,7 +8539,7 @@
           },
           "allowedCommands": {
             "type": "array",
-            "maxItems": 22,
+            "maxItems": 23,
             "items": {
               "enum": [
                 "flow.create",
@@ -8474,6 +8563,7 @@
                 "context.create",
                 "revision.propose",
                 "flow.start",
+                "flow.approve-and-start",
                 "legacy.preview"
               ]
             }

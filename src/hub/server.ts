@@ -14,7 +14,7 @@ import { deliverRevision, inspectGitPublication } from "./git-delivery";
 import { openHubStore } from "./store";
 import { webAssets } from "./web";
 import { authorizeAgentRequest, resolveNamedAgent, validateAgentCredentialsConfiguration } from "./agent-credentials";
-export type HubServerConfig = HubConfig & { mutationQueue?: Partial<MutationQueueLimits>; workManagement?: { enabled: boolean; repositories?:WorkRepositoryConfig[]; observerFetch?:(request:Request)=>Promise<Response> }; publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
+export type HubServerConfig = HubConfig & { accessSessionSeconds?: number; mutationQueue?: Partial<MutationQueueLimits>; workManagement?: { enabled: boolean; repositories?:WorkRepositoryConfig[]; observerFetch?:(request:Request)=>Promise<Response> }; publicOrigin?: string; cloudflareAccess?: CloudflareAccessConfig; accessDependencies?: AccessDependencies; observeRemoteTransport?:(observation:import("./remote-v2").RemoteTransportObservation)=>void; remoteBudgets?:Partial<import('./remote-v2/budgets').RemoteBudgets> };
 const MAX_BODY = 32 * 1024 * 1024;
 function json(value: unknown, status = 200, headers?: HeadersInit): Response {
   const h = new Headers(headers); h.set("Content-Type", "application/json; charset=utf-8"); h.set("Cache-Control", "no-store");
@@ -53,6 +53,8 @@ function validateConfig(config: HubServerConfig) {
   validateAgentCredentialsConfiguration(config);
   if (config.publicOrigin && !/^https?:\/\//.test(config.publicOrigin)) throw new Error("Hub public origin must be an HTTP(S) origin");
   if (config.publicOrigin && new URL(config.publicOrigin).origin !== config.publicOrigin) throw new Error("Hub public origin must not include path or trailing slash");
+  if (config.accessSessionSeconds !== undefined && (!Number.isSafeInteger(config.accessSessionSeconds) || config.accessSessionSeconds < 60 || config.accessSessionSeconds > 604800))
+    throw new Error("KERYX_HUB_ACCESS_SESSION_SECONDS must be an integer between 60 and 604800");
   if (config.cloudflareAccess) {
     validateAccessConfig(config.cloudflareAccess);
     if (!config.publicOrigin?.startsWith("https://")) throw new Error("Cloudflare Access requires an HTTPS public origin");
@@ -184,7 +186,7 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
       const accessIdentity = await access.verify(request.headers.get("cf-access-jwt-assertion"));
       return serialized(async () => {
         const actor = accessPrincipal(accessIdentity);
-        const expiresAt = Math.min(accessIdentity.expiresAt, now() + 43200 * 1000);
+        const expiresAt = Math.min(accessIdentity.expiresAt, now() + (config.accessSessionSeconds ?? 43200) * 1000);
         if (expiresAt <= now()) fail(401, "access-invalid", "Cloudflare Access identity expired");
         const state = store.load(); const key = randomBytes(32).toString("base64url");
         for (const [key, session] of Object.entries(state.sessions)) if (session.expiresAt <= now()) delete state.sessions[key];
@@ -232,9 +234,36 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
       });
       fail(405, "method-not-allowed", "Unsupported method");
     }
+    if (path.length === 1 && path[0] === "preferences") {
+      if (!identity.cookie || identity.actor.kind !== "human" || !identity.actor.issuer || !identity.actor.subject)
+        fail(403, "individual-account-required", "Personal settings require an individual sign-in");
+      if (request.method === "GET") return json(store.preferences.read(identity.actor.id));
+      if (request.method !== "POST") fail(405, "method-not-allowed", "Unsupported method");
+      const { theme, language, ...other } = object(await readJson(request, 1024));
+      if (Object.keys(other).length || (theme === undefined && language === undefined) ||
+        (theme !== undefined && theme !== "system" && theme !== "light" && theme !== "dark") ||
+        (language !== undefined && language !== "ru" && language !== "en"))
+        fail(400, "invalid-preferences", "Choose a supported theme or language");
+      const current = await authenticate(request);
+      if (current.actor.id !== identity.actor.id) fail(403, "access-denied", "Session changed");
+      return json(store.preferences.update(current.actor.id, {
+        ...(theme === undefined ? {} : { theme }),
+        ...(language === undefined ? {} : { language }),
+      }));
+    }
     if (path[0] === 'projects' && path[2] === 'delivery-jobs') deliveries.authorize(identity.actor,path[1]!);
     authorizeAgentRequest(identity.actor, path, request.method);
     if (path[0]==='projects' && path[1] && identity.actor.projectIds && !identity.actor.projectIds.includes(path[1])) fail(403,'project-scope-denied','Project access denied');
+    const isProjectDeletion = path.length === 3 && path[0] === "projects" && path[2] === "deletion";
+    if (isProjectDeletion) {
+      if (identity.actor.kind !== "human" || identity.actor.role !== "operator" || identity.actor.readOnly)
+        fail(403, "operator-required", "Project deletion requires an operator");
+      if (request.method === "GET") {
+        const state = store.load();
+        const project = hubRead(state, path.slice(0, 2), url);
+        return json({ project, blockers: store.projectDeletionBlockers(state, path[1]!) });
+      }
+    }
     const isReviewReturn = path.length===5 && path[0]==='projects' && path[2]==='flows' && path[4]==='request-changes';
     const reviewReplayKey = (actor: Principal, operationId: string) => sha256(JSON.stringify([actor.id,'POST',`/hub/v1/projects/${encodeURIComponent(path[1]!)}/flows/${encodeURIComponent(path[3]!)}/request-changes`,operationId]));
     if (request.method === "GET") {
@@ -303,6 +332,34 @@ export function createHubApplication(config: HubServerConfig): HubApplication {
         });
       }
       const replayKey = sha256(JSON.stringify([currentIdentity.actor.id, request.method, url.pathname, key]));
+      if (isProjectDeletion) {
+        if (currentIdentity.actor.kind !== "human" || currentIdentity.actor.role !== "operator" || currentIdentity.actor.readOnly)
+          fail(403, "operator-required", "Project deletion requires an operator");
+        return store.writeTransaction(state => {
+          const replay = state.replays[replayKey];
+          if (replay) {
+            if (replay.digest !== bodyDigest) fail(409, "idempotency-conflict", "Idempotency key was already used for another payload");
+            return json(replay.body, replay.status);
+          }
+          const project = state.projects.find(item => item.id === path[1]);
+          if (!project) fail(404, "not-found", "Project not found");
+          const confirmation = object(body);
+          if (confirmation.name !== project.name || confirmation.expectedVersion !== project.version)
+            fail(409, "project-confirmation-stale", "Confirm the current project name and version");
+          const blockers = store.projectDeletionBlockers(state, project.id);
+          if (blockers.length) fail(409, "project-deletion-blocked", blockers.join(", "));
+          store.removeEmptyProject(state, project.id);
+          state.events.push({
+            sequence: (state.events.at(-1)?.sequence ?? 0) + 1,
+            projectId: project.id, entityId: project.id, type: "project.deleted",
+            actorId: currentIdentity.actor.id, actorRole: currentIdentity.actor.role,
+            createdAt: new Date(now()).toISOString(),
+          });
+          const result = { deletedProjectId: project.id };
+          state.replays[replayKey] = { digest: bodyDigest, body: result, status: 200 };
+          return json(result);
+        });
+      }
       const state = store.load(); const replay = state.replays[replayKey];
       if (replay) { if (replay.digest !== bodyDigest) fail(409, "idempotency-conflict", "Idempotency key was already used for another payload"); return json(replay.body, replay.status); }
       const result = await hubMutate(state, currentIdentity.actor, path, body, config, config.gitDelivery ?? deliverRevision, `delivery-${replayKey.slice(0, 32)}`);
@@ -341,6 +398,7 @@ export function loadHubConfig(env: Record<string, string | undefined> = process.
   const budgets=remoteBudgetsFromEnv(env);if(budgets)config.remoteBudgets=budgets;
   if (env.KERYX_HUB_ACCESS_ENABLED !== undefined && env.KERYX_HUB_ACCESS_ENABLED !== "true" && env.KERYX_HUB_ACCESS_ENABLED !== "false") throw new Error("Invalid KERYX_HUB_ACCESS_ENABLED; expected true or false");
   if (env.KERYX_HUB_ACCESS_ENABLED === "true") config.cloudflareAccess = { issuer: env.KERYX_HUB_ACCESS_ISSUER ?? "", audience: env.KERYX_HUB_ACCESS_AUDIENCE ?? "", rolesFile: env.KERYX_HUB_ACCESS_ROLES_FILE ?? "" };
+  if (env.KERYX_HUB_ACCESS_SESSION_SECONDS !== undefined) config.accessSessionSeconds = Number(env.KERYX_HUB_ACCESS_SESSION_SECONDS);
   validateConfig(config); return config;
 }
 export function startHub(config: HubServerConfig = loadHubConfig()) {

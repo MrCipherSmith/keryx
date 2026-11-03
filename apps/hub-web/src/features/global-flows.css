@@ -109,7 +109,7 @@
     border-top: 0;
   }
   .hub-flow-table-row > :nth-child(4) {
-    text-align: end;
+    grid-column: 1 / -1;
   }
   .hub-flow-toolbar > :nth-child(2) {
     min-width: 140px;
