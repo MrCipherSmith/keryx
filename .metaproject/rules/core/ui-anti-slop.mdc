@@ -1,0 +1,167 @@
+---
+description: "Shared catalog of AI-slop tells in UI (visual, copy, behavioral) with severity tiers, numeric craft thresholds, and the positive-direction principle. Read by ui-direction, ui-craft, and review-ui-ux."
+alwaysApply: false
+globs:
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "**/*.vue"
+  - "**/*.svelte"
+  - "**/*.css"
+  - "**/*.scss"
+  - "**/*.html"
+  - "**/DESIGN.md"
+---
+
+# UI Anti-Slop
+
+One vocabulary for the three UI skills: `ui-direction` (concept before code), `ui-craft`
+(implementation), `review-ui-ux` (review). The creator and the reviewer judge by the same list.
+
+## Why slop happens
+
+- **Distributional convergence.** With no direction a model emits the most probable design:
+  Inter, indigo-on-white, centered hero, three cards, fade-up on scroll. Every "safe" default
+  is a vote for the average. (Anthropic, *Improving frontend design through skills*)
+- **A ban list alone fails.** Ban purple and the output moves to the *next* most probable look
+  ("second-wave slop": cream + serif + terracotta; near-black + one neon accent; broadsheet).
+  The cure is a **positive direction derived from the subject**, with this list as a guard rail.
+- **Slop is a stack, not a tell.** One default (Inter for body text) is fine. Five defaults
+  together are slop. Score density, not presence.
+- **Behavioral slop** is the half nobody screenshots: missing states, no validation, no focus
+  ring. Models learn from code snapshots, not from using flows.
+
+## Core principles
+
+1. **Direction comes from the subject.** Industry, materials, vernacular, printed artefacts,
+   the client's own numbers and names. Not from "modern, clean, minimal".
+2. **Spend boldness in one place.** Exactly one signature element; everything else quiet.
+   Before finishing, remove one element.
+3. **Distinctive look, conventional behavior** (Jakob's Law). Navigation placement, link
+   affordance, form patterns, and keyboard behavior stay standard.
+4. **Structure must encode information.** Borders, numbering, eyebrows, dividers, badges exist
+   only when they carry meaning.
+5. **Never invent proof.** No made-up stats, logos, testimonials, customers, or "Live" chips.
+6. **If the brief names a look, follow it** — even if that look is on the list below.
+7. **Don't claim checks that weren't run.** No browser → say so.
+
+## Tell catalog
+
+Tiers: **T1** — recognizable as AI within ~3 seconds by a layperson (must fix).
+**T2** — obvious to anyone who builds UI (should fix). **T3** — weak alone, damning in a stack.
+
+### Color
+| Tier | Tell | Fix |
+|---|---|---|
+| T1 | Purple→blue / violet→indigo gradient on hero or background; radial "hero blobs" | 4–6 named colors with roles, derived from the subject |
+| T1 | Gradient text (`bg-clip-text`) on headlines | Solid ink; emphasis by size/weight |
+| T2 | Untouched framework palette (`indigo-500` primary, `emerald-500` success) | Own tokens; tune hue/chroma to the palette |
+| T2 | Second-wave palettes used by reflex: cream `#F4F1EA` + terracotta `~#D97757`; near-black + acid green/vermilion | Justify from the subject or choose again |
+| T2 | Brand color on more than 3 surfaces | Accent on the primary action + at most one other element |
+| T3 | Gradient borders, decorative gradient washes, glows | Tone steps between surfaces |
+| T3 | Gray text on colored backgrounds | Tint/shade of the background hue |
+| T3 | Dark mode = inverted light mode | Re-tune each token for dark |
+
+### Typography
+| Tier | Tell | Fix |
+|---|---|---|
+| T1 | Inter / Roboto / Arial / Open Sans / Lato / system-ui as the *only* face | Choose a face for the subject; state the choice before coding |
+| T2 | Re-converged substitutes used by default: Space Grotesk, Plus Jakarta Sans, Geist | Vary across projects; pick by mood, not habit |
+| T2 | Accent on one headline word ("Build *faster*" — italic/colored/serif swap) | Let the sentence carry itself |
+| T2 | Tracked ALL-CAPS eyebrow above every heading; mono for decorative meta labels | Only where it encodes information |
+| T2 | Meta strings "A · B · C"; labels "WORD — fragment" | Plain sentence-case labels |
+| T3 | Framework size ramp verbatim (12/14/16/18/24/30/36/48/60/72) | Modular ratio (1.2 / 1.25 / 1.333), ≤5 sizes |
+| T3 | Close weights (400 vs 600); body at 600 | Extreme contrast (200–300 vs 700–900); body 400 |
+| T3 | Headlines ≥48px with default tracking | −0.02 to −0.05em, leading 0.85–1.05 |
+
+### Layout & composition
+| Tier | Tell | Fix |
+|---|---|---|
+| T1 | Stock page order: pill badge → centered headline → 2 CTAs → logo row → 3 feature cards → pricing → CTA band | Sections as claims with proof; neighbors use different structures |
+| T1 | Three equal icon cards with the icon in a tinted rounded square | Structure follows content (list, table, diagram, one large proof) |
+| T2 | Fully centered page, no alignment axis | Left-aligned grid; ≤3 shared left edges |
+| T2 | Every section the same height/padding/heading size | Rhythm: section gaps clearly larger than internal gaps, varied |
+| T2 | 01/02/03 markers on content that is not a sequence | Number only real steps |
+| T3 | Big number + small label + stat row as hero | Open with the subject's most characteristic element |
+| T3 | Glass pill floating nav; fake grey-bar dashboard as hero art | Real product, real data |
+
+### Components & surfaces
+| Tier | Tell | Fix |
+|---|---|---|
+| T1 | SaaS card kit: one radius (16–24px) + same soft shadow everywhere; cards in cards | Radius by role (child ≤ parent); shadows only on floating layers |
+| T2 | Card with shadow + border + tinted fill at once | Pick one separation method |
+| T2 | Glassmorphism / backdrop-blur without depth meaning | Opaque surfaces with tone steps |
+| T2 | Default icon set at default size, the usual five (zap, shield-check, bot, sparkles, rocket) | Fewer icons; icons only where they speed recognition |
+| T3 | "→" appended to every link/CTA; same hover-lift on every card | Affordance via convention; hover only where clickable |
+| T3 | Colored thick left border on a rounded card as decoration | Border only for state |
+
+### Motion
+| Tier | Tell | Fix |
+|---|---|---|
+| T2 | Same fade-and-slide-up on every section on scroll; count-up stats | One orchestrated moment; user-triggered motion explains change |
+| T3 | Drifting blobs, pulsing cards, shimmer that answers no question | Delete |
+| T3 | Bounce/elastic easing, `transition: all`, linear UI easing | ease-out in, ease-in out; transform/opacity only |
+
+### Copy & content
+| Tier | Tell | Fix |
+|---|---|---|
+| T1 | Invented round stats (10x, 99.9%, 10,000+), fake logos/testimonials | Delete anything unsourced; list sample content for replacement |
+| T1 | Placeholder people/brands (Jane Doe, Sarah Johnson, Acme, Globex), lorem ipsum | Real or clearly marked sample content |
+| T2 | Filler verbs: unlock, supercharge, empower, elevate, seamless, streamline | Say what the product does, in the user's words |
+| T2 | Emoji in headings and bullets | Remove |
+| T3 | Generic CTAs ("Get started", "Submit", "Learn more") | Outcome label ("Save changes", "Book a table") |
+| T3 | Empty state = generic illustration + two lines that fit any product | Specific reason + direct action |
+
+### Behavioral slop
+| Tier | Tell | Fix |
+|---|---|---|
+| T1 | `outline: none` without `:focus-visible` replacement | Visible focus ring, ≥3:1 against adjacent colors |
+| T1 | Missing loading / empty / error / disabled states | Design all of them |
+| T2 | Forms with no validation, placeholder-as-label, pre-disabled submit | Visible labels, inline errors, focus first error |
+| T2 | Critical actions only visible on hover; color-only status | Always reachable; text/icon + color |
+| T2 | No `prefers-reduced-motion` variant | Keep content, drop travel |
+
+## Craft thresholds (checkable)
+
+**Type.** 1–2 families. Body 16–20px (≥16px on mobile inputs), line-height 1.45–1.6, measure
+45–75ch (hero 30–45ch). Display ≥3× body on marketing pages; ≤3 visible sizes on dense app
+screens. Real punctuation (curly quotes, “…”, en/em dashes). `tabular-nums` for compared numbers.
+
+**Color.** Contrast text ≥4.5:1, large text (≥24px or ≥18.66px bold) and UI boundaries/icons
+≥3:1 (WCAG 1.4.3 / 1.4.11). Color never the sole carrier of meaning (1.4.1). ≤3 contrast
+treatments per view.
+
+**Space & shape.** One spacing scale (4/8/12/16/24/32/48/64/96/128). Groups separated more than
+items within them. Radius: one scale by role, nested radius concentric.
+
+**Targets.** ≥24×24 CSS px (WCAG 2.5.8); ≥44px on touch (Apple 44pt, Material 48dp).
+
+**Motion.** 100–400ms; ~100ms for toggles, 200–300ms for dialogs, nothing ≥500ms; entrances
+slightly longer than exits; stagger 60–90ms; travel 16–32px.
+
+**Feedback timing.** 0.1s feels instant; >1s needs an indicator; 2–10s spinner; ≥10s percent-done
++ cancel. Loaders appear after ~150–300ms and stay ≥300ms. Skeletons match final dimensions.
+
+**Accessibility floor.** WCAG 2.2 AA, including 2.4.11 Focus Not Obscured (sticky headers →
+`scroll-padding`), 2.5.7 drag alternative, 1.4.10 reflow at 320px, never disable zoom.
+
+## Slop score
+
+Count tells by tier on the reviewed surface: `T1×3 + T2×2 + T3×1`.
+- 0–3 — distinctive or deliberately neutral
+- 4–8 — template-leaning; fix T1/T2 first
+- ≥9 — reads as AI-generated; redo direction, don't patch
+
+A tell is exempt when `DESIGN.md` or the brief explicitly chooses it — record the exemption.
+
+## Sources
+
+- Anthropic frontend-design skill — https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md
+- Anthropic, Improving frontend design through skills — https://claude.com/blog/improving-frontend-design-through-skills
+- Anthropic cookbook, Prompting for frontend aesthetics — https://github.com/anthropics/claude-cookbooks/blob/main/coding/prompting_for_frontend_aesthetics.ipynb
+- How to fix AI slop in web design — https://capitalandcompute.net/blog/fix-ai-slop-design/
+- ux-skill: detecting AI slop — https://github.com/Laith0003/ux-skill/wiki/How-to-detect-AI-slop-in-your-design
+- Impeccable — https://github.com/pbakaus/impeccable · Taste Skill — https://github.com/Leonxlnx/taste-skill
+- Vercel Web Interface Guidelines — https://vercel.com/design/guidelines
+- Practical Typography — https://practicaltypography.com/summary-of-key-rules.html
+- NN/g: heuristics, severity, hierarchy, response times, progress, errors, empty states, animation duration — https://www.nngroup.com/articles/
+- Laws of UX — https://lawsofux.com/ · WCAG 2.2 — https://www.w3.org/WAI/WCAG22/quickref/

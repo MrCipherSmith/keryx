@@ -373,6 +373,7 @@ const SUPPORT_REVIEWERS = new Set([
   "review-vantage-testing",
   "review-vantage-styling",
   "review-layout",
+  "review-ui-ux",
   "code-style-review",
 ]);
 

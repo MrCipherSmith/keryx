@@ -397,7 +397,8 @@
         "src/gdskills/bundled/rules/core/storybook-guidelines.mdc",
         "src/gdskills/bundled/rules/core/subagent-context-construction.md",
         "src/gdskills/bundled/rules/core/subagent-status-protocol.md",
-        "src/gdskills/bundled/rules/core/tdd-workflow.mdc"
+        "src/gdskills/bundled/rules/core/tdd-workflow.mdc",
+        "src/gdskills/bundled/rules/core/ui-anti-slop.mdc"
       ],
       "targets": [
         "claude",
@@ -490,10 +491,11 @@
     },
     "react-review-skills": {
       "kind": "skill",
-      "description": "React/frontend review skills: review-frontend and review-frontend-conventions.",
+      "description": "React/frontend review skills: review-frontend, review-frontend-conventions, and review-ui-ux.",
       "paths": [
         "src/gdskills/bundled/skills/review/review-frontend/**",
-        "src/gdskills/bundled/skills/review/review-frontend-conventions/**"
+        "src/gdskills/bundled/skills/review/review-frontend-conventions/**",
+        "src/gdskills/bundled/skills/review/review-ui-ux/**"
       ],
       "targets": [
         "claude",

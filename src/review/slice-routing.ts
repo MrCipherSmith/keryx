@@ -116,6 +116,7 @@ const ROLE_RULES: readonly RoleRule[] = [
   { role: "review-frontend-conventions", why: "frontend file", path: (f) => FRONTEND_FILE.test(f) && !isTestFilePath(f) },
   { role: "review-layout", why: "stylesheet or theme", path: (f) => STYLE_FILE.test(f) },
   { role: "review-layout", why: "markup or styling in a component", path: (f) => /\.(tsx|jsx|vue|svelte)$/.test(f) && !isTestFilePath(f), content: /\b(className|style=|styled\.|css`|sx=|theme\.|padding|margin|flex|grid|z-index|width|height)\b/ },
+  { role: "review-ui-ux", why: "user-facing markup or styling", path: (f) => (STYLE_FILE.test(f) || /\.(tsx|jsx|vue|svelte|html)$/.test(f)) && !isTestFilePath(f) && !/\.stories\.[jt]sx?$/.test(f) },
   { role: "review-style", why: "documentation", path: (f) => DOC_FILE.test(f) },
   { role: "review-style", why: "stylesheet or theme", path: (f) => STYLE_FILE.test(f) },
   { role: "review-clean-code", why: "new functions or classes", content: /^\+\s*(export\s+)?(default\s+)?(async\s+)?(function\s+\w|class\s+\w|(const|let)\s+\w+\s*=\s*(async\s*)?\([^)]*\)\s*(:\s*[^=]+)?=>)/m, codeOnly: true },
