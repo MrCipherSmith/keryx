@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-11-03
+
+### Added
+- **UI design skills.** `ui-direction` chooses a subject-derived visual concept before any UI code and persists it as `DESIGN.md`; `ui-craft` builds from it with tokens first, every interactive and data state, purposeful motion and browser verification at 1440/768/390.
+- **`review-ui-ux` reviewer.** Usability heuristics, system states, forms, hierarchy, the WCAG 2.2 AA floor and an AI-slop score, in code and live modes. Routed for user-facing UI files and by `--ui-ux`; pixel geometry stays with `review-layout`.
+- **`ui-anti-slop` core rule.** A tiered catalog of AI-generated UI tells with numeric craft thresholds and cited sources, shared by all three skills.
+
 ## [0.4.8] - 2026-11-03
 
 ### Added
