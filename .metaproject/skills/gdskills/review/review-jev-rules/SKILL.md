@@ -210,7 +210,7 @@ other reviewer's: same Quality Gate, same dedup, same Wave C verification.
 3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
-This reviewer already satisfies all three by construction: `evidence` always
+This reviewer already satisfies laws 1-3 by construction (law 4 is the premise judge's question, Wave D, for its findings at `minor` and above): `evidence` always
 names the hunk and quotes it (never an unreproducible claim), a finding is
 only synthesized when the hunk itself is checked against the clause (never a
 theoretical pattern), and `synthesizeFindingsFromViolations` dedupes by

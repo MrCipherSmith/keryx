@@ -152,9 +152,9 @@ Required, all of it in `SKILL.md`:
   `review-orchestrator/SKILL.md` → **Severity (canonical)** and add one table
   saying where this reviewer's recurring conditions land under it. Ten private
   rubrics feeding one sort produce a ranking that means ten things at once.
-- **Shared laws** — copy the three verbatim from the orchestrator: no
-  unreproducible harm claim above `info`, never flag the theoretical, one finding
-  per class.
+- **Shared laws** — copy the four verbatim from the orchestrator: no unreproducible
+  harm claim above `info`, never flag the theoretical, one finding per class, a
+  deliberate choice is no defect until its reason is read and shown wrong.
 - **Class scope** — `blocker` and `major` carry every site holding the shape and
   the enumeration method that found them.
 - **Orchestrated Review Contract** — return `REVIEW_RESULT` per
@@ -267,7 +267,7 @@ Report done only once all of these hold:
   files — is what proves the reviewer will be dispatched.
 - The `SKILL.md` carries all six required parts from Step 3: Scope naming the
   neighbouring reviewers it excludes, a Checklist of performable checks, a
-  pointer to the canonical severity rubric with no rubric of its own, the three
+  pointer to the canonical severity rubric with no rubric of its own, the four
   shared laws verbatim, the class-scope contract, and the Orchestrated Review
   Contract with its own finding-id prefix.
 - `--origin` was passed whenever a source file exists, and the recorded path is
