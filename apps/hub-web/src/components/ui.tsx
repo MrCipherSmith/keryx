@@ -2,8 +2,7 @@ import {
   cloneElement,
   isValidElement,
   useId,
-  type ButtonHTMLAttributes,
-  type InputHTMLAttributes,
+  type ComponentPropsWithRef,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
   type ReactNode,
@@ -16,7 +15,7 @@ export function Button({
   className = "",
   type = "button",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
+}: ComponentPropsWithRef<"button"> & {
   variant?: "primary" | "secondary" | "danger" | "ghost";
 }) {
   return (
@@ -90,7 +89,7 @@ export function Field({
 export function Input({
   className = "",
   ...props
-}: InputHTMLAttributes<HTMLInputElement>) {
+}: ComponentPropsWithRef<"input">) {
   return <input className={inputClass + " " + className} {...props} />;
 }
 export function Select({

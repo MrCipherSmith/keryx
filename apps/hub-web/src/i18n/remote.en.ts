@@ -1,4 +1,5 @@
 export default {
+  searchCommands: "Search Keryx commands", noCommandsFound: "No matching commands.",
  sessionOpeningFailed: "Could not open", sessionOpeningNextStep: "Check that the machine is available, then create a new session.", sessionLaunchRequirements: "Choose an available machine, a clean checkout and a ready profile, then enter a title.",
  launchFlow: "Session Flow (optional)", launchMessage: "First message (draft)",
   goToController: "Go to session control",

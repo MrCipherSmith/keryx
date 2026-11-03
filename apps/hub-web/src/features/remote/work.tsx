@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
@@ -24,6 +24,7 @@ import {
   Select,
   Textarea,
 } from "../../components/ui";
+import { Commands } from "./settings";
 import { AssociationPicker } from "./association";
 import {
   ActionFeedback,
@@ -35,10 +36,19 @@ import {
 export function MessageComposer({
   record,
   control,
+  onCommandOutcome,
 }: {
   record: Control["SessionRecord"];
   control: Controller;
+  onCommandOutcome?: (outcome: Control["CommandOutcome"]) => void;
 }) {
+  const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
+  const commandsId = useId();
+  const commandTrigger = useRef<HTMLButtonElement>(null);
+  function closeCommands() {
+    setCommands("closed");
+    commandTrigger.current?.focus();
+  }
   const hub = useHub();
   const { t } = useTranslation("remote");
   const {t:workT}=useTranslation("work");
@@ -179,10 +189,33 @@ export function MessageComposer({
         <Textarea
           value={draft.text}
           rows={3}
+          onKeyDown={(event) => {
+            if (event.key !== "/" || draft.text || event.nativeEvent.isComposing ||
+                event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+            event.preventDefault();
+            setCommands("open");
+          }}
           maxLength={32768}
           onChange={(e) => setDraft({ ...draft, ...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{}), text: e.target.value })}
         />
       </Field>
+      <Button
+        ref={commandTrigger}
+        variant="secondary"
+        aria-label={t("commands")}
+        aria-expanded={commands === "open"}
+        aria-controls={commands === "unopened" ? undefined : commandsId}
+        onClick={() => commands === "open" ? closeCommands() : setCommands("open")}
+      >
+        <span aria-hidden="true">/</span> {t("commands")}
+      </Button>
+      {commands !== "unopened" && (
+        <div id={commandsId} hidden={commands !== "open"} onKeyDown={(event) => {
+          if (event.key === "Escape" && !event.defaultPrevented) closeCommands();
+        }}>
+          <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} />
+        </div>
+      )}
       <p className="composer-hint">{t("secretWarning")}</p>
       <details open={!association()} className="composer-work-context">
         <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>

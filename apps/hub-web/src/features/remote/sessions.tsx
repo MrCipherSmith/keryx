@@ -38,7 +38,7 @@ import {
 } from "./shared";
 import { MessageComposer, QueueControls } from "./work";
 import { ForkSession } from "./fork";
-import { Settings, Commands } from "./settings";
+import { Settings } from "./settings";
 export function SessionsView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
@@ -288,7 +288,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         ← {t("back")}
       </Button>
       <Feedback query={query} />
-      {query.data && <SessionSurface record={query.data} />}
+      {query.data && <SessionSurface key={query.data.sessionId} record={query.data} />}
     </div>
   );
 }
@@ -319,14 +319,11 @@ export function SessionSurface({
       record={record}
       control={control}
       history={<History record={record} outcomes={outcomes} />}
-      composer={<MessageComposer record={record} control={control} />}
-      queue={<QueueControls record={record} control={control} />}
-      settings={
-        <>
-          <Settings record={record} control={control} />
-          <Commands record={record} control={control} onOutcome={recordOutcome} />
-        </>
+      composer={
+        <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
       }
+      queue={<QueueControls record={record} control={control} />}
+      settings={<Settings record={record} control={control} />}
       operations={
         <>
           {" "}
