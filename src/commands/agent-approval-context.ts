@@ -10,6 +10,7 @@
 // still requires a typed `y`. The frozen harness policy engine is untouched.
 
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+import { terminalSafe } from "../lib/terminal-safe";
 
 /**
  * Extract file-like tokens from a shell command: tokens with a path separator or a
@@ -44,7 +45,7 @@ export async function buildApprovalContext(port: MetaprojectPort, command: strin
     try {
       const affected = await port.graphAffected({ target: file });
       if (affected.error === undefined && affected.affected.length > 0) {
-        lines.push(`context: ${file} affects ${affected.affected.length} file(s) in the code graph`);
+        lines.push(`context: ${terminalSafe(file).text} affects ${affected.affected.length} file(s) in the code graph`);
         break;
       }
     } catch {
@@ -57,7 +58,7 @@ export async function buildApprovalContext(port: MetaprojectPort, command: strin
     const memory = await port.memorySearch({ query: command, status: "accepted", limit: 1 });
     const hit = memory.error === undefined ? memory.hits[0] : undefined;
     if (hit !== undefined) {
-      lines.push(`memory: ${hit.title}`);
+      lines.push(`memory: ${terminalSafe(hit.title).text}`);
     }
   } catch {
     // best-effort: ignore

@@ -45,3 +45,15 @@ test("the worker evaluates that source rather than a second copy of it", () => {
   expect(source).toContain("const browserHeaders = ${BROWSER_HEADERS_SOURCE};");
   expect(source).toContain("input.browserHeaders");
 });
+
+test("the system runner refuses a pre-aborted signal without spawning a worker", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const started = Date.now();
+  const result = await new SystemWebWorkerRunner().run(
+    { url: "https://example.invalid/", hostname: "example.invalid", address: "192.0.2.1", method: "GET" },
+    controller.signal,
+  );
+  expect(result).toEqual({ ok: false, reason: "cancelled" });
+  expect(Date.now() - started).toBeLessThan(500);
+});

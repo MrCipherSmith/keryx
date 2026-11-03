@@ -224,7 +224,7 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
   // Contain before opening: the scanner reads whatever it is pointed at and
   // renders findings from the content, so an uncontained path turns a scanner
   // into a file reader for anything the process can reach.
-  const contained = await resolveContainedPath(projectRoot, file);
+  const contained = await resolveContainedPath(projectRoot, file, cwd);
   if (!contained.ok) {
     console.error(contained.message);
     process.exitCode = 1;

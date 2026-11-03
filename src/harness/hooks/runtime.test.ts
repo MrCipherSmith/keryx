@@ -88,6 +88,30 @@ describe("createHookRuntime — ordering + short-circuit", () => {
   });
 });
 
+describe("createHookRuntime — an uncompilable matcher never silently skips a gate", () => {
+  test("a gate hook with an invalid matcher still runs (and so can deny); an observer with one does not", async () => {
+    const { runner, calls } = makeFakeRunner({
+      badgate: { exitCode: 2, stdout: "", stderr: "blocked", timedOut: false, durationMs: 1 },
+      badobs: { exitCode: 0, stdout: "", stderr: "", timedOut: false, durationMs: 1 },
+    });
+    const registrations: HookRegistration[] = [
+      commandReg({ id: "badgate", event: "PreToolUse", matcher: "Bash(" }),
+      commandReg({ id: "badadv", event: "PreToolUse", class: "gate-advisory", matcher: "Bash(", order: 1 }),
+    ];
+    const runtime = createHookRuntime(baseCtx({ registrations, runner }));
+    const result = await runtime.fire("PreToolUse", { sessionId: "s1", runId: "r1", toolCallId: "t1", toolName: "Write", toolInput: {}, policyProfile: "monitored-trusted-local" }, { toolName: "Write" });
+    expect(calls.map((c) => c.argv[1])).toContain("badgate");
+    expect(result.decisions[0]).toEqual({ hookId: "badgate", decision: "deny" });
+
+    const obsRuntime = createHookRuntime(
+      baseCtx({ registrations: [commandReg({ id: "badobs", event: "PostToolUse", class: "observe", matcher: "Bash(" })], runner }),
+    );
+    const before = calls.length;
+    await obsRuntime.fire("PostToolUse", { sessionId: "s1", runId: "r1", toolCallId: "t1", toolName: "Write", toolInput: {}, toolOutput: {} }, { toolName: "Write" });
+    expect(calls.length).toBe(before);
+  });
+});
+
 describe("createHookRuntime — parallel observe/context never awaited past timeout", () => {
   test("a hanging observe hook does not block fire(), and is recorded as a timeout", async () => {
     const { runner } = makeFakeRunner({
@@ -625,7 +649,8 @@ describe("createHookRuntime — built-in ports", () => {
       },
       { toolName: "Edit" },
     );
-    expect(seenFiles).toEqual([["src/other.ts", "src/old.ts"]]);
+    // The rename's destination is a write too, so the gate sees it beside the source.
+    expect(seenFiles.map((files) => [...files].sort())).toEqual([["src/new.ts", "src/old.ts", "src/other.ts"]]);
   });
 
   test("a learning-observer sink is invoked with the mapped observation kind", async () => {

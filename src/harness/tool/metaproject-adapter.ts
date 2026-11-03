@@ -35,6 +35,8 @@ import { normalizeRetrievalCode, RETRIEVAL_NEXT_ACTIONS } from "../../lib/retrie
 import { findPath } from "../../gdgraph/path";
 import { querySymbol } from "../../gdgraph/symbol";
 import { loadGraph } from "../../gdgraph/query";
+import { gdgraphStorageDir } from "../../gdgraph/data-dir";
+import type { GraphData } from "../../gdgraph/types";
 import { loadGdgraphConfig } from "../../gdgraph/config";
 import { checkGraphStaleness, type StalenessCheck } from "../../gdgraph/staleness";
 import {
@@ -141,9 +143,11 @@ export interface MetaprojectAdapterDeps {
    * Tri-state graph freshness (default: the real `checkGraphStaleness`). Every
    * graph-backed result carries it so an agent learns what the command line
    * already prints; a git failure reads as `unknown`, never as a confident
-   * "the repo moved" claim and never as "fresh". Computed AT MOST ONCE per
-   * adapter instance (see `staleness()` below) — it shells out to git, and a
-   * per-call check would spend three subprocesses on every graph read.
+   * "the repo moved" claim and never as "fresh". Cached for a few seconds and
+   * dropped when the graph is rebuilt (see `staleness()` below) — it shells out
+   * to git, and a per-call check would spend three subprocesses on every graph
+   * read, but a session-long memo would keep saying "fresh" after the agent's
+   * own edits.
    * Injectable so tests are deterministic and spawn nothing.
    */
   checkGraphStaleness: (cwd: string) => Promise<StalenessCheck>;
@@ -155,10 +159,12 @@ export interface MetaprojectAdapterDeps {
    * for every pattern, including ones with real matches. Injectable so tests
    * neither need ripgrep installed nor spawn anything.
    */
-  runRipgrep: (
-    cwd: string,
-    argv: string[],
-  ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  runRipgrep: (cwd: string, argv: string[]) => Promise<RipgrepRun>;
+  /**
+   * Milliseconds clock for the staleness TTL (default `Date.now`). Injectable so
+   * tests expire the cache without sleeping.
+   */
+  clockMs: () => number;
   /**
    * Clock for `skillsCatalog`'s `generatedAt` (default: real wall-clock ISO
    * time). Injectable for tests — the only concession to this file's stated
@@ -166,6 +172,138 @@ export interface MetaprojectAdapterDeps {
    * field rather than threading a clock through every method.
    */
   now: () => string;
+}
+
+/** What a ripgrep run returns; the flags say it was stopped before it finished. */
+export interface RipgrepRun {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  /** stdout reached the read cap and rg was killed: more output existed than `stdout` holds. */
+  stdoutCut?: boolean;
+  /** rg was killed after the wall-clock limit. */
+  timedOut?: boolean;
+}
+
+/** Output cap for `searchCode` — the same bound the interactive fallback used. */
+const MAX_SEARCH_OUTPUT_BYTES = 20_000;
+/** Wall-clock limit for one ripgrep run. */
+const RIPGREP_TIMEOUT_MS = 15_000;
+const MAX_STDERR_CHARS = 8_000;
+
+/**
+ * Run a process, reading stdout only until `maxStdoutChars` are held, then kill
+ * it. `new Response(proc.stdout).text()` buffered everything a model-chosen
+ * pattern matched (tens of MB) before the 20 KB cut; here the buffer and the
+ * child are both stopped at the cap, and a wall-clock limit kills a runaway walk.
+ */
+export async function runBoundedProcess(
+  cwd: string,
+  argv: string[],
+  options: { maxStdoutChars?: number; timeoutMs?: number } = {},
+): Promise<RipgrepRun> {
+  const maxStdoutChars = options.maxStdoutChars ?? MAX_SEARCH_OUTPUT_BYTES + 1;
+  const timeoutMs = options.timeoutMs ?? RIPGREP_TIMEOUT_MS;
+  const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe" });
+  let stdoutCut = false;
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    proc.kill();
+  }, timeoutMs);
+  const readStdout = async (): Promise<string> => {
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    let out = "";
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        out += decoder.decode(value, { stream: true });
+        if (out.length >= maxStdoutChars) {
+          stdoutCut = true;
+          proc.kill();
+          break;
+        }
+      }
+    } finally {
+      reader.cancel().catch(() => undefined);
+    }
+    return out;
+  };
+  const readStderr = async (): Promise<string> => {
+    const reader = proc.stderr.getReader();
+    const decoder = new TextDecoder();
+    let err = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      // Keep draining so the child never blocks on a full pipe; keep only the head.
+      if (err.length < MAX_STDERR_CHARS) err += decoder.decode(value, { stream: true });
+    }
+    return err;
+  };
+  try {
+    const [stdout, stderr, exitCode] = await Promise.all([readStdout(), readStderr(), proc.exited]);
+    return { stdout, stderr, exitCode, ...(stdoutCut ? { stdoutCut } : {}), ...(timedOut ? { timedOut } : {}) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function runBoundedRipgrep(cwd: string, argv: string[]): Promise<RipgrepRun> {
+  return runBoundedProcess(cwd, argv);
+}
+
+const GRAPH_FILES = ["nodes", "edges", "symbols", "calls", "wiki-pages", "describes"].map((name) => `${name}.jsonl`);
+
+/**
+ * mtime+size of every JSONL file `loadGraph` reads, or null when none exists
+ * (then nothing is cached: there is no file whose change could invalidate it).
+ */
+async function graphSignature(cwd: string): Promise<string | null> {
+  const dir = gdgraphStorageDir(cwd);
+  let any = false;
+  const parts = await Promise.all(
+    GRAPH_FILES.map(async (name) => {
+      try {
+        const info = await stat(join(dir, name));
+        any = true;
+        return `${info.mtimeMs}:${info.size}`;
+      } catch {
+        return "-";
+      }
+    }),
+  );
+  return any ? parts.join("|") : null;
+}
+
+const graphCache = new Map<string, { signature: string; graph: Promise<GraphData> }>();
+const GRAPH_CACHE_LIMIT = 8;
+/** How long a graph-freshness answer is reused before git is asked again. */
+const STALENESS_TTL_MS = 3_000;
+
+/**
+ * `loadGraph` re-reads and JSON-parses six JSONL files (~60 MB on this repo) on
+ * every call. Keep the parsed graph per project, keyed by the files' mtime/size,
+ * so a rebuild is picked up on the next call and repeated graph tools share one parse.
+ */
+export async function loadGraphCached(cwd: string, loader: (cwd: string) => Promise<GraphData>): Promise<GraphData> {
+  const signature = await graphSignature(cwd);
+  if (signature === null) return loader(cwd);
+  const hit = graphCache.get(cwd);
+  if (hit !== undefined && hit.signature === signature) return hit.graph;
+  const graph = loader(cwd);
+  graph.catch(() => {
+    if (graphCache.get(cwd)?.graph === graph) graphCache.delete(cwd);
+  });
+  graphCache.delete(cwd);
+  graphCache.set(cwd, { signature, graph });
+  if (graphCache.size > GRAPH_CACHE_LIMIT) {
+    const oldest = graphCache.keys().next().value;
+    if (oldest !== undefined) graphCache.delete(oldest);
+  }
+  return graph;
 }
 
 const DEFAULT_DEPS: MetaprojectAdapterDeps = {
@@ -186,21 +324,14 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
     }),
   wikiAsk,
   wikiEvidence,
-  graphFind: async (cwd, query, options) => findCandidates(await loadGraph(cwd), query, options),
+  graphFind: async (cwd, query, options) => findCandidates(await loadGraphCached(cwd, loadGraph), query, options),
   wikiPagesForFile,
   now: () => new Date().toISOString(),
   checkGraphStaleness,
-  runRipgrep: async (cwd, argv) => {
-    const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe" });
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
-    return { stdout, stderr, exitCode };
-  },
+  runRipgrep: (cwd, argv) => runBoundedRipgrep(cwd, argv),
+  clockMs: () => Date.now(),
   repomapCompute: async (cwd, options) => {
-    const [graph, config] = await Promise.all([loadGraph(cwd), loadGdgraphConfig(cwd)]);
+    const [graph, config] = await Promise.all([loadGraphCached(cwd, loadGraph), loadGdgraphConfig(cwd)]);
     return computeRepomap(graph, config, options);
   },
 };
@@ -215,9 +346,6 @@ const MAX_QUERY_BYTES = 4096;
 // confirmedBy reads identically at both the compressed-report boundary and
 // this agent-facing one. Never an omitted key, never an empty string.
 const UNKNOWN_PROVENANCE = "unknown";
-
-/** Output cap for `searchCode` — the same bound the interactive fallback used. */
-const MAX_SEARCH_OUTPUT_BYTES = 20_000;
 
 /**
  * The model-facing diagnosis when ripgrep is missing. Deliberately keeps the
@@ -272,17 +400,18 @@ function confineToProject(cwd: string, candidate: string): string | null {
  * it saw nearly everything or a tenth, so it cannot decide between reading on and
  * narrowing the search. Cut at a line boundary so the last line shown is whole.
  */
-function boundOutput(raw: string): { output: string; truncated: boolean } {
-  if (raw.length <= MAX_SEARCH_OUTPUT_BYTES) {
+function boundOutput(raw: string, cut = false): { output: string; truncated: boolean } {
+  if (raw.length <= MAX_SEARCH_OUTPUT_BYTES && !cut) {
     return { output: raw, truncated: false };
   }
   const kept = raw.slice(0, MAX_SEARCH_OUTPUT_BYTES);
   const lastBreak = kept.lastIndexOf("\n");
   const head = lastBreak > 0 ? kept.slice(0, lastBreak) : kept;
   const shown = head.split("\n").length;
-  const total = raw.split("\n").length;
+  // A killed ripgrep never reported its tail, so there is no total to give.
+  const of = cut ? "; more matches omitted" : ` of ${raw.split("\n").length} lines`;
   return {
-    output: `${head}\n…(truncated: showing ${shown} of ${total} lines — narrow the pattern or pass a path)`,
+    output: `${head}\n…(truncated: showing ${shown}${cut ? " lines" : ""}${of} — narrow the pattern or pass a path)`,
     truncated: true,
   };
 }
@@ -549,13 +678,24 @@ export function createMetaprojectAdapter(
   const memory = deps.createMemoryService();
   const flow = deps.createFlowService();
 
-  // One freshness check per adapter instance, shared by every graph-backed
-  // result below. `checkGraphStaleness` shells out to git; recomputing it per
-  // operation would put three subprocesses behind every graph read, and the
-  // answer cannot meaningfully change within a single adapter's lifetime.
-  let stalenessOnce: Promise<GraphStaleness> | undefined;
-  function staleness(): Promise<GraphStaleness> {
-    stalenessOnce ??= deps
+  // `checkGraphStaleness` shells out to git; recomputing it per operation would
+  // put three subprocesses behind every graph read, so concurrent and
+  // back-to-back calls share one answer. It is NOT kept for the adapter's
+  // lifetime: a shell session builds one adapter and the agent edits, commits
+  // and rebuilds inside it, which is exactly what the check detects. The
+  // answer expires after STALENESS_TTL_MS, and at once when the graph files change.
+  let stalenessCache: { at: number; signature: string | null; value: Promise<GraphStaleness> } | undefined;
+  async function staleness(): Promise<GraphStaleness> {
+    const now = deps.clockMs();
+    const signature = await graphSignature(cwd);
+    if (
+      stalenessCache !== undefined &&
+      now - stalenessCache.at < STALENESS_TTL_MS &&
+      stalenessCache.signature === signature
+    ) {
+      return stalenessCache.value;
+    }
+    const value = deps
       .checkGraphStaleness(cwd)
       .then((check) => ({ status: check.status, reasons: check.reasons }))
       // A freshness check that itself failed is `unknown` — the one thing it
@@ -564,8 +704,10 @@ export function createMetaprojectAdapter(
         status: "unknown" as const,
         reasons: [`the staleness check failed: ${errorMessage(cause)}`],
       }));
-    return stalenessOnce;
+    stalenessCache = { at: now, signature, value };
+    return value;
   }
+  const loadGraphShared = (): Promise<GraphData> => loadGraphCached(cwd, (root) => gdgraph.loadGraph(root));
 
   return {
     /**
@@ -619,7 +761,7 @@ export function createMetaprojectAdapter(
         // It is the REAL path's relative form, never the caller's link name.
         argv.push(confined || ".");
       }
-      let run: { stdout: string; stderr: string; exitCode: number };
+      let run: RipgrepRun;
       try {
         run = await deps.runRipgrep(cwd, argv);
       } catch (cause) {
@@ -629,14 +771,28 @@ export function createMetaprojectAdapter(
           isError: true,
         };
       }
-      if (run.exitCode === 1 && run.stdout.trim().length === 0) {
+      // Killed by us (output cap or time limit): the exit code is the kill's, not
+      // ripgrep's verdict, and what was read is a real prefix of the matches.
+      const stoppedEarly = run.stdoutCut === true || run.timedOut === true;
+      if (run.timedOut === true && run.stdout.trim().length === 0) {
+        return {
+          ...echo,
+          output: `search_code timed out after ${RIPGREP_TIMEOUT_MS / 1000}s with no matches read — narrow the pattern or pass a path`,
+          isError: true,
+        };
+      }
+      if (!stoppedEarly && run.exitCode === 1 && run.stdout.trim().length === 0) {
         return {
           ...echo,
           output: `No matches for ${JSON.stringify(input.pattern)}${input.path !== undefined ? ` under ${input.path}` : ""}. The search ran and completed — this is a no-match, not a failure.`,
           isError: false,
         };
       }
-      if (run.exitCode > 1) {
+      // Exit 2 is "an error happened during the walk" — also when matches were
+      // found (one unreadable file among many). Matches on stdout are kept; only
+      // an empty stdout is a hard failure.
+      const partial = !stoppedEarly && run.exitCode > 1 && run.stdout.trim().length > 0;
+      if (!stoppedEarly && run.exitCode > 1 && !partial) {
         const detail = run.stderr.trim().length > 0 ? run.stderr.trim() : run.stdout.trim();
         return {
           ...echo,
@@ -646,10 +802,13 @@ export function createMetaprojectAdapter(
           isError: true,
         };
       }
-      const bounded = boundOutput(run.stdout.trimEnd());
+      const bounded = boundOutput(run.stdout.trimEnd(), stoppedEarly);
+      const note = partial && run.stderr.trim().length > 0
+        ? `\n…(rg exit ${run.exitCode}; some paths could not be searched: ${run.stderr.trim().split("\n").slice(0, 3).join("; ")})`
+        : "";
       return {
         ...echo,
-        output: bounded.output,
+        output: bounded.output + note,
         isError: false,
         ...(bounded.truncated ? { truncated: true } : {}),
       };
@@ -992,7 +1151,7 @@ export function createMetaprojectAdapter(
       let graphEdges = 0;
       let graphError: string | undefined;
       try {
-        const graph = await gdgraph.loadGraph(cwd);
+        const graph = await loadGraphShared();
         graphNodes = graph.nodes.length;
         graphEdges = graph.edges.length;
       } catch (cause) {
@@ -1019,7 +1178,7 @@ export function createMetaprojectAdapter(
 
     async graphPath(input): Promise<GraphPathResult> {
       try {
-        const graph = await gdgraph.loadGraph(cwd);
+        const graph = await loadGraphShared();
         const result = findPath(graph, input.from, input.to);
         const unresolved = result.fromResolved.length === 0 || result.toResolved.length === 0;
         return {
@@ -1121,7 +1280,7 @@ export function createMetaprojectAdapter(
 
     async graphSymbol(input): Promise<GraphSymbolResult> {
       try {
-        const graph = await gdgraph.loadGraph(cwd);
+        const graph = await loadGraphShared();
         const result = querySymbol(graph, input.name);
         return {
           name: input.name,

@@ -286,12 +286,13 @@ failures do not qualify; non-interactive behavior is unchanged.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
             [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
-            [--tui|--no-tui] [--debug] [--name <name>] [--guard]
+            [--tui|--no-tui] [--debug] [--name <name>] [--guard] [--] ["<prompt>"]
 ```
 
 | Flag | Description |
 |---|---|
 | _(default)_ | Full-screen OpenTUI renderer plus the agent, whenever `stdout` is a TTY. |
+| `"<prompt>"` | One positional argument: submitted as the session's first turn once the composer is ready (after any resume picker), through the same path as a typed line, so the session stays open afterwards. It always goes to the model as a turn, even when it starts with `/`: a leading `/` is not read as a slash command. Quote it as one argument; put `--` before a prompt that starts with `-`. A bare `-r` takes the next word as the session id or title, so write the prompt before it (`keryx shell "<task>" -r`) or after `--` (`keryx shell -r -- "<task>"`). Two positionals, an empty one, one with `--print` or with `--chat` are refused, and a lone `help` prints this help. In the readline shell it is the first line the REPL reads; the provider picker never sees it, and the agent/chat question is skipped because the prompt runs in agent mode. This is how herdr-core starts an agent with a task — see [Run Keryx in the Herdr app](guides/herdr.md). |
 | `-c`, `--continue` | Resume the most recent session for this project that no other shell has open. When it skips a newer session, it prints that session and its holder. |
 | `-r`, `--resume [id]` | Resume a specific session; without an id, pick one interactively. Without a TTY, bare `-r` uses the latest session no other shell has open. |
 | `--fork` | With `-r <id>`: fork a session another shell has open, and continue in the fork. |
@@ -4677,6 +4678,49 @@ never worded the same way: "install bubblewrap and this works" and "this does
 not exist on Linux" lead to different actions, and collapsing them into one
 message is how an operator ends up installing something that was never going to
 help. `keryx init` prints the same matrix once, up front.
+
+---
+
+## herdr
+
+Opt-in registration of Keryx with the Herdr desktop app and herdr-core. It
+writes user-global files, never anything inside a project, and `keryx update`
+never runs it.
+
+```
+keryx herdr install [--dry-run] [--force] [--json]
+keryx herdr remove [--dry-run] [--json]
+keryx herdr status [--json]
+```
+
+Three targets, under `XDG_CONFIG_HOME` (default `~/.config`):
+
+| Target | File | Content |
+|---|---|---|
+| `programs` | `herdr-app/programs.json` | `programs.keryx` merged in; every other key preserved |
+| `icon` | `herdr-app/keryx/keryx.svg` | the Keryx glyph the entry points at |
+| `template` | `herdr-core/templates/keryx.md` | agent template running `keryx shell` |
+
+- `install` creates what is missing. A second run changes nothing and says so.
+  A target whose `herdr-app` or `herdr-core` directory does not exist is
+  `skipped` with a reason and nothing is created.
+- An invalid `programs.json` makes `install` exit non-zero, name the file and
+  leave it byte-identical. The first change to an existing `programs.json`
+  leaves `programs.json.keryx-backup` beside it.
+- A `programs.keryx` entry, `keryx.svg` or `keryx.md` that differs from Keryx's
+  own is reported as `kept`; `--force` overwrites it.
+- `remove` deletes only the entry and files that still equal Keryx's own, keeps
+  everything else, and never deletes `programs.json` itself.
+- `status` reports each target as `installed`, `absent`, `modified` or
+  `skipped`, and writes nothing.
+- `--dry-run` prints the plan and writes nothing. `--json` prints
+  `{ command, dryRun, targets: [{ target, path, action, reason? }] }`. Any error
+  exits non-zero. On Windows every target is `skipped`: herdr-core keeps its
+  config under `%APPDATA%`.
+
+What the shell does inside an herdr-core terminal (status over OSC 7501, `<hc from>`
+messages, the delegation section of the agent's instructions) is in
+[Run Keryx in the Herdr app](guides/herdr.md).
 
 ---
 

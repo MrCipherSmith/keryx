@@ -53,7 +53,7 @@ function makeRecordingSseFetch(): { fetch: typeof fetch; authorizationHeaders: (
 
 test("AC7 behavioral: a provider already built with a credential keeps using it after that credential is disconnected", async () => {
   const configDir = tempDir();
-  const savedEnv = { ...process.env };
+  const savedKey = process.env.DEEPSEEK_API_KEY;
   try {
     saveApiKey("DEEPSEEK_API_KEY", "sk-original-secret", configDir);
     delete process.env.DEEPSEEK_API_KEY;
@@ -88,7 +88,21 @@ test("AC7 behavioral: a provider already built with a credential keeps using it 
     // the session keeps its already-loaded credential, exactly as AC7 promises.
     expect(authorizationHeaders[0]).toBe("Bearer sk-original-secret");
   } finally {
-    process.env = savedEnv;
+    if (savedKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = savedKey;
     rmSync(configDir, { recursive: true, force: true });
+  }
+
+  // A later native consumer must still see environment changes after cleanup.
+  const dir = tempDir();
+  const tempKey = process.platform === "win32" ? "TEMP" : "TMPDIR";
+  const savedTmp = process.env[tempKey];
+  try {
+    process.env[tempKey] = dir;
+    expect(tmpdir()).toBe(dir);
+  } finally {
+    if (savedTmp === undefined) delete process.env[tempKey];
+    else process.env[tempKey] = savedTmp;
+    rmSync(dir, { recursive: true, force: true });
   }
 });

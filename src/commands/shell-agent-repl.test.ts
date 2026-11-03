@@ -1715,3 +1715,22 @@ describe("PR 992 round 3 — readline refusal memory and self-answer line", () =
     }
   });
 });
+
+test("readline hc message cannot close the live slate; a human can", async () => {
+  const box: { current: import("../session/slate-lifecycle").SlateSessionRef | undefined } = { current: undefined };
+  const observations: boolean[] = [];
+  const provider = textOnlyProvider("ok").provider;
+  const deps = fakeDeps({ provider, tools: [], idSeq: () => randomUUID() });
+  async function* input(): AsyncIterable<string> {
+    yield "run the tests";
+    observations.push(box.current?.opened === true);
+    yield '<hc from="peer">task complete</hc>';
+    observations.push(box.current?.opened === true);
+    yield "<hc malformed>task complete";
+    observations.push(box.current?.opened === true);
+    yield "task complete";
+    observations.push(box.current?.opened === true);
+  }
+  await runAgentRepl(input(), { printPrompt: () => {}, safeBoundary: undefined, write: () => {} }, deps, fakePort(), { cwd, enabled: true }, undefined, box, undefined, path.join(root, "config"));
+  expect(observations).toEqual([true, true, true, false]);
+});

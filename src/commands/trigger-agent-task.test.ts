@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { pinGrantedBinary, type BinaryPin } from "../trigger/granted-binary";
 import { execFileSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { runTriggerOnce } from "./trigger";
@@ -404,6 +404,73 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
     expect(record.outcome).toBe("dispatch-refused");
     expect(record.agentTask?.refusal).toBe("sandbox-unavailable");
     expect(provider.calls()).toBe(0);
+  });
+
+  test("network allowlist whose proxy cannot bind refuses the run with sandbox-unavailable instead of hanging", async () => {
+    // A tmpdir so deep that even the short proxy socket directory cannot fit sun_path: the run is refused.
+    const longTmp = path.join(aside, "r".repeat(60), "r".repeat(60), "r".repeat(60));
+    await mkdir(longTmp, { recursive: true });
+    const saved = process.env["TMPDIR"];
+    const savedRuntime = process.env["XDG_RUNTIME_DIR"];
+    // The primary socket directory prefers XDG_RUNTIME_DIR; force that path
+    // and the TMPDIR fallback over the limit on every host.
+    process.env["TMPDIR"] = longTmp;
+    process.env["XDG_RUNTIME_DIR"] = longTmp;
+    try {
+      const base = entry({ tools: ["gh.pr.list"], bins: { gh: await stubGh() } });
+      const action = base["action"] as Record<string, unknown>;
+      const grants = { ...(action["grants"] as Record<string, unknown>), network: "allowlist", domains: ["api.github.com"] };
+      await addConfirmedSchedule(root, { ...base, action: { ...action, grants } });
+      const provider = scripted([finalText("never")]);
+      await Promise.race([
+        run(provider),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error("dispatcher hung on a proxy bind failure")), 15_000)),
+      ]);
+      const record = await lastRecord();
+      expect(record.outcome).toBe("dispatch-refused");
+      expect(record.agentTask?.refusal).toBe("sandbox-unavailable");
+      expect(provider.calls()).toBe(0);
+    } finally {
+      if (saved === undefined) delete process.env["TMPDIR"];
+      else process.env["TMPDIR"] = saved;
+      if (savedRuntime === undefined) delete process.env["XDG_RUNTIME_DIR"];
+      else process.env["XDG_RUNTIME_DIR"] = savedRuntime;
+    }
+  }, 30_000);
+
+  test("the proxy socket path does not depend on the schedule name: check-github fits on darwin", async () => {
+    const { makeProxySocketDir, maxUnixSocketPathBytes } = await import("./trigger-agent-task");
+    expect(maxUnixSocketPathBytes("darwin")).toBe(103);
+    expect(maxUnixSocketPathBytes("linux")).toBe(107);
+    // The default tmpdir (on macOS /var/folders/xx/<28 chars>/T, ~50 bytes, no XDG_RUNTIME_DIR):
+    // the path holds no schedule name, so `check-github` and a 60-byte name get the same one.
+    const made = await makeProxySocketDir(undefined, "darwin");
+    try {
+      expect(Buffer.byteLength(made.socketPath)).toBeLessThanOrEqual(103);
+      expect(made.socketPath).not.toContain("check-github");
+    } finally {
+      await rm(made.dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the proxy socket directory is private (0700) and created under the parent it is given", async () => {
+    const { makeProxySocketDir } = await import("./trigger-agent-task");
+    const parent = await mkdtemp(path.join(tmpdir(), "kp-"));
+    const made = await makeProxySocketDir(parent, "linux");
+    try {
+      expect(path.dirname(made.dir)).toBe(parent);
+      expect((await stat(made.dir)).mode & 0o777).toBe(0o700);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test("a tmpdir that still cannot fit is refused, and the half-made directory is removed", async () => {
+    const { makeProxySocketDir } = await import("./trigger-agent-task");
+    const longTmp = path.join(aside, "q".repeat(60), "q".repeat(60));
+    await mkdir(longTmp, { recursive: true });
+    await expect(makeProxySocketDir(longTmp, "darwin")).rejects.toThrow(/unix socket limit/);
+    expect(await readdir(longTmp)).toEqual([]);
   });
 
   test("a schedule edited after confirmation is refused with grants-changed and calls no model", async () => {

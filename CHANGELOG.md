@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-11-03
+
+### Added
+- **Herdr and herdr-core integration (PR #1116).** `keryx herdr install`, `status` and `remove` manage an opt-in Herdr app entry and herdr-core template. The TUI reports agent status through OSC 7501 when running under herdr-core; existing Herdr reporting remains available. `keryx shell "<task>"` submits the positional task as the first model turn, including when it begins with `/`.
+- **Agent message provenance.** Herdr-core messages are labelled and framed as another agent’s input, including malformed agent-shaped messages. They cannot independently authorize operator shell controls, human-only slate closure or approval-gated actions; queued and edited messages retain their origin. Telegram operator input keeps its existing behavior.
+
+### Security
+- **Stronger sandbox and command boundaries (PR #1117).** Interactive sandboxes protect Git control paths, including worktree and submodule controls, and macOS blocks host IPC paths used to escape the sandbox. Git push and operator-only command classification now fail closed on ambiguous configuration or expansions. Some Git administrative operations inside a sandbox are consequently restricted; see the OS sandbox documentation.
+- **Safer network and output handling (PRs #1114, #1117).** Host and IP parsing, private-address checks and web egress screening are tightened. The egress proxy pins checked addresses, rejects plaintext credential injection and closes abandoned CONNECT upstreams. Output validation detects additional secrets and sensitive numeric values, and SAC proposal notes pass the same guard across the CLI, agent and MCP surfaces.
+- **Safer security and MCP inputs (PR #1114).** Security evaluation fails when its corpus is missing or invalid; MCP configuration audits recognize additional forms and require exact pins. `slate.open` validates workspace IDs and bounds input, and MCP client status can read JSONC without rewriting it. Bus pause reasons are redacted before persistence.
+
+### Fixed
+- **Remote and ACP session handling (PR #1114).** Telegram queue mutation commands are refused from the topic, queued messages are paired by identity, and a command that exceeds its limit does not overlap its successor. ACP session open/load respects active leases and client-routed `read_file` uses the local paging limits.
+- **Execution, approvals and configuration (PR #1117).** Shell output is capped while pipes continue draining, runtime and timeout values are bounded, and child-process cleanup and proxy shutdown are more reliable. Remembered approvals are limited to what the operator saw and report when they cannot be saved. Concurrent configuration updates use locked, current on-disk state.
+- **Project context and terminal safety (PR #1117).** Graph freshness and cache handling, bounded `search_code` reads and wiki freshness counts are corrected. Approval context and external-agent cost output escape terminal control characters. Relative security-scan and test paths resolve against the caller’s working directory.
+- **Safe child execution (PRs #1116, #1117).** Stale re-execution parent markers are consumed and excluded from context child commands. Herdr-origin messages retain their untrusted provenance through queue edits and cannot trigger operator slash commands.
+
+### Notes
+- On Linux, bubblewrap cannot seal a missing Git `commondir` or new submodule/worktree Git directories at launch; the existing paths receive the protections described in the sandbox documentation.
+- The Herdr app’s real `+` menu integration (AC15) remains unverified in a human GUI check. The herdr-core socket’s reachability depends on the selected sandbox network profile, and processes started by `hc` are outside the shell sandbox; see the Herdr guide.
+- Team Hub run-ending code was consolidated without changing its intended behavior (PR #1112). Publishing this release does not itself update an installed Hub server.
+
 ## [0.4.5] - 2026-11-02
 
 ### Fixed

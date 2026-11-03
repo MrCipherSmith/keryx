@@ -1093,7 +1093,8 @@ describe("SLATE-3a — shellCommand's agent-mode branch (source-text audit; NOT 
   });
 
   test("the box is threaded into the runAgentRepl(...) call", () => {
-    const replCallIndex = shellSource.indexOf("await runAgentRepl(sharedLines,");
+    // Flow 481 T7: the REPL reads `replLines` (the shared iterator plus the positional prompt).
+    const replCallIndex = shellSource.indexOf("await runAgentRepl(replLines,");
     expect(replCallIndex).toBeGreaterThanOrEqual(0);
     const replCallBlock = shellSource.slice(replCallIndex, replCallIndex + 400);
     expect(replCallBlock).toContain("slateSessionBox");

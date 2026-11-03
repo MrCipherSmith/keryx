@@ -159,7 +159,91 @@ function outboundUrlComponents(text: string): string[] {
   return components;
 }
 
+/**
+ * The hostname labels of the URL the request will actually use. The host comes
+ * from the same WHATWG parse as the request (`new URL`), so a tab inside the
+ * scheme, a backslash ending the authority or a stray newline cannot make the
+ * check read a different host than the fetch. `new URL` lowercases the host,
+ * which would hide a mixed-case key from the shape check, so the case-preserving
+ * labels are read from the input after the parser's own normalisation (tabs and
+ * newlines removed, backslashes as slashes) and used only when they spell the
+ * parsed host; otherwise the parsed (lowercase) labels are used.
+ */
+function outboundHostLabels(text: string): string[] {
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return [];
+  }
+  const parsed = url.hostname.replace(/^\[|\]$/g, "");
+  const normalised = text.replace(/[\t\n\r]/g, "").trim().replace(/\\/g, "/");
+  const authority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(normalised)?.[1];
+  let labels = parsed.split(".");
+  if (authority !== undefined) {
+    const host = safeDecodeComponent(authority.slice(authority.lastIndexOf("@") + 1)).replace(/:\d*$/, "");
+    if (host.toLowerCase() === parsed) labels = host.split(".");
+  }
+  return labels.filter((label) => label.length > 0);
+}
+
+/** A host label (or hyphen-separated run) long enough to carry a key. */
+const HOST_LABEL_ENTROPY_MIN = 32;
+
+/** Shortest run between hyphens that the mixed-case key-shape test below applies to. */
+const HOST_RUN_MIXED_CASE_MIN = 20;
+
+/**
+ * A 20-31 character run shaped like a random mixed-case key: both letter cases,
+ * at least two digits and several case/digit switches. Ordinary platform ids are
+ * lowercase (hex deploy ids, `k3j9x2a1b`) or plain words, and DNS names are
+ * conventionally lowercase, so mixed case plus digits interleaved through the
+ * run is the shape of a generated token rather than of a name. Shape only,
+ * never length alone.
+ */
+function looksLikeMixedCaseKey(run: string): boolean {
+  if (run.length < HOST_RUN_MIXED_CASE_MIN || !/^[A-Za-z0-9]+$/.test(run)) return false;
+  if (!/[a-z]/.test(run) || !/[A-Z]/.test(run)) return false;
+  const digits = run.replace(/[^0-9]/g, "").length;
+  if (digits < 2) return false;
+  let switches = 0;
+  for (let i = 1; i < run.length; i++) {
+    const kind = (c: string): number => (/[a-z]/.test(c) ? 0 : /[A-Z]/.test(c) ? 1 : 2);
+    if (kind(run[i]!) !== kind(run[i - 1]!)) switches++;
+  }
+  return switches >= 6;
+}
+
+/**
+ * A hostname label that looks like a key. Ordinary platform names are made of
+ * plain words joined by hyphens plus a short id (`my-project-k3j9x2a1b-myteam`,
+ * `<deploy-id>--my-site`), so a hyphenated label made of several lowercase words
+ * is not judged as a whole; any single run of 32+ characters between hyphens
+ * still is, so a key glued into a word slug is caught.
+ */
+function hostLabelLooksSecret(label: string): boolean {
+  if (detectSecrets(label).length > 0) return true;
+  const runs = label.split(/[-_]+/).filter((run) => run.length > 0);
+  if (runs.some((run) => run.length >= HOST_LABEL_ENTROPY_MIN && looksSecretShapedIn(run))) return true;
+  if (runs.some(looksLikeMixedCaseKey)) return true;
+  if (label.length < HOST_LABEL_ENTROPY_MIN) return false;
+  const words = runs.filter((run) => /^[a-z]{2,}$/.test(run)).length;
+  return words < 3 && looksSecretShapedIn(label);
+}
+
+/** A secret in a subdomain leaves through DNS before any request is made. */
+function hostLooksSecret(text: string): boolean {
+  const labels = outboundHostLabels(text);
+  if (labels.length === 0) return false;
+  if (detectSecrets(labels.join(".")).length > 0) return true;
+  const entropyGateOpen = isEntropyBackendEnabled();
+  return labels.some((label) => (entropyGateOpen ? hostLabelLooksSecret(label) : detectSecrets(label).length > 0));
+}
+
 function anyComponentLooksSecret(text: string): boolean {
+  if (hostLooksSecret(text)) {
+    return true;
+  }
   // `looksSecretShapedIn`'s shape decision is entropy-based (F-REG-F3): it
   // must honour the same gate `detectEntropy(text)` below already does, so a
   // disabled entropy backend turns this check off too, not just the whole-URL

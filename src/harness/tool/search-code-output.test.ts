@@ -53,16 +53,14 @@ test("an enormous matching line is capped, not returned whole", async () => {
   expect(result.output.length).toBeLessThan(2000);
 });
 
-test("a clipped result says how many lines were shown out of how many", async () => {
+test("a clipped result says how many lines were shown and that more were omitted", async () => {
   const result = await createMetaprojectAdapter(root).searchCode({ pattern: "haystack", path: "src" });
   expect(result.truncated).toBe(true);
-  const note = /…\(truncated: showing (\d+) of (\d+) lines/.exec(result.output);
+  // rg is stopped at the read cap, so there is no honest total to print.
+  const note = /…\(truncated: showing (\d+) lines; more matches omitted/.exec(result.output);
   expect(note).not.toBeNull();
-  const shown = Number(note?.[1]);
-  const total = Number(note?.[2]);
-  expect(total).toBe(2000);
-  expect(shown).toBeGreaterThan(0);
-  expect(shown).toBeLessThan(total);
+  expect(Number(note?.[1])).toBeGreaterThan(0);
+  expect(Number(note?.[1])).toBeLessThan(2000);
   // The cut is at a line boundary: the line before the note is a whole match line.
   const lines = result.output.split("\n");
   expect(lines.at(-2)).toMatch(/^src\/many\.ts:\d+:\d+:const haystack\d+ = "haystack";$/);

@@ -23,7 +23,7 @@ describe("Shell CLI validation before startup", () => {
   }
 
   for (const args of [
-    ["--provder", "fixture"], ["unexpected"],
+    ["--provder", "fixture"], ["--unexpected"],
     ["--provider"], ["--model"], ["--base-url"], ["--permission-mode"],
     ["--provider", "--chat"], ["--model", ""],
     ["--permission-mode", "yolo"],

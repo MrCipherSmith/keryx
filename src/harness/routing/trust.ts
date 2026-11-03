@@ -20,8 +20,9 @@ import {
   ensureKeryxConfigDir,
   isDefiniteAbsence,
   readConfigFile,
-  writeOwnerOnlyFileAtomic,
+  type ConfigReadResult,
 } from "../../lib/config-dir";
+import { updateConfigFile } from "../../lib/config-update";
 import type { CategoryAssignment, RoutingTable } from "./table";
 
 export function routingTrustFile(configDir?: string): string {
@@ -53,7 +54,10 @@ export function routingTrustKey(cwd: string): string {
 }
 
 export function loadRoutingTrustStore(configDir?: string): Record<string, string> {
-  const read = readConfigFile(routingTrustFile(configDir));
+  return parseRoutingTrustStore(readConfigFile(routingTrustFile(configDir)));
+}
+
+function parseRoutingTrustStore(read: ConfigReadResult): Record<string, string> {
   if (!read.ok) return {};
   try {
     const parsed = JSON.parse(read.text) as RoutingTrustStore;
@@ -85,26 +89,48 @@ export type RoutingTrustResult =
   | { readonly ok: true; readonly file: string }
   | { readonly ok: false; readonly error: string };
 
+/**
+ * Apply one approval change to the store as it is at write time, under the
+ * store lock (`updateConfigFile`): several keryx processes approve and revoke
+ * other projects in this same file, and a write built from an earlier read
+ * dropped their entries or brought a revoked approval back.
+ */
+function updateRoutingTrust(
+  file: string,
+  change: (approvals: Record<string, string>) => void,
+): RoutingTrustResult {
+  let unreadable: string | undefined;
+  const outcome = updateConfigFile(file, (read) => {
+    unreadable = !read.ok && !isDefiniteAbsence(read.reason) ? read.reason : undefined;
+    if (unreadable !== undefined) return undefined;
+    const approvals = parseRoutingTrustStore(read);
+    change(approvals);
+    return `${JSON.stringify({ approvals }, null, 2)}\n`;
+  });
+  if (unreadable !== undefined) {
+    return { ok: false, error: `${file} could not be read (${unreadable}); nothing was written` };
+  }
+  if (outcome === "failed") {
+    return { ok: false, error: `${file} kept changing under concurrent keryx writers; nothing was written — try again` };
+  }
+  return { ok: true, file };
+}
+
 /** Record approval for exactly this table as it validates today. */
 export function approveProjectRouting(cwd: string, table: RoutingTable, configDir?: string): RoutingTrustResult {
-  const file = routingTrustFile(configDir);
-  const read = readConfigFile(file);
-  if (!read.ok && !isDefiniteAbsence(read.reason)) {
-    return { ok: false, error: `${file} could not be read (${read.reason}); nothing was written` };
-  }
-  const approvals = loadRoutingTrustStore(configDir);
-  approvals[routingTrustKey(cwd)] = routingTableFingerprint(table);
-  writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ approvals }, null, 2)}\n`);
-  return { ok: true, file };
+  const key = routingTrustKey(cwd);
+  const fingerprint = routingTableFingerprint(table);
+  return updateRoutingTrust(routingTrustFile(configDir), (approvals) => {
+    approvals[key] = fingerprint;
+  });
 }
 
 /** Withdraw approval. An unapproved project layer is ignored again. */
 export function revokeProjectRouting(cwd: string, configDir?: string): RoutingTrustResult {
-  const file = routingTrustFile(configDir);
-  const approvals = loadRoutingTrustStore(configDir);
-  delete approvals[routingTrustKey(cwd)];
-  writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ approvals }, null, 2)}\n`);
-  return { ok: true, file };
+  const key = routingTrustKey(cwd);
+  return updateRoutingTrust(routingTrustFile(configDir), (approvals) => {
+    delete approvals[key];
+  });
 }
 
 /** One line per category, for `keryx routing trust`/`/routing`'s approve action to show BEFORE recording anything. */

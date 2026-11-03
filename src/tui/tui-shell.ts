@@ -344,6 +344,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
+import { frameSubmittedLine, HC_UNPARSED_HEADER, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -351,7 +352,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig, updateShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -422,6 +423,8 @@ import { DECISION_SOURCES } from "../decisions/service";
 import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
+import { createAgentHostStatus } from "./agent-host-status";
+import { createHerdrCoreReporter, createStatusWriter, type HerdrCoreAttention } from "./herdr-core-status";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
@@ -463,7 +466,7 @@ import { mountExecutionPlanPanel } from "./execution-plan-panel";
 import { runScheduleSlashCommand } from "./schedule-command";
 import { openExecutionPlanInspector } from "./execution-plan-inspector";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
-import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer } from "./worker-fleet";
+import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer, type FleetWorkerStatus } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
 // Flow 273 (agent bus P2, T7): join/heartbeat/poll/leave all live in the
 // surface-independent client; this file only wires status/activity in and
@@ -4500,6 +4503,13 @@ export async function launchTuiAgentShell(opts: {
    * `/guard on|off` can still change it live and persists the new default.
    */
   initialGuardEnabled?: boolean;
+  /**
+   * Flow 481 T7: `keryx shell "<task>"` — taken once and submitted as the
+   * session's first turn through the composer's own submit path once the shell
+   * is ready. Taking empties it, so a readline fallback after a TUI failure
+   * cannot run the same task a second time.
+   */
+  takeInitialPrompt?: () => string | undefined;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -4522,6 +4532,14 @@ export async function launchTuiAgentShell(opts: {
   // Surfaces this pane's lifecycle to a herdr workspace (working/idle/blocked).
   // No-op unless the shell was launched inside a herdr pane.
   const herdr = createHerdrReporter();
+  // herdr-core side (OSC 7501): inert unless `HC_TERMINAL_ID` is set. The writer goes through the live
+  // renderer's `writeOut` so a status sequence cannot interleave with a frame; once `onDestroy` has run
+  // (`destroyed`) the renderer is dead, so a late `clear` goes to stdout instead.
+  const hostStatus = createAgentHostStatus({
+    herdrCore: createHerdrCoreReporter({
+      write: createStatusWriter(() => (destroyed ? undefined : renderer)),
+    }),
+  });
   /** Session-scoped allow patterns (plus persisted permissions.json). */
   // Empty on purpose: `evaluateShellApproval` loads the saved list on every call, and tracks what it loaded so a removal reaches this set.
   const sessionShellAllow = new Set<string>();
@@ -5571,7 +5589,10 @@ export async function launchTuiAgentShell(opts: {
         },
         ask: async (request) => {
           chrome.hideMenu(); // release menuNav before the dock takes over
-          setMainAgent("blocked", "approval");
+          setMainAgent("blocked", "approval", {
+            kind: "permission",
+            text: `${request.agentId}: ${request.task}`,
+          });
           const preview = request.task.length > 80 ? `${request.task.slice(0, 77)}…` : request.task;
           const id = await chrome.withOverlay(() =>
             showComposerChoice(otui, r, chrome.dock, {
@@ -5657,13 +5678,14 @@ export async function launchTuiAgentShell(opts: {
     // status/detail the Activity panel and herdr already track, so the bus
     // presence record can never say something different from what the
     // operator's own sidebar shows.
-    let lastMainAgentStatus: "queued" | "running" | "done" | "failed" | "blocked" = "queued";
+    let lastMainAgentStatus: FleetWorkerStatus = "queued";
     let lastMainAgentDetail: string | undefined;
 
     /** Update the pinned main-agent slot (Activity panel). */
     const setMainAgent = (
-      status: "queued" | "running" | "done" | "failed" | "blocked",
+      status: FleetWorkerStatus,
       detail?: string,
+      attention?: HerdrCoreAttention,
     ): void => {
       debugEvent("main-agent", { status, detail });
       lastMainAgentStatus = status;
@@ -5676,6 +5698,7 @@ export async function launchTuiAgentShell(opts: {
         model: `${currentSel.provider}/${currentSel.model}`,
       });
       herdr.report(herdrStateFor(status));
+      hostStatus.status(status, attention);
     };
     // Idle main agent visible from launch.
     setMainAgent("queued", "ready");
@@ -6016,8 +6039,10 @@ export async function launchTuiAgentShell(opts: {
      */
     const setRoutingEnabled = (next: boolean): void => {
       routingEnabled = next;
-      const existing = loadShellConfig().routingClassifier ?? {};
-      saveShellConfig({ routingClassifier: { ...existing, enabled: next } });
+      // Applied to the value on disk at write time (`updateShellConfig`), not
+      // to one read here: a `routingClassifier` snapshot taken a moment earlier
+      // put `enabled` back after another process had flipped it.
+      updateShellConfig((current) => ({ ...current, routingClassifier: { ...(current.routingClassifier ?? {}), enabled: next } }));
       refreshRoutingSidebar();
       io.onSystem?.(`Route: ${next ? "on" : "off"}\n`);
     };
@@ -6243,7 +6268,10 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
       chrome.hideMenu();
-      setMainAgent("blocked", "approval");
+      setMainAgent("blocked", "approval", {
+        kind: "permission",
+        text: cardTitle === undefined ? card[0] ?? dialog.title : card[card.length - 1] ?? dialog.title,
+      });
       const id = await chrome.withOverlay(() =>
         showComposerChoice(otui, r, chrome.dock, {
           title: dialog.title,
@@ -6284,7 +6312,7 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
       chrome.hideMenu();
-      setMainAgent("blocked", "approval");
+      setMainAgent("blocked", "approval", { kind: "permission", text: card[0] ?? "Send this message to the model?" });
       const id = await chrome.withOverlay(() =>
         showComposerChoice(otui, r, chrome.dock, {
           title: "Send this message to the model?",
@@ -6416,7 +6444,7 @@ export async function launchTuiAgentShell(opts: {
           return true;
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", { kind: "permission", text: `subagent (${mode}): ${taskPreview}` });
         addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
@@ -6489,7 +6517,7 @@ export async function launchTuiAgentShell(opts: {
           );
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", { kind: "permission", text: "apply_patch: review the diff" });
         addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
@@ -6570,7 +6598,10 @@ export async function launchTuiAgentShell(opts: {
           transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${dimChunk(otui, `  ${notice}`)}` }));
         }
         chrome.hideMenu();
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", {
+          kind: "permission",
+          text: `${described.server} wants to run ${described.tool}`,
+        });
         addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
@@ -6651,7 +6682,7 @@ export async function launchTuiAgentShell(opts: {
           );
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-        setMainAgent("blocked", "approval");
+        setMainAgent("blocked", "approval", { kind: "permission", text: described.command ?? described.message });
         const elicitationSubtitle =
           described.message.length > 80 ? `${described.message.slice(0, 77)}…` : described.message;
         addCauseLine(tool, meta);
@@ -6748,7 +6779,7 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${roleChunk(otui, "attention", `⚙ shell_exec needs approval`)} ${dimChunk(otui, "(menu above input)")}`,
         }),
       );
-      setMainAgent("blocked", "approval");
+      setMainAgent("blocked", "approval", { kind: "permission", text: cmd });
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       addCauseLine(tool, meta);
@@ -6876,7 +6907,7 @@ export async function launchTuiAgentShell(opts: {
         offer = judged.offer;
       }
       io.onSystem?.(`◇ approval for ${brief} sent to the Telegram topic; waiting for the answer there.\n`);
-      setMainAgent("blocked", "approval (telegram)");
+      setMainAgent("blocked", "approval (telegram)", { kind: "permission", text: `${brief} (Telegram)` });
       const answer = await bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), offer === undefined ? {} : { remember: offer.pattern });
       const decision = answer.decision;
       let rememberedNote = "";
@@ -6950,7 +6981,7 @@ export async function launchTuiAgentShell(opts: {
       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
     }): Promise<AskUserAnswer> => {
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      setMainAgent("blocked", "ask");
+      setMainAgent("blocked", "ask", { kind: "question", text: req.question });
       setBusyPhase("waiting for your answer (menu above input)");
       // Keep a short transcript breadcrumb; the interactive picker is at the input.
       const qShort = req.question.length > 100 ? `${req.question.slice(0, 97)}…` : req.question;
@@ -7432,11 +7463,15 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         for (const m of history.filter((x) => x.role === "user").slice(-5)) {
-          const t = m.content.length > 100 ? `${m.content.slice(0, 97)}…` : m.content;
+          // An hc message is stored framed (flow 481); show it as the live echo did, sender and
+          // body, so the long frame header does not fill the 100 characters.
+          const hc = hcHistoryEcho(m.content);
+          const text = hc?.line ?? m.content;
+          const t = text.length > 100 ? `${text.slice(0, 97)}…` : text;
           transcript.add(
             new otui.TextRenderable(r, {
               id: `sessu${uid++}`,
-              content: otui.t`${dimChunk(otui, `  ❯ ${t}`)}`,
+              content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${t}`)}`,
             }),
           );
         }
@@ -7562,8 +7597,15 @@ export async function launchTuiAgentShell(opts: {
       mount: () => mountEmptyTranscriptSplash(otui, r, transcript),
       initialHistoryLength: history.length,
     });
+    // A positional prompt (flow 481: `runLine(initialPrompt, …)` below) and the read-only view both
+    // remove the splash in this same synchronous run, before any frame could draw what it holds.
+    // Startup notices then go to the transcript, never into a splash nobody will see.
+    const splashRemovedBeforeFirstFrame = viewedReadOnly || opts.takeInitialPrompt !== undefined;
     /**
-     * A STARTUP notice that belongs to the splash while one is up.
+     * A STARTUP notice that belongs to the splash while one is up. With a
+     * positional prompt or the read-only view no splash survives to its first
+     * frame (`splashRemovedBeforeFirstFrame`), so the notice goes to the
+     * transcript instead.
      *
      * On a genuinely empty transcript a system line added to the transcript is
      * full-width by construction, so it can never be centred there and lands
@@ -7575,7 +7617,7 @@ export async function launchTuiAgentShell(opts: {
      * message has a transcript to belong to.
      */
     const announceStartupNotice = (text: string): void => {
-      if (splash?.addStatusIfShown(text) !== true) {
+      if (splashRemovedBeforeFirstFrame || splash?.addStatusIfShown(text) !== true) {
         io.onSystem?.(`${text}\n`);
       }
     };
@@ -9402,6 +9444,9 @@ export async function launchTuiAgentShell(opts: {
     // dispatch instead of growing a second one. A notification-started turn
     // carries no operator text, so it skips the empty-line guard and the user
     // echo — there is nobody to echo.
+    // Flow 481: `skipSlashRouting` is set only for the positional startup prompt, a task for the
+    // model whatever it starts with (`/Users/me/app/log.txt shows the failure`): it never reaches
+    // the slash-command router. A typed line keeps slash routing.
     let consecutiveAutoWakes = 0;
     const runLine = (
       line: string,
@@ -9409,9 +9454,10 @@ export async function launchTuiAgentShell(opts: {
       // busInbox holds a wake-eligible peer message — same shape as
       // `"task-notification"`, and shares the SAME `consecutiveAutoWakes`
       // counter/cap (specification §5.3).
-      origin: "operator" | "task-notification" | "bus-message" = "operator",
+      origin: "operator" | "task-notification" | "bus-message" | "agent-message" = "operator",
       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
       source?: typeof TG_SOURCE,
+      skipSlashRouting = false,
     ): void => {
       if (line.length === 0 && origin === "operator") {
         return;
@@ -9420,7 +9466,12 @@ export async function launchTuiAgentShell(opts: {
       // not only the main agent turn — supersedes whatever next-step
       // suggestion request was still in flight from the PREVIOUS one.
       suggestionGate.cancel("new turn started");
-      if (origin === "operator") {
+      // Flow 481: another agent's line (herdr-core typed it), not the operator's. A Telegram line is
+      // the operator's whatever its shape. Decided once: the busy branch and the wiki-enrich route below
+      // both read it.
+      const agentShaped = source !== TG_SOURCE && (origin === "agent-message" || looksLikeHcMessage(line));
+
+      if (origin === "operator" && !agentShaped) {
         // A human is here: the auto-wake budget starts over.
         consecutiveAutoWakes = 0;
         // ...and the first thing they send replaces the wordmark (AC10).
@@ -9432,6 +9483,12 @@ export async function launchTuiAgentShell(opts: {
       // "In progress" is the chrome's own spinner state, which `startBusy` /
       // `stopBusy` below are the only things that move.
       if (chrome.isBusy()) {
+        // Agent-origin text, including edited slash text, is never a shell control.
+        if (agentShaped) {
+          const position = turnLoop.enqueue(line, displayLine, source, "agent-message");
+          io.onSystem?.(`◇ agent message queued as q${position}; the main agent reads it when this turn ends.\n`);
+          return;
+        }
         const command = findAgentCommand(line, "agent");
         // Reuses `/status`'s and `/flows`'s own single-source-of-truth command
         // matchers instead of a second, separately-maintained name list that
@@ -9685,7 +9742,7 @@ export async function launchTuiAgentShell(opts: {
         // the very next busy submit, skipping the recipient selector entirely
         // (the item is already committed to the main queue by definition).
         // (`remoteQueue` holds the pending edit: `/queue edit` set it, this takes it.)
-        if (remoteQueue.requeuePendingEdit(line, displayLine)) {
+        if (!agentShaped && remoteQueue.requeuePendingEdit(line, displayLine)) {
           return;
         }
         // Flow 275 T7 (specification §4.3, AC4): "dispatches no side worker
@@ -9695,7 +9752,7 @@ export async function launchTuiAgentShell(opts: {
         // goes straight to the main queue, same as the idle-path hold below,
         // skipping the Main-queue/Side-1 choice entirely.
         if (leaseView()?.held() === true) {
-          const position = turnLoop.enqueue(line, displayLine, source);
+          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
@@ -9762,7 +9819,7 @@ export async function launchTuiAgentShell(opts: {
 
       // Echo a slash command so it is clear WHICH command ran (turns echo their
       // own `❯ …` user box below).
-      if (line.startsWith("/")) {
+      if (!skipSlashRouting && !agentShaped && line.startsWith("/")) {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `c${uid++}`,
@@ -9772,7 +9829,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
       }
-      const command = findAgentCommand(line, "agent");
+      const command = skipSlashRouting || agentShaped ? undefined : findAgentCommand(line, "agent");
       if (command !== undefined) {
         if (command.name === "/exit") {
           // SLATE-5 close trigger: shell exit (explicit command).
@@ -10515,7 +10572,7 @@ export async function launchTuiAgentShell(opts: {
         openHelp(); // /help
         return;
       }
-      if (line.startsWith("/")) {
+      if (!skipSlashRouting && !agentShaped && line.startsWith("/")) {
         // A real command belonging to the OTHER mode (`/models`)
         // says so; only a genuinely unknown token is "unknown" (S4 parity with
         // the readline surfaces).
@@ -10538,20 +10595,27 @@ export async function launchTuiAgentShell(opts: {
       // this point by their own wake sites' `isIdle` ("not held"); this is a
       // defensive no-op for either, never an empty-line turn or a queue push.
       if (leaseView()?.held() === true) {
-        if (origin === "operator") {
-          const position = turnLoop.enqueue(line, displayLine, source);
+        if (origin === "operator" || origin === "agent-message") {
+          const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position}.\n`);
         }
         return;
       }
+      // Flow 481 T8: an `<hc from="…">…</hc>` line is another agent talking, not the
+      // operator, so it is labelled with the sender instead of the user's own mark
+      // (one shaped like that which does not parse, as an unknown agent).
+      // A Telegram line is the operator's own words, whatever its shape: it keeps
+      // its `tg ❯` mark and is never treated as an agent message.
+      const hcEcho = source === undefined ? hcTranscriptEcho(line) : undefined;
+      const echoLine = hcEcho !== undefined ? summarizeSubmittedLine(hcEcho.line) : displayLine;
       const userEcho = appendUserEcho(otui, r, transcript, {
         id: `ub${uid++}`,
-        line: displayLine,
+        line: echoLine,
         fullWidth: true,
         // Flow 376: a line from the Telegram topic says so (`tg ❯ ...`).
-        ...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : {}),
+        ...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : hcEcho !== undefined ? { marker: hcEcho.marker } : {}),
       });
-      chrome.registerUserPrompt(userEcho, displayLine);
+      chrome.registerUserPrompt(userEcho, echoLine, hcEcho?.marker);
       transcript.add(
         new otui.TextRenderable(r, {
           id: `h${uid++}`,
@@ -10562,8 +10626,9 @@ export async function launchTuiAgentShell(opts: {
 
       // Hard pre-router: "обогати вики" → list pages + interactive plan, then run
       // wikiEnrich in-process (no model thrash on search_code).
-      // (Not for a line from Telegram: that path opens a local picker nobody there can answer.)
-      if (source === undefined && isWikiEnrichIntent(line)) {
+      // (Not for a line from Telegram: that path opens a local picker nobody there can answer.
+      // Not for an agent's hc message either, for the same reason: it goes to the model framed.)
+      if (source === undefined && !agentShaped && isWikiEnrichIntent(line)) {
         const startedAt = Date.now();
         const operation = foregroundOperation.begin();
         // The busy flag is `startBusy`/`stopBusy` now (the chrome owns it); the
@@ -10878,7 +10943,7 @@ export async function launchTuiAgentShell(opts: {
         let deps = sessionDeps;
         const turnSignal = foregroundOperation.signal;
         let routingOutcome: RoutingClassifierTurnResult | undefined;
-        if (routingEnabled && origin === "operator" && line.trim().length > 0) {
+        if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {
           try {
             routingOutcome = await runRoutingClassifierForTurn(line, {
               enabled: routingEnabled,
@@ -10952,10 +11017,16 @@ export async function launchTuiAgentShell(opts: {
         // and by the time the guard's own deferred continuation (further down)
         // wakes up from its `await`, a NEW turn may already be active, whose
         // signal would say nothing about whether THIS turn was cancelled.
-        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {
+        // Flow 481 T8: an hc agent message reaches the model framed as one (and the
+        // history stores that framed text); every other line is passed as typed. A
+        // Telegram line is the operator's own words and is never framed.
+        const modelLine = source === undefined
+          ? agentShaped && !looksLikeHcMessage(line) ? `${HC_UNPARSED_HEADER}\n\n${line}` : frameSubmittedLine(line)
+          : line;
+        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
         signal: turnSignal,
         recovery: {},
-        ...(origin === "operator" ? {} : { origin }),
+        ...(agentShaped ? { origin: "agent-message" as const } : origin === "operator" ? {} : { origin }),
         // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       })).finally(() => {
@@ -11438,11 +11509,27 @@ export async function launchTuiAgentShell(opts: {
       runLine(line);
     });
 
+    // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen
+    // any more, and the submit handler above exists: only now may herdr-core see `idle` (it types a
+    // template's first task on the first report; a line typed before `onSubmit` would be cleared and dropped).
+    hostStatus.markReady();
+
+    // Flow 481 T7: the positional prompt is the first turn. Submitted only here — after
+    // `hostStatus.markReady()` and any resume picker / held-session choice, with `runLine`
+    // defined — through `runLine`, the very function a typed line + Enter reaches.
+    const initialPrompt = opts.takeInitialPrompt?.()?.trim();
+    if (initialPrompt !== undefined && initialPrompt.length > 0) {
+      runLine(initialPrompt, "operator", undefined, true);
+    }
+
     await done;
     return true;
   } catch {
     return false;
   } finally {
+    // herdr-core: remove the status first (sync, never throws, no-op outside a herdr-core pane), so a
+    // slow or failing teardown await below cannot leave a stale `working`/`blocked` in the core.
+    hostStatus.exit();
     const preservation = await finalizeShell?.();
     // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
     // Idempotent: the destroy hook above usually started it already.

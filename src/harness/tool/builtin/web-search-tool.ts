@@ -19,14 +19,21 @@ function render(response: SearchResponse): string | undefined {
     `Query: ${response.query}`,
     "",
   ];
+  let withheld = 0;
   for (const result of response.results) {
     const source = `${result.title}\n${result.snippet}\n${result.canonicalUrl}`;
-    if (isUnsafeExternalInstruction(source)) return undefined;
+    if (isUnsafeExternalInstruction(source)) {
+      withheld += 1;
+      continue;
+    }
     lines.push(`[${result.providerId}] ${redactSensitiveText(result.title)}`);
     lines.push(redactSensitiveText(result.canonicalUrl));
     if (result.snippet.length > 0) lines.push(redactSensitiveText(result.snippet));
     lines.push("");
   }
+  // One poisoned hit must not discard the rest; only an all-poisoned set errors.
+  if (withheld > 0 && withheld === response.results.length) return undefined;
+  if (withheld > 0) lines.push(`${withheld} result${withheld === 1 ? "" : "s"} withheld: likely prompt injection.`);
   return lines.join("\n").trim();
 }
 

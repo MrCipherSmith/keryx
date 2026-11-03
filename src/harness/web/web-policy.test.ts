@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parsePublicHttpsUrl, validatePublicTarget } from "./web-policy";
+import { isBlockedRemoteAddress, parsePublicHttpsUrl, validatePublicTarget } from "./web-policy";
 
 const publicAddress = "93.184.216.34";
 
@@ -47,6 +47,15 @@ test("remote policy rejects every private, special, and IPv6-local DNS answer", 
   for (const address of ["127.0.0.1", "10.0.0.1", "100.64.0.1", "169.254.169.254", "0.0.0.0", "::1", "::", "fc00::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1"]) {
     const result = await validatePublicTarget(url.value, async () => [{ address }]);
     expect(result.ok).toBe(false);
+  }
+});
+
+test("the 192.0.0.0/24 and 192.0.2.0/24 blocks are special, the rest of 192.0/16 and 192.2/16 is public", () => {
+  for (const blocked of ["192.0.0.1", "192.0.0.255", "192.0.2.1", "192.0.2.254"]) {
+    expect(isBlockedRemoteAddress(blocked)).toBe(true);
+  }
+  for (const open of ["192.0.1.1", "192.0.3.1", "192.0.200.9", "192.2.0.1", "192.2.5.5", "192.1.1.1"]) {
+    expect(isBlockedRemoteAddress(open)).toBe(false);
   }
 });
 

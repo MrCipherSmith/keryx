@@ -234,6 +234,12 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx research sync --schedule daily | --unschedule\n",
     "                                               Run that sync once a day inside keryx serve (the daily entry), or take the entry away\n",
     "  research  Part 1 materials: sync the -latest counts, the decisions export and the status page\n",
+    // Flow 481: `keryx herdr`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
+    "  keryx herdr install [--dry-run] [--force] [--json]\n",
+    "  keryx herdr remove [--dry-run] [--json]\n",
+    "  keryx herdr status [--json]\n",
+    "                                               Register Keryx with the Herdr app and herdr-core (opt-in; programs.json entry, icon, template)\n",
+    "  herdr     Register Keryx with the Herdr desktop app and herdr-core (opt-in)\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

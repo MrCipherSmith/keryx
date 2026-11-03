@@ -178,6 +178,7 @@ import { renderGroupedNamedHelp } from "../standard/service";
 // shell, so both dispatch into the same rule instead of growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import { runTasksCommand } from "../tui/tasks-command";
+import { frameSubmittedLine, herdrCoreSectionFromEnv, looksLikeHcMessage } from "../tui/hc-message";
 import { formatUsageLine } from "../tui/usage-format";
 import {
   type AgentDeps,
@@ -1714,6 +1715,12 @@ export async function runAgentRepl(
     onCompletionWaitersSize?: (size: number) => void;
     /** Shutdown cancels a stream or recovery timer before cleanup. */
     signal?: AbortSignal;
+    /**
+     * Flow 481: the positional startup prompt, the first line `lines` yields. It is always a model
+     * turn: it skips the slash-command router (`/Users/me/app/log.txt shows the failure` is a task,
+     * not an unknown command). Typed lines keep slash routing.
+     */
+    initialPrompt?: string;
     /** Deterministic interactive recovery test seams. */
     recovery?: import("./agent").InteractiveRecovery;
   },
@@ -2507,6 +2514,7 @@ export async function runAgentRepl(
             providerId: deps.providerId,
             modelId: deps.modelId,
             toolNames: interactiveAgentToolNames(rebuiltTools),
+            herdrCore: herdrCoreSectionFromEnv(process.env),
             busJoined: true,
           }),
         };
@@ -2655,8 +2663,14 @@ export async function runAgentRepl(
     flushSessionCheckpoint();
   };
 
+  // Only the very first line read can be the positional prompt (`withInitialLine` yields it first).
+  let initialPromptPending = rich.initialPrompt !== undefined;
+
   /** One main-agent turn from an operator line — extracted so it can run either straight away or drained from `heldQueue` below. */
-  const runOperatorLine = async (operatorLine: string): Promise<void> => {
+  const runOperatorLine = async (typedLine: string): Promise<void> => {
+    // An `<hc from="…">` agent message reaches the model framed as such (and the
+    // history stores that framed text); any other line is passed as typed.
+    const operatorLine = frameSubmittedLine(typedLine);
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
     turnUsage = undefined;
@@ -2664,8 +2678,8 @@ export async function runAgentRepl(
     turnText = "";
     turnError = undefined;
     syncArchive();
-    rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: operatorLine });
-    events?.emit({ type: "turn_start", prompt: operatorLine, provider: deps.providerId, model: deps.modelId });
+    rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: typedLine });
+    events?.emit({ type: "turn_start", prompt: typedLine, provider: deps.providerId, model: deps.modelId });
     deps.resetSubagentBudget?.();
     startSpinner();
     busWorking = true;
@@ -2675,6 +2689,7 @@ export async function runAgentRepl(
       const abort = new AbortController();
       activeAgentAbort = abort;
       const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+        ...(looksLikeHcMessage(typedLine) ? { origin: "agent-message" as const } : {}),
         recovery: rich.recovery ?? {},
         signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
@@ -2816,7 +2831,9 @@ export async function runAgentRepl(
     }
     rich.safeBoundary?.();
     if (line.trim() !== "/rewind confirm") rewindCommand.cancelPending();
-    if (line.startsWith("/")) {
+    const isInitialPrompt = initialPromptPending && line === rich.initialPrompt;
+    initialPromptPending = false;
+    if (!isInitialPrompt && line.startsWith("/")) {
       const parts = line.trim().split(/\s+/);
       const command = parts[0] ?? "";
       const rest = parts.slice(1).join(" ").trim();
@@ -3443,6 +3460,12 @@ export interface ShellCliFlags {
    */
   printPrompt?: string;
   /**
+   * The one positional argument (`keryx shell "<task>"`): submitted as the
+   * first turn of the interactive session (TUI) or the first line (readline).
+   * Agent mode only; an alternative to `--print`, which runs headless and exits.
+   */
+  initialPrompt?: string;
+  /**
    * `--events-file <path>`: append a machine-readable NDJSON transcript of the
    * session — turn boundaries, tool calls and results, and provider-reported
    * usage. Written beside the rendered output, never instead of it.
@@ -3484,6 +3507,30 @@ export interface ShellCliFlags {
 }
 
 /**
+ * Readline fallback for `initialPrompt`: the prompt is the first line the REPL
+ * reads, then stdin continues. Give this iterable to the REPL alone — the
+ * provider/mode pickers and the held-session choice read the plain shared
+ * iterator, so none of them can take the task as an answer. The prompt is
+ * delivered once in total: a second iterator over the same iterable goes
+ * straight to stdin. stdin is not read before the prompt has been handed out.
+ */
+export function withInitialLine(initial: string | undefined, rest: AsyncIterator<string>): AsyncIterable<string> {
+  if (initial === undefined) return { [Symbol.asyncIterator]: () => rest };
+  let sent = false;
+  return {
+    [Symbol.asyncIterator]: () => ({
+      next: async () => {
+        if (!sent) {
+          sent = true;
+          return { done: false, value: initial };
+        }
+        return rest.next();
+      },
+    }),
+  };
+}
+
+/**
  * A refused combination of the session-lease flags (`--fork`, `--take-over`),
  * or of `--name` (flow 273 T6).
  * Carries exit code 2, the usage-error code, which `cli.ts` honours.
@@ -3503,7 +3550,8 @@ export class ShellFlagError extends Error {
  * Session flags (`-c`/`-r`) are per-project only.
  */
 export function parseShellCliFlags(args: string[]): ShellCliFlags {
-  if (args.includes("--help") || args.includes("-h")) {
+  // A lone `help` asks for help, as `keryx herdr help` does; it is not a one-word first turn.
+  if (args.includes("--help") || args.includes("-h") || (args.length === 1 && args[0] === "help")) {
     return { help: true, wantTui: true };
   }
   const invalid = (message: string): never => {
@@ -3535,9 +3583,20 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let debug: boolean | undefined;
   let name: string | undefined;
   let guard: boolean | undefined;
+  let initialPrompt: string | undefined;
+  let flagsEnded = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === "--provider") {
+    if (!flagsEnded && arg === "--") {
+      flagsEnded = true;
+    } else if (flagsEnded || (arg !== undefined && !arg.startsWith("-"))) {
+      // Flow 481 T7: the one positional word is the first turn (`keryx shell "<task>"`).
+      if (initialPrompt !== undefined) {
+        invalid("keryx shell takes one initial prompt; quote it as a single argument");
+      }
+      if ((arg ?? "").trim() === "") invalid("The initial prompt is empty");
+      initialPrompt = arg;
+    } else if (arg === "--provider") {
       providerArg = valueAfter(i++);
     } else if (arg === "--model") {
       modelArg = valueAfter(i++);
@@ -3557,6 +3616,8 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       continueLast = true;
     } else if (arg === "-r" || arg === "--resume") {
       const next = args[i + 1];
+      // The next bare word is the session id, prefix or title (findSession matches titles, which
+      // may hold spaces). An initial prompt therefore goes before a bare -r, or after `--`.
       if (next !== undefined && !next.startsWith("-")) {
         resumeId = next;
         i += 1;
@@ -3645,6 +3706,13 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     // so beats running something that looks like the agent and is not.
     invalid("--print is agent-mode only and cannot be combined with --chat");
   }
+  if (initialPrompt !== undefined && printPromptArg !== undefined) {
+    invalid("An initial prompt and --print are alternatives: use the prompt to start an interactive session, or --print for one headless turn");
+  }
+  if (initialPrompt !== undefined && modeFlag === false) {
+    // The chat surfaces have no first-message hook; refusing beats dropping the task.
+    invalid("An initial prompt is agent-mode only and cannot be combined with --chat");
+  }
   return {
     ...(providerArg !== undefined ? { providerArg } : {}),
     ...(modelArg !== undefined ? { modelArg } : {}),
@@ -3660,6 +3728,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(reviewSystemFlag !== undefined ? { reviewSystemFlag } : {}),
     ...(denyTools !== undefined ? { denyTools } : {}),
     ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
+    ...(initialPrompt !== undefined ? { initialPrompt } : {}),
     ...(eventsFile !== undefined ? { eventsFile } : {}),
     ...(eventsMaxField !== undefined ? { eventsMaxField } : {}),
     ...(debug === true ? { debug: true } : {}),
@@ -3805,9 +3874,20 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     return;
   }
   const flags = parseShellCliFlags(args);
+  // Flow 481 T7: the positional prompt is handed out once. The TUI takes it when it submits the
+  // first turn; a TUI that then fails falls back to readline with nothing left to re-run.
+  let pendingInitialPrompt = flags.initialPrompt;
+  const takeInitialPrompt = (): string | undefined => {
+    const prompt = pendingInitialPrompt;
+    pendingInitialPrompt = undefined;
+    return prompt;
+  };
   if (flags.reviewSystemFlag !== undefined) setReviewSystem(flags.reviewSystemFlag);
   if (flags.help) {
-    console.log(`Usage: keryx shell [options]
+    console.log(`Usage: keryx shell [options] [prompt]
+
+  prompt                        Submit this as the first turn of the session (quote it; use -- before one starting with -;
+                                a bare -r takes the next word as the session, so put the prompt first or after --)
 
   --help, -h                    Show this help without starting a session
   --provider <name>             Use this provider (otherwise choose interactively)
@@ -3860,7 +3940,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       stdinTTY: process.stdin.isTTY === true,
       stdoutTTY: process.stdout.isTTY === true,
       env: Object.fromEntries(
-        ["TERM", "TERM_PROGRAM", "COLORTERM", "TMUX", "HERDR_ENV", "HERDR_PANE_ID", "SSH_TTY", "LANG"].map((k) => [k, process.env[k]]),
+        ["TERM", "TERM_PROGRAM", "COLORTERM", "TMUX", "HERDR_ENV", "HERDR_PANE_ID", "HC_TERMINAL_ID", "SSH_TTY", "LANG"].map((k) => [k, process.env[k]]),
       ),
       watcherPid,
       dir: run.dir,
@@ -4260,6 +4340,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             providerId: sel.provider,
             modelId: sel.model,
             toolNames: interactiveAgentToolNames(deps.tools),
+            herdrCore: herdrCoreSectionFromEnv(process.env),
             // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
             // resolves. `tui-shell.ts` rebuilds via this same function right
             // after its own join settles, so a session that starts before the
@@ -4399,6 +4480,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // (never persisted) — `undefined` lets the TUI fall back to the
         // persisted `ShellConfig.turnGuard.enabled` default (off).
         ...(flags.guard === true ? { initialGuardEnabled: true } : {}),
+        ...(flags.initialPrompt !== undefined ? { takeInitialPrompt } : {}),
         versionCheck,
       })
     ) {
@@ -4503,6 +4585,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             yield oneShotPrompt;
           },
         };
+  // Flow 481 T7: the positional prompt reaches the REPL alone. The provider/mode pickers read
+  // `io.lines` (= `sharedLines`) and the held-session choice reads `lineIterator`, so neither can
+  // take the task as a menu answer. `takeInitialPrompt()` is empty if the TUI already submitted it.
+  const readlineInitialPrompt = oneShotPrompt === undefined ? takeInitialPrompt() : undefined;
+  const replLines: AsyncIterable<string> =
+    oneShotPrompt === undefined ? withInitialLine(readlineInitialPrompt, lineIterator) : sharedLines;
 
   const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
 
@@ -4547,10 +4635,17 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       if (picked.baseUrl !== undefined) {
         baseUrl = picked.baseUrl;
       }
-      // Offer the agent/chat choice only when no explicit flag was given.
+      // Offer the agent/chat choice only when no explicit flag was given. An initial prompt is
+      // agent-mode only (parseShellCliFlags refuses it with --chat), and only the agent REPL reads
+      // it, so there is nothing to choose: picking chat here would drop the task without a word.
       if (modeFlag === undefined) {
-        modeFlag = await pickAgentMode(io);
-        io.write("\n");
+        if (readlineInitialPrompt !== undefined) {
+          modeFlag = true;
+          io.write("Agent mode: the initial prompt runs as the first turn.\n");
+        } else {
+          modeFlag = await pickAgentMode(io);
+          io.write("\n");
+        }
       }
     } else {
       provider = providerArg;
@@ -4749,6 +4844,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: provider,
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
+          herdrCore: herdrCoreSectionFromEnv(process.env),
           // Flow 274 (T6/T7 contract): always `false` here — the bus join
           // happens later, inside `runAgentRepl` (`busBox.current` is still
           // empty at this point, and `agentDepsBase.tools` above was built
@@ -4803,7 +4899,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }
         let endReason = "normal";
         try {
-          await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+          await runAgentRepl(replLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal, ...(readlineInitialPrompt !== undefined ? { initialPrompt: readlineInitialPrompt } : {}) }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
         } catch (cause) {
           endReason = "error";
           throw cause;

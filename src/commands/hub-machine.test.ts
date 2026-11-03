@@ -7,6 +7,13 @@ import { machineConfigPath, machineStateDir, loadEnrollment } from '../lib/hub-m
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true }); });
+/** Runs `body` with KERYX_TOOL_CALL removed from process.env, restoring whatever value it had. */
+async function withoutToolCallMarker(body: () => unknown): Promise<void> {
+    const saved = process.env.KERYX_TOOL_CALL;
+    delete process.env.KERYX_TOOL_CALL;
+    try { await body(); }
+    finally { if (saved !== undefined) process.env.KERYX_TOOL_CALL = saved; }
+}
 function dir() { const d = mkdtempSync(path.join(tmpdir(), 'machine-cli-')); dirs.push(d); return d; }
 test('pair accepts explicitly named environment code, saves no raw code and does not print secret', async () => {
     const stateDir = dir();
@@ -37,7 +44,7 @@ test('unpair removes only enrollment while preserving durable launch identities'
     let ledger = new MachineLedger(path.join(machineStateDir(stateDir,loadEnrollment(stateDir)!.hubId),'control.sqlite'));
     const identity = ledger.ledgerId; const ledgerPath=path.join(machineStateDir(stateDir,loadEnrollment(stateDir)!.hubId),'control.sqlite');
     ledger.close();
-    await hubMachineCommand(['unpair'], { stateDir, write: () => { } });
+    await hubMachineCommand(['unpair'], { stateDir, env: {}, write: () => { } });
     expect(loadEnrollment(stateDir)).toBeNull();
     ledger = new MachineLedger(ledgerPath);
     expect(ledger.ledgerId).toBe(identity);
@@ -52,7 +59,7 @@ test('unpair refuses unresolved command and recovery reports uncertainty without
     ledger.claim({ hubId: 'h', commandId: 'c', digest: 'a'.repeat(64), runId: 'r', checkoutId: 'checkout' });
     ledger.markStarting('h', 'c', 'daemon');
     ledger.close();
-    await expect(hubMachineCommand(['unpair'], { stateDir, write: () => { } })).rejects.toThrow('recovery-required');
+    await expect(hubMachineCommand(['unpair'], { stateDir, env: {}, write: () => { } })).rejects.toThrow('recovery-required');
     const logs: string[] = [];
     await hubMachineCommand(['recover'], { stateDir, write: s => logs.push(s) });
     expect(logs.join('')).toContain('unknown');
@@ -61,7 +68,8 @@ test('unpair refuses unresolved command and recovery reports uncertainty without
 test('hub CLI routes machine commands before ordinary Hub flags and preserves watch help', async () => {
     const { hubCommand, HUB_HELP } = await import('./hub');
     expect(HUB_HELP).toContain('machine pair');
-    await expect(hubCommand(['machine', 'pair', '--code', 'raw-secret'])).rejects.toThrow('Invalid hub machine arguments');
+    // hubCommand reads process.env; an agent's shell_exec child carries KERYX_TOOL_CALL=1, which would refuse pair first.
+    await withoutToolCallMarker(() => expect(hubCommand(['machine', 'pair', '--code', 'raw-secret'])).rejects.toThrow('Invalid hub machine arguments'));
     expect(HUB_HELP).toContain('sync [--watch');
 });
 test('the usage error and the hub help name every machine subcommand', async () => {
@@ -73,7 +81,7 @@ test('the usage error and the hub help name every machine subcommand', async () 
 });
 test('local configure snapshots only explicitly selected current candidate and ad-hoc consent',async()=>{
  const stateDir=dir();const {saveEnrollment,hubIdentity}=await import('../lib/hub-machine/config');const {saveShellConfig}=await import('../lib/shell-config');const {readMachinePolicy}=await import('../lib/hub-machine/policy');saveEnrollment(stateDir,{hubUrl:'https://hub.example',machineId:'m',secret:'s'.repeat(43)});saveShellConfig({provider:'local-fixture',model:'fixture-model'},stateDir);
- await hubMachineCommand(['configure','--hub',hubIdentity('https://hub.example'),'--candidate','current','--ad-hoc','deny','--max-runs','1'],{stateDir,write:()=>{}});const policy=readMachinePolicy(stateDir,hubIdentity('https://hub.example'))!;expect(policy.allowAdHocSessions).toBe(false);expect(policy.maxConcurrentRuns).toBe(1);expect(policy.allowedCandidateIds).toHaveLength(1);expect(JSON.stringify(policy)).not.toContain('fixture-model');
+ await hubMachineCommand(['configure','--hub',hubIdentity('https://hub.example'),'--candidate','current','--ad-hoc','deny','--max-runs','1'],{stateDir,env:{},write:()=>{}});const policy=readMachinePolicy(stateDir,hubIdentity('https://hub.example'))!;expect(policy.allowAdHocSessions).toBe(false);expect(policy.maxConcurrentRuns).toBe(1);expect(policy.allowedCandidateIds).toHaveLength(1);expect(JSON.stringify(policy)).not.toContain('fixture-model');
 });
 test('concurrent pair commands serialize before consuming a second Hub one-use code',async()=>{
  const stateDir=dir();let requests=0;let release!:()=>void;const gate=new Promise<void>(r=>release=r);const server=Bun.serve({port:0,async fetch(){requests++;await gate;return Response.json({machineId:`machine-${requests}`,secret:'s'.repeat(43)});}});
@@ -129,4 +137,12 @@ test('a stale daemon lock is released only once its recorded daemon is proven go
   // A lock whose writer recorded no identity is never released: absence cannot be proven.
   acquireMachineDaemon(stateDir,hubId);await expect(release()).rejects.toThrow('recovery-required');expect(fs.existsSync(lockFile)).toBe(true);
  }finally{daemon.kill('SIGKILL');await daemon.exited;}
+});
+
+test('pair, allow, configure and unpair refuse under an agent shell (KERYX_TOOL_CALL=1) and change nothing', async () => {
+    const stateDir = dir();
+    const env = { KERYX_TOOL_CALL: '1', PAIR_FIXTURE: 'c'.repeat(22) };
+    for (const args of [['pair', '--url', 'https://hub.example', '--code-env', 'PAIR_FIXTURE'], ['allow', '--project', 'p', '--checkout', 'c', '--path', '/tmp', '--profile', 'native'], ['configure', '--candidate', 'current', '--ad-hoc', 'allow', '--max-runs', '1'], ['unpair']])
+        await expect(hubMachineCommand(args, { stateDir, env, write: () => { } })).rejects.toThrow('KERYX_TOOL_CALL=1');
+    expect(loadEnrollment(stateDir)).toBeNull();
 });

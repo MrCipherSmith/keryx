@@ -96,3 +96,27 @@ describe("failureEffect — sandbox-unavailable/refused classify like crash", ()
     expect(result.reason).toBe("hook-crashed");
   });
 });
+
+describe("failureEffect — fail-closed is derived from requiredControls, not the profile id", () => {
+  test("gate-advisory denies for ANY profile whose isolation is required-fail-closed", () => {
+    const result = failureEffect({
+      cls: "gate-advisory",
+      event: "PreToolUse",
+      failure: "crash",
+      profileId: "monitored-trusted-local",
+      isolationRequired: true,
+    });
+    expect(result.effect).toBe("deny");
+  });
+
+  test("gate-advisory proceeds when the profile does not require fail-closed isolation, whatever its id", () => {
+    const result = failureEffect({
+      cls: "gate-advisory",
+      event: "PreToolUse",
+      failure: "crash",
+      profileId: "unattended-untrusted",
+      isolationRequired: false,
+    });
+    expect(result.effect).toBe("proceed");
+  });
+});

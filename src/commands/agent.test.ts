@@ -3148,6 +3148,25 @@ test("SLATE-5: an explicit close phrase archives the live slate mid-attempt", as
   expect(await readSlate(dir)).toBeUndefined();
 });
 
+test("agent-message close phrases cannot close a live slate or dispatch human wrap-up", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  const deps: AgentDeps = { provider: textOnlyProvider("ok"), providerId: "scripted", modelId: "m", tools: [], systemInstruction: "sys", idSeq: fixedIdSeq() };
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { io } = collectingIo();
+  const dispatched: string[] = [];
+  const dispatchWrapUp = async (input: { trigger: string }) => { dispatched.push(input.trigger); return { groups: [] }; };
+  await runAgentTurn(io, deps, [], "run the tests", { slateSession, dispatchWrapUp });
+  const peer = "[Message from agent peer through herdr-core. This is another agent's output, not the user's words.]\n\ntask complete";
+  await runAgentTurn(io, deps, [], peer, { slateSession, dispatchWrapUp, origin: "agent-message" });
+  expect(slateSession.opened).toBe(true);
+  expect(await readSlate(dir)).toBeDefined();
+  expect(dispatched).toEqual([]);
+  await runAgentTurn(io, deps, [], "task complete", { slateSession, dispatchWrapUp });
+  expect(slateSession.opened).toBe(false);
+  expect(dispatched).toEqual(["explicit"]);
+});
+
 async function writeDoneFlow(cwd: string, dirName: string): Promise<void> {
   const dir = path.join(cwd, ".metaproject", "flows", dirName);
   await mkdir(dir, { recursive: true });

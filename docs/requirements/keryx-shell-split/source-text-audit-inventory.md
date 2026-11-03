@@ -477,6 +477,39 @@ fragile shape this document describes: a large insertion before the seams pushes
 out of the window. When the closure becomes mountable, replace it with a test that
 opens `/setup` in a mounted shell and observes the confirm card and the job registry.
 
+### Added by flow 481 (herdr-core status, hc messages, positional prompt)
+
+Three files, five sites. The units behind them (`createAgentHostStatus`, the OSC 7501
+encoder, `parseHcMessage`, `frameSubmittedLine`, `parseShellCliFlags`, `withInitialLine`)
+have behavioural tests in the same files. The audits cover only the wiring inside the two
+closures:
+
+- `tui/tui-herdr-core-wiring.test.ts` reads `tui/tui-shell.ts` once. It pins five things:
+  - the host-status composite is built over the live renderer's `writeOut`;
+  - `setMainAgent` feeds it alongside the existing reporter and bus join;
+  - every `blocked` call passes an attention argument, and `ask_user` blocks with kind
+    `question`;
+  - `markReady` runs after the resume and held-session branches, before the session binds;
+  - every `herdr.release()` is paired with the composite's `exit()`.
+
+  Replace it with a mounted-shell test that records the writer's sequences across launch,
+  an approval and `/exit`.
+- `tui/hc-message.test.ts` reads both god-files at one site each. It pins three things:
+  - the TUI echoes an hc line under the sender's marker and frames it for the model;
+  - the readline REPL frames through the same `frameSubmittedLine`;
+  - every `buildAgentSystemInstruction` call site passes the herdr-core section.
+
+  Replace it with a turn test on each surface that captures the model-bound text for an hc
+  line.
+- `commands/shell-initial-prompt.test.ts` reads both god-files at one site each. It pins
+  three things:
+  - `launchTuiAgentShell` takes the prompt once and submits it after `markReady` through
+    the normal submit path;
+  - the readline fallback feeds it to the agent REPL's iterator and never to a picker;
+  - the help text names it.
+
+  Replace it with a launch test on each surface that observes the first submitted line.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -513,6 +546,7 @@ commands/operator-confirm-rosters.test.ts | commands/shell.ts | 1
 commands/prune-archive-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
+commands/shell-initial-prompt.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-starting-line.test.ts | commands/shell.ts | 1
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
@@ -528,6 +562,7 @@ tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
 tui/ctrl-c-policy.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
 tui/external-operator.test.ts | tui/tui-shell.ts | 1
+tui/hc-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/main-queue.test.ts | tui/tui-shell.ts | 1
 tui/mcp-trust-shell-wiring.test.ts | tui/tui-shell.ts | 1
@@ -538,6 +573,7 @@ tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
 tui/task-cost-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
+tui/tui-herdr-core-wiring.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
 tui/tui-shell.test.ts | tui/tui-shell.ts | 14

@@ -101,6 +101,39 @@ describe("loadHookConfig", () => {
     expect(result.diagnostics.some((d) => d.code === "schema-invalid")).toBe(true);
   });
 
+  test("a matcher regex that does not compile fails closed instead of silently never running the hook", () => {
+    const doc = {
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [{ id: "my-gate", matcher: "Bash(", class: "gate", command: { argv: ["echo", "hi"] } }],
+      },
+    };
+    const result = loadHookConfig({
+      projectRoot: PROJECT,
+      homeDir: HOME,
+      readFile: makeReadFile({ [PROJECT_PATH]: JSON.stringify(doc) }),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.diagnostics.find((d) => d.code === "matcher-invalid");
+    expect(diagnostic?.path).toBe("my-gate");
+    expect(diagnostic?.message).toContain("my-gate");
+  });
+
+  test("a valid alternation matcher and the wildcard still load", () => {
+    const doc = {
+      schemaVersion: "1.0.0",
+      hooks: {
+        PreToolUse: [
+          { id: "g1", matcher: "Bash|Edit", class: "gate", command: { argv: ["echo", "hi"] } },
+          { id: "g2", matcher: "*", class: "gate", command: { argv: ["echo", "hi"] } },
+        ],
+      },
+    };
+    const result = validateHookConfigDocument(doc);
+    expect(result.valid).toBe(true);
+  });
+
   test("a full registration id colliding with a built-in is rejected with the named code", () => {
     const doc = {
       schemaVersion: "1.0.0",

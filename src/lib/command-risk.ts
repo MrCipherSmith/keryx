@@ -25,7 +25,8 @@
 //
 // Determinism: pure string analysis. No clock, RNG, filesystem, env, or network.
 
-import { commandWord, splitSegments, stripAssignments } from "./shell-syntax";
+import { optionValues } from "./args";
+import { commandWord, splitSegments, splitWords, stripAssignments } from "./shell-syntax";
 import type { Segment } from "./shell-syntax";
 
 /** Risk class of a concrete command string. */
@@ -123,6 +124,11 @@ interface SegmentView {
   positionals: string[];
   /** Original words, for flag helpers. */
   words: readonly string[];
+  /**
+   * This segment or an earlier one on the line assigns a variable that moves git's config (`HOME=/x; git push`,
+   * `export XDG_CONFIG_HOME=/x && git push`, `env GIT_DIR=/x git push`).
+   */
+  configRelocated?: boolean;
 }
 
 /**
@@ -177,20 +183,342 @@ const ruleContainerEscape: Rule = (v) => {
   );
 };
 
+/** git's own options (before the subcommand, git.c `handle_options`) that take the next word as their value. */
+const GIT_GLOBAL_VALUE_OPTIONS: ReadonlySet<string> = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env", "--attr-source",
+]);
+/** git's own options that take no value; `--exec-path` and `--list-cmds` take one only glued with `=`. */
+const GIT_GLOBAL_FLAGS: ReadonlySet<string> = new Set([
+  "-p", "--paginate", "-P", "--no-pager", "--no-replace-objects", "--bare", "--literal-pathspecs", "--glob-pathspecs",
+  "--noglob-pathspecs", "--icase-pathspecs", "--no-optional-locks", "--no-lazy-fetch", "--no-advice", "--html-path",
+  "--man-path", "--info-path", "--exec-path", "--list-cmds", "-v", "--version", "-h", "--help",
+]);
+
 /**
- * Force push. Destructive against a protected branch, and escalated when no
- * target is named at all — that form pushes the CURRENT branch, so the target is
- * unknown at approval time and the fail-closed direction is to ask.
+ * git's own command names: `git --list-cmds=main` of git 2.51 (the builtins plus the commands in its exec-path), with
+ * a few builtins older releases had. git runs one of these before it looks up an alias (git.c `run_argv`), so an
+ * `alias.<name>` that shadows one is ignored (git-config(1) `alias.*`). A builtin a newer git adds and this list lacks
+ * is read through its alias: if the alias names `push`, the line is classified as a push (a false positive); every
+ * command a rule here keys on (`push`, `config`, `remote`) is listed.
+ */
+const GIT_COMMANDS: ReadonlySet<string> = new Set([
+  "add", "am", "annotate", "apply", "archimport", "archive", "backfill", "bisect", "blame", "branch", "bugreport",
+  "bundle", "cat-file", "check-attr", "check-ignore", "check-mailmap", "check-ref-format", "checkout", "checkout--worker",
+  "checkout-index", "cherry", "cherry-pick", "clean", "clone", "column", "commit", "commit-graph", "commit-tree", "config",
+  "count-objects", "credential", "credential-cache", "credential-cache--daemon", "credential-netrc", "credential-osxkeychain",
+  "credential-store", "cvsexportcommit", "cvsimport", "cvsserver", "daemon", "describe", "diagnose", "diff", "diff-files",
+  "diff-index", "diff-pairs", "diff-tree", "difftool", "difftool--helper", "env--helper", "fast-export", "fast-import",
+  "fetch", "fetch-pack", "filter-branch", "fmt-merge-msg", "for-each-ref", "for-each-repo", "format-patch", "fsck",
+  "fsck-objects", "fsmonitor--daemon", "gc", "get-tar-commit-id", "grep", "hash-object", "help", "hook", "http-backend",
+  "http-fetch", "http-push", "imap-send", "index-pack", "init", "init-db", "instaweb", "interpret-trailers", "log",
+  "ls-files", "ls-remote", "ls-tree", "mailinfo", "mailsplit", "maintenance", "merge", "merge-base", "merge-file",
+  "merge-index", "merge-octopus", "merge-one-file", "merge-ours", "merge-recursive", "merge-recursive-ours",
+  "merge-recursive-theirs", "merge-resolve", "merge-subtree", "merge-tree", "mergetool", "mktag", "mktree",
+  "multi-pack-index", "mv", "name-rev", "notes", "p4", "pack-objects", "pack-redundant", "pack-refs", "patch-id",
+  "pickaxe", "prune", "prune-packed", "pull", "push", "quiltimport", "range-diff", "read-tree", "rebase",
+  "rebase--interactive", "receive-pack", "reflog", "refs", "remote", "remote-ext", "remote-fd", "remote-ftp",
+  "remote-ftps", "remote-http", "remote-https", "repack", "replace", "replay", "request-pull", "rerere", "reset",
+  "restore", "rev-list", "rev-parse", "revert", "rm", "send-email", "send-pack", "serve", "sh-i18n--envsubst", "shell",
+  "shortlog", "show", "show-branch", "show-index", "show-ref", "sparse-checkout", "stage", "stash", "status",
+  "stripspace", "submodule", "submodule--helper", "subtree", "switch", "symbolic-ref", "tag", "unpack-file",
+  "unpack-objects", "update-index", "update-ref", "update-server-info", "upload-archive", "upload-archive--writer",
+  "upload-pack", "var", "verify-commit", "verify-pack", "verify-tag", "version", "web--browse", "whatchanged", "worktree",
+  "write-tree",
+]);
+
+/**
+ * Environment variables that move where git reads its config from (the repository, the global or system file, or
+ * `GIT_CONFIG_*` entries): with one set, a `git push` may carry a refspec, a mirror or an alias the line does not show.
+ * A leading `(` or `{` is a subshell or group opener in front of the assignment.
+ */
+const GIT_CONFIG_SOURCE_ASSIGNMENT = /^[({]*(?:HOME|XDG_CONFIG_HOME|GIT_DIR|GIT_COMMON_DIR|GIT_WORK_TREE|GIT_CONFIG\w*)=/i;
+
+/** git's own options that point it at a repository (and so a config file) other than the one the shell is in. */
+const GIT_REPOSITORY_OPTIONS: ReadonlySet<string> = new Set(["--git-dir", "--work-tree"]);
+
+/** One `-c key=value` (or `--config-env key=ENV`, whose value the classifier cannot see). */
+interface GitConfigEntry {
+  key: string;
+  value: string | undefined;
+  opaque: boolean;
+}
+
+/** A git invocation with git's own options and `-c` aliases resolved: the subcommand and its arguments. */
+interface GitInvocation {
+  /** The subcommand, or undefined when there is none or it cannot be known (an expansion, an unresolvable alias). */
+  sub: string | undefined;
+  args: string[];
+  config: GitConfigEntry[];
+  /** The subcommand is a word the shell or a `-c alias.*` still has to produce: what runs is unknown. */
+  opaqueSub: boolean;
+  /** An option before the subcommand that git's table does not list: where the subcommand starts is unknown. */
+  unknownGlobal: boolean;
+  /**
+   * git reads config the line does not show: a `HOME=`, `XDG_CONFIG_HOME=`, `GIT_DIR=` or `GIT_CONFIG_*` assignment in
+   * front of the command, or `--git-dir`/`--work-tree`. Any config, push refspecs, mirror and aliases included, may be set.
+   */
+  envConfig: boolean;
+  /** A `-c alias.<sub>=!…` shell alias: the shell text it runs. */
+  shellAlias?: string;
+}
+
+function gitConfigEntry(spec: string, fromEnv: boolean): GitConfigEntry {
+  const eq = spec.indexOf("=");
+  return { key: (eq < 0 ? spec : spec.slice(0, eq)).toLowerCase(), value: eq < 0 ? undefined : spec.slice(eq + 1), opaque: fromEnv || wordIsOpaque(spec) };
+}
+
+/**
+ * Parse `[VAR=… ] git [global options] <sub> <args…>`, expanding a `-c alias.<sub>=…` the way git does: only for a
+ * name that is not one of git's own commands, which git runs before it looks at aliases. Pure.
+ */
+function parseGitInvocation(input: readonly string[]): GitInvocation {
+  const bare = stripAssignments(input);
+  let envConfig = input.slice(0, input.length - bare.length).some((w) => GIT_CONFIG_SOURCE_ASSIGNMENT.test(w));
+  const words = bare.map(unescapeWord);
+  const config: GitConfigEntry[] = [];
+  let unknownGlobal = false;
+  let i = 1;
+  for (; i < words.length; i += 1) {
+    const w = words[i]!;
+    if (!w.startsWith("-")) break;
+    const eq = w.startsWith("--") ? w.indexOf("=") : -1;
+    const name = eq > 0 ? w.slice(0, eq) : w;
+    if (GIT_GLOBAL_VALUE_OPTIONS.has(name)) {
+      if (GIT_REPOSITORY_OPTIONS.has(name)) envConfig = true;
+      const value = eq > 0 ? w.slice(eq + 1) : words[++i];
+      if (name === "-c" || name === "--config-env") config.push(gitConfigEntry(value ?? "", name === "--config-env"));
+      continue;
+    }
+    if (!GIT_GLOBAL_FLAGS.has(name)) unknownGlobal = true;
+  }
+  let rest = words.slice(i);
+  const invocation = (sub: string | undefined, opaqueSub: boolean, shellAlias?: string): GitInvocation => ({
+    sub, args: rest.slice(1), config, opaqueSub, unknownGlobal, envConfig, ...(shellAlias !== undefined ? { shellAlias } : {}),
+  });
+  for (let guard = 0; guard < 8 && rest.length > 0; guard += 1) {
+    const head = rest[0]!;
+    if (wordIsOpaque(head)) return invocation(undefined, true);
+    // git's own command runs whatever alias shadows it; a case variant (`PUSH`) is read as the command, failing closed.
+    if (GIT_COMMANDS.has(head.toLowerCase())) return invocation(head.toLowerCase(), false);
+    const alias = [...config].reverse().find((c) => c.key === `alias.${head.toLowerCase()}`);
+    if (alias === undefined) return invocation(head, false);
+    if (alias.opaque || alias.value === undefined) return invocation(undefined, true);
+    if (alias.value.trimStart().startsWith("!")) return invocation(undefined, true, [alias.value.trimStart().slice(1), ...rest.slice(1)].join(" "));
+    const expanded = splitWords(alias.value);
+    // git refuses an alias that starts with an option; one that does is not classified.
+    if (expanded.length === 0 || expanded[0]!.startsWith("-")) return invocation(undefined, true);
+    rest = [...expanded, ...rest.slice(1)];
+  }
+  return invocation(undefined, rest.length > 0);
+}
+
+/** How a `git push` long option takes a value: never, as the next word or glued (`value`), or only glued (`optional`). */
+type PushOptionKind = "flag" | "value" | "optional";
+/** `git push`'s option table (builtin/push.c, as `git push -h` lists it in git 2.51). */
+const PUSH_LONG_OPTIONS: ReadonlyMap<string, PushOptionKind> = new Map<string, PushOptionKind>([
+  ["verbose", "flag"], ["quiet", "flag"], ["repo", "value"], ["all", "flag"], ["branches", "flag"], ["mirror", "flag"],
+  ["delete", "flag"], ["tags", "flag"], ["dry-run", "flag"], ["porcelain", "flag"], ["force", "flag"],
+  ["force-with-lease", "optional"], ["force-if-includes", "flag"], ["recurse-submodules", "value"], ["thin", "flag"],
+  ["receive-pack", "value"], ["exec", "value"], ["set-upstream", "flag"], ["progress", "flag"], ["prune", "flag"],
+  ["no-verify", "flag"], ["verify", "flag"], ["follow-tags", "flag"], ["signed", "optional"], ["atomic", "flag"],
+  ["push-option", "value"], ["ipv4", "flag"], ["ipv6", "flag"],
+]);
+const PUSH_SHORT_FLAGS: ReadonlySet<string> = new Set(["v", "q", "d", "n", "f", "u", "4", "6"]);
+
+/** The long option a `--name` spelling selects: the exact name, or the one option it is an unambiguous prefix of. */
+function resolvePushOption(name: string): string | undefined {
+  if (PUSH_LONG_OPTIONS.has(name)) return name;
+  const candidates = [...PUSH_LONG_OPTIONS.keys()].filter((option) => option.startsWith(name));
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+/** What a `git push` command line asks git to do, read the way git's parse-options reads it. */
+interface PushRequest {
+  force: boolean;
+  del: boolean;
+  mirror: boolean;
+  all: boolean;
+  prune: boolean;
+  /** An option git does not list, or an ambiguous abbreviation: the line cannot be classified. */
+  unknown: boolean;
+  /** Positional words: the repository, then the refspecs. */
+  positionals: string[];
+}
+
+function parsePushArgs(args: readonly string[]): PushRequest {
+  const request: PushRequest = { force: false, del: false, mirror: false, all: false, prune: false, unknown: false, positionals: [] };
+  const set = (option: string): void => {
+    if (option === "force" || option === "force-with-lease" || option === "force-if-includes") request.force = true;
+    else if (option === "delete") request.del = true;
+    else if (option === "mirror") request.mirror = true;
+    else if (option === "all" || option === "branches") request.all = true;
+    else if (option === "prune") request.prune = true;
+  };
+  let options = true;
+  for (let i = 0; i < args.length; i += 1) {
+    const w = args[i]!;
+    if (!options || w === "-" || !w.startsWith("-")) {
+      request.positionals.push(w);
+      continue;
+    }
+    if (w === "--") {
+      options = false;
+      continue;
+    }
+    if (w.startsWith("--")) {
+      const eq = w.indexOf("=");
+      const name = eq > 0 ? w.slice(2, eq) : w.slice(2);
+      // Every `--no-…` spelling (and `--n…`, which only abbreviates one) turns something off and takes no value.
+      if (name.startsWith("n")) continue;
+      const option = resolvePushOption(name);
+      if (option === undefined) {
+        request.unknown = true;
+        continue;
+      }
+      if (PUSH_LONG_OPTIONS.get(option) === "value" && eq < 0) i += 1;
+      set(option);
+      continue;
+    }
+    // A short cluster (`-fu`); `-o` takes the rest of the cluster or the next word as its value.
+    for (let at = 1; at < w.length; at += 1) {
+      const ch = w[at]!;
+      if (ch === "o") {
+        if (at === w.length - 1) i += 1;
+        break;
+      }
+      if (!PUSH_SHORT_FLAGS.has(ch)) {
+        request.unknown = true;
+        break;
+      }
+      if (ch === "f") request.force = true;
+      if (ch === "d") request.del = true;
+    }
+  }
+  return request;
+}
+
+/**
+ * True when writing (or deleting) this destination ref could hit a protected branch: a protected name, a glob (`*`
+ * reaches every branch), or no name at all (`HEAD`, `@`, empty: whatever is checked out).
+ */
+function isDangerousDestination(destination: string): boolean {
+  const name = (destination.split("/").pop() ?? "").toLowerCase();
+  return destination.includes("*") || PROTECTED_BRANCHES.includes(name) || name === "" || name === "head" || name === "@";
+}
+
+/** Does one refspec, under the line's `--force`/`--delete`, force-overwrite or delete a ref that may be protected? */
+function refspecDestroys(spec: string, force: boolean, del: boolean): boolean {
+  if (wordIsOpaque(spec)) return true;
+  const plus = spec.startsWith("+");
+  const body = plus ? spec.slice(1) : spec;
+  // `--delete` takes plain ref names: each one is deleted.
+  if (del) return isDangerousDestination(body);
+  // `:` alone is the matching push: every branch the remote also has, main included; forced, it overwrites them.
+  if (body === ":") return force || plus;
+  const deletes = body.startsWith(":");
+  if (!(force || plus || deletes)) return false;
+  const destination = body.slice(body.lastIndexOf(":") + 1);
+  if (deletes && destination !== "" && !destination.includes("*")) {
+    return PROTECTED_BRANCHES.includes((destination.split("/").pop() ?? "").toLowerCase());
+  }
+  return isDangerousDestination(destination);
+}
+
+/** Config keys that make a `git push` force-write or mirror without a word on its command line. */
+const PUSH_SHAPING_KEY = /^remote\..+\.(push|mirror)$/;
+
+/** git's boolean reading of a config value: a key with no value is true. */
+function isConfigTrue(value: string | undefined): boolean {
+  return value === undefined || !/^(?:false|no|off|0|)$/i.test(value.trim());
+}
+
+/** Config keys that pull in another config file (`include.path`, `includeIf.<condition>.path`), which the classifier cannot read. */
+const CONFIG_INCLUDE_KEY = /^include(?:if\..*)?\.path$/;
+
+/**
+ * Does setting this config key to this value make a push force-write, delete or mirror a protected branch? An include
+ * is a file the classifier cannot read, so it may set anything.
+ */
+function configArmsPush(entry: GitConfigEntry): boolean {
+  if (CONFIG_INCLUDE_KEY.test(entry.key)) return true;
+  const match = PUSH_SHAPING_KEY.exec(entry.key);
+  if (match === null) return false;
+  if (entry.opaque) return true;
+  return match[1] === "mirror" ? isConfigTrue(entry.value) : refspecDestroys(entry.value ?? "", false, false);
+}
+
+/**
+ * Does WRITING this entry (`git config …`) arm a later command the classifier will not see as destructive? Everything
+ * {@link configArmsPush} reads, plus an alias: one that runs `push` turns a later `git <alias>` into a push the line does
+ * not name, and a `!` alias runs its shell text.
+ */
+function configWriteArmsPush(entry: GitConfigEntry): boolean {
+  if (!entry.key.startsWith("alias.")) return configArmsPush(entry);
+  if (entry.opaque || entry.value === undefined) return true;
+  const value = entry.value.trimStart();
+  return /\bpush\b/i.test(value) || (value.startsWith("!") && isDestructiveCommand(value.slice(1)));
+}
+
+/**
+ * Force push, branch deletion or mirror against a protected branch, decided on a parse of the git command line:
+ * git's own options and `-c` config (a `remote.<r>.push` refspec, `remote.<r>.mirror`, an `alias.*`), then `git
+ * push`'s option table with git's unambiguous-prefix abbreviations (`--del`, `--mirr`) and value-taking options
+ * (`-o ci.skip`, `--receive-pack X`, `--repo X`), then the repository and refspecs. A line that cannot be read with
+ * confidence is destructive: an unknown or ambiguous option, an expansion the shell has yet to make, a subcommand
+ * from an alias git would run through the shell, `GIT_CONFIG_*` in the environment. A forced push that names no
+ * branch (only a remote, or `HEAD`) pushes the CURRENT branch, so its target is unknown and it asks.
  */
 const ruleForcePush: Rule = (v) => {
-  if (v.cmd !== "git" || !v.positionals.includes("push")) return false;
-  const forced = v.args.some((x) => x === "-f" || x === "--force" || x.startsWith("--force-with-lease"));
-  if (!forced) return false;
-  const after = v.positionals.slice(v.positionals.indexOf("push") + 1);
-  if (after.length === 0) return true;
-  const named = after.map((x) => x.split("/").pop()?.toLowerCase() ?? "");
-  return named.some((n) => PROTECTED_BRANCHES.includes(n));
+  const words = gitWords(v);
+  if (words === undefined) return false;
+  const git = parseGitInvocation(words);
+  if (git.shellAlias !== undefined) return isDestructiveCommand(git.shellAlias) || /\bpush\b/.test(git.shellAlias);
+  if (git.opaqueSub) return true;
+  if (git.unknownGlobal && positionals(words).includes("push")) return true;
+  if (git.sub !== "push") return false;
+  // Config from a source the line does not show (an include, another repository, a relocated global file).
+  if (git.envConfig || v.configRelocated === true || git.args.some(wordIsOpaque) || git.config.some(configArmsPush)) return true;
+  const push = parsePushArgs(git.args);
+  if (push.unknown || push.mirror) return true;
+  const refspecs = push.positionals.slice(1); // positionals[0] is the repository
+  if (push.all && (push.force || push.prune)) return true;
+  if (push.prune && (refspecs.length === 0 || refspecs.some((spec) => spec.includes("*")))) return true;
+  if (refspecs.length === 0) return push.force;
+  return refspecs.some((spec) => refspecDestroys(spec, push.force, push.del));
 };
+
+/**
+ * Writing the config a later, plain `git push` reads: `git config remote.<r>.push '+refs/heads/*:refs/heads/*'`,
+ * `git config remote.<r>.mirror true`, `git remote add --mirror[=push]`, `git config include.path <file>` (or
+ * `includeIf.<cond>.path`), `git config alias.<x> 'push -f origin main'`. The push that follows names nothing forced,
+ * so the arming step is where the classifier can still see it.
+ */
+const ruleArmsForcePush: Rule = (v) => {
+  const words = gitWords(v);
+  if (words === undefined) return false;
+  const git = parseGitInvocation(words);
+  if (git.sub === "remote") {
+    if (git.args[0] !== "add") return false;
+    return git.args.some((w) => {
+      const [name = "", value] = w.split("=", 2);
+      return name.length > 3 && "--mirror".startsWith(name) && value !== "fetch";
+    });
+  }
+  if (git.sub !== "config") return false;
+  const operands = git.args.filter((w) => !w.startsWith("-"));
+  return operands.some((w, i) => i + 1 < operands.length && configWriteArmsPush(gitConfigEntry(`${w}=${operands[i + 1]!}`, false)));
+};
+
+/**
+ * The words of a git command, behind the wrappers that run the rest of the line (`env HOME=/x git push`, `nohup git …`),
+ * or undefined when the segment is not git. `sudo`/`doas` are destructive on their own.
+ */
+function gitWords(v: SegmentView): readonly string[] | undefined {
+  if (v.cmd === "git") return v.words;
+  if (!WRAPPER_COMMANDS.has(v.cmd)) return undefined;
+  const peeled = peelWrappers(v.words);
+  return peeled.inner === undefined && baseName(peeled.words[0]) === "git" ? peeled.words : undefined;
+}
 
 const RULES: readonly Rule[] = [
   rulePrivilege,
@@ -202,16 +530,35 @@ const RULES: readonly Rule[] = [
   ruleMkfs,
   ruleContainerEscape,
   ruleForcePush,
+  ruleArmsForcePush,
 ];
 
+/** Builtins whose arguments assign shell variables (`export HOME=/x`). */
+const ASSIGNING_BUILTINS: ReadonlySet<string> = new Set(["export", "declare", "typeset", "readonly", "local"]);
+
+/**
+ * Does this simple command assign a variable that moves git's config, for itself or for the commands after it: a
+ * leading `HOME=/x`, `export XDG_CONFIG_HOME=/x`, `env GIT_DIR=/x …`? An argument that merely reads like one
+ * (`git commit -m "HOME=/x"`) does not count.
+ */
+function assignsGitConfigSource(words: readonly string[]): boolean {
+  const bare = stripAssignments(words);
+  // `bare[0]` too: an assignment behind a subshell or group opener (`(HOME=/x; git push)`) is not stripped.
+  if (words.slice(0, words.length - bare.length + 1).some((w) => GIT_CONFIG_SOURCE_ASSIGNMENT.test(w))) return true;
+  const cmd = commandWord(bare);
+  if (!ASSIGNING_BUILTINS.has(cmd) && !WRAPPER_COMMANDS.has(cmd)) return false;
+  return bare.slice(1).some((w) => GIT_CONFIG_SOURCE_ASSIGNMENT.test(w));
+}
+
 /** Classify ONE simple command: destructive when ANY rule matches. */
-function classifySegment(seg: Segment): boolean {
+function classifySegment(seg: Segment, configRelocated: boolean): boolean {
   const view: SegmentView = {
     raw: seg.raw,
     cmd: head(seg.words),
     args: args(seg.words),
     positionals: positionals(seg.words),
     words: seg.words,
+    configRelocated,
   };
   return RULES.some((rule) => rule(view));
 }
@@ -225,8 +572,10 @@ export function classifyCommand(command: string): CommandRiskClass {
   if (command.trim().length === 0) return "shell";
   const segments = splitSegments(command);
 
+  let configRelocated = false;
   for (const seg of segments) {
-    if (classifySegment(seg)) return "destructive";
+    configRelocated ||= assignsGitConfigSource(seg.words);
+    if (classifySegment(seg, configRelocated)) return "destructive";
   }
 
   // Cross-segment: `curl … | sh`. Only a PIPE counts — `curl …; sh script.sh`
@@ -344,8 +693,16 @@ export function isPublishCommand(command: string): boolean {
  * containment is off (ADR-0006) or unavailable. Pure.
  */
 export function touchesAgentCredentials(command: string): boolean {
-  const text = command.toLowerCase();
-  return CREDENTIAL_MARKERS.some((marker) => text.includes(marker));
+  return textSpellings(command).some((text) => CREDENTIAL_MARKERS.some((marker) => text.includes(marker)));
+}
+
+/**
+ * The command text as written and with its shell quoting resolved (`.config/ke''ryx`, `auth\.json`, `$'\x61uth.json'`
+ * collapse to the literal), lowercased, runs of whitespace folded to one space. A marker that is matched on text is
+ * matched on both, so a spelling that changes the text without changing what runs is seen too.
+ */
+function textSpellings(command: string): string[] {
+  return [command, collapseQuoting(joinContinuations(command))].map((text) => text.toLowerCase().replace(/\s+/g, " "));
 }
 
 /**
@@ -371,8 +728,27 @@ const SAC_REVIEW_MARKERS: readonly string[] = ["confirm-review", "workspace revi
 
 /** True when `command` mentions SAC's proposal-review/confirm-token family. Pure. */
 export function touchesSacConfirmReview(command: string): boolean {
-  const text = command.toLowerCase();
-  return SAC_REVIEW_MARKERS.some((marker) => text.includes(marker));
+  if (textSpellings(command).some((text) => SAC_REVIEW_MARKERS.some((marker) => text.includes(marker)))) return true;
+  return parsedSacReview(command);
+}
+
+/**
+ * Parsed-word net for {@link touchesSacConfirmReview}: a keryx command (through wrappers, `bash -c`, `eval`, a terminal
+ * driver) whose words, once quoting and escapes are resolved, name `confirm-review` or `workspace … review`, or whose
+ * `workspace` verb is a word the shell has yet to expand.
+ */
+function parsedSacReview(command: string): boolean {
+  return anySimpleCommand(joinContinuations(command), (words) => {
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lower = args.map((w) => w.toLowerCase());
+    if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    if (lower.includes("confirm-review")) return true;
+    const workspace = lower.indexOf("workspace");
+    if (workspace < 0) return false;
+    const rest = args.slice(workspace + 1);
+    return lower.slice(workspace + 1).includes("review") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+  });
 }
 
 /**
@@ -692,12 +1068,70 @@ function opaqueArgs(args: readonly string[]): boolean {
   return args.some((w, i) => wordIsOpaque(w) && args[i - 1] !== "--package");
 }
 
+/**
+ * For each word {@link splitWords} cuts from `raw`, whether the shell still rewrites it: a `$` or a backtick outside
+ * single quotes, or a `{` outside any quotes, none of them backslash-escaped. Text in single quotes is literal. Cut on
+ * exactly the boundaries `splitWords` uses, so the result lines up with its words.
+ */
+function wordExpansions(raw: string): boolean[] {
+  const result: boolean[] = [];
+  let quote: '"' | "'" | undefined;
+  let started = false;
+  let length = 0;
+  let expands = false;
+  let escaped = false;
+  const push = (): void => {
+    if (started || length > 0) result.push(expands);
+    started = false;
+    length = 0;
+    expands = false;
+  };
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]!;
+    if (quote !== undefined) {
+      if (quote === '"' && ch === "\\" && raw[i + 1] !== undefined) {
+        length += 2;
+        i++;
+        continue;
+      }
+      if (ch === quote) quote = undefined;
+      else {
+        length += 1;
+        if (quote === '"' && (ch === "$" || ch === "`")) expands = true;
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      started = true;
+      escaped = false;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      escaped = false;
+      if (length > 0 || started) push();
+      continue;
+    }
+    if (!escaped && (ch === "$" || ch === "`" || ch === "{")) expands = true;
+    escaped = !escaped && ch === "\\";
+    length += 1;
+  }
+  push();
+  return result;
+}
+
 /** Run `visit` over every simple command, descending into `bash -c`/`eval` bodies and any word that is itself a command line. */
-function anySimpleCommand(command: string, visit: (words: string[]) => boolean, depth = 0): boolean {
+function anySimpleCommand(command: string, visit: (words: string[], expands: readonly boolean[]) => boolean, depth = 0): boolean {
   for (const seg of segmentsOfBothSpellings(command)) {
     const words = seg.words.map(unescapeWord);
     const peeled = peelWrappers(words);
-    if (visit(peeled.words)) return true;
+    const cut = wordExpansions(seg.raw);
+    // Should the two cuts ever disagree, every word is judged by its text (the wider reading).
+    const all = cut.length === words.length ? cut : words.map(wordIsOpaque);
+    const expands = all.slice(all.length - peeled.words.length);
+    if (visit(peeled.words, expands)) return true;
+    // A terminal driver runs the rest of its line as a program (`script -q /dev/null keryx review …`, `unbuffer keryx …`).
+    if (TERMINAL_DRIVERS.has(baseName(peeled.words[0])) && peeled.words.some((_w, i) => i > 0 && visit(peeled.words.slice(i), expands.slice(i)))) return true;
     if (depth < MAX_SHELL_NESTING) {
       if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, depth + 1)) return true;
       if (words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, depth + 1))) return true;
@@ -793,22 +1227,105 @@ export function touchesReviewPublish(raw: string): boolean {
   });
 }
 
+/** `keryx review` verbs only the operator takes (their handlers refuse without a terminal). */
+const OPERATOR_REVIEW_VERBS: ReadonlySet<string> = new Set(["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise"]);
+/** `keryx review` verbs whose `--unattended` the handler refuses without a terminal (`plan` hands it to `start`). */
+const UNATTENDED_REVIEW_VERBS: ReadonlySet<string> = new Set(["start", "attach", "plan"]);
+/** `keryx hub machine` verbs that enroll this machine, widen what the Hub may run here, or drop the enrollment. */
+const HUB_MACHINE_OPERATOR_VERBS: ReadonlySet<string> = new Set(["pair", "allow", "configure", "unpair"]);
 /**
- * Flow 456: `keryx learn accept|promote|graduate` and `keryx agents external apply` are decisions only the operator takes
+ * The command paths of the operator floor ({@link touchesOperatorDecision}): `learn accept|promote|graduate`, `agents
+ * external apply`, the `review` verbs of {@link isOperatorReviewForm}, `hub machine pair|allow|configure|unpair`.
+ */
+const OPERATOR_COMMAND_PATHS: readonly (readonly string[])[] = [
+  ...["accept", "promote", "graduate"].map((verb) => ["learn", verb]),
+  ["agents", "external", "apply"],
+  ...[...OPERATOR_REVIEW_VERBS, ...UNATTENDED_REVIEW_VERBS, "estimate"].map((verb) => ["review", verb]),
+  ["review", "comments", "reply"],
+  ["review", "chunks", "estimate"],
+  ...[...HUB_MACHINE_OPERATOR_VERBS].map((verb) => ["hub", "machine", verb]),
+];
+/** The deepest operator command path (`hub machine pair`, `agents external apply`, `review comments reply`). */
+const MAX_COMMAND_PATH = Math.max(...OPERATOR_COMMAND_PATHS.map((path) => path.length));
+/** Literal words of an operator command: with one of them, a command whose head is an expansion may be keryx. */
+const OPERATOR_PATH_WORDS: ReadonlySet<string> = new Set(OPERATOR_COMMAND_PATHS.flat());
+
+/** Are these literal words the start of an operator command that still needs more words? */
+function startsOperatorPath(literal: readonly string[]): boolean {
+  return OPERATOR_COMMAND_PATHS.some((path) => path.length > literal.length && literal.every((w, i) => path[i] === w));
+}
+
+/**
+ * True when the shell has yet to expand a word of the command path (the words before the first flag, at most
+ * {@link MAX_COMMAND_PATH}) at a point where it could still complete an operator command: `keryx $X`, `keryx $H machine
+ * pair`, `keryx hub $M pair`, `keryx hub $(printf machine) pair`, `keryx review comments $V --final`. Literal words that
+ * already rule every operator command out (`keryx ctx read "$F"`, `keryx wiki ask "$Q"`) leave the command known, and a
+ * single-quoted word is literal. A head that is itself an expansion (`$K …`) may stand for any part of the path, so it
+ * counts beside any expanded path word and a literal operator word, and `$PY $SCRIPT` is not caught.
+ */
+function hasOpaqueCommandPath(args: readonly string[], expands: readonly boolean[], headExpands: boolean): boolean {
+  const firstFlag = args.findIndex((w) => w.startsWith("-"));
+  const pathLength = Math.min(firstFlag < 0 ? args.length : firstFlag, MAX_COMMAND_PATH);
+  if (headExpands) {
+    return expands.slice(0, pathLength).some(Boolean) && args.some((w) => OPERATOR_PATH_WORDS.has(w.toLowerCase()));
+  }
+  const literal: string[] = [];
+  for (let i = 0; i < pathLength; i++) {
+    if (expands[i] === true) return startsOperatorPath(literal);
+    literal.push(args[i]!.toLowerCase());
+    if (!startsOperatorPath(literal)) return false;
+  }
+  return false;
+}
+
+/**
+ * The review forms the handlers refuse without a terminal, and only those: `--unattended` on `start|attach|plan`,
+ * `estimate --confirm`, `comments reply --final` outside `--dry-run` and a `--fixtures` rehearsal, and `chunks estimate
+ * --mode automatic` (a value the shell has yet to expand may be `automatic`).
+ */
+function isOperatorReviewForm(args: readonly string[]): boolean {
+  const lower = args.map((w) => w.toLowerCase());
+  const hasFlag = (flag: string): boolean => lower.some((w) => w === flag || w.startsWith(`${flag}=`));
+  if (lower.some((w) => OPERATOR_REVIEW_VERBS.has(w))) return true;
+  if (UNATTENDED_REVIEW_VERBS.has(lower.find((w) => !w.startsWith("-")) ?? "") && hasFlag("--unattended")) return true;
+  if (lower.includes("estimate") && hasFlag("--confirm")) return true;
+  if (lower.includes("comments") && lower.includes("reply") && hasFlag("--final")) {
+    const fixtures = optionValues(args, "--fixtures");
+    return !args.includes("--dry-run") && !(fixtures.length > 0 && !fixtures.some(wordIsOpaque));
+  }
+  if (lower.includes("chunks") && lower.includes("estimate")) {
+    return optionValues(args, "--mode").some((value) => value.toLowerCase() === "automatic" || wordIsOpaque(value));
+  }
+  return false;
+}
+
+/**
+ * Flow 456: `keryx learn accept|promote|graduate`, `keryx agents external apply`, the operator-only `keryx review` forms ({@link isOperatorReviewForm}) and `keryx hub machine pair|allow|configure|unpair` are decisions only the operator takes
  * (their CLI needs a terminal; inside keryx shell the operator answers a card instead). A `shell_exec` of one of them always
  * asks, in every permission mode, and no answer is remembered. Parsed words like {@link touchesReviewPublish}, so a split or
- * escaped spelling and a verb the shell assembles (`learn $V`) are seen too. Pure.
+ * escaped spelling and a verb the shell assembles (`learn $V`, `keryx $H machine pair`) are seen too. Pure.
  */
 export function touchesOperatorDecision(raw: string): boolean {
-  return anySimpleCommand(joinContinuations(raw), (words) => {
+  return anySimpleCommand(joinContinuations(raw), (words, expands) => {
     const args = keryxArgs(words);
     if (args === undefined) return false;
     const lower = args.map((w) => w.toLowerCase());
     if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    // keryxArgs takes a head with `$`, a backtick or `{` for keryx; a single-quoted one is literal text, not an expansion.
+    const headOpaque = wordIsOpaque(words[0]!);
+    if ((!headOpaque || expands[0] === true) && hasOpaqueCommandPath(args, expands.slice(words.length - args.length), headOpaque)) return true;
     const learn = lower.indexOf("learn");
     if (learn >= 0) {
       const rest = args.slice(learn + 1);
       if (lower.slice(learn + 1).some((w) => w === "accept" || w === "promote" || w === "graduate") || (rest[0] !== undefined && wordIsOpaque(rest[0]))) return true;
+    }
+    const review = lower.indexOf("review");
+    if (review >= 0 && isOperatorReviewForm(args.slice(review + 1))) return true;
+    const hub = lower.indexOf("hub");
+    if (hub >= 0) {
+      const machine = lower.indexOf("machine", hub + 1);
+      const rest = args.slice(machine + 1);
+      if (machine >= 0 && (lower.slice(machine + 1).some((w) => HUB_MACHINE_OPERATOR_VERBS.has(w)) || (rest[0] !== undefined && wordIsOpaque(rest[0])))) return true;
     }
     const external = lower.indexOf("external");
     if (external >= 0) {

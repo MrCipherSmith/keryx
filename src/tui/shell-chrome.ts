@@ -427,8 +427,11 @@ export interface ShellChrome {
   readonly textarea: Textarea;
   readonly footer: Box;
   readonly input: ComposerInput;
-  /** Track a main-turn operator prompt so it can become the scroll context pin. */
-  registerUserPrompt(box: Box, line: string): void;
+  /**
+   * Track a main-turn prompt so it can become the scroll context pin. `marker` replaces the
+   * user's own `❯` when the line is not theirs (an hc agent message, flow 481).
+   */
+  registerUserPrompt(box: Box, line: string, marker?: string): void;
   /** The prompt currently pinned above the transcript, if any. */
   pinnedUserPrompt(): string | undefined;
 
@@ -909,10 +912,10 @@ export async function createShellChrome(
   });
   main.add(scroll);
   const transcript = scroll.content;
-  const userPrompts: { box: Box; line: string }[] = [];
-  let pinnedPrompt: { box: Box; line: string } | undefined;
+  const userPrompts: { box: Box; line: string; marker: string }[] = [];
+  let pinnedPrompt: { box: Box; line: string; marker: string } | undefined;
   const syncPromptPin = (): void => {
-    let active: { box: Box; line: string } | undefined;
+    let active: { box: Box; line: string; marker: string } | undefined;
     for (let i = userPrompts.length - 1; i >= 0; i -= 1) {
       const candidate = userPrompts[i];
       if (candidate === undefined) continue;
@@ -931,11 +934,11 @@ export async function createShellChrome(
     if (active?.box === pinnedPrompt?.box) return;
     pinnedPrompt = active;
     promptPin.visible = active !== undefined;
-    promptPinText.content = active === undefined ? "" : `↥ ❯ ${active.line}`;
+    promptPinText.content = active === undefined ? "" : `↥ ${active.marker} ${active.line}`;
   };
-  const registerUserPrompt = (box: Box, line: string): void => {
+  const registerUserPrompt = (box: Box, line: string, marker = "❯"): void => {
     if (line.length === 0 || userPrompts.some((item) => item.box === box)) return;
-    userPrompts.push({ box, line });
+    userPrompts.push({ box, line, marker });
   };
   r.on(otui.CliRenderEvents.FRAME, syncPromptPin);
 

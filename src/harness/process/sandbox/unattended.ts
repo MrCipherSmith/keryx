@@ -35,10 +35,11 @@
 // reasons are what the run record carries.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
+import { gitProtectBwrapArgs } from "./bwrap";
 import { detectSandboxLauncher, type DetectOptions } from "./detect";
-import { keryxConfigDir } from "../../../lib/config-dir";
+import { resolveGitProtection, type GitProtectFs } from "./git-protect";
 import { defaultReadDenyList } from "./profile";
 
 /** Environment variables an unattended command inherits, by name. Nothing else passes. */
@@ -95,16 +96,22 @@ function shQuote(value: string): string {
 }
 
 /**
- * `DetectOptions` plus the two host-filesystem reads the plan makes for the
- * `/run` and `/var/run` hide list. A test that injects `platform: "linux"` on a
- * non-Linux host supplies a fake filesystem here; production leaves both unset
- * and reads the real one.
+ * `DetectOptions` plus the host-filesystem reads the plan makes. EVERY read the
+ * plan performs goes through `existsSync` / `isDir` / `realpath` / `readText` /
+ * `listDir` here (the git-protection walk included), so a test
+ * that injects `platform: "linux"` on a non-Linux host supplies a fake filesystem
+ * and gets the same argv on any machine; production leaves them unset and reads
+ * the real one. (`existsSync` is shared with launcher detection.)
  */
 export interface UnattendedDetectOptions extends DetectOptions {
   /** Is `p` a directory on the (possibly fake) host? Default: real `statSync`. */
   isDir?: (p: string) => boolean;
   /** Canonical path of `p` on the (possibly fake) host. Default: real `realpathSync`, falling back to `path.resolve`. */
   realpath?: (p: string) => string;
+  /** Contents of the file `p` (a `.git` gitdir file, `commondir`, `.gitmodules`), undefined when unreadable. Default: real `readFileSync`. */
+  readText?: (p: string) => string | undefined;
+  /** Entry names of the directory `p` (`.git/worktrees`, `.git/modules`), empty when unreadable. Default: real `readdirSync`. */
+  listDir?: (p: string) => string[];
 }
 
 export interface UnattendedSandboxInput {
@@ -126,6 +133,11 @@ export interface UnattendedSandboxInput {
   /** The operator's environment — read for PATH/locale and the opt-outs, never passed through. */
   readonly env: Record<string, string | undefined>;
   readonly home: string;
+  /**
+   * keryx's own config directory (auth.json, provider keys), hidden always. Default:
+   * derived from `env` (`XDG_DATA_HOME`) and `home`, never from the process state.
+   */
+  readonly configDir?: string;
   readonly uid?: number;
   readonly platform?: string;
   /** Test seams. */
@@ -151,7 +163,11 @@ export type UnattendedSandboxPlan =
  * → `~/.nvm/versions/node/v22`; `~/.local/bin` → itself only (its parent holds
  * `share/keryx` credentials). Nothing is hard-coded to one machine.
  */
-export function toolchainRoots(pathEnv: string | undefined, home: string): string[] {
+export function toolchainRoots(
+  pathEnv: string | undefined,
+  home: string,
+  hostExists: (p: string) => boolean = exists,
+): string[] {
   const out = new Set<string>();
   const homeResolved = path.resolve(home);
   for (const entry of (pathEnv ?? "").split(path.delimiter)) {
@@ -164,7 +180,7 @@ export function toolchainRoots(pathEnv: string | undefined, home: string): strin
         ? parent
         : resolved;
     if (root === homeResolved) continue;
-    if (existsSync(root)) out.add(root);
+    if (hostExists(root)) out.add(root);
   }
   return [...out];
 }
@@ -193,6 +209,22 @@ function exists(p: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+function readText(p: string): string | undefined {
+  try {
+    return readFileSync(p, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function listDir(p: string): string[] {
+  try {
+    return readdirSync(p);
+  } catch {
+    return [];
   }
 }
 
@@ -260,19 +292,22 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   for (const runDir of ["/run", "/var/run"]) {
     if (hostIsDir(runDir) && hostReal(runDir) === path.resolve(runDir)) hidden.add(runDir);
   }
-  if (isDir(home)) hidden.add(home);
+  if (hostIsDir(home)) hidden.add(home);
   const runtimeDir = input.env["XDG_RUNTIME_DIR"];
-  if (runtimeDir !== undefined && runtimeDir.length > 0 && isDir(runtimeDir)) {
-    const resolved = real(runtimeDir);
+  if (runtimeDir !== undefined && runtimeDir.length > 0 && hostIsDir(runtimeDir)) {
+    const resolved = hostReal(runtimeDir);
     if (![...hidden].some((dir) => resolved === dir || resolved.startsWith(`${dir}${path.sep}`))) hidden.add(resolved);
   }
   // Flow 295 (N4): keryx's own config directory (auth.json, provider keys, the
   // schedule signing key) is hidden ALWAYS. It usually sits under $HOME, which is
   // hidden already, but `XDG_DATA_HOME` may point anywhere, and `--ro-bind / /` would
   // then expose it to every unattended command (with network `full`, off the box too).
-  const configDir = keryxConfigDir();
+  const dataHome = input.env["XDG_DATA_HOME"];
+  const configDir =
+    input.configDir ??
+    path.join(dataHome !== undefined && dataHome.length > 0 ? dataHome : path.join(home, ".local", "share"), "keryx");
   for (const extra of [configDir, ...(input.hide ?? [])]) {
-    if (isDir(extra)) hidden.add(real(extra));
+    if (hostIsDir(extra)) hidden.add(hostReal(extra));
   }
   for (const dir of hidden) args.push("--tmpfs", dir);
 
@@ -289,17 +324,27 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   // Bind back read-only what the run needs, then read-write the worktree and
   // the scratch home. Order matters: later mounts win.
   const readOnly = new Set<string>();
-  for (const root of toolchainRoots(input.env["PATH"], home)) readOnly.add(root);
-  for (const extra of input.readOnly) if (exists(extra)) readOnly.add(real(extra));
+  for (const root of toolchainRoots(input.env["PATH"], home, hostExists)) readOnly.add(root);
+  for (const extra of input.readOnly) if (hostExists(extra)) readOnly.add(hostReal(extra));
   for (const root of readOnly) args.push("--ro-bind", root, root);
-  for (const rw of [input.worktree, input.scratchHome]) args.push("--bind", real(rw), real(rw));
+  for (const rw of [input.worktree, input.scratchHome]) args.push("--bind", hostReal(rw), hostReal(rw));
+  // The worktree's `.git` (a gitdir FILE for a linked worktree) and any git
+  // control path inside the RW binds stay read-only, so a contained write cannot
+  // repoint the repository the host runs git in afterwards (see git-protect.ts).
+  const hostGit: GitProtectFs = {
+    kind: (p) => (hostIsDir(p) ? "dir" : hostExists(p) ? "file" : "missing"),
+    real: hostReal,
+    readText: input.detect?.readText ?? readText,
+    list: input.detect?.listDir ?? listDir,
+  };
+  args.push(...gitProtectBwrapArgs(resolveGitProtection([hostReal(input.worktree), hostReal(input.scratchHome)], hostGit)));
 
   // Known secret paths, masked inside anything bound back (e.g. a toolchain
   // root that happens to hold a credentials file).
   for (const secret of defaultReadDenyList(home)) {
     const inside = [...readOnly].some((root) => secret === root || secret.startsWith(`${root}${path.sep}`));
-    if (!inside || !exists(secret)) continue;
-    if (isDir(secret)) args.push("--tmpfs", secret);
+    if (!inside || !hostExists(secret)) continue;
+    if (hostIsDir(secret)) args.push("--tmpfs", secret);
     else args.push("--ro-bind", "/dev/null", secret);
   }
 
@@ -309,14 +354,14 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   // survives — it is a fresh, empty tmpfs (above) — so binding this one path in
   // is the ONLY way out of the sandbox's private netns.
   if (allowlist !== undefined) args.push("--bind", allowlist.proxySocketPath, allowlist.proxySocketPath);
-  args.push("--unshare-pid", "--unshare-ipc", "--die-with-parent", "--new-session", "--chdir", real(input.worktree));
+  args.push("--unshare-pid", "--unshare-ipc", "--die-with-parent", "--new-session", "--chdir", hostReal(input.worktree));
 
   const env: Record<string, string> = {};
   for (const name of UNATTENDED_ENV_ALLOWLIST) {
     const value = input.env[name];
     if (value !== undefined) env[name] = value;
   }
-  const scratch = real(input.scratchHome);
+  const scratch = hostReal(input.scratchHome);
   env["HOME"] = scratch;
   env["XDG_CONFIG_HOME"] = path.join(scratch, ".config");
   env["XDG_CACHE_HOME"] = path.join(scratch, ".cache");

@@ -8,11 +8,15 @@
 
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import {
   DEFAULT_SHELL_TIMEOUT_MS,
+  DEFAULT_SHELL_YIELD_MS,
   ENV_SHELL_TIMEOUT_MS,
+  ENV_SHELL_YIELD_MS,
   makeCommandRunner,
   resolveShellTimeoutMs,
+  resolveShellYieldMs,
 } from "./shell-exec-tool";
 
 test("resolveShellTimeoutMs: default, override, disable, and junk", () => {
@@ -74,3 +78,88 @@ test("a fast command is unaffected by the deadline", async () => {
     else process.env[ENV_SHELL_TIMEOUT_MS] = prev;
   }
 });
+
+// review-logic-w17:F-001: a delay above 2^31-1 ms makes setTimeout fire after 1 ms, killing every command.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+test("env millisecond values above the largest timer delay are clamped, not passed to setTimeout", () => {
+  expect(resolveShellTimeoutMs({ [ENV_SHELL_TIMEOUT_MS]: "3000000000" })).toBe(MAX_TIMER_DELAY_MS);
+  expect(resolveShellTimeoutMs({ [ENV_SHELL_TIMEOUT_MS]: String(MAX_TIMER_DELAY_MS) })).toBe(MAX_TIMER_DELAY_MS);
+  expect(resolveShellYieldMs({ [ENV_SHELL_YIELD_MS]: "9999999999999" })).toBe(MAX_TIMER_DELAY_MS);
+  expect(resolveShellYieldMs({ [ENV_SHELL_YIELD_MS]: "" })).toBe(DEFAULT_SHELL_YIELD_MS);
+  expect(resolveShellYieldMs({ [ENV_SHELL_YIELD_MS]: "-1" })).toBe(DEFAULT_SHELL_YIELD_MS);
+  expect(resolveShellYieldMs({ [ENV_SHELL_YIELD_MS]: "0" })).toBe(0);
+});
+
+test("an oversized KERYX_SHELL_TIMEOUT_MS does not kill a short command", async () => {
+  const prev = process.env[ENV_SHELL_TIMEOUT_MS];
+  process.env[ENV_SHELL_TIMEOUT_MS] = "3000000000";
+  try {
+    const result = await makeCommandRunner(tmpdir())("sleep 0.2; echo survived");
+    expect(result.isError).toBe(false);
+    expect(result.output).toBe("survived");
+  } finally {
+    if (prev === undefined) delete process.env[ENV_SHELL_TIMEOUT_MS];
+    else process.env[ENV_SHELL_TIMEOUT_MS] = prev;
+  }
+});
+
+// review-logic-w17:F-002: the group SIGKILL must still fire when the direct child died on SIGTERM
+// but a grandchild in the group ignores it.
+test("with processGroup, a TERM-ignoring grandchild does not outlive the deadline", async () => {
+  const prev = process.env[ENV_SHELL_TIMEOUT_MS];
+  process.env[ENV_SHELL_TIMEOUT_MS] = "300";
+  let pid = 0;
+  try {
+    const run = makeCommandRunner(tmpdir(), undefined, { processGroup: true });
+    const result = await run('(trap "" TERM; exec sleep 30) & echo $!; wait');
+    pid = Number.parseInt(result.output.split("\n")[0] ?? "", 10);
+    expect(Number.isInteger(pid) && pid > 0).toBe(true);
+    const alive = (): boolean => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    for (let i = 0; i < 20 && alive(); i++) await new Promise((r) => setTimeout(r, 50));
+    expect(alive()).toBe(false);
+  } finally {
+    if (pid > 0) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // already gone
+      }
+    }
+    if (prev === undefined) delete process.env[ENV_SHELL_TIMEOUT_MS];
+    else process.env[ENV_SHELL_TIMEOUT_MS] = prev;
+  }
+});
+
+// review-highload-w7:F-001 / review-performance-w6:F-001: the runner must not buffer all of a
+// chatty command's output before the transcript cap applies.
+test("a command printing far more than the transcript cap neither balloons memory nor blocks, and is counted", async () => {
+  // RSS belongs to the runner under test, rather than allocations retained
+  // by every earlier test in this Bun worker. Keep the original 120 MiB bound.
+  const child = Bun.spawn([
+    process.execPath, "--no-env-file", "--config=/dev/null",
+    fileURLToPath(new URL("./shell-exec-rss.test-support.ts", import.meta.url)),
+  ], { stdout: "pipe", stderr: "pipe", env: { ...process.env } });
+  const deadline = setTimeout(() => child.kill(), 55_000);
+  const [stdout, stderr, exit] = await Promise.all([
+    new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+  ]).finally(() => clearTimeout(deadline));
+  expect({ exit, stderr }).toEqual({ exit: 0, stderr: "" });
+  const report = JSON.parse(stdout) as {
+    peakDelta: number; isError: boolean; spillLength: number; output: string;
+  };
+  expect(report.isError).toBe(false);
+  expect(report.spillLength).toBeLessThanOrEqual(16 * 1024 * 1024);
+  expect(report.spillLength).toBeGreaterThan(0);
+  expect(report.output).toContain("stdout");
+  expect(report.output).toContain("200000000 bytes");
+  expect(report.output).toContain("longer than the shell keeps");
+  expect(report.peakDelta).toBeLessThan(120 * 1024 * 1024);
+}, 60_000);

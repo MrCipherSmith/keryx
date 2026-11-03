@@ -91,8 +91,9 @@ function isHardDeny(risk: ToolRisk, defaults: PolicyProfileDefaults): boolean {
  */
 export function isManagedFlowFile(targetPath: string | undefined): boolean {
   if (targetPath === undefined || targetPath.length === 0) return false;
-  if (path.basename(targetPath) === "flow.json") return true;
-  return /(^|[\\/])flows[\\/].+\.json$/.test(targetPath);
+  // Case-insensitive: on APFS/NTFS `flow.JSON` is the same file as `flow.json`.
+  if (path.basename(targetPath).toLowerCase() === "flow.json") return true;
+  return /(^|[\\/])flows[\\/].+\.json$/i.test(targetPath);
 }
 
 /**

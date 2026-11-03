@@ -1,7 +1,9 @@
 // Shell command allowlist for the interactive agent.
 //
-// - Rules use `*` wildcards; the ask UI offers once / always / reject, and
-//   "always" stores a command-prefix pattern for the session (or config).
+// - A rule is literal text, optionally ending in one `*` (a prefix grant); a
+//   literal `*` / `?` inside it is escaped as `\*` / `\?`. The ask UI offers
+//   once / always / reject, and "always" stores the exact command (escaped) or a
+//   command-prefix pattern for the session (or config).
 // - Precedence is deny > ask > allow.
 //
 // keryx stores shell allow patterns in `~/.local/share/keryx/permissions.json`
@@ -9,20 +11,22 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
+import { ensureKeryxConfigDir, readConfigFile, type ConfigReadResult } from "./config-dir";
+import { updateConfigFile } from "./config-update";
 import { shellConfigPath } from "./shell-config";
 import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSchedulerControl } from "./command-risk";
 import { createHash } from "node:crypto";
-import { hasUnquotedMetacharacter } from "./shell-syntax";
+import { commandWord, hasUnquotedMetacharacter, splitWords, stripAssignments } from "./shell-syntax";
 
 export { hasUnquotedMetacharacter };
 
 /** On-disk shell permission file shape. */
 export interface ShellPermissions {
   /**
-   * Glob patterns that auto-allow `shell_exec` without prompting.
-   * Matching is case-sensitive; `*` / `?` wildcards.
-   * Examples: `keryx wiki index`, `keryx *`, `git status*`.
+   * Patterns that auto-allow `shell_exec` without prompting. Case-sensitive
+   * literal text; a single trailing `*` makes it a prefix grant, and `\*` / `\?`
+   * are a literal `*` / `?`. Any other `*` or `?` makes the pattern invalid.
+   * Examples: `keryx wiki index`, `keryx *`, `git status*`, `rm \*.log`.
    */
   allow: string[];
 }
@@ -48,7 +52,9 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   "java", "dotnet", "rscript", "tclsh",
   // generic wrappers that execute their argument
   "env", "eval", "exec", "xargs", "nice", "nohup", "time", "watch", "script",
-  "sudo", "doas", "su", "pkexec", "runas",
+  "timeout", "stdbuf", "command", "builtin", "ionice", "taskset", "flock", "caffeinate", "chroot",
+  "busybox", "strace", "ltrace", "unbuffer", "setsid", "chrt", "nsenter", "unshare", "fakeroot",
+  "sudo", "doas", "su", "pkexec", "runas", "runuser",
   // remote execution and transfer
   "ssh", "scp", "rsync", "nc", "ncat", "socat", "telnet",
   // download tools (a fetched script is arbitrary code)
@@ -57,6 +63,7 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   "docker", "podman", "nerdctl", "kubectl", "helm", "systemd-run",
   // build/package runners that execute project-defined scripts
   "make", "npm", "npx", "yarn", "pnpm", "cargo", "go", "gradle", "mvn", "ant",
+  "bunx", "pnpx", "uv", "uvx", "pipx", "poetry", "tsx", "ts-node", "pwsh", "powershell", "just", "rake",
   // tools whose flags execute arbitrary commands
   "git", "find", "awk", "gawk", "sed", "vim", "vi", "ex", "emacs", "gdb", "lldb",
   "at", "batch", "crontab", "tmux", "screen", "osascript", "open", "tee", "cd",
@@ -107,7 +114,11 @@ export type PatternValidation = { ok: true } | { ok: false; reason: string };
  *     text that `/bin/sh -c` re-interprets;
  *  4. a destructive command (see `command-risk.ts`) — this is what a stored
  *     exact `rm -rf /` defeats;
- *  5. a bare `<interpreter> *` grant.
+ *  5. a bare `<interpreter> *` grant, or a `*` / `VAR=value *` grant that names
+ *     no command at all;
+ *
+ * and, before all of those, a pattern whose `*` / `?` is not a single trailing
+ * `*` (see {@link matchShellPattern}).
  *
  * Pure.
  */
@@ -119,6 +130,13 @@ export function validateShellPattern(pattern: string): PatternValidation {
   const firstToken = trimmed.split(/\s+/)[0] ?? "";
   if (firstToken.startsWith("#")) {
     return { ok: false, reason: "a comment is not a command: `# *` matches any text followed by any command" };
+  }
+  if (parseShellPattern(trimmed) === undefined) {
+    return {
+      ok: false,
+      reason:
+        "a wildcard may only end the pattern (`git status*`); a `*` or `?` anywhere else is read as a glob, so an exact grant would cover other commands. Approve the command again to store it exactly",
+    };
   }
   if (hasUnquotedMetacharacter(trimmed)) {
     return {
@@ -154,7 +172,7 @@ export function validateShellPattern(pattern: string): PatternValidation {
         "touches a human-confirmation command (SAC's confirm-review family, or `flow confirm`); that guarantee depends on a human answering a real approval prompt, so it is never remembered",
     };
   }
-  const banned = bannedPrefixGrant(trimmed, firstToken);
+  const banned = bannedPrefixGrant(trimmed);
   if (banned !== undefined) {
     return { ok: false, reason: banned.reason };
   }
@@ -186,11 +204,20 @@ function getRunningBinaryName(): string {
  * that narrows the arguments (`bun test*`, `cat package.json*`) is not a bare
  * grant and is allowed.
  */
-function bannedPrefixGrant(pattern: string, firstToken: string): { word: string; reason: string } | undefined {
-  const rest = pattern.slice(firstToken.length).trim();
-  const wildcardOnly = /^\*+$/.test(rest) || (rest.length === 0 && /\*+$/.test(firstToken));
-  if (!wildcardOnly) return undefined;
-  const word = (firstToken.replace(/\*+$/, "").split("/").pop() ?? "").toLowerCase();
+function bannedPrefixGrant(pattern: string): { word: string; reason: string } | undefined {
+  if (parseShellPattern(pattern)?.prefix !== true) return undefined;
+  // The words before the trailing `*`, judged by the command word: leading
+  // `VAR=value` assignments cannot hide it, nor can `\bash` or a `(` opener.
+  const words = stripAssignments(splitWords(pattern.slice(0, -1)));
+  if (words.length === 0) {
+    return {
+      word: "",
+      reason:
+        "a `*` or `VAR=value *` grant names no command, so it would auto-approve every command; such a command can be approved once, never remembered",
+    };
+  }
+  if (words.length > 1) return undefined;
+  const word = commandWord(words);
   if (PREFIX_BANNED.has(word)) {
     return {
       word,
@@ -320,9 +347,23 @@ export function saveShellPermissions(
     const body: ShellPermissions = {
       allow: options.skipValidation === true ? cleaned : cleaned.filter((p) => validateShellPattern(p).ok),
     };
-    writeOwnerOnlyFile(file, `${JSON.stringify(body, null, 2)}\n`);
+    // Under the store lock and atomic (temp + rename): a truncate-then-write
+    // let a concurrent reader parse half a file, fail closed to an empty list
+    // and report a spurious fingerprint change.
+    updateConfigFile(file, () => `${JSON.stringify(body, null, 2)}\n`);
   } catch {
     // best-effort
+  }
+}
+
+/** The stored object, or `undefined` when the file is absent, unreadable or not a JSON object. */
+function parsePermissionsFile(read: ConfigReadResult): Record<string, unknown> | undefined {
+  if (!read.ok) return undefined;
+  try {
+    const raw: unknown = JSON.parse(read.text);
+    return raw !== null && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -339,10 +380,24 @@ export function allowShellPattern(pattern: string, dir?: string): string {
   if (!validateShellPattern(trimmed).ok) {
     return "";
   }
-  const current = loadShellPermissions(dir);
-  if (!current.allow.includes(trimmed)) {
-    current.allow.push(trimmed);
-    saveShellPermissions(current, dir);
+  // Appended to the RAW list as it is on disk at write time, under the store
+  // lock — never to a list loaded earlier, which put back a pattern another
+  // process had just removed. Entries that no longer validate stay in the file
+  // (see `loadShellPermissionsWithAudit`); they are refused on load.
+  try {
+    const file = shellPermissionsPath(dir);
+    ensureKeryxConfigDir(path.dirname(file));
+    const outcome = updateConfigFile(file, (read) => {
+      const raw = parsePermissionsFile(read) ?? {};
+      const allowRaw: unknown[] = Array.isArray(raw.allow) ? raw.allow : [];
+      if (allowRaw.some((entry) => typeof entry === "string" && entry.trim() === trimmed)) return undefined;
+      return `${JSON.stringify({ ...raw, allow: [...allowRaw, trimmed] }, null, 2)}\n`;
+    });
+    // Not stored means not remembered: telling the operator otherwise is the
+    // grant they will rely on next time and not find.
+    if (outcome === "failed") return "";
+  } catch {
+    return "";
   }
   return trimmed;
 }
@@ -364,29 +419,63 @@ export function removeShellPattern(pattern: string, dir?: string): boolean {
   try {
     const file = shellPermissionsPath(dir);
     if (!existsSync(file)) return false;
-    const read = readConfigFile(file);
-    if (!read.ok) return false;
-    const raw: unknown = JSON.parse(read.text);
-    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return false;
-    const allowRaw = (raw as { allow?: unknown }).allow;
-    if (!Array.isArray(allowRaw)) return false;
-    const kept = allowRaw.filter((entry) => !(typeof entry === "string" && entry.trim() === wanted));
-    if (kept.length === allowRaw.length) return false;
     ensureKeryxConfigDir(path.dirname(file));
-    writeOwnerOnlyFile(file, `${JSON.stringify({ ...(raw as object), allow: kept }, null, 2)}\n`);
-    return true;
+    // Filtered from the file as it is at write time, under the store lock, so
+    // a grant another process is writing at the same moment cannot carry the
+    // removed pattern back in.
+    let removed = false;
+    const outcome = updateConfigFile(file, (read) => {
+      removed = false;
+      const raw = parsePermissionsFile(read);
+      if (raw === undefined || !Array.isArray(raw.allow)) return undefined;
+      const kept = raw.allow.filter((entry) => !(typeof entry === "string" && entry.trim() === wanted));
+      if (kept.length === raw.allow.length) return undefined;
+      removed = true;
+      return `${JSON.stringify({ ...raw, allow: kept }, null, 2)}\n`;
+    });
+    return outcome === "written" && removed;
   } catch {
     return false;
   }
 }
 
 /**
- * Glob: `*` = any run of chars **including newlines** (heredoc /
- * multiline shell_exec), `?` = one char (any, including newline), other chars literal.
+ * Parse a stored pattern: the literal text it stands for, and whether it ends in
+ * the one wildcard a pattern may carry (a trailing `*`, a prefix grant). `\*` and
+ * `\?` are a literal `*` / `?`; every other backslash is literal. `undefined`
+ * when any other unescaped `*` or `?` appears: such a pattern is a glob, and an
+ * exact grant stored by an older keryx (`rm *.log`) would then approve
+ * `rm -rf src x.log`. Pure.
+ */
+function parseShellPattern(pattern: string): { literal: string; prefix: boolean } | undefined {
+  let literal = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i]!;
+    const next = pattern[i + 1];
+    if (ch === "\\" && (next === "*" || next === "?")) {
+      literal += next;
+      i++;
+      continue;
+    }
+    if (ch === "*" && i === pattern.length - 1) return { literal, prefix: true };
+    if (ch === "*" || ch === "?") return undefined;
+    literal += ch;
+  }
+  return { literal, prefix: false };
+}
+
+/** Escape `text` so a stored pattern matches exactly it: `rm *.log` → `rm \*.log`. Pure. */
+export function escapeShellPatternLiteral(text: string): string {
+  return text.replace(/[*?]/g, "\\$&");
+}
+
+/**
+ * Match a stored pattern against a command (both trimmed). A pattern ending in
+ * an unescaped `*` matches any command that starts with the text before it
+ * (newlines included, so `cat *` covers `cat > file <<'EOF'\n…\nEOF`); any
+ * other pattern must equal the command. A pattern with a `*` / `?` elsewhere is
+ * invalid and matches nothing. Linear time: no glob engine, no backtracking.
  * Pure.
- *
- * Note: JS `RegExp` `.` does not match `\n` by default — we map `*` → `[\s\S]*`
- * so remembered prefixes like `cat *` match `cat > file <<'EOF'\n…\nEOF`.
  */
 export function matchShellPattern(pattern: string, command: string): boolean {
   const p = pattern.trim();
@@ -394,26 +483,9 @@ export function matchShellPattern(pattern: string, command: string): boolean {
   if (p.length === 0) {
     return false;
   }
-  // Escape regex specials except our wildcards, then map * / ?.
-  let re = "";
-  for (let i = 0; i < p.length; i++) {
-    const ch = p[i]!;
-    if (ch === "*") {
-      // Dot-all: any run of characters including newlines.
-      re += "[\\s\\S]*";
-    } else if (ch === "?") {
-      re += "[\\s\\S]";
-    } else if (/[.+^${}()|[\]\\]/.test(ch)) {
-      re += `\\${ch}`;
-    } else {
-      re += ch;
-    }
-  }
-  try {
-    return new RegExp(`^${re}$`).test(c);
-  } catch {
-    return p === c;
-  }
+  const parsed = parseShellPattern(p);
+  if (parsed === undefined) return false;
+  return parsed.prefix ? c.startsWith(parsed.literal) : c === parsed.literal;
 }
 
 /**
@@ -450,7 +522,8 @@ export function isShellCommandAllowed(command: string, allow: readonly string[])
   if (touchesHumanConfirmation(cmd)) {
     return false;
   }
-  return allow.some((pat) => matchShellPattern(pat, cmd));
+  // A `*` / `VAR=value *` grant names no command: never honoured, however it got into the list.
+  return allow.some((pat) => bannedPrefixGrant(pat.trim())?.word !== "" && matchShellPattern(pat, cmd));
 }
 
 /**
@@ -491,8 +564,10 @@ export interface ShellPatternSuggestion {
  * Suggested patterns for the approval UI ("always" grants), each
  * with a flag saying whether it may be OFFERED at all.
  *
- * - exact: full command (preserves newlines so heredoc matches on re-use)
- * - prefix: first token of the first line + ` *`
+ * - exact: the full command, verbatim apart from trimming (whitespace inside
+ *   quoted arguments and heredoc newlines must survive, or the grant never
+ *   matches again), with `*` / `?` escaped so it matches only itself
+ * - prefix: first token of the first line (escaped) + ` *`
  *
  * A destructive command offers neither grant, whatever its shape: "always" on a
  * destructive command is the exact path that put a literal `rm -rf /` into a
@@ -504,20 +579,18 @@ export interface ShellPatternSuggestion {
  */
 export function suggestShellPatterns(command: string): ShellPatternSuggestion {
   const trimmed = command.trim();
-  // Preserve newlines for heredoc exact-match; collapse spaces on single-line only.
-  const multiline = /[\r\n]/.test(trimmed);
-  const exact = multiline ? trimmed : trimmed.replace(/\s+/g, " ");
+  const exact = escapeShellPatternLiteral(trimmed);
   // First token from the first non-empty line only (ignore heredoc body).
   const firstLine = trimmed.split(/\r?\n/, 1)[0] ?? trimmed;
   const collapsed = firstLine.replace(/\s+/g, " ").trim();
   const first = collapsed.split(" ")[0] ?? collapsed;
-  const prefix = first.length > 0 ? `${first} *` : exact;
+  const prefix = first.length > 0 ? `${escapeShellPatternLiteral(first)} *` : exact;
   const neverRemember =
     trimmed.length > 0 && (isDestructiveCommand(trimmed) || touchesHumanConfirmation(trimmed));
   return {
     exact,
     prefix,
-    offerExact: !neverRemember && validateShellPattern(exact).ok,
+    offerExact: !neverRemember && validateShellPattern(exact).ok && isShellCommandAllowed(trimmed, [exact]),
     // `prefix` is a DERIVED pattern (`echo *`), not the command. Validating it
     // alone only proves the pattern's own text is clean and says nothing about
     // the command on screen, so the menu could offer an "always" grant that a

@@ -53,7 +53,7 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isProviderIdExternal, loadExternalProvidersConfig } from "../lib/external-providers";
 import { ExternalBlockedError, resolveExternalSetting } from "../lib/external-switch";
-import { loadShellConfig, saveShellConfig } from "../lib/shell-config";
+import { loadShellConfig, updateShellConfig } from "../lib/shell-config";
 import type { CapabilityDescriptor } from "./wiring";
 
 /** Capability id for the external agent runtime, in the seam's `module.name` form. */
@@ -277,11 +277,16 @@ export function agentConfig(config: ExternalAgentsConfig, agentId: string): Exte
  * next time, not that the dispatch silently proceeds unrecorded.
  */
 export function recordExternalAgentConsent(agentId: string, keryxVersion: string, dir?: string): ExternalAgentsConfig {
-  const raw = loadShellConfig(dir).externalAgents;
-  const block = isPlainObject(raw) ? raw : {};
-  const consent = isPlainObject(block.consent) ? block.consent : {};
   const record: ExternalAgentConsentRecord = { acceptedAt: new Date().toISOString(), keryxVersion };
-  saveShellConfig({ externalAgents: { ...block, consent: { ...consent, [agentId]: record } } }, dir);
+  // The block is taken from the config AS IT IS ON DISK when the write happens
+  // (`updateShellConfig`), never from a read made earlier in this function: a
+  // `disable` landing between the two was silently reverted by the stale
+  // `{ ...block }` spread.
+  updateShellConfig((current) => {
+    const block = isPlainObject(current.externalAgents) ? current.externalAgents : {};
+    const consent = isPlainObject(block.consent) ? block.consent : {};
+    return { ...current, externalAgents: { ...block, consent: { ...consent, [agentId]: record } } };
+  }, dir);
   return loadExternalAgentsConfig(dir);
 }
 
@@ -646,10 +651,15 @@ async function toggleManifestEntry(cwd: string, target: boolean): Promise<Projec
 /** Set the user-global `externalAgents.enabled`, merging over the RAW block so no other field moves and no default is materialised. */
 function toggleUserFlag(target: boolean, dir?: string): UserToggleOutcome {
   const raw = loadShellConfig(dir).externalAgents;
-  const block = isPlainObject(raw) ? raw : {};
-  if ((block.enabled === true) === target) return "unchanged";
-  saveShellConfig({ externalAgents: { ...block, enabled: target } }, dir);
-  // `saveShellConfig` is best-effort and never throws: read back rather than trust it.
+  if (((isPlainObject(raw) ? raw : {}).enabled === true) === target) return "unchanged";
+  // Merged into the block on disk at write time, not the one read above (which
+  // only decides the "unchanged" label): see {@link recordExternalAgentConsent}.
+  updateShellConfig((current) => {
+    const block = isPlainObject(current.externalAgents) ? current.externalAgents : {};
+    if ((block.enabled === true) === target) return undefined;
+    return { ...current, externalAgents: { ...block, enabled: target } };
+  }, dir);
+  // `updateShellConfig` is best-effort and never throws: read back rather than trust it.
   return loadExternalAgentsConfig(dir).enabled === target ? "changed" : "failed";
 }
 
