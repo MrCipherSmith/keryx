@@ -142,14 +142,25 @@ import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FIN
 import { loadRoutingConfig } from "../harness/routing/config";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
 import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
-import { loadModelProfiles } from "../harness/routing/model-profile";
+import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
-import { buildCatalogRoutingSnapshot } from "../harness/routing/snapshot-adapter";
-import type { RoutingRequest } from "../harness/routing/routing-request";
+import { buildCatalogRoutingSnapshot, catalogRoutingRevision, estimateModelCostUsd } from "../harness/routing/snapshot-adapter";
+import type { RoutingRequest, RoutingRequirements } from "../harness/routing/routing-request";
+import { modelRefKey, type ModelRef } from "../harness/routing/model-class";
+import { inspectProviderRoutingFacts, routingPolicyRevision } from "../harness/routing/provider-facts-v2";
+import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
+import { runProductionRoutingClassification } from "../harness/routing/routing-classifier-service";
+import { DEFAULT_JEV_ROUTING_TARGET } from "../harness/routing/classifier-adapters-v2";
+import { makeProvider as makeRoutingProvider } from "../harness/provider/make-provider";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
 import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
 import { resolveExternalSetting } from "../lib/external-switch";
-import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../lib/external-providers";
+import {
+  externalAllowedConnectedPredicate,
+  isModelIdExternal,
+  isProviderIdExternal,
+  loadExternalProvidersConfig,
+} from "../lib/external-providers";
 import { EXTERNAL_DEFAULT_NOTICE_TEXT, shouldShowExternalDefaultNotice } from "../lib/external-notice";
 import {
   blastRadiusRecomputeDecision,
@@ -317,7 +328,7 @@ import {
   type ConformHunkBudget,
   type ConformTarget,
 } from "../review/conform-report";
-import { runModelTurn } from "../harness/provider/single-turn";
+import { hasCredential, runModelTurn } from "../harness/provider/single-turn";
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -1575,37 +1586,103 @@ async function resolveReviewRoutingV2(
   catalog: readonly DiscoveredProvider[],
   session: SessionModelContext,
   activeRoutingV2: NormalizedRoutingV2Config | undefined = loadActiveRoutingV2(cwd),
+  task = "review",
+  requirements: RoutingRequirements = { capabilities: ["tools"], inputTokensRequired: 4_096, outputTokensReserved: 4_096 },
 ): Promise<RoutingDecisionReceipt | undefined> {
   if (activeRoutingV2 === undefined) return undefined;
+  const observedAt = new Date().toISOString();
+  const env = envWithSavedApiKeys();
   const external = await resolveExternalSetting({ cwd });
   const { config: externalConfig } = loadExternalProvidersConfig();
   const baseline = { providerId: session.providerId, modelId: session.modelId };
   const parentConnected = connectedPredicateFrom(catalog, baseline);
   const policyConnected = externalAllowedConnectedPredicate(parentConnected, external.value === "on", externalConfig);
-  const request: RoutingRequest = {
+  const externalPolicyAllowed = (providerId: string, modelId: string): boolean => external.value === "on"
+    || (!isProviderIdExternal(providerId, externalConfig) && !isModelIdExternal(modelId, externalConfig));
+  const targetsByKey = new Map<string, ModelRef>();
+  for (const provider of catalog) {
+    for (const modelId of provider.models) {
+      const target = { providerId: provider.name, modelId };
+      targetsByKey.set(modelRefKey(target), target);
+    }
+  }
+  targetsByKey.set(modelRefKey(baseline), baseline);
+  const targets = [...targetsByKey.values()];
+  const providerFacts = inspectProviderRoutingFacts(targets, (target) => makeRoutingProvider(
+    target.providerId,
+    target.modelId,
+    { fetch, env },
+  ).describe());
+  const credentialsAvailable = (target: ModelRef): boolean => hasCredential(target.providerId, env);
+  const policyAllowed = (target: ModelRef): boolean => externalPolicyAllowed(target.providerId, target.modelId);
+  const parentAllowed = (_target: ModelRef): boolean => true;
+  const policyRevision = routingPolicyRevision(targets, (target) => ({
+    credentialsAvailable: credentialsAvailable(target),
+    policyAllowed: policyAllowed(target),
+    parentAllowed: parentAllowed(target),
+    cooldown: false,
+  }));
+  const profiles = loadModelProfiles();
+  let request: RoutingRequest = {
     requestId: `review:${randomUUID()}`,
     category: "review",
     origin: "review",
     baseline,
-    requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
+    requirements,
   };
+  if (activeRoutingV2.categories.review.mode === "auto") {
+    const budget = new RoutingBudgetLedger({
+      configUsd: activeRoutingV2.execution.maxEstimatedCostUsd,
+      unknownCost: activeRoutingV2.execution.unknownCost,
+    });
+    const classified = await runProductionRoutingClassification({
+      task,
+      request,
+      config: activeRoutingV2,
+      budget,
+      estimatedCostUsd: (adapter) => {
+        const entry = activeRoutingV2.classifier.chain.find((candidate) => candidate.adapterId === adapter.id);
+        const target = entry?.target ?? (adapter.id === "jev" ? DEFAULT_JEV_ROUTING_TARGET : baseline);
+        return estimateModelCostUsd(profiles[profileKey(target.providerId, target.modelId)], 4_000, 180);
+      },
+      adapterInput: {
+        sessionProvider: baseline.providerId,
+        fallbackModel: baseline,
+        env,
+        jevEnabled: true,
+        externalAllowed: externalPolicyAllowed,
+        classifierAllowed: (providerId, modelId) => policyConnected(providerId, modelId),
+      },
+    });
+    if (classified.status === "cancelled") throw new Error("routing v2 review classification was cancelled");
+    request = classified.request;
+  }
   const snapshot = buildCatalogRoutingSnapshot({
     configDigest: activeRoutingV2.configDigest,
+    observedAt,
+    catalogRevision: catalogRoutingRevision(catalog, profiles),
+    policyRevision,
+    capabilityRevision: providerFacts.capabilityRevision,
     baseline,
     providers: catalog,
-    profiles: loadModelProfiles(),
+    profiles,
     request,
     policy: {
-      credentialsAvailable: (target) => parentConnected(target.providerId, target.modelId),
-      policyAllowed: (target) => policyConnected(target.providerId, target.modelId),
-      parentAllowed: (target) => parentConnected(target.providerId, target.modelId),
+      credentialsAvailable,
+      policyAllowed,
+      parentAllowed,
       availability: (target) => parentConnected(target.providerId, target.modelId) ? "available" : undefined,
-      capabilities: () => [],
+      capabilities: providerFacts.capabilities,
       cooldown: () => false,
       observedLatencyMs: () => null,
     },
   });
-  return resolveRoutingForRuntime({ request, snapshot, config: activeRoutingV2 });
+  return resolveRoutingForRuntime({
+    request,
+    snapshot,
+    config: activeRoutingV2,
+    journal: { cwd, kind: "dispatch" },
+  });
 }
 
 async function applyReviewRoutingCategory(
@@ -1614,8 +1691,17 @@ async function applyReviewRoutingCategory(
   catalog: readonly DiscoveredProvider[],
   session: SessionModelContext,
   activeRoutingV2: NormalizedRoutingV2Config | undefined,
+  routingTask: string,
+  routingRequirements: RoutingRequirements,
 ): Promise<ReviewRoutingResult> {
-  const receipt = await resolveReviewRoutingV2(cwd, catalog, session, activeRoutingV2);
+  const receipt = await resolveReviewRoutingV2(
+    cwd,
+    catalog,
+    session,
+    activeRoutingV2,
+    routingTask,
+    routingRequirements,
+  );
   if (receipt !== undefined) {
     if (receipt.decision.status !== "selected") {
       const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
@@ -1715,6 +1801,12 @@ async function runTier(args: string[]): Promise<void> {
     catalog,
     session,
     activeRoutingV2,
+    JSON.stringify({ category: "review", signals }),
+    {
+      capabilities: ["tools"],
+      inputTokensRequired: Math.max(2_048, (signals.diffLines ?? 128) * 32),
+      outputTokensReserved: 4_096,
+    },
   );
   // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s
   // `pinsModel`-gated provider/model — that path exists for the TIER's own
@@ -2688,14 +2780,25 @@ async function scoreConformClauses(
 }
 
 /** AC7: the `review`-category model (the session model when unset), same resolution `applyReviewRoutingCategory` uses, without the live provider-catalog probe a text explanation does not need. */
-async function resolveConformExplainModel(cwd: string): Promise<{ provider?: string; model?: string }> {
+async function resolveConformExplainModel(cwd: string, routingTask: string): Promise<{ provider?: string; model?: string }> {
   if (loadActiveRoutingV2(cwd) !== undefined) {
     const session = resolveCallerSession();
     if (session.providerId === "" || session.modelId === "") {
       throw new Error("routing v2 requires the caller session provider/model for review explanations");
     }
     const catalog = await tierCatalog([], session);
-    const receipt = await resolveReviewRoutingV2(cwd, catalog, session);
+    const receipt = await resolveReviewRoutingV2(
+      cwd,
+      catalog,
+      session,
+      undefined,
+      routingTask,
+      {
+        capabilities: [],
+        inputTokensRequired: Math.max(1, Math.ceil(routingTask.length / 4)),
+        outputTokensReserved: 512,
+      },
+    );
     if (receipt === undefined) throw new Error("routing v2 activation changed while resolving review explanation");
     if (receipt.decision.status !== "selected") {
       const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
@@ -2746,7 +2849,12 @@ export async function explainConformVerdicts(
       return {};
     }
   }
-  const { provider, model } = await resolveConformExplainModel(cwd);
+  const routingTask = toExplain.map((verdict) => [
+    verdict.clause_id,
+    verdict.state_kind,
+    ...verdict.factLines,
+  ].join("\n")).join("\n");
+  const { provider, model } = await resolveConformExplainModel(cwd, routingTask);
   const explanations: Record<string, string> = {};
   for (const verdict of toExplain) {
     const result = await runTurn({

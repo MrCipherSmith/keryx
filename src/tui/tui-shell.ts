@@ -54,6 +54,7 @@ import {
   describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
+  resolveAgentMaxOutputTokens,
   resolveMaxAutoWake,
   runAgentTurn,
 } from "../commands/agent";
@@ -200,6 +201,8 @@ import {
 } from "./routing-classifier-source";
 import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
 import type { RoutingCategory } from "../harness/routing/table";
+import type { RoutingCapability } from "../harness/routing/routing-request";
+import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
 // Flow 346: the EXTERNAL switch's `/external on|off` command + status line —
 // no modal (see the flow's own AC8 scope note); the sidebar row and bare
 // status text are rendered from `external-command.ts`.
@@ -10945,6 +10948,17 @@ export async function launchTuiAgentShell(opts: {
         let routingOutcome: RoutingClassifierTurnResult | undefined;
         if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {
           try {
+            let baselineCapabilities: RoutingCapability[] = [];
+            try {
+              const capabilities = sessionDeps.provider.describe().capabilities;
+              baselineCapabilities = [
+                ...(capabilities.toolCalls ? ["tools" as const] : []),
+                ...(capabilities.vision ? ["vision" as const] : []),
+                ...(capabilities.structuredOutput ? ["structured-output" as const] : []),
+              ];
+            } catch {
+              // Missing provider metadata proves no capability; the resolver remains conservative.
+            }
             routingOutcome = await runRoutingClassifierForTurn(line, {
               enabled: routingEnabled,
               signal: turnSignal,
@@ -10959,6 +10973,17 @@ export async function launchTuiAgentShell(opts: {
               providers: () => loadRoutingProviders(opts.redetect),
               sessionProvider: currentSel.provider,
               sessionModel: currentSel.model,
+              requestId: sessionDeps.idSeq(),
+              requirements: {
+                capabilities: [],
+                inputTokensRequired: estimateRequestTokens(
+                  [...history, { role: "user", content: line }],
+                  sessionDeps.systemInstruction,
+                  sessionDeps.tools.map((tool) => tool.definition),
+                ),
+                outputTokensReserved: sessionDeps.maxOutputTokens ?? resolveAgentMaxOutputTokens(),
+              },
+              baselineCapabilities,
             });
           } catch {
             // fail-closed: classification must never block or fail the turn.
@@ -10987,12 +11012,42 @@ export async function launchTuiAgentShell(opts: {
                 if (tag !== undefined) io.onSystem?.(`${tag}\n`);
               }
             } catch {
-              // fail-closed: a routed-deps build failure runs on the session's own model instead.
               deps = sessionDeps;
+              if (!turnSignal.aborted && routingOutcome?.routingV2 !== undefined) {
+                io.onSystem?.("[route blocked: selected model could not be prepared; check availability and external policy]\n");
+                foregroundOperation.settle(operation);
+                if (!foregroundOperation.isDisposed) stopBusy();
+                return;
+              }
+              // Legacy routing keeps its established session-model fallback.
               if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
             }
           } else if (!turnSignal.aborted) {
-            io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
+            if (routingOutcome?.routingV2 === undefined) {
+              io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
+            }
+          }
+          const routingV2 = routingOutcome?.routingV2;
+          if (!turnSignal.aborted && routingV2 !== undefined) {
+            if (deps.providerId !== routingV2.target.providerId || deps.modelId !== routingV2.target.modelId) {
+              io.onSystem?.("[route blocked: prepared provider identity does not match the routing decision]\n");
+              foregroundOperation.settle(operation);
+              if (!foregroundOperation.isDisposed) stopBusy();
+              return;
+            }
+            deps = {
+              ...deps,
+              provider: createMeteredRoutingProvider({
+                provider: deps.provider,
+                target: routingV2.target,
+                receipt: routingV2.receipt,
+                budget: routingV2.budget,
+                selectionTimeoutMs: routingV2.config.execution.selectionTimeoutMs,
+                beforeIo: routingV2.beforeIo,
+                estimatedCostUsd: routingV2.estimatedCostUsd,
+                journal: routingV2.journal,
+              }),
+            };
           }
         }
         // Flow 341 (AC3, wired to PR #737's classifier): captured

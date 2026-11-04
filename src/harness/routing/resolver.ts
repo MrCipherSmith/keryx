@@ -2,7 +2,7 @@ import { routingV2Digest, type ModelClassConfigV2, type NormalizedRoutingV2Confi
 import type { RoutingAssignmentSource, RoutingDecision, RoutingExclusion, RoutingFallbackReason, RoutingReason } from "./decision";
 import { compareModelClasses, isModelClass, modelRefKey, sameModelRef, type ModelClass, type ModelRef } from "./model-class";
 import { ROUTING_CAPABILITIES, type RoutingRequest } from "./routing-request";
-import type { RoutingModelFacts, RoutingSnapshot } from "./snapshot";
+import { isVerifiedRoutingSnapshot, type RoutingModelFacts, type RoutingSnapshot } from "./snapshot";
 import { isRoutingCategory } from "./table";
 
 interface AssignmentResolution {
@@ -60,6 +60,7 @@ function validRequest(request: RoutingRequest): boolean {
     && (request.requirements.minimumClass === undefined || isModelClass(request.requirements.minimumClass))
     && (request.requirements.maxEstimatedCostUsd === undefined || (Number.isFinite(request.requirements.maxEstimatedCostUsd) && request.requirements.maxEstimatedCostUsd >= 0))
     && (request.userOverride === undefined || validAssignment(request.userOverride))
+    && !(request.recommendation !== undefined && request.classification !== undefined)
     && (request.recommendation === undefined || (isRecord(request.recommendation)
       && hasOnlyKeys(request.recommendation, ["modelClass", "source", "receiptId"])
       && isModelClass(request.recommendation.modelClass)
@@ -89,7 +90,17 @@ function validFacts(facts: RoutingModelFacts): boolean {
 function assignmentFor(request: RoutingRequest, config: NormalizedRoutingV2Config): AssignmentResolution {
   const configured = request.userOverride ?? config.categories[request.category];
   const source = request.userOverride !== undefined ? "user-override" : config.categorySources[request.category];
-  if (configured.mode !== "auto") return { assignment: configured, source, recommendationSource: "none" };
+  if (configured.mode !== "auto") {
+    const classifierReceiptId = request.recommendation?.source === "classifier"
+      ? request.recommendation.receiptId
+      : request.classification?.receiptId;
+    return {
+      assignment: configured,
+      source,
+      recommendationSource: "none",
+      ...(classifierReceiptId !== undefined ? { classifierReceiptId } : {}),
+    };
+  }
   if (request.recommendation !== undefined) {
     return {
       assignment: { mode: "class", modelClass: request.recommendation.modelClass },
@@ -118,13 +129,16 @@ function commonDecision(
   requestedClass?: ModelClass,
   fallbackReason?: RoutingFallbackReason,
 ) {
+  const snapshotDigest = typeof snapshot?.snapshotDigest === "string" && snapshot.snapshotDigest.length > 0
+    ? snapshot.snapshotDigest
+    : "invalid-snapshot";
   return {
     schemaVersion: 2 as const,
-    decisionId: routingV2Digest({ request, snapshotDigest: snapshot.snapshotDigest, configDigest: config.configDigest, resolved, exclusions }),
+    decisionId: routingV2Digest({ request, snapshotDigest, configDigest: config.configDigest, resolved, exclusions }),
     requestId: request.requestId,
     ...(request.parentDecisionId !== undefined ? { parentDecisionId: request.parentDecisionId } : {}),
     configDigest: config.configDigest,
-    snapshotDigest: snapshot.snapshotDigest,
+    snapshotDigest,
     assignmentSource: resolved.source,
     recommendationSource: resolved.recommendationSource,
     exclusions,
@@ -146,8 +160,15 @@ function effectiveCostLimit(request: RoutingRequest, config: NormalizedRoutingV2
   return limits.length === 0 ? undefined : Math.min(...limits);
 }
 
-function candidateRejection(candidate: ModelRef, facts: RoutingModelFacts | undefined, request: RoutingRequest, config: NormalizedRoutingV2Config): RoutingReason | undefined {
+function candidateRejection(
+  candidate: ModelRef,
+  facts: RoutingModelFacts | undefined,
+  authFailedProviderIds: ReadonlySet<string>,
+  request: RoutingRequest,
+  config: NormalizedRoutingV2Config,
+): RoutingReason | undefined {
   if (!providerAllowed(candidate, request, config)) return "provider-scope-conflict";
+  if (authFailedProviderIds.has(candidate.providerId)) return "auth-failed";
   if (facts === undefined || !validFacts(facts) || !facts.connected) return "candidate-unverified";
   if (!facts.policyAllowed || !facts.parentAllowed) return "policy-denied";
   if (!facts.credentialsAvailable) return "credentials-missing";
@@ -216,14 +237,15 @@ export function resolveRoutingDecision(request: RoutingRequest, snapshot: Routin
   const exclusions: RoutingExclusion[] = [];
   const { configDigest, ...configBody } = config;
   if (routingV2Digest(configBody) !== configDigest
+    || !isVerifiedRoutingSnapshot(snapshot)
     || snapshot.configDigest !== config.configDigest
-    || typeof snapshot.snapshotDigest !== "string" || snapshot.snapshotDigest.length === 0
     || !validModelRef(snapshot.baseline) || !sameModelRef(snapshot.baseline, request.baseline)
     || !Array.isArray(snapshot.models)) {
     return { ...commonDecision(request, snapshot, config, resolved, exclusions), status: "blocked", reason: "config-invalid" };
   }
 
   const facts = new Map<string, RoutingModelFacts>();
+  const authFailedProviderIds = new Set(snapshot.authFailedProviderIds);
   for (const model of snapshot.models) {
     const key = modelRefKey(model.target);
     if (facts.has(key)) return { ...commonDecision(request, snapshot, config, resolved, exclusions), status: "blocked", reason: "config-invalid" };
@@ -239,7 +261,7 @@ export function resolveRoutingDecision(request: RoutingRequest, snapshot: Routin
   const directTarget = assignment.mode === "baseline" ? request.baseline : assignment.mode === "model" ? assignment.target : undefined;
   let pinFallbackUsed = false;
   if (directTarget !== undefined) {
-    const reason = candidateRejection(directTarget, facts.get(modelRefKey(directTarget)), request, config)
+    const reason = candidateRejection(directTarget, facts.get(modelRefKey(directTarget)), authFailedProviderIds, request, config)
       ?? minimumClassRejection(directTarget, request, config);
     if (reason === undefined) {
       const fallbackReason = resolved.recommendationSource === "classifier-fallback" ? "classifier-fallback" : undefined;
@@ -272,7 +294,7 @@ export function resolveRoutingDecision(request: RoutingRequest, snapshot: Routin
     for (const candidate of [...candidates].sort((left, right) => modelRefKey(left.config.target).localeCompare(modelRefKey(right.config.target)))) {
       const reason: RoutingReason | undefined = !candidate.config.enabled
         ? "model-unavailable"
-        : candidateRejection(candidate.config.target, facts.get(modelRefKey(candidate.config.target)), request, config);
+        : candidateRejection(candidate.config.target, facts.get(modelRefKey(candidate.config.target)), authFailedProviderIds, request, config);
       if (reason === undefined) accepted.push(candidate);
       else exclusions.push({ target: candidate.config.target, modelClass, reason });
     }

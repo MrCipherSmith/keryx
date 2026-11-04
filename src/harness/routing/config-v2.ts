@@ -63,6 +63,10 @@ export interface RoutingV2ConfigLayers {
   readonly user?: RoutingV2ConfigLayer;
   readonly project?: RoutingV2ConfigLayer;
 }
+export interface RoutingV2NormalizationOptions {
+  /** Must be the same adapter registry execution will resolve against. */
+  readonly classifierAdapters?: { has(adapterId: string): boolean };
+}
 
 export interface NormalizedRoutingV2Config {
   readonly schemaVersion: 2;
@@ -154,7 +158,7 @@ function secretPaths(value: unknown, at = "config"): string[] {
   });
 }
 
-export function validateRoutingV2ConfigLayer(raw: unknown): RoutingV2ValidationResult {
+export function validateRoutingV2ConfigLayer(raw: unknown, options: RoutingV2NormalizationOptions = {}): RoutingV2ValidationResult {
   const errors: string[] = [];
   if (!isRecord(raw)) return { ok: false, errors: ["routing v2 config must be an object"] };
   unknownKeys(raw, ["schemaVersion", "classes", "categories", "providers", "classifier", "execution"], "config", errors);
@@ -236,6 +240,7 @@ export function validateRoutingV2ConfigLayer(raw: unknown): RoutingV2ValidationR
       if (!Array.isArray(raw.classifier.chain)) errors.push("classifier.chain must be an array");
       else {
         if (raw.classifier.chain.length > 3) errors.push("classifier.chain must contain at most 3 items");
+        if (raw.classifier.chain.length > 0 && options.classifierAdapters === undefined) errors.push("classifier adapter registry is required for a non-empty classifier chain");
         const adapterIds = new Set<string>();
         for (const [index, entry] of raw.classifier.chain.entries()) {
           const path = `classifier.chain[${index}]`;
@@ -248,6 +253,8 @@ export function validateRoutingV2ConfigLayer(raw: unknown): RoutingV2ValidationR
           else {
             if (adapterIds.has(entry.adapterId)) errors.push(`${path}.adapterId is duplicated`);
             adapterIds.add(entry.adapterId);
+            if (options.classifierAdapters?.has(entry.adapterId) !== true) errors.push(`${path}.adapterId is not registered`);
+            if (entry.adapterId === "model" && entry.target === undefined) errors.push(`${path}.target is required for model adapter`);
           }
           if (entry.target !== undefined) validateModelRef(entry.target, `${path}.target`, errors);
         }
@@ -266,6 +273,16 @@ export function validateRoutingV2ConfigLayer(raw: unknown): RoutingV2ValidationR
       if (!Number.isSafeInteger(raw.execution.selectionTimeoutMs) || (raw.execution.selectionTimeoutMs as number) < 1 || (raw.execution.selectionTimeoutMs as number) > 30_000) errors.push("execution.selectionTimeoutMs must be an integer between 1 and 30000");
       if (raw.execution.maxEstimatedCostUsd !== null && (typeof raw.execution.maxEstimatedCostUsd !== "number" || !Number.isFinite(raw.execution.maxEstimatedCostUsd) || raw.execution.maxEstimatedCostUsd < 0)) errors.push("execution.maxEstimatedCostUsd must be null or a non-negative finite number");
       if (!(raw.execution.unknownCost === "allow" || raw.execution.unknownCost === "deny")) errors.push("execution.unknownCost is invalid");
+    }
+  }
+  const rawClasses = raw.classes;
+  if (errors.length === 0 && isRecord(rawClasses)) {
+    const semanticClasses = Object.fromEntries(MODEL_CLASSES.map((modelClass) => [
+      modelClass,
+      rawClasses[modelClass] ?? EMPTY_CLASS,
+    ])) as Record<ModelClass, ModelClassConfigV2>;
+    try { assertAcyclicFallbacks(semanticClasses); } catch (error) {
+      errors.push(error instanceof Error ? error.message : "routing class fallback cycle");
     }
   }
   return { ok: errors.length === 0, errors };
@@ -296,6 +313,23 @@ function assertClassConfig(modelClass: ModelClass, config: ModelClassConfigV2): 
     if (fallbacks.has(fallback)) throw new Error(`${modelClass} contains duplicate fallback ${fallback}`);
     fallbacks.add(fallback);
   }
+}
+function assertAcyclicFallbacks(classes: Readonly<Record<ModelClass, ModelClassConfigV2>>): void {
+  const visiting = new Set<ModelClass>();
+  const visited = new Set<ModelClass>();
+  const visit = (modelClass: ModelClass, path: readonly ModelClass[]): void => {
+    if (visiting.has(modelClass)) {
+      const cycleStart = path.indexOf(modelClass);
+      const cycle = [...path.slice(cycleStart), modelClass];
+      throw new Error(`routing class fallback cycle: ${cycle.join(" -> ")}`);
+    }
+    if (visited.has(modelClass)) return;
+    visiting.add(modelClass);
+    for (const fallback of classes[modelClass].fallbackClasses) visit(fallback, [...path, modelClass]);
+    visiting.delete(modelClass);
+    visited.add(modelClass);
+  };
+  for (const modelClass of MODEL_CLASSES) visit(modelClass, []);
 }
 
 function copyModelRef(ref: ModelRef): ModelRef {
@@ -352,10 +386,10 @@ function copyExecution(config: RoutingExecutionConfigV2): RoutingExecutionConfig
   });
 }
 
-export function normalizeRoutingV2Config(layers: RoutingV2ConfigLayers): NormalizedRoutingV2Config {
+export function normalizeRoutingV2Config(layers: RoutingV2ConfigLayers, options: RoutingV2NormalizationOptions = {}): NormalizedRoutingV2Config {
   for (const [name, layer] of Object.entries(layers)) {
     if (layer === undefined) continue;
-    const validation = validateRoutingV2ConfigLayer(layer);
+    const validation = validateRoutingV2ConfigLayer(layer, options);
     if (!validation.ok) throw new Error(`invalid ${name} routing v2 config: ${validation.errors.join("; ")}`);
   }
 
@@ -364,6 +398,7 @@ export function normalizeRoutingV2Config(layers: RoutingV2ConfigLayers): Normali
     assertClassConfig(modelClass, config);
     return [modelClass, copyClassConfig(config)];
   })) as Record<ModelClass, ModelClassConfigV2>;
+  assertAcyclicFallbacks(classes);
 
   const categories = {} as Record<RoutingCategory, RoutingAssignmentV2>;
   const categorySources = {} as Record<RoutingCategory, "project" | "user" | "builtin">;
@@ -382,6 +417,13 @@ export function normalizeRoutingV2Config(layers: RoutingV2ConfigLayers): Normali
 
   const providers = copyProviders(layers.project?.providers ?? layers.user?.providers ?? DEFAULT_PROVIDERS);
   const classifier = copyClassifier(layers.project?.classifier ?? layers.user?.classifier ?? DEFAULT_CLASSIFIER);
+  if (classifier.chain.length > 0 && options.classifierAdapters === undefined) {
+    throw new Error("classifier adapter registry is required for a non-empty classifier chain");
+  }
+  for (const entry of classifier.chain) {
+    if (options.classifierAdapters?.has(entry.adapterId) !== true) throw new Error(`unregistered classifier adapter ${JSON.stringify(entry.adapterId)}`);
+    if (entry.adapterId === "model" && entry.target === undefined) throw new Error("classifier adapter \"model\" requires an explicit target");
+  }
   const execution = copyExecution(layers.project?.execution ?? layers.user?.execution ?? DEFAULT_EXECUTION);
   const normalized = Object.freeze({
     schemaVersion: 2 as const,

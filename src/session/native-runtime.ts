@@ -177,7 +177,8 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
     onNativeTurn: (turn) => { children.set(turn, jobOwners.getStore()); void turn.then(() => children.delete(turn), () => children.delete(turn)); },
     configuredMaxToolCalls: options.deps?.maxToolCalls ?? 100,
     getParentModel: () => selected,
-    makeProvider: providerFor, getDetectedProviders: () => [{ name: selected.providerId, models: [selected.modelId] }], getSlateSession: () => slateSession,
+    makeProvider: providerFor, describeProvider: (providerId, modelId) => providerFor(providerId, modelId).describe(),
+    getDetectedProviders: () => [{ name: selected.providerId, models: [selected.modelId] }], getSlateSession: () => slateSession,
     ...(options.deps?.hooks === undefined ? {} : { hooks: options.deps.hooks.runtime }),
   });
   const wrapTool = (tool: InteractiveTool): InteractiveTool => ({ ...tool,
@@ -312,6 +313,11 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
       if (candidate === undefined || !candidate.available) throw new NativeRuntimeError("candidate-unavailable");
       const binding = bindings.get(bindingKey(candidate.providerId, candidate.modelId)); if (binding === undefined) throw new NativeRuntimeError("candidate-unavailable");
       selected = { providerId: binding.actualProviderId, modelId: binding.actualModelId };
+      // Remote admission authorizes exactly this candidate. The admission
+      // grant is closed before this asynchronous run starts, while the live
+      // current-role check does not authorize an alternate model. Keep native
+      // execution single-attempt until the protocol supplies a fresh,
+      // candidate- and decision-bound execution-attempt receipt.
       const selectedProvider = providerFor(candidate.providerId, candidate.modelId);
       let providerOutcome: "incomplete" | "complete" | "error" = "incomplete"; let providerFailed = false;
       const observedProvider: ProviderPort = {

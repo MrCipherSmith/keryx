@@ -28,8 +28,9 @@ import {
   type RoutingConfigResult,
 } from "../harness/routing/config";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
-import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { routingV2Digest, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
 import type { RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
+import type { RoutingJournalLocation } from "../harness/routing/routing-journal";
 import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
 import { buildCatalogRoutingSnapshot, type RoutingSnapshotPolicy } from "../harness/routing/snapshot-adapter";
 import {
@@ -116,7 +117,10 @@ export function previewCatalogRoutingCategoriesV2(options: {
   readonly profiles: Readonly<Record<string, ModelProfile>>;
   readonly baseline: { readonly providerId: string; readonly modelId: string };
   readonly policy: RoutingSnapshotPolicy;
-  readonly now?: () => Date;
+  readonly observedAt: string;
+  readonly policyRevision: string;
+  readonly capabilityRevision: string;
+  readonly journal?: RoutingJournalLocation;
 }): RoutingCategoryV2Row[] {
   return ROUTING_CATEGORIES.map((category) => {
     const request = {
@@ -128,14 +132,21 @@ export function previewCatalogRoutingCategoriesV2(options: {
     };
     const snapshot = buildCatalogRoutingSnapshot({
       configDigest: options.config.configDigest,
+      observedAt: options.observedAt,
+      policyRevision: options.policyRevision,
+      capabilityRevision: options.capabilityRevision,
       baseline: options.baseline,
       providers: options.providers,
       profiles: options.profiles,
       request,
       policy: options.policy,
-      ...(options.now === undefined ? {} : { now: options.now }),
     });
-    return { category, receipt: resolveRoutingForRuntime({ request, snapshot, config: options.config }) };
+    return { category, receipt: resolveRoutingForRuntime({
+      request,
+      snapshot,
+      config: options.config,
+      ...(options.journal === undefined ? {} : { journal: { ...options.journal, kind: "preview" as const } }),
+    }) };
   });
 }
 
@@ -382,13 +393,19 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
       projectIsUntrusted = false;
       const connected = connectedPredicateFrom(providers, options.session);
       const external = await resolveExternalSetting({ cwd: location.cwd, ...(location.userConfigDir === undefined ? {} : { dir: location.userConfigDir }) });
-      const allowed = externalAllowedConnectedPredicate(connected, external.value === "on", loadExternalProvidersConfig(location.userConfigDir).config);
+      const externalProviders = loadExternalProvidersConfig(location.userConfigDir).config;
+      const allowed = externalAllowedConnectedPredicate(connected, external.value === "on", externalProviders);
       const env = envWithSavedApiKeys(process.env, location.userConfigDir);
+      const observedAt = new Date().toISOString();
       rowsV2 = previewCatalogRoutingCategoriesV2({
         config: activeV2,
         providers,
         profiles,
         baseline: options.session,
+        observedAt,
+        policyRevision: routingV2Digest({ external: external.value, externalProviders }),
+        capabilityRevision: routingV2Digest({ baseline: options.session, capabilities: "unproven", catalogCapabilities: "unproven" }),
+        journal: { cwd: location.cwd, ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }) },
         policy: {
           credentialsAvailable: (target) => target.providerId === options.session!.providerId || hasCredential(target.providerId, env),
           policyAllowed: (target) => allowed(target.providerId, target.modelId),

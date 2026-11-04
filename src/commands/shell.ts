@@ -4182,6 +4182,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           }),
           makeProvider: (providerId, modelId, childBaseUrl) =>
             tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl),
+          describeProvider: (providerId, modelId, childBaseUrl) =>
+            tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl).describe(),
           // The allowlist AND the candidate set for tier resolution. `models` is
           // carried through rather than mapped away: `buildTierMap`
           // (src/gdskills/model-tier.ts) ranks exactly these ids to place a
@@ -4766,6 +4768,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         makeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
+        describeProvider: (providerId, modelId, childBaseUrl) =>
+          baseFactory(providerId, modelId, childBaseUrl ?? baseUrl).describe(),
         getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models()),
         getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read

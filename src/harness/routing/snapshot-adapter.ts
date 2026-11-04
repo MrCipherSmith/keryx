@@ -3,7 +3,7 @@ import type { ModelProfile } from "./model-profile";
 import { profileKey } from "./model-profile";
 import { modelRefKey, type ModelRef } from "./model-class";
 import type { RoutingRequest } from "./routing-request";
-import type { RoutingModelFacts, RoutingSnapshot } from "./snapshot";
+import { createRoutingSnapshot, type RoutingModelFacts, type RoutingSnapshot } from "./snapshot";
 import type { FlatPickerProvider } from "./table";
 
 export interface RoutingSnapshotPolicy {
@@ -19,36 +19,51 @@ export interface RoutingSnapshotPolicy {
 
 export interface BuildCatalogRoutingSnapshotOptions {
   readonly configDigest: string;
+  /** One captured evaluation time for TTL checks and the frozen snapshot digest. */
+  readonly observedAt: string;
+  readonly catalogRevision?: string;
+  readonly policyRevision: string;
+  readonly capabilityRevision: string;
   readonly baseline: ModelRef;
   readonly providers: readonly FlatPickerProvider[];
   readonly profiles: Readonly<Record<string, ModelProfile>>;
   readonly request: RoutingRequest;
   readonly policy: RoutingSnapshotPolicy;
-  readonly now?: () => Date;
   readonly availabilityTtlMs?: number;
 }
 
 export const ROUTING_AVAILABILITY_TTL_MS = 5 * 60 * 1_000;
+export function catalogRoutingRevision(
+  providers: readonly FlatPickerProvider[],
+  profiles: Readonly<Record<string, ModelProfile>>,
+): string {
+  return routingV2Digest({
+    providers: providers.map((provider) => ({ ...provider, models: provider.models === undefined ? undefined : [...provider.models].sort() }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    profiles,
+  });
+}
 
 function numericValue(field: ModelProfile["contextLength"]): number | null {
   return field.value === "unknown" ? null : field.value;
 }
 
-function estimatedCost(profile: ModelProfile | undefined, request: RoutingRequest): number | null {
+export function estimateModelCostUsd(
+  profile: ModelProfile | undefined,
+  inputTokens: number,
+  outputTokens: number,
+): number | null {
   if (profile === undefined) return null;
   const input = numericValue(profile.priceInputPerMillion);
   const output = numericValue(profile.priceOutputPerMillion);
   if (input === null || output === null) return null;
-  return (request.requirements.inputTokensRequired * input + request.requirements.outputTokensReserved * output) / 1_000_000;
+  return (inputTokens * input + outputTokens * output) / 1_000_000;
 }
 
-function snapshotDigest(configDigest: string, baseline: ModelRef, models: readonly RoutingModelFacts[]): string {
-  return routingV2Digest({
-    configDigest,
-    baseline,
-    models: [...models].sort((left, right) => modelRefKey(left.target).localeCompare(modelRefKey(right.target))),
-  });
+function estimatedCost(profile: ModelProfile | undefined, request: RoutingRequest): number | null {
+  return estimateModelCostUsd(profile, request.requirements.inputTokensRequired, request.requirements.outputTokensReserved);
 }
+
 
 function observedAvailability(
   provider: FlatPickerProvider,
@@ -71,8 +86,8 @@ function observedAvailability(
 export function buildCatalogRoutingSnapshot(options: BuildCatalogRoutingSnapshotOptions): RoutingSnapshot {
   const ttlMs = options.availabilityTtlMs ?? ROUTING_AVAILABILITY_TTL_MS;
   if (!Number.isFinite(ttlMs) || ttlMs <= 0) throw new Error("availabilityTtlMs must be a positive number");
-  const nowMs = (options.now ?? (() => new Date()))().getTime();
-  if (!Number.isFinite(nowMs)) throw new Error("snapshot clock returned an invalid date");
+  const nowMs = Date.parse(options.observedAt);
+  if (!Number.isFinite(nowMs)) throw new Error("snapshot observedAt is invalid");
   const models: RoutingModelFacts[] = [];
   const seen = new Set<string>();
   for (const provider of options.providers) {
@@ -118,10 +133,14 @@ export function buildCatalogRoutingSnapshot(options: BuildCatalogRoutingSnapshot
       });
     }
   }
-  return {
+  return createRoutingSnapshot({
     configDigest: options.configDigest,
-    snapshotDigest: snapshotDigest(options.configDigest, options.baseline, models),
+    observedAt: options.observedAt,
+    catalogRevision: options.catalogRevision ?? catalogRoutingRevision(options.providers, options.profiles),
+    policyRevision: options.policyRevision,
+    capabilityRevision: options.capabilityRevision,
+    authFailedProviderIds: [...new Set(options.providers.filter((provider) => provider.authFailed === true).map((provider) => provider.name))],
     baseline: options.baseline,
     models,
-  };
+  });
 }

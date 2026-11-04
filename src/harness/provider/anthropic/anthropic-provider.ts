@@ -456,6 +456,9 @@ function classifyHttpError(status: number, _headers: Headers): NormalizedError {
   if (status >= 500) {
     return { kind: "unavailable", retryable: retryableFor("unavailable", true), message: "" };
   }
+  if (status === 404) {
+    return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "", detail: { modelNotFound: true } };
+  }
   if (status >= 400) {
     return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "" };
   }
@@ -976,6 +979,7 @@ export class AnthropicProvider implements ProviderPort {
               kind,
               retryable: retryableFor(kind, false),
               message: redact(message !== undefined && message.length > 0 ? message : "Anthropic API returned a stream error with no message"),
+              ...(asString(errorObj.type) === "not_found_error" ? { detail: { modelNotFound: true } } : {}),
             };
             break;
           }

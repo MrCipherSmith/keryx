@@ -1,7 +1,7 @@
 # Единый роутинг моделей Keryx
-Version: 0.1.0
+Version: 0.1.1
 
-Status: spec ready — целевой контракт описан; runtime v2 не реализован.
+Status: draft implementation — код v2 проверяется в PR #1128. Приёмка и пилот открыты.
 Date: 2026-11-04
 
 ## Назначение

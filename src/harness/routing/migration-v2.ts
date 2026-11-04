@@ -14,8 +14,9 @@ import {
   type RoutingAssignmentV2,
   type RoutingV2ConfigLayer,
   type RoutingV2ConfigLayers,
+  type RoutingV2NormalizationOptions,
 } from "./config-v2";
-import { projectRoutingConfigPath } from "./config";
+import { projectRoutingConfigPath, withProjectRoutingWriteLock } from "./config";
 import { ROUTING_CATEGORIES, type RoutingCategory, type RoutingTable } from "./table";
 
 const PROJECT_V2_KEY = "modelRouting";
@@ -88,6 +89,10 @@ export interface RoutingV2ActiveMarker {
   readonly activatedAt: string;
   readonly projectRoot: string;
   readonly configRoot: string;
+  readonly revision: string;
+  readonly previousRevision?: string;
+  readonly lastEditId?: string;
+  readonly updatedAt?: string;
   readonly targets: {
     readonly project: RoutingV2ActivatedTarget;
     readonly user: RoutingV2ActivatedTarget;
@@ -129,6 +134,11 @@ interface RootSnapshot {
   readonly value: JsonObject;
 }
 
+export interface ActiveRoutingV2Settings {
+  readonly layers: RoutingV2ConfigLayers;
+  readonly revision: string;
+}
+
 interface BackupManifest {
   readonly schemaVersion: 1;
   readonly migrationId: string;
@@ -165,6 +175,7 @@ export interface CreateRoutingV2MigrationPlanInput {
   readonly project?: RoutingV2ConfigLayer;
   readonly user?: RoutingV2ConfigLayer;
   readonly unresolved?: readonly RoutingV2MigrationUnresolved[];
+  readonly normalization?: RoutingV2NormalizationOptions;
 }
 
 export interface ApplyRoutingV2MigrationOptions {
@@ -172,6 +183,7 @@ export interface ApplyRoutingV2MigrationOptions {
   /** Independently trusted invocation location; plan paths are never trusted alone. */
   readonly cwd: string;
   readonly configDir?: string;
+  readonly normalization?: RoutingV2NormalizationOptions;
   /** Test-only crash seam. */
   readonly fault?: (point: RoutingV2MigrationFaultPoint) => Promise<void> | void;
 }
@@ -181,6 +193,7 @@ export interface RollbackRoutingV2MigrationOptions {
   /** Independently trusted invocation location; plan paths are never trusted alone. */
   readonly cwd: string;
   readonly configDir?: string;
+  readonly normalization?: RoutingV2NormalizationOptions;
   /** Test-only crash seam. */
   readonly fault?: (point: RoutingV2RollbackFaultPoint) => Promise<void> | void;
 }
@@ -203,6 +216,58 @@ export interface RoutingV2DeactivationResult {
   readonly activationFile: string;
 }
 
+export type ActiveRoutingV2Layer = "project" | "user";
+
+export type ActiveRoutingV2EditFaultPoint = "after-journal" | "after-config-write" | "after-marker-write";
+
+export interface UpdateActiveRoutingV2LayerInput {
+  readonly cwd: string;
+  readonly configDir?: string;
+  readonly layer: ActiveRoutingV2Layer;
+  readonly expectedRevision: string;
+  readonly next: RoutingV2ConfigLayer;
+  readonly normalization?: RoutingV2NormalizationOptions;
+  /** Test-only crash seam. */
+  readonly fault?: (point: ActiveRoutingV2EditFaultPoint) => Promise<void> | void;
+}
+
+export interface UpdateActiveRoutingV2LayerResult {
+  readonly status: "updated" | "unchanged" | "already-applied";
+  readonly revision: string;
+}
+
+interface ActiveRoutingV2EditJournal {
+  readonly schemaVersion: 1;
+  readonly editId: string;
+  readonly layer: ActiveRoutingV2Layer;
+  readonly targetPath: string;
+  readonly targetKey: typeof PROJECT_V2_KEY | typeof USER_V2_KEY;
+  readonly beforeExisted: boolean;
+  readonly beforeDigest: string;
+  readonly afterDigest: string;
+  readonly backupFile: string;
+  readonly beforeMarker: RoutingV2ActiveMarker;
+  readonly afterMarker: RoutingV2ActiveMarker;
+}
+
+interface RoutingV2RollbackReadTarget {
+  readonly path: string;
+  readonly existed: boolean;
+  readonly digest: string;
+  readonly backupFile: string;
+}
+
+interface RoutingV2RollbackReadJournal {
+  readonly schemaVersion: 1;
+  readonly migrationId: string;
+  readonly planDigest: string;
+  readonly revision: string;
+  readonly targets: {
+    readonly project: RoutingV2RollbackReadTarget;
+    readonly user: RoutingV2RollbackReadTarget;
+  };
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -219,6 +284,25 @@ function canonical(value: unknown): unknown {
 
 function canonicalDigest(value: unknown): string {
   return sha256(JSON.stringify(canonical(value)));
+}
+
+function activeRevision(projectFragmentDigest: string, userFragmentDigest: string): string {
+  return canonicalDigest({ schemaVersion: MARKER_SCHEMA_VERSION, projectFragmentDigest, userFragmentDigest });
+}
+
+function editedActiveRevision(
+  previousRevision: string,
+  projectFragmentDigest: string,
+  userFragmentDigest: string,
+  editId: string,
+): string {
+  return canonicalDigest({
+    schemaVersion: MARKER_SCHEMA_VERSION,
+    previousRevision,
+    projectFragmentDigest,
+    userFragmentDigest,
+    editId,
+  });
 }
 
 function planBody(plan: RoutingV2MigrationPlan): Omit<RoutingV2MigrationPlan, "planDigest"> {
@@ -264,6 +348,10 @@ function locations(cwd: string, configDir: string | undefined, migrationId: stri
   };
 }
 
+function withRoutingMutationLocks<T>(activationFile: string, projectRoot: string, action: () => Promise<T>): Promise<T> {
+  return withFileLock(`${activationFile}.lock`, () => withProjectRoutingWriteLock(projectRoot, action));
+}
+
 function parseRoot(bytes: string, file: string): JsonObject {
   let parsed: unknown;
   try {
@@ -304,15 +392,24 @@ function withoutKey(value: JsonObject, key: string): JsonObject {
   return rest;
 }
 
-function validateLayer(layer: unknown, label: string): RoutingV2ConfigLayer {
-  const result = validateRoutingV2ConfigLayer(layer);
+function validateLayer(
+  layer: unknown,
+  label: string,
+  normalization: RoutingV2NormalizationOptions = {},
+): RoutingV2ConfigLayer {
+  const result = validateRoutingV2ConfigLayer(layer, normalization);
   if (!result.ok) throw new Error(`invalid ${label} routing v2 config: ${result.errors.join("; ")}`);
   return layer as RoutingV2ConfigLayer;
 }
 
-function existingLayer(root: RootSnapshot, key: string, label: string): RoutingV2ConfigLayer | null {
+function existingLayer(
+  root: RootSnapshot,
+  key: string,
+  label: string,
+  normalization: RoutingV2NormalizationOptions = {},
+): RoutingV2ConfigLayer | null {
   const raw = root.value[key];
-  return raw === undefined ? null : validateLayer(raw, label);
+  return raw === undefined ? null : validateLayer(raw, label, normalization);
 }
 
 function makeTarget(root: RootSnapshot, key: typeof PROJECT_V2_KEY | typeof USER_V2_KEY, proposed: RoutingV2ConfigLayer | null, ownerOnly: boolean): RoutingV2MigrationTarget {
@@ -331,13 +428,17 @@ function makeTarget(root: RootSnapshot, key: typeof PROJECT_V2_KEY | typeof USER
   };
 }
 
-function assertValidLayers(project: RoutingV2ConfigLayer | null, user: RoutingV2ConfigLayer | null): void {
-  if (project !== null) validateLayer(project, "project");
-  if (user !== null) validateLayer(user, "user");
+function assertValidLayers(
+  project: RoutingV2ConfigLayer | null,
+  user: RoutingV2ConfigLayer | null,
+  normalization: RoutingV2NormalizationOptions = {},
+): void {
+  if (project !== null) validateLayer(project, "project", normalization);
+  if (user !== null) validateLayer(user, "user", normalization);
   normalizeRoutingV2Config({
     ...(project === null ? {} : { project }),
     ...(user === null ? {} : { user }),
-  });
+  }, normalization);
 }
 
 /** Build the dry-run artifact in memory. This function never writes. */
@@ -350,9 +451,9 @@ export async function createRoutingV2MigrationPlan(input: CreateRoutingV2Migrati
   ]);
   const project = input.project ?? null;
   const user = input.user ?? null;
-  assertValidLayers(project, user);
-  const projectBefore = existingLayer(projectRoot, PROJECT_V2_KEY, "existing project");
-  const userBefore = existingLayer(userRoot, USER_V2_KEY, "existing user");
+  assertValidLayers(project, user, input.normalization);
+  const projectBefore = existingLayer(projectRoot, PROJECT_V2_KEY, "existing project", input.normalization);
+  const userBefore = existingLayer(userRoot, USER_V2_KEY, "existing user", input.normalization);
   const targets = {
     project: makeTarget(projectRoot, PROJECT_V2_KEY, project, false),
     user: makeTarget(userRoot, USER_V2_KEY, user, true),
@@ -398,13 +499,19 @@ function assertExactLocations(plan: RoutingV2MigrationPlan, cwd: string, configD
   }
 }
 
-function assertApplicablePlan(plan: RoutingV2MigrationPlan, confirmed: boolean, cwd: string, configDir?: string): void {
+function assertApplicablePlan(
+  plan: RoutingV2MigrationPlan,
+  confirmed: boolean,
+  cwd: string,
+  configDir?: string,
+  normalization: RoutingV2NormalizationOptions = {},
+): void {
   if (!confirmed) throw new Error("explicit routing v2 migration plan confirmation is required");
   if (plan.schemaVersion !== MIGRATION_SCHEMA_VERSION) throw new Error("unsupported routing v2 migration plan schema");
   assertPlanDigest(plan);
   assertExactLocations(plan, cwd, configDir);
   if (plan.unresolved.length > 0) throw new Error(`routing v2 migration has ${plan.unresolved.length} unresolved mapping(s)`);
-  assertValidLayers(plan.targets.project.proposed, plan.targets.user.proposed);
+  assertValidLayers(plan.targets.project.proposed, plan.targets.user.proposed, normalization);
   if (plan.targets.project.ownerOnly || !plan.targets.user.ownerOnly) throw new Error("routing v2 migration target ownership metadata mismatch");
   if (plan.targets.project.proposedDigest !== routingV2Digest(plan.targets.project.proposed)
     || plan.targets.user.proposedDigest !== routingV2Digest(plan.targets.user.proposed)) {
@@ -494,6 +601,15 @@ export function parseRoutingV2ActivationMarker(raw: unknown): RoutingV2Activatio
     activatedAt: raw.activatedAt,
     projectRoot: raw.projectRoot,
     configRoot: raw.configRoot,
+    revision: typeof raw.revision === "string"
+      ? raw.revision
+      : activeRevision(
+        parseActiveTarget(raw.targets.project, "project").fragmentDigest,
+        parseActiveTarget(raw.targets.user, "user").fragmentDigest,
+      ),
+    ...(typeof raw.previousRevision === "string" ? { previousRevision: raw.previousRevision } : {}),
+    ...(typeof raw.lastEditId === "string" ? { lastEditId: raw.lastEditId } : {}),
+    ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
     targets: {
       project: parseActiveTarget(raw.targets.project, "project"),
       user: parseActiveTarget(raw.targets.user, "user"),
@@ -535,18 +651,84 @@ function assertMarkerBinding(marker: RoutingV2ActivationMarker, cwd: string, con
   }
 }
 
+function expectedActiveMarkerRevision(marker: RoutingV2ActiveMarker): string | undefined {
+  if (marker.lastEditId === undefined) {
+    return activeRevision(marker.targets.project.fragmentDigest, marker.targets.user.fragmentDigest);
+  }
+  if (marker.previousRevision === undefined) return undefined;
+  return editedActiveRevision(
+    marker.previousRevision,
+    marker.targets.project.fragmentDigest,
+    marker.targets.user.fragmentDigest,
+    marker.lastEditId,
+  );
+}
+
 /**
  * Reads marker and both bound fragments synchronously as one loader snapshot.
  * Missing/rolled back returns legacy. Any active inconsistency throws.
  */
-export function readActiveRoutingV2Layers(cwd: string, configDir?: string): RoutingV2ConfigLayers | undefined {
+export function readActiveRoutingV2Settings(
+  cwd: string,
+  configDir?: string,
+  normalization: RoutingV2NormalizationOptions = {},
+): ActiveRoutingV2Settings | undefined {
   const markerFile = routingV2ActivationPath(cwd, configDir);
   const marker = readMarker(markerFile);
   if (marker === undefined) return undefined;
   assertMarkerBinding(marker, cwd, configDir);
-  if (marker.engineVersion === 1) return undefined;
-  const projectRoot = readRootSync(marker.targets.project.path);
-  const userRoot = readRootSync(marker.targets.user.path);
+  const journal = readEditJournalSync(markerFile);
+  const rollbackJournal = readRollbackReadJournalSync(markerFile);
+  if (journal !== undefined && rollbackJournal !== undefined) throw new Error("routing v2 has conflicting edit and rollback journals");
+  if (marker.engineVersion === 1) {
+    if (journal !== undefined) throw new Error("routing v2 is inactive with a pending edit journal");
+    return undefined;
+  }
+  const expectedRevision = expectedActiveMarkerRevision(marker);
+  if (marker.revision !== expectedRevision) throw new Error("active routing v2 revision mismatch");
+  let projectRoot = readRootSync(marker.targets.project.path);
+  let userRoot = readRootSync(marker.targets.user.path);
+  if (rollbackJournal !== undefined) {
+    if (rollbackJournal.migrationId !== marker.migrationId
+      || rollbackJournal.planDigest !== marker.planDigest
+      || rollbackJournal.revision !== marker.revision
+      || rollbackJournal.targets.project.path !== marker.targets.project.path
+      || rollbackJournal.targets.user.path !== marker.targets.user.path
+      || rollbackJournal.targets.project.digest !== marker.targets.project.digest
+      || rollbackJournal.targets.user.digest !== marker.targets.user.digest) {
+      throw new Error("routing v2 rollback read journal does not match the active marker");
+    }
+    projectRoot = readRollbackReadBackupSync(rollbackJournal.targets.project);
+    userRoot = readRollbackReadBackupSync(rollbackJournal.targets.user);
+  } else if (journal !== undefined) {
+    assertEditJournalBinding(journal, markerFile, cwd, configDir);
+    const journalMarker = marker.revision === journal.beforeMarker.revision
+      ? journal.beforeMarker
+      : marker.revision === journal.afterMarker.revision
+        ? journal.afterMarker
+        : undefined;
+    if (journalMarker === undefined
+      || journalMarker.migrationId !== marker.migrationId
+      || journalMarker.planDigest !== marker.planDigest) {
+      throw new Error("routing v2 edit journal does not match the active marker");
+    }
+    const currentTarget = journal.layer === "project" ? projectRoot : userRoot;
+    const currentFragment = currentTarget.value[journal.targetKey];
+    const currentFragmentDigest = routingV2Digest(currentFragment === undefined ? null : currentFragment);
+    const beforeFragmentDigest = journal.beforeMarker.targets[journal.layer].fragmentDigest;
+    const afterFragmentDigest = journal.afterMarker.targets[journal.layer].fragmentDigest;
+    if (marker.revision === journal.beforeMarker.revision) {
+      if (currentFragmentDigest === afterFragmentDigest) {
+        const original = readEditBackupSync(journal);
+        if (journal.layer === "project") projectRoot = original;
+        else userRoot = original;
+      } else if (currentFragmentDigest !== beforeFragmentDigest) {
+        throw new Error("routing v2 edit journal target is neither the old nor new revision");
+      }
+    } else if (currentFragmentDigest !== afterFragmentDigest) {
+      throw new Error("routing v2 committed edit journal target mismatch");
+    }
+  }
   const projectRaw = projectRoot.value[PROJECT_V2_KEY];
   const userRaw = userRoot.value[USER_V2_KEY];
   if (routingV2Digest(projectRaw === undefined ? null : projectRaw) !== marker.targets.project.fragmentDigest) {
@@ -555,11 +737,415 @@ export function readActiveRoutingV2Layers(cwd: string, configDir?: string): Rout
   if (routingV2Digest(userRaw === undefined ? null : userRaw) !== marker.targets.user.fragmentDigest) {
     throw new Error("active routing v2 user fragment digest mismatch");
   }
-  const project = projectRaw === undefined ? undefined : validateLayer(projectRaw, "active project");
-  const user = userRaw === undefined ? undefined : validateLayer(userRaw, "active user");
+  const project = projectRaw === undefined ? undefined : validateLayer(projectRaw, "active project", normalization);
+  const user = userRaw === undefined ? undefined : validateLayer(userRaw, "active user", normalization);
   const layers: RoutingV2ConfigLayers = { ...(project === undefined ? {} : { project }), ...(user === undefined ? {} : { user }) };
-  normalizeRoutingV2Config(layers);
-  return layers;
+  normalizeRoutingV2Config(layers, normalization);
+  return { layers, revision: marker.revision };
+}
+
+export function readActiveRoutingV2Layers(
+  cwd: string,
+  configDir?: string,
+  normalization: RoutingV2NormalizationOptions = {},
+): RoutingV2ConfigLayers | undefined {
+  return readActiveRoutingV2Settings(cwd, configDir, normalization)?.layers;
+}
+
+function editJournalPath(activationFile: string): string {
+  return `${activationFile}.edit.json`;
+}
+
+function editBackupPath(activationFile: string): string {
+  return `${activationFile}.edit.backup`;
+}
+
+function rollbackReadJournalPath(activationFile: string): string {
+  return `${activationFile}.rollback.json`;
+}
+
+function rollbackReadBackupPath(activationFile: string, layer: ActiveRoutingV2Layer): string {
+  return `${activationFile}.rollback.${layer}.backup`;
+}
+
+function renderLayerRoot(root: RootSnapshot, key: typeof PROJECT_V2_KEY | typeof USER_V2_KEY, next: RoutingV2ConfigLayer): string {
+  return `${JSON.stringify({ ...root.value, [key]: next }, null, 2)}\n`;
+}
+
+function parseEditJournal(raw: unknown): ActiveRoutingV2EditJournal {
+  if (
+    !isRecord(raw)
+    || raw.schemaVersion !== 1
+    || typeof raw.editId !== "string"
+    || (raw.layer !== "project" && raw.layer !== "user")
+    || typeof raw.targetPath !== "string"
+    || (raw.targetKey !== PROJECT_V2_KEY && raw.targetKey !== USER_V2_KEY)
+    || typeof raw.beforeExisted !== "boolean"
+    || typeof raw.beforeDigest !== "string"
+    || typeof raw.afterDigest !== "string"
+    || typeof raw.backupFile !== "string"
+  ) throw new Error("malformed routing v2 edit journal");
+  const beforeMarker = parseRoutingV2ActivationMarker(raw.beforeMarker);
+  const afterMarker = parseRoutingV2ActivationMarker(raw.afterMarker);
+  if (beforeMarker.engineVersion !== 2 || afterMarker.engineVersion !== 2) throw new Error("routing v2 edit journal markers must be active");
+  return {
+    schemaVersion: 1,
+    editId: raw.editId,
+    layer: raw.layer,
+    targetPath: raw.targetPath,
+    targetKey: raw.targetKey,
+    beforeExisted: raw.beforeExisted,
+    beforeDigest: raw.beforeDigest,
+    afterDigest: raw.afterDigest,
+    backupFile: raw.backupFile,
+    beforeMarker,
+    afterMarker,
+  };
+}
+
+function parseRollbackReadTarget(raw: unknown, activationFile: string, layer: ActiveRoutingV2Layer): RoutingV2RollbackReadTarget {
+  if (!isRecord(raw)
+    || typeof raw.path !== "string"
+    || typeof raw.existed !== "boolean"
+    || typeof raw.digest !== "string"
+    || raw.backupFile !== rollbackReadBackupPath(activationFile, layer)) {
+    throw new Error(`malformed routing v2 rollback ${layer} read target`);
+  }
+  return { path: raw.path, existed: raw.existed, digest: raw.digest, backupFile: raw.backupFile };
+}
+
+function parseRollbackReadJournal(raw: unknown, activationFile: string): RoutingV2RollbackReadJournal {
+  if (!isRecord(raw)
+    || raw.schemaVersion !== 1
+    || typeof raw.migrationId !== "string"
+    || typeof raw.planDigest !== "string"
+    || typeof raw.revision !== "string"
+    || !isRecord(raw.targets)) {
+    throw new Error("malformed routing v2 rollback read journal");
+  }
+  return {
+    schemaVersion: 1,
+    migrationId: raw.migrationId,
+    planDigest: raw.planDigest,
+    revision: raw.revision,
+    targets: {
+      project: parseRollbackReadTarget(raw.targets.project, activationFile, "project"),
+      user: parseRollbackReadTarget(raw.targets.user, activationFile, "user"),
+    },
+  };
+}
+
+function readRollbackReadJournalSync(activationFile: string): RoutingV2RollbackReadJournal | undefined {
+  const file = rollbackReadJournalPath(activationFile);
+  let stats;
+  try {
+    stats = lstatSync(file);
+  } catch (error) {
+    if (isNotFound(error)) return undefined;
+    throw error;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 rollback read journal must be a regular non-symlink file");
+  if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 rollback read journal permissions are not owner-only");
+  try {
+    return parseRollbackReadJournal(JSON.parse(readFileSync(file, "utf8")), activationFile);
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error("malformed routing v2 rollback read journal JSON");
+    throw error;
+  }
+}
+
+function readRollbackReadBackupSync(target: RoutingV2RollbackReadTarget): RootSnapshot {
+  if (!target.existed) return { file: target.path, existed: false, bytes: "", value: {} };
+  let stats;
+  try {
+    stats = lstatSync(target.backupFile);
+  } catch (error) {
+    if (isNotFound(error)) throw new Error("routing v2 rollback read backup is missing");
+    throw error;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 rollback read backup must be a regular non-symlink file");
+  if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 rollback read backup permissions are not owner-only");
+  const bytes = readFileSync(target.backupFile, "utf8");
+  if (sha256(bytes) !== target.digest) throw new Error("routing v2 rollback read backup digest mismatch");
+  return { file: target.path, existed: true, bytes, value: parseRoot(bytes, target.path) };
+}
+
+function readEditJournalSync(activationFile: string): ActiveRoutingV2EditJournal | undefined {
+  const file = editJournalPath(activationFile);
+  let stats;
+  try {
+    stats = lstatSync(file);
+  } catch (error) {
+    if (isNotFound(error)) return undefined;
+    throw error;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 edit journal must be a regular non-symlink file");
+  if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 edit journal permissions are not owner-only");
+  try {
+    return parseEditJournal(JSON.parse(readFileSync(file, "utf8")));
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error("malformed routing v2 edit journal JSON");
+    throw error;
+  }
+}
+
+function readEditBackupSync(journal: ActiveRoutingV2EditJournal): RootSnapshot {
+  if (!journal.beforeExisted) return { file: journal.targetPath, existed: false, bytes: "", value: {} };
+  let stats;
+  try {
+    stats = lstatSync(journal.backupFile);
+  } catch (error) {
+    if (isNotFound(error)) throw new Error("routing v2 edit backup is missing");
+    throw error;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 edit backup must be a regular non-symlink file");
+  if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 edit backup permissions are not owner-only");
+  const bytes = readFileSync(journal.backupFile, "utf8");
+  if (sha256(bytes) !== journal.beforeDigest) throw new Error("routing v2 edit backup digest mismatch");
+  return { file: journal.targetPath, existed: true, bytes, value: parseRoot(bytes, journal.targetPath) };
+}
+
+function assertEditJournalBinding(
+  journal: ActiveRoutingV2EditJournal,
+  activationFile: string,
+  cwd: string,
+  configDir?: string,
+): void {
+  assertMarkerBinding(journal.beforeMarker, cwd, configDir);
+  assertMarkerBinding(journal.afterMarker, cwd, configDir);
+  const otherLayer: ActiveRoutingV2Layer = journal.layer === "project" ? "user" : "project";
+  if (journal.targetPath !== journal.beforeMarker.targets[journal.layer].path
+    || journal.targetPath !== journal.afterMarker.targets[journal.layer].path
+    || journal.targetKey !== (journal.layer === "project" ? PROJECT_V2_KEY : USER_V2_KEY)
+    || journal.backupFile !== editBackupPath(activationFile)
+    || journal.beforeMarker.revision !== expectedActiveMarkerRevision(journal.beforeMarker)
+    || journal.afterMarker.migrationId !== journal.beforeMarker.migrationId
+    || journal.afterMarker.planDigest !== journal.beforeMarker.planDigest
+    || journal.afterMarker.activatedAt !== journal.beforeMarker.activatedAt
+    || journal.afterMarker.previousRevision !== journal.beforeMarker.revision
+    || journal.afterMarker.lastEditId !== journal.editId
+    || journal.afterMarker.revision !== expectedActiveMarkerRevision(journal.afterMarker)
+    || canonicalDigest(journal.afterMarker.targets[otherLayer]) !== canonicalDigest(journal.beforeMarker.targets[otherLayer])
+    || journal.afterDigest !== journal.afterMarker.targets[journal.layer].digest) {
+    throw new Error("routing v2 edit journal target binding mismatch");
+  }
+}
+
+async function readEditJournal(activationFile: string): Promise<ActiveRoutingV2EditJournal | undefined> {
+  const file = editJournalPath(activationFile);
+  try {
+    const stats = await lstat(file);
+    if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 edit journal must be a regular non-symlink file");
+    if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 edit journal permissions are not owner-only");
+    return parseEditJournal(JSON.parse(await readFile(file, "utf8")));
+  } catch (error) {
+    if (isNotFound(error)) return undefined;
+    throw error;
+  }
+}
+
+async function cleanupEditJournal(activationFile: string, journal: ActiveRoutingV2EditJournal): Promise<void> {
+  await rm(editJournalPath(activationFile), { force: true });
+  await rm(journal.backupFile, { force: true });
+}
+
+async function cleanupRollbackReadJournal(activationFile: string): Promise<void> {
+  await rm(rollbackReadJournalPath(activationFile), { force: true });
+  await rm(rollbackReadBackupPath(activationFile, "project"), { force: true });
+  await rm(rollbackReadBackupPath(activationFile, "user"), { force: true });
+}
+
+async function ensureRollbackReadJournal(
+  activationFile: string,
+  marker: RoutingV2ActiveMarker,
+  project: RootSnapshot,
+  user: RootSnapshot,
+  states: readonly RollbackTargetState[],
+): Promise<RoutingV2RollbackReadJournal> {
+  const existing = readRollbackReadJournalSync(activationFile);
+  if (existing !== undefined) {
+    if (existing.migrationId !== marker.migrationId
+      || existing.planDigest !== marker.planDigest
+      || existing.revision !== marker.revision
+      || existing.targets.project.path !== marker.targets.project.path
+      || existing.targets.user.path !== marker.targets.user.path
+      || existing.targets.project.digest !== marker.targets.project.digest
+      || existing.targets.user.digest !== marker.targets.user.digest) {
+      throw new Error("routing v2 rollback read journal does not match the active marker");
+    }
+    readRollbackReadBackupSync(existing.targets.project);
+    readRollbackReadBackupSync(existing.targets.user);
+    return existing;
+  }
+  if (states.some((state) => state !== "active")) {
+    throw new Error("routing v2 rollback is partially restored but its read journal is missing");
+  }
+  const target = (layer: ActiveRoutingV2Layer, root: RootSnapshot): RoutingV2RollbackReadTarget => ({
+    path: root.file,
+    existed: root.existed,
+    digest: sha256(root.bytes),
+    backupFile: rollbackReadBackupPath(activationFile, layer),
+  });
+  const journal: RoutingV2RollbackReadJournal = {
+    schemaVersion: 1,
+    migrationId: marker.migrationId,
+    planDigest: marker.planDigest,
+    revision: marker.revision,
+    targets: {
+      project: target("project", project),
+      user: target("user", user),
+    },
+  };
+  if (project.existed) await writeFileAtomic(journal.targets.project.backupFile, project.bytes, { mode: 0o600 });
+  if (user.existed) await writeFileAtomic(journal.targets.user.backupFile, user.bytes, { mode: 0o600 });
+  await writeFileAtomic(rollbackReadJournalPath(activationFile), `${JSON.stringify(journal, null, 2)}\n`, { mode: 0o600 });
+  return journal;
+}
+
+/** Complete or discard a previously interrupted edit while holding the activation lock. */
+async function recoverActiveRoutingV2Edit(activationFile: string, cwd: string, configDir?: string): Promise<void> {
+  const journal = await readEditJournal(activationFile);
+  if (journal === undefined) return;
+  const marker = readMarker(activationFile);
+  if (marker === undefined) throw new Error("routing v2 edit journal exists without an activation marker");
+  assertMarkerBinding(marker, cwd, configDir);
+  assertEditJournalBinding(journal, activationFile, cwd, configDir);
+  if (marker.engineVersion !== 2) throw new Error("routing v2 edit journal exists while routing v2 is inactive");
+  const target = await readRoot(journal.targetPath);
+  const targetDigest = sha256(target.bytes);
+  const fragment = target.value[journal.targetKey];
+  const fragmentDigest = routingV2Digest(fragment === undefined ? null : fragment);
+  const beforeFragmentDigest = journal.beforeMarker.targets[journal.layer].fragmentDigest;
+  const afterFragmentDigest = journal.afterMarker.targets[journal.layer].fragmentDigest;
+  if (marker.revision === journal.afterMarker.revision && fragmentDigest === afterFragmentDigest) {
+    await cleanupEditJournal(activationFile, journal);
+    return;
+  }
+  if (marker.revision !== journal.beforeMarker.revision) throw new Error("routing v2 edit journal marker revision mismatch");
+  if (fragmentDigest === beforeFragmentDigest) {
+    await cleanupEditJournal(activationFile, journal);
+    return;
+  }
+  if (fragmentDigest !== afterFragmentDigest) throw new Error("routing v2 edit journal target digest mismatch");
+  const recoveredMarker: RoutingV2ActiveMarker = {
+    ...journal.afterMarker,
+    targets: {
+      ...journal.afterMarker.targets,
+      [journal.layer]: { ...journal.afterMarker.targets[journal.layer], digest: targetDigest },
+    },
+  };
+  await writeFileAtomic(activationFile, markerJson(recoveredMarker), { mode: 0o600 });
+  await cleanupEditJournal(activationFile, journal);
+}
+
+function writeUserRootExpected(file: string, expected: RootSnapshot, nextBytes: string): void {
+  const outcome = updateConfigFile(file, (read) => {
+    const current = rootFromConfigRead(file, read);
+    if (current.existed !== expected.existed || sha256(current.bytes) !== sha256(expected.bytes)) {
+      throw new Error("active routing v2 user layer changed during update");
+    }
+    return nextBytes;
+  });
+  if (outcome !== "written") throw new Error(`active routing v2 user layer write ${outcome}`);
+}
+
+async function writeActiveLayerRoot(layer: ActiveRoutingV2Layer, current: RootSnapshot, nextBytes: string): Promise<void> {
+  if (layer === "user") {
+    writeUserRootExpected(current.file, current, nextBytes);
+    return;
+  }
+  const latest = await readRoot(current.file);
+  if (latest.existed !== current.existed || sha256(latest.bytes) !== sha256(current.bytes)) {
+    throw new Error("active routing v2 project layer changed during update");
+  }
+  await writeFileAtomic(current.file, nextBytes);
+}
+
+function updatedActiveMarker(
+  marker: RoutingV2ActiveMarker,
+  layer: ActiveRoutingV2Layer,
+  targetDigest: string,
+  fragmentDigest: string,
+  editId: string,
+): RoutingV2ActiveMarker {
+  const targets = {
+    ...marker.targets,
+    [layer]: { ...marker.targets[layer], digest: targetDigest, fragmentDigest },
+  };
+  return {
+    ...marker,
+    previousRevision: marker.revision,
+    revision: editedActiveRevision(
+      marker.revision,
+      targets.project.fragmentDigest,
+      targets.user.fragmentDigest,
+      editId,
+    ),
+    lastEditId: editId,
+    updatedAt: new Date().toISOString(),
+    targets,
+  };
+}
+
+/** Atomically update one active layer with expected-revision conflict detection. */
+export async function updateActiveRoutingV2Layer(input: UpdateActiveRoutingV2LayerInput): Promise<UpdateActiveRoutingV2LayerResult> {
+  validateLayer(input.next, `${input.layer} update`, input.normalization);
+  const projectRoot = normalizedRoot(input.cwd);
+  const configRoot = normalizedConfigRoot(input.configDir);
+  const activationFile = routingV2ActivationPath(projectRoot, configRoot);
+  const nextFragmentDigest = routingV2Digest(input.next);
+  const editId = canonicalDigest({ expectedRevision: input.expectedRevision, layer: input.layer, nextFragmentDigest });
+  return withRoutingMutationLocks(activationFile, projectRoot, async () => {
+    await recoverActiveRoutingV2Edit(activationFile, projectRoot, configRoot);
+    if (readRollbackReadJournalSync(activationFile) !== undefined) throw new Error("routing v2 rollback is in progress");
+    const marker = readMarker(activationFile);
+    if (marker === undefined || marker.engineVersion !== 2) throw new Error("routing v2 is not active");
+    assertMarkerBinding(marker, projectRoot, configRoot);
+    const settings = readActiveRoutingV2Settings(projectRoot, configRoot, input.normalization);
+    if (settings === undefined) throw new Error("routing v2 is not active");
+    if (marker.lastEditId === editId) return { status: "already-applied", revision: marker.revision };
+    if (marker.revision !== input.expectedRevision) throw new Error("active routing v2 revision conflict");
+    const nextLayers: RoutingV2ConfigLayers = { ...settings.layers, [input.layer]: input.next };
+    normalizeRoutingV2Config(nextLayers, input.normalization);
+    const currentLayer = settings.layers[input.layer];
+    if (currentLayer !== undefined && routingV2Digest(currentLayer) === nextFragmentDigest) {
+      return { status: "unchanged", revision: marker.revision };
+    }
+    const target = marker.targets[input.layer];
+    const currentRoot = await readRoot(target.path);
+    const targetKey = input.layer === "project" ? PROJECT_V2_KEY : USER_V2_KEY;
+    const currentFragment = currentRoot.value[targetKey];
+    if (routingV2Digest(currentFragment === undefined ? null : currentFragment) !== target.fragmentDigest) {
+      throw new Error(`active routing v2 ${input.layer} fragment changed during update`);
+    }
+    const nextBytes = renderLayerRoot(currentRoot, targetKey, input.next);
+    const nextMarker = updatedActiveMarker(marker, input.layer, sha256(nextBytes), nextFragmentDigest, editId);
+    const backupFile = editBackupPath(activationFile);
+    if (currentRoot.existed) await writeFileAtomic(backupFile, currentRoot.bytes, { mode: 0o600 });
+    const journal: ActiveRoutingV2EditJournal = {
+      schemaVersion: 1,
+      editId,
+      layer: input.layer,
+      targetPath: target.path,
+      targetKey,
+      beforeExisted: currentRoot.existed,
+      beforeDigest: sha256(currentRoot.bytes),
+      afterDigest: sha256(nextBytes),
+      backupFile,
+      beforeMarker: marker,
+      afterMarker: nextMarker,
+    };
+    await writeFileAtomic(editJournalPath(activationFile), `${JSON.stringify(journal, null, 2)}\n`, { mode: 0o600 });
+    await input.fault?.("after-journal");
+    await writeActiveLayerRoot(input.layer, currentRoot, nextBytes);
+    await input.fault?.("after-config-write");
+    const written = await readRoot(target.path);
+    if (sha256(written.bytes) !== journal.afterDigest) throw new Error(`active routing v2 ${input.layer} write verification failed`);
+    await writeFileAtomic(activationFile, markerJson(nextMarker), { mode: 0o600 });
+    await input.fault?.("after-marker-write");
+    await cleanupEditJournal(activationFile, journal);
+    return { status: "updated", revision: nextMarker.revision };
+  });
 }
 
 function backupManifestPath(plan: RoutingV2MigrationPlan): string {
@@ -634,7 +1220,12 @@ async function originalRoot(target: BackupTarget): Promise<RootSnapshot> {
   return { file: target.path, existed: true, bytes, value: parseRoot(bytes, target.path) };
 }
 
-function assertOriginalPlanConsistency(plan: RoutingV2MigrationPlan, project: RootSnapshot, user: RootSnapshot): void {
+function assertOriginalPlanConsistency(
+  plan: RoutingV2MigrationPlan,
+  project: RootSnapshot,
+  user: RootSnapshot,
+  normalization: RoutingV2NormalizationOptions = {},
+): void {
   const projectDiff = plan.diff[0];
   const userDiff = plan.diff[1];
   if (projectDiff === undefined || userDiff === undefined) throw new Error("routing v2 migration diff is incomplete");
@@ -644,7 +1235,7 @@ function assertOriginalPlanConsistency(plan: RoutingV2MigrationPlan, project: Ro
   ] as const;
   for (const { root, target, diff } of pairs) {
     const before = root.value[target.key];
-    const beforeLayer = before === undefined ? null : validateLayer(before, `original ${diff.layer}`);
+    const beforeLayer = before === undefined ? null : validateLayer(before, `original ${diff.layer}`, normalization);
     if (sha256(root.bytes) !== target.inputDigest || root.existed !== target.existed) {
       throw new Error(`routing v2 migration ${diff.layer} input digest mismatch`);
     }
@@ -695,6 +1286,8 @@ async function verifyStaged(plan: RoutingV2MigrationPlan): Promise<{ project: Ro
 }
 
 function activeMarkerFor(plan: RoutingV2MigrationPlan, project: RootSnapshot, user: RootSnapshot): RoutingV2ActiveMarker {
+  const projectFragmentDigest = plan.targets.project.proposedDigest;
+  const userFragmentDigest = plan.targets.user.proposedDigest;
   return {
     schemaVersion: MARKER_SCHEMA_VERSION,
     engineVersion: 2,
@@ -703,16 +1296,17 @@ function activeMarkerFor(plan: RoutingV2MigrationPlan, project: RootSnapshot, us
     activatedAt: new Date().toISOString(),
     projectRoot: plan.locations.projectRoot,
     configRoot: plan.locations.configRoot,
+    revision: activeRevision(projectFragmentDigest, userFragmentDigest),
     targets: {
       project: {
         path: plan.targets.project.file,
         digest: sha256(project.bytes),
-        fragmentDigest: plan.targets.project.proposedDigest,
+        fragmentDigest: projectFragmentDigest,
       },
       user: {
         path: plan.targets.user.file,
         digest: sha256(user.bytes),
-        fragmentDigest: plan.targets.user.proposedDigest,
+        fragmentDigest: userFragmentDigest,
       },
     },
   };
@@ -735,11 +1329,13 @@ export async function deactivateRoutingV2(options: DeactivateRoutingV2Options): 
   const projectRoot = normalizedRoot(options.cwd);
   const configRoot = normalizedConfigRoot(options.configDir);
   const activationFile = routingV2ActivationPath(projectRoot, configRoot);
-  return withFileLock(`${activationFile}.lock`, async () => {
+  return withRoutingMutationLocks(activationFile, projectRoot, async () => {
+    await recoverActiveRoutingV2Edit(activationFile, projectRoot, configRoot);
     const marker = readMarker(activationFile);
     if (marker === undefined) throw new Error("routing v2 is not active and has no activation marker");
     assertMarkerBinding(marker, projectRoot, configRoot);
     if (marker.engineVersion === 1) {
+      await cleanupRollbackReadJournal(activationFile);
       return { status: "already-deactivated", migrationId: inactiveMigrationId(marker), activationFile };
     }
     const deactivated: RoutingV2DeactivatedMarker = {
@@ -752,24 +1348,27 @@ export async function deactivateRoutingV2(options: DeactivateRoutingV2Options): 
       configRoot,
     };
     await writeFileAtomic(activationFile, markerJson(deactivated), { mode: 0o600 });
+    await cleanupRollbackReadJournal(activationFile);
     return { status: "deactivated", migrationId: marker.migrationId, activationFile };
   });
 }
 
 /** Apply a confirmed, unchanged plan transactionally; the marker is committed last. */
 export async function applyRoutingV2Migration(plan: RoutingV2MigrationPlan, options: ApplyRoutingV2MigrationOptions): Promise<RoutingV2MigrationResult> {
-  assertApplicablePlan(plan, options.confirmed, options.cwd, options.configDir);
-  return withFileLock(`${plan.locations.activationFile}.lock`, async () => {
+  assertApplicablePlan(plan, options.confirmed, options.cwd, options.configDir, options.normalization);
+  return withRoutingMutationLocks(plan.locations.activationFile, plan.locations.projectRoot, async () => {
+    await recoverActiveRoutingV2Edit(plan.locations.activationFile, plan.locations.projectRoot, plan.locations.configRoot);
     const currentMarker = readMarker(plan.locations.activationFile);
     if (currentMarker !== undefined) {
       assertMarkerBinding(currentMarker, plan.locations.projectRoot, plan.locations.configRoot);
       if (sameActivation(currentMarker, plan)) {
-        readActiveRoutingV2Layers(plan.locations.projectRoot, plan.locations.configRoot);
+        readActiveRoutingV2Layers(plan.locations.projectRoot, plan.locations.configRoot, options.normalization);
         return { status: "already-applied", migrationId: plan.migrationId, activationFile: plan.locations.activationFile };
       }
       if (currentMarker.engineVersion === 2) {
         throw new Error("another routing v2 migration is active; roll it back before reconfiguration");
       }
+      await cleanupRollbackReadJournal(plan.locations.activationFile);
       // An engineVersion=1 marker is explicit legacy state, not an activation.
       // A fresh, reviewed plan may replace it after the ordinary stale checks.
     }
@@ -784,9 +1383,9 @@ export async function applyRoutingV2Migration(plan: RoutingV2MigrationPlan, opti
         originalRoot(backup.targets.project),
         originalRoot(backup.targets.user),
       ]);
-      assertOriginalPlanConsistency(plan, originalProject, originalUser);
+      assertOriginalPlanConsistency(plan, originalProject, originalUser, options.normalization);
     } else {
-      assertOriginalPlanConsistency(plan, project, user);
+      assertOriginalPlanConsistency(plan, project, user, options.normalization);
     }
     await options.fault?.("after-backup");
 
@@ -804,7 +1403,7 @@ export async function applyRoutingV2Migration(plan: RoutingV2MigrationPlan, opti
     const finalStaged = await verifyStaged(plan);
     ensureKeryxSubdir(["routing-v2", "activations"], plan.locations.configRoot);
     await writeFileAtomic(plan.locations.activationFile, markerJson(activeMarkerFor(plan, finalStaged.project, finalStaged.user)), { mode: 0o600 });
-    readActiveRoutingV2Layers(plan.locations.projectRoot, plan.locations.configRoot);
+    readActiveRoutingV2Layers(plan.locations.projectRoot, plan.locations.configRoot, options.normalization);
     return { status: "applied", migrationId: plan.migrationId, activationFile: plan.locations.activationFile };
   });
 }
@@ -818,8 +1417,10 @@ async function backupBytes(target: BackupTarget): Promise<string | undefined> {
   return bytes;
 }
 
-async function restoreProjectBackup(target: BackupTarget): Promise<void> {
+async function restoreProjectBackup(target: BackupTarget, activatedDigest: string): Promise<void> {
   const bytes = await backupBytes(target);
+  const current = await readRoot(target.path);
+  if (sha256(current.bytes) !== activatedDigest) throw new Error("routing v2 project configuration changed during rollback");
   if (bytes === undefined) await rm(target.path, { force: true });
   else await writeFileAtomic(target.path, bytes);
 }
@@ -856,18 +1457,23 @@ function rollbackTargetState(current: RootSnapshot, activatedDigest: string, bac
 
 /** Restore exact pre-migration bytes and switch future turns back to legacy. */
 export async function rollbackRoutingV2Migration(plan: RoutingV2MigrationPlan, options: RollbackRoutingV2MigrationOptions): Promise<RoutingV2MigrationResult> {
-  assertApplicablePlan(plan, options.confirmed, options.cwd, options.configDir);
-  return withFileLock(`${plan.locations.activationFile}.lock`, async () => {
+  assertApplicablePlan(plan, options.confirmed, options.cwd, options.configDir, options.normalization);
+  return withRoutingMutationLocks(plan.locations.activationFile, plan.locations.projectRoot, async () => {
+    await recoverActiveRoutingV2Edit(plan.locations.activationFile, plan.locations.projectRoot, plan.locations.configRoot);
     const marker = readMarker(plan.locations.activationFile);
     if (marker === undefined) throw new Error("routing v2 migration is not active");
     assertMarkerBinding(marker, plan.locations.projectRoot, plan.locations.configRoot);
     if (marker.engineVersion === 1) {
       if (inactiveMigrationId(marker) === plan.migrationId && marker.planDigest === plan.planDigest && "rolledBackMigrationId" in marker) {
+        await cleanupRollbackReadJournal(plan.locations.activationFile);
         return { status: "already-rolled-back", migrationId: plan.migrationId, activationFile: plan.locations.activationFile };
       }
       throw new Error("routing v2 is inactive; exact rollback requires its active marker");
     }
     if (!sameActivation(marker, plan)) throw new Error("routing v2 active marker does not match this migration plan");
+    if (marker.lastEditId !== undefined) {
+      throw new Error("routing v2 settings were edited after migration; exact rollback refused, use deactivation to preserve them");
+    }
     const manifest = await readBackupManifest(plan);
     if (manifest === undefined) throw new Error("routing v2 migration backup manifest is missing");
     const [project, user] = await Promise.all([readRoot(marker.targets.project.path), readRoot(marker.targets.user.path)]);
@@ -876,7 +1482,14 @@ export async function rollbackRoutingV2Migration(plan: RoutingV2MigrationPlan, o
     if (projectState === "stale" || userState === "stale") {
       throw new Error("routing v2 configuration changed after activation; rollback refused");
     }
-    if (projectState === "active") await restoreProjectBackup(manifest.targets.project);
+    await ensureRollbackReadJournal(
+      plan.locations.activationFile,
+      marker,
+      project,
+      user,
+      [projectState, userState],
+    );
+    if (projectState === "active") await restoreProjectBackup(manifest.targets.project, marker.targets.project.digest);
     await options.fault?.("after-project-restore");
     if (userState === "active") await restoreUserBackup(manifest.targets.user, marker.targets.user.digest);
     await options.fault?.("after-user-restore");
@@ -891,6 +1504,7 @@ export async function rollbackRoutingV2Migration(plan: RoutingV2MigrationPlan, o
     };
     await options.fault?.("before-rollback-marker");
     await writeFileAtomic(plan.locations.activationFile, markerJson(rolledBack), { mode: 0o600 });
+    await cleanupRollbackReadJournal(plan.locations.activationFile);
     return { status: "rolled-back", migrationId: plan.migrationId, activationFile: plan.locations.activationFile };
   });
 }

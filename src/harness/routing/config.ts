@@ -9,7 +9,7 @@
 // entry that does not match the `CategoryAssignment` shape — is a NAMED,
 // SURFACED error, never a silently empty table.
 import path from "node:path";
-import { pathExists, writeFileAtomic } from "../../lib/fs";
+import { pathExists, withFileLock, writeFileAtomic } from "../../lib/fs";
 import { readJsonObjectFile } from "../../lib/json";
 import { loadShellConfig, saveShellConfig, updateShellConfig } from "../../lib/shell-config";
 import { isRoutingCategory, ROUTING_CATEGORIES, type CategoryAssignment, type RoutingCategory, type RoutingTable } from "./table";
@@ -218,7 +218,15 @@ export async function saveRoutingConfig(layer: RoutingConfigLayer, location: Rou
     saveShellConfig({ routing: table }, location.userConfigDir);
     return;
   }
-  const file = projectRoutingConfigPath(location.cwd);
+  await withProjectRoutingWriteLock(location.cwd, () => writeProjectRoutingConfig(location.cwd, table));
+}
+
+export function withProjectRoutingWriteLock<T>(cwd: string, action: () => Promise<T>): Promise<T> {
+  return withFileLock(`${projectRoutingConfigPath(path.resolve(cwd))}.lock`, action);
+}
+
+async function writeProjectRoutingConfig(cwd: string, table: RoutingTable): Promise<void> {
+  const file = projectRoutingConfigPath(cwd);
   // Top-level keys beside `categories` (for example `reviewChunks`) belong to other readers and survive a routing write.
   const existing = (await pathExists(file)) ? await readJsonObjectFile(file) : undefined;
   const others = existing?.state === "object" ? (existing.value as Record<string, unknown>) : {};
@@ -255,8 +263,10 @@ export async function setRoutingCategory(
     updateUserRoutingTable(location, (table) => ({ ...table, [category]: assignment }));
     return;
   }
-  const current = await loadRoutingConfigRaw(layer, location);
-  await saveRoutingConfig(layer, location, { ...current.table, [category]: assignment });
+  await withProjectRoutingWriteLock(location.cwd, async () => {
+    const current = await loadRoutingConfigRaw(layer, location);
+    await writeProjectRoutingConfig(location.cwd, { ...current.table, [category]: assignment });
+  });
 }
 
 /** Clear one category back to unset (`session-default` falls through to it) in a layer. Same raw-merge-base note as `setRoutingCategory`. */
@@ -268,7 +278,9 @@ export async function unsetRoutingCategory(layer: RoutingConfigLayer, location: 
     });
     return;
   }
-  const current = await loadRoutingConfigRaw(layer, location);
-  const { [category]: _removed, ...rest } = current.table;
-  await saveRoutingConfig(layer, location, rest);
+  await withProjectRoutingWriteLock(location.cwd, async () => {
+    const current = await loadRoutingConfigRaw(layer, location);
+    const { [category]: _removed, ...rest } = current.table;
+    await writeProjectRoutingConfig(location.cwd, rest);
+  });
 }

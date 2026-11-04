@@ -19,8 +19,8 @@ test("v2 inspector preview uses the shared resolver and receipt", () => {
   } });
   const rows = previewCatalogRoutingCategoriesV2({
     config, providers: [{ name: "alpha", models: ["expert"] }], profiles: { [profileKey("alpha", "expert")]: profile }, baseline: target,
+    observedAt: "2026-11-04T00:04:00.000Z", policyRevision: "policy-1", capabilityRevision: "capability-1",
     policy: { credentialsAvailable: () => true, policyAllowed: () => true, parentAllowed: () => true, capabilities: () => [], cooldown: () => false, observedLatencyMs: () => null },
-    now: () => new Date("2026-11-04T00:04:00.000Z"),
   });
   expect(rows.find((row) => row.category === "review")?.receipt.decision).toMatchObject({ status: "selected", selection: target });
   expect(rows.find((row) => row.category === "coding")?.receipt.decision.status).toBe("needs-classification");

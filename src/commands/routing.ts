@@ -7,21 +7,28 @@
 // `profile list`/`profile set` (AC8) and `list`'s `derived`-layer/
 // unavailable-fallback reporting (AC10/AC11) are Flow 327 (Routing A2).
 import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
-import { readConfigFile } from "../lib/config-dir";
+import { readConfigFile, readTranscriptFile } from "../lib/config-dir";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
-import { validateRoutingV2ConfigLayer, type NormalizedRoutingV2Config, type RoutingV2ConfigLayer } from "../harness/routing/config-v2";
+import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "../harness/routing/classifier-production-v2";
+import { routingV2Digest, validateRoutingV2ConfigLayer, type NormalizedRoutingV2Config, type RoutingV2ConfigLayer } from "../harness/routing/config-v2";
 import {
   applyRoutingV2Migration,
   createRoutingV2MigrationPlan,
   deactivateRoutingV2,
   proposeRoutingV2Categories,
+  readActiveRoutingV2Settings,
   rollbackRoutingV2Migration,
+  updateActiveRoutingV2Layer,
   type RoutingV2MigrationPlan,
 } from "../harness/routing/migration-v2";
 import { resolveRoutingDecision } from "../harness/routing/resolver";
+import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
+import { isModelClass, type ModelRef } from "../harness/routing/model-class";
 import { buildCatalogRoutingSnapshot } from "../harness/routing/snapshot-adapter";
-import type { RoutingRequest } from "../harness/routing/routing-request";
+import { ROUTING_CAPABILITIES, type RoutingCapability, type RoutingRequest } from "../harness/routing/routing-request";
 import { hasCredential } from "../harness/provider/single-turn";
+import { makeProvider } from "../harness/provider/make-provider";
+import { inspectProviderRoutingFacts } from "../harness/routing/provider-facts-v2";
 import { externalBlockReason, loadExternalProvidersConfig } from "../lib/external-providers";
 import { resolveExternalSetting } from "../lib/external-switch";
 import { summarizeRoutingPilot, type RoutingPilotObservation } from "../harness/routing/pilot-v2";
@@ -85,7 +92,14 @@ function printRoutingHelp(): void {
       "                              Every category, its resolved model, and which layer answered.",
       "  keryx routing classes list",
       "                              Show the active v2 model class pools.",
-      "  keryx routing pilot <observations.json>",
+      "  keryx routing classes set <class> <file.json> --revision <revision>",
+      "                              Replace a user model class pool at the expected revision.",
+      "  keryx routing settings list",
+      "  keryx routing settings set <user|project> <file.json> --revision <revision>",
+      "                              Read or atomically replace an active v2 settings layer.",
+      "  keryx routing explain --request <file.json> --json",
+      "                              Resolve explicit task requirements and show decision evidence.",
+      "  keryx routing pilot <observations.json|journal.jsonl>",
       "                              Report preview parity and fallback trace completeness.",
       "  keryx routing migrate --dry-run [proposed-layers.json]",
       "                              Print a reviewable v2 migration plan as JSON.",
@@ -393,6 +407,7 @@ async function listRoutingV2(
   location: RoutingConfigLocation,
   deps: RoutingCommandDeps,
   json: boolean,
+  explain?: Pick<RoutingRequest, "requestId" | "category" | "requirements">,
 ): Promise<void> {
   const baseline = deps.session?.() ?? defaultSession(location.userConfigDir);
   if (baseline === undefined) throw new Error("Select a session provider and model before previewing routing.");
@@ -403,26 +418,51 @@ async function listRoutingV2(
   const providerPolicy = loadExternalProvidersConfig(location.userConfigDir).config;
   const profiles = loadModelProfiles(location.userConfigDir);
   const env = envWithSavedApiKeys(process.env, location.userConfigDir);
-  const decisions = ROUTING_CATEGORIES.map((category) => {
+  const observedAt = new Date().toISOString();
+  const targets = [baseline, ...providers.flatMap((provider) =>
+    (provider.models ?? []).map((modelId) => ({ providerId: provider.name, modelId })))];
+  const policyAllowed = ({ providerId, modelId }: ModelRef) =>
+    external.value === "on" || externalBlockReason(providerId, modelId, providerPolicy) === undefined;
+  const credentialsAvailable = ({ providerId }: ModelRef) => hasCredential(providerId, env, location.userConfigDir);
+  const facts = inspectProviderRoutingFacts(targets, (target) =>
+    policyAllowed(target) && credentialsAvailable(target)
+      ? makeProvider(target.providerId, target.modelId, {
+          fetch, env, ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }),
+        }).describe()
+      : undefined);
+  const decisions = (explain === undefined ? ROUTING_CATEGORIES : [explain.category]).map((category) => {
     const request: RoutingRequest = {
-      requestId: `preview:${category}`,
+      requestId: explain?.requestId ?? `preview:${category}`,
       category,
       origin: "operator",
       baseline,
-      requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
+      requirements: explain?.requirements ?? { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
     };
     const snapshot = buildCatalogRoutingSnapshot({
       baseline, configDigest: config.configDigest, providers, profiles, request,
+      observedAt,
+      catalogRevision: routingV2Digest({ providers, profiles }),
+      policyRevision: routingV2Digest({ external: external.value, providerPolicy }),
+      capabilityRevision: facts.capabilityRevision,
       policy: {
-        credentialsAvailable: (target) => hasCredential(target.providerId, env, location.userConfigDir),
-        policyAllowed: (target) => external.value === "on" || externalBlockReason(target.providerId, target.modelId, providerPolicy) === undefined,
+        credentialsAvailable,
+        policyAllowed,
         parentAllowed: () => true,
-        capabilities: () => [],
+        capabilities: facts.capabilities,
         cooldown: () => false,
         observedLatencyMs: () => null,
       },
     });
-    return { category, decision: resolveRoutingDecision(request, snapshot, config) };
+    const decision = explain === undefined
+      ? resolveRoutingDecision(request, snapshot, config)
+      : resolveRoutingForRuntime({
+          request, snapshot, config,
+          journal: {
+            kind: "preview", cwd: location.cwd,
+            ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }),
+          },
+        }).decision;
+    return { category, decision };
   });
   if (json) {
     console.log(JSON.stringify({ engineVersion: 2, baseline, decisions }, null, 2));
@@ -472,21 +512,108 @@ function pilotObservations(raw: unknown): RoutingPilotObservation[] {
   });
 }
 
+function pilotJournal(file: string): RoutingPilotObservation[] {
+  const read = readTranscriptFile(file);
+  if (!read.ok) throw new Error(`Could not read routing journal: ${read.reason}.`);
+  const rows: unknown[] = read.text.split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line));
+  return pilotObservations(rows.flatMap((row) => {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) throw new Error("Invalid routing journal record.");
+    const record = row as Record<string, unknown>;
+    if (record.kind === "attempt") return [];
+    return [{
+      ...record,
+      ...((record.parentDecisionId !== undefined || record.fallbackReason !== undefined)
+        ? { fallback: { parentDecisionId: record.parentDecisionId, reason: record.fallbackReason } }
+        : {}),
+    }];
+  }));
+}
+
 function readRoutingJson(file: string): unknown {
   const read = readConfigFile(file);
   if (!read.ok) throw new Error(`Could not read routing input: ${read.reason}.`);
   return JSON.parse(read.text);
 }
 
+function explainRequest(raw: unknown): Pick<RoutingRequest, "requestId" | "category" | "requirements"> {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Expected a routing request object.");
+  const { requestId, category, requirements } = raw as Record<string, unknown>;
+  if (typeof requestId !== "string" || !requestId || typeof category !== "string" || !isRoutingCategory(category)
+    || requirements === null || typeof requirements !== "object" || Array.isArray(requirements)) {
+    throw new Error("Expected requestId, category and requirements.");
+  }
+  const { capabilities, inputTokensRequired, outputTokensReserved, minimumClass, maxEstimatedCostUsd } = requirements as Record<string, unknown>;
+  if (!Array.isArray(capabilities) || !capabilities.every((value: unknown): value is RoutingCapability =>
+    ROUTING_CAPABILITIES.some((capability) => capability === value))
+    || typeof inputTokensRequired !== "number" || !Number.isSafeInteger(inputTokensRequired) || inputTokensRequired < 0
+    || typeof outputTokensReserved !== "number" || !Number.isSafeInteger(outputTokensReserved) || outputTokensReserved < 0
+    || (minimumClass !== undefined && !isModelClass(minimumClass))
+    || (maxEstimatedCostUsd !== undefined && (typeof maxEstimatedCostUsd !== "number" || !Number.isFinite(maxEstimatedCostUsd) || maxEstimatedCostUsd < 0))) {
+    throw new Error("Invalid routing task requirements.");
+  }
+  return {
+    requestId, category,
+    requirements: {
+      capabilities, inputTokensRequired, outputTokensReserved,
+      ...(minimumClass === undefined ? {} : { minimumClass }),
+      ...(maxEstimatedCostUsd === undefined ? {} : { maxEstimatedCostUsd }),
+    },
+  };
+}
+
 function validateProposedLayer(value: unknown): RoutingV2ConfigLayer | undefined {
   if (value === undefined) return undefined;
-  const result = validateRoutingV2ConfigLayer(value);
+  const result = validateRoutingV2ConfigLayer(value, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
   if (!result.ok) throw new Error(`Invalid routing layer: ${result.errors.join(", ")}`);
   return value as RoutingV2ConfigLayer;
 }
 
+async function editRoutingSettings(args: readonly string[], location: RoutingConfigLocation): Promise<void> {
+  const [group, action, target, file, revisionFlag, expectedRevision] = args;
+  const normalization = { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY };
+  const settings = readActiveRoutingV2Settings(location.cwd, location.userConfigDir, normalization);
+  if (settings === undefined) throw new Error("Activate routing v2 with a reviewed migration plan first.");
+  if (group === "settings" && action === "list" && args.length === 2) {
+    console.log(JSON.stringify(settings, null, 2));
+    return;
+  }
+  if (action !== "set" || file === undefined || revisionFlag !== "--revision" || !expectedRevision || args.length !== 6) {
+    throw new Error("Supply a settings layer or model class, a JSON file, and --revision.");
+  }
+  let layer: "project" | "user";
+  let next: RoutingV2ConfigLayer | undefined;
+  if (group === "settings" && (target === "project" || target === "user")) {
+    layer = target;
+    next = validateProposedLayer(readRoutingJson(file));
+  } else if (group === "classes" && isModelClass(target)) {
+    layer = "user";
+    const user = settings.layers.user;
+    next = validateProposedLayer({
+      ...user,
+      schemaVersion: 2,
+      classes: { ...user?.classes, [target]: readRoutingJson(file) },
+    });
+  } else {
+    throw new Error("Invalid settings layer or model class.");
+  }
+  if (next === undefined) throw new Error("Expected a routing settings layer.");
+  const result = await updateActiveRoutingV2Layer({
+    cwd: location.cwd,
+    ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }),
+    layer,
+    expectedRevision,
+    next,
+    normalization,
+  });
+  console.log(JSON.stringify(result, null, 2));
+}
+
 async function migrateRouting(args: readonly string[], location: RoutingConfigLocation): Promise<void> {
-  const context = { cwd: location.cwd, ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }) };
+  const context = {
+    cwd: location.cwd,
+    ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }),
+    normalization: { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY },
+  };
   const [mode, file, confirmation] = args;
   if (mode === "--deactivate" && file === "--confirm" && args.length === 2) {
     console.log(JSON.stringify(await deactivateRoutingV2({ ...context, confirmed: true }), null, 2));
@@ -561,8 +688,24 @@ export async function routingCommand(args: string[], deps: RoutingCommandDeps = 
     console.log(JSON.stringify(config.classes, null, 2));
     return;
   }
+  if (command === "settings" || command === "classes") {
+    await editRoutingSettings(args, location);
+    return;
+  }
+  if (command === "explain") {
+    const file = args[2];
+    if (args[1] !== "--request" || file === undefined || args[3] !== "--json" || args.length !== 4) {
+      throw new Error("Usage: keryx routing explain --request <file.json> --json.");
+    }
+    const config = loadActiveRoutingV2(location.cwd, location.userConfigDir);
+    if (config === undefined) throw new Error("Routing v2 must be active to explain a request.");
+    await listRoutingV2(config, location, deps, true, explainRequest(readRoutingJson(file)));
+    return;
+  }
   if (command === "pilot" && args[1] !== undefined && args.length === 2) {
-    const result = summarizeRoutingPilot(pilotObservations(readRoutingJson(args[1])));
+    const result = summarizeRoutingPilot(args[1].endsWith(".jsonl")
+      ? pilotJournal(args[1])
+      : pilotObservations(readRoutingJson(args[1])));
     console.log(JSON.stringify(result, null, 2));
     return;
   }

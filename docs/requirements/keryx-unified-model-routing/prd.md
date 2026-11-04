@@ -1,7 +1,7 @@
 # PRD: четыре класса и единый роутинг
-Version: 0.1.0
+Version: 0.1.1
 
-Status: spec ready — runtime v2 не реализован.
+Status: draft implementation — требования остаются критериями приёмки PR #1128.
 
 ## Проблема
 

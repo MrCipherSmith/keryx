@@ -21,7 +21,12 @@ const policy: RoutingSnapshotPolicy = {
   observedLatencyMs: () => null,
 };
 
-const NOW = new Date("2026-11-04T00:04:00.000Z");
+const SNAPSHOT_META = {
+  observedAt: "2026-11-04T00:04:00.000Z",
+  catalogRevision: "catalog-v1",
+  policyRevision: "policy-v1",
+  capabilityRevision: "capabilities-v1",
+} as const;
 
 function profile(providerId: string, modelId: string, available = true): ModelProfile {
   return {
@@ -45,13 +50,13 @@ test("catalog snapshot keeps providers distinct and derives request cost from pr
     ["openrouter", "same"],
   ].map(([providerId, modelId]) => [profileKey(providerId!, modelId!), profile(providerId!, modelId!)]));
   const snapshot = buildCatalogRoutingSnapshot({
+    ...SNAPSHOT_META,
     configDigest: "config",
     baseline: request.baseline,
     providers: [{ name: "anthropic", models: ["same"] }, { name: "openrouter", models: ["same"] }],
     profiles,
     request,
     policy,
-    now: () => NOW,
   });
   expect(snapshot.models.map((entry) => entry.target)).toEqual([
     { providerId: "anthropic", modelId: "same" },
@@ -65,6 +70,7 @@ test("catalog snapshot keeps providers distinct and derives request cost from pr
 test("offline rows remain unknown and status-only providers never invent models", () => {
   const stored = profile("offline", "old");
   const snapshot = buildCatalogRoutingSnapshot({
+    ...SNAPSHOT_META,
     configDigest: "config",
     baseline: request.baseline,
     providers: [
@@ -75,23 +81,30 @@ test("offline rows remain unknown and status-only providers never invent models"
     profiles: { [profileKey("offline", "old")]: stored },
     request,
     policy,
-    now: () => NOW,
   });
   expect(snapshot.models).toHaveLength(1);
   expect(snapshot.models[0]).toMatchObject({ connected: false, availability: "unknown" });
+  expect(snapshot.authFailedProviderIds).toEqual(["broken"]);
 });
 
 test("snapshot digest is independent of provider catalogue order", () => {
   const providers = [{ name: "b", models: ["m"] }, { name: "a", models: ["m"] }];
   const profiles = Object.fromEntries(providers.map(({ name }) => [profileKey(name, "m"), profile(name, "m")]));
-  const input = { configDigest: "config", baseline: request.baseline, profiles, request, policy, now: () => NOW };
+  const input = { ...SNAPSHOT_META, configDigest: "config", baseline: request.baseline, profiles, request, policy };
   const left = buildCatalogRoutingSnapshot({ ...input, providers });
   const right = buildCatalogRoutingSnapshot({ ...input, providers: [...providers].reverse() });
   expect(left.snapshotDigest).toBe(right.snapshotDigest);
+  const changedPolicy = buildCatalogRoutingSnapshot({ ...input, providers, policyRevision: "policy-v2" });
+  const changedTime = buildCatalogRoutingSnapshot({ ...input, providers, observedAt: "2026-11-04T00:04:01.000Z" });
+  expect(changedPolicy.snapshotDigest).not.toBe(left.snapshotDigest);
+  expect(changedTime.snapshotDigest).not.toBe(left.snapshotDigest);
+  expect(Object.isFrozen(left)).toBeTrue();
+  expect(Object.isFrozen(left.models)).toBeTrue();
 });
 
 test("authenticated baseline is injected when its live provider row omits models", () => {
   const snapshot = buildCatalogRoutingSnapshot({
+    ...SNAPSHOT_META,
     configDigest: "config",
     baseline: request.baseline,
     providers: [{ name: "anthropic" }],
@@ -119,6 +132,7 @@ test("availability expires after five minutes without changing connection identi
   const available = profile("alpha", "fresh");
   const unavailable = { ...profile("alpha", "gone", false), refreshedAt: "2026-11-04T00:00:00.000Z" };
   const input = {
+    ...SNAPSHOT_META,
     configDigest: "config",
     baseline: request.baseline,
     providers: [{ name: "alpha", models: ["fresh", "gone"] }],
@@ -129,10 +143,10 @@ test("availability expires after five minutes without changing connection identi
     request,
     policy,
   };
-  const fresh = buildCatalogRoutingSnapshot({ ...input, now: () => NOW });
+  const fresh = buildCatalogRoutingSnapshot(input);
   expect(fresh.models.map((entry) => entry.availability)).toEqual(["available", "unavailable"]);
 
-  const stale = buildCatalogRoutingSnapshot({ ...input, now: () => new Date("2026-11-04T00:05:00.001Z") });
+  const stale = buildCatalogRoutingSnapshot({ ...input, observedAt: "2026-11-04T00:05:00.001Z" });
   expect(stale.models).toEqual(fresh.models.map((entry) => ({ ...entry, availability: "unknown" })));
   expect(stale.models.every((entry) => entry.connected)).toBe(true);
 });

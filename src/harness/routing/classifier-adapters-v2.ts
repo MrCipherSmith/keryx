@@ -12,6 +12,8 @@ const CATEGORIES = ["default", "review", "subagents", "quick", "coding", "planni
 const CLASSES = ["light", "standard", "expert", "frontier"] as const;
 const CAPABILITIES = ["tools", "vision", "structured-output"] as const;
 
+export const DEFAULT_JEV_ROUTING_TARGET = { providerId: "openrouter", modelId: "jev-1.13" } as const;
+
 export interface MainModelRoutingClassifierOptions {
   readonly providerId: string;
   readonly modelId: string;
@@ -28,7 +30,7 @@ export function mainModelRoutingClassifierAdapter(id: string, options: MainModel
         provider: options.providerId,
         model: options.modelId,
         system: `Classify the coding-assistant request. Return JSON only with exactly these fields: category (${CATEGORIES.join("|")}), modelClass (${CLASSES.join("|")}), confidence (0..1), reasonCode (short stable string), requiredCapabilities (array containing only ${CAPABILITIES.join("|")}).`,
-        user: task.slice(0, 4_000),
+        user: redactSensitiveText(task.slice(0, 4_000)),
         maxOutputTokens: 180,
         requestId: "keryx-routing-classifier-v2",
         ...(options.env === undefined ? {} : { env: options.env }),

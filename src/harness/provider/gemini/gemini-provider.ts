@@ -512,6 +512,9 @@ function classifyGeminiError(httpStatus: number, rpcStatus: string | undefined):
     // detection.
     return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "" };
   }
+  if (rpcStatus === "NOT_FOUND" || httpStatus === 404) {
+    return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "", detail: { modelNotFound: true } };
+  }
   if (httpStatus >= 400) {
     return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "" };
   }

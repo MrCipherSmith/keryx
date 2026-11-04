@@ -1,7 +1,7 @@
 # Спецификация единого роутинга моделей
-Version: 0.1.0
+Version: 0.1.1
 
-Status: spec ready — весь контракт v2 ниже планируется; существующие механизмы перечислены отдельно.
+Status: draft implementation — контракт v2 ниже задаёт критерии приёмки. Проверка финального CI и пилот требуются для выпуска.
 
 ## 1. Идентичность и исходные данные
 
@@ -93,13 +93,30 @@ Configuration fallback: модель pin/baseline по умолчанию strict
 
 Availability fallback разрешён до отправки запроса. Runtime fallback возможен только после подтверждённого terminal отказа до первого видимого токена и до любого tool execution. Учитывать уже понесённые затраты. Timeout с неизвестным remote outcome запрещает автоматическую повторную отправку. После первого токена или tool call — interrupted, ручное/существующее checkpoint recovery, без автоматического replay и склейки ответов разных моделей.
 
+Native remote execution в текущем protocol остаётся одно-попыточным и fail-closed. Его start/admission grant действует только во время применения исходной команды и закрывается до асинхронного execution; current-role read не продлевает этот grant и не авторизует другую пару provider/model. Поэтому native runtime не подключает общий multi-attempt executor: подтверждённый provider failure завершается как `provider-error` без fallback. Для включения native fallback нужен отдельный fresh execution-attempt grant, связанный с canonical candidateId, decisionId, parentDecisionId/fallbackReason, runId/turnId, текущими controller/session/config pins и native lease; receipt этого grant должен быть получен до любого I/O конкретной попытки. Отсутствие или отказ такого authorizer блокирует попытку, а не откатывает её на legacy/current-role authorization.
+
 401/403 → исключить credential identity до её изменения; 404 model-not-found → исключить пару до catalog refresh; 429 → уважать Retry-After и пробовать другой допустимый кандидат; 5xx → следующий кандидат без немедленного повтора той же пары. Permission/capability отказ нельзя лечить ослаблением policy. Общий maxAttempts=3 для executor, classifier attempts ограничены отдельно; selection deadline покрывает probes и перебор, а execution timeout остаётся собственностью harness. Cooldown ключуется по фактической identity; общий provider quota блокирует все соответствующие кандидаты. В пределах одного decision пара не исполняется дважды, даже если включена в разные классы.
 
 Полный набор причин: policy-denied, provider-scope-conflict, credentials-missing, auth-failed, model-unavailable, candidate-unverified, capability-missing, context-insufficient, cooldown, budget-exceeded, cost-unknown, minimum-class-unproven, class-below-minimum, empty-class, classifier-failed, config-invalid, attempts-exhausted, cancelled, uncertain-outcome. Человекочитаемые подробности редактируются существующей redaction системой.
 
 ## 9. Поверхности и наблюдаемость
 
-Новые planned CLI под существующим keryx routing: classes list/set; explain --request <file> --json; migrate --dry-run; migrate --apply <plan>; migrate --rollback <backup>. Это проект интерфейса, не доступные сейчас команды. Atomic setter использует schema validation, file lock и expected revision, исключая stale writes. Existing routing list/set/unset/profile сохраняются как compatibility surface с явным legacy/v2 режимом, без двойной записи.
+CLI настройки и диагностики:
+
+| Команда | Действие |
+| --- | --- |
+| `keryx routing classes list` | Показывает активные пулы четырёх классов. |
+| `keryx routing settings list` | Показывает слои пользователя и проекта и их текущую ревизию. |
+| `keryx routing classes set expert pool.json --revision <revision>` | Заменяет пул Expert в пользовательском слое. |
+| `keryx routing settings set project layer.json --revision <revision>` | Атомарно заменяет слой проекта после проверки ожидаемой ревизии. |
+| `keryx routing explain --request request.json --json` | Показывает решение для конкретных требований, без вызова классификатора. |
+| `keryx routing migrate --dry-run [proposed-layers.json]` | Строит план без изменения активных настроек. |
+| `keryx routing migrate --apply plan.json --confirm` | Активирует проверенный план. |
+| `keryx routing migrate --rollback plan.json --confirm` | Восстанавливает резервную копию, если конфигурация с тех пор не менялась. |
+| `keryx routing migrate --deactivate --confirm` | Возвращает legacy для будущих запусков и сохраняет текущие файлы конфигурации. |
+| `keryx routing pilot journal.jsonl` | Подсчитывает совпадения preview и исполнения и полноту связей fallback. |
+
+`layer.json` использует схему слоя v2, `pool.json` — её определение пула класса. После успешной правки прочитайте новую ревизию перед следующей записью. Команды legacy `set` и `unset` требуют явного `--legacy`, если v2 активен.
 
 /routing: разделы Categories, Classes, Providers, Classifier, Fallback; общий список моделей с провайдером, membership, доступностью и причиной исключения. Добавление в класс не меняет baseline. /model меняет baseline; UI показывает влияние session-only и preferSessionProvider, число pins на других провайдерах, не перезаписывает их.
 

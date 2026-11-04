@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createNativeRoutingClassifier } from "./native-classifier";
@@ -7,6 +7,7 @@ import { scriptedProvider } from "../commands/agent.test-helpers";
 import { saveRoutingConfig } from "../harness/routing/config";
 import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../harness/routing/migration-v2";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import type { RoutingV2ConfigLayer } from "../harness/routing/config-v2";
 import type { Control } from "../remote-control/protocol";
 const digest = "a".repeat(64);
 const standard = "claude-sonnet-5"; const deep = "claude-opus-4-8";
@@ -16,8 +17,8 @@ const config: Control["SessionConfig"] = { configVersion: 1, baselineCandidateId
   routing: { enabled: true, profileId: "local", candidateIds: [standard, deep], fallbackCandidateId: standard } };
 const bindings = () => [standard, deep].map((modelId) => ({ providerId: "anthropic", modelId, actualProviderId: "anthropic", actualModelId: modelId }));
 
-async function activateV2(cwd: string) {
-  const project = { schemaVersion: 2 as const,
+async function activateV2(cwd: string, override?: RoutingV2ConfigLayer) {
+  const project: RoutingV2ConfigLayer = override ?? { schemaVersion: 2 as const,
     categories: { review: { mode: "class" as const, modelClass: "expert" as const } },
     classes: { expert: { selection: "priority" as const, fallbackClasses: [], candidates: [{ target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 }] } } };
   const plan = await createRoutingV2MigrationPlan({ cwd, configDir: cwd, project });
@@ -37,6 +38,46 @@ test("production classifier composition uses the actual shared service with owne
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
 
+test("active v2 classifies once and preserves the classifier receipt in the journaled decision", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-auto-"));
+  const response = JSON.stringify({ category: "coding", modelClass: "expert", confidence: 0.95, reasonCode: "implementation", requiredCapabilities: ["tools"] });
+  const script = scriptedProvider([[{ kind: "text_delta", text: response }, { kind: "model_end" }]]);
+  try {
+    await activateV2(cwd, { schemaVersion: 2,
+      categories: { default: { mode: "auto" }, coding: { mode: "auto" } },
+      classes: { expert: { selection: "priority", fallbackClasses: [], candidates: [{ target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 }] } },
+      classifier: { chain: [{ adapterId: "model", target: { providerId: "anthropic", modelId: standard } }], timeoutMs: 2500, minConfidence: 0.7, onFailure: { mode: "baseline" } } });
+    let authorizations = 0;
+    const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: { ANTHROPIC_API_KEY: "fixture" }, availability: () => availability, bindings,
+      providerFactory: () => script.provider, outputTokensReserved: 100,
+      modelFacts: () => ({ connected: true, credentialsAvailable: true, capabilities: ["tools"], contextLength: 200_000, cooldown: false, estimatedCostUsd: 0, observedLatencyMs: null }) });
+    const result = await classifier("Implement a difficult change", config, { signal: new AbortController().signal, beforeIo: async () => { authorizations++; }, onUsage() {} });
+    expect(result).toEqual({ candidateId: deep, selectionReceiptId: expect.any(String) });
+    expect(authorizations).toBe(1);
+    expect(script.requests).toHaveLength(1);
+    const journalDir = join(cwd, "routing-v2", "journal");
+    const entries = (await Promise.all((await readdir(journalDir)).map((file) => readFile(join(journalDir, file), "utf8")))).flatMap((body) => body.trim().split("\n"));
+    expect(entries).toHaveLength(1);
+    expect(JSON.parse(entries[0]!)).toMatchObject({ kind: "dispatch", recommendationSource: "classifier", classifierReceiptId: expect.any(String) });
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("active v2 honors an explicit default assignment without classifier I/O", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-default-"));
+  const script = scriptedProvider([[{ kind: "text_delta", text: "coding" }, { kind: "model_end" }]]);
+  try {
+    await activateV2(cwd, { schemaVersion: 2,
+      categories: { default: { mode: "baseline" } },
+      classifier: { chain: [{ adapterId: "model", target: { providerId: "anthropic", modelId: deep } }], timeoutMs: 2500, minConfidence: 0.7, onFailure: { mode: "baseline" } } });
+    const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: { ANTHROPIC_API_KEY: "fixture" }, availability: () => availability, bindings,
+      providerFactory: () => script.provider, outputTokensReserved: 100,
+      modelFacts: () => ({ connected: true, credentialsAvailable: true, capabilities: ["tools"], contextLength: 200_000, cooldown: false, estimatedCostUsd: 0, observedLatencyMs: null }) });
+    const result = await classifier("A task without a deterministic category", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} });
+    expect(result).toEqual({ candidateId: standard, selectionReceiptId: expect.any(String) });
+    expect(script.requests).toHaveLength(0);
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
 test("active v2 uses the shared resolver and returns its canonical selection receipt", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-"));
   const script = scriptedProvider([[{ kind: "text_delta", text: "review" }, { kind: "model_end" }]]);
@@ -44,11 +85,16 @@ test("active v2 uses the shared resolver and returns its canonical selection rec
     await activateV2(cwd);
     expect(loadActiveRoutingV2(cwd, cwd)?.categories.review).toEqual({ mode: "class", modelClass: "expert" });
     const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: { ANTHROPIC_API_KEY: "fixture" }, availability: () => availability, bindings,
-      providerFactory: () => script.provider });
+      providerFactory: () => script.provider, outputTokensReserved: 100,
+      modelFacts: () => ({ connected: true, credentialsAvailable: true, capabilities: ["tools"], contextLength: 200_000, cooldown: false, estimatedCostUsd: 0, observedLatencyMs: null }) });
     const result = await classifier("Review PR", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} });
     expect(result).toEqual({ candidateId: deep, selectionReceiptId: expect.any(String) });
     expect((result as { selectionReceiptId: string }).selectionReceiptId).toHaveLength(64);
     expect(script.requests).toHaveLength(0);
+    const journalDir = join(cwd, "routing-v2", "journal");
+    const entries = (await Promise.all((await readdir(journalDir)).map((file) => readFile(join(journalDir, file), "utf8")))).flatMap((body) => body.trim().split("\n"));
+    expect(entries).toHaveLength(1);
+    expect(JSON.parse(entries[0]!)).toMatchObject({ kind: "dispatch", decisionId: (result as { selectionReceiptId: string }).selectionReceiptId });
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
 

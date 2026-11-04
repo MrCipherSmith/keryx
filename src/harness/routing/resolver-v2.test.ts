@@ -4,7 +4,7 @@ import type { RoutingDecision, RoutingReason } from "./decision";
 import type { ModelRef } from "./model-class";
 import { resolveRoutingDecision } from "./resolver";
 import type { RoutingRequest } from "./routing-request";
-import type { RoutingModelFacts, RoutingSnapshot } from "./snapshot";
+import { createRoutingSnapshot, type RoutingModelFacts } from "./snapshot";
 
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId });
 const baseline = ref("alpha", "standard-a");
@@ -41,14 +41,18 @@ function request(patch: Partial<RoutingRequest> = {}): RoutingRequest {
   };
 }
 
-function setup(layer: RoutingV2ConfigLayer, models: readonly RoutingModelFacts[], req = request()) {
+function setup(layer: RoutingV2ConfigLayer, models: readonly RoutingModelFacts[], req = request(), authFailedProviderIds: readonly string[] = []) {
   const config = normalizeRoutingV2Config({ user: layer });
-  const snapshot: RoutingSnapshot = {
+  const snapshot = createRoutingSnapshot({
     configDigest: config.configDigest,
-    snapshotDigest: "s1",
+    observedAt: "2026-11-04T00:00:00.000Z",
+    catalogRevision: "catalog-v1",
+    policyRevision: "policy-v1",
+    capabilityRevision: "capabilities-v1",
+    authFailedProviderIds,
     baseline: req.baseline,
     models,
-  };
+  });
   return { config, snapshot, req };
 }
 
@@ -81,7 +85,7 @@ test("user override beats project configuration and an agent recommendation", ()
     project: { schemaVersion: 2, categories: { review: { mode: "class", modelClass: "expert" } } },
   });
   const req = request({ userOverride: { mode: "model", target: chosen }, recommendation: { modelClass: "light", source: "agent" } });
-  const snapshot = { configDigest: config.configDigest, snapshotDigest: "s", baseline, models: [facts(baseline), facts(chosen)] };
+  const snapshot = createRoutingSnapshot({ configDigest: config.configDigest, observedAt: "2026-11-04T00:00:00.000Z", catalogRevision: "catalog-v1", policyRevision: "p1", capabilityRevision: "c1", authFailedProviderIds: [], baseline, models: [facts(baseline), facts(chosen)] });
   const decision = resolveRoutingDecision(req, snapshot, config);
   expect(decision.assignmentSource).toBe("user-override");
   expect(selectionOf(decision)).toEqual(chosen);
@@ -135,7 +139,8 @@ test("same-class fallback and tie breaking are deterministic", () => {
   const models = [facts(offline, { availability: "unavailable" }), facts(a), facts(b)];
   const { config, snapshot, req } = setup(layer, models);
   const first = resolveRoutingDecision(req, snapshot, config);
-  const second = resolveRoutingDecision(req, { ...snapshot, models: [...models].reverse() }, config);
+  const reordered = createRoutingSnapshot({ ...snapshot, models: [...models].reverse() });
+  const second = resolveRoutingDecision(req, reordered, config);
   expect(selectionOf(first)).toEqual(a);
   expect(selectionOf(second)).toEqual(a);
   expect(first.exclusions).toContainEqual({ target: offline, modelClass: "expert", reason: "model-unavailable" });
@@ -197,6 +202,23 @@ test("normalization replaces classes atomically and rejects duplicate or self fa
   expect(config.classes.expert.selection).toBe("latency");
   expect(() => normalizeRoutingV2Config({ user: { schemaVersion: 2, classes: { expert: { candidates: [], selection: "priority", fallbackClasses: ["expert"] } } } })).toThrow();
   expect(() => normalizeRoutingV2Config({ user: { schemaVersion: 2, classes: { expert: { candidates: [{ target: one, enabled: true, priority: 1 }, { target: one, enabled: true, priority: 2 }], selection: "priority", fallbackClasses: [] } } } })).toThrow();
+  const cyclicLayer: RoutingV2ConfigLayer = { schemaVersion: 2, classes: {
+      expert: { candidates: [], selection: "priority", fallbackClasses: ["standard"] },
+      standard: { candidates: [], selection: "priority", fallbackClasses: ["expert"] },
+    } };
+  expect(validateRoutingV2ConfigLayer(cyclicLayer).ok).toBeFalse();
+  expect(() => normalizeRoutingV2Config({ user: cyclicLayer })).toThrow(/cycle/);
+  const classifierLayer: RoutingV2ConfigLayer = {
+    schemaVersion: 2,
+    classifier: { chain: [{ adapterId: "jev" }], timeoutMs: 1_000, minConfidence: 0.7, onFailure: { mode: "baseline" } },
+  };
+  expect(validateRoutingV2ConfigLayer(classifierLayer).ok).toBeFalse();
+  expect(validateRoutingV2ConfigLayer(classifierLayer, { classifierAdapters: new Set(["jev"]) }).ok).toBeTrue();
+  expect(() => normalizeRoutingV2Config({ user: classifierLayer })).toThrow(/registry/);
+  expect(() => normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["model"]) })).toThrow(/unregistered/);
+  expect(normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["jev"]) }).classifier.chain).toHaveLength(1);
+  const untargetedModel = { ...classifierLayer, classifier: { ...classifierLayer.classifier!, chain: [{ adapterId: "model" }] } };
+  expect(() => normalizeRoutingV2Config({ user: untargetedModel }, { classifierAdapters: new Set(["model"]) })).toThrow(/explicit target/);
 });
 
 test("auto waits for classification and applies fallback only after explicit failure", () => {
@@ -222,6 +244,19 @@ test("auto waits for classification and applies fallback only after explicit fai
   expect(selectionOf(overrideDecision)).toEqual(expert);
   expect(overrideDecision.assignmentSource).toBe("user-override");
   expect(overrideDecision.recommendationSource).toBe("agent");
+
+  const explicit = setup(expertLayer([expert]), [facts(expert)], request({ classification: { status: "failed", receiptId: "preserved" } }));
+  expect(resolveRoutingDecision(explicit.req, explicit.snapshot, explicit.config).classifierReceiptId).toBe("preserved");
+  const classifiedExplicit = setup(expertLayer([expert]), [facts(expert)], request({ recommendation: { modelClass: "light", source: "classifier", receiptId: "classified-preserved" } }));
+  expect(resolveRoutingDecision(classifiedExplicit.req, classifiedExplicit.snapshot, classifiedExplicit.config).classifierReceiptId).toBe("classified-preserved");
+});
+
+test("confirmed provider authentication failure wins over missing candidate facts", () => {
+  const expert = ref("broken", "expert");
+  const configured = setup(expertLayer([expert]), [], request(), ["broken"]);
+  const decision = resolveRoutingDecision(configured.req, configured.snapshot, configured.config);
+  expect(decision.status).toBe("blocked");
+  expect(decision.exclusions).toContainEqual({ target: expert, modelClass: "expert", reason: "auth-failed" });
 });
 
 test("validation rejects schema drift at every nested boundary", () => {
@@ -248,6 +283,11 @@ test("normalization takes immutable copies and decisions include request semanti
   candidates[0]!.priority = 99;
   expect(configured.config.classes.expert.candidates[0]!.priority).toBe(1);
   expect(Object.isFrozen(configured.config.classes.expert.candidates)).toBeTrue();
+  const mutableFacts = { ...facts(expert) };
+  const frozenSnapshot = setup(layer, [mutableFacts]).snapshot;
+  mutableFacts.policyAllowed = false;
+  expect(frozenSnapshot.models[0]!.policyAllowed).toBeTrue();
+  expect(Object.isFrozen(frozenSnapshot.models[0]!.capabilities)).toBeTrue();
   const tools = request({ parentDecisionId: "parent-1", requirements: { capabilities: ["tools"], inputTokensRequired: 1, outputTokensReserved: 1 } });
   const vision = request({ requirements: { capabilities: ["vision"], inputTokensRequired: 1, outputTokensReserved: 1 } });
   const toolsSetup = setup(layer, [facts(expert)], tools);
@@ -259,10 +299,14 @@ test("normalization takes immutable copies and decisions include request semanti
 
 test("invalid or duplicate snapshot facts fail closed", () => {
   const expert = ref("alpha", "expert");
-  const configured = setup(expertLayer([expert]), [facts(expert, { contextLength: Number.NaN })], request({ requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 } }));
-  expect(resolveRoutingDecision(configured.req, configured.snapshot, configured.config).exclusions.at(-1)?.reason).toBe("candidate-unverified");
+  const configured = setup(expertLayer([expert]), [facts(expert)], request({ requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 } }));
+  expect(() => createRoutingSnapshot({ ...configured.snapshot, models: [facts(expert, { contextLength: Number.NaN })] })).toThrow();
   const duplicate = { ...configured.snapshot, models: [facts(expert), facts(expert)] };
   const decision = resolveRoutingDecision(configured.req, duplicate, configured.config);
   expect(decision.status).toBe("blocked");
   if (decision.status === "blocked") expect(decision.reason).toBe("config-invalid");
+  const tampered = Object.freeze({ ...configured.snapshot, policyRevision: "policy-v2" });
+  const tamperedDecision = resolveRoutingDecision(configured.req, tampered, configured.config);
+  expect(tamperedDecision.status).toBe("blocked");
+  if (tamperedDecision.status === "blocked") expect(tamperedDecision.reason).toBe("config-invalid");
 });

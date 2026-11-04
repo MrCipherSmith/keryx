@@ -120,3 +120,32 @@ test("classifier reservation reconciles provider-reported actual cost", async ()
   });
   expect(budget.snapshot()).toEqual({ capUsd: 1, spentUsd: 0.2, reservedUsd: 0, remainingUsd: 0.8 });
 });
+
+test("classifier receipt binds request input and config identity", async () => {
+  const classifier = adapter("model", async () => accepted);
+  const context = { receiptVersion: 1 as const, requestId: "request-a", configDigest: "config-a", requirementsDigest: "requirements-a" };
+  const first = await runRoutingClassifierChain("task-a", {
+    ...options([classifier]),
+    receiptContext: context,
+  });
+  const changedInput = await runRoutingClassifierChain("task-b", {
+    ...options([classifier]),
+    receiptContext: context,
+  });
+  const changedConfig = await runRoutingClassifierChain("task-a", {
+    ...options([classifier]),
+    receiptContext: { ...context, configDigest: "config-b" },
+  });
+  const changedRequirements = await runRoutingClassifierChain("task-a", {
+    ...options([classifier]),
+    receiptContext: { ...context, requirementsDigest: "requirements-b" },
+  });
+  expect(first.status).toBe("classified");
+  expect(changedInput.status).toBe("classified");
+  expect(changedConfig.status).toBe("classified");
+  expect(changedRequirements.status).toBe("classified");
+  if (first.status !== "classified" || changedInput.status !== "classified" || changedConfig.status !== "classified" || changedRequirements.status !== "classified") return;
+  expect(first.receiptId).not.toBe(changedInput.receiptId);
+  expect(first.receiptId).not.toBe(changedConfig.receiptId);
+  expect(first.receiptId).not.toBe(changedRequirements.receiptId);
+});

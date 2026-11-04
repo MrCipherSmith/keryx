@@ -285,3 +285,14 @@ test("unsetRoutingCategory on an UNAPPROVED project layer preserves the rest, re
   const raw = await loadRoutingConfigRaw("project", loc);
   expect(raw.table).toEqual({ quick: { kind: "provider-default", providerId: "deepseek" } });
 });
+
+test("concurrent project category edits preserve both assignments", async () => {
+  const loc = await location();
+  const review = { kind: "model", providerId: "provider-a", modelId: "model-a" } as const;
+  const docs = { kind: "model", providerId: "provider-b", modelId: "model-b" } as const;
+  await Promise.all([
+    setRoutingCategory("project", loc, "review", review),
+    setRoutingCategory("project", loc, "docs", docs),
+  ]);
+  expect((await loadRoutingConfigRaw("project", loc)).table).toEqual({ review, docs });
+});

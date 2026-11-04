@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const SOURCE = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+const ROUTING_SOURCE = readFileSync(join(import.meta.dir, "routing-classifier-source.ts"), "utf8");
 const FN_START = SOURCE.indexOf("export async function launchTuiAgentShell(opts: {");
 
 test("launchTuiAgentShell exists and this audit is anchored inside it", () => {
@@ -114,4 +115,43 @@ test("routing dispatch and picker share their catalog loader, both handed the sh
   const showRoutingAt = SOURCE.indexOf("openRouting(otui, chrome, {", FN_START);
   expect(showRoutingAt).toBeGreaterThan(FN_START);
   expect(SOURCE.slice(showRoutingAt, showRoutingAt + 1200)).toContain("redetect: opts.redetect");
+});
+
+test("active v2 routing receives the frozen real turn envelope and proven baseline capabilities", () => {
+  const start = SOURCE.indexOf('if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {', FN_START);
+  const body = SOURCE.slice(start, SOURCE.indexOf("// Flow 341", start));
+  expect(body).toContain("requestId: sessionDeps.idSeq()");
+  expect(body).toContain("inputTokensRequired: estimateRequestTokens(");
+  expect(body).toContain("sessionDeps.tools.map((tool) => tool.definition)");
+  expect(body).toContain("outputTokensReserved: sessionDeps.maxOutputTokens ?? resolveAgentMaxOutputTokens()");
+  expect(body).toContain("baselineCapabilities");
+});
+
+test("routing v2 shadow journals a no-I/O preview and then preserves legacy execution", () => {
+  const flagAt = ROUTING_SOURCE.indexOf('const shadowV2 = env.KERYX_ROUTING_V2_SHADOW === "1";');
+  const shadowAt = ROUTING_SOURCE.indexOf("if (activeV2 !== undefined && shadowV2) {", flagAt);
+  const activeAt = ROUTING_SOURCE.indexOf("if (activeV2 !== undefined && !shadowV2) {", shadowAt);
+  const legacyAt = ROUTING_SOURCE.indexOf("const classification = await classifyTurn(", activeAt);
+  expect(flagAt).toBeGreaterThan(-1);
+  expect(shadowAt).toBeGreaterThan(flagAt);
+  expect(activeAt).toBeGreaterThan(shadowAt);
+  expect(legacyAt).toBeGreaterThan(activeAt);
+  const shadow = ROUTING_SOURCE.slice(shadowAt, activeAt);
+  expect(shadow).toContain("resolveRoutingForRuntime({");
+  expect(shadow).toContain('kind: "preview"');
+  expect(shadow).not.toContain("runProductionRoutingClassification");
+});
+
+test("TUI v2 wraps the authorized fixed target with the classifier's shared budget and receipt", () => {
+  const start = SOURCE.indexOf("const routingV2 = routingOutcome?.routingV2;", FN_START);
+  const end = SOURCE.indexOf("// Flow 341", start);
+  const body = SOURCE.slice(start, end);
+  expect(start).toBeGreaterThan(FN_START);
+  expect(body).toContain("createMeteredRoutingProvider({");
+  expect(body).toContain("receipt: routingV2.receipt");
+  expect(body).toContain("budget: routingV2.budget");
+  expect(body).toContain("beforeIo: routingV2.beforeIo");
+  expect(body).toContain("estimatedCostUsd: routingV2.estimatedCostUsd");
+  expect(body).toContain("deps.providerId !== routingV2.target.providerId");
+  expect(ROUTING_SOURCE).not.toContain("finite routing budget cannot be enforced by the TUI agent-loop boundary");
 });

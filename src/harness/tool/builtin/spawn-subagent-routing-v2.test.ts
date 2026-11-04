@@ -5,6 +5,7 @@ import path from "node:path";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
 import type { RoutingV2ConfigLayer } from "../../routing/config-v2";
 import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../../routing/migration-v2";
+import { setModelProfileField } from "../../routing/model-profile";
 import { createSpawnSubagentTool, type SpawnSubagentFleetEvent } from "./spawn-subagent-tool";
 
 const roots: string[] = [];
@@ -13,13 +14,13 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-function stubProvider(): ProviderPort {
+function stubProvider(text = "done", onStream?: () => void): ProviderPort {
   return {
     describe() {
       return {
         capabilities: {
           streaming: true,
-          toolCalls: false,
+          toolCalls: true,
           parallelToolCalls: false,
           structuredOutput: false,
           reasoningMetadata: false,
@@ -32,7 +33,8 @@ function stubProvider(): ProviderPort {
       };
     },
     async *stream(_request, options: StreamOptions): AsyncIterable<NormalizedEvent> {
-      yield { kind: "text_delta", sequence: 0, attemptId: options.attemptId, text: "done" };
+      onStream?.();
+      yield { kind: "text_delta", sequence: 0, attemptId: options.attemptId, text };
       yield { kind: "model_end", sequence: 1, attemptId: options.attemptId };
     },
   };
@@ -41,15 +43,22 @@ function stubProvider(): ProviderPort {
 async function activeTool(
   user: RoutingV2ConfigLayer,
   detected: readonly { name: string; models?: readonly string[] }[] = [{ name: "ollama", models: ["medium", "max"] }],
+  providerText = "done",
 ) {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-project-"));
   const configDir = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-config-"));
   roots.push(cwd, configDir);
   await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+  for (const provider of detected) {
+    for (const modelId of provider.models ?? []) {
+      await setModelProfileField(provider.name, modelId, { field: "contextLength", value: 100_000 }, configDir);
+    }
+  }
   const plan = await createRoutingV2MigrationPlan({ cwd, configDir, user });
   await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir });
 
   const built: Array<{ providerId: string; modelId: string }> = [];
+  const streamed: Array<{ providerId: string; modelId: string }> = [];
   const events: SpawnSubagentFleetEvent[] = [];
   const tool = createSpawnSubagentTool({
     cwd,
@@ -58,8 +67,9 @@ async function activeTool(
     getDetectedProviders: () => detected,
     makeProvider: (providerId, modelId) => {
       built.push({ providerId, modelId });
-      return stubProvider();
+      return stubProvider(providerText, () => streamed.push({ providerId, modelId }));
     },
+    describeProvider: () => stubProvider().describe(),
     idSeq: (() => {
       let value = 0;
       return () => `v2-${value++}`;
@@ -67,7 +77,7 @@ async function activeTool(
     clock: () => "2026-11-04T00:00:00.000Z",
     onFleetEvent: (event) => events.push(event),
   });
-  return { tool, built, events };
+  return { tool, built, streamed, events };
 }
 
 const classConfig = {
@@ -93,6 +103,7 @@ test("routing v2 category outranks an agent model_class recommendation and keeps
 
   expect(result.isError).toBe(false);
   expect(built).toEqual([{ providerId: "ollama", modelId: "medium" }]);
+  expect(result.output).toMatch(/routing v2 [a-f0-9]{64} → ollama\/medium \[user\/none\]/);
   const routingLog = events.find(
     (event) => event.kind === "log" && event.entry.kind === "system" && event.entry.text.startsWith("routing v2 "),
   );
@@ -117,6 +128,36 @@ test("routing v2 auto may use model_class as an agent recommendation without mak
   expect(logText).not.toContain("user-override");
 });
 
+test("routing v2 auto uses the shared production classifier path", async () => {
+  const classifierReply = JSON.stringify({
+    category: "subagents",
+    modelClass: "frontier",
+    confidence: 0.95,
+    reasonCode: "hard-subtask",
+    requiredCapabilities: ["tools"],
+  });
+  const { tool, built, events } = await activeTool({
+    schemaVersion: 2,
+    classes: classConfig,
+    categories: { subagents: { mode: "auto" } },
+    classifier: {
+      chain: [{ adapterId: "model", target: { providerId: "ollama", modelId: "medium" } }],
+      timeoutMs: 3_000,
+      minConfidence: 0.7,
+      onFailure: { mode: "baseline" },
+    },
+  }, undefined, classifierReply);
+  const result = await tool.invoke({ task: "classify this hard task", mode: "read_only" });
+
+  expect(result.isError).toBe(false);
+  expect(built).toEqual([
+    { providerId: "ollama", modelId: "medium" },
+    { providerId: "ollama", modelId: "max" },
+  ]);
+  expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
+    .toContain("user/classifier -> ollama/max");
+});
+
 test("routing v2 blocks an unverified subagent target before provider construction", async () => {
   const { tool, built } = await activeTool({
     schemaVersion: 2,
@@ -127,6 +168,28 @@ test("routing v2 blocks an unverified subagent target before provider constructi
   expect(result).toMatchObject({ status: "Denied", isError: true });
   expect(result.output).toContain("candidate-unverified");
   expect(built).toEqual([]);
+});
+
+test("routing v2 finite execution budget blocks unknown child cost before provider I/O", async () => {
+  const { tool, built, streamed, events } = await activeTool({
+    schemaVersion: 2,
+    classes: classConfig,
+    categories: { subagents: { mode: "class", modelClass: "standard" } },
+    execution: {
+      maxAttempts: 3,
+      selectionTimeoutMs: 3_000,
+      maxEstimatedCostUsd: 1,
+      unknownCost: "allow",
+    },
+  });
+  const result = await tool.invoke({ task: "must be budgeted", mode: "read_only" });
+
+  expect(result).toMatchObject({ status: "Denied", isError: true });
+  expect(result.output).toContain("execution budget: cost-unknown");
+  expect(built).toEqual([{ providerId: "ollama", modelId: "medium" }]);
+  expect(streamed).toEqual([]);
+  expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
+    .toContain("execution denied before provider I/O (cost-unknown)");
 });
 
 test("routing v2 snapshot preserves the child provider authorization gate", async () => {

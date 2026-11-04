@@ -323,18 +323,18 @@ export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { w
   const out: FlatPickerProvider[] = [];
   for (const entry of Object.values(catalog.providers)) {
     if (entry.status === "ok") {
-      out.push({ name: entry.name, models: entry.models });
+      out.push({ name: entry.name, models: entry.models, observedAt: entry.fetchedAt });
       continue;
     }
     if (entry.status === "auth-failed") {
-      if (opts.withStatusRows === true) out.push({ name: entry.name, models: [], authFailed: true });
+      if (opts.withStatusRows === true) out.push({ name: entry.name, models: [], authFailed: true, observedAt: entry.fetchedAt });
       continue;
     }
     // unreachable | timeout | not-supported
     if (entry.fallbackModels.length > 0) {
-      out.push({ name: entry.name, models: entry.fallbackModels, offline: true });
+      out.push({ name: entry.name, models: entry.fallbackModels, offline: true, observedAt: entry.fetchedAt });
     } else if (opts.withStatusRows === true) {
-      out.push({ name: entry.name, models: [], listUnavailable: describeCatalogStatus(entry.status) });
+      out.push({ name: entry.name, models: [], listUnavailable: describeCatalogStatus(entry.status), observedAt: entry.fetchedAt });
     }
   }
   return out;

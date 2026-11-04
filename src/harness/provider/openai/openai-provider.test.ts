@@ -263,6 +263,13 @@ describe("temporary OpenAI overload 403", () => {
   }
 });
 
+test("OpenAI HTTP 404 is marked as model-not-found for safe routing fallback", async () => {
+  const { fetch: fetchMock } = makeFetchMock(() => new Response(JSON.stringify({ error: { code: "model_not_found", message: "model not found" } }), { status: 404 }));
+  const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+  const events = await collectEvents(provider.stream(buildRequest("missing-model"), { attemptId: "missing-model" }));
+  expect(events[0]?.error).toMatchObject({ kind: "invalid_request", retryable: false, detail: { modelNotFound: true } });
+});
+
 describe("AC1 — the documented empty-message context-overflow bug never surfaces an empty string", () => {
   test("terminal error event with empty message + context_length_exceeded code -> classified, non-empty message", async () => {
     const { fetch: fetchMock } = makeFixtureFetchMock(ERROR_FIXTURE_PATH);

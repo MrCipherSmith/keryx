@@ -9,9 +9,11 @@ import {
   createRoutingV2MigrationPlan,
   deactivateRoutingV2,
   proposeRoutingV2Categories,
+  readActiveRoutingV2Settings,
   readActiveRoutingV2Layers,
   rollbackRoutingV2Migration,
   routingV2ActivationPath,
+  updateActiveRoutingV2Layer,
   type RoutingV2MigrationFaultPoint,
   type RoutingV2RollbackFaultPoint,
 } from "./migration-v2";
@@ -220,11 +222,12 @@ describe("routing v2 migration", () => {
     const f = await fixture();
     const plan = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
     await applyRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
+    const active = readActiveRoutingV2Layers(f.cwd, f.configDir);
     const failAt = (point: RoutingV2RollbackFaultPoint) => {
       if (point === "after-project-restore") throw new Error("simulated rollback crash");
     };
     await expect(rollbackRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir, fault: failAt })).rejects.toThrow("simulated rollback crash");
-    expect(() => readActiveRoutingV2Layers(f.cwd, f.configDir)).toThrow("digest mismatch");
+    expect(readActiveRoutingV2Layers(f.cwd, f.configDir)).toEqual(active);
     expect(await rollbackRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir })).toMatchObject({ status: "rolled-back" });
     expect(await readFile(f.projectFile, "utf8")).toBe(f.projectBytes);
     expect(await readFile(f.userFile, "utf8")).toBe(f.userBytes);
@@ -254,6 +257,94 @@ describe("routing v2 migration", () => {
     expect(await readFile(f.projectFile, "utf8")).toBe(project);
     expect(await readFile(f.userFile, "utf8")).toBe(user);
     expect(readActiveRoutingV2Layers(f.cwd, f.configDir)).toBeUndefined();
+  });
+
+  test("active layer edits use expected revisions and preserve unrelated auth state", async () => {
+    const f = await fixture();
+    const plan = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
+    await applyRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
+    const before = readActiveRoutingV2Settings(f.cwd, f.configDir);
+    expect(before).toBeDefined();
+    if (before === undefined) throw new Error("expected active settings");
+    const next = { schemaVersion: 2 as const, categories: { coding: { mode: "baseline" as const } } };
+    const updated = await updateActiveRoutingV2Layer({
+      cwd: f.cwd,
+      configDir: f.configDir,
+      layer: "project",
+      expectedRevision: before.revision,
+      next,
+    });
+    expect(updated.status).toBe("updated");
+    expect(updated.revision).not.toBe(before.revision);
+    expect(readActiveRoutingV2Settings(f.cwd, f.configDir)).toEqual({
+      layers: { project: next, user: f.user },
+      revision: updated.revision,
+    });
+    expect(JSON.parse(await readFile(f.userFile, "utf8"))).toMatchObject({ apiKeys: { anthropic: "secret-value" } });
+    const restored = await updateActiveRoutingV2Layer({
+      cwd: f.cwd,
+      configDir: f.configDir,
+      layer: "project",
+      expectedRevision: updated.revision,
+      next: f.project,
+    });
+    expect(restored.revision).not.toBe(before.revision);
+    await expect(rollbackRoutingV2Migration(plan, {
+      confirmed: true,
+      cwd: f.cwd,
+      configDir: f.configDir,
+    })).rejects.toThrow("edited after migration");
+    await expect(updateActiveRoutingV2Layer({
+      cwd: f.cwd,
+      configDir: f.configDir,
+      layer: "project",
+      expectedRevision: before.revision,
+      next: f.project,
+    })).rejects.toThrow("revision conflict");
+  });
+
+  test("active user edits merge against refreshed credentials", async () => {
+    const f = await fixture();
+    const plan = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
+    await applyRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
+    const active = readActiveRoutingV2Settings(f.cwd, f.configDir);
+    if (active === undefined) throw new Error("expected active settings");
+    const current = JSON.parse(await readFile(f.userFile, "utf8"));
+    await writeFile(f.userFile, `${JSON.stringify({ ...current, apiKeys: { anthropic: "rotated-secret" } }, null, 2)}\n`, { mode: 0o600 });
+    const next = { schemaVersion: 2 as const, categories: { quick: { mode: "class" as const, modelClass: "light" as const } } };
+    const result = await updateActiveRoutingV2Layer({
+      cwd: f.cwd,
+      configDir: f.configDir,
+      layer: "user",
+      expectedRevision: active.revision,
+      next,
+    });
+    expect(result.status).toBe("updated");
+    expect(JSON.parse(await readFile(f.userFile, "utf8"))).toMatchObject({
+      apiKeys: { anthropic: "rotated-secret" },
+      routingV2: next,
+    });
+  });
+
+  test("an interrupted active edit is recovered and a retry is idempotent", async () => {
+    const f = await fixture();
+    const plan = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
+    await applyRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
+    const active = readActiveRoutingV2Settings(f.cwd, f.configDir);
+    if (active === undefined) throw new Error("expected active settings");
+    const next = { schemaVersion: 2 as const, categories: { coding: { mode: "baseline" as const } } };
+    const request = { cwd: f.cwd, configDir: f.configDir, layer: "project" as const, expectedRevision: active.revision, next };
+    await expect(updateActiveRoutingV2Layer({
+      ...request,
+      fault: (point) => {
+        if (point === "after-config-write") throw new Error("simulated edit crash");
+      },
+    })).rejects.toThrow("simulated edit crash");
+    expect(readActiveRoutingV2Settings(f.cwd, f.configDir)).toEqual(active);
+    const recovered = await updateActiveRoutingV2Layer(request);
+    expect(recovered.status).toBe("already-applied");
+    expect(await Bun.file(`${routingV2ActivationPath(f.cwd, f.configDir)}.edit.json`).exists()).toBe(false);
+    expect(readActiveRoutingV2Settings(f.cwd, f.configDir)?.layers.project).toEqual(next);
   });
 });
 

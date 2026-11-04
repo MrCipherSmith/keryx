@@ -44,6 +44,13 @@ export interface RunRoutingClassifierChainOptions<Input> {
   readonly estimatedCostUsd?: (adapter: RoutingClassifierAdapter<Input>) => number | null;
   /** Provider usage reconciler; undefined keeps the conservative reservation amount. */
   readonly actualCostUsd?: (adapter: RoutingClassifierAdapter<Input>) => number | undefined;
+  /** Stable, non-secret identities that bind the receipt to its routing request/config. */
+  readonly receiptContext?: {
+    readonly receiptVersion: 1;
+    readonly requestId: string;
+    readonly configDigest: string;
+    readonly requirementsDigest: string;
+  };
 }
 
 const CATEGORIES = new Set<RoutingCategory>(["default", "review", "subagents", "quick", "coding", "planning", "docs", "unattended"]);
@@ -94,6 +101,14 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
   if (adapterIds.some((id) => id.length === 0) || new Set(adapterIds).size !== adapterIds.length) throw new Error("classifier adapter ids must be non-empty and unique");
 
   const trace: ClassificationTraceEntry[] = [];
+  const receiptBinding = {
+    inputDigest: routingV2Digest(input),
+    adapterIds,
+    deadlineMs,
+    minConfidence: options.minConfidence,
+    onFailure: options.onFailure,
+    ...(options.receiptContext === undefined ? {} : { context: options.receiptContext }),
+  };
   if (options.signal?.aborted) return cancelled(trace);
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort(options.signal?.reason);
@@ -138,7 +153,7 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
             status: "classified",
             classification,
             adapterId: adapter.id,
-            receiptId: routingV2Digest({ adapterId: adapter.id, classification, trace }),
+            receiptId: routingV2Digest({ ...receiptBinding, adapterId: adapter.id, classification, trace }),
             trace,
           };
         } catch {
@@ -169,7 +184,7 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
       status: "fallback",
       assignment: options.onFailure,
       reason: "classifier-failed",
-      receiptId: routingV2Digest({ assignment: options.onFailure, reason: "classifier-failed", trace }),
+      receiptId: routingV2Digest({ ...receiptBinding, assignment: options.onFailure, reason: "classifier-failed", trace }),
       trace,
     };
   } finally {

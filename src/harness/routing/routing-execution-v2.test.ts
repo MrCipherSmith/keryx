@@ -3,7 +3,8 @@ import { normalizeRoutingV2Config, type RoutingV2ConfigLayer } from "./config-v2
 import type { ModelRef } from "./model-class";
 import { executeRoutingWithFallback } from "./routing-execution-v2";
 import type { RoutingRequest } from "./routing-request";
-import type { RoutingModelFacts, RoutingSnapshot } from "./snapshot";
+import { createRoutingSnapshot, type RoutingModelFacts } from "./snapshot";
+import { RoutingBudgetLedger } from "./routing-budget";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort } from "../provider/types";
 
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId });
@@ -14,17 +15,33 @@ function facts(target: ModelRef): RoutingModelFacts {
   return { target, connected: true, credentialsAvailable: true, policyAllowed: true, parentAllowed: true, availability: "available", capabilities: ["tools"], contextLength: 100_000, cooldown: false, estimatedCostUsd: 0.1, observedLatencyMs: 10 };
 }
 
-function setup() {
+function setup(selectionTimeoutMs = 3_000) {
   const layer: RoutingV2ConfigLayer = {
     schemaVersion: 2,
     classes: { expert: { candidates: [{ target: first, enabled: true, priority: 2 }, { target: second, enabled: true, priority: 1 }], selection: "priority", fallbackClasses: [] } },
     categories: { coding: { mode: "class", modelClass: "expert" } },
-    execution: { maxAttempts: 3, selectionTimeoutMs: 3_000, maxEstimatedCostUsd: null, unknownCost: "allow" },
+    execution: { maxAttempts: 3, selectionTimeoutMs, maxEstimatedCostUsd: null, unknownCost: "allow" },
   };
   const config = normalizeRoutingV2Config({ user: layer });
   const request: RoutingRequest = { requestId: "run", category: "coding", origin: "operator", baseline: first, requirements: { capabilities: [], inputTokensRequired: 10, outputTokensReserved: 10 } };
-  const snapshot: RoutingSnapshot = { configDigest: config.configDigest, snapshotDigest: "snapshot", baseline: first, models: [facts(first), facts(second)] };
-  return { config, request, snapshot };
+  const snapshot = createRoutingSnapshot({
+    configDigest: config.configDigest,
+    observedAt: "2026-11-04T00:00:00.000Z",
+    catalogRevision: "catalog-1",
+    policyRevision: "policy-1",
+    capabilityRevision: "capability-1",
+    authFailedProviderIds: [],
+    baseline: first,
+    models: [facts(first), facts(second)],
+  });
+  return {
+    config,
+    request,
+    snapshot,
+    budget: new RoutingBudgetLedger({ unknownCost: "allow" }),
+    beforeIo: async () => ({ ok: true as const }),
+    now: () => new Date("2026-11-04T00:00:01.000Z"),
+  };
 }
 
 function requestFor(target: ModelRef, attemptId: string): NormalizedRequest {
@@ -49,9 +66,11 @@ const errorEvent = (attemptId: string, kind: "rate_limit" | "overloaded" | "unav
 
 test("confirmed 429 before output selects the next model and links receipts", async () => {
   const input = setup();
+  const delivered: NormalizedEvent[] = [];
   const result = await executeRoutingWithFallback({
     ...input,
     buildRequest: requestFor,
+    onEvent: (event) => { delivered.push(event); },
     providerFor: (target) => target.providerId === "alpha"
       ? provider((attemptId) => [errorEvent(attemptId, "rate_limit")])
       : provider((attemptId) => [{ kind: "model_end", sequence: 1, attemptId }]),
@@ -60,6 +79,7 @@ test("confirmed 429 before output selects the next model and links receipts", as
   expect(result.attempts.map((attempt) => attempt.target)).toEqual([first, second]);
   expect(result.receipts[1]?.previousDecisionId).toBe(result.receipts[0]?.decision.decisionId);
   expect(result.receipts[1]?.fallbackReason).toBe("cooldown");
+  expect(delivered.some((event) => event.kind === "provider_error")).toBe(false);
 });
 
 test("confirmed unavailable model falls back even when the failed pair is not retryable", async () => {
@@ -69,6 +89,24 @@ test("confirmed unavailable model falls back even when the failed pair is not re
     buildRequest: requestFor,
     providerFor: (target) => target.providerId === "alpha"
       ? provider((attemptId) => [errorEvent(attemptId, "unavailable", false)])
+      : provider((attemptId) => [{ kind: "model_end", sequence: 1, attemptId }]),
+  });
+  expect(result.status).toBe("completed");
+  expect(result.attempts.map((attempt) => attempt.target)).toEqual([first, second]);
+});
+
+test("confirmed normalized model-not-found falls back to another pair", async () => {
+  const input = setup();
+  const result = await executeRoutingWithFallback({
+    ...input,
+    buildRequest: requestFor,
+    providerFor: (target) => target.providerId === "alpha"
+      ? provider((attemptId) => [{
+          kind: "provider_error",
+          sequence: 1,
+          attemptId,
+          error: { kind: "invalid_request", retryable: false, message: "model not found", detail: { modelNotFound: true } },
+        }])
       : provider((attemptId) => [{ kind: "model_end", sequence: 1, attemptId }]),
   });
   expect(result.status).toBe("completed");
@@ -158,4 +196,48 @@ test("maxAttempts stops before another provider pair is invoked", async () => {
   expect(result.status).toBe("blocked");
   if (result.status === "blocked") expect(result.reason).toBe("attempts-exhausted");
   expect(providers).toEqual(["alpha"]);
+});
+
+test("selection timeout aborts pre-I/O revalidation before provider invocation", async () => {
+  const input = setup(5);
+  let providerCalls = 0;
+  const result = await executeRoutingWithFallback({
+    ...input,
+    buildRequest: requestFor,
+    beforeIo: async (_target, _decisionId, { signal }) => new Promise((resolve) => {
+      signal.addEventListener("abort", () => resolve({ ok: false, reason: "model-unavailable" }), { once: true });
+    }),
+    providerFor: () => {
+      providerCalls += 1;
+      return provider(() => []);
+    },
+  });
+  expect(result.status).toBe("blocked");
+  if (result.status === "blocked") expect(result.reason).toBe("uncertain-outcome");
+  expect(providerCalls).toBe(0);
+});
+
+test("selection timeout is one aggregate budget across fallback candidates", async () => {
+  const input = setup(10);
+  let clock = 0;
+  let checks = 0;
+  let providerCalls = 0;
+  const result = await executeRoutingWithFallback({
+    ...input,
+    monotonicNow: () => clock,
+    beforeIo: async () => {
+      checks += 1;
+      clock += checks === 1 ? 6 : 5;
+      return checks === 1 ? { ok: false, reason: "model-unavailable" } : { ok: true };
+    },
+    buildRequest: requestFor,
+    providerFor: () => {
+      providerCalls += 1;
+      return provider(() => []);
+    },
+  });
+  expect(result.status).toBe("blocked");
+  if (result.status === "blocked") expect(result.reason).toBe("uncertain-outcome");
+  expect(checks).toBe(2);
+  expect(providerCalls).toBe(0);
 });

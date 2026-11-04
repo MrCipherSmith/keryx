@@ -89,6 +89,8 @@ export interface NormalizedError {
     incompleteStream?: boolean;
     /** Exact OpenAI HTTP 403 overload response; interactive recovery is bounded. */
     transientOverload403?: boolean;
+    /** Confirmed HTTP/provider model-not-found response; safe routing may choose another pair. */
+    modelNotFound?: boolean;
   };
 }
 

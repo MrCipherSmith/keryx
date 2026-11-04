@@ -20,6 +20,8 @@ import { addConfirmedSchedule, readScheduleStore } from "../trigger/store";
 import { buildGrantedArgv, grantedToolSpec } from "../trigger/granted-tools";
 import { writeFileAtomic } from "../lib/fs";
 import { normalizeRoutingV2Config, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import type { RoutingRequest } from "../harness/routing/routing-request";
+import { createRoutingSnapshot, type RoutingSnapshot } from "../harness/routing/snapshot";
 
 // Flow 295 (F1): confirming a schedule creates the per-machine signing key in keryx's
 // user-global directory. Point HOME and XDG_DATA_HOME at a throwaway directory so no
@@ -104,6 +106,35 @@ function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connect
       },
       providers: { scope, allowlist: scope === "allowlist" ? ["other"] : [], preferSessionProvider: false },
     },
+  });
+}
+
+function currentRoutingSnapshot(input: {
+  config: NormalizedRoutingV2Config;
+  request: RoutingRequest;
+  baseline: { providerId: string; modelId: string };
+}): RoutingSnapshot {
+  return createRoutingSnapshot({
+    configDigest: input.config.configDigest,
+    observedAt: "2026-11-04T00:00:00.000Z",
+    catalogRevision: "catalog-test",
+    policyRevision: "policy-test",
+    capabilityRevision: "capability-test",
+    authFailedProviderIds: [],
+    baseline: input.baseline,
+    models: [{
+      target: input.baseline,
+      connected: true,
+      credentialsAvailable: true,
+      policyAllowed: true,
+      parentAllowed: true,
+      availability: "available",
+      capabilities: ["tools"],
+      contextLength: 100_000,
+      cooldown: false,
+      estimatedCostUsd: 0.01,
+      observedLatencyMs: 1,
+    }],
   });
 }
 
@@ -578,10 +609,16 @@ describe("routing v2: scheduled agent task", () => {
     await addConfirmedSchedule(root, entry());
     const provider = scripted([finalText("done")]);
     let selected: { provider: string; model: string } | undefined;
+    let routedRequest: RoutingRequest | undefined;
+    const routingConfigDir = path.join(keyHome, "routing-test-config");
 
     await run(provider, "check-github", {
       loadActiveRoutingV2: () => activeRoutingConfig(),
-      routingCredentialsAvailable: () => true,
+      routingConfigDir,
+      routingSnapshot: (input) => {
+        routedRequest = input.request;
+        return currentRoutingSnapshot(input);
+      },
       makeProvider: (dispatch: { provider: string; model: string }) => {
         selected = dispatch;
         return provider;
@@ -590,16 +627,21 @@ describe("routing v2: scheduled agent task", () => {
 
     expect(selected).toMatchObject({ provider: "scripted", model: "m" });
     expect(provider.calls()).toBe(1);
+    expect(routedRequest?.requirements.capabilities).toEqual(["tools"]);
+    expect(routedRequest?.requirements.inputTokensRequired).toBeGreaterThan(0);
+    expect(routedRequest?.requirements.outputTokensReserved).toBeGreaterThan(0);
+    expect(await readdir(path.join(routingConfigDir, "routing-v2", "journal"))).toHaveLength(1);
   });
 
-  test("an active v2 provider scope blocks the explicit pin before provider construction", async () => {
+  test("an active v2 provider scope blocks the explicit pin after factual provider inspection and before model I/O", async () => {
     await addConfirmedSchedule(root, entry());
     const provider = scripted([]);
     let built = false;
 
     await run(provider, "check-github", {
       loadActiveRoutingV2: () => activeRoutingConfig("allowlist"),
-      routingCredentialsAvailable: () => true,
+      routingConfigDir: path.join(keyHome, "routing-test-config"),
+      routingSnapshot: currentRoutingSnapshot,
       makeProvider: () => {
         built = true;
         return provider;
@@ -607,7 +649,7 @@ describe("routing v2: scheduled agent task", () => {
     });
 
     const record = await lastRecord();
-    expect(built).toBe(false);
+    expect(built).toBe(true);
     expect(provider.calls()).toBe(0);
     expect(record.outcome).toBe("dispatch-refused");
     expect(record.agentTask?.refusal).toBe("routing-blocked");

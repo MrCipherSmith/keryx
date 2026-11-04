@@ -21,6 +21,7 @@ import { loadRoutingConfigRaw } from "../harness/routing/config";
 import { approveProjectRouting } from "../harness/routing/trust";
 import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../harness/routing/migration-v2";
 import type { RoutingV2ConfigLayer } from "../harness/routing/config-v2";
+import { setModelProfileField } from "../harness/routing/model-profile";
 
 const ORIGINAL_CWD = process.cwd();
 const refusingAgent: TierRankAgent = async () => {
@@ -951,6 +952,21 @@ async function activateRoutingV2(user: RoutingV2ConfigLayer): Promise<void> {
   await applyRoutingV2Migration(plan, { confirmed: true, cwd: ROOT });
 }
 
+async function tierV2(...extra: string[]): Promise<void> {
+  await setModelProfileField("ollama", "llama3.1:latest", { field: "contextLength", value: 100_000 });
+  await setModelProfileField("ollama", "llama3.2", { field: "contextLength", value: 100_000 });
+  await writeFile(path.join(ROOT, "catalog.json"), JSON.stringify([
+    { name: "ollama", models: ["llama3.1:latest", "llama3.2"] },
+  ]), "utf8");
+  await reviewCommand([
+    "tier",
+    "--session-provider", "ollama",
+    "--session-model", "llama3.1:latest",
+    "--catalog", "catalog.json",
+    ...extra,
+  ]);
+}
+
 test("`review tier` floors a blast-radius round at deep and names the rule that did it", async () => {
   // A blast-radius round over a twelve-line diff is still a blast-radius round:
   // the floor is applied AFTER the small-scope downgrade.
@@ -995,9 +1011,9 @@ test("`review tier --json` prints the model block a dispatch document carries", 
 test("routing v2 review category is the canonical selection, not the legacy relative tier", async () => {
   await activateRoutingV2({
     schemaVersion: 2,
-    categories: { review: { mode: "model", target: { providerId: "demo", modelId: "demo-large" } } },
+    categories: { review: { mode: "model", target: { providerId: "ollama", modelId: "llama3.2" } } },
   });
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
+  await tierV2("--findings", "2", "--diff-lines", "20", "--json");
 
   expect(process.exitCode).toBe(0);
   const parsed = JSON.parse(logs.join("\n")) as {
@@ -1005,15 +1021,15 @@ test("routing v2 review category is the canonical selection, not the legacy rela
     routing_v2: { decision: { status: string; assignmentSource: string; selection: { providerId: string; modelId: string } } };
   };
   expect(parsed.model).toMatchObject({
-    provider: "demo",
-    model: "demo-large",
+    provider: "ollama",
+    model: "llama3.2",
     routed: true,
     model_discovery: { candidates: [] },
   });
   expect(parsed.routing_v2.decision).toMatchObject({
     status: "selected",
     assignmentSource: "user",
-    selection: { providerId: "demo", modelId: "demo-large" },
+    selection: { providerId: "ollama", modelId: "llama3.2" },
   });
 });
 
@@ -1022,7 +1038,7 @@ test("routing v2 review refuses an unauthorized catalog target without falling b
     schemaVersion: 2,
     categories: { review: { mode: "model", target: { providerId: "other", modelId: "unlisted" } } },
   });
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
+  await tierV2("--findings", "2", "--diff-lines", "20", "--json");
 
   expect(process.exitCode).toBe(1);
   expect(logs).toEqual([]);

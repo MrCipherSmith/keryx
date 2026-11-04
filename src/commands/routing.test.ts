@@ -427,7 +427,35 @@ test("routing CLI previews a confirmed v2 migration and restores legacy on rollb
       expect.objectContaining({ category: "review", decision: expect.objectContaining({ status: "blocked", reason: "empty-class" }) }),
     ]),
   });
+  const request = path.join(d.cwd, "request.json");
+  await writeFile(request, JSON.stringify({
+    requestId: "review-request",
+    category: "review",
+    requirements: { capabilities: ["tools"], inputTokensRequired: 1500, outputTokensReserved: 200 },
+  }));
+  const explanation = await capture(() => routingCommand(["explain", "--request", request, "--json"], d));
+  expect(JSON.parse(explanation.stdout.join(""))).toMatchObject({
+    decisions: [{ category: "review", decision: { requestId: "review-request", status: "blocked", reason: "empty-class" } }],
+  });
   await capture(() => routingCommand(["migrate", "--rollback", plan, "--confirm"], d));
   const rolledBack = await capture(() => routingCommand(["list", "--json"], d));
   expect(JSON.parse(rolledBack.stdout.join("")).engineVersion).toBeUndefined();
+}, 30_000);
+
+test("routing settings rejects a stale revision and exposes the new class pool", async () => {
+  const d = await deps();
+  const plan = path.join(d.cwd, "settings-migration.json");
+  const dryRun = await capture(() => routingCommand(["migrate", "--dry-run"], d));
+  await writeFile(plan, dryRun.stdout.join(""));
+  await capture(() => routingCommand(["migrate", "--apply", plan, "--confirm"], d));
+  const settings = await capture(() => routingCommand(["settings", "list"], d));
+  const { revision } = JSON.parse(settings.stdout.join("")) as { revision: string };
+  const file = path.join(d.cwd, "expert.json");
+  const candidate = { target: { providerId: "anthropic", modelId: "claude-x" }, priority: 1, enabled: true };
+  await writeFile(file, JSON.stringify({ candidates: [candidate], selection: "priority", fallbackClasses: [] }));
+  await capture(() => routingCommand(["classes", "set", "expert", file, "--revision", revision], d));
+  const pools = await capture(() => routingCommand(["classes", "list"], d));
+  expect(JSON.parse(pools.stdout.join(""))).toMatchObject({ expert: { candidates: [candidate] } });
+  await writeFile(file, JSON.stringify({ candidates: [], selection: "priority", fallbackClasses: [] }));
+  await expect(routingCommand(["classes", "set", "expert", file, "--revision", revision], d)).rejects.toThrow(/revision/i);
 }, 30_000);

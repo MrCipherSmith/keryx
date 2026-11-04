@@ -60,10 +60,13 @@ test("native v2 snapshot digest is independent of advertised candidate order", (
   const baseline = candidate("baseline-id", "wire-a", "standard");
   const second = candidate("second-id", "wire-b", "deep");
   const config = routingConfig({ schemaVersion: 2 });
-  const options = { sessionConfig: sessionConfig([baseline.candidateId, second.candidateId]), bindings: [binding(baseline), binding(second)], routingConfig: config };
+  const options = { sessionConfig: sessionConfig([baseline.candidateId, second.candidateId]), bindings: [binding(baseline), binding(second)], routingConfig: config,
+    observedAt: "2026-11-04T00:00:00.000Z" };
   const left = buildNativeRoutingV2Snapshot({ ...options, availability: availability([baseline, second]) });
   const right = buildNativeRoutingV2Snapshot({ ...options, availability: availability([second, baseline]) });
   expect(left.snapshot.snapshotDigest).toBe(right.snapshot.snapshotDigest);
+  expect(Object.isFrozen(left.snapshot)).toBe(true);
+  expect(left.snapshot).toMatchObject({ catalogRevision: expect.any(String), policyRevision: digest, capabilityRevision: digest, observedAt: options.observedAt });
 });
 
 test("native v2 excludes a candidate that does not allow the pinned reasoning effort", () => {
@@ -79,4 +82,20 @@ test("native v2 excludes a candidate that does not allow the pinned reasoning ef
     request: { requestId: "request", category: "coding", origin: "native-session", requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 } } });
   expect(resolved.candidateId).toBe(baseline.candidateId);
   expect(resolved.decision.exclusions).toContainEqual({ target: { providerId: "wire-a", modelId: "deep" }, modelClass: "expert", reason: "model-unavailable" });
+});
+
+test("native v2 evaluates authentic capability and context facts against the request requirements", () => {
+  const baseline = candidate("baseline-id", "wire-a", "standard");
+  const config = routingConfig({ schemaVersion: 2, categories: { coding: { mode: "baseline" } } });
+  const requirements = { capabilities: ["tools" as const], inputTokensRequired: 40, outputTokensReserved: 60 };
+  const observed: unknown[] = [];
+  const resolved = resolveNativeRoutingV2({ sessionConfig: sessionConfig([baseline.candidateId]), availability: availability([baseline]), bindings: [binding(baseline)], routingConfig: config,
+    modelFacts: (_target, _candidate, value) => { observed.push(value); return { connected: true, credentialsAvailable: true, capabilities: ["tools"], contextLength: 100, cooldown: false, estimatedCostUsd: 0, observedLatencyMs: null }; },
+    request: { requestId: "request", category: "coding", origin: "native-session", requirements } });
+  expect(resolved.candidateId).toBe(baseline.candidateId);
+  expect(observed).toEqual([requirements]);
+
+  const unproven = resolveNativeRoutingV2({ sessionConfig: sessionConfig([baseline.candidateId]), availability: availability([baseline]), bindings: [binding(baseline)], routingConfig: config,
+    request: { requestId: "request-unproven", category: "coding", origin: "native-session", requirements } });
+  expect(unproven.decision).toMatchObject({ status: "blocked", reason: "capability-missing" });
 });

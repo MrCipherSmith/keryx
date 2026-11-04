@@ -48,7 +48,7 @@ import { mkdir, rm, symlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildAgentSystemInstruction, generateControlNonce, resolveAgentMaxOutputTokens, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { resolveAgentMaxRounds } from "./round-limit";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
@@ -56,14 +56,14 @@ import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/buil
 import { makeCommandRunner, shellExecTool, type CommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { makeProvider } from "../harness/provider/make-provider";
 import { FakeProvider } from "../harness/provider/fake-provider";
-import type { NormalizedEvent, NormalizedMessage, NormalizedUsage, ProviderPort } from "../harness/provider/types";
+import type { NormalizedEvent, NormalizedMessage, NormalizedRequest, NormalizedToolDefinition, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 import { planUnattendedSandbox, type UnattendedSandboxInput, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
 import { ensureScratchParent } from "./unattended-scratch";
-import { providerByName } from "./providers";
+import { providerByName, resolveProviderModelParamsByName, type ResolvedProviderModelParams } from "./providers";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
-import { envWithSavedApiKeys } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { spendFromTokens } from "../review/caps";
 import type { FlowService, FlowTask } from "../flow/types";
 import type { TriggerDispatch, TriggerEntry } from "../trigger/config";
@@ -75,15 +75,24 @@ import type {
   UnattendedDenial,
 } from "../trigger/record";
 import { NETWORK_ON_WARNING } from "../trigger/describe";
-import { reserveTriggerSpend } from "../trigger/run";
+import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
 import { routingV2Digest, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
 import type { RoutingDecision } from "../harness/routing/decision";
-import { sameModelRef } from "../harness/routing/model-class";
-import { resolveRoutingDecision } from "../harness/routing/resolver";
+import { modelRefKey, sameModelRef, type ModelRef } from "../harness/routing/model-class";
+import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
 import type { RoutingRequest } from "../harness/routing/routing-request";
-import type { RoutingSnapshot } from "../harness/routing/snapshot";
+import { createRoutingSnapshot, type RoutingSnapshot } from "../harness/routing/snapshot";
+import { buildCatalogRoutingSnapshot } from "../harness/routing/snapshot-adapter";
+import { catalogToFlatPickerProviders, loadOrRefreshProviderCatalog } from "../harness/provider-catalog";
+import { loadModelProfiles } from "../harness/routing/model-profile";
+import { hasCredential } from "../harness/provider/single-turn";
+import { externalBlockReason, loadExternalProvidersConfig } from "../lib/external-providers";
+import { resolveExternalSetting } from "../lib/external-switch";
+import { estimateRequestTokens } from "../harness/provider/context-guard";
+import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
+import { createRoutingExecutionProvider } from "../harness/routing/routing-provider-v2";
 
 const execFileAsync = promisify(execFile);
 
@@ -106,8 +115,15 @@ export interface HealthGateResult {
 export interface UnattendedRoutingV2Deps {
   /** Test seam; production reads the shared activation marker and v2 layers. */
   readonly loadActiveRoutingV2?: (cwd: string) => NormalizedRoutingV2Config | undefined;
-  /** Test seam for the credential fact frozen into the v2 snapshot. */
-  readonly routingCredentialsAvailable?: (dispatch: Pick<TriggerDispatch, "provider" | "model" | "baseUrl">) => boolean;
+  /** Per-user config dir seam used by every routing input and by the dispatch receipt journal. */
+  readonly routingConfigDir?: string;
+  /** Test seam for a current, fully factual snapshot; production reads live catalogue/profile/policy facts. */
+  readonly routingSnapshot?: (input: {
+    readonly config: NormalizedRoutingV2Config;
+    readonly request: RoutingRequest;
+    readonly baseline: { readonly providerId: string; readonly modelId: string };
+    readonly provider: ProviderPort;
+  }) => RoutingSnapshot | Promise<RoutingSnapshot>;
 }
 
 export interface DispatchDeps extends UnattendedRoutingV2Deps {
@@ -260,53 +276,248 @@ export function providerHasUsableCredential(
  * replace it with the category's class recommendation. External CLI agents do
  * not use either unattended dispatcher and remain unmanaged by this adapter.
  */
-export function resolveUnattendedRoutingV2(
+export interface UnattendedRoutingV2Resolution {
+  readonly receipt?: RoutingDecisionReceipt;
+  readonly maxOutputTokens: number;
+  readonly modelParams: ResolvedProviderModelParams;
+  readonly execution?: {
+    readonly config: NormalizedRoutingV2Config;
+    readonly routeFor: (request: NormalizedRequest) => Promise<{ readonly request: RoutingRequest; readonly snapshot: RoutingSnapshot }>;
+  };
+}
+
+function routingCapabilities(provider: ProviderPort): RoutingRequest["requirements"]["capabilities"] {
+  const capabilities = provider.describe().capabilities;
+  return [
+    ...(capabilities.toolCalls ? ["tools" as const] : []),
+    ...(capabilities.vision ? ["vision" as const] : []),
+    ...(capabilities.structuredOutput ? ["structured-output" as const] : []),
+  ];
+}
+
+async function currentUnattendedSnapshot(
+  projectRoot: string,
+  configDir: string | undefined,
+  config: NormalizedRoutingV2Config,
+  request: RoutingRequest,
+  baseline: { readonly providerId: string; readonly modelId: string },
+  providerFor: (target: ModelRef) => ProviderPort | undefined,
+  dispatch: TriggerDispatch,
+): Promise<RoutingSnapshot> {
+  const env = envWithSavedApiKeys(process.env, configDir);
+  const [catalog, external] = await Promise.all([
+    loadOrRefreshProviderCatalog({ fetch: globalThis.fetch, env, ...(configDir === undefined ? {} : { dir: configDir }) }),
+    resolveExternalSetting({ cwd: projectRoot, ...(configDir === undefined ? {} : { dir: configDir }) }),
+  ]);
+  const externalPolicy = loadExternalProvidersConfig(configDir).config;
+  const observedAt = new Date().toISOString();
+  // The trigger's concrete pin has no fallbackClass. Keep the snapshot scoped to that pin so
+  // routing cannot construct or authorize unrelated provider adapters behind the operator's back.
+  const providers = catalogToFlatPickerProviders(catalog, { withStatusRows: true })
+    .filter((entry) => entry.name === baseline.providerId)
+    .map((entry) => ({ ...entry, models: entry.models?.filter((modelId) => modelId === baseline.modelId) ?? [] }));
+  const profiles = loadModelProfiles(configDir);
+  const baselineProvider = providerFor(baseline);
+  if (baselineProvider === undefined) throw new Error("the explicit unattended provider/model pin could not be built");
+  const snapshot = buildCatalogRoutingSnapshot({
+    baseline,
+    configDigest: config.configDigest,
+    observedAt,
+    policyRevision: routingV2Digest({ external, externalPolicy }),
+    capabilityRevision: routingV2Digest({ target: baseline, capabilities: routingCapabilities(baselineProvider) }),
+    providers,
+    profiles,
+    request,
+    policy: {
+      credentialsAvailable: (target) => providerFor(target) !== undefined || hasCredential(target.providerId, env, configDir),
+      policyAllowed: (target) => external.value === "on" || externalBlockReason(target.providerId, target.modelId, externalPolicy) === undefined,
+      // These dispatchers create root tasks, so there is no parent scope to inherit or widen.
+      parentAllowed: () => true,
+      capabilities: (target) => {
+        const candidate = providerFor(target);
+        return candidate === undefined ? [] : routingCapabilities(candidate);
+      },
+      // A configured pin that the current catalogue did not list stays unknown; constructing an adapter is not proof that the model exists.
+      availability: (target) => providers.some((entry) => entry.name === target.providerId && entry.models?.includes(target.modelId))
+        ? undefined
+        : "unknown",
+      // No durable cooldown/latency observation exists yet. Availability comes from the live catalogue above.
+      cooldown: () => false,
+      observedLatencyMs: () => null,
+    },
+  });
+  const estimatedCostUsd = (
+    request.requirements.inputTokensRequired * dispatch.rates.inputUsdPerMTok
+    + request.requirements.outputTokensReserved * dispatch.rates.outputUsdPerMTok
+  ) / 1_000_000;
+  const models = snapshot.models.map((facts) => sameModelRef(facts.target, baseline) ? { ...facts, estimatedCostUsd } : facts);
+  return createRoutingSnapshot({
+    configDigest: snapshot.configDigest,
+    observedAt: snapshot.observedAt,
+    catalogRevision: snapshot.catalogRevision,
+    policyRevision: snapshot.policyRevision,
+    capabilityRevision: snapshot.capabilityRevision,
+    authFailedProviderIds: snapshot.authFailedProviderIds,
+    baseline: snapshot.baseline,
+    models,
+  });
+}
+
+export async function resolveUnattendedRoutingV2(
   projectRoot: string,
   dispatch: TriggerDispatch,
   requestId: string,
+  providerFor: (target: ModelRef) => ProviderPort | undefined,
+  prompt: string,
+  toolDefs: readonly NormalizedToolDefinition[],
+  maxEstimatedCostUsd: number,
   deps: UnattendedRoutingV2Deps = {},
-): RoutingDecision | undefined {
-  const config = (deps.loadActiveRoutingV2 ?? loadActiveRoutingV2)(projectRoot);
-  if (config === undefined) return undefined;
+): Promise<UnattendedRoutingV2Resolution> {
+  const shellConfig = loadShellConfig(deps.routingConfigDir);
+  const modelParams = resolveProviderModelParamsByName(dispatch.provider, shellConfig, deps.routingConfigDir);
+  const maxOutputTokens = resolveAgentMaxOutputTokens({
+    env: process.env,
+    providerMaxOutputTokens: modelParams.maxOutputTokens,
+    globalMaxOutputTokens: shellConfig.maxOutputTokens,
+  });
+  const config = deps.loadActiveRoutingV2 === undefined
+    ? loadActiveRoutingV2(projectRoot, deps.routingConfigDir)
+    : deps.loadActiveRoutingV2(projectRoot);
+  if (config === undefined) return { maxOutputTokens, modelParams };
 
   const baseline = { providerId: dispatch.provider, modelId: dispatch.model };
-  const request: RoutingRequest = {
+  const systemInstruction = buildAgentSystemInstruction(undefined, {
+    providerId: dispatch.provider,
+    modelId: dispatch.model,
+    toolNames: toolDefs.map((tool) => tool.name),
+  });
+  const requestFor = (inputTokensRequired: number, outputTokensReserved: number): RoutingRequest => ({
     requestId,
     category: "unattended",
     origin: "unattended",
     baseline,
-    requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
+    requirements: { capabilities: ["tools"], inputTokensRequired, outputTokensReserved, maxEstimatedCostUsd },
     userOverride: { mode: "model", target: baseline },
+  });
+  const snapshotFor = async (request: RoutingRequest): Promise<RoutingSnapshot> => {
+    const baselineProvider = providerFor(baseline);
+    if (baselineProvider === undefined) throw new Error("the explicit unattended provider/model pin could not be built");
+    return deps.routingSnapshot?.({ config, request, baseline, provider: baselineProvider })
+      ?? currentUnattendedSnapshot(projectRoot, deps.routingConfigDir, config, request, baseline, providerFor, dispatch);
   };
-  const credentialsAvailable = deps.routingCredentialsAvailable?.(dispatch) ?? providerHasUsableCredential(dispatch).ok;
-  const snapshotBody: Omit<RoutingSnapshot, "snapshotDigest"> = {
-    configDigest: config.configDigest,
-    baseline,
-    models: [{
-      target: baseline,
-      connected: true,
-      credentialsAvailable,
-      policyAllowed: true,
-      parentAllowed: true,
-      availability: "available",
-      capabilities: [],
-      contextLength: null,
-      cooldown: false,
-      estimatedCostUsd: null,
-      observedLatencyMs: null,
-    }],
-  };
-  const snapshot: RoutingSnapshot = { ...snapshotBody, snapshotDigest: routingV2Digest(snapshotBody) };
-  const decision = resolveRoutingDecision(request, snapshot, config);
+  const request = requestFor(estimateRequestTokens([{ content: prompt }], systemInstruction, toolDefs), maxOutputTokens);
+  const snapshot = await snapshotFor(request);
+  const receipt = resolveRoutingForRuntime({
+    request,
+    snapshot,
+    config,
+    journal: {
+      cwd: projectRoot,
+      kind: "dispatch",
+      ...(deps.routingConfigDir === undefined ? {} : { configDir: deps.routingConfigDir }),
+    },
+  });
+  const decision = receipt.decision;
   if (decision.status === "selected" && !sameModelRef(decision.selection, baseline)) {
     throw new Error("routing v2 changed an explicit unattended provider/model pin");
   }
-  return decision;
+  return {
+    receipt,
+    maxOutputTokens,
+    modelParams,
+    execution: {
+      config,
+      routeFor: async (normalized) => {
+        const currentRequest = requestFor(
+          estimateRequestTokens(normalized.messages, normalized.systemInstruction, normalized.tools ?? []),
+          normalized.budget.maxOutputTokens,
+        );
+        return { request: currentRequest, snapshot: await snapshotFor(currentRequest) };
+      },
+    },
+  };
 }
 
 function routingDecisionFailure(decision: Exclude<RoutingDecision, { readonly status: "selected" }>): string {
   const reason = decision.status === "blocked" ? decision.reason : decision.status;
   return `routing v2 refused the explicit unattended provider/model pin: ${reason} (decision ${decision.decisionId})`;
+}
+
+type UnattendedProviderBuilder = (dispatch: TriggerDispatch) => ProviderPort | { readonly error: string; readonly code?: DispatchRefusalCode };
+
+export function cachedRoutingProviders(
+  dispatch: TriggerDispatch,
+  baselineProvider: ProviderPort,
+  build: UnattendedProviderBuilder,
+): (target: ModelRef) => ProviderPort | undefined {
+  const baseline = { providerId: dispatch.provider, modelId: dispatch.model };
+  const cache = new Map<string, ProviderPort>([[modelRefKey(baseline), baselineProvider]]);
+  return (target) => {
+    const key = modelRefKey(target);
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    const { baseUrl: _baselineUrl, ...shared } = dispatch;
+    const candidateDispatch: TriggerDispatch = sameModelRef(target, baseline)
+      ? dispatch
+      : { ...shared, provider: target.providerId, model: target.modelId };
+    const candidate = build(candidateDispatch);
+    if ("error" in candidate) return undefined;
+    cache.set(key, candidate);
+    return candidate;
+  };
+}
+
+export function routedUnattendedProvider(
+  projectRoot: string,
+  configDir: string | undefined,
+  dispatch: TriggerDispatch,
+  reservedUsd: number,
+  baseline: ProviderPort,
+  providerFor: (target: ModelRef) => ProviderPort | undefined,
+  routing: UnattendedRoutingV2Resolution,
+): ProviderPort {
+  const execution = routing.execution;
+  if (execution === undefined) return baseline;
+  const budget = new RoutingBudgetLedger({
+    taskUsd: reservedUsd,
+    ...(execution.config.execution.maxEstimatedCostUsd === undefined ? {} : { configUsd: execution.config.execution.maxEstimatedCostUsd }),
+    unknownCost: execution.config.execution.unknownCost,
+  });
+  return createRoutingExecutionProvider({
+    description: baseline.describe(),
+    config: execution.config,
+    budget,
+    routeFor: (request) => execution.routeFor(request),
+    providerFor: (target) => {
+      const provider = providerFor(target);
+      if (provider === undefined) throw new Error(`routing provider unavailable: ${modelRefKey(target)}`);
+      return provider;
+    },
+    beforeIo: async (target, _decisionId, context) => {
+      if (context.signal.aborted) return { ok: false, reason: "cancelled" };
+      const external = await resolveExternalSetting({ cwd: projectRoot, ...(configDir === undefined ? {} : { dir: configDir }) });
+      const externalPolicy = loadExternalProvidersConfig(configDir).config;
+      if (external.value === "off" && externalBlockReason(target.providerId, target.modelId, externalPolicy) !== undefined) {
+        return { ok: false, reason: "policy-denied" };
+      }
+      return providerFor(target) === undefined
+        ? { ok: false, reason: "credentials-missing" }
+        : { ok: true };
+    },
+    actualCostUsd: ({ usage, estimatedCostUsd }) => {
+      if (usage === undefined) {
+        if (estimatedCostUsd === null) throw new Error("unattended routing cost is unknown");
+        return estimatedCostUsd;
+      }
+      return spendFromTokens({
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          inputUsdPerMTok: dispatch.rates.inputUsdPerMTok,
+          outputUsdPerMTok: dispatch.rates.outputUsdPerMTok,
+        });
+    },
+    journal: { cwd: projectRoot, ...(configDir === undefined ? {} : { configDir }) },
+  });
 }
 
 /** Default provider construction: fails closed on a missing credential and on unknown usage reporting. */
@@ -705,11 +916,6 @@ async function dispatchLocked(
     );
   }
 
-  const routingDecision = resolveUnattendedRoutingV2(projectRoot, dispatch, `unattended:${runId}:flow-next`, deps);
-  if (routingDecision !== undefined && routingDecision.status !== "selected") {
-    return refusal(runId, flow, "routing-blocked", routingDecisionFailure(routingDecision), task);
-  }
-
   // Flow 457 (security review B1): a review task takes the same path as every other task below: containment,
   // spend reservation and attempt record first. It is NOT handed to the autonomous review runner, which would run
   // in the real project root, with no budget and no attempt. An unattended agent cannot dispatch reviewers, so a
@@ -781,6 +987,35 @@ async function dispatchLocked(
       dispatch: { runId, flow, task: task.id },
       exitCode: 1,
     };
+  }
+
+  const routingTools = [...buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox)), ...(deps.extraTools ?? [])];
+  const providerFor = cachedRoutingProviders(dispatch, built, deps.makeProvider ?? defaultMakeProvider);
+  const flowDir = (await service.list({ cwd: projectRoot })).find((candidate) => candidate.id === state.id)?.dir;
+  const taskPrompt = buildTaskPrompt(state.id, state.title, flowDir, task);
+  const currentBudget = await evaluateTriggerBudget(projectRoot, "flow-next", {}, { name: triggerName, ceilingUsd: dispatch.ceilingUsd });
+  if (!currentBudget.allowed) {
+    return {
+      outcome: "budget-refused",
+      detail: currentBudget.reason,
+      cost: { recorded: false, reason: "run was refused on the spend ceiling before any model call" },
+      dispatch: { runId, flow, task: task.id },
+      exitCode: 0,
+    };
+  }
+  const routing = await resolveUnattendedRoutingV2(
+    projectRoot,
+    dispatch,
+    `unattended:${runId}:flow-next`,
+    providerFor,
+    taskPrompt,
+    routingTools.map((tool) => tool.definition),
+    currentBudget.remainingUsd,
+    deps,
+  );
+  const routingDecision = routing.receipt?.decision;
+  if (routingDecision !== undefined && routingDecision.status !== "selected") {
+    return refusal(runId, flow, "routing-blocked", routingDecisionFailure(routingDecision), task);
   }
 
   // --- 5. spend reservation (AC14) — the last refusal point ---------------------
@@ -883,10 +1118,13 @@ async function dispatchLocked(
       timedOut = true;
       controller.abort();
     });
-    const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
+    const provider = guardUsage(
+      routedUnattendedProvider(projectRoot, deps.routingConfigDir, dispatch, reservedUsd, built, providerFor, routing),
+      () => meter.markUsageMissing(),
+    );
 
     try {
-      const tools = [...buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox)), ...(deps.extraTools ?? [])];
+      const tools = routingTools;
       const toolNames = tools.map((t) => t.definition.name);
       // Flow 306 (W6 T9, AC9): every unattended entry point builds its hook
       // runtime with `interactive: false` and the `unattended-untrusted`
@@ -919,6 +1157,8 @@ async function dispatchLocked(
         }),
         idSeq: () => randomUUID(),
         unattended: true,
+        maxOutputTokens: routing.maxOutputTokens,
+        modelParams: routing.modelParams,
         // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
         maxRounds: resolveAgentMaxRounds(process.env, "ask"),
         // Nor does it get trust mode's plan follow-through nudges: nobody is there to stop them.
@@ -948,9 +1188,8 @@ async function dispatchLocked(
           }
         },
       };
-      const flowDir = (await service.list({ cwd: projectRoot })).find((f) => f.id === state.id)?.dir;
       const history: NormalizedMessage[] = [];
-      const result = await runAgentTurn(io, agentDeps, history, buildTaskPrompt(state.id, state.title, flowDir, task), {
+      const result = await runAgentTurn(io, agentDeps, history, taskPrompt, {
         signal: controller.signal,
         automaticReview: false,
       });

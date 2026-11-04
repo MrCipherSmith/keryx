@@ -15,14 +15,24 @@ import type { ProviderPort } from "../harness/provider/types";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
 import { routingV2Digest, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
 import { classifyDeterministic } from "../harness/decision/deterministic-shortcuts";
+import { runRoutingClassifierChain } from "../harness/routing/classifier-chain-v2";
+import { buildRoutingClassifierAdapters } from "../harness/routing/classifier-production-v2";
+import { applyRoutingClassificationResult } from "../harness/routing/routing-classification-runtime";
+import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
+import type { RoutingRequest } from "../harness/routing/routing-request";
 import type { NativeModelBinding } from "./model-identity";
-import { resolveNativeRoutingV2, type NativeRoutingV2Resolution } from "./native-routing-v2";
+import { nativeRoutingV2Resolution, prepareNativeRoutingV2, type NativeRoutingV2FactsProvider, type NativeRoutingV2Resolution } from "./native-routing-v2";
 export interface NativeRoutingClassifierOptions {
   cwd: string; configDir?: string; env: Readonly<Record<string, string | undefined>>;
   availability(config: Control["SessionConfig"]): Control["RoutingAvailability"];
   bindings(): readonly NativeModelBinding[];
   providerFactory(providerId: string, modelId: string): ProviderPort;
   allowed?(providerId: string, modelId: string): boolean;
+  modelFacts?: NativeRoutingV2FactsProvider;
+  /** Capture one coherent set of local facts for each decision. */
+  modelFactsFactory?: () => NativeRoutingV2FactsProvider;
+  /** Same output reservation the native agent turn will enforce. */
+  outputTokensReserved?: number;
   /** One aggregate native service budget, including cleanup, never above the frozen original work window. */
   timeoutMs?: number;
 }
@@ -54,12 +64,7 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
     const deadline = performance.now() + Math.min(3000, budget + 500);
     let authorityRefused = false; let calls = 0;
     const pending = new Set<Promise<void>>();
-    const result = await runRoutingClassifierForTurn(text, { enabled: config.routing.enabled, jevEnabled: false, jevAllowed: false,
-      cwd: options.cwd, ...(options.configDir === undefined ? {} : { userConfigDir: options.configDir }), env: { ...options.env }, detected,
-      sessionProvider: baseline.binding.actualProviderId, sessionModel: baseline.binding.actualModelId, signal: context.signal, timeoutMs: budget,
-      classifierAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
-      executorAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
-      providerFactory: (providerId, modelId) => {
+    const classifierProviderFactory = (providerId: string, modelId: string): ProviderPort => {
         const choice = actual(providerId, modelId); if (choice === undefined) throw new NativeClassifierError("classifier-model-not-permitted");
         const metadata: NativeClassifierProvider = { candidateId: choice.candidate.candidateId, providerId: choice.candidate.providerId, modelId: choice.candidate.modelId, actualProviderId: choice.binding.actualProviderId, actualModelId: choice.binding.actualModelId };
         const provider = options.providerFactory(providerId, modelId);
@@ -78,40 +83,92 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
             }
           } finally { pending.delete(completion); finished(); }
         })() };
-      },
-    });
-    if (pending.size > 0) {
+    };
+    const confirmStopped = async () => { if (pending.size > 0) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([Promise.allSettled([...pending]), new Promise<void>((resolve) => { timer = setTimeout(resolve, Math.max(0, deadline - performance.now())); })]);
       if (timer !== undefined) clearTimeout(timer);
-    }
-    if (authorityRefused) throw new NativeClassifierError("classifier-authority-refused");
-    if (pending.size > 0) throw new NativeClassifierError("classifier-stop-unconfirmed");
-    context.signal.throwIfAborted();
+    } };
     if (routingV2 !== undefined) {
-      const category = classifyDeterministic(text) ?? result?.category ?? "default";
+      const category = classifyDeterministic(text) ?? "default";
+      const baseRequest: Omit<RoutingRequest, "baseline"> = {
+        requestId: routingV2Digest({ origin: "native-session", category, text }),
+        category,
+        origin: "native-session",
+        requirements: {
+          capabilities: ["tools"],
+          inputTokensRequired: Buffer.byteLength(text),
+          outputTokensReserved: options.outputTokensReserved ?? 8192,
+        },
+      };
+      let request = baseRequest;
+      const needsClassification = routingV2.categories[category].mode === "auto";
+      if (needsClassification) {
+        const adapters = buildRoutingClassifierAdapters({ config: routingV2,
+          sessionProvider: baseline.binding.actualProviderId,
+          fallbackModel: { providerId: baseline.binding.actualProviderId, modelId: baseline.binding.actualModelId },
+          env: { ...options.env }, jevEnabled: false, jevAllowed: false,
+          externalAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
+          classifierAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
+          providerFactory: classifierProviderFactory,
+          ...(options.configDir === undefined ? {} : { userConfigDir: options.configDir }),
+          timeoutMs: Math.min(budget, routingV2.classifier.timeoutMs),
+        });
+        const classified = await runRoutingClassifierChain(text, {
+          adapters,
+          deadlineMs: Math.min(budget, routingV2.classifier.timeoutMs),
+          minConfidence: routingV2.classifier.minConfidence,
+          onFailure: routingV2.classifier.onFailure,
+          signal: context.signal,
+        });
+        const applied = applyRoutingClassificationResult({ ...baseRequest,
+          baseline: { providerId: baseline.binding.actualProviderId, modelId: baseline.binding.actualModelId } }, classified);
+        if (applied.status === "cancelled") {
+          context.signal.throwIfAborted();
+          throw new NativeClassifierError("routing-v2-cancelled", true);
+        }
+        const { baseline: _baseline, ...classifiedRequest } = applied.request;
+        request = classifiedRequest;
+      }
+      await confirmStopped();
+      if (authorityRefused) throw new NativeClassifierError("classifier-authority-refused");
+      if (pending.size > 0) throw new NativeClassifierError("classifier-stop-unconfirmed");
+      context.signal.throwIfAborted();
       let resolution: NativeRoutingV2Resolution;
+      let receiptId: string;
       try {
-        resolution = resolveNativeRoutingV2({
+        const modelFacts = options.modelFactsFactory?.() ?? options.modelFacts;
+        const prepared = prepareNativeRoutingV2({
           sessionConfig: config,
           availability: frozenAvailability,
           bindings: frozenBindings,
           routingConfig: routingV2,
           ...(options.allowed === undefined ? {} : { allowed: options.allowed }),
-          request: {
-            requestId: routingV2Digest({ origin: "native-session", category, text }),
-            category,
-            origin: "native-session",
-            requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
-          },
+          ...(modelFacts === undefined ? {} : { modelFacts }),
+          request,
         });
+        const receipt = resolveRoutingForRuntime({ request: prepared.request, snapshot: prepared.frozen.snapshot, config: routingV2,
+          journal: { cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }), kind: "dispatch" } });
+        receiptId = receipt.receiptId;
+        resolution = nativeRoutingV2Resolution(prepared.frozen, receipt.decision);
       } catch { throw new NativeClassifierError("routing-v2-snapshot-invalid", true); }
       if (resolution.decision.status === "selected" && resolution.candidateId !== undefined) {
-        return { candidateId: resolution.candidateId, selectionReceiptId: resolution.receiptId };
+        return { candidateId: resolution.candidateId, selectionReceiptId: receiptId };
       }
       const reason = resolution.decision.status === "blocked" ? resolution.decision.reason : "config-invalid";
       throw new NativeClassifierError(`routing-v2-${reason}`, true);
     }
+    const result = await runRoutingClassifierForTurn(text, { enabled: config.routing.enabled, jevEnabled: false, jevAllowed: false,
+      cwd: options.cwd, ...(options.configDir === undefined ? {} : { userConfigDir: options.configDir }), env: { ...options.env }, detected,
+      sessionProvider: baseline.binding.actualProviderId, sessionModel: baseline.binding.actualModelId, signal: context.signal, timeoutMs: budget,
+      classifierAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
+      executorAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
+      providerFactory: classifierProviderFactory,
+    });
+    await confirmStopped();
+    if (authorityRefused) throw new NativeClassifierError("classifier-authority-refused");
+    if (pending.size > 0) throw new NativeClassifierError("classifier-stop-unconfirmed");
+    context.signal.throwIfAborted();
     return result?.routed === undefined ? undefined : actual(result.routed.providerId, result.routed.modelId)?.candidate.candidateId;
   };
 }

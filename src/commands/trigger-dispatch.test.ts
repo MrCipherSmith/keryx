@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { chmodSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runTriggerOnce, triggerCommand } from "./trigger";
@@ -29,6 +29,8 @@ import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permi
 import { loadShellPermissions, shellPermissionsPath } from "../lib/shell-permissions";
 import { acquireCwd, releaseCwd } from "../lib/test-cwd";
 import { normalizeRoutingV2Config, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import type { RoutingRequest } from "../harness/routing/routing-request";
+import { createRoutingSnapshot, type RoutingSnapshot } from "../harness/routing/snapshot";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
 
@@ -103,6 +105,36 @@ function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connect
       },
       providers: { scope, allowlist: scope === "allowlist" ? ["other"] : [], preferSessionProvider: false },
     },
+  });
+}
+
+function currentRoutingSnapshot(input: {
+  config: NormalizedRoutingV2Config;
+  request: RoutingRequest;
+  baseline: { providerId: string; modelId: string };
+}, facts: Partial<RoutingSnapshot["models"][number]> = {}): RoutingSnapshot {
+  return createRoutingSnapshot({
+    configDigest: input.config.configDigest,
+    observedAt: "2026-11-04T00:00:00.000Z",
+    catalogRevision: "catalog-test",
+    policyRevision: "policy-test",
+    capabilityRevision: "capability-test",
+    authFailedProviderIds: [],
+    baseline: input.baseline,
+    models: [{
+      target: input.baseline,
+      connected: true,
+      credentialsAvailable: true,
+      policyAllowed: true,
+      parentAllowed: true,
+      availability: "available",
+      capabilities: ["tools"],
+      contextLength: 100_000,
+      cooldown: false,
+      estimatedCostUsd: 0.01,
+      observedLatencyMs: 1,
+      ...facts,
+    }],
   });
 }
 
@@ -1075,10 +1107,16 @@ describe("routing v2: unattended flow dispatch", () => {
     await writeTriggers([dispatchEntry()]);
     const provider = scripted([[USAGE_ROUND_1, { kind: "text_delta", text: "inspected" }, { kind: "model_end" }]]);
     let selected: { provider: string; model: string } | undefined;
+    let routedRequest: RoutingRequest | undefined;
+    const routingConfigDir = path.join(root, "routing-test-config");
 
     await run(provider, {
       loadActiveRoutingV2: () => activeRoutingConfig(),
-      routingCredentialsAvailable: () => true,
+      routingConfigDir,
+      routingSnapshot: (input) => {
+        routedRequest = input.request;
+        return currentRoutingSnapshot(input);
+      },
       makeProvider: (dispatch: { provider: string; model: string }) => {
         selected = dispatch;
         return provider;
@@ -1087,16 +1125,29 @@ describe("routing v2: unattended flow dispatch", () => {
 
     expect(selected).toMatchObject({ provider: "scripted", model: "m" });
     expect(provider.calls()).toBe(1);
+    expect(routedRequest?.requirements.capabilities).toEqual(["tools"]);
+    expect(routedRequest?.requirements.inputTokensRequired).toBeGreaterThan(0);
+    expect(routedRequest?.requirements.outputTokensReserved).toBeGreaterThan(0);
+    expect(routedRequest?.requirements.maxEstimatedCostUsd).toBe(1);
+    const journalDir = path.join(routingConfigDir, "routing-v2", "journal");
+    const journalFiles = await readdir(journalDir);
+    expect(journalFiles).toHaveLength(1);
+    const journalFile = journalFiles[0];
+    if (journalFile === undefined) throw new Error("routing journal was not written");
+    const journal = await readFile(path.join(journalDir, journalFile), "utf8");
+    expect(journal).toContain('"kind":"dispatch"');
+    expect(journal).toContain('"kind":"attempt"');
   });
 
-  test("an active v2 provider scope blocks the explicit pin before provider construction", async () => {
+  test("an active v2 provider scope blocks the explicit pin after factual provider inspection and before model I/O", async () => {
     await writeTriggers([dispatchEntry()]);
     const provider = scripted([]);
     let built = false;
 
     await run(provider, {
       loadActiveRoutingV2: () => activeRoutingConfig("allowlist"),
-      routingCredentialsAvailable: () => true,
+      routingConfigDir: path.join(root, "routing-test-config"),
+      routingSnapshot: currentRoutingSnapshot,
       makeProvider: () => {
         built = true;
         return provider;
@@ -1104,10 +1155,32 @@ describe("routing v2: unattended flow dispatch", () => {
     });
 
     const record = await lastRecord();
-    expect(built).toBe(false);
+    expect(built).toBe(true);
     expect(provider.calls()).toBe(0);
     expect(record.outcome).toBe("dispatch-refused");
     expect(record.dispatch?.refusal).toBe("routing-blocked");
     expect(record.detail).toContain("provider-scope-conflict");
+  });
+
+  test.each([
+    [{ policyAllowed: false }, "policy-denied"],
+    [{ capabilities: [] }, "capability-missing"],
+    [{ contextLength: 1 }, "context-insufficient"],
+    [{ estimatedCostUsd: 2 }, "budget-exceeded"],
+  ] as const)("factual routing gate refuses %s before model I/O", async (facts, reason) => {
+    await writeTriggers([dispatchEntry()]);
+    const provider = scripted([]);
+
+    await run(provider, {
+      loadActiveRoutingV2: () => activeRoutingConfig(),
+      routingConfigDir: path.join(root, "routing-test-config"),
+      routingSnapshot: (input) => currentRoutingSnapshot(input, facts),
+      makeProvider: () => provider,
+    });
+
+    const record = await lastRecord();
+    expect(provider.calls()).toBe(0);
+    expect(record.dispatch?.refusal).toBe("routing-blocked");
+    expect(record.detail).toContain(reason);
   });
 });

@@ -1,7 +1,7 @@
 # План реализации и миграции
-Version: 0.1.0
+Version: 0.1.1
 
-Status: planned — реализация не начата этим пакетом.
+Status: draft implementation — работа M0–M5 отслеживается в job unified-model-routing и PR #1128.
 
 ## Принцип перехода
 
@@ -39,6 +39,7 @@ Legacy и v2 — отдельные версии engine, а не две посл
 Зоны: tui/routing-inspector.ts, tui/tui-shell.ts, commands/routing.ts, commands/review.ts, spawn-subagent-tool.ts, session/native-classifier.ts, session/routing.ts, native runtime, scheduler/trigger native factories.
 
 - Один RoutingRequest → RoutingDecision на всех native путях; сохранить parent gates, remote candidate identities и permissions.
+- Native remote исполняет только выбранный и допущенный candidate. Multi-attempt fallback остаётся закрыт до появления fresh execution-attempt grant/receipt с candidateId и decision lineage; current-role check и уже закрытый admission grant не считаются такой авторизацией.
 - Inspector и CLI объясняют этот же decision. Удалить самостоятельную derived/tier резолюцию из v2 consumers.
 - Shadow mode: production исполняет legacy, v2 считает лишь решение. Переиспользовать разрешённый classification receipt; дополнительные classifier I/O по умолчанию запрещены. Если данных нет — shadow-unresolved, не выдуманная эквивалентность.
 - Gate: cross-entrypoint conformance fixtures; ни один v2 consumer не импортирует legacy ranking для принятия решения. AC8/10 подтверждены на реальных wiring, не source substring assertions.

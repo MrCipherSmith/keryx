@@ -1,4 +1,5 @@
 import { normalizeRoutingV2Config, type NormalizedRoutingV2Config } from "./config-v2";
+import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "./classifier-production-v2";
 import { readActiveRoutingV2Layers } from "./migration-v2";
 
 /**
@@ -6,6 +7,9 @@ import { readActiveRoutingV2Layers } from "./migration-v2";
  * An inconsistent active snapshot throws so callers cannot silently bypass it.
  */
 export function loadActiveRoutingV2(cwd: string, configDir?: string): NormalizedRoutingV2Config | undefined {
-  const layers = readActiveRoutingV2Layers(cwd, configDir);
-  return layers === undefined ? undefined : normalizeRoutingV2Config(layers);
+  const normalization = {
+    classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY,
+  };
+  const layers = readActiveRoutingV2Layers(cwd, configDir, normalization);
+  return layers === undefined ? undefined : normalizeRoutingV2Config(layers, normalization);
 }

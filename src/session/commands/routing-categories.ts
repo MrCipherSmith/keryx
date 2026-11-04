@@ -35,6 +35,8 @@ export interface NativeRoutingCategoriesV2Context {
   readonly availability: Control["RoutingAvailability"];
   readonly bindings: readonly NativeModelBinding[];
   readonly sessionConfig: Control["SessionConfig"];
+  readonly cwd?: string;
+  readonly configDir?: string;
 }
 
 /** Pure v2 preview over one frozen native availability snapshot; no classifier or provider I/O. */
@@ -59,6 +61,7 @@ export function previewNativeRoutingCategoriesV2(
       },
       snapshot: frozen.snapshot,
       config: routingConfig,
+      ...(context.cwd === undefined ? {} : { journal: { cwd: context.cwd, ...(context.configDir === undefined ? {} : { configDir: context.configDir }), kind: "preview" as const } }),
     });
     return { category, assignment: routingConfig.categories[category], receipt, decision: receipt.decision };
   });
@@ -85,7 +88,8 @@ export async function executeRoutingCategories(context: { cwd: string; configDir
     const activeV2 = loadActiveRoutingV2(context.cwd, context.configDir);
     if (activeV2 !== undefined) {
       if (context.sessionConfig === undefined) throw new Error("active routing v2 preview requires the frozen session config");
-      const data = previewNativeRoutingCategoriesV2({ availability: context.availability, bindings: context.bindings, sessionConfig: context.sessionConfig }, activeV2);
+      const data = previewNativeRoutingCategoriesV2({ availability: context.availability, bindings: context.bindings, sessionConfig: context.sessionConfig,
+        cwd: context.cwd, ...(context.configDir === undefined ? {} : { configDir: context.configDir }) }, activeV2);
       const json = redactSensitiveText(JSON.stringify(data).replaceAll(context.cwd, "."));
       return Buffer.byteLength(json) > 30000 ? { ok: false, error: { code: "quota-exceeded", message: "The routing table exceeds its remote quota." } } : { ok: true, data: JSON.parse(json) as unknown };
     }

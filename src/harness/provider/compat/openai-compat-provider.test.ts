@@ -156,7 +156,7 @@ test("K-005: 401/403 are authentication, 429 is a retryable rate limit that hono
   expect(limited.kind).toBe("rate_limit");
   expect(limited.retryable).toBe(true);
   expect(limited.retryAfterMs).toBe(7000);
-  expect((await errorFor(json({ error: "gone" }, 404))).kind).toBe("invalid_request");
+  expect(await errorFor(json({ error: "gone" }, 404))).toMatchObject({ kind: "invalid_request", detail: { modelNotFound: true } });
   expect((await errorFor(new Response("", { status: 502 }))).kind).toBe("unavailable");
 });
 
