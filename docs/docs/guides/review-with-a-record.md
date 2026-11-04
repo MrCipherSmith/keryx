@@ -193,7 +193,10 @@ the reviewers cannot write files, so the main session writes their candidates to
 is: `behavior` (the default) or `presentation` (copy, class names, display order).
 
 `mutate` applies each proposed mutant in a scratch copy of the worktree (the
-worktree is never written) and records whether the tests failed. The table in
+worktree is never written) and records whether the tests failed. The copy leaves
+out nested git checkouts, such as the worktrees under `.claude/worktrees/` and
+`.worktrees/`, and a pass first removes scratch that earlier passes left behind
+when they died. The table in
 `research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
 test command it was judged by and that command's exit code. A mutant that
 **survived** means no test pins that behaviour. A survivor shows a

@@ -781,7 +781,7 @@ costs the time to its first failure, not the whole suite. The baseline always ru
 a green run is the same with or without the flag, so a survivor stays a survivor. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. Any other command shape
 (`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off and takes no value.
 The `.json` record carries `bail: true` when it was applied; always `startedAt`, `loadavg` (sampled
-at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; and `head` and `treeHash` only
+at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` only when it removed leftover scratch; and `head` and `treeHash` only
 when the worktree is the root of a git checkout and the size and time limits of that step held.
 `treeHash` hashes the tracked changes against HEAD (staged or not) and the untracked, non-ignored
 files, so two passes over the same code agree. It leaves out the review packages under

@@ -5084,7 +5084,9 @@ Usage:
                         copy of the worktree; the worktree is never written. The
                         copy lives under .metaproject/data/review/mutate-scratch
                         (--scratch repo, default, so ancestor node_modules still
-                        resolve) or in the OS temp dir (--scratch tmp). The
+                        resolve) or in the OS temp dir (--scratch tmp). Nested
+                        git checkouts are not copied, and a pass removes the
+                        scratch left by passes that died. The
                         baseline must pass first; a red one exits non-zero and
                         prints the command, its cwd and the last 60 output lines.
                         A plain "bun test <paths>" command runs each mutant with

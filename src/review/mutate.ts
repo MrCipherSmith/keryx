@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { loadavg, tmpdir } from "node:os";
 import path from "node:path";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
@@ -71,6 +71,8 @@ export type MutationRecord = {
   copyMs?: number | undefined;
   /** Sum of the mutant rows' `ms`. */
   mutantsMs?: number | undefined;
+  /** Scratch directories of dead or abandoned earlier passes removed before this one; absent when none were. */
+  sweptScratch?: number | undefined;
 };
 
 export const MUTANTS_SPEC = "mutants.json";
@@ -82,6 +84,11 @@ const SKIP_COPY = new Set([".git", "node_modules"]);
 export const SCRATCH_DIR = path.join(".metaproject", "data", "review", "mutate-scratch");
 export type ScratchMode = "repo" | "tmp";
 export const SCRATCH_MODES: readonly ScratchMode[] = ["repo", "tmp"];
+/** How long a scratch directory with no readable owner marker may sit before a later pass treats it as abandoned. */
+export const STALE_SCRATCH_MS = 6 * 60 * 60 * 1000;
+const OWNER_FILE = "owner.json";
+/** What `mkdtemp(".../keryx-mutate-")` makes; any other name in the scratch base is not ours to remove. */
+const SCRATCH_NAME = /^keryx-mutate-[A-Za-z0-9]{6}$/;
 const BASELINE_TAIL_LINES = 60;
 const OUTPUT_KEEP_CHARS = 256 * 1024;
 
@@ -210,9 +217,33 @@ function lineOf(text: string, index: number): number {
 }
 
 /**
+ * True when `dir` is the root of a git checkout of its own: an embedded clone (`.git` directory), a
+ * linked worktree (`.git` file whose `gitdir:` is not under a `modules` directory) or a `.git` link.
+ * A submodule keeps its history under the parent's `.git/modules`, so it is part of the tree and is copied.
+ * An unreadable `.git` is treated as a checkout: skipping a directory is the safe way to be wrong.
+ */
+async function isNestedCheckout(dir: string): Promise<boolean> {
+  const dotGit = path.join(dir, ".git");
+  let info;
+  try {
+    info = await lstat(dotGit);
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+  if (!info.isFile()) return true;
+  try {
+    const match = /^gitdir:\s*(.+)$/m.exec(await readFile(dotGit, "utf8"));
+    return match === null || !match[1]!.trim().split(/[\\/]+/).includes("modules");
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Copies the tree entry by entry instead of with one `cp`: the scratch directory can sit inside the
  * tree being copied, and `cp` refuses a destination under its own source. `skip` holds absolute paths
- * (the scratch directory) that are left out.
+ * (the scratch directory) that are left out. Nested git checkouts (`.claude/worktrees/*`, `.worktrees/*`)
+ * are left out too: a checkout can hold hundreds of thousands of files and is not part of what is reviewed.
  */
 async function copyTree(source: string, target: string, skip: ReadonlySet<string>): Promise<void> {
   const walk = async (from: string, to: string): Promise<void> => {
@@ -220,13 +251,68 @@ async function copyTree(source: string, target: string, skip: ReadonlySet<string
     for (const entry of await readdir(from, { withFileTypes: true })) {
       const entryPath = path.join(from, entry.name);
       if (SKIP_COPY.has(entry.name) || skip.has(entryPath)) continue;
-      if (entry.isDirectory()) await walk(entryPath, path.join(to, entry.name));
+      if (entry.isDirectory()) {
+        if (await isNestedCheckout(entryPath)) continue;
+        await walk(entryPath, path.join(to, entry.name));
+      }
       else await cp(entryPath, path.join(to, entry.name));
     }
   };
   await walk(source, target);
   const modules = path.join(source, "node_modules");
   if (existsSync(modules)) await symlink(modules, path.join(target, "node_modules"), "dir");
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists under another user; only ESRCH means it is gone.
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+async function ownerPid(dir: string): Promise<number | undefined> {
+  try {
+    const owner = JSON.parse(await readFile(path.join(dir, OWNER_FILE), "utf8")) as { pid?: unknown };
+    return typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0 ? owner.pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Removes scratch directories that earlier passes left behind: a pass killed with SIGKILL or a crash never
+ * reaches its cleanup. A directory goes when its owner marker names a dead pid, or when it has no readable
+ * marker and is older than `staleMs`. Best effort: it returns how many it removed and never throws.
+ */
+export async function sweepStaleScratch(
+  scratchBase: string,
+  options: { now?: (() => number) | undefined; staleMs?: number | undefined; isAlive?: ((pid: number) => boolean) | undefined } = {},
+): Promise<number> {
+  const now = options.now ?? Date.now;
+  const staleMs = options.staleMs ?? STALE_SCRATCH_MS;
+  const isAlive = options.isAlive ?? pidAlive;
+  let removed = 0;
+  try {
+    for (const entry of await readdir(scratchBase, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !SCRATCH_NAME.test(entry.name)) continue;
+      const dir = path.join(scratchBase, entry.name);
+      try {
+        const pid = await ownerPid(dir);
+        const abandoned = pid !== undefined ? !isAlive(pid) : now() - (await stat(dir)).mtimeMs > staleMs;
+        if (!abandoned) continue;
+        await rm(dir, { recursive: true, force: true });
+        removed += 1;
+      } catch {
+        /* one unreadable entry must not stop the sweep */
+      }
+    }
+  } catch {
+    /* no scratch base yet, or it is unreadable: nothing to sweep */
+  }
+  return removed;
 }
 
 const SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
@@ -275,7 +361,10 @@ export async function runMutation(options: {
   const timeoutMs = options.timeoutMs ?? 300_000;
   const scratchBase = options.scratchRoot !== undefined ? path.resolve(options.scratchRoot) : options.scratch === "tmp" ? tmpdir() : path.join(worktree, SCRATCH_DIR);
   await mkdir(scratchBase, { recursive: true });
+  const sweptScratch = await sweepStaleScratch(scratchBase);
   const scratch = await mkdtemp(path.join(scratchBase, "keryx-mutate-"));
+  // Beside the copy, never inside it, so a later pass can tell a live owner from a dead one.
+  await writeFile(path.join(scratch, OWNER_FILE), JSON.stringify({ pid: process.pid, startedAt }));
   // The copy has no .git; without a ceiling a git command run by the tests would walk up into the real repository.
   const env = runEnv(scratchBase);
   return withScratchSignalCleanup(async () => { killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
@@ -304,6 +393,7 @@ export async function runMutation(options: {
         totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
         ...passFields,
         copyMs,
+        ...(sweptScratch > 0 ? { sweptScratch } : {}),
       });
     }
 
@@ -355,6 +445,7 @@ export async function runMutation(options: {
       ...passFields,
       copyMs,
       mutantsMs: results.reduce((sum, r) => sum + r.ms, 0),
+      ...(sweptScratch > 0 ? { sweptScratch } : {}),
     };
   } finally {
     await rm(scratch, { recursive: true, force: true });
