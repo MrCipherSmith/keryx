@@ -100,9 +100,10 @@ afterEach(async () => {
 async function run(
   over: Partial<AgentDeps>,
   options: RunAgentTurnOptions = {},
+  ioOver: Partial<AgentIO> = {},
 ): Promise<{ history: NormalizedMessage[]; system: string[]; finishReason: string | undefined }> {
   const system: string[] = [];
-  const io: AgentIO = { write: () => undefined, onSystem: (t) => system.push(t) };
+  const io: AgentIO = { write: () => undefined, onSystem: (t) => system.push(t), ...ioOver };
   const history = reviewHistory();
   let id = 0;
   const result = await runAgentTurn(
@@ -139,7 +140,8 @@ test("AC4: the turn's abort signal reaches the gate scan, and an aborted turn is
   // Deterministic stand-in for a scan that is still walking when the operator presses Ctrl+C: it settles only when the
   // signal it was handed aborts. A scan that was never handed the turn's signal reports an open review at once, which
   // is the nudge this test forbids.
-  const reviewGateState: typeof findReviewGateState = async (_cwd, _since, _named, signal) => {
+  const reviewGateState: typeof findReviewGateState = async (_cwd, _since, _named, scanOptions) => {
+    const signal = scanOptions?.signal;
     seenSignal = signal;
     if (signal === undefined) {
       return { reviewId: "pr-1-all", packageDir: path.join(root, ".metaproject", "reviews", "pr-1-all"), blockers: ["missing artifacts: report.md"], signature: "never-aborted" };
@@ -186,14 +188,61 @@ test("LOGIC-003: a text-only stop whose turn was aborted during the gate prints 
   expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
 });
 
-test("LOGIC-003: a no-progress stop whose turn was aborted during the gate prints the [stopped] line", async () => {
+test("LOGIC-003 / LOGIC-R2-001: a no-progress stop whose turn was aborted during the gate ends there, with no wrap-up", async () => {
   const controller = new AbortController();
+  let modelCalls = 0;
+  let callsAtGate = -1;
+  const inner = scriptedProvider([sameFailingCall("a1"), sameFailingCall("a2"), sameFailingCall("a3"), sameFailingCall("a4")]);
+  const provider: ProviderPort = {
+    describe: () => inner.describe(),
+    stream: (request, opts) => {
+      modelCalls += 1;
+      return inner.stream(request, opts);
+    },
+  };
   const reviewGateState: typeof findReviewGateState = async () => {
+    callsAtGate = modelCalls;
     controller.abort();
     return openReview();
   };
-  const { system } = await run({ reviewGateState }, { signal: controller.signal });
-  expect(system.join("")).toContain("[stopped] Model turn interrupted by user.");
+  const { history, system, finishReason } = await run({ reviewGateState, provider }, { signal: controller.signal });
+  const printed = system.join("");
+  expect(callsAtGate).toBeGreaterThan(0);
+  // The turn was already stopping on no progress: it is interrupted, not a clean finish.
+  expect(finishReason).toBe("interrupted");
+  expect(printed).toContain("[stopped] Model turn interrupted by user.");
+  // The wrap-up path prints the [budget] line, asks the model again and leaves a harness "Tool loop stopped" message.
+  expect(printed).not.toContain("[budget]");
+  expect(history.some((m) => typeof m.content === "string" && m.content.includes("Tool loop stopped"))).toBe(false);
+  expect(modelCalls).toBe(callsAtGate);
+});
+
+test("TP-004: a turn already aborted when the gate runs never calls the scan and gets no nudge", async () => {
+  const controller = new AbortController();
+  let scans = 0;
+  const reviewGateState: typeof findReviewGateState = async () => {
+    scans += 1;
+    return openReview();
+  };
+  let modelCalls = 0;
+  const inner = scriptedProvider([[{ kind: "text_delta", text: "all done" }, { kind: "model_end" }]]);
+  const provider: ProviderPort = {
+    describe: () => inner.describe(),
+    stream: (request, opts) => {
+      modelCalls += 1;
+      return inner.stream(request, opts);
+    },
+  };
+  // `permissionMode` is read between the last abort check of the text-only stop and the gate: the operator presses
+  // Ctrl+C in that window, so only the check ahead of the scan can keep the scan from running.
+  const permissionMode = () => {
+    if (modelCalls > 0) controller.abort();
+    return "ask" as const;
+  };
+  const { history } = await run({ reviewGateState, provider }, { signal: controller.signal }, { permissionMode });
+  expect(controller.signal.aborted).toBe(true);
+  expect(scans).toBe(0);
+  expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
 });
 
 test("an unattended run is not held: there is no one to re-prompt", async () => {

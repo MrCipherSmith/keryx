@@ -26,7 +26,7 @@ session within seconds (nudge at 07:10:54Z).
 
 - The stop gate's work per evaluation is bounded regardless of what lies under `.metaproject/data/review` or a package,
   it never reads the mutation scratch directory, and an aborted turn stops it immediately.
-- A mutation pass copies no nested git checkout and removes scratch left behind by earlier, dead passes.
+- A mutation pass copies no linked worktree (the design was narrowed after the round-1 review; see AC5/AC6 and journal.md) and removes scratch left behind by earlier, dead passes.
 
 ## Outcome criteria
 

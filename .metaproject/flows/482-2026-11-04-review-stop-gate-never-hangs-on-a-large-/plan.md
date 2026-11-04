@@ -12,26 +12,34 @@
      signature carries a deterministic truncation marker (same tree → same signature, so stall detection still works on
      the walked part).
    - The signal is checked before each entry; an aborted signal throws an `AbortError`.
-2. `findReviewGateState(cwd, since, named, signal?)` passes the signal to the walks and checks it around
+2. `findReviewGateState(cwd, since, named, { signal, now })` passes the signal to the walks and checks it around
    `scanRoot` / `reviewCompletionBlockers`.
 3. `holdReviewGate` passes the turn's `signal`, returns `false` (no nudge) when the turn is aborted before or after the
    scan. Both call sites (text-only stop, no-progress stop) go through it.
 
 ### B. Mutation pass (`src/review/mutate.ts`)
 
-1. `copyTree` skips a nested git checkout: a subdirectory with a `.git` directory (embedded clone) or a `.git` file whose
-   `gitdir:` does not point into a `modules` directory (a worktree). A submodule (`gitdir: …/modules/…`) is copied.
-2. After `mkdtemp`, write `<scratch>/owner.json` `{ pid, startedAt }`.
-3. Before `mkdtemp`, sweep `scratchBase`: entries named exactly `keryx-mutate-` + 6 alphanumerics; remove one whose
-   owner pid is dead (`process.kill(pid, 0)` → `ESRCH`), or that has no readable owner marker and is older than a stale
-   age (6 h). Keep a live owner (including `EPERM`), a fresh unmarked one, and any other name.
+The design was narrowed after the round-1 review (see AC5/AC6 and journal.md); this describes the code at head.
+
+1. `copyTree` leaves out only a linked worktree: a subdirectory whose `.git` file names an admin directory that holds a
+   `commondir` file, or a path ending `.git/worktrees/<name>` (either slash). Submodules, paths a `.gitmodules` of the
+   walk lists, embedded clones (a `.git` directory) and unreadable or malformed gitfiles are copied. The repository's own
+   scratch directory is never copied, and it is swept in `--scratch tmp` mode too.
+2. After `mkdtemp`, inside the scope whose cleanup removes the scratch, write `<scratch>/owner.json` `{ pid, startedAt }`
+   and touch it every heartbeat while the pass runs.
+3. Before `mkdtemp`, sweep the operator's own directories in `scratchBase` (and the repository's scratch): entries named
+   exactly `keryx-mutate-` + 6 alphanumerics, real directories owned by the current uid. One with a marker is judged by
+   its heartbeat: removed when the marker is older than 10 minutes whatever the pid says, or when the pid is dead and the
+   marker is older than two heartbeats. One without a usable marker is removed after 6 h. Keep a live owner (including
+   `EPERM`), a fresh unmarked one, and any other name.
 4. Help text (`src/commands/review.ts`) and `docs/docs/guides/review-with-a-record.md` say what is skipped and swept.
 
 ## Trade-offs
 
 - A truncated signature cannot see progress beyond the budget, so the stall counter may stop the gate a little early on a
   huge package. That degrades toward "the turn ends", never toward a hang; the operator is at the keyboard.
-- Skipping nested checkouts rather than `.metaproject/data` keeps every file a test may read.
+- Leaving out only linked worktrees rather than every nested checkout keeps every file a test may read (a submodule or an
+  embedded clone is part of the tree under review); a linked worktree is a second working copy of a repository.
 
 ## State × event matrix
 

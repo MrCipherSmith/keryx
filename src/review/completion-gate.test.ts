@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { constants, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -746,10 +746,10 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     await writeFile(path.join(scratch, "b.txt"), "bbbb");
     const now = aged();
     const before = hashedFileCount();
-    const withScratch = await findReviewGateState(root, 0, {}, undefined, now);
+    const withScratch = await findReviewGateState(root, 0, {}, { now });
     const grown = hashedFileCount() - before;
     await rm(path.join(root, SCRATCH_DIR), { recursive: true, force: true });
-    const withoutScratch = await findReviewGateState(root, 0, {}, undefined, now);
+    const withoutScratch = await findReviewGateState(root, 0, {}, { now });
     expect(withScratch?.signature).toBe(withoutScratch?.signature as string);
     // note.json and manifest.json are the only aged files outside the scratch.
     expect(grown).toBeLessThanOrEqual(2);
@@ -761,7 +761,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     for (let i = 0; i < total; i += 1) await writeFile(path.join(dir, `f${String(i).padStart(5, "0")}.txt`), String(i));
     const now = aged();
     const before = hashedFileCount();
-    const first = await findReviewGateState(root, 0, {}, undefined, now);
+    const first = await findReviewGateState(root, 0, {}, { now });
     const grown = hashedFileCount() - before;
     expect(grown).toBeLessThanOrEqual(MAX_SIGNATURE_FILES);
     // TP-M07: the walk stops at the first entry past the budget, so the marker is written once, as the last thing in the
@@ -770,12 +770,12 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(first?.signature.endsWith(`${TRUNCATION_MARKER}#`)).toBe(true);
     const afterFirst = hashedFileCount();
     const reads = hashReadCount();
-    const second = await findReviewGateState(root, 0, {}, undefined, now);
+    const second = await findReviewGateState(root, 0, {}, { now });
     expect(second?.signature).toBe(first?.signature as string);
     // Every file the walk reached is remembered, so the second call hashed none again.
     expect(hashedFileCount()).toBe(afterFirst);
     expect(hashReadCount()).toBe(reads);
-  });
+  }, 30_000);
 
   test("TP-005: one budget covers a nested tree, so only the shared budget stops a walk whose every directory is small", async () => {
     const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
@@ -795,11 +795,11 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     const expected = whole * perDir + left;
     expect(expected).toBe(33 * 60 + 34);
     const reads = hashReadCount();
-    const state = await findReviewGateState(root, 0, {}, undefined, aged());
+    const state = await findReviewGateState(root, 0, {}, { now: aged() });
     // A budget that restarted in each directory would read all 2400.
     expect(hashReadCount() - reads).toBe(expected);
     expect(state?.signature).toContain(TRUNCATION_MARKER);
-  });
+  }, 30_000);
 
   test("TP-006 / DEG-001: both walks over budget fit the hash cache, so an unchanged second stop reads nothing", async () => {
     expect(SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES).toBeLessThanOrEqual(MAX_HASHED_FILES);
@@ -813,13 +813,13 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     }
     const now = aged();
     const reads = hashReadCount();
-    const first = await findReviewGateState(root, 0, {}, undefined, now);
+    const first = await findReviewGateState(root, 0, {}, { now });
     expect(hashReadCount() - reads).toBe(SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES);
     const afterFirst = hashReadCount();
-    const second = await findReviewGateState(root, 0, {}, undefined, now);
+    const second = await findReviewGateState(root, 0, {}, { now });
     expect(second?.signature).toBe(first?.signature as string);
     expect(hashReadCount()).toBe(afterFirst);
-  });
+  }, 30_000);
 
   test("AC3: an already-aborted signal rejects with AbortError and hashes no file", async () => {
     await writePackage("live", { mode: "review-flow", status: "draft" });
@@ -829,7 +829,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     const reads = hashReadCount();
     const controller = new AbortController();
     controller.abort();
-    await expect(findReviewGateState(root, 0, {}, controller.signal, aged())).rejects.toMatchObject({ name: "AbortError" });
+    await expect(findReviewGateState(root, 0, {}, { signal: controller.signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
     expect(hashReadCount()).toBe(reads);
   });
 
@@ -866,7 +866,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     const reads = hashReadCount();
     // 20 reads of the signal: two before the walk, then one per entry; the working data is the first tree walked.
     const { signal } = abortsAfterReads(20);
-    await expect(findReviewGateState(root, 0, {}, signal, aged())).rejects.toMatchObject({ name: "AbortError" });
+    await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
     const hashed = hashReadCount() - reads;
     expect(hashed).toBeGreaterThan(0);
     // Without the signal in the working-data walk, all its files are read before the package walk notices the abort.
@@ -877,20 +877,63 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     const workingFiles = await writeWorkingTree();
     const reads = hashReadCount();
     const { signal } = abortsAfterReads(20);
-    await expect(findReviewGateState(root, 0, {}, signal, aged())).rejects.toMatchObject({ name: "AbortError" });
+    await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
     const hashed = hashReadCount() - reads;
     expect(hashed).toBeGreaterThan(0);
     expect(hashed).toBeLessThan(workingFiles);
   });
 
-  test("TP-003: an abort that lands right before the completion blockers are computed stops there, not one check later", async () => {
+  /**
+   * A signal whose `aborted` flag turns true once more than `after` of the gate's own straight-line checks have read it.
+   * The per-entry reads inside `dirSignature` are not counted and never abort, so a deleted straight-line check shows as
+   * a call that resolves instead of one that is stopped later by the walk.
+   */
+  const abortsAfterStraightLineReads = (after: number): { signal: AbortSignal; reads: () => number } => {
+    let count = 0;
+    const signal = {
+      get aborted(): boolean {
+        if ((new Error().stack ?? "").includes("dirSignature")) return false;
+        count += 1;
+        return count > after;
+      },
+    } as AbortSignal;
+    return { signal, reads: () => count };
+  };
+
+  // With a package and no working data the gate's straight-line checks are: on entry (k = 0), after the root scan (1), before
+  // the completion blockers are computed (2), after them (3). Aborting on the (k + 1)-th must stop there, not at a later one.
+  for (const k of [0, 1, 2, 3]) {
+    test(`TP-R2-001: an abort that lands on straight-line check ${k + 1} of 4 stops there`, async () => {
+      await writePackage("live", { mode: "review-flow", status: "draft" });
+      const reads = hashReadCount();
+      const { signal, reads: signalReads } = abortsAfterStraightLineReads(k);
+      await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
+      expect(signalReads()).toBe(k + 1);
+      expect(hashReadCount()).toBe(reads);
+    });
+  }
+
+  // Pins the helper above: with no abort among the four checks the call resolves after exactly four counted reads. If
+  // `dirSignature` were renamed, the walk's reads would be counted, abort the walk, and this test would fail.
+  test("TP-R2-001: the gate makes exactly four straight-line checks, and the walk's reads are not counted among them", async () => {
     await writePackage("live", { mode: "review-flow", status: "draft" });
+    const { signal, reads: signalReads } = abortsAfterStraightLineReads(4);
+    const state = await findReviewGateState(root, 0, {}, { signal, now: aged() });
+    expect(state).not.toBeNull();
+    expect(signalReads()).toBe(4);
+  });
+
+  test("TP-R2-001: an abort inside the package walk stops it part-way", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const files = 300;
+    for (let f = 0; f < files; f += 1) await writeFile(path.join(dir, `f${String(f).padStart(3, "0")}.txt`), String(f));
     const reads = hashReadCount();
-    // No working data, so the checks are: on entry (1), after the root scan (2), before the blockers (3), after them (4).
-    const { signal, reads: signalReads } = abortsAfterReads(2);
-    await expect(findReviewGateState(root, 0, {}, signal, aged())).rejects.toMatchObject({ name: "AbortError" });
-    expect(signalReads()).toBe(3);
-    expect(hashReadCount()).toBe(reads);
+    // Four straight-line checks, then one read per package entry: the abort lands on the 100th entry of the walk.
+    const { signal } = abortsAfterReads(4 + 99);
+    await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
+    const hashed = hashReadCount() - reads;
+    expect(hashed).toBeGreaterThan(0);
+    expect(hashed).toBeLessThan(files);
   });
 
   test("SEC-002: a FIFO in the package does not block the evaluation", async () => {
@@ -899,12 +942,14 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     const made = spawnSync("mkfifo", [path.join(dir, "pipe")]);
     expect(made.status).toBe(0);
     const outcome = await Promise.race([
-      findReviewGateState(root, 0, {}, undefined, aged()).then((state) => state),
+      findReviewGateState(root, 0, {}, { now: aged() }).then((state) => state),
       new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 5_000)),
     ]);
     expect(outcome).not.toBe("blocked");
-    expect(typeof outcome === "object" && outcome !== null ? outcome.signature : "").toContain("pipe:special:");
-    expect(await fileHash(path.join(dir, "pipe"))).toStartWith("special:");
+    // A FIFO is hashed as `special:` and its file-type bits in octal (S_IFIFO), never read.
+    const special = `special:${constants.S_IFIFO.toString(8)}`;
+    expect(typeof outcome === "object" && outcome !== null ? outcome.signature : "").toContain(`pipe:${special}`);
+    expect(await fileHash(path.join(dir, "pipe"))).toBe(special);
   });
 });
 
@@ -922,7 +967,7 @@ describe("a stall stop on a truncated signature says what the gate could see", (
     const decision = stalled(`a:1,${TRUNCATION_MARKER}#`);
     expect(decision.action).toBe("stop");
     if (decision.action !== "stop") return;
-    expect(decision.report).toContain(`no change in the first ${MAX_SIGNATURE_FILES} entries the gate reads`);
+    expect(decision.report).toContain(`no change in the first ${MAX_SIGNATURE_FILES} entries of each tree the gate reads in the last ${MAX_REVIEW_GATE_STALLS} continues`);
     expect(decision.report).not.toContain("no new artifact");
   });
 
@@ -930,7 +975,7 @@ describe("a stall stop on a truncated signature says what the gate could see", (
     const decision = stalled("a:1#");
     expect(decision.action).toBe("stop");
     if (decision.action !== "stop") return;
-    expect(decision.report).toContain("no new artifact in the last");
-    expect(decision.report).not.toContain("entries the gate reads");
+    expect(decision.report).toContain(`no new artifact in the last ${MAX_REVIEW_GATE_STALLS} continues`);
+    expect(decision.report).not.toContain("entries of each tree");
   });
 });

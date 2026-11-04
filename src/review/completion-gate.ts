@@ -3,7 +3,7 @@
 // used to accept it; a review is finished when `keryx review complete` accepts
 // the package, not when the model stops writing. Deterministic: no model judges.
 
-import { readFileSync } from "node:fs";
+import { constants, readFileSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -62,7 +62,7 @@ export const hashReadCount = (): number => fileReads;
 export async function fileHash(file: string, now: number = Date.now()): Promise<string> {
   const info = await stat(file).catch(() => undefined);
   if (info === undefined) return "unreadable";
-  if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;
+  if (!info.isFile()) return `special:${(info.mode & constants.S_IFMT).toString(8)}`;
   const key = `${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.ino}`;
   const hit = fileHashes.get(file);
   if (hit !== undefined && hit.key === key) return hit.hash;
@@ -767,9 +767,9 @@ export async function findReviewGateState(
   cwd: string,
   since: number,
   named: Partial<SessionReviewNames> = {},
-  signal?: AbortSignal,
-  now?: number,
+  options: { signal?: AbortSignal | undefined; now?: number | undefined } = {},
 ): Promise<OpenManagedReview | null> {
+  const { signal, now } = options;
   throwIfAborted(signal);
   const roots = [...new Set([cwd, ...(named.roots ?? [])].map((r) => path.resolve(r)))];
   // The roots are independent: read them together.
@@ -886,8 +886,8 @@ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
     // A signature that ran out of budget only vouches for its first entries: say so instead of claiming no artifact is new.
     const stalled = open.signature.includes(TRUNCATION_MARKER)
-      ? ` and no change in the first ${MAX_SIGNATURE_FILES} entries the gate reads in the last ${stalls}`
-      : ` and no new artifact in the last ${stalls}`;
+      ? ` and no change in the first ${MAX_SIGNATURE_FILES} entries of each tree the gate reads in the last ${stalls} continues`
+      : ` and no new artifact in the last ${stalls} continues`;
     return {
       action: "stop",
       report:

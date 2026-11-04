@@ -6,7 +6,7 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { BaselineError, doneMutantIds, EVIDENCE_DIR, HEARTBEAT_MS, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, STALE_HEARTBEAT_MS, STALE_SCRATCH_MS, sweepStaleScratch, unjudgedMutants, withBail, writeMutationEvidence } from "./mutate";
+import { BaselineError, DEAD_PID_GRACE_HEARTBEATS, doneMutantIds, EVIDENCE_DIR, HEARTBEAT_MS, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, STALE_HEARTBEAT_MS, STALE_SCRATCH_MS, sweepStaleScratch, unjudgedMutants, withBail, writeMutationEvidence } from "./mutate";
 import { DEFAULT_PROVENANCE_LIMITS, REVIEW_PACKAGES_DIR, worktreeProvenance } from "./worktree-provenance";
 
 let base: string;
@@ -246,9 +246,11 @@ describe("nested git checkouts and stale scratch", () => {
   const spec = () => parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]);
   const uid = process.getuid?.();
   const isRoot = uid === 0;
+  /** A marker age that a dead pid's directory is swept at: past the grace of {@link DEAD_PID_GRACE_HEARTBEATS} heartbeats. */
+  const PAST_TWO_HEARTBEATS = (DEAD_PID_GRACE_HEARTBEATS + 1) * HEARTBEAT_MS;
 
   /** A scratch directory with an owner marker (`owner` undefined: none); `ageMs` is the directory's age, `markerAgeMs` the marker's. */
-  async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {
+  async function make(name: string, owner: unknown, { ageMs, markerAgeMs = ageMs, into = scratch }: { ageMs: number; markerAgeMs?: number; into?: string }): Promise<string> {
     const dir = path.join(into, name);
     await mkdir(path.join(dir, "tree"), { recursive: true });
     if (owner !== undefined) {
@@ -273,6 +275,9 @@ describe("nested git checkouts and stale scratch", () => {
     await writeFile(path.join(admin, "commondir"), "../..\n");
     await mkdir(path.join(tree, "with-commondir"), { recursive: true });
     await writeFile(path.join(tree, "with-commondir", ".git"), `gitdir: ${admin}\n`);
+    // A gitfile written on Windows: backslash separators, still a worktree admin dir.
+    await mkdir(path.join(tree, "backslash-wt"), { recursive: true });
+    await writeFile(path.join(tree, "backslash-wt", ".git"), "gitdir: C:\\x\\.git\\worktrees\\w\n");
     // Copied: submodules (their history is under .git/modules), a worktree-shaped gitfile that .gitmodules names, ...
     await mkdir(path.join(tree, "sub"), { recursive: true });
     await writeFile(path.join(tree, "sub", ".git"), "gitdir: ../.git/modules/sub\n");
@@ -285,7 +290,13 @@ describe("nested git checkouts and stale scratch", () => {
     await writeFile(path.join(tree, "listed", ".git"), "gitdir: /x/.git/worktrees/listed\n");
     await mkdir(path.join(tree, "listed quoted"), { recursive: true });
     await writeFile(path.join(tree, "listed quoted", ".git"), "gitdir: /x/.git/worktrees/listed-quoted\n");
-    await mkdir(path.join(tree, "listed-dir", ".git"), { recursive: true });
+    // Worktree-shaped as well, so only its `.gitmodules` entry (`path=listed-dir`, no spaces) saves it.
+    await mkdir(path.join(tree, "listed-dir"), { recursive: true });
+    await writeFile(path.join(tree, "listed-dir", ".git"), "gitdir: /x/.git/worktrees/listed-dir\n");
+    // A `.gitmodules` below the walk root names paths relative to its own directory.
+    await mkdir(path.join(tree, "vendor", "lib"), { recursive: true });
+    await writeFile(path.join(tree, "vendor", "lib", ".git"), "gitdir: /x/.git/worktrees/lib\n");
+    await writeFile(path.join(tree, "vendor", ".gitmodules"), '[submodule "lib"]\n\tpath = lib\n\turl = ../lib\n');
     await writeFile(
       path.join(tree, ".gitmodules"),
       '[submodule "a"]\n\tpath = listed\n\turl = ../a\n[submodule "b"]\n\t path = "listed quoted"\n\turl = ../b\n[submodule "c"]\n\tpath=listed-dir\n\turl = ../c\n',
@@ -313,8 +324,9 @@ describe("nested git checkouts and stale scratch", () => {
     for (const copied of ["sub", "winsub", "wtsub", "listed", "listed quoted", "listed-dir", "clone", "linked", "no-gitdir", "plain", "modules"]) expect(seen).toContain(copied);
     // An unreadable gitfile is not proof of a worktree: the directory is copied (root reads it, and then it is one).
     if (!isRoot) expect(seen).toContain("unreadable");
-    for (const skipped of ["nested-wt", "with-commondir"]) expect(seen).not.toContain(skipped);
+    for (const skipped of ["nested-wt", "with-commondir", "backslash-wt"]) expect(seen).not.toContain(skipped);
     expect(deep).not.toContain("modules/app");
+    expect(deep).toContain("vendor/lib");
   });
 
   test("a red baseline names how many linked worktrees the copy left out", async () => {
@@ -348,9 +360,9 @@ describe("nested git checkouts and stale scratch", () => {
     await writeFile(path.join(tree, "probe.js"), PROBE);
     const repoScratch = path.join(tree, SCRATCH_DIR);
     // A dead pass (its marker is old, its pid is not alive) and a live one (this process, a fresh marker).
-    const dead = await make("keryx-mutate-DEADDD", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS, repoScratch);
+    const dead = await make("keryx-mutate-DEADDD", { pid: 2147483646, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS, into: repoScratch });
     await writeFile(path.join(dead, "tree", "stale.txt"), "stale");
-    const live = await make("keryx-mutate-LIVEEE", { pid: process.pid, startedAt: "x" }, 1000, 1000, repoScratch);
+    const live = await make("keryx-mutate-LIVEEE", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, into: repoScratch });
     const out = path.join(base, "seen");
     const record = await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: spec() });
     expect(await readFile(`${out}.scratch`, "utf8")).toBe("no");
@@ -361,12 +373,12 @@ describe("nested git checkouts and stale scratch", () => {
 
   test("sweepStaleScratch removes dead-owner and old unmarked passes and keeps live, fresh and foreign-named ones", async () => {
     const old = STALE_SCRATCH_MS + 60_000;
-    // A marker counts as dead only once it is also older than two heartbeats, so a dead owner's marker is aged past that.
-    await make("keryx-mutate-AAAAAA", { pid: 111, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
-    await make("keryx-mutate-BBBBBB", undefined, old);
-    await make("keryx-mutate-CCCCCC", { pid: 222, startedAt: "x" }, old, 3 * HEARTBEAT_MS);
-    await make("keryx-mutate-DDDDDD", undefined, 1000);
-    await make("keryx-mutate-test-xyz", undefined, old);
+    // A marker counts as dead only once it is also older than the grace heartbeats, so a dead owner's marker is aged past that.
+    await make("keryx-mutate-AAAAAA", { pid: 111, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
+    await make("keryx-mutate-BBBBBB", undefined, { ageMs: old });
+    await make("keryx-mutate-CCCCCC", { pid: 222, startedAt: "x" }, { ageMs: old, markerAgeMs: PAST_TWO_HEARTBEATS });
+    await make("keryx-mutate-DDDDDD", undefined, { ageMs: 1000 });
+    await make("keryx-mutate-test-xyz", undefined, { ageMs: old });
     const removed = await sweepStaleScratch(scratch, { isAlive: (pid) => pid === 222 });
     expect(removed).toBe(2);
     expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-CCCCCC", "keryx-mutate-DDDDDD", "keryx-mutate-test-xyz"]);
@@ -378,8 +390,8 @@ describe("nested git checkouts and stale scratch", () => {
 
   test("sweepStaleScratch: a probe that throws keeps the directory, and the sweep goes on to the next one", async () => {
     for (let i = 1; i <= 4; i += 1) {
-      await make(`keryx-mutate-AAAAA${i}`, { pid: 111, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
-      await make(`keryx-mutate-ZZZZZ${i}`, { pid: 222, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+      await make(`keryx-mutate-AAAAA${i}`, { pid: 111, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
+      await make(`keryx-mutate-ZZZZZ${i}`, { pid: 222, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
     }
     const removed = await sweepStaleScratch(scratch, {
       isAlive: (pid) => {
@@ -393,14 +405,14 @@ describe("nested git checkouts and stale scratch", () => {
 
   describe("the real liveness probe", () => {
     // The default `isAlive` is `process.kill(pid, 0)`: alive and EPERM mean the process exists, only ESRCH means it is gone.
-    const staleButNotAbandoned = 3 * HEARTBEAT_MS;
+    const staleButNotAbandoned = PAST_TWO_HEARTBEATS;
     test("TP-001: this process and pid 1 are kept; the pid of a process that has exited is removed", async () => {
       const exited = spawnSync(process.execPath, ["-e", ""]);
       expect(exited.pid).toBeGreaterThan(0);
-      await make("keryx-mutate-SELFSE", { pid: process.pid, startedAt: "x" }, 1000, staleButNotAbandoned);
+      await make("keryx-mutate-SELFSE", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: staleButNotAbandoned });
       // pid 1 is EPERM for a process that is not root, and alive for root.
-      await make("keryx-mutate-INITIN", { pid: 1, startedAt: "x" }, 1000, staleButNotAbandoned);
-      await make("keryx-mutate-GONEGO", { pid: exited.pid, startedAt: "x" }, 1000, staleButNotAbandoned);
+      await make("keryx-mutate-INITIN", { pid: 1, startedAt: "x" }, { ageMs: 1000, markerAgeMs: staleButNotAbandoned });
+      await make("keryx-mutate-GONEGO", { pid: exited.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: staleButNotAbandoned });
       expect(await sweepStaleScratch(scratch)).toBe(1);
       expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-INITIN", "keryx-mutate-SELFSE"]);
     });
@@ -408,24 +420,24 @@ describe("nested git checkouts and stale scratch", () => {
 
   describe("a marker that stops being refreshed ages out", () => {
     test("HL-001: a live pid whose marker is older than STALE_HEARTBEAT_MS is removed, whatever the pid says", async () => {
-      await make("keryx-mutate-REUSED", { pid: process.pid, startedAt: "x" }, 1000, STALE_HEARTBEAT_MS + 60_000);
-      await make("keryx-mutate-FRESHH", { pid: process.pid, startedAt: "x" }, 1000, STALE_HEARTBEAT_MS - 60_000);
+      await make("keryx-mutate-REUSED", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: STALE_HEARTBEAT_MS + 60_000 });
+      await make("keryx-mutate-FRESHH", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: STALE_HEARTBEAT_MS - 60_000 });
       expect(await sweepStaleScratch(scratch)).toBe(1);
       expect(await readdir(scratch)).toEqual(["keryx-mutate-FRESHH"]);
     });
 
-    test("HL-001: a dead pid with a fresh marker is kept (another PID namespace sees a live pass as gone); it goes after two heartbeats", async () => {
-      await make("keryx-mutate-FRESHH", { pid: 999, startedAt: "x" }, 1000, 1000);
-      await make("keryx-mutate-JUSTIN", { pid: 999, startedAt: "x" }, 1000, 2 * HEARTBEAT_MS - 30_000);
-      await make("keryx-mutate-JUSTAF", { pid: 999, startedAt: "x" }, 1000, 2 * HEARTBEAT_MS + 30_000);
+    test("HL-001: a dead pid with a fresh marker is kept (another PID namespace sees a live pass as gone); it goes after the grace heartbeats", async () => {
+      await make("keryx-mutate-FRESHH", { pid: 999, startedAt: "x" }, { ageMs: 1000 });
+      await make("keryx-mutate-JUSTIN", { pid: 999, startedAt: "x" }, { ageMs: 1000, markerAgeMs: DEAD_PID_GRACE_HEARTBEATS * HEARTBEAT_MS - 30_000 });
+      await make("keryx-mutate-JUSTAF", { pid: 999, startedAt: "x" }, { ageMs: 1000, markerAgeMs: DEAD_PID_GRACE_HEARTBEATS * HEARTBEAT_MS + 30_000 });
       expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(1);
       expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-FRESHH", "keryx-mutate-JUSTIN"]);
     });
 
     test("the thresholds are the options' when given", async () => {
-      await make("keryx-mutate-ONEONE", { pid: 999, startedAt: "x" }, 1000, 5_000);
+      await make("keryx-mutate-ONEONE", { pid: 999, startedAt: "x" }, { ageMs: 1000, markerAgeMs: 5_000 });
       expect(await sweepStaleScratch(scratch, { isAlive: () => false, heartbeatMs: 1_000 })).toBe(1);
-      await make("keryx-mutate-TWOTWO", { pid: process.pid, startedAt: "x" }, 1000, 5_000);
+      await make("keryx-mutate-TWOTWO", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: 5_000 });
       expect(await sweepStaleScratch(scratch, { staleHeartbeatMs: 1_000 })).toBe(1);
     });
 
@@ -445,7 +457,7 @@ describe("nested git checkouts and stale scratch", () => {
 
     test("SEC-001: a directory owned by another uid is kept", async () => {
       if (uid === undefined) return;
-      await make("keryx-mutate-FOREIG", dead, 1000, 3 * HEARTBEAT_MS);
+      await make("keryx-mutate-FOREIG", dead, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
       expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid: uid + 1 })).toBe(0);
       expect(await readdir(scratch)).toEqual(["keryx-mutate-FOREIG"]);
       expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid })).toBe(1);
@@ -454,8 +466,8 @@ describe("nested git checkouts and stale scratch", () => {
     test("SEC-001: a FIFO named owner.json does not stall the sweep; the directory is unmarked", async () => {
       if (process.platform === "win32") return;
       const old = STALE_SCRATCH_MS + 60_000;
-      const stale = await make("keryx-mutate-FIFOOL", undefined, old);
-      const fresh = await make("keryx-mutate-FIFOFR", undefined, 1000);
+      const stale = await make("keryx-mutate-FIFOOL", undefined, { ageMs: old });
+      const fresh = await make("keryx-mutate-FIFOFR", undefined, { ageMs: 1000 });
       for (const dir of [stale, fresh]) expect(spawnSync("mkfifo", [path.join(dir, "owner.json")]).status).toBe(0);
       // Creating the FIFO touched the directory; put its age back.
       const aged = new Date(Date.now() - old);
@@ -465,17 +477,31 @@ describe("nested git checkouts and stale scratch", () => {
       expect(await readdir(scratch)).toEqual(["keryx-mutate-FIFOFR"]);
     });
 
+    test("TP-R2-006: an owner.json that is a link to a valid marker counts as unmarked: a fresh directory is kept, whatever the target's pid says", async () => {
+      const target = path.join(base, "elsewhere-owner.json");
+      await writeFile(target, JSON.stringify(dead));
+      const old = new Date(Date.now() - PAST_TWO_HEARTBEATS);
+      await utimes(target, old, old);
+      const dir = await make("keryx-mutate-LINKOW", undefined, { ageMs: 1000 });
+      await symlink(target, path.join(dir, "owner.json"));
+      // Creating the link touched the directory; put its age back.
+      const aged = new Date(Date.now() - 1000);
+      await utimes(dir, aged, aged);
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
+      expect(existsSync(dir)).toBe(true);
+    });
+
     test("SEC-001: an oversize marker counts as unmarked, so a fresh directory is kept", async () => {
-      const dir = await make("keryx-mutate-BIGBIG", dead, 1000, 3 * HEARTBEAT_MS);
+      const dir = await make("keryx-mutate-BIGBIG", dead, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
       await writeFile(path.join(dir, "owner.json"), JSON.stringify({ ...dead, pad: "x".repeat(8192) }));
-      const marker = new Date(Date.now() - 3 * HEARTBEAT_MS);
+      const marker = new Date(Date.now() - PAST_TWO_HEARTBEATS);
       await utimes(path.join(dir, "owner.json"), marker, marker);
       expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
     });
 
     test("TP-M32: a pid of 0, a negative pid or a fractional one is no marker, so a fresh directory is kept", async () => {
       for (const [name, pid] of [["keryx-mutate-ZEROZE", 0], ["keryx-mutate-NEGNEG", -5], ["keryx-mutate-FRACFR", 1.5], ["keryx-mutate-STRSTR", "7"]] as const)
-        await make(name, { pid, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+        await make(name, { pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
       expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
       expect(await readdir(scratch)).toHaveLength(4);
     });
@@ -494,7 +520,7 @@ describe("nested git checkouts and stale scratch", () => {
 
   test("a pass sweeps a dead pass's scratch first and reports how many it removed and how long it took", async () => {
     // pid 2^31-2 is never a live process on a normal host, so process.kill(pid, 0) reports ESRCH; the marker is old enough to count.
-    const stale = await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+    const stale = await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
     const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() });
     expect(record.sweptScratch).toBe(1);
     expect(typeof record.sweepMs).toBe("number");
@@ -506,7 +532,7 @@ describe("nested git checkouts and stale scratch", () => {
 
   test("TP-M41: a pass whose baseline is red still carries what it swept", async () => {
     await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
-    await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+    await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_TWO_HEARTBEATS });
     const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(BaselineError);
     const record = (error as BaselineError).record;
