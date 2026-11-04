@@ -958,9 +958,10 @@ A review run in the shell is finished when `keryx review complete` has closed th
 model stops writing. Once the session has loaded `review-orchestrator` or run a `keryx review` command,
 the shell does not accept a text-only finish while no package is closed and `review complete` would still
 refuse: it names what is still missing (no package opened yet, missing artifacts, research or dispatch
-errors) and the next step, prints a `[review-gate]` line in the pane, and continues the turn. It gives up after 20 continues, or after three
-in a row that added no new artifact, and then reports the state instead of looping. Progress is judged
-on the first 2 048 entries of each tree it reads, so on a larger package the gate can give up early.
+errors) and the next step, prints a `[review-gate]` line in the pane, and continues the turn. It gives
+up after 20 continues, or after three in a row that added no new artifact, and then reports the state
+instead of looping. Progress is judged on the first 2 048 entries of each tree it reads, so on a larger
+package the gate can give up early.
 
 ## Verify the findings before you report them
 

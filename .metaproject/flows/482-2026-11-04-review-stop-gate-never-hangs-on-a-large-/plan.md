@@ -20,6 +20,8 @@
 ### B. Mutation pass (`src/review/mutate.ts`)
 
 The design was narrowed after the round-1 review (see AC5/AC6 and journal.md); this describes the code at head.
+The flow's recorded title and task T5's title (flow.json, tasks.md) keep the original "nested checkouts" wording:
+they record what was planned, and no flow command renames them.
 
 1. `copyTree` leaves out only a linked worktree: a subdirectory whose `.git` file names an admin directory that holds a
    `commondir` file, or a path ending `.git/worktrees/<name>` (either slash). Submodules, paths a `.gitmodules` of the

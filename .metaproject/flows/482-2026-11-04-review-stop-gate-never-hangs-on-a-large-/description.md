@@ -1,4 +1,4 @@
-# Review stop gate never hangs on a large tree; mutation pass copies no nested checkouts and sweeps stale scratch
+# Review stop gate never hangs on a large tree; mutation pass copies no linked worktrees and sweeps stale scratch
 
 Status: formalized
 Source: live incident, 2026-11-04 — keryx shell session `f732e03c…89ac6706` (PR #1125 review) hung in "thinking" after every final reply, three times; Ctrl+C printed `active operation is still stopping`.

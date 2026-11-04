@@ -833,11 +833,18 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(hashReadCount()).toBe(reads);
   });
 
-  /** A signal whose `aborted` flag turns true on the `after`-th read of it, counting every read. */
-  const abortsAfterReads = (after: number): { signal: AbortSignal; reads: () => number } => {
+  /**
+   * A signal whose `aborted` flag turns true once more than `after` reads of it are counted. A read `ignore` accepts is
+   * not counted and never aborts.
+   */
+  const abortsAfterReads = (
+    after: number,
+    { ignore }: { ignore?: () => boolean } = {},
+  ): { signal: AbortSignal; reads: () => number } => {
     let count = 0;
     const signal = {
       get aborted(): boolean {
+        if (ignore?.() === true) return false;
         count += 1;
         return count > after;
       },
@@ -884,21 +891,12 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
   });
 
   /**
-   * A signal whose `aborted` flag turns true once more than `after` of the gate's own straight-line checks have read it.
-   * The per-entry reads inside `dirSignature` are not counted and never abort, so a deleted straight-line check shows as
-   * a call that resolves instead of one that is stopped later by the walk.
+   * Counts only the gate's own straight-line checks: a read from inside the signature walk (`dirSignature` on the stack)
+   * is ignored and never aborts, so a deleted straight-line check shows as a call that resolves instead of one that is
+   * stopped later by the walk.
    */
-  const abortsAfterStraightLineReads = (after: number): { signal: AbortSignal; reads: () => number } => {
-    let count = 0;
-    const signal = {
-      get aborted(): boolean {
-        if ((new Error().stack ?? "").includes("dirSignature")) return false;
-        count += 1;
-        return count > after;
-      },
-    } as AbortSignal;
-    return { signal, reads: () => count };
-  };
+  const abortsAfterStraightLineReads = (after: number): { signal: AbortSignal; reads: () => number } =>
+    abortsAfterReads(after, { ignore: () => (new Error().stack ?? "").includes("dirSignature") });
 
   // With a package and no working data the gate's straight-line checks are: on entry (k = 0), after the root scan (1), before
   // the completion blockers are computed (2), after them (3). Aborting on the (k + 1)-th must stop there, not at a later one.

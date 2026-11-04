@@ -268,7 +268,9 @@ async function isLinkedWorktree(dir: string, submodules: ReadonlySet<string>): P
 function submodulePaths(gitmodules: string): string[] {
   const found: string[] = [];
   for (const line of gitmodules.split("\n")) {
-    const match = /^\s*path\s*=\s*(.+?)\s*$/.exec(line);
+    // Matched on the trimmed line: no trailing `\s*` for a lazy value to backtrack against, so a long run of spaces
+    // inside a line costs linear time.
+    const match = /^path\s*=\s*(.+)$/.exec(line.trim());
     if (match !== null) found.push(match[1]!.replace(/^"(.*)"$/, "$1"));
   }
   return found;

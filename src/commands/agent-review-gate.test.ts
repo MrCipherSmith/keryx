@@ -44,6 +44,20 @@ function scriptedProvider(rounds: Partial<NormalizedEvent>[][]): ProviderPort {
   };
 }
 
+/** {@link scriptedProvider} that also counts the model calls it answers. */
+function countingProvider(rounds: Partial<NormalizedEvent>[][]): { provider: ProviderPort; calls: () => number } {
+  const inner = scriptedProvider(rounds);
+  let calls = 0;
+  const provider: ProviderPort = {
+    describe: () => inner.describe(),
+    stream: (request, opts) => {
+      calls += 1;
+      return inner.stream(request, opts);
+    },
+  };
+  return { provider, calls: () => calls };
+}
+
 const sameFailingCall = (id: string): Partial<NormalizedEvent>[] => [
   { kind: "tool_call_start", toolCallId: id, toolName: "probe" },
   { kind: "tool_call_end", toolCallId: id, input: JSON.stringify({ value: "same" }) },
@@ -190,18 +204,10 @@ test("LOGIC-003: a text-only stop whose turn was aborted during the gate prints 
 
 test("LOGIC-003 / LOGIC-R2-001: a no-progress stop whose turn was aborted during the gate ends there, with no wrap-up", async () => {
   const controller = new AbortController();
-  let modelCalls = 0;
   let callsAtGate = -1;
-  const inner = scriptedProvider([sameFailingCall("a1"), sameFailingCall("a2"), sameFailingCall("a3"), sameFailingCall("a4")]);
-  const provider: ProviderPort = {
-    describe: () => inner.describe(),
-    stream: (request, opts) => {
-      modelCalls += 1;
-      return inner.stream(request, opts);
-    },
-  };
+  const { provider, calls: modelCalls } = countingProvider([sameFailingCall("a1"), sameFailingCall("a2"), sameFailingCall("a3"), sameFailingCall("a4")]);
   const reviewGateState: typeof findReviewGateState = async () => {
-    callsAtGate = modelCalls;
+    callsAtGate = modelCalls();
     controller.abort();
     return openReview();
   };
@@ -214,7 +220,7 @@ test("LOGIC-003 / LOGIC-R2-001: a no-progress stop whose turn was aborted during
   // The wrap-up path prints the [budget] line, asks the model again and leaves a harness "Tool loop stopped" message.
   expect(printed).not.toContain("[budget]");
   expect(history.some((m) => typeof m.content === "string" && m.content.includes("Tool loop stopped"))).toBe(false);
-  expect(modelCalls).toBe(callsAtGate);
+  expect(modelCalls()).toBe(callsAtGate);
 });
 
 test("TP-004: a turn already aborted when the gate runs never calls the scan and gets no nudge", async () => {
@@ -224,19 +230,11 @@ test("TP-004: a turn already aborted when the gate runs never calls the scan and
     scans += 1;
     return openReview();
   };
-  let modelCalls = 0;
-  const inner = scriptedProvider([[{ kind: "text_delta", text: "all done" }, { kind: "model_end" }]]);
-  const provider: ProviderPort = {
-    describe: () => inner.describe(),
-    stream: (request, opts) => {
-      modelCalls += 1;
-      return inner.stream(request, opts);
-    },
-  };
+  const { provider, calls: modelCalls } = countingProvider([[{ kind: "text_delta", text: "all done" }, { kind: "model_end" }]]);
   // `permissionMode` is read between the last abort check of the text-only stop and the gate: the operator presses
   // Ctrl+C in that window, so only the check ahead of the scan can keep the scan from running.
   const permissionMode = () => {
-    if (modelCalls > 0) controller.abort();
+    if (modelCalls() > 0) controller.abort();
     return "ask" as const;
   };
   const { history } = await run({ reviewGateState, provider }, { signal: controller.signal }, { permissionMode });
