@@ -605,6 +605,17 @@ describe("R700-01: an untrusted project hook is reported headless, on stderr", (
 });
 
 describe("routing v2: scheduled agent task", () => {
+  test("a failed routed attempt keeps reported usage in the persistent trigger meter", async () => {
+    await addConfirmedSchedule(root, entry());
+    const provider = scripted([[USAGE, { kind: "provider_error", error: { kind: "unavailable", retryable: false, message: "upstream down" } }]]);
+    await run(provider, "check-github", {
+      loadActiveRoutingV2: () => activeRoutingConfig(),
+      routingConfigDir: path.join(keyHome, "routing-test-config"),
+      routingSnapshot: currentRoutingSnapshot,
+      makeProvider: () => provider,
+    });
+    expect((await lastRecord()).cost).toEqual({ recorded: true, usd: ROUND_USD, tokens: { input: 1000, output: 200 } });
+  });
   test("an active v2 category cannot replace the schedule's explicit provider/model pin", async () => {
     await addConfirmedSchedule(root, entry());
     const provider = scripted([finalText("done")]);

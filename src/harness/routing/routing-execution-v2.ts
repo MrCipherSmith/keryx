@@ -40,6 +40,7 @@ export interface ExecuteRoutingWithFallbackInput {
   /** One root-task ledger shared by classifier, parent, and every child attempt. */
   readonly budget: RoutingBudgetLedger;
   readonly actualCostUsd?: (input: { readonly target: ModelRef; readonly usage?: NormalizedUsage; readonly estimatedCostUsd: number | null }) => number;
+  readonly onAttemptSettled?: (event: RoutingExecutionAttempt & { readonly usage?: NormalizedUsage }) => void;
   readonly maxAttempts?: number;
   readonly signal?: AbortSignal;
   readonly streamTimeoutMs?: number;
@@ -296,6 +297,10 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
     let usage: NormalizedUsage | undefined;
     let providerError: NormalizedEvent | undefined;
     let completed = false;
+    const settleAttempt = (attempt: RoutingExecutionAttempt): void => {
+      attempts.push(attempt);
+      input.onAttemptSettled?.({ ...attempt, ...(usage !== undefined ? { usage } : {}) });
+    };
     let iterator: AsyncIterator<NormalizedEvent>;
     try {
       iterator = provider.stream(request, {
@@ -305,7 +310,7 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
       })[Symbol.asyncIterator]();
     } catch {
       reconcileBudget(input, budget, reservationId, target, usage, estimate);
-      attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: false, emittedToolCall: false });
+      settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: false, emittedToolCall: false });
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "interrupted", usage);
       return terminal("interrupted", "uncertain-outcome", receipt, receipts, attempts);
     }
@@ -336,28 +341,28 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
       }
       reconcileBudget(input, budget, reservationId, target, usage, estimate);
       if (input.signal?.aborted) {
-        attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "cancelled", reason: "cancelled", emittedVisibleOutput: visible, emittedToolCall: toolCall });
+        settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "cancelled", reason: "cancelled", emittedVisibleOutput: visible, emittedToolCall: toolCall });
         journalAttempt(input, receipt.decision.decisionId, attemptNumber, "cancelled", usage);
         return terminal("cancelled", "cancelled", receipt, receipts, attempts);
       }
-      attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: visible || toolCall ? "interrupted" : "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
+      settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: visible || toolCall ? "interrupted" : "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "interrupted", usage);
       return terminal("interrupted", "uncertain-outcome", receipt, receipts, attempts);
     }
 
     reconcileBudget(input, budget, reservationId, target, usage, estimate);
     if (completed) {
-      attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "complete", emittedVisibleOutput: visible, emittedToolCall: toolCall });
+      settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "complete", emittedVisibleOutput: visible, emittedToolCall: toolCall });
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "completed", usage);
       return { status: "completed", receipt, receipts, attempts, ...(usage !== undefined ? { usage } : {}) };
     }
     if (input.signal?.aborted) {
-      attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "cancelled", reason: "cancelled", emittedVisibleOutput: visible, emittedToolCall: toolCall });
+      settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "cancelled", reason: "cancelled", emittedVisibleOutput: visible, emittedToolCall: toolCall });
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "cancelled", usage);
       return terminal("cancelled", "cancelled", receipt, receipts, attempts);
     }
     if (providerError === undefined) {
-      attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: visible || toolCall ? "interrupted" : "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
+      settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: visible || toolCall ? "interrupted" : "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "interrupted", usage);
       return terminal("interrupted", "uncertain-outcome", receipt, receipts, attempts);
     }
@@ -373,26 +378,26 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
     };
     if (reason === "cancelled") {
       if (!await emitTerminalError()) {
-        attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
+        settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
         journalAttempt(input, receipt.decision.decisionId, attemptNumber, "interrupted", usage);
         return terminal("interrupted", "uncertain-outcome", receipt, receipts, attempts);
       }
-      attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "cancelled", reason, emittedVisibleOutput: visible, emittedToolCall: toolCall });
+      settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "cancelled", reason, emittedVisibleOutput: visible, emittedToolCall: toolCall });
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "cancelled", usage);
       return terminal("cancelled", "cancelled", receipt, receipts, attempts);
     }
     if (visible || toolCall || !isConfirmedRetryable(providerError)) {
       if (!await emitTerminalError()) {
-        attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
+        settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "uncertain", reason: "uncertain-outcome", emittedVisibleOutput: visible, emittedToolCall: toolCall });
         journalAttempt(input, receipt.decision.decisionId, attemptNumber, "interrupted", usage);
         return terminal("interrupted", "uncertain-outcome", receipt, receipts, attempts);
       }
-      attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "interrupted", reason, emittedVisibleOutput: visible, emittedToolCall: toolCall });
+      settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "interrupted", reason, emittedVisibleOutput: visible, emittedToolCall: toolCall });
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "interrupted", usage);
       return terminal("interrupted", reason, receipt, receipts, attempts);
     }
 
-    attempts.push({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "failed", reason, emittedVisibleOutput: false, emittedToolCall: false });
+    settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "failed", reason, emittedVisibleOutput: false, emittedToolCall: false });
     journalAttempt(input, receipt.decision.decisionId, attemptNumber, "rejected", usage);
     const previousDecisionId = receipt.decision.decisionId;
     const failureObservedAt = input.now?.() ?? new Date();

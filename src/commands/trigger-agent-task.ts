@@ -625,7 +625,16 @@ async function runLocked(
     });
     try {
       const provider = guardUsage(
-        routedUnattendedProvider(projectRoot, deps.routingConfigDir, dispatch, reservation.usd, built, providerFor, routing),
+        routedUnattendedProvider(
+          projectRoot,
+          deps.routingConfigDir,
+          dispatch,
+          reservation.usd,
+          built,
+          providerFor,
+          routing,
+          (usage) => usage === undefined ? meter.markUsageMissing() : meter.onUsage(usage),
+        ),
         () => meter.markUsageMissing(),
       );
       // Flow 306 (W6 T9, AC9): same unattended-untrusted, non-interactive
@@ -668,7 +677,9 @@ async function runLocked(
         onSystem: (text) => {
           if (/\[error\]/.test(text)) providerError ??= text.replace(/\s+/g, " ").trim().slice(0, 400);
         },
-        onUsage: (usage) => meter.onUsage(usage),
+        onUsage: (usage) => {
+          if (routing.execution === undefined) meter.onUsage(usage);
+        },
         // The ONLY permission mode is the entry's — never the project default, never a saved allowlist.
         permissionMode: () => dispatch.permissionMode,
         readOnly: () => false,

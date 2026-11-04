@@ -2200,12 +2200,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider = deps.makeProvider(runModel.provider, runModel.model, parent.baseUrl);
         if (routingV2ExecutionBudget !== undefined) {
           const decisionId = routingV2ExecutionBudget.receipt.decision.decisionId;
+          const routingTarget = routingV2ExecutionBudget.target;
           const currentProfile = () => loadModelProfiles(deps.routingConfigDir)[
-            profileKey(routingV2ExecutionBudget!.target.providerId, routingV2ExecutionBudget!.target.modelId)
+            profileKey(routingTarget.providerId, routingTarget.modelId)
           ];
           provider = createMeteredRoutingProvider({
             provider,
-            target: routingV2ExecutionBudget.target,
+            target: routingTarget,
             receipt: routingV2ExecutionBudget.receipt,
             budget: routingV2ExecutionBudget.ledger,
             selectionTimeoutMs: routingV2ExecutionBudget.selectionTimeoutMs,

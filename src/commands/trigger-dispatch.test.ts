@@ -1103,6 +1103,30 @@ describe("R700-01/D9: project-hook trust is looked up under the main project roo
 });
 
 describe("routing v2: unattended flow dispatch", () => {
+  test("a failed routed attempt keeps reported usage in the persistent trigger meter", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const provider = scripted([[USAGE_ROUND_1, { kind: "provider_error", error: { kind: "unavailable", retryable: false, message: "upstream down" } }]]);
+    await run(provider, {
+      loadActiveRoutingV2: () => activeRoutingConfig(),
+      routingConfigDir: path.join(root, "routing-test-config"),
+      routingSnapshot: currentRoutingSnapshot,
+      makeProvider: () => provider,
+    });
+    expect((await lastRecord()).cost).toEqual({ recorded: true, usd: ROUND_1_USD, tokens: { input: 1000, output: 200 } });
+  });
+  test("a routed attempt that fails without usage is charged conservatively", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const provider = scripted([[{ kind: "provider_error", error: { kind: "unavailable", retryable: false, message: "upstream down" } }]]);
+    await run(provider, {
+      loadActiveRoutingV2: () => activeRoutingConfig(),
+      routingConfigDir: path.join(root, "routing-test-config"),
+      routingSnapshot: currentRoutingSnapshot,
+      makeProvider: () => provider,
+    });
+    const record = await lastRecord();
+    expect(record.cost).toEqual({ recorded: true, usd: 1, tokens: { input: 0, output: 0 } });
+    expect(record.detail).toContain("without token usage");
+  });
   test("an active v2 category cannot replace the trigger's explicit provider/model pin", async () => {
     await writeTriggers([dispatchEntry()]);
     const provider = scripted([[USAGE_ROUND_1, { kind: "text_delta", text: "inspected" }, { kind: "model_end" }]]);

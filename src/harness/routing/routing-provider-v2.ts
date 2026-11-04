@@ -3,7 +3,7 @@ import type { NormalizedRoutingV2Config } from "./config-v2";
 import type { RoutingReason } from "./decision";
 import type { ModelRef } from "./model-class";
 import type { RoutingBudgetLedger } from "./routing-budget";
-import { executeRoutingWithFallback } from "./routing-execution-v2";
+import { executeRoutingWithFallback, type ExecuteRoutingWithFallbackInput } from "./routing-execution-v2";
 import type { RoutingDecisionReceipt } from "./routing-runtime";
 import type { RoutingRequest } from "./routing-request";
 import type { RoutingSnapshot } from "./snapshot";
@@ -18,6 +18,7 @@ export interface RoutingExecutionProviderOptions {
   readonly providerFor: (target: ModelRef) => ProviderPort;
   readonly beforeIo: (target: ModelRef, decisionId: string, context: { readonly signal: AbortSignal }) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: RoutingReason }>;
   readonly actualCostUsd?: (input: { readonly target: ModelRef; readonly usage?: NormalizedUsage; readonly estimatedCostUsd: number | null }) => number;
+  readonly onAttemptSettled?: ExecuteRoutingWithFallbackInput["onAttemptSettled"];
   readonly onReceipt?: (receipt: RoutingDecisionReceipt) => void | Promise<void>;
   readonly journal?: RoutingJournalLocation & { readonly kind?: "dispatch" | "preview" };
   readonly now?: () => Date;
@@ -247,6 +248,7 @@ async function* executeProviderRoute(
     ...(streamOptions.timeoutMs === undefined ? {} : { streamTimeoutMs: streamOptions.timeoutMs }),
     selectionTimeoutMs: selectionRemainingMs,
     ...(options.actualCostUsd === undefined ? {} : { actualCostUsd: options.actualCostUsd }),
+    ...(options.onAttemptSettled === undefined ? {} : { onAttemptSettled: options.onAttemptSettled }),
     ...(options.journal === undefined ? {} : { journal: options.journal }),
     ...(options.now === undefined ? {} : { now: options.now }),
     failureRegistry,

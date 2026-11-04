@@ -45,6 +45,7 @@ async function activeTool(
   detected: readonly { name: string; models?: readonly string[] }[] = [{ name: "ollama", models: ["medium", "max"] }],
   providerText = "done",
   profileObservedAt = "2026-11-04T00:00:00.000Z",
+  clearDetectedOnProviderBuild = false,
 ) {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-project-"));
   const configDir = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-config-"));
@@ -67,13 +68,15 @@ async function activeTool(
   const built: Array<{ providerId: string; modelId: string }> = [];
   const streamed: Array<{ providerId: string; modelId: string }> = [];
   const events: SpawnSubagentFleetEvent[] = [];
+  let currentDetected = detected;
   const tool = createSpawnSubagentTool({
     cwd,
     routingConfigDir: configDir,
     getParentModel: () => ({ providerId: "ollama", modelId: "medium" }),
-    getDetectedProviders: () => detected,
+    getDetectedProviders: () => currentDetected,
     makeProvider: (providerId, modelId) => {
       built.push({ providerId, modelId });
+      if (clearDetectedOnProviderBuild) currentDetected = [];
       return stubProvider(providerText, () => streamed.push({ providerId, modelId }));
     },
     describeProvider: () => stubProvider().describe(),
@@ -209,6 +212,22 @@ test("routing v2 finite execution budget blocks unknown child cost before provid
   expect(streamed).toEqual([]);
   expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
     .toContain("execution denied before provider I/O (cost-unknown)");
+});
+
+test("routing v2 rechecks current credentials before child provider I/O", async () => {
+  const { tool, built, streamed } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
+  }, [
+    { name: "ollama", models: ["medium"] },
+    { name: "anthropic", models: ["reviewer"] },
+  ], "done", "2026-11-04T00:00:00.000Z", true);
+  const result = await tool.invoke({ task: "credentials can change", mode: "read_only" });
+
+  expect(result).toMatchObject({ status: "Denied", isError: true });
+  expect(result.output).toContain("credentials-missing");
+  expect(built).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
+  expect(streamed).toEqual([]);
 });
 
 test("routing v2 snapshot preserves the child provider authorization gate", async () => {

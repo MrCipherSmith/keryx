@@ -475,6 +475,7 @@ export function routedUnattendedProvider(
   baseline: ProviderPort,
   providerFor: (target: ModelRef) => ProviderPort | undefined,
   routing: UnattendedRoutingV2Resolution,
+  onAttemptUsage?: (usage: NormalizedUsage | undefined) => void,
 ): ProviderPort {
   const execution = routing.execution;
   if (execution === undefined) return baseline;
@@ -516,6 +517,9 @@ export function routedUnattendedProvider(
           outputUsdPerMTok: dispatch.rates.outputUsdPerMTok,
         });
     },
+    ...(onAttemptUsage === undefined
+      ? {}
+      : { onAttemptSettled: ({ usage }: { readonly usage?: NormalizedUsage }) => onAttemptUsage(usage) }),
     journal: { cwd: projectRoot, ...(configDir === undefined ? {} : { configDir }) },
   });
 }
@@ -1119,7 +1123,16 @@ async function dispatchLocked(
       controller.abort();
     });
     const provider = guardUsage(
-      routedUnattendedProvider(projectRoot, deps.routingConfigDir, dispatch, reservedUsd, built, providerFor, routing),
+      routedUnattendedProvider(
+        projectRoot,
+        deps.routingConfigDir,
+        dispatch,
+        reservedUsd,
+        built,
+        providerFor,
+        routing,
+        (usage) => usage === undefined ? meter.markUsageMissing() : meter.onUsage(usage),
+      ),
       () => meter.markUsageMissing(),
     );
 
@@ -1171,7 +1184,9 @@ async function dispatchLocked(
         onSystem: (text) => {
           if (/\[error\]/.test(text)) providerError ??= text.replace(/\s+/g, " ").trim().slice(0, 400);
         },
-        onUsage: (usage) => meter.onUsage(usage),
+        onUsage: (usage) => {
+          if (routing.execution === undefined) meter.onUsage(usage);
+        },
         // AC4: the ONLY permission mode is the entry's. Never the project's
         // stored default, never a saved shell allowlist — this io consults neither.
         permissionMode: () => dispatch.permissionMode,
