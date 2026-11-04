@@ -1,0 +1,107 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-01"],
+  "summary": "Slice-01 (hub-web source and i18n) read in full against base. No blocker or major: the shared-component changes (Button/Input ref typing, Select chevron class, useRemoteQuery function-form enabled, useAppliedReceipt settled switch) leave every traced consumer on its base behaviour. Four minor findings and one suspicion remain: a new History fetch of the full documents list for labels, consent/mode retained after a plain send while the managed send still resets, a review-gaps panel that also renders on read-only and aggregate reviews, three raw selects outside the chevron fix, and an unguarded await between session creation and navigation.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "performance",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/hub-web/src/features/context.tsx",
+      "quote": "const documents = useResource<{documents: HubDocument[]}>('documents');",
+      "problem": "HistoryView now calls useResource('flows') and useResource('documents') only to turn entity ids into labels. On base opening History issued one request (events). Now it also issues GET /projects/:id/flows and GET /projects/:id/documents. The documents list carries each document's full `content` (ProposalCard reads `doc?.content` from this same list, context.tsx ProposalCard `{doc?.content ?? t('missingDocument')}`), so the payload scales with the whole document corpus, not with the 500-event page the view shows. Both queries share the keys [scopeKey, projectId, 'flows'|'documents'] with other views, but staleTime is the default, so a mount refetches.",
+      "impact": "Opening History downloads every document body in the project to print a path next to an event. Nothing renders wrong, and ReadState waits only on events, so the cost is bandwidth and server work per History visit, growing with the documents stored. Not a correctness defect.",
+      "suggested_fix": "Resolve names lazily (only for the entity ids on the visible page) or use a lightweight id-to-path listing if the Hub exposes one; otherwise leave the labels out of the first paint and fetch the lists only when the user expands 'Identifiers'.",
+      "evidence": "base-diff: base HistoryView (diff lines for `const { projectId, scopeKey } = useHub();`) has one useInfiniteQuery and no useResource; head adds two. consumer-trace: context.tsx useResource builds `${projectPath(projectId)}/${resource}` with no field selection; ProposalCard uses `doc?.content` from the same documents list, so the list includes bodies. refute: read useMemo/ReadState, no guard limits the lists; Proposals view fetches documents too but needs the content, History needs only `doc.path`. Whether the server trims `content` on the list route was not read (server code is outside slice-01).",
+      "confidence": "medium",
+      "reviewer": "review-degradation"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "degradation_class": "default-change",
+      "evidence_kind": "base-diff",
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "quote": "if(current===submitted)store.put(draftKey,{...submitted,text:\"\",prepared:false});",
+      "problem": "After a successful plain (non-managed) send the head writes back `{...submitted, text:\"\", prepared:false}`, so `mode`, `consent`, `consentVersion`, `busyPolicy`, `flowId` and the three pins all survive. Base called `clearDraft(submitted)`, which removed the whole draft and returned every field to its default (mode \"\" , consent false, no Flow). The commit title (d5129807d 'retain session Flow') names only the Flow pin. The managed path in the same function (`sendNative`) still calls `clearDraft(submittedDraft)`, so after a managed send consent and the Flow pin reset while after a plain send they do not.",
+      "impact": "In ad-hoc mode `association()` needs `draft.consent`; on base each ad-hoc message needed the 'Send messages in this session without a Flow' box ticked again, on head the second message is sendable with no new acknowledgement. In the other direction a managed send drops the Flow that a plain send keeps. The label reads session-wide, so the head behaviour is defensible, but it is a default that moved without being stated, and the two send routes now disagree.",
+      "suggested_fix": "Decide one rule and apply it in both routes: reset consent/mode on send (keep only flowId and pins), or retain in both. State the choice in the PR text.",
+      "evidence": "base-diff: base `onSuccess:()=>setPreserved(!clearDraft(submitted))`; head `onSuccess:receipt=>{...store.put(draftKey,{...submitted,text:\"\",prepared:false})...}`; sendNative line `const preserved=!clearDraft(submittedDraft)` is unchanged. Read useDraft (state/drafts.ts): clear() removes the key so the next read falls back to `initial` (consent false). refute: label `chatConsent` is 'Send messages in this session without a Flow.' and the draft store is in-memory zustand, never persisted, so retention cannot outlive the tab; commit messages d5129807d..0be1e7173 mention retaining the Flow only.",
+      "confidence": "medium",
+      "reviewer": "review-degradation"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/hub-web/src/features/acceptance/presentation.tsx",
+      "quote": "const missingSteps = guideResolved ? criteria.filter(row => !mappedCriteria.has(row.id)).length : 0;",
+      "problem": "ReviewPresentation now appends a 'What needs manual review' section that ends 'Open the result and verify these criteria manually before deciding.' It never reads `decision.readonly`, and it treats guide status 'missing' as 'steps are missing'. Two consumers reach the wrong cases: (1) CanonicalFlowReview passes `guide={{status:'missing',reason:'aggregate-manifest'}}` by construction, so every aggregate Flow review reports every criterion as 'without verification steps'; (2) CanonicalIntentReview/CanonicalFlowReview set `readonly:'acceptedReadonly'` once accepted, and the section still renders 'before deciding' for criteria that lack linked evidence.",
+      "impact": "Opening an aggregate Flow review always shows N of N criteria lacking steps, which the same page already says in 'How to check' (guideMissing); opening an accepted, read-only review shows a call to act before a decision that has been made. Screens that gate an accept/return decision now carry text that is wrong or redundant in these two states.",
+      "suggested_fix": "Skip the section when `decision.readonly` is set, and count missing steps only for guides that can have steps (not the 'aggregate-manifest' reason).",
+      "evidence": "consumer-trace: canonical.tsx CanonicalFlowReview `guide={{status:'missing',reason:'aggregate-manifest'}}`, `readonly:flow.state==='accepted'?'acceptedReadonly':undefined`; CanonicalIntentReview `const readonly=intent.state==='accepted'?'acceptedReadonly' as const:undefined`; legacy.tsx passes a resolved guide. Traced the three ReviewPresentation callers (canonical.tsx x2, legacy.tsx). refute: the added comment says only a resolved guide may count missing steps, and commit 2136617fb ('count missing steps only when the guide is available') shows intent; neither addresses the aggregate manifest or the read-only state. review-aggregate-evidence.case.tsx was not read (not in my slice), so a test may pin the aggregate count.",
+      "confidence": "medium",
+      "reviewer": "review-degradation"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/hub-web/src/features/workflow.tsx",
+      "quote": "<select className={inputClass} value={draft.specDocumentId}",
+      "problem": "The description says 'select controls reserve space for the chevron'. The change adds the `hub-select` class (appearance:none, padding-inline-end, custom chevron) only inside the shared <Select>. Three native selects in workflow.tsx use `className={inputClass}` directly, never reach <Select>, and keep the native arrow and padding. workflow.tsx is itself edited by this diff.",
+      "impact": "On the Flow create form the specification select looks different from every other select in the app, and a long specification path can run under the native arrow, which is the symptom the change set out to remove. Cosmetic; selection still works.",
+      "suggested_fix": "Render those three through <Select>, or add `hub-select` to their class.",
+      "evidence": "consumer-trace: `keryx ctx rg -n \"<select className=\\{inputClass\\}\" apps/hub-web/src --all` returned 3 matches, all in workflow.tsx (lines 108, 165, 175); `.hub-select` is the only selector carrying the chevron rules (styles.css, `.hub-select:not([multiple]):not([size])`); `<Select ... className` has no caller in apps/hub-web/src. refute: no comment or commit says the raw selects are exempt.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "class_scope": {
+        "sites": ["apps/hub-web/src/features/workflow.tsx:108", "apps/hub-web/src/features/workflow.tsx:165", "apps/hub-web/src/features/workflow.tsx:175"],
+        "enumeration_method": "keryx ctx rg for `<select` over apps/hub-web/src/**/*.tsx: 4 matches, 1 in components/ui.tsx (Select itself) and 3 raw ones in workflow.tsx"
+      }
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "publication": "question",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "const criteriaDigest = await digestCriteria(selectedFlow.criteria);",
+      "problem": "Session creation with a Flow awaits digestCriteria (crypto.subtle.digest, available only in secure contexts) inside the mutation's onSuccess, after the Hub has already created the session. If the call throws, the async onSuccess rejects before `clearDraft()` and `hub.navigate(...)`, so the form stays, nothing tells the user a session now exists, and pressing Create again makes a second one. Base navigated straight from onSuccess with no await. The composer's selectFlow has the same dependency, so a Flow cannot be pinned there either in that context; what is new is that session creation can now strand the user after the side effect. If true: major, a created session is not shown and a retry duplicates it.",
+      "impact": "Only reached where crypto.subtle is missing (Hub opened over plain http on a non-localhost origin) or the digest otherwise throws. I could not read from the code whether the Hub is ever served that way.",
+      "suggested_fix": "Check: open the Hub over http://<non-localhost host>, choose a Flow in New session, press Create, and see whether the page navigates; or wrap the digest in try/catch, navigate in `finally`, and let the composer's pin button recover (it already renders `pins` when criteriaDigest is empty).",
+      "evidence": "consumer-trace: shared.tsx `digestCriteria` is `await crypto.subtle.digest('SHA-256', ...)` with no fallback; sessions.tsx onSuccess is `async (receipt) => { if (selectedFlow) { await digestCriteria(...); put(...) } clearDraft(); hub.navigate(...) }`. refute: no try/catch upstream or downstream (react-query does not await per-call mutate callbacks, so the rejection is unhandled, not shown by ActionFeedback); the trigger depends on deployment, which I could not read.",
+      "confidence": "low",
+      "reviewer": "review-degradation"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 }
+}
+```
+
+## Summary
+
+**Scope read:** slice-01 in full (16 files), the working-tree files it touches at head (work.tsx, settings.tsx, session-workspace.tsx, sessions.tsx, canonical.tsx, styles.css, ui.tsx, drafts.ts), and the commit messages d5129807d..0be1e7173. I did not read slice-02 (tests, client.ts, the other i18n files) and did not run anything (`allowed_tools` is read-only); no probe, red-test or merge-trace is claimed. Cross-PR conflicts were not assessed (no GitHub access).
+
+**Consumer coverage:** the payload lists 40 of 59 consumers; the cap dropped 19 (fork.tsx, revision-code-viewer.tsx, native-lifecycle-parity.ts, main.tsx and 15 test files) and I traced none of those 19. For the 40 I traced by symbol, not by reading every file: ui.tsx users via searches for `<Select ... className`, raw `<select`, and `ref=` on Button/Input; remote-hooks users via the three `useAppliedReceipt` sites and the unchanged boolean branch of `useRemoteQuery`; i18n users by key presence in en/ru. The graph named no importers for `session-timeline.ts` (new file); its users are History, Commands and MessageComposer, found by search (`search-derived`).
+
+**Verified clean (traced, no finding):**
+- `useRemoteQuery` function-form `enabled`: boolean callers take the identical `!!projectId && enabled` branch; React Query 5.105 evaluates the function per observer and `invalidateQueries` refetches only active ones.
+- `useAppliedReceipt` `settled`: omitted by Settings and Commands, so `!(latest && undefined)` is true and they behave as on base.
+- `Button`/`Input` `ComponentPropsWithRef`: React 19.3.1, so `ref` flows through the prop spread; the only ref users are the two new ones (command trigger, search input).
+- `Select` + `hub-select`: no caller passes `className`, `multiple` and `size` are excluded in the selector, rules sit in the same CSS layer so Tailwind utilities still override.
+- Composer: `prepared` draft pin effect runs once (then `prepared` is false); stale check now needs text, and `editText` re-pins on the first keystroke; a rejected receipt now keeps the draft where base cleared it.
+- Command outcomes: `mergeTimeline` places an outcome after the last message with cursor at or below its anchor; the Infinity-vs-Infinity sort comparator yields NaN, which sorts as equal, so order is stable.
+- Commands moved from the always-mounted Settings tab to a lazily mounted composer panel (the catalogue request now starts on first open instead of on session open).
+- CSS selector changes (`button[aria-expanded]`, `.session-composer > .hub-panel > .hub-panel-header`) match the Panel markup; the new Settings button has no `aria-expanded`, so the 1279px rule does not hide it.
+- i18n key sets for context, acceptance, workflow and remote are present in both languages; `navigate({tab:'code'})` targets an existing tab.
+
+**Pre-existing, not filed:** `Commands`' `useAppliedReceipt` keeps following its latest operation indefinitely (same as base); the two local `hub-machine` test failures are not claimed.

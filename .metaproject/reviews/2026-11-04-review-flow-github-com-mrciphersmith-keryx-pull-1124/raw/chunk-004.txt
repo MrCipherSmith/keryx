@@ -1,0 +1,13 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": [],
+  "findings": [],
+  "file": ".metaproject/keryx-dashboard.html"
+}
+```
+
+Verdict: the change cannot break this file. It is a generated, self-contained Metaproject status page (src/commands/dashboard.ts): two inline <style> blocks, one inline JSON docs blob, only in-page and relative-doc hrefs, no external stylesheet or script, and no mention of apps/hub-web, web-assets or any Hub path (0 matches). Comparing the 19 class selectors added or removed in session-workspace.css and styles.css against its 70 inline CSS classes gives zero overlap, and no CSS custom property the diff touches appears in the page. It carries no copy of a renamed, moved or restyled selector, token or asset path. Its 'composer'/'sidebar' hits are its own unrelated words and classes.

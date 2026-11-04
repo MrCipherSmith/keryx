@@ -1,0 +1,28 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-02"],
+  "summary": "Scope B, slice-02: no existing behaviour is broken at a radius site. The only non-UI behaviour change (verifyAuthorizationGrant in src/lib/hub-machine/client.ts) was walked through every caller; the i18n, CSS and test edits are purely additive.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary
+
+No regression found in slice-02 (18 files). No finding is filed.
+
+**The changed grant check (`src/lib/hub-machine/client.ts`).** `verifyAuthorizationGrant` now accepts an issue time up to `MAX_HUB_CLOCK_LEAD_MS = 250` ahead of the machine clock. It also adds `expires > issued`. Callers, enumerated with `keryx ctx rg "verifyAuthorizationGrant"` over `src/`, `scripts/` and `apps/`:
+- `MachineConnection.authorize` (client.ts:209). It sleeps up to 500 ms to `authorizedAt` before verifying. Grants that were valid before are still valid, and a lead above 250 ms is still refused as before.
+- `createGrantApplication().valid` (client.ts:296). This is what `src/lib/hub-machine/bridge.ts` reaches through `application.valid()` and `application.apply()` at the queued, controller and selection authority checks (bridge.ts:1126 and 1131 and the apply sites at 752 and 760). `src/lib/hub-machine/admission.ts` `applyStartingCommand` also uses it, as does `scripts/verify-native-coverage.ts` through `MachineConnection`. The callers still refuse the same expired, over-limit, wrong-digest, wrong-target and wrong-controller grants. The expiry and monotonic age bounds are unchanged.
+
+The only inputs whose result moves are grants issued 1 to 250 ms ahead of the machine clock. Those were refused before and are accepted now, which is the intent of the change. The new `expires > issued` clause cannot reject anything the old clause accepted. Under the old `issued <= now` and `expires > now`, expiry was already after issue. The Hub issues grants as `authorizedAt = t` and `expiresAt = t + LIMITS.grantMs` from one clock read (`src/hub/remote-v2/index.ts:349`). So `expires - issued <= grantMs` holds with equality, and no existing producer is newly refused. The existing grant tests in `client.test.ts` and `admission.test.ts` keep their meaning: they use `authorizedAt = now` or earlier, or a fake monotonic clock with a fixed wall clock.
+
+**The other slice-02 files.** The diffs to `remote.en/ru.ts` and `workflow.en/ru.ts` only add keys. I found no removed or renamed key that `apps/hub-web/src/i18n/index.ts`, `common.en/ru.ts`, or any file under `features/remote/*` or `features/managed-work/*` could still read. The `styles.css` additions are the `--hub-select-chevron` tokens, the `.rail-collapsed` rules (only at 1024px and wider) and `.hub-select:not([multiple]):not([size])`. They are in `@layer components` and use longhand `background-image` only, so they leave the existing `.hub-input` background-color and disabled fill alone. I found no radius file that depends on the old native select arrow or on the sidebar width. Of the tests, the removed lines are in `breadcrumb`, `context`, `remote-owned-controls` and `browser-journeys` and are rewrites inside changed test files, not radius sites.
+
+**Coverage limits.** The blast-radius brief says the cap dropped 21 of 99 candidate files, so the sweep did not cover them. Two changed files are absent from the code graph, so their blast radius is unknown, not empty. The graph has no runtime edges (string-keyed i18n lookup, CSS class names applied from TSX). I checked i18n and CSS consumers by reading the diffs and the `ctx rg` results, not by graph walk. Slice-01 (the other 16 changed files, including `sessions.tsx` and `work.tsx`) is not covered by this reviewer. I ran no tests, and `allowed_tools` is read-only. I did not claim either local failure (R4.4, `client.test.ts:134`).
+
+Routing audit: graph_used=yes (payload layers); wiki_used=not-relevant; ctx_used=yes; raw_rg_used=no.

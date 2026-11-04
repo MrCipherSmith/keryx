@@ -1,0 +1,93 @@
+range: 85fe58fad184...0be1e717365d (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: degradation
+
+QUESTION: after this change, is the code worse than on the base branch: in behaviour, in defaults, in speed or in
+structure, and can that be shown? Scope is the diff plus the consumers below. The consumer list is the code
+graph's, not yours: trace those, and say so when you traced fewer.
+
+CHANGED SHARED EXPORTS (33):
+  - apps/hub-web/src/api/remote-hooks.ts  useAppliedReceipt, useRemoteQuery
+  - apps/hub-web/src/app/App.tsx  (every export)
+  - apps/hub-web/src/components/ui.tsx  (every export)
+  - apps/hub-web/src/features/acceptance/presentation.tsx  (every export)
+  - apps/hub-web/src/features/context.tsx  (every export)
+  - apps/hub-web/src/features/remote/session-timeline.ts  CommandEntry, CommandOutcomeListener, TimelineEntry, historyQueryKey, latestHistoryCursor, mergeTimeline
+  - apps/hub-web/src/features/remote/session-workspace.css  (every export)
+  - apps/hub-web/src/features/remote/session-workspace.tsx  (every export)
+  - apps/hub-web/src/features/remote/sessions.tsx  (every export)
+  - apps/hub-web/src/features/remote/settings.tsx  (every export)
+  - apps/hub-web/src/features/remote/work.tsx  (every export)
+  - apps/hub-web/src/features/workflow.tsx  (every export)
+  - apps/hub-web/src/i18n/acceptance.en.ts  default
+  - apps/hub-web/src/i18n/acceptance.ru.ts  default
+  - apps/hub-web/src/i18n/context.en.ts  default
+  - apps/hub-web/src/i18n/context.ru.ts  default
+  - apps/hub-web/src/i18n/remote.en.ts  default
+  - apps/hub-web/src/i18n/remote.ru.ts  default
+  - apps/hub-web/src/i18n/workflow.en.ts  default
+  - apps/hub-web/src/i18n/workflow.ru.ts  default
+  - apps/hub-web/src/styles.css  (every export)
+  - apps/hub-web/tests/breadcrumb.case.tsx  (every export)
+  - apps/hub-web/tests/context.case.tsx  (every export)
+  - apps/hub-web/tests/css-rules.ts  CssRule, parseCssRules, selectorAlternatives
+  - apps/hub-web/tests/flow-acceptance.case.tsx  (every export)
+  - apps/hub-web/tests/flow-term.case.ts  (every export)
+  - apps/hub-web/tests/remote-owned-controls.case.tsx  (every export)
+  - apps/hub-web/tests/remote.case.tsx  (every export)
+  - apps/hub-web/tests/session-command-outcomes.case.tsx  (every export)
+  - apps/hub-web/tests/session-timeline.case.ts  (every export)
+  - apps/hub-web/tests/session-workspace.case.tsx  (every export)
+  - src/lib/hub-machine/client.test.ts  (every export)
+  - src/lib/hub-machine/client.ts  MachineConnection, createGrantApplication, verifyAuthorizationGrant
+
+CONSUMERS (40 of 59; the files that import the module holding each changed export, or a barrel re-exporting it; most imported first, cap 40):
+  - apps/hub-web/src/i18n/index.ts  imports apps/hub-web/src/i18n/acceptance.en.ts  [fan-in 28]
+  - apps/hub-web/src/features/remote/shared.tsx  imports apps/hub-web/src/api/remote-hooks.ts  [fan-in 17]
+  - apps/hub-web/src/features/managed-work/operation.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 14]
+  - apps/hub-web/src/features/managed-work/updates.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 7]
+  - apps/hub-web/tests/flow-acceptance.fixture.tsx  imports apps/hub-web/src/features/workflow.tsx  [fan-in 7]
+  - src/lib/hub-machine/bridge.test-support.ts  imports src/lib/hub-machine/client.ts  [fan-in 7]
+  - apps/hub-web/src/features/managed-work/revision-review.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 6]
+  - apps/hub-web/src/features/managed-work/view.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 5]
+  - apps/hub-web/src/features/managed-work/work-panels.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 5]
+  - src/lib/hub-machine/bridge.ts  imports src/lib/hub-machine/client.ts  [fan-in 5]
+  - apps/hub-web/src/features/managed-work/contribute.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 4]
+  - apps/hub-web/src/features/managed-work/overview-attention.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 4]
+  - src/commands/hub-machine.ts  imports src/lib/hub-machine/client.ts  [fan-in 4]
+  - apps/hub-web/src/features/global-flows.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 3]
+  - apps/hub-web/src/features/managed-work/amendments.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 3]
+  - apps/hub-web/src/features/managed-work/revision-editor.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 3]
+  - apps/hub-web/src/features/remote/recovery.tsx  imports apps/hub-web/src/api/remote-hooks.ts  [fan-in 3]
+  - apps/hub-web/src/features/revisions-query.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 3]
+  - src/lib/hub-machine/trial.test-support.ts  imports src/lib/hub-machine/client.ts  [fan-in 3]
+  - apps/hub-web/src/features/acceptance/canonical.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 2]
+  - apps/hub-web/src/features/managed-work/attempt-detail.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 2]
+  - apps/hub-web/src/features/managed-work/flow-review.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 2]
+  - apps/hub-web/src/features/managed-work/legacy.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 2]
+  - apps/hub-web/src/features/managed-work/observations.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 2]
+  - apps/hub-web/src/features/project-overview.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 2]
+  - apps/hub-web/src/features/remote/association.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 2]
+  - apps/hub-web/src/features/remote/machines.tsx  imports apps/hub-web/src/api/remote-hooks.ts  [fan-in 2]
+  - apps/hub-web/src/features/remote/runs.tsx  imports apps/hub-web/src/api/remote-hooks.ts  [fan-in 2]
+  - apps/hub-web/src/features/remote/session-run-context.tsx  imports apps/hub-web/src/api/remote-hooks.ts  [fan-in 2]
+  - scripts/verify-native-coverage.ts  imports src/lib/hub-machine/client.ts  [fan-in 2]
+  - src/lib/hub-machine/admission.ts  imports src/lib/hub-machine/client.ts  [fan-in 2]
+  - apps/hub-web/src/features/acceptance/decision-controls.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/acceptance/legacy-history.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/acceptance/legacy.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/managed-work/create-flow.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/managed-work/decision-form.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/managed-work/native-selection.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/managed-work/work-lists.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/project-deletion.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+  - apps/hub-web/src/features/record-browser.tsx  imports apps/hub-web/src/components/ui.tsx  [fan-in 1]
+
+CAP: the cap of 40 dropped 19 of 59 consumers; the first 20 dropped ones are listed, the rest are counted, and none were traced. The cap is one budget shared by all changed exports, not one per export.
+NOT TRACED (19): apps/hub-web/src/features/remote/fork.tsx, apps/hub-web/src/features/revision-code-viewer.tsx, scripts/native-lifecycle-parity.ts, apps/hub-web/src/main.tsx, apps/hub-web/tests/accessibility.case.tsx, apps/hub-web/tests/auth.case.tsx, apps/hub-web/tests/global-flows.case.tsx, apps/hub-web/tests/localization.case.ts, apps/hub-web/tests/managed-native-message.case.tsx, apps/hub-web/tests/remote-draft-renewal.case.tsx, apps/hub-web/tests/remote-events.case.tsx, apps/hub-web/tests/remote-runs.case.tsx, apps/hub-web/tests/remote-settings.case.tsx, apps/hub-web/tests/revision-pagination.case.tsx, apps/hub-web/tests/workflow-pagination.case.tsx, apps/hub-web/tests/workflow.case.tsx, src/lib/hub-machine/access.test.ts, src/lib/hub-machine/admission.test.ts, src/lib/hub-machine/bridge.network.test.ts
+
+omitted with a reason: 4 unrelated-symbol, 0 hub-damped, 652 text-hub, 38 test-consumer. They are context, not owed a chunk pass.
+38 tests exercise the changed code — run them: `bun test apps/hub-web/tests/accessibility.case.tsx apps/hub-web/tests/auth.case.tsx apps/hub-web/tests/flow-acceptance.fixture.tsx apps/hub-web/tests/global-flows.case.tsx apps/hub-web/tests/legacy-review-history.case.tsx apps/hub-web/tests/localization.case.ts apps/hub-web/tests/machine-cards.case.tsx apps/hub-web/tests/managed-native-message.case.tsx apps/hub-web/tests/managed-work-advanced.case.tsx apps/hub-web/tests/managed-work.case.tsx apps/hub-web/tests/pending-recovery.case.tsx apps/hub-web/tests/project-overview.case.tsx apps/hub-web/tests/remote-controller.case.tsx apps/hub-web/tests/remote-draft-renewal.case.tsx apps/hub-web/tests/remote-recovery.case.tsx apps/hub-web/tests/remote-runs.case.tsx apps/hub-web/tests/remote-settings.case.tsx apps/hub-web/tests/review-aggregate-evidence.case.tsx apps/hub-web/tests/review-draft-recovery.case.tsx apps/hub-web/tests/review-flow-reject.case.tsx apps/hub-web/tests/review-knowledge-followup.case.tsx apps/hub-web/tests/review-legacy-evidence.case.tsx apps/hub-web/tests/revision-pagination.case.tsx apps/hub-web/tests/session-run-context.case.tsx apps/hub-web/tests/work-incremental.case.tsx apps/hub-web/tests/work-live-amendments.case.tsx apps/hub-web/tests/work-live-attention.case.tsx apps/hub-web/tests/work-live-choices.case.tsx apps/hub-web/tests/work-live-updates.case.tsx apps/hub-web/tests/work-revision-members.case.tsx apps/hub-web/tests/work-sequences.case.tsx apps/hub-web/tests/workflow-pagination.case.tsx apps/hub-web/tests/workflow.case.tsx src/lib/hub-machine/access.test.ts src/lib/hub-machine/admission.test.ts src/lib/hub-machine/bridge.inventory.network.test.ts src/lib/hub-machine/bridge.network.test.ts src/remote/topic-history.test.ts`
+tests to run: /Users/tsaitler.aleksandr/goodea/keryx/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/tests-to-run.json
+cap: 21 of 99 candidate files were NOT reviewed (blast_radius_max_files=40). They are listed in the record. Cut blast radius: run the waves — keryx review chunks plan --package .metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124
+unresolved: 2 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

@@ -1,0 +1,2068 @@
+--- apps/hub-web/src/api/remote-hooks.ts
+@@ 1,43 @@
+ import { useEffect, useState } from "react";
+ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+ import { useHub } from "../app/hub-context";
+ import { remoteGet, remoteMutate, remoteProject } from "./remote";
+ import {
+   InvalidationWindow,
+   InvalidationBatch,
+   parseInvalidation,
+ } from "./browser-invalidations";
+ import { ApiError, invalidateAuthentication, type NativeWorkHint } from "./client";
+ export function useRemoteQuery<T>(
+   key: readonly unknown[],
+   path: string,
+-  enabled = true,
++  enabled: boolean | ((data: T | undefined) => boolean) = true,
+ ) {
+   const { scopeKey, projectId } = useHub();
+   return useQuery({
+     queryKey: [scopeKey, projectId, "remote", ...key],
+     queryFn: ({ signal }) => remoteGet<T>(path, signal),
+-    enabled: !!projectId && enabled,
++    // A function decides from the query's own cached data, so a query can stop itself and keep what it holds.
++    enabled: typeof enabled === "function"
++      ? (query) => !!projectId && enabled(query.state.data)
++      : !!projectId && enabled,
+   });
+ }
+ export function useRemoteAction<T = unknown>() {
+   const { scopeKey, projectId } = useHub();
+   const client = useQueryClient();
+   return useMutation({
+     mutationFn: ({
+       path,
+       body,
+       method = "POST",
+       operationId,
+       workHint,
+     }: {
+       path: string;
+       body: unknown;
+       method?: "POST" | "PUT" | "PATCH" | "DELETE";
+       operationId?:string;
+       workHint?:NativeWorkHint;
+     }) => operationId||workHint?remoteMutate<T>(method,path,body,{operationId,workHint}):remoteMutate<T>(method, path, body),
+     retry: false,
+
+--- apps/hub-web/src/api/remote-hooks.ts
+@@ 136,175 @@
+       };
+     });
+     return () => {
+       active = false;
+       cleanups.forEach((cleanup) => cleanup());
+     };
+   }, [scopeKey, projectKey, client, global]);
+   return connected;
+ }
+ export function requireController(
+   binding: import("./remote").Control["ControllerBinding"] | null,
+ ) {
+   if (!binding)
+     throw new ApiError(
+       409,
+       "controller-conflict",
+       "Explicit control claim required",
+     );
+   return binding;
+ }
+-/** Follow the immutable operation identity on invalidation; no polling or resubmission. */
++/**
++ * Follow the immutable operation identity on invalidation; no polling or resubmission.
++ * `settled` stops the following once the receipt (or the first-reported one) cannot change; the cached receipt stays.
++ */
+ export function useAppliedReceipt<T extends { operationId: string }>(
+   record: import("./remote").Control["SessionRecord"],
+   initial: T | undefined,
++  settled?: (receipt: T) => boolean,
+ ) {
+   return useRemoteQuery<T>(
+     ["operation", record.sessionId, initial?.operationId],
+     sessionPath(record.projectId, record.sessionId) +
+       "/operations/" +
+       encodeURIComponent(initial?.operationId ?? ""),
+-    !!initial?.operationId,
++    (data) => {
++      const latest = data ?? initial;
++      return !!initial?.operationId && !(latest && settled?.(latest));
++    },
+   );
+ }
+
+--- apps/hub-web/src/app/App.tsx
+@@ 1,21 @@
++import { PanelLeft } from "lucide-react";
+ import { clearPending } from "../state/pending";
+ import { lazy, Suspense, useEffect, useRef, useState } from "react";
+ import {
+   QueryClient,
+   QueryClientProvider,
+   useQuery,
+   useMutation,
+   useQueryClient,
+ } from "@tanstack/react-query";
+ import { useTranslation } from "react-i18next";
+ import {
+   LayoutDashboard,
+   GitBranch,
+   BookOpen,
+   MessageSquare,
+   Code2,
+   Send,
+   History,
+   RefreshCw,
+   LogOut,
+
+--- apps/hub-web/src/app/App.tsx
+@@ 240,280 @@
+   return (
+     <div className="brand">
+       <span className="brand-mark">K</span>
+       <span>
+         Keryx <small>Team Hub</small>
+       </span>
+     </div>
+   );
+ }
+ function Shell({
+   principal,
+   scopeKey,
+   onRefresh,
+   onLogout,
+ }: {
+   principal: Principal;
+   scopeKey: number;
+   onRefresh: () => Promise<void>;
+   onLogout: () => Promise<void>;
+ }) {
++  const [railCollapsed, setRailCollapsed] = useState(false);
+   const { t, i18n } = useTranslation("common");
+   const ru = i18n.language.startsWith("ru");
+   const location = useLocation();
+   const [busy, setBusy] = useState(false);
+   const [error, setError] = useState<unknown>(null);
+   const [menu, setMenu] = useState(false);
+   const menuTrigger = useRef<HTMLButtonElement>(null);
+   const navRef = useRef<HTMLElement>(null);
+   const projects = useQuery({
+     queryKey: [scopeKey, "projects"],
+     queryFn: ({ signal }) =>
+       getJson<{ projects: Project[] }>("/projects", signal),
+   });
+   const projectId = location.projectId;
+   const active = projects.data?.projects.find((p) => p.id === projectId);
+   const views: Record<Tab, React.ReactNode> = {
+     overview: <OverviewView />,
+     work: <ManagedWorkView />,
+     flows: projectId ? <FlowsView /> : <GlobalFlowsView />,
+     documents: <DocumentsView />,
+
+--- apps/hub-web/src/app/App.tsx
+@@ 287,453 @@
+     runs: <RunsView />,
+   };
+   const action = async (fn: () => Promise<void>) => {
+     if (busy) return;
+     setBusy(true);
+     setError(null);
+     try {
+       await fn();
+     } catch (e) {
+       setError(e);
+     } finally {
+       setBusy(false);
+     }
+   };
+   const closeMenu = () => {
+     setMenu(false);
+     menuTrigger.current?.focus();
+   };
+   useEffect(() => {
+     if (menu)
+-      navRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
++      navRef.current
++        ?.querySelector<HTMLButtonElement>("button:not(.desktop-rail-toggle)")
++        ?.focus();
+   }, [menu]);
+   const navTabs = projectId
+     ? tabs
+     : (["overview", "flows", "machines"] as Tab[]);
+   const label = (tab: Tab) =>
+     tab === "work"
+       ? ru
+         ? "Работа над проектом"
+         : "Managed work"
+       : ["machines", "sessions", "runs"].includes(tab)
+         ? t(tab, { ns: "remote" })
+         : t("nav." + tab);
+   return (
+     <HubContext.Provider
+       value={{
+         projectId,
+         principal,
+         scopeKey,
+         location,
+         navigate,
+         refresh: onRefresh,
+       }}
+     >
+-      <div className="app-shell">
++      <div className={"app-shell" + (railCollapsed ? " rail-collapsed" : "")}>
+         <a className="skip-link" href="#main-content">
+           {ru ? "К содержимому" : "Skip to content"}
+         </a>
+         <aside
+           className={"sidebar " + (menu ? "sidebar-open" : "")}
+           onKeyDown={(event) => {
+             if (event.key === "Escape") {
+               event.preventDefault();
+               closeMenu();
+             }
+           }}
+         >
+           <div className="sidebar-brand">
+             <Brand />
+             <button
+               type="button"
+               className="mobile-menu"
+               aria-label={ru ? "Закрыть навигацию" : "Close navigation"}
+               onClick={closeMenu}
+             >
+               <X size={18} />
+             </button>
+           </div>
+           <nav ref={navRef} className="nav-list" aria-label={t("appName")}>
++            <button type="button" className="nav-item desktop-rail-toggle" aria-label={ru ? (railCollapsed ? "Развернуть меню" : "Свернуть меню") : (railCollapsed ? "Expand menu" : "Collapse menu")} aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(!railCollapsed)}><PanelLeft size={17} aria-hidden="true"/></button>
+             {navTabs.map((tab) => {
+               const Icon = icons[tab];
+               return (
+                 <button
+                   type="button"
+                   key={tab}
+                   onClick={() => {
+                     navigate({
+                       tab,
+                       documentId: undefined,
+                       flowId: undefined,
+                       revisionId: undefined,
+                       sessionId: undefined,
+                       runId: undefined,
+                       machineId: undefined,
+                     });
+                     setMenu(false);
+                     document.getElementById("main-content")?.focus();
+                   }}
++                  aria-label={label(tab)}
++                  title={label(tab)}
+                   aria-current={location.tab === tab ? "page" : undefined}
+                   className={
+                     "nav-item " + (location.tab === tab ? "nav-active" : "")
+                   }
+                 >
+                   <Icon size={17} aria-hidden="true" />
+-                  {label(tab)}
++                  <span className="nav-label">{label(tab)}</span>
+                 </button>
+               );
+             })}
+           </nav>
+           <div className="sidebar-projects">
+             <span>{t("projects")}</span>
+             {projects.data?.projects.map((p) => (
+               <button
+                 type="button"
+                 key={p.id}
++                aria-label={p.name}
++                title={p.name}
++                aria-current={projectId === p.id ? "true" : undefined}
+                 className={
+                   "nav-item " + (projectId === p.id ? "project-active" : "")
+                 }
+                 onClick={() => {
+                   navigate({ projectId: p.id, tab: "overview" });
+                   setMenu(false);
+                 }}
+               >
+                 <span className="project-initial">{p.name.slice(0, 1)}</span>
+                 <span className="truncate">{p.name}</span>
+               </button>
+             ))}
+           </div>
+           <div className="identity">
+             <p className="identity-kind">
+               {t(
+                 principal.issuer && principal.subject && principal.email
+                   ? "verifiedIdentity"
+                   : "tokenIdentity",
+               )}
+             </p>
+             <p className="identity-name">{principal.email ?? principal.id}</p>
+             <p>
+               {t(principal.kind)} · {t(principal.role)}
+             </p>
+             <Button
+               variant="ghost"
+               disabled={busy}
++              aria-label={t("signOut")}
++              title={t("signOut")}
+               onClick={() => void action(onLogout)}
+             >
+               <LogOut size={14} />
+-              {t("signOut")}
++              <span className="nav-label">{t("signOut")}</span>
+             </Button>
+           </div>
+         </aside>
+         <div className="workspace">
+           <header className="workspace-header">
+             <button
+               ref={menuTrigger}
+               type="button"
+               className="mobile-menu"
+               aria-label={ru ? "Открыть навигацию" : "Open navigation"}
+               aria-expanded={menu}
+               onClick={() => setMenu(!menu)}
+             >
+               <Menu size={18} />
+             </button>
+             <div className="workspace-breadcrumb">
+               <FolderKanban size={16} aria-hidden="true" />
+               <button
+                 type="button"
+                 className="shrink-0 whitespace-nowrap"
+
+--- apps/hub-web/src/components/ui.tsx
+@@ 1,38 @@
+ import {
+   cloneElement,
+   isValidElement,
+   useId,
+-  type ButtonHTMLAttributes,
+-  type InputHTMLAttributes,
++  type ComponentPropsWithRef,
+   type SelectHTMLAttributes,
+   type TextareaHTMLAttributes,
+   type ReactNode,
+   type ReactElement,
+ } from "react";
+ import { useTranslation } from "react-i18next";
+ const inputClass = "hub-input";
+ export function Button({
+   variant = "primary",
+   className = "",
+   type = "button",
+   ...props
+-}: ButtonHTMLAttributes<HTMLButtonElement> & {
++}: ComponentPropsWithRef<"button"> & {
+   variant?: "primary" | "secondary" | "danger" | "ghost";
+ }) {
+   return (
+     <button
+       type={type}
+       className={"hub-button hub-button-" + variant + " " + className}
+       {...props}
+     />
+   );
+ }
+ export function Panel({
+   title,
+   description,
+   children,
+   className = "",
+ }: {
+   title?: ReactNode;
+   description?: ReactNode;
+   children: ReactNode;
+   className?: string;
+
+--- apps/hub-web/src/components/ui.tsx
+@@ 72,119 @@
+       .join(" ") || undefined;
+   return (
+     <div className="min-w-0 space-y-1.5">
+       <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+         {label}
+       </label>
+       {control
+         ? cloneElement(control, { id, "aria-describedby": description })
+         : children}
+       {hint && (
+         <p id={hintId} className="text-xs leading-relaxed text-slate-500">
+           {hint}
+         </p>
+       )}
+     </div>
+   );
+ }
+ export function Input({
+   className = "",
+   ...props
+-}: InputHTMLAttributes<HTMLInputElement>) {
++}: ComponentPropsWithRef<"input">) {
+   return <input className={inputClass + " " + className} {...props} />;
+ }
+ export function Select({
+   className = "",
+   ...props
+ }: SelectHTMLAttributes<HTMLSelectElement>) {
+-  return <select className={inputClass + " " + className} {...props} />;
++  return <select className={inputClass + " hub-select " + className} {...props} />;
+ }
+ export function Textarea({
+   className = "",
+   ...props
+ }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+   return (
+     <textarea
+       className={inputClass + " min-h-28 resize-y " + className}
+       {...props}
+     />
+   );
+ }
+ export function Notice({
+   children,
+   tone = "info",
+ }: {
+   children: ReactNode;
+   tone?: "error" | "success" | "info";
+ }) {
+   return (
+
+--- apps/hub-web/src/features/acceptance/presentation.tsx
+@@ 1,34 @@
+ import { useState, type ReactNode } from 'react';
+ import { useTranslation } from 'react-i18next';
+ import { Button } from '../../components/ui';
+ import { Markdown } from '../../components/Markdown';
+ import { formatDate } from '../../i18n/format';
+ import type { GuideResolution } from '../../../../../src/hub/review-guide';
+ import { DecisionControls, type ReviewDecisionProps } from './decision-controls';
+ import type { ReviewCriterion } from './model';
+ import './acceptance.css';
+ export function ReviewPresentation({title,summary,author,submittedAt,createdTime=false,guide,loading,criteria,decision,technical,children}:{title:string;summary:string;author:string;submittedAt:string;createdTime?:boolean;guide:GuideResolution|undefined;loading?:boolean;criteria:ReviewCriterion[];decision:ReviewDecisionProps;technical:ReactNode;children?:ReactNode}){
+  const {t,i18n}=useTranslation('acceptance');const [copyStatus,setCopyStatus]=useState<'copied'|'copyFailed'|null>(null);
+  const content=guide?.status==='available'?guide.guide:null;
++ const mappedCriteria = new Set(content?.steps.flatMap(step => step.criterionIds));
++ // Only a resolved guide (available or explicitly missing) can say a criterion has no steps; an unavailable or unloaded one says nothing.
++ const guideResolved = guide?.status==='available'||guide?.status==='missing';
++ const missingSteps = guideResolved ? criteria.filter(row => !mappedCriteria.has(row.id)).length : 0;
++ const missingEvidence = criteria.filter(row => !row.reports.length && !row.waivers.length).length;
+  return <article className="acceptance-review" aria-label={title}>
+   <section><h2>{t('what')}</h2><h3>{title}</h3><Markdown safeLinksOnly content={content?.summary||summary||t('noSummary')}/><p>{content?.userImpact||t('impactMissing')}</p><h3>{t('limitations')}</h3>{content?.limitations.length?<ul>{content.limitations.map((item,index)=><li key={index}>{item}</li>)}</ul>:<p>{t('noLimitation')}</p>}<p className="acceptance-byline">{t(createdTime?'created':'submitted',{author,time:Number.isFinite(Date.parse(submittedAt))?formatDate(submittedAt,i18n.language):"—"})}</p>{createdTime&&<p className="acceptance-byline">{t('submittedUnknown')}</p>}</section>
+   <section><h2>{t('how')}</h2>{loading?<p>{t('guideLoading')}</p>:content?<>
+    <p className="acceptance-byline">{t('guideAuthor')}</p><h3>{t('prerequisites')}</h3><ul>{content.prerequisites.map((item,index)=><li key={index}>{item}</li>)}</ul>
+    <ol className="acceptance-steps">{content.steps.map(step=><li key={step.stepId}><strong>{step.location}</strong><pre className="acceptance-instruction">{step.instruction}</pre><Button variant="secondary" onClick={()=>{void Promise.resolve().then(()=>{if(!navigator.clipboard?.writeText)throw new Error('clipboard-unavailable');return navigator.clipboard.writeText(step.instruction);}).then(()=>setCopyStatus('copied')).catch(()=>setCopyStatus('copyFailed'));}}>{t('copy')}</Button><p><strong>{t('expected')}: </strong>{step.expectedResult}</p></li>)}</ol>
+   </>:<p>{t(guide?.status==='missing'?'guideMissing':'guideUnavailable')}</p>}{copyStatus&&<p role="status">{t(copyStatus)}</p>}</section>
+   <section><h2>{t('criteria')}</h2><div className="acceptance-criteria">{criteria.map(row=><section className="acceptance-criterion" role="group" aria-label={row.text} key={row.id}><strong>{row.text}</strong><span className="acceptance-support" data-state={row.status}>{t(row.status)}</span>{row.reports.map(report=><div key={report.id} role="group" aria-label={report.method}><p><span>{t(report.source==='ci-observation'?(report.sourceObservationId?'ci':'unverified'):report.source==='human-review'?'human':report.source==='machine-observation'?(report.sourceRunId?'agent':'unverified'):'contributor')}</span> · {report.createdBy}</p><p>{report.report.slice(0,2000)}</p><a href={'#review-evidence-'+report.id} onClick={()=>{let element=document.getElementById('review-evidence-'+report.id);while(element){if(element instanceof HTMLDetailsElement)element.open=true;element=element.parentElement;}}}>{t('openEvidence')}</a></div>)}{row.waivers.map(waiver=><div key={waiver.id}><strong>{t('waiver')}</strong><p>{waiver.reason}</p><small>{waiver.createdBy} · {formatDate(waiver.createdAt,i18n.language)}</small></div>)}</section>)}</div>{children}</section>
++  {!loading && (missingSteps > 0 || missingEvidence > 0) && <section aria-label={t('reviewGaps')}>
++    <h2>{t('reviewGaps')}</h2>
++    {missingSteps > 0 && <p>{t('missingStepsCount', {count:missingSteps})}</p>}
++    {missingEvidence > 0 && <p>{t('missingEvidenceCount', {count:missingEvidence})}</p>}
++    <p>{t('manualReviewNext')}</p>
++  </section>}
+   <DecisionControls key={decision.scope} {...decision}/>
+   <details className="acceptance-technical"><summary>{t('technical')}</summary>{technical}</details>
+  </article>;
+ }
+
+--- apps/hub-web/src/features/context.tsx
+@@ 1,25 @@
+-import { useState, type FormEvent, type ReactNode } from 'react';
++import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+ import { useTranslation } from 'react-i18next';
+ import { getJson, postJson, errorMessage } from '../api/client';
+-import type { CodeRevision, CodeRevisionSummary, Delivery, HubDocument, HubEvent, ImportResponse, Project, Proposal } from '../api/types';
++import type { CodeRevision, CodeRevisionSummary, Delivery, HubDocument, HubEvent, HubFlow, ImportResponse, Project, Proposal } from '../api/types';
+ import { useHub } from '../app/hub-context';
+ import { useDraft } from '../state/drafts';
+ import { Button, EmptyState, Field, Input, Notice, PageHeading, Panel, Select, StatusBadge, Textarea } from '../components/ui';
+ import { Markdown } from '../components/Markdown';
+ import { RecordBrowser } from './record-browser';
+ import { RevisionCodeViewer } from './revision-code-viewer';
+ import { formatDate } from '../i18n/format';
+ import { decodeRevisionFile, mergeEvents, parseRevisionChanges, safeExternalUrl } from './context-model';
+ 
+ import { useRevisionPages, useRevisionSummary, MoreRevisions } from "./revisions-query";
+ 
+ const projectPath = (id: string | null) => `/projects/${encodeURIComponent(id ?? '')}`;
+ const codeClass = 'max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-700';
+ 
+ function Value({ label, children }: { label: ReactNode; children: ReactNode }) {
+   return <div className="min-w-0"><dt className="text-xs font-medium text-slate-500">{label}</dt><dd className="mt-1 break-all text-sm text-slate-800">{children}</dd></div>;
+ }
+ 
+ function ErrorNotice({ error }: { error: unknown }) {
+   const { t } = useTranslation('common');
+
+--- apps/hub-web/src/features/context.tsx
+@@ 136,189 @@
+   const [validation, setValidation] = useState(false);
+   const [draftKept, setDraftKept] = useState(false);
+   const mutation = useWrite<Proposal, typeof draft>(['proposals'], (_result, submitted) => { if (submitted) setDraftKept(!clear(submitted)); });
+   function submit(event: FormEvent) {
+     event.preventDefault();
+     if (!draft.content.trim() || !draft.reason.trim()) { setValidation(true); return; }
+     setValidation(false);
+     mutation.mutate({ submittedDraft: draft, path: '/proposals', body: { documentId: doc.id, baseVersion: draft.baseVersion, content: draft.content, reason: draft.reason.trim() } });
+   }
+   return <details className="rounded-2xl border border-slate-200 bg-white"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-emerald-900">{t('proposeEdit')}</summary><form noValidate onSubmit={submit} className="space-y-4 border-t border-slate-100 p-5">
+     <Field label={t('proposedContent')}><Textarea required rows={10} value={draft.content} onChange={event => setDraft({ ...draft, content: event.target.value })} /></Field>
+     <Field label={t('reason')}><Input required value={draft.reason} onChange={event => setDraft({ ...draft, reason: event.target.value })} /></Field>
+     <p className="text-xs text-slate-500">{t('baseVersion')}: {draft.baseVersion} · {t('currentVersion')}: {doc.version}</p>
+     {draft.baseVersion !== doc.version ? <div className="space-y-2"><Notice>{t('reconcileHint')}</Notice><Button variant="secondary" disabled={mutation.isPending} onClick={() => setDraft({ ...draft, baseVersion: doc.version })}>{t('useCurrentVersion')}</Button></div> : null}
+     {draftKept ? <Notice tone="success">{t('common:draftPreserved')}</Notice> : null}{validation ? <Notice tone="error">{t('requiredFields')}</Notice> : null}<ErrorNotice error={mutation.error} />{mutation.isSuccess ? <Notice tone="success">{t('saved')}</Notice> : null}<Button type="submit" disabled={mutation.isPending}>{t('submitProposal')}</Button>
+   </form></details>;
+ }
+ 
+ export function ProposalsView() {
+   const { t } = useTranslation('context');
++  const { navigate } = useHub();
+   const proposals = useResource<{ proposals: Proposal[] }>('proposals');
+   const documents = useResource<{ documents: HubDocument[] }>('documents');
+   const [filter, setFilter] = useState('pending');
+   const filtered = (proposals.data?.proposals ?? []).filter(item => filter === 'all' || item.status === filter);
+   return <><PageHeading title={t('proposals')} description={t('proposalsDescription')} />
+     <div className="mb-5 max-w-xs"><Field label={t('proposals')}><Select value={filter} onChange={event => setFilter(event.target.value)}>{['all', 'pending', 'accepted', 'rejected'].map(value => <option key={value} value={value}>{t(value)}</option>)}</Select></Field></div>
+     <ReadState pending={proposals.isPending || documents.isPending} error={proposals.error || documents.error} retry={() => { void proposals.refetch(); void documents.refetch(); }}>
+-      <div className="space-y-5">{filtered.length ? filtered.map(proposal => <ProposalCard key={`${proposal.id}:${proposal.version}:${proposal.contentDigest}`} proposal={proposal} document={documents.data?.documents.find(doc => doc.id === proposal.documentId)} />) : <EmptyState>{t('noProposals')}</EmptyState>}</div>
++      <div className="space-y-5">{filtered.length ? filtered.map(proposal => <ProposalCard key={`${proposal.id}:${proposal.version}:${proposal.contentDigest}`} proposal={proposal} document={documents.data?.documents.find(doc => doc.id === proposal.documentId)} />) : <EmptyState>
++        <p>{t(proposals.data?.proposals.length ? 'noMatchingProposals' : 'noProposals')}</p>
++        <Button variant="secondary" className="mt-3" onClick={() => proposals.data?.proposals.length ? setFilter('all') : navigate({tab:'documents',documentId:undefined})}>
++          {proposals.data?.proposals.length ? t('all') : t('documents')}
++        </Button>
++      </EmptyState>}</div>
+     </ReadState></>;
+ }
+ 
+ function ProposalCard({ proposal, document: doc }: { proposal: Proposal; document: HubDocument | undefined }) {
+   const { t } = useTranslation('context');
+   const { principal } = useHub();
+   const [acknowledged, setAcknowledged] = useState(false);
+   const [review] = useState({ expectedVersion: proposal.version, contentDigest: proposal.contentDigest });
+   const mutation = useWrite<Proposal>(['proposals', 'documents', 'project']);
+   function decide(decision: 'accepted' | 'rejected') {
+     mutation.mutate({ path: `/proposals/${encodeURIComponent(proposal.id)}/review`, body: { decision, ...review } });
+   }
+   return <Panel title={<span className="break-all">{doc?.path ?? proposal.documentId}</span>}>
+     <div className="flex flex-wrap items-center gap-3"><StatusBadge status={proposal.status} /><span className="text-xs text-slate-500">{t('version')} {proposal.version} · {t('baseVersion')} {proposal.baseVersion}</span></div>
+     <p className="text-sm leading-relaxed text-slate-700">{proposal.reason}</p>
+     <dl className="grid gap-4 sm:grid-cols-2"><Value label={t('digest')}><code>{proposal.contentDigest}</code></Value><Value label={t('createdBy')}>{proposal.createdBy}</Value>{proposal.reviewedBy ? <Value label={t('reviewedBy')}>{proposal.reviewedBy}</Value> : null}</dl>
+     <details><summary className="cursor-pointer text-sm font-semibold text-emerald-800">{t('reviewProposal')}</summary><div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2"><div className="min-w-0"><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('canonicalSource')}</h3><pre className={`${codeClass} max-h-[32rem] whitespace-pre-wrap break-words`}>{doc?.content ?? t('missingDocument')}</pre></div><div className="min-w-0"><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('proposedSource')}</h3><pre className={`${codeClass} max-h-[32rem] whitespace-pre-wrap break-words`}>{proposal.content}</pre></div></div></details>
+     {proposal.status === 'pending' ? principal.kind === 'human' ? <div className="space-y-3 border-t border-slate-100 pt-4">
+       {doc && doc.version !== proposal.baseVersion ? <Notice tone="error">{t('proposalBaseChanged')}</Notice> : null}
+       <label className="flex items-start gap-3 text-sm leading-relaxed text-slate-700"><input type="checkbox" className="mt-1 size-4 shrink-0 accent-emerald-800" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />{t('proposalAcknowledgment')}</label>
+
+--- apps/hub-web/src/features/context.tsx
+@@ 260,356 @@
+     {revision.purpose !== 'review-bundle' ? principal.kind === 'human' ? <div className="space-y-3 border-t border-slate-100 pt-4">
+       <p className="break-all text-xs text-slate-500">{t('selectedLine')}: {project.lineRevisionId ?? t('noLine')} · {t('lineVersion')}: {project.lineVersion}</p>
+       <label className="flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" className="mt-1 size-4 shrink-0 accent-emerald-800" checked={acknowledged} onChange={event => { setAcknowledged(event.target.checked); if (event.target.checked) setLineVersion(project.lineVersion); }} />{t('selectionAcknowledgment')}</label>
+       <Button disabled={!acknowledged || mutation.isPending} onClick={() => mutation.mutate({ path: '/line', body: { revisionId: revision.id, expectedVersion: lineVersion } })}>{t('selectForIntegration')}</Button>
+       <ErrorNotice error={mutation.error} />{mutation.isSuccess ? <Notice tone="success">{t('selectionSaved')}</Notice> : null}
+     </div> : <Notice>{t('humanRequired')}</Notice> : null}
+   </Panel><Panel title={t('files')}>
+     {revision.files.length ? <Field label={t('selectFile')}><Select value={filePath} onChange={event => setFilePath(event.target.value)}>{revision.files.map(item => <option key={item.path} value={item.path}>{item.path}</option>)}</Select></Field> : <EmptyState>{t('selectFile')}</EmptyState>}
+     {preview?.kind === 'binary' ? <Notice>{t('binaryFile', { size: preview.size })}</Notice> : file && preview ? (
+       <RevisionCodeViewer key={file.path} file={file} preview={preview} />
+     ) : null}
+     {file && <details className="text-xs text-slate-500">
+       <summary className="cursor-pointer">{t('fileTechnicalDetails')}</summary>
+       <p className="mt-2 break-all font-mono">{file.mode} · {file.contentDigest}</p>
+     </details>}
+   </Panel></div>;
+ }
+ 
+ export function DeliveryView() {
+   const { t, i18n } = useTranslation('context');
+-  const { principal } = useHub();
++  const { principal, navigate } = useHub();
+   const project = useResource<Project>('project');
+   const deliveries = useResource<{ deliveries: Delivery[] }>('deliveries');
+   const revisions = useRevisionSummary(project.data?.lineRevisionId);
+   const selected = revisions.data;
+   return <><PageHeading title={t('delivery')} description={t('deliveryDescription')} />
+     <ReadState pending={project.isPending || (!!project.data?.lineRevisionId && revisions.isPending) || deliveries.isPending} error={project.error || revisions.error || deliveries.error} retry={() => { void project.refetch(); void revisions.refetch(); void deliveries.refetch(); }}>
+       {project.data ? <Panel title={t('selectedLine')}><p className="break-all font-mono text-sm text-slate-700">{project.data.lineRevisionId ?? t('noLine')}</p><p className="text-xs text-slate-500">{t('lineVersion')}: {project.data.lineVersion}</p></Panel> : null}
+-      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>{t('deliveryUnavailable')}</Notice>}</div>
++      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>
++        <p>{t('deliveryUnavailable')}</p>
++        <Button variant="secondary" className="mt-3" onClick={() => navigate({tab:'code',revisionId:undefined})}>
++          {t('chooseDeliveryRevision')}
++        </Button>
++      </Notice>}</div>
+       <div className="space-y-4">{deliveries.data?.deliveries.length ? [...deliveries.data.deliveries].reverse().map(delivery => <Panel key={delivery.id} title={<span className="break-all">{delivery.baseBranch} · {delivery.revisionId.slice(0, 12)}</span>}>
+         <StatusBadge status={delivery.status} /><p className="break-all text-sm text-slate-600">{delivery.remoteUrl}</p>
+         {delivery.error ? <Notice tone="error"><code>{delivery.error}</code></Notice> : null}
+         <dl className="grid gap-4 sm:grid-cols-2">{delivery.branch ? <Value label={t('branch')}><code>{delivery.branch}</code></Value> : null}{delivery.commitSha ? <Value label={t('commit')}><code>{delivery.commitSha}</code></Value> : null}{delivery.treeSha ? <Value label={t('tree')}><code>{delivery.treeSha}</code></Value> : null}<Value label={t('receipt')}><code>{delivery.receipt.id}</code><span className="block text-xs text-slate-500">{delivery.receipt.actorId} · {formatDate(delivery.receipt.createdAt, i18n.language)}</span></Value></dl>
+         {safeExternalUrl(delivery.prUrl) ? <a className="text-sm font-semibold text-emerald-800 underline" href={safeExternalUrl(delivery.prUrl)} target="_blank" rel="noopener noreferrer">{t('viewPullRequest')}</a> : null}
+       </Panel>) : <EmptyState>{t('noDeliveries')}</EmptyState>}</div>
+     </ReadState></>;
+ }
+ 
+ function DeliveryForm({ project }: { project: Project }) {
+   const { t } = useTranslation('context');
+   const [draft, setDraft, clear] = useDraft(`delivery:${project.id}`, { remoteUrl: '', baseBranch: 'main', revisionId: project.lineRevisionId ?? '', expectedLineVersion: project.lineVersion });
+   const [acknowledged, setAcknowledged] = useState(false);
+   const [validation, setValidation] = useState(false);
+   const [draftKept, setDraftKept] = useState(false);
+   const mutation = useWrite<Delivery, typeof draft>(['deliveries'], (_result, submitted) => { if (submitted) setDraftKept(!clear(submitted)); setAcknowledged(false); });
+   const stale = draft.expectedLineVersion !== project.lineVersion || draft.revisionId !== project.lineRevisionId;
+   function submit(event: FormEvent) {
+     event.preventDefault();
+     if (!draft.remoteUrl.trim() || !draft.baseBranch.trim() || !draft.revisionId || !acknowledged) { setValidation(true); return; }
+     setValidation(false);
+     mutation.mutate({ submittedDraft: draft, path: '/deliveries', body: { revisionId: draft.revisionId, remoteUrl: draft.remoteUrl.trim(), baseBranch: draft.baseBranch.trim(), expectedLineVersion: draft.expectedLineVersion } });
+   }
+   return <Panel title={t('publish')}><form noValidate onSubmit={submit} className="space-y-4">
+     <p className="break-all font-mono text-xs text-slate-500">{draft.revisionId} · {t('lineVersion')}: {draft.expectedLineVersion}</p>
+     <Field label={t('remoteUrl')}><Input required value={draft.remoteUrl} onChange={event => setDraft({ ...draft, remoteUrl: event.target.value })} /></Field>
+     <Field label={t('baseBranch')}><Input required value={draft.baseBranch} onChange={event => setDraft({ ...draft, baseBranch: event.target.value })} /></Field>
+     {stale ? <div className="space-y-2"><Notice>{t('reconcileHint')}</Notice><Button variant="secondary" disabled={mutation.isPending} onClick={() => { setDraft({ ...draft, revisionId: project.lineRevisionId ?? '', expectedLineVersion: project.lineVersion }); setAcknowledged(false); }}>{t('useCurrentVersion')}</Button></div> : null}
+     <label className="flex items-start gap-3 text-sm leading-relaxed"><input type="checkbox" checked={acknowledged} className="mt-1 size-4 shrink-0 accent-emerald-800" onChange={event => setAcknowledged(event.target.checked)} />{t('publishAcknowledgment')}</label>
+     {draftKept ? <Notice tone="success">{t('common:draftPreserved')}</Notice> : null}{validation ? <Notice tone="error">{t('requiredFields')}</Notice> : null}<ErrorNotice error={mutation.error} />{mutation.isSuccess ? <Notice tone="success">{t('deliveryResult')}</Notice> : null}<Button type="submit" disabled={!acknowledged || mutation.isPending || stale}>{t('publish')}</Button>
+   </form></Panel>;
+ }
+ 
+ export function HistoryView() {
+   const { t, i18n } = useTranslation('context');
+-  const { projectId, scopeKey } = useHub();
++  const { projectId, scopeKey, navigate, principal } = useHub();
++  const [eventType, setEventType] = useState('');
++  const flows = useResource<{flows: HubFlow[]}>('flows');
++  const documents = useResource<{documents: HubDocument[]}>('documents');
+   const events = useInfiniteQuery({
+     queryKey: [scopeKey, projectId, 'events'], initialPageParam: 0,
+     queryFn: ({ pageParam, signal }) => getJson<{ events: HubEvent[]; cursor: number }>(`${projectPath(projectId)}/events?after=${pageParam}`, signal),
+     getNextPageParam: (last, _pages, previousCursor) => last.events.length === 500 && last.cursor > previousCursor ? last.cursor : undefined,
+     enabled: Boolean(projectId),
+   });
+-  const items = mergeEvents(events.data?.pages.map(page => page.events) ?? []);
++  // History grows by up to 500 events per page; derive once per data change, not per render.
++  const items = useMemo(() => mergeEvents(events.data?.pages.map(page => page.events) ?? []), [events.data]);
++  const visible = useMemo(() => items.filter(event => !eventType || event.type === eventType), [items, eventType]);
++  const eventTypes = useMemo(() => [...new Set(items.map(event => event.type))].sort(), [items]);
++  const flowNames = useMemo(() => new Map(flows.data?.flows?.map(flow => [flow.id, flow.title])), [flows.data]);
++  const documentNames = useMemo(() => new Map(documents.data?.documents?.map(doc => [doc.id, doc.path])), [documents.data]);
+   return <><PageHeading title={t('history')} description={t('historyDescription')} />
+     <ReadState pending={events.isPending} error={events.error} retry={events.refetch}>
+-      {items.length ? <Panel><ol className="space-y-0">{items.map(event => <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div><p className="mt-2 break-all font-mono text-xs text-slate-600">{event.entityId}</p></li>)}</ol></Panel> : <EmptyState>{t('noHistory')}</EmptyState>}
++      {items.length > 0 && <div className="mb-4 max-w-sm"><Field label={t('historyEventType')}><Select value={eventType} onChange={event => setEventType(event.target.value)}>
++        <option value="">{t('all')}</option>
++        {eventTypes.map(type => <option key={type} value={type}>{t(`event.${type}`, {defaultValue:type})}</option>)}
++      </Select></Field></div>}
++      {visible.length ? <Panel><ol className="space-y-0">{visible.map(event => <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId === principal.id ? principal.email ?? t('historyYou') : event.actorId}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div>{flowNames.has(event.entityId) && <Button variant="ghost" className="max-w-full" onClick={() => navigate({tab:'flows',flowId:event.entityId})}><span className="min-w-0 break-all text-left">{flowNames.get(event.entityId)}</span></Button>}
++        {documentNames.has(event.entityId) && <Button variant="ghost" className="max-w-full" onClick={() => navigate({tab:'documents',documentId:event.entityId})}><span className="min-w-0 break-all text-left">{documentNames.get(event.entityId)}</span></Button>}
++        <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">{t('historyIdentifiers')}</summary><p className="break-all font-mono">{event.entityId} · {event.actorId}</p></details></li>)}</ol></Panel> : <EmptyState>{t(items.length ? 'historyNoMatchingEvents' : 'noHistory')}</EmptyState>}
+       <div className="mt-5">{events.hasNextPage ? <Button variant="secondary" disabled={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>{t('loadMore')}</Button> : items.length ? <p className="text-center text-xs text-slate-500">{t('endOfHistory')}</p> : null}</div>
+     </ReadState></>;
+ }
+
+--- apps/hub-web/src/features/remote/session-timeline.ts
+@@ 1,48 @@
++import type { InfiniteData } from "@tanstack/react-query";
++import type { Control } from "../../api/remote";
++
++/**
++ * A command invocation kept for the chat. `anchor` is the session's latest `historyCursor` when the
++ * command was invoked (the session record's cursor, or the loaded pages if they are ahead): a position
++ * in the Hub's own message order, not a clock, and not just the pages this tab has paged in.
++ */
++export type CommandEntry = { outcome: Control["CommandOutcome"]; invokedAt: string; anchor: number };
++
++/** How the command panel reports an outcome: the outcome, when it was invoked, and its placement anchor. */
++export type CommandOutcomeListener = (outcome: Control["CommandOutcome"], invokedAt: string, anchor?: number) => void;
++
++export type TimelineEntry =
++  | { kind: "message"; message: Control["SessionMessage"] }
++  | { kind: "outcome"; item: CommandEntry };
++
++/** The one key History reads its pages from; the command panel reads the same cache at invoke time. */
++export function historyQueryKey(scopeKey: number, projectId: string, sessionId: string) {
++  return [scopeKey, projectId, "remote", "history", sessionId, "workspace"] as const;
++}
++
++/** Highest `historyCursor` among the loaded pages (0 when nothing is loaded yet). */
++export function latestHistoryCursor(data: InfiniteData<Control["HistoryPage"]> | undefined): number {
++  let latest = 0;
++  data?.pages.forEach(page => page.messages.forEach(message => {
++    if (message.historyCursor > latest) latest = message.historyCursor;
++  }));
++  return latest;
++}
++
++/**
++ * Interleave command outcomes with messages by the Hub's message order. An outcome goes after the
++ * last message whose `historyCursor` is at or below its `anchor`; outcomes with the same anchor keep
++ * the order they were given. The browser clock and the machine clock are never compared.
++ */
++export function mergeTimeline(ordered: Control["SessionMessage"][], outcomes: CommandEntry[]): TimelineEntry[] {
++  const byAnchor = [...outcomes].sort((a, b) => a.anchor - b.anchor);
++  const timeline: TimelineEntry[] = [];
++  let next = 0;
++  for (const message of ordered) {
++    while (next < byAnchor.length && byAnchor[next].anchor < message.historyCursor)
++      timeline.push({ kind: "outcome", item: byAnchor[next++] });
++    timeline.push({ kind: "message", message });
++  }
++  while (next < byAnchor.length) timeline.push({ kind: "outcome", item: byAnchor[next++] });
++  return timeline;
++}
+
+--- apps/hub-web/src/features/remote/session-workspace.css
+@@ 22,62 @@
+ }
+ .session-identity h1 {
+   font-size: 16px;
+   font-weight: 650;
+   line-height: 1.4;
+   overflow-wrap: anywhere;
+ }
+ .session-header-meta {
+   display: flex;
+   gap: 10px;
+   flex-wrap: wrap;
+   font-size: 11px;
+   color: var(--hub-muted);
+   margin-top: 3px;
+ }
+ .session-header-actions {
+   display: flex;
+   gap: 6px;
+   flex-shrink: 0;
+ }
+-.session-header-actions > button:first-child {
++.session-header-actions > button[aria-expanded] {
+   display: none;
+ }
+ .session-location {
+   display: flex;
+   gap: 7px;
+   align-items: center;
+   flex-wrap: wrap;
+   color: var(--hub-muted);
+   font-size: 11px;
+   padding-bottom: 12px;
+   border-bottom: 1px solid var(--hub-border);
+   overflow-wrap: anywhere;
+ }
+ .session-model {
+   margin-inline-start: auto;
+ }
+ .session-workbench-grid {
+   display: grid;
+   grid-template-columns: 190px minmax(0, 1fr) 320px;
+   gap: 14px;
+
+--- apps/hub-web/src/features/remote/session-workspace.css
+@@ 250,290 @@
+   margin: 0;
+ }
+ .session-message.human .session-message-content {
+   background: var(--hub-subtle);
+   padding: 9px 11px;
+   border-radius: 0 7px 7px 7px;
+ }
+ .session-message.tool-summary {
+   margin-block: 10px;
+ }
+ .session-message.tool-summary .session-message-content {
+   font-size: 12px;
+   color: var(--hub-muted);
+ }
+ .session-history-pages {
+   padding: 8px 12px;
+   display: flex;
+   justify-content: space-between;
+   border-top: 1px solid var(--hub-border);
+ }
+-.session-composer .hub-panel-header {
++.session-composer > .hub-panel > .hub-panel-header {
+   display: none;
+ }
+ .session-composer .hub-panel {
+   border-color: var(--hub-border);
+ }
+ .session-composer .hub-panel-body {
+   padding: 12px;
+ }
+ .session-composer textarea {
+   min-height: 90px;
+ }
+ .composer-hint {
+   font-size: 10px;
+   line-height: 1.5;
+   color: var(--hub-muted);
+ }
+ .composer-controls {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 10px;
+
+--- apps/hub-web/src/features/remote/session-workspace.css
+@@ 323,363 @@
+   .session-workbench-grid {
+     grid-template-columns: 220px minmax(0, 1fr) 360px;
+   }
+ }
+ @media (max-width: 1279px) {
+   .session-workbench-grid {
+     grid-template-columns: minmax(0, 1fr) 310px;
+   }
+   .session-browser {
+     display: none;
+     position: static;
+     max-height: 360px;
+     border: 1px solid var(--hub-border);
+     border-radius: 7px;
+     padding: 12px;
+   }
+   .session-browser-open {
+     display: block;
+     grid-column: 1/-1;
+   }
+-  .session-header-actions > button:first-child {
++  .session-header-actions > button[aria-expanded] {
+     display: inline-flex;
+   }
+ }
+ @media (max-width: 1023px) {
+   .session-workbench-grid {
+     grid-template-columns: minmax(0, 1fr);
+   }
+   .session-context-column {
+     position: static;
+     max-height: none;
+   }
+   .session-transcript-body {
+     max-height: 55dvh;
+   }
+   .session-model {
+     margin-inline-start: 0;
+   }
+ }
+ @media (max-width: 480px) {
+   .session-workbench-header {
+
+--- apps/hub-web/src/features/remote/session-workspace.css
+@@ 392,421 @@
+     width: 20px;
+     height: 20px;
+   }
+   .session-message-header {
+     flex-wrap: wrap;
+     font-size: 10px;
+   }
+   .session-model {
+     width: 100%;
+   }
+   .composer-controls {
+     grid-template-columns: minmax(0, 1fr);
+   }
+   .composer-controls select {
+     font-size: 16px;
+   }
+   .composer-footer select {
+     font-size: 16px;
+   }
+ }
++
++.composer-work-context { min-width:0; }
++.composer-work-context > summary { cursor:pointer; overflow-wrap:anywhere; }
++.composer-work-context[open] > summary { margin-bottom:.5rem; }
++@media (max-width:600px) {
++  /* The wrap must sit on the constrained container: let the header and its actions shrink and wrap together. */
++  .session-workbench-header { flex-wrap:wrap; }
++  .session-header-actions { flex-wrap:wrap; flex-shrink:1; min-width:0; }
++  .session-composer :is(textarea, select) { font-size:16px; }
++}
+
+--- apps/hub-web/src/features/remote/session-workspace.tsx
+@@ 67,116 @@
+     controlled: "Вы управляете",
+     idle: "Нет текущего запуска",
+     routing: "Базовая модель",
+     runModel: "Модель запуска",
+     stale:
+       "Машина не в сети. Показано последнее наблюдавшееся состояние сессии.",
+     navigationPartial: "Есть ещё сессии.",
+     role: {
+       human: "Человек",
+       assistant: "Keryx",
+       "tool-summary": "Действия инструментов",
+       "system-receipt": "Квитанция системы",
+     },
+   },
+ };
+ export function useWorkspaceCopy() {
+   const { i18n } = useTranslation();
+   return copy[i18n.language.startsWith("ru") ? "ru" : "en"];
+ }
+ export function SessionWorkspace({
++  openingRejected = false,
+   record,
+   control,
+   history,
+   composer,
+   queue,
+   settings,
+   operations,
+ }: {
++  openingRejected?: boolean;
+   record: Control["SessionRecord"];
+   control: Controller;
+   history: ReactNode;
+   composer: ReactNode;
+   queue: ReactNode;
+   settings: ReactNode;
+   operations: ReactNode;
+ }) {
+   const hub = useHub();
+   const { t } = useTranslation("remote");
+   const words = useWorkspaceCopy();
+   const [tab, setTab] = useState<
+     "context" | "changes" | "checks" | "queue" | "settings"
+   >("context");
+   const [navigationOpen, setNavigationOpen] = useState(false);
+   const id = useId();
+   const titleRef = useRef<HTMLHeadingElement>(null);
+   useEffect(() => {
+     titleRef.current?.focus();
+   }, [record.sessionId]);
+
+--- apps/hub-web/src/features/remote/session-workspace.tsx
+@@ 137,189 @@
+     !!record.activeRunId,
+   );
+   const candidateId =
+     run.data?.snapshot.effectiveCandidateId ??
+     record.config.baselineCandidateId;
+   const candidate = routing.data?.candidates.find(
+     (c) => c.candidateId === candidateId,
+   );
+   const tabs = ["context", "changes", "checks", "queue", "settings"] as const;
+   return (
+     <section className="session-workbench">
+       <header className="session-workbench-header">
+         <div className="session-identity">
+           <MessageSquare size={18} />
+           <div>
+             <h1 ref={titleRef} tabIndex={-1}>
+               {record.title}
+             </h1>
+             <div className="session-header-meta">
+               <span>
+-                {t("states." + record.state, { defaultValue: record.state })}
++                {openingRejected ? t("sessionOpeningFailed") : t("states." + record.state, { defaultValue: record.state })}
+               </span>
+               <span>{record.agentProfileId}</span>
+               <span>{control.active ? words.controlled : words.observer}</span>
+             </div>
+           </div>
+         </div>
+         <div className="session-header-actions">
++          <Button variant="secondary" onClick={() => {
++            setTab("settings");
++            document.getElementById(id + "-inspector")?.scrollIntoView({ block: "start" });
++            document.getElementById(id + "-settings")?.focus({ preventScroll: true });
++          }}>{words.settings}</Button>
+           <Button
+             variant="secondary"
+             aria-expanded={navigationOpen}
+             onClick={() => setNavigationOpen(!navigationOpen)}
+           >
+             {words.navigation}
+             <ChevronDown size={13} />
+           </Button>
+           {record.activeRunId && (
+             <Button
+               variant="ghost"
+               onClick={() =>
+                 hub.navigate({
+                   tab: "runs",
+                   runId: record.activeRunId ?? undefined,
+                   sessionId: undefined,
+                 })
+               }
+             >
+               {words.openRun}
+
+--- apps/hub-web/src/features/remote/sessions.tsx
+@@ 1,216 @@
+-import { useState } from "react";
+-import { useInfiniteQuery } from "@tanstack/react-query";
++import { getJson } from '../../api/client';
++import type { HubFlow } from '../../api/types';
++import { digestCriteria } from './shared';
++import { Textarea } from '../../components/ui';
++import { useCallback, useEffect, useRef, useState } from "react";
++import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+ import { remoteGet } from "../../api/remote";
+ import { formatDate } from "../../i18n/format";
+ import { Markdown } from "../../components/Markdown";
+ import { SessionWorkspace, useWorkspaceCopy } from "./session-workspace";
+ import { useTranslation } from "react-i18next";
+ import type { MachineSummary } from "../../../../../src/remote-control/protocol";
+ import type { Control } from "../../api/remote";
+ import { remoteProject } from "../../api/remote";
+ import {
+   sessionPath,
+   useRemoteAction,
++  useAppliedReceipt,
+   useRemoteQuery,
+ } from "../../api/remote-hooks";
+ import { useHub } from "../../app/hub-context";
+-import { useDraft } from "../../state/drafts";
++import { useDraft, useDraftStore } from "../../state/drafts";
+ import {
+   Button,
+   EmptyState,
+   Field,
+   Input,
+   Notice,
+   PageHeading,
+   Panel,
+   Select,
+ } from "../../components/ui";
+ import {
+   ActionFeedback,
+   Definition,
+   Feedback,
+   useController,
+   useOperator,
+ } from "./shared";
+-import { MessageComposer, QueueControls } from "./work";
++import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
+ import { ForkSession } from "./fork";
+-import { Settings, Commands } from "./settings";
++import { Settings } from "./settings";
++import { historyQueryKey, mergeTimeline, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
+ export function SessionsView() {
+   const hub = useHub();
+   const { t } = useTranslation("remote");
+   const [create, setCreate] = useState(false);
++  // Set when the form is opened from the rejected-opening recovery, which unmounts the focused button.
++  const [focusForm, setFocusForm] = useState(false);
+   const sessions = useRemoteQuery<Control["SessionPage"]>(
+     ["sessions"],
+     remoteProject(hub.projectId ?? "") + "/sessions",
+   );
++  const machines = useRemoteQuery<{ machines: MachineSummary[] }>(
++    ["machines"], "/machines?projectId=" + encodeURIComponent(hub.projectId ?? ""),
++  );
+   if (hub.location.sessionId)
+     return (
+       <SessionDetail
+         key={hub.projectId + ":" + hub.location.sessionId}
+         sessionId={hub.location.sessionId}
++        onNewSession={() => { setCreate(true); setFocusForm(true); hub.navigate({ tab: "sessions", sessionId: undefined }); }}
+       />
+     );
+   return (
+     <div className="space-y-5">
+       <PageHeading
+         title={t("sessions")}
+         description={t("description")}
+         action={
+-          <Button onClick={() => setCreate(!create)}>{t("newSession")}</Button>
++          <Button onClick={() => { setFocusForm(false); setCreate(!create); }}>{t("newSession")}</Button>
+         }
+       />
+-      {create && <CreateSession />}
++      {create && <CreateSession focusOnOpen={focusForm} />}
+       <Feedback query={sessions} />
+       {sessions.data?.sessions.length === 0 && (
+         <EmptyState>{t("empty")}</EmptyState>
+       )}
+       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+         {sessions.data?.sessions.map((s) => (
+           <Panel
+             key={s.sessionId}
+             title={s.title}
+             description={t("states." + s.state, { defaultValue: s.state })}
+           >
+             <dl className="space-y-3">
+-              <Definition label={t("machine")}>{s.machineId}</Definition>
++              <Definition label={t("machine")}>
++                {machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId}
++              </Definition>
+               <Definition label={t("checkout")}>{s.checkoutId}</Definition>
+               <Definition label={t("controller")}>
+                 {s.controller?.actorId ?? "—"}
+               </Definition>
+             </dl>
+             <Button
+               variant="secondary"
+               onClick={() =>
+                 hub.navigate({ tab: "sessions", sessionId: s.sessionId })
+               }
+             >
+               {t("details")}
+             </Button>
+           </Panel>
+         ))}
+       </div>
+     </div>
+   );
+ }
+-function CreateSession() {
++/** The first launch requirement that is not met, in the order the operator should fix them. */
++function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowsState, flowGone }: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowsState: "ready" | "loading" | "failed"; flowGone: boolean }) {
++  if (!operator) return "sessionLaunchOperatorOnly";
++  if (!targetReady) return "sessionLaunchRequirements";
++  if (!hasTitle) return "sessionLaunchEnterTitle";
++  if (flowsState === "loading") return "sessionLaunchFlowsLoading";
++  if (flowsState === "failed") return "sessionLaunchFlowsFailed";
++  if (flowGone) return "sessionLaunchFlowGone";
++  return null;
++}
++function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
+   const hub = useHub();
++  const form = useRef<HTMLDivElement>(null);
++  useEffect(() => {
++    if (focusOnOpen) form.current?.querySelector("select")?.focus();
++  }, [focusOnOpen]);
+   const { t } = useTranslation("remote");
+   const operator = useOperator();
+   const machines = useRemoteQuery<{ machines: MachineSummary[] }>(
+     ["machines"],
+     "/machines?projectId=" + encodeURIComponent(hub.projectId ?? ""),
+   );
+   const action = useRemoteAction<Control["SessionOperationReceipt"]>();
+-  const [draft, setDraft] = useDraft(
++  const [draft, setDraft, clearDraft] = useDraft(
+     `remote-create:${hub.scopeKey}:${hub.projectId}`,
+-    { machineId: "", checkoutId: "", profileId: "", title: "" },
++    { machineId: "", checkoutId: "", profileId: "", title: "", flowId: "", firstMessage: "" },
+   );
+   const m = machines.data?.machines.find(
+     (m) => m.machineId === draft.machineId,
+   );
+   const c = m?.inventory?.checkouts.find(
+     (c) => c.projectId === hub.projectId && c.checkoutId === draft.checkoutId,
+   );
+   const profile = c?.agentProfiles.find((p) => p.profileId === draft.profileId);
+-  const ready =
+-    operator &&
++  const flows = useQuery({
++    queryKey: [hub.scopeKey, hub.projectId, "flows"],
++    queryFn: ({ signal }) => getJson<{ flows: HubFlow[] }>(remoteProject(hub.projectId ?? "") + "/flows", signal),
++  });
++  const eligible = flows.data?.flows.filter(flow => flow.status === "in-progress") ?? [];
++  const selectedFlow = eligible.find(flow => flow.id === draft.flowId);
++  const targetReady =
+     m?.connected &&
+     !m.revoked &&
+     !m.recoveryRequired &&
+     c?.available &&
+     c.clean &&
+     !c.busy &&
+     profile?.adapter === "keryx-native-v1" &&
+-    profile.readiness === "ready" &&
+-    !!draft.title.trim();
++    profile.readiness === "ready";
++  // A chosen Flow cannot be checked until the Flows are known: name that instead of blaming the Flow.
++  const flowsState = !draft.flowId || flows.data ? "ready" : flows.isError ? "failed" : "loading";
++  const flowGone = !!draft.flowId && !!flows.data && !selectedFlow;
++  const blocker = firstUnmetLaunchCondition({ operator, targetReady: !!targetReady, hasTitle: !!draft.title.trim(), flowsState, flowGone });
++  const ready = blocker === null;
+   function submit() {
+     if (!ready || !m?.inventory || !c || !profile || !hub.projectId) return;
+     action.mutate(
+       {
+         path: remoteProject(hub.projectId) + "/sessions",
+         body: {
+           machineId: m.machineId,
+           checkoutId: c.checkoutId,
+           agentProfileId: profile.profileId,
+           expectedInventoryVersion: m.inventory.inventoryVersion,
+           expectedHeadSha: c.headSha,
+           capabilityDigest: profile.capabilityDigest,
+           policyDigest: profile.policyDigest,
+           title: draft.title.trim(),
+         } satisfies Control["SessionCreate"],
+       },
+       {
+-        onSuccess: (receipt) =>
+-          hub.navigate({ tab: "sessions", sessionId: receipt.sessionId }),
++        onSuccess: async (receipt) => {
++          if (selectedFlow) {
++            const criteriaDigest = await digestCriteria(selectedFlow.criteria);
++            useDraftStore.getState().put(
++              messageDraftKey(hub.scopeKey, hub.projectId, receipt.sessionId),
++              prepareFlowMessageDraft(selectedFlow, criteriaDigest, draft.firstMessage),
++            );
++          }
++          // The next New session starts from a clean form, not from this session's Flow and first message.
++          clearDraft();
++          hub.navigate({ tab: "sessions", sessionId: receipt.sessionId });
++        },
+       },
+     );
+   }
+   return (
++    <div ref={form} className="contents">
+     <Panel title={t("newSession")}>
+       <Field label={t("machine")}>
+         <Select
+           value={draft.machineId}
+           onChange={(e) =>
+             setDraft({
+               ...draft,
+               machineId: e.target.value,
+               checkoutId: "",
+               profileId: "",
+             })
+           }
+         >
+           <option value="">{t("choose")}</option>
+           {machines.data?.machines.map((m) => (
+             <option
+               key={m.machineId}
+               value={m.machineId}
+               disabled={!m.connected || m.revoked || m.recoveryRequired}
+             >
+
+--- apps/hub-web/src/features/remote/sessions.tsx
+@@ 250,391 @@
+           {c?.agentProfiles.map((p) => (
+             <option
+               key={p.profileId}
+               value={p.profileId}
+               disabled={
+                 p.adapter !== "keryx-native-v1" || p.readiness !== "ready"
+               }
+             >
+               {p.profileId} · {p.readiness} · {p.reason}
+             </option>
+           ))}
+         </Select>
+       </Field>
+       <Field label={t("title")}>
+         <Input
+           value={draft.title}
+           maxLength={200}
+           onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+         />
+       </Field>
++      <Field label={t("launchFlow")}>
++        <Select value={draft.flowId} onChange={event => setDraft({ ...draft, flowId: event.target.value })}>
++          <option value="">{t("choose")}</option>
++          {draft.flowId && !selectedFlow && <option value={draft.flowId} disabled>{flows.data
++            ? t("launchFlowGone", { title: flows.data.flows.find(flow => flow.id === draft.flowId)?.title ?? draft.flowId })
++            : t("launchFlowUnchecked", { id: draft.flowId })}</option>}
++          {eligible.map(flow => <option key={flow.id} value={flow.id}>{flow.title} · v{flow.version}</option>)}
++        </Select>
++      </Field>
++      {selectedFlow && <Field label={t("launchMessage")}>
++        <Textarea value={draft.firstMessage} maxLength={32768} onChange={event => setDraft({ ...draft, firstMessage: event.target.value })}/>
++      </Field>}
+       {c && (
+         <dl className="space-y-2">
+           <Definition label={t("head")}>{c.headSha}</Definition>
+           <Definition label={t("policy")}>
+             {profile?.policyDigest ?? "—"}
+           </Definition>
+           <Definition label={t("capability")}>
+             {profile?.capabilityDigest ?? "—"}
+           </Definition>
+         </dl>
+       )}
+       <Feedback query={machines} />
++      <Feedback query={flows} />
+       <ActionFeedback action={action} />
++      {blocker && <p className="text-sm text-slate-500">{t(blocker)}</p>}
+       <Button disabled={!ready || action.isPending} onClick={submit}>
+         {t("createSession")}
+       </Button>
+     </Panel>
++    </div>
+   );
+ }
+-export function SessionDetail({ sessionId }: { sessionId: string }) {
++export function SessionDetail({ sessionId, onNewSession }: { sessionId: string; onNewSession?: () => void }) {
+   const hub = useHub();
+   const { t } = useTranslation("remote");
+   const query = useRemoteQuery<Control["SessionRecord"]>(
+     ["session", sessionId],
+     sessionPath(hub.projectId ?? "", sessionId),
+   );
+   return (
+     <div className="space-y-5">
+       <Button
+         variant="ghost"
+         onClick={() => hub.navigate({ sessionId: undefined })}
+       >
+         ← {t("back")}
+       </Button>
+       <Feedback query={query} />
+-      {query.data && <SessionSurface record={query.data} />}
++      {query.data && <SessionSurface key={query.data.sessionId} record={query.data} onNewSession={onNewSession} />}
+     </div>
+   );
+ }
+ export function SessionSurface({
+   record,
++  onNewSession,
+ }: {
+   record: Control["SessionRecord"];
++  onNewSession?: () => void;
+ }) {
+   const { t } = useTranslation("remote");
+   const control = useController(record);
+   const action = useRemoteAction();
+   const path = sessionPath(record.projectId, record.sessionId);
++  // Command outcomes are tab-local (the history endpoint carries only messages). Each keeps its
++  // invocation time for display and the history cursor at invocation for placement; the first report
++  // of an operation fixes both, later reports only refresh the outcome.
++  const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
++  const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
++    setOutcomes(previous => {
++      const index = previous.findIndex(item => item.outcome.operationId === outcome.operationId);
++      if (index < 0) return [...previous, { outcome, invokedAt, anchor: anchor ?? Number.POSITIVE_INFINITY }];
++      return previous.map((item, at) => at === index ? { ...item, outcome } : item);
++    });
++  }, []);
+   const opening = useRemoteQuery<{ errorCode: string | null }>(
+     ["opening-status",record.sessionId],path+"/opening-status",record.state==="opening",
+   );
++  const openingError = record.state === "opening" ? opening.data?.errorCode : null;
+   return (
+     <>
+-    {record.state === "opening" && opening.data?.errorCode && (
+-      <Notice tone="error">{t("sessionOpeningRejected")} ({opening.data.errorCode})</Notice>
++    {openingError && (
++      <Notice tone="error">
++        {t("sessionOpeningRejected")} {t("sessionOpeningNextStep")}
++        {onNewSession && <Button variant="secondary" onClick={onNewSession}>{t("sessionOpeningCreateNew")}</Button>}
++        <details>
++          <summary>{t("sessionOpeningDetails")}</summary>
++          <code>{openingError}</code>
++        </details>
++      </Notice>
+     )}
+     <SessionWorkspace
++      openingRejected={!!openingError}
+       record={record}
+       control={control}
+-      history={<History record={record} />}
+-      composer={<MessageComposer record={record} control={control} />}
+-      queue={<QueueControls record={record} control={control} />}
+-      settings={
+-        <>
+-          <Settings record={record} control={control} />
+-          <Commands record={record} control={control} />
+-        </>
++      history={<History record={record} outcomes={outcomes} />}
++      composer={
++        <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
+       }
++      queue={<QueueControls record={record} control={control} />}
++      settings={<Settings record={record} control={control} />}
+       operations={
+         <>
+           {" "}
+           <Panel title={t("versions")}>
+             <dl className="grid grid-cols-2 gap-3">
+               <Definition label={t("sessionVersion")}>
+                 {record.version}
+               </Definition>
+               <Definition label={t("configVersion")}>
+                 {record.config.configVersion}
+               </Definition>
+               <Definition label={t("historyVersion")}>
+                 {record.historyVersion}
+               </Definition>
+               <Definition label={t("queueVersion")}>
+                 {record.queueVersion}
+               </Definition>
+             </dl>
+             <div className="flex flex-wrap gap-3">
+               <Button
+
+--- apps/hub-web/src/features/remote/sessions.tsx
+@@ 418,552 @@
+                       expectedSessionVersion: record.version,
+                       controller: control.binding,
+                       mode: "when-idle",
+                     } satisfies Control["SessionClose"],
+                   })
+                 }
+               >
+                 {t("close")}
+               </Button>
+             </div>
+             <ActionFeedback action={action} />
+           </Panel>
+           <ForkSession record={record} control={control} />
+         </>
+       }
+     />
+     </>
+   );
+ }
+ 
+-function History({ record }: { record: Control["SessionRecord"] }) {
+-  const { t, i18n } = useTranslation("remote");
++function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: CommandEntry[] }) {
++  const { t } = useTranslation("remote");
+   const hub = useHub();
+-  const words = useWorkspaceCopy();
+   const query = useInfiniteQuery({
+-    queryKey: [
+-      hub.scopeKey,
+-      record.projectId,
+-      "remote",
+-      "history",
+-      record.sessionId,
+-      "workspace",
+-    ],
++    queryKey: historyQueryKey(hub.scopeKey, record.projectId, record.sessionId),
+     initialPageParam: 0,
+     queryFn: ({ signal, pageParam }) =>
+       remoteGet<Control["HistoryPage"]>(
+         sessionPath(record.projectId, record.sessionId) +
+           "/history?after=" +
+           pageParam,
+         signal,
+       ),
+     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
+   });
+   const messages = new Map<string, Control["SessionMessage"]>();
+   query.data?.pages.forEach((page) =>
+     page.messages.forEach((message) =>
+       messages.set(message.messageId, message),
+     ),
+   );
+   const ordered = [...messages.values()].sort(
+     (a, b) => a.historyCursor - b.historyCursor,
+   );
++  const timeline = mergeTimeline(ordered, outcomes);
+   return (
+     <section className="session-transcript" aria-label={t("history")}>
+       <header className="session-transcript-header">
+         <h2>{t("history")}</h2>
+         <span>{record.agentProfileId}</span>
+       </header>
+       <div className="session-transcript-body">
+         <Feedback query={query} />
+         {query.data?.pages.some((page) => page.gap) && (
+           <Notice>{t("gap")}</Notice>
+         )}
+         <ol>
+-          {ordered.map((message) => (
+-            <li
+-              key={message.messageId}
+-              className={"session-message " + message.role}
+-            >
+-              <span className="session-avatar" aria-hidden="true">
+-                {message.role === "human"
+-                  ? "H"
+-                  : message.role === "assistant"
+-                    ? "K"
+-                    : "↳"}
+-              </span>
+-              <div>
+-                <div className="session-message-header">
+-                  <strong>{words.role[message.role]}</strong>
+-                  <time dateTime={message.createdAt}>
+-                    {formatDate(message.createdAt, i18n.language)}
+-                  </time>
+-                </div>
+-                <div className="session-message-content">
+-                  {message.role === "assistant" ? (
+-                    <Markdown content={message.text} />
+-                  ) : (
+-                    <pre>{message.text}</pre>
+-                  )}
+-                </div>
+-                {message.role === "assistant" && message.runId && (
+-                  <Button
+-                    variant="ghost"
+-                    onClick={() =>
+-                      hub.navigate({
+-                        tab: "runs",
+-                        runId: message.runId ?? undefined,
+-                        sessionId: undefined,
+-                      })
+-                    }
+-                  >
+-                    {i18n.language.startsWith("ru")
+-                      ? "Открыть запуск"
+-                      : "Open run"}
+-                  </Button>
+-                )}
+-              </div>
+-            </li>
+-          ))}
++          {timeline.map((entry) => entry.kind === "outcome"
++            ? <OutcomeItem key={entry.item.outcome.operationId} record={record} item={entry.item} />
++            : <MessageItem key={entry.message.messageId} message={entry.message} />)}
+         </ol>
+-        {query.data && !ordered.length && <EmptyState>{t("empty")}</EmptyState>}
++        {query.data && !ordered.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
+       </div>
+       {query.hasNextPage && (
+         <footer className="session-history-pages">
+           <Button
+             variant="secondary"
+             disabled={query.isFetchingNextPage}
+             onClick={() => void query.fetchNextPage()}
+           >
+             {t("more")}
+           </Button>
+         </footer>
+       )}
+     </section>
+   );
+ }
++
++function formatResult(result: unknown) {
++  return typeof result === "string" ? result : JSON.stringify(result, null, 2);
++}
++const isSettled = (status: Control["CommandOutcome"]["status"]) => status === "applied" || status === "rejected";
++/** One command outcome, followed through its own operation so it moves from queued to applied or rejected. */
++function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item: CommandEntry }) {
++  const { t, i18n } = useTranslation("remote");
++  // Follow the operation only until it settles: an applied or rejected record cannot change, and a live
++  // query per outcome would be refetched on every invalidation for the tab's lifetime.
++  const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, item.outcome, receipt => isSettled(receipt.status));
++  const outcome = followed.data ?? item.outcome;
++  return (
++    <li className="session-message system">
++      <span className="session-avatar" aria-hidden="true">/</span>
++      <div>
++        <div className="session-message-header">
++          <strong>/{outcome.commandName}</strong>
++          <time dateTime={item.invokedAt}>{formatDate(item.invokedAt, i18n.language)}</time>
++        </div>
++        <div className="session-message-content">
++          <p>{t("receiptStatuses." + outcome.status, { defaultValue: outcome.status })}</p>
++          {outcome.errorCode && <p>{outcome.errorCode}</p>}
++          {outcome.result !== null && <pre className="whitespace-pre-wrap break-all">{formatResult(outcome.result)}</pre>}
++        </div>
++      </div>
++    </li>
++  );
++}
++function MessageItem({ message }: { message: Control["SessionMessage"] }) {
++  const { i18n } = useTranslation("remote");
++  const hub = useHub();
++  const words = useWorkspaceCopy();
++  return (
++    <li className={"session-message " + message.role}>
++      <span className="session-avatar" aria-hidden="true">
++        {message.role === "human" ? "H" : message.role === "assistant" ? "K" : "↳"}
++      </span>
++      <div>
++        <div className="session-message-header">
++          <strong>{words.role[message.role]}</strong>
++          <time dateTime={message.createdAt}>{formatDate(message.createdAt, i18n.language)}</time>
++        </div>
++        <div className="session-message-content">
++          {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
++        </div>
++        {message.role === "assistant" && message.runId && (
++          <Button
++            variant="ghost"
++            onClick={() => hub.navigate({ tab: "runs", runId: message.runId ?? undefined, sessionId: undefined })}
++          >
++            {i18n.language.startsWith("ru") ? "Открыть запуск" : "Open run"}
++          </Button>
++        )}
++      </div>
++    </li>
++  );
++}
+
+--- apps/hub-web/src/features/remote/settings.tsx
+@@ 1,38 @@
++import { useEffect, useRef } from 'react';
++import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
+ import { isOwnedControlCommand } from '../../../../../src/remote-control/owned-controls';
+ import { useState } from 'react';
+ import { useTranslation } from 'react-i18next';
+ import type { Control } from '../../api/remote';
+ import { sessionPath,useRemoteAction,useRemoteQuery,useAppliedReceipt } from '../../api/remote-hooks';
+ import { useHub } from '../../app/hub-context';
+ import { useDraft } from '../../state/drafts';
+-import { Button,Field,Notice,Panel,Select,Textarea } from '../../components/ui';
++import { Button,Field,Input,Notice,Panel,Select,Textarea } from '../../components/ui';
+ import { AssociationPicker } from './association';
+ import { ActionFeedback,Feedback,type Controller } from './shared';
++import { historyQueryKey,latestHistoryCursor,type CommandOutcomeListener } from './session-timeline';
+ export function Confirmation({card,record,control,kind}:{card:Control['CommandConfirmationRequest'];record:Control['SessionRecord'];control:Controller;kind:'config'|'commands'}){const{t}=useTranslation('remote');const action=useRemoteAction();const expired=Date.parse(card.expiresAt)<=Date.now();const allowed=control.active&&control.binding?.controllerLeaseId===card.controller.controllerLeaseId&&control.binding.expectedControllerVersion===card.controller.expectedControllerVersion&&!expired&&card.expectedConfigVersion===record.config.configVersion;
+  function answer(decision:'allow-once'|'deny'){if(!allowed||!control.binding||Date.parse(card.expiresAt)<=Date.now())return;action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/'+kind+'/confirm',body:{expectedSessionVersion:record.version,controller:control.binding,confirmationId:card.confirmationId,operationDigest:card.operationDigest,policyDigest:card.policyDigest,decision} satisfies Control['CommandConfirmation']});}
+  return <Panel title={t('confirmation')}><p className="break-words">{card.summary}</p><p>{t('cost')}: {card.costEffect}</p><p>{t('privacy')}: {card.privacyEffect}</p><code className="block break-all text-xs">{card.operationDigest}</code><p className="text-sm">{card.expiresAt}</p>{expired&&<Notice tone="error">{t('expired')}</Notice>}<div className="flex flex-wrap gap-2"><Button disabled={!allowed||action.isPending} onClick={()=>answer('allow-once')}>{t('allowOnce')}</Button><Button variant="danger" disabled={!allowed||action.isPending} onClick={()=>answer('deny')}>{t('deny')}</Button></div><ActionFeedback action={action}/></Panel>;
+ }
+ export function Settings({record,control}:{record:Control['SessionRecord'];control:Controller}){const hub=useHub();const{t}=useTranslation('remote');const path=sessionPath(record.projectId,record.sessionId);const routing=useRemoteQuery<Control['RoutingAvailability']>(['routing',record.sessionId],path+'/routing');const action=useRemoteAction<Control['ConfigReceipt']>();const observed=useAppliedReceipt(record,action.data);const receipt=observed.data??action.data;const[draft,setDraft]=useDraft(`remote-settings:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,{sessionVersion:record.version,configVersion:record.config.configVersion,baselineCandidateId:record.config.baselineCandidateId,reasoningEffort:record.config.reasoningEffort,routing:record.config.routing,busyPolicy:'reject' as 'reject'|'queue-at-idle'});const stale=control.advanceVersion(draft.sessionVersion)!==record.version||draft.configVersion!==record.config.configVersion;const candidate=routing.data?.candidates.find(c=>c.candidateId===draft.baselineCandidateId);
+  function save(){if(!control.binding)return;action.mutate({method:'PUT',path:path+'/config',body:{expectedSessionVersion:control.advanceVersion(draft.sessionVersion),controller:control.binding,expectedConfigVersion:draft.configVersion,baselineCandidateId:draft.baselineCandidateId,reasoningEffort:draft.reasoningEffort,routing:draft.routing,busyPolicy:draft.busyPolicy} satisfies Control['ConfigChange']});}
+  return <Panel title={t('settings')}><Feedback query={routing}/><Field label={t('baseline')}><Select value={draft.baselineCandidateId} onChange={e=>setDraft({...draft,baselineCandidateId:e.target.value})}>{routing.data?.candidates.map(c=><option key={c.candidateId} value={c.candidateId} disabled={!c.available}>{c.providerId}/{c.modelId} · {c.reason} · {c.privacyClass} · {c.costClass}</option>)}</Select></Field><Field label={t('reasoning')}><Select value={draft.reasoningEffort} onChange={e=>{const effort=candidate?.reasoningEfforts.find(v=>v===e.target.value);if(effort)setDraft({...draft,reasoningEffort:effort});}}>{candidate?.reasoningEfforts.map(e=><option key={e} value={e}>{e}</option>)}</Select></Field><label className="flex gap-3 text-sm"><input type="checkbox" checked={draft.routing.enabled} onChange={e=>setDraft({...draft,routing:{...draft.routing,enabled:e.target.checked}})}/>{t('routing')}</label><Field label={t('routingProfile')}><Select value={draft.routing.profileId} onChange={e=>setDraft({...draft,routing:{...draft.routing,profileId:e.target.value}})}>{routing.data?.profileIds.map(p=><option key={p} value={p}>{p}</option>)}</Select></Field><Field label={t('candidates')}><Select multiple value={draft.routing.candidateIds} onChange={e=>setDraft({...draft,routing:{...draft.routing,candidateIds:Array.from(e.target.selectedOptions,o=>o.value)}})}>{routing.data?.candidates.map(c=><option key={c.candidateId} value={c.candidateId} disabled={!c.available}>{c.providerId}/{c.modelId}</option>)}</Select></Field><Field label={t('fallback')}><Select value={draft.routing.fallbackCandidateId} onChange={e=>setDraft({...draft,routing:{...draft.routing,fallbackCandidateId:e.target.value}})}>{routing.data?.candidates.map(c=><option key={c.candidateId} value={c.candidateId} disabled={!c.available}>{c.providerId}/{c.modelId}</option>)}</Select></Field><Field label={t('busyPolicy')}><Select value={draft.busyPolicy} onChange={e=>setDraft({...draft,busyPolicy:e.target.value==='queue-at-idle'?'queue-at-idle':'reject'})}><option value="reject">{t('reject')}</option><option value="queue-at-idle">{t('queueAtIdle')}</option></Select></Field>{stale&&<Notice>{t('stale')}<Button variant="secondary" onClick={()=>setDraft({...draft,sessionVersion:record.version,configVersion:record.config.configVersion})}>{t('rebase')}</Button></Notice>}<Button disabled={!control.active||stale||action.isPending||!candidate?.available||draft.routing.candidateIds.length===0} onClick={save}>{t('saveConfig')}</Button><ActionFeedback action={{...action,data:receipt,error:action.error??observed.error}}/>{receipt?.confirmation&&<Confirmation card={receipt.confirmation} record={record} control={control} kind="config"/>}</Panel>;
+ }
+-export function Commands({record,control}:{record:Control['SessionRecord'];control:Controller}){const{t}=useTranslation('remote');const hub=useHub();const path=sessionPath(record.projectId,record.sessionId);const query=useRemoteQuery<Control['CommandCatalogue']>(['catalogue',record.sessionId],path+'/commands');const[name,setName]=useState('');const[association,setAssociation]=useState<Control['FlowAssociation']|null>(null);const[draft,setDraft]=useDraft(`remote-command:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,{args:'{}',sessionVersion:record.version,configVersion:record.config.configVersion,catalogueDigest:''});const action=useRemoteAction<Control['CommandOutcome']>();const observed=useAppliedReceipt(record,action.data);const receipt=observed.data??action.data;const[invalid,setInvalid]=useState(false);const entry=query.data?.entries.find(e=>e.commandName===name);const stale=control.advanceVersion(draft.sessionVersion)!==record.version||draft.configVersion!==record.config.configVersion||!!draft.catalogueDigest&&draft.catalogueDigest!==query.data?.catalogueDigest;const allowed=entry?.availability==='available'&&entry.confirmation!=='local-only'&&entry.mutationClass!=='sensitive-setup'&&entry.states.some(s=>s===record.state)&&(record.state!=='busy'||entry.mutationClass==='read'&&entry.busyPolicy==='read-only'||entry.mutationClass==='session'&&isOwnedControlCommand(entry.commandName));
+- function invoke(){if(!entry||!control.binding||!query.data||entry.mutationClass==='workspace'&&!association)return;let args:Control['BoundedJson'];try{args=JSON.parse(draft.args) as Control['BoundedJson'];if(new TextEncoder().encode(draft.args).length>32768)throw new SyntaxError();}catch{setInvalid(true);return;}setInvalid(false);action.mutate({path:path+'/commands/invoke',body:{expectedSessionVersion:control.advanceVersion(draft.sessionVersion),controller:control.binding,expectedConfigVersion:draft.configVersion,catalogueDigest:draft.catalogueDigest||query.data.catalogueDigest,commandName:entry.commandName,arguments:args,busyPolicy:entry.busyPolicy==='queue-at-idle'?'queue-at-idle':'reject',...(entry.mutationClass==='workspace'&&association?{association}:{})} satisfies Control['CommandInvoke']});}
+- return <Panel title={t('commands')}><Feedback query={query}/><Field label={t('command')}><Select value={name} onChange={e=>{setName(e.target.value);setAssociation(null);setDraft({...draft,args:'{}',catalogueDigest:query.data?.catalogueDigest??''});}}><option value="">{t('choose')}</option>{query.data?.entries.map(e=><option key={e.commandName} value={e.commandName} disabled={e.availability!=='available'}>{e.commandName} · {e.availability}</option>)}</Select></Field>{entry&&<><p className="break-words text-sm">{entry.summary} · {entry.reason}</p><details><summary className="text-sm">{t('arguments')}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(entry.inputSchema,null,2)}</pre></details><Field label={t('arguments')} hint={t('secretWarning')}><Textarea value={draft.args} maxLength={32768} onChange={e=>setDraft({...draft,args:e.target.value})}/></Field></>}{entry?.mutationClass==='workspace'&&<AssociationPicker projectId={record.projectId} onChange={setAssociation}/>} {invalid&&<Notice tone="error">{t('required')}</Notice>}{stale&&<Notice>{t('stale')}<Button variant="secondary" onClick={()=>setDraft({...draft,sessionVersion:record.version,configVersion:record.config.configVersion,catalogueDigest:query.data?.catalogueDigest??''})}>{t('rebase')}</Button></Notice>}<Button disabled={!control.active||!allowed||stale||action.isPending||entry?.mutationClass==='workspace'&&!association} onClick={invoke}>{t('invoke')}</Button><ActionFeedback action={{...action,data:receipt,error:action.error??observed.error}}/>{receipt?.confirmation&&<Confirmation card={receipt.confirmation} record={record} control={control} kind="commands"/>}</Panel>;
++export function Commands({record,control,onOutcome,visible=true,focusToken=0}:{record:Control['SessionRecord'];control:Controller;onOutcome?:CommandOutcomeListener;visible?:boolean;focusToken?:number}){const{t}=useTranslation('remote');const hub=useHub();const path=sessionPath(record.projectId,record.sessionId);const query=useRemoteQuery<Control['CommandCatalogue']>(['catalogue',record.sessionId],path+'/commands');const[name,setName]=useState('');const[association,setAssociation]=useState<Control['FlowAssociation']|null>(null);const[draft,setDraft]=useDraft(`remote-command:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,{args:'{}',sessionVersion:record.version,configVersion:record.config.configVersion,catalogueDigest:''});const action=useRemoteAction<Control['CommandOutcome']>();const observed=useAppliedReceipt(record,action.data);const receipt=observed.data??action.data;const queryClient=useQueryClient();const invokedAt=useRef('');const anchor=useRef<number|undefined>(undefined);useEffect(()=>{if(receipt)onOutcome?.(receipt,invokedAt.current||new Date().toISOString(),anchor.current);},[receipt,onOutcome]);const[invalid,setInvalid]=useState(false);const entry=query.data?.entries.find(e=>e.commandName===name);const stale=control.advanceVersion(draft.sessionVersion)!==record.version||draft.configVersion!==record.config.configVersion||!!draft.catalogueDigest&&draft.catalogueDigest!==query.data?.catalogueDigest;const allowed=entry?.availability==='available'&&entry.confirmation!=='local-only'&&entry.mutationClass!=='sensitive-setup'&&entry.states.some(s=>s===record.state)&&(record.state!=='busy'||entry.mutationClass==='read'&&entry.busyPolicy==='read-only'||entry.mutationClass==='session'&&isOwnedControlCommand(entry.commandName));
++ const [search, setSearch] = useState("");
++ const searchInput = useRef<HTMLInputElement>(null);
++ useEffect(() => {
++   if (visible) searchInput.current?.focus();
++ }, [visible, focusToken]);
++ const needle = search.trim().replace(/^\//, "").toLowerCase();
++ const matches = query.data?.entries.filter(item =>
++   item.commandName.toLowerCase().includes(needle) || item.summary.toLowerCase().includes(needle)
++ );
++ const options = entry && !matches?.includes(entry) ? [entry, ...(matches ?? [])] : matches;
++ function invoke(){if(!allowed||stale||action.isPending||!control.active||!entry||!control.binding||!query.data||entry.mutationClass==='workspace'&&!association)return;let args:Control['BoundedJson'];try{args=JSON.parse(draft.args) as Control['BoundedJson'];if(new TextEncoder().encode(draft.args).length>32768)throw new SyntaxError();}catch{setInvalid(true);return;}setInvalid(false);invokedAt.current=new Date().toISOString();anchor.current=Math.max(record.historyCursor,latestHistoryCursor(queryClient.getQueryData<InfiniteData<Control['HistoryPage']>>(historyQueryKey(hub.scopeKey,record.projectId,record.sessionId))));action.mutate({path:path+'/commands/invoke',body:{expectedSessionVersion:control.advanceVersion(draft.sessionVersion),controller:control.binding,expectedConfigVersion:draft.configVersion,catalogueDigest:draft.catalogueDigest||query.data.catalogueDigest,commandName:entry.commandName,arguments:args,busyPolicy:entry.busyPolicy==='queue-at-idle'?'queue-at-idle':'reject',...(entry.mutationClass==='workspace'&&association?{association}:{})} satisfies Control['CommandInvoke']});}
++ return <Panel title={t('commands')}><Feedback query={query}/>
++ <Field label={t('searchCommands')}><Input ref={searchInput} type="search" value={search} onChange={event => setSearch(event.target.value)} /></Field>
++ {matches?.length === 0 && <Notice>{t('noCommandsFound')}</Notice>}
++ <Field label={t('command')}><Select value={name} onChange={e=>{setName(e.target.value);setAssociation(null);setDraft({...draft,args:'{}',catalogueDigest:query.data?.catalogueDigest??''});}}><option value="">{t('choose')}</option>{options?.map(e=><option key={e.commandName} value={e.commandName}>{e.commandName} · {e.availability}</option>)}</Select></Field>{entry&&<><p className="break-words text-sm">{entry.summary} · {entry.reason}</p><details><summary className="text-sm">{t('arguments')}</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(entry.inputSchema,null,2)}</pre></details><Field label={t('arguments')} hint={t('secretWarning')}><Textarea value={draft.args} maxLength={32768} onChange={e=>setDraft({...draft,args:e.target.value})}/></Field></>}{entry?.mutationClass==='workspace'&&<AssociationPicker projectId={record.projectId} onChange={setAssociation}/>} {invalid&&<Notice tone="error">{t('required')}</Notice>}{stale&&<Notice>{t('stale')}<Button variant="secondary" onClick={()=>setDraft({...draft,sessionVersion:record.version,configVersion:record.config.configVersion,catalogueDigest:query.data?.catalogueDigest??''})}>{t('rebase')}</Button></Notice>}<Button disabled={!control.active||!allowed||stale||action.isPending||entry?.mutationClass==='workspace'&&!association} onClick={invoke}>{t('invoke')}</Button><ActionFeedback action={{...action,data:receipt,error:action.error??observed.error}}/>{receipt?.confirmation&&<Confirmation card={receipt.confirmation} record={record} control={control} kind="commands"/>}</Panel>;
+ }
+
+--- apps/hub-web/src/features/remote/work.tsx
+@@ 1,155 @@
+-import { useRef, useState } from "react";
++import { useEffect, useId, useRef, useState } from "react";
+ import { useTranslation } from "react-i18next";
+ import type { Control } from "../../api/remote";
+ import type { HubFlow } from "../../api/types";
++import type { CommandOutcomeListener } from "./session-timeline";
+ import {ApiError,getClientScope, getJson } from "../../api/client";
+ import {NativeAttemptPicker,useNativeWorkSelection} from "../managed-work/native-selection";
+ import { remoteProject } from "../../api/remote";
+ import {
+   sessionPath,
+   useRemoteAction,
+   useRemoteQuery,
+ } from "../../api/remote-hooks";
+ import { useQuery } from "@tanstack/react-query";
+ import { useHub } from "../../app/hub-context";
+-import { useDraft } from "../../state/drafts";
++import { useDraft, useDraftStore } from "../../state/drafts";
+ import { pendingScope, usePending } from "../../state/pending";
+ import { validNativeSubmission, type NativeSubmission } from "./work-pending";
+ import {
+   Button,
+   EmptyState,
+   Field,
+   Notice,
+   Panel,
+   Select,
+   Textarea,
+ } from "../../components/ui";
++import { Commands } from "./settings";
+ import { AssociationPicker } from "./association";
+ import {
+   ActionFeedback,
+   Definition,
+   digestCriteria,
+   Feedback,
+   type Controller,
+ } from "./shared";
++export type MessageDraft = {
++  text: string; prepared: boolean; mode: string; flowId: string; flowVersion: number; specDigest: string;
++  criteriaDigest: string; consent: boolean; consentVersion: number | null; busyPolicy: "reject" | "enqueue";
++  sessionVersion: number; configVersion: number;
++};
++/** The one key the composer reads its draft from; launch code writes through the same helper. */
++export function messageDraftKey(scopeKey: number, projectId: string | null, sessionId: string) {
++  return `remote-message:${scopeKey}:${projectId}:${sessionId}`;
++}
++/** A first message prepared for an exact Flow, seeded by session creation. */
++export function prepareFlowMessageDraft(flow: HubFlow, criteriaDigest: string, text: string): MessageDraft {
++  return {
++    text, prepared: true, mode: "flow", flowId: flow.id, flowVersion: flow.version,
++    specDigest: flow.specContentDigest, criteriaDigest, consent: false, consentVersion: null,
++    busyPolicy: "reject", sessionVersion: 0, configVersion: 0,
++  };
++}
+ export function MessageComposer({
+   record,
+   control,
++  onCommandOutcome,
+ }: {
+   record: Control["SessionRecord"];
+   control: Controller;
++  onCommandOutcome?: CommandOutcomeListener;
+ }) {
++  const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
++  const [focusToken, setFocusToken] = useState(0);
++  const commandsId = useId();
++  const commandTrigger = useRef<HTMLButtonElement>(null);
++  // Set while the catalogue was opened by '/' and nothing has been done in it yet (no key other than Escape, no
++  // pointer press, no change inside it): Escape then hands the slash back.
++  const slashOpened = useRef<HTMLTextAreaElement | null>(null);
++  function closeCommands() {
++    slashOpened.current = null;
++    setCommands("closed");
++    commandTrigger.current?.focus();
++  }
+   const hub = useHub();
+   const { t } = useTranslation("remote");
+   const {t:workT}=useTranslation("work");
+   const action = useRemoteAction<Control["TurnReceipt"]>();
+   const consent = useRemoteQuery<{ profileConsentVersion: number | null }>(
+     ["chat-consent",record.sessionId,record.config.policyDigest],
+     sessionPath(record.projectId,record.sessionId)+"/chat-consent",
+   );
+   const profileConsentVersion = consent.data?.profileConsentVersion;
+   const hasProfileConsent = typeof profileConsentVersion === "number" && Number.isSafeInteger(profileConsentVersion) && profileConsentVersion > 0;
+-  const [draft, setDraft, clearDraft] = useDraft(
+-    `remote-message:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,
++  const draftKey = messageDraftKey(hub.scopeKey, record.projectId, record.sessionId);
++  const [draft, setDraft, clearDraft] = useDraft<MessageDraft>(
++    draftKey,
+     {
+       text: "",
++      prepared: false,
+       mode: "",
+       flowId: hub.location.flowId ?? "",
+       flowVersion: 0,
+       specDigest: "",
+       criteriaDigest: "",
+       consent: false,
+-      consentVersion: null as number | null,
+-      busyPolicy: "reject" as "reject" | "enqueue",
++      consentVersion: null,
++      busyPolicy: "reject",
+       sessionVersion: record.version,
+       configVersion: record.config.configVersion,
+     },
+   );
+   const mode = draft.mode || (hasProfileConsent ? "ad-hoc" : "flow");
+   const managed=useNativeWorkSelection(record,mode,control.active);
+   const nativeScope=pendingScope("native",hub.principal.id,record.projectId,record.sessionId);
+   const nativeScopeRef=useRef(nativeScope);nativeScopeRef.current=nativeScope;
+   const nativePending=usePending<NativeSubmission>(nativeScope,(value):value is NativeSubmission=>validNativeSubmission(value,nativeScope,sessionPath(record.projectId,record.sessionId)+"/messages"),(value)=>({...value,phase:"unknown"}));
+   const nativeOperation=nativePending.value;
+   const flows = useQuery({
+     queryKey: [hub.scopeKey, record.projectId, "flows"],
+     queryFn: ({ signal }) =>
+       getJson<{ flows: HubFlow[] }>(
+         remoteProject(record.projectId) + "/flows",
+         signal,
+       ),
+   });
+   const eligible =
+     flows.data?.flows.filter((f) => f.status === "in-progress") ?? [];
+   const [validation, setValidation] = useState("");
+   const [preserved, setPreserved] = useState(false);
+-  const stale =
++  // A draft prepared at session creation carries no versions yet. Pin it to the versions the human first
++  // sees once the machine has opened the session, so later drift raises the same stale notice as any draft.
++  useEffect(() => {
++    if (!draft.prepared || record.state === "opening") return;
++    setDraft(old => old.prepared
++      ? { ...old, prepared: false, sessionVersion: record.version, configVersion: record.config.configVersion }
++      : old);
++  }, [draft.prepared, record.state, record.version, record.config.configVersion, setDraft]);
++  const stale = !!draft.text && !draft.prepared && (
+     control.advanceVersion(draft.sessionVersion) !== record.version ||
+-    draft.configVersion !== record.config.configVersion;
++    draft.configVersion !== record.config.configVersion);
+   const selected = eligible.find((f) => f.id === draft.flowId);
++  function editText(text: string) {
++    setDraft({ ...draft, ...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{}), text });
++  }
+   async function selectFlow(id: string) {
+     const flow = eligible.find((f) => f.id === id);
+     if (!flow) {
+       setDraft({
+         ...draft,
+         flowId: "",
+         flowVersion: 0,
+         specDigest: "",
+         criteriaDigest: "",
+       });
+       return;
+     }
+     const digest = await digestCriteria(flow.criteria);
+     setDraft((old) => ({
+       ...old,
+       flowId: id,
+       flowVersion: flow.version,
+       specDigest: flow.specContentDigest,
+       criteriaDigest: digest,
+     }));
+
+--- apps/hub-web/src/features/remote/work.tsx
+@@ 184,315 @@
+   function sendNative(original:NativeSubmission, submittedDraft?:typeof draft, previouslyUncertain=false){
+     const generation=getClientScope();
+     if(!nativePending.put({...original,phase:'sending'}))return;
+     action.mutate({path:original.path,body:original.body,operationId:original.operationId,workHint:original.hint},{
+       onSuccess:(receipt)=>{
+         if(generation!==getClientScope())return;
+         if(typeof receipt.operationId!=='string'||!receipt.operationId||receipt.sessionId!==record.sessionId||!['queued','admitted','rejected'].includes(receipt.status)){nativePending.put({...original,phase:'unknown'});return;}
+         if(!nativePending.put(null))return;
+         if(receipt.status!=='rejected'&&submittedDraft){const preserved=!clearDraft(submittedDraft);if(nativeScopeRef.current===original.scope)setPreserved(preserved);}
+       },
+       onError:(error)=>{
+         if(generation!==getClientScope())return;
+         const ambiguous=previouslyUncertain||!(error instanceof ApiError)||error.status===0||error.status>=500||/unknown|pending|uncertain/.test(error.code);
+         nativePending.put(ambiguous?{...original,phase:'unknown'}:null);
+       }
+     });
+   }
+   function submit() {
+     const assoc=association();
+     if(nativeOperation||nativePending.error)return;
++    if(draft.prepared)return;
+     if(!control.binding||!control.active||stale||!assoc||!draft.text.trim()) {setValidation(t('required'));return;}
+     if(mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
+     const submitted=draft;
+     const body={expectedSessionVersion:control.advanceVersion(submitted.sessionVersion),controller:control.binding,expectedConfigVersion:submitted.configVersion,text:submitted.text,interpretation:'literal-message',association:assoc,busyPolicy:submitted.busyPolicy} satisfies Control['MessageSubmit'];
+     if(mode==='managed'&&managed.hint){
+       if(assoc.mode!=='ad-hoc'){setValidation(workT('nativeConsentRequired'));return;}
+       const original:NativeSubmission={scope:nativeScope,operationId:crypto.randomUUID(),path:sessionPath(record.projectId,record.sessionId)+'/messages',body:structuredClone(body),hint:Object.freeze({...managed.hint}),phase:'sending'};
+       sendNative(original,submitted);
+-    }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:()=>setPreserved(!clearDraft(submitted))});
++    }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:receipt=>{if(receipt.status==='rejected')return;const store=useDraftStore.getState();const current=store.drafts[draftKey];if(current===submitted)store.put(draftKey,{...submitted,text:"",prepared:false});setPreserved(current!==undefined&&current!==submitted);}});
+   }
+ 
+   return (
+     <Panel title={t("message")}>
+       {record.state === "opening" || record.state === "recovery-required" ? (
+         <Notice>{t(record.state === "opening" ? "sessionNotOpen" : "sessionNeedsRecovery")}</Notice>
+       ) : control.claimPending ? <Notice>{t("controlApplying")}</Notice> : !control.active && !record.controller && (
+         <Notice>{t("observer")} {control.operator && <a href="#session-controller" className="underline">{t("goToController")}</a>}</Notice>
+       )}
+-      <Field label={t("message")}>
++      <Field label={t("message")} hint={t("commandsHint")}>
+         <Textarea
+           value={draft.text}
+           rows={3}
++          onKeyDown={(event) => {
++            if (event.key !== "/" || draft.text || event.nativeEvent.isComposing ||
++                event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
++            event.preventDefault();
++            slashOpened.current = event.currentTarget;
++            setCommands("open");
++            // Already open: no state change re-runs the focus effect, so ask for it explicitly.
++            setFocusToken(token => token + 1);
++          }}
+           maxLength={32768}
+-          onChange={(e) => setDraft({ ...draft, text: e.target.value })}
++          onChange={(e) => editText(e.target.value)}
+         />
+       </Field>
++      <Button
++        ref={commandTrigger}
++        variant="secondary"
++        aria-label={t("commands")}
++        aria-expanded={commands === "open"}
++        aria-controls={commands === "unopened" ? undefined : commandsId}
++        onClick={() => commands === "open" ? closeCommands() : setCommands("open")}
++      >
++        <span aria-hidden="true">/</span> {t("commands")}
++      </Button>
++      {commands !== "unopened" && (
++        <div id={commandsId} hidden={commands !== "open"}
++          onPointerDownCapture={() => { slashOpened.current = null; }}
++          onChangeCapture={() => { slashOpened.current = null; }}
++          onKeyDown={(event) => {
++          if (event.key !== "Escape") { slashOpened.current = null; return; }
++          if (event.defaultPrevented) return;
++          const field = slashOpened.current;
++          closeCommands();
++          if (field && !draft.text) { editText("/"); field.focus(); }
++        }}>
++          <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} focusToken={focusToken} />
++        </div>
++      )}
+       <p className="composer-hint">{t("secretWarning")}</p>
++      <details open={!association()} className="composer-work-context">
++        <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>
+       <div className="composer-controls">
+         <Field label={t("workMode")}>
+           <Select
+             value={mode}
+             disabled={!!nativeOperation}
+             onChange={(e) => setDraft({ ...draft, mode: e.target.value,consent:false })}
+           >
+             <option value="flow">{t("flow")}</option>
+             <option value="ad-hoc" disabled={!hasProfileConsent}>{t("adHoc")}</option>
+             {(managed.available||mode==='managed')&&<option value="managed" disabled={!managed.available||!managed.operator}>{workT("managedAttempt")}</option>}
+           </Select>
+         </Field>
+         {mode === "flow" ? (
+           <Field label={t("chooseFlow")}>
+             <Select
+               value={draft.flowId}
+               onChange={(e) => void selectFlow(e.target.value)}
+             >
+               <option value="">{t("choose")}</option>
+               {eligible.map((f) => (
+                 <option key={f.id} value={f.id}>
+                   {f.title} · v{f.version}
+                 </option>
+               ))}
+             </Select>
+           </Field>
+         ) : null}
+       </div>
++      </details>
+       {mode === "flow" ? (
+         <>
+           {selected && !draft.criteriaDigest && (
+             <Button
+               variant="secondary"
+               onClick={() => void selectFlow(selected.id)}
+             >
+               {t("pins")}
+             </Button>
+           )}
+           <details className="composer-pins">
+             <summary>{t("pins")}</summary>
+             <Definition label={t("pins")}>
+               {draft.specDigest || "—"}
+               <br />
+               {draft.criteriaDigest || "—"}
+             </Definition>
+           </details>
+         </>
+       ) : hasProfileConsent ? (
+
+--- apps/hub-web/src/features/workflow.tsx
+@@ 82,125 @@
+ }
+ 
+ function FlowsProject({ projectId, title }: { projectId: string; title: string }) {
+   const hub = useHub(); const { t } = useTranslation('workflow'); const client = useQueryClient(); const prefix = projectPath(projectId);
+   const [layout, setLayout] = useState<'list' | 'board'>('list');
+   const [creating, setCreating] = useState(false); const [search, setSearch] = useState(''); const [validation, setValidation] = useState('');
+   const [draftKept, setDraftKept] = useState(false);
+   const [draft, setDraft, clearDraft] = useDraft(`create-flow:${projectId}`, { title: '', specDocumentId: '', criteria: '' });
+   const flows = useQuery({ queryKey: [hub.scopeKey, projectId, 'flows'], queryFn: ({ signal }) => getJson<{ flows: HubFlow[] }>(`${prefix}/flows`, signal) });
+   const documents = useQuery({ queryKey: [hub.scopeKey, projectId, 'documents'], queryFn: ({ signal }) => getJson<{ documents: HubDocument[] }>(`${prefix}/documents`, signal) });
+   const isCurrent = usePresentationGuard(`${hub.scopeKey}:${projectId}:${hub.location.tab}:${hub.location.flowId ?? ''}`);
+   const specs = documents.data?.documents.filter(doc => doc.kind === 'spec') ?? [];
+   const create = useMutation({ mutationFn: (context: { isCurrent: () => boolean; draft: typeof draft }) => postJson<HubFlow>(`${prefix}/flows`, { title: context.draft.title.trim(), specDocumentId: context.draft.specDocumentId, criteria: context.draft.criteria.split('\n').map(line => line.trim()).filter(Boolean) }), onSuccess: (flow, context) => {
+     void client.invalidateQueries({ queryKey: [hub.scopeKey, projectId, 'flows'] }); const cleared = clearDraft(context.draft); if (!context.isCurrent()) return; setDraftKept(!cleared); if (!cleared) return; setCreating(false); hub.navigate({ tab: 'flows', flowId: flow.id });
+   } });
+   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.title.trim() || !specs.some(spec => spec.id === draft.specDocumentId) || !draft.criteria.trim()) { setValidation(t('required')); return; } create.mutate({ isCurrent, draft: draft }); }
+   const selected = hub.location.flowId;
+   if (selected) return <FlowDetail key={`${projectId}:${selected}`} projectId={projectId} flowId={selected} documents={documents.data?.documents ?? []} />;
+   const filtered = flows.data?.flows.filter(flow => `${flow.title} ${flow.specContentDigest}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
+   return <div className="space-y-6"><PageHeading title={title} description={t('boardDescription')} action={<Button variant={creating ? 'secondary' : 'primary'} onClick={() => setCreating(!creating)}>{creating ? t('cancel') : t('createFlow')}</Button>} />
++    <Notice>
++      <p>{t('flowWorkspaceDistinction')}</p>
++      <Button variant="secondary" className="mt-2" onClick={() => hub.navigate({tab:'work',flowId:undefined,intentId:undefined,attemptId:undefined})}>{t('openManagedWork')}</Button>
++    </Notice>
+     {creating && <Panel title={t('createFlow')}><form noValidate onSubmit={submit} className="grid gap-5 lg:grid-cols-2">
+       <Field label={t('flowTitle')}><input className={inputClass} value={draft.title} onChange={event => setDraft(old => ({ ...old, title: event.target.value }))} placeholder={t('flowTitlePlaceholder')} maxLength={500} required /></Field>
+       <Field label={t('specification')}><select className={inputClass} value={draft.specDocumentId} onChange={event => setDraft(old => ({ ...old, specDocumentId: event.target.value }))} required><option value="">{t('chooseSpecification')}</option>{specs.map(spec => <option key={spec.id} value={spec.id}>{spec.path}</option>)}</select></Field>
+       {draft.specDocumentId && <p className="break-all text-sm text-teal-800 lg:col-span-2">{t('selectedSpecification')}: <strong>{specs.find(spec => spec.id === draft.specDocumentId)?.path ?? t('specificationMissing')}</strong></p>}
+       <div className="lg:col-span-2"><Field label={t('acceptanceCriteria')} hint={t('criteriaHint')}><textarea className={inputClass} value={draft.criteria} onChange={event => setDraft(old => ({ ...old, criteria: event.target.value }))} rows={5} required /></Field></div>
+       {specs.length === 0 && !documents.isPending && <Notice tone="info">{t('noSpecifications')}</Notice>}
+       <div className="space-y-3 lg:col-span-2">{draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{validation && <Notice tone="error"><span role="alert">{validation}</span></Notice>}{create.isError && <ErrorNotice error={create.error} />}<Button type="submit" disabled={create.isPending || specs.length === 0}>{create.isPending ? t('loading') : t('createFlow')}</Button></div>
+     </form></Panel>}
+     <QueryFeedback query={flows} /><QueryFeedback query={documents} />
+     {flows.data && <><Field label={t('searchFlows')}><input className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('searchFlowsPlaceholder')} aria-label={t('flowSearchLabel')} /></Field>
+       {flows.data.flows.length === 0 && <EmptyState>{t('noFlows')}</EmptyState>}
+       <div className="flex gap-2" role="group" aria-label={t('boardLabel')}><Button variant={layout === 'list' ? 'primary' : 'secondary'} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>{t('listView')}</Button><Button variant={layout === 'board' ? 'primary' : 'secondary'} aria-pressed={layout === 'board'} onClick={() => setLayout('board')}>{t('boardView')}</Button></div>
+       {layout === 'list' ? <FlowRows rows={filtered.map(flow => ({ flow }))} /> : <div className="min-w-0 overflow-x-auto pb-3" aria-label={t('boardLabel')}><div className="grid min-w-[1320px] grid-cols-6 gap-3">{flowStatuses.map(status => <section key={status} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"><div className="mb-3 flex items-center justify-between gap-2 px-1"><h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t(statusKeys[status])}</h2><span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500">{filtered.filter(flow => flow.status === status).length}</span></div><div className="space-y-3">{filtered.filter(flow => flow.status === status).map(flow => <button key={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => hub.navigate({ tab: 'flows', flowId: flow.id })} className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block break-words text-sm font-semibold leading-6 text-slate-900">{flow.title}</span><span className="mt-4 block font-mono text-[11px] text-slate-400">{flow.specContentDigest.slice(0, 12)}</span><span className="mt-2 block text-xs text-slate-500">{t('criteriaCount', { count: flow.criteria.length })} · v{flow.version}</span></button>)}{filtered.every(flow => flow.status !== status) && <p className="px-1 py-4 text-xs text-slate-400">{t('noLaneItems')}</p>}</div></section>)}</div></div>}
+     </>}
+   </div>;
+ }
+ 
+ function FlowDetail({ projectId, flowId, documents }: { projectId: string; flowId: string; documents: HubDocument[] }) {
+   const hub = useHub(); const { t, i18n } = useTranslation('workflow'); const client = useQueryClient(); const prefix = `${projectPath(projectId)}/flows/${encodeURIComponent(flowId)}`;
+   const [notice, setNotice] = useState('');
+
+--- apps/hub-web/src/i18n/acceptance.en.ts
+@@ 1,14 @@
+ export default {
++  reviewGaps: "What needs manual review",
++  missingStepsCount: "Criteria without verification steps: {{count}}",
++  missingEvidenceCount: "Criteria without linked evidence or waivers: {{count}}",
++  manualReviewNext: "Open the result and verify these criteria manually before deciding.",
++
+  rejectFlowEffect:'This terminally rejects the exact reviewed Flow composition. Accepted deliverables remain unchanged.',flowRejected:'Flow result rejected',
+  evidenceLoading:'Loading evidence…',evidenceUnavailable:'Evidence is unavailable. Load it before deciding.',evidenceRetry:'Retry evidence',
+  historyTitle:'Review decision history',historyLoading:'Loading review history…',historyUnavailable:'Review history is unavailable',historyRetry:'Retry history',historyEmpty:'No recorded return decisions',historyResult:'Reviewed result',historyDecision:'Return decision',historyCriterion:'Criterion {{position}}',historyMore:'Load older decisions',
+  returnedReadonly:'Returned result — awaiting a new submission',
+  pendingOther:'Another project operation needs recovery. Use its original reconciliation controls.',
+  created:'Result created by {{author}} · {{time}}',submittedUnknown:'Submission time was not recorded',workContext:'Project work context',
+  what:'What was done',how:'How to check',criteria:'Acceptance criteria',decision:'Decision',technical:'Technical details',accept:'Accept result',return:'Return for changes',confirmAccept:'Confirm acceptance',confirmReturn:'Confirm return',comment:'Return comment',personal:'Personal review notes',personalHelp:'Private notes do not change evidence, waivers or acceptance eligibility.',related:'Relate to: {{text}}',cancel:'Cancel',guideMissing:'No verification steps were supplied',guideUnavailable:'Verification guidance is unavailable',guideAuthor:'Review guide supplied by contributor',guideLoading:'Loading exact verification guidance…',impactMissing:'User impact was not supplied',limitations:'Limitations',prerequisites:'Prerequisites',expected:'Expected result',copy:'Copy instruction',copied:'Instruction copied',copyFailed:'Copy failed. Select and copy the instruction manually.',submitted:'Submitted by {{author}} · {{time}}',reportedPass:'Reported pass',fail:'Failing support',inconclusive:'Inconclusive',missing:'Missing support',conflicting:'Conflicting support',unmapped:'Reports without criterion mapping',unmappedHelp:'These reports do not identify pinned criteria. Judge them explicitly; no mapped coverage is implied.',contributor:'Contributor report',agent:'Agent report',human:'Human review',ci:'Observed CI',waiver:'Human waiver',unverified:'Observation unavailable or unverified',legacyUnknown:'No mapped coverage',effectIntent:'This accepts the submitted result for this deliverable (Intent). Its Flow and Git publication keep their own decisions.',effectFlow:'This accepts the reviewed Flow composition and its required deliverables.',effectLegacy:'This accepts the exact submitted revision and finishes this legacy Flow. Git publication remains separate.',returnEffect:'The contributor receives this comment for a new result. Submitted artifacts and earlier decisions remain in history.',ack:'I understand that the supplied reports are self-reported and I accept this exact result.',acceptedReason:'Human accepted the exact submitted result.',commentInvalid:'A nonblank return comment is required (at most 4000 characters including criterion references).',remaining:'{{count}} characters remaining (4000 maximum)',stale:'The reviewed result changed. Your comment is retained; review the updated result before deciding again.',reviewAgain:'Review updated result',permission:'Only an authorized human reviewer can make this decision.',unknownExecution:'Execution outcome is unknown. Resolve it before acceptance.',selectionFirst:'Select this attempt before accepting its result.',drift:'Requirements or context changed. Review the current pinned result before deciding.',blocked:'This result is not currently eligible for this decision.',network:'Connection unavailable. The decision outcome is unknown; reconcile it before retrying.',unknown:'Decision outcome is unknown.',check:'Check decision status',retry:'Retry identical decision',saving:'Saving decision…',accepted:'Result accepted',returned:'Returned for changes',acceptedReadonly:'Accepted result — read only',doneReadonly:'Completed result — read only',returnedFeedback:'Changes requested',waiveLabel:'Waive: {{text}}',waiveReason:'Waiver reason: {{text}}',waiverRequired:'An explicit permitted waiver and reason are required for this criterion.',loading:'Loading review…',noResult:'The exact submitted result is unavailable.',returnedHistory:'Previous result retained for the return decision.',aggregate:'Flow composition',intent:'Deliverable (Intent)',legacy:'Legacy Flow',criterionRefs:'Criteria: {{ids}}',openEvidence:'Read evidence',noSummary:'A delivery summary was not supplied',reference:'Pinned reference',noLimitation:'No limitations were supplied',returnRemediation:'Accepted deliverables remain unchanged. Use the existing amendment/remediation process to change required work.',offline:'Review data is unavailable. Decisions are disabled until the exact result is loaded.',pendingStorage:'Decision recovery storage is unavailable. No new decision was sent.'
+ };
+
+--- apps/hub-web/src/i18n/acceptance.ru.ts
+@@ 1,14 @@
+ export default {
++  reviewGaps: "Что нужно проверить вручную",
++  missingStepsCount: "Критериев без шагов проверки: {{count}}",
++  missingEvidenceCount: "Критериев без привязанных материалов или исключений: {{count}}",
++  manualReviewNext: "Перед решением откройте результат работы и проверьте эти критерии вручную.",
++
+  rejectFlowEffect:'Представленный состав Flow будет окончательно отклонён. Принятые задачи не меняются.',flowRejected:'Результат Flow отклонён',
+  evidenceLoading:'Загружаются отчёты…',evidenceUnavailable:'Отчёты недоступны. Загрузите их перед решением.',evidenceRetry:'Повторить загрузку отчётов',
+  historyTitle:'История решений по проверке',historyLoading:'Загружается история проверки…',historyUnavailable:'История проверки недоступна',historyRetry:'Повторить загрузку истории',historyEmpty:'Решения о возврате не записаны',historyResult:'Проверенный результат',historyDecision:'Решение о возврате',historyCriterion:'Критерий {{position}}',historyMore:'Загрузить предыдущие решения',
+  returnedReadonly:'Результат возвращён — ожидается новая подача',
+  pendingOther:'Другой запрос проекта требует восстановления. Используйте исходные элементы проверки его статуса.',
+  created:'Результат создал {{author}} · {{time}}',submittedUnknown:'Время передачи на проверку не записано',workContext:'Контекст работы проекта',
+  what:'Что сделано',how:'Как проверить',criteria:'Критерии приёмки',decision:'Решение',technical:'Технические подробности',accept:'Принять результат',return:'Вернуть на доработку',confirmAccept:'Подтвердить приёмку',confirmReturn:'Подтвердить возврат',comment:'Комментарий для доработки',personal:'Личные заметки проверки',personalHelp:'Личные заметки не меняют доказательства, исключения и условия приёмки.',related:'Связать с: {{text}}',cancel:'Отмена',guideMissing:'Шаги проверки не предоставлены',guideUnavailable:'Руководство по проверке недоступно',guideAuthor:'Руководство предоставлено исполнителем',guideLoading:'Загружаются точные инструкции проверки…',impactMissing:'Эффект для пользователя не указан',limitations:'Ограничения',prerequisites:'Перед проверкой',expected:'Ожидаемый результат',copy:'Копировать инструкцию',copied:'Инструкция скопирована',copyFailed:'Не удалось скопировать. Выделите и скопируйте инструкцию вручную.',submitted:'Предоставил {{author}} · {{time}}',reportedPass:'Исполнитель сообщил об успехе',fail:'Есть неуспешная проверка',inconclusive:'Результат не определён',missing:'Подтверждения отсутствуют',conflicting:'Противоречивые подтверждения',unmapped:'Отчёты без привязки к критериям',unmappedHelp:'В этих отчётах нет привязки к закреплённым критериям. Оцените их вручную; покрытие критериев не предполагается.',contributor:'Отчёт исполнителя',agent:'Отчёт агента',human:'Проверка человеком',ci:'Наблюдаемый CI',waiver:'Исключение, одобренное человеком',unverified:'Наблюдение недоступно или не подтверждено',legacyUnknown:'Нет привязанной проверки',effectIntent:'Принимается представленный результат этой задачи (Intent). У Flow и публикации в Git отдельные решения.',effectFlow:'Принимается проверенный состав Flow и обязательных результатов.',effectLegacy:'Принимается точная представленная ревизия и завершается этот legacy Flow. Публикация в Git выполняется отдельно.',returnEffect:'Исполнитель получит комментарий для подготовки нового результата. Артефакты и предыдущие решения сохранятся в истории.',ack:'Я понимаю, что отчёты предоставлены исполнителем, и принимаю этот точный результат.',acceptedReason:'Человек принял точный представленный результат.',commentInvalid:'Нужен непустой комментарий для доработки (до 4000 символов, включая ссылки на критерии).',remaining:'Осталось символов: {{count}} (максимум 4000)',stale:'Проверяемый результат изменился. Комментарий сохранён; перед решением проверьте обновлённый результат.',reviewAgain:'Проверить обновлённый результат',permission:'Решение может принять только уполномоченный человек.',unknownExecution:'Исход выполнения неизвестен. Уточните его перед приёмкой.',selectionFirst:'Выберите эту попытку перед приёмкой её результата.',drift:'Требования или контекст изменились. Проверьте актуальный закреплённый результат.',blocked:'Сейчас условия для этого решения не выполнены.',network:'Соединение недоступно. Исход решения неизвестен; сначала уточните его.',unknown:'Исход решения неизвестен.',check:'Проверить статус решения',retry:'Повторить тот же запрос',saving:'Решение сохраняется…',accepted:'Результат принят',returned:'Возвращено на доработку',acceptedReadonly:'Принятый результат — только чтение',doneReadonly:'Завершённый результат — только чтение',returnedFeedback:'Нужна доработка',waiveLabel:'Сделать исключение: {{text}}',waiveReason:'Причина исключения: {{text}}',waiverRequired:'Для критерия нужны явно разрешённое исключение и причина.',loading:'Загружается проверка…',noResult:'Точный представленный результат недоступен.',returnedHistory:'Предыдущий результат сохранён для решения о доработке.',aggregate:'Состав Flow',intent:'Задача (Intent)',legacy:'Legacy Flow',criterionRefs:'Критерии: {{ids}}',openEvidence:'Прочитать отчёт',noSummary:'Описание выполненного изменения не предоставлено',reference:'Закреплённая версия',noLimitation:'Ограничения не указаны',returnRemediation:'Принятые задачи не меняются. Для изменения обязательной работы используйте существующий процесс правок требований.',offline:'Данные проверки недоступны. Решения отключены до загрузки точного результата.',pendingStorage:'Хранилище восстановления решения недоступно. Новый запрос не отправлен.'
+ };
+
+--- apps/hub-web/src/i18n/context.en.ts
+@@ 1,27 @@
+ export default {
++  historyEventType: "Event type",
++  historyYou: "You",
++  historyIdentifiers: "Identifiers",
++  historyNoMatchingEvents: "No events of this type in the loaded history.",
++
++  noMatchingProposals: "No proposals match the selected status.", chooseDeliveryRevision: "Browse revisions",
+   specifications: 'Specifications',
+   backToList: 'Back to list',
+   copyCode: 'Copy source',
+   wrapLines: 'Wrap lines',
+   codeCopied: 'Source copied.',
+   codeCopyFailed: 'Could not copy source.',
+   fileTechnicalDetails: 'File technical details',
+   codeLineLimit: 'Showing the first {{count}} lines. Copy source to get the full file.',
+   missingRevision: 'This revision is unavailable in the selected project.',
+   loadMoreRevisions: 'Load more revisions',
+   documents: 'Documents', documentsDescription: 'Shared specifications and wiki, with exact versions and review history.',
+   searchDocuments: 'Search paths, types or review status', noDocuments: 'No documents match this view.', selectDocument: 'Select a document to read its source and propose a change.', missingDocument: 'This document is unavailable in the selected project.',
+   importDocument: 'Import document', path: 'Project-relative path', kind: 'Document type', specification: 'Specification', wiki: 'Wiki', sourceRevision: 'Source revision', sourceRevisionHint: 'Required provenance, for example a Git SHA or manual:spec-v1.', markdownSource: 'Markdown source', import: 'Import', importHint: 'Changed existing content creates a proposal. Canonical content is never overwritten.',
+   requiredFields: 'Complete all required fields.', saved: 'Saved. The server accepted this operation.', importSaved: 'Import saved: {{documents}} canonical documents, {{proposals}} proposals.', version: 'Version', digest: 'Content digest', source: 'Source', acceptedBy: 'Accepted by', createdBy: 'Created by', reviewedBy: 'Reviewed by', preview: 'Preview', rawSource: 'Raw source', proposeEdit: 'Propose an edit', reason: 'Reason', proposedContent: 'Proposed content', submitProposal: 'Submit proposal', baseVersion: 'Draft base version', currentVersion: 'Current version', useCurrentVersion: 'Use current version explicitly', reconcileHint: 'Refresh does not rebase this draft. Review the current content before choosing a newer base.', draftPinned: 'This draft keeps the version originally presented.',
+   proposals: 'Proposals', proposalsDescription: 'Review an exact change before updating shared project knowledge.', noProposals: 'No proposals in this view.', all: 'All', pending: 'Pending', accepted: 'Accepted', rejected: 'Rejected', canonicalSource: 'Current canonical source', proposedSource: 'Exact proposed source', reviewProposal: 'Review exact proposal', acceptProposal: 'Accept exact digest', rejectProposal: 'Reject proposal', proposalAcknowledgment: 'I reviewed this exact proposal digest and its current canonical base.', humanRequired: 'This decision requires a human operator or reviewer.', proposalBaseChanged: 'The canonical version differs from the proposal base. Acceptance will be rejected; create a new proposal against the current version.',
+   revisionId: 'Revision ID', revisions: 'Code revisions', revisionsDescription: 'Immutable code subjects and explicit integration decisions.', noRevisions: 'No code revisions yet.', createRevision: 'Create text snapshot', revisionMessage: 'Revision message', gitBaseSha: 'Git base SHA', baseRevision: 'Base snapshot', noBase: 'No base — complete new snapshot', changes: 'Text changes (JSON)', changesHint: 'Use [{"path":"README.md","content":"Text","mode":"100644"}] or {"path":"old.txt","deleted":true}. Use the CLI for complete tracked trees and binary files.', invalidChanges: 'Enter a JSON array of unique, safe text changes with supported file modes.', invalidSha: 'Enter a Git SHA of 40 or 64 hexadecimal characters.', createSnapshot: 'Create snapshot', snapshot: 'Complete snapshot', reviewBundle: 'Review only · not publishable', reviewBundleHint: 'This is a review package, not a complete checkout. Selection, delivery and connector application are blocked.', treeDigest: 'Tree digest', files: 'Files', selectFile: 'Choose a file to inspect its immutable contents.', binaryFile: 'Binary or non-UTF-8 file · {{size}} bytes. Use the CLI to inspect it.', truncated: 'Preview truncated to 128,000 characters.', selectRevision: 'Inspect revision', selectedLine: 'Selected integration line', noLine: 'No integration line selected', selectForIntegration: 'Select exact snapshot for integration', selectionAcknowledgment: 'I reviewed this snapshot and want to change the shared integration line.', lineVersion: 'Integration line version', selectionSaved: 'Integration line selected. No Git publication has been performed.',
+   delivery: 'Git delivery', deliveryDescription: 'Publish a selected snapshot to a managed branch. Delivery is separate from merge or deployment.', noDeliveries: 'No delivery attempts yet.', remoteUrl: 'Remote URL', baseBranch: 'Base branch', publish: 'Publish selected snapshot', publishAcknowledgment: 'I authorize publishing this exact selected snapshot to the specified remote branch workflow.', deliveryUnavailable: 'Select a complete snapshot as the integration line before creating a delivery.', branch: 'Published branch', commit: 'Commit', tree: 'Tree', receipt: 'Receipt', viewPullRequest: 'Open pull request', deliveryResult: 'Delivery attempt recorded. Inspect its status and receipt below.', conflict: 'Conflict', failed: 'Failed', published: 'Published',
+   history: 'History', historyDescription: 'Durable project events, loaded in cursor pages.', noHistory: 'No events recorded yet.', loadMore: 'Load more events', loadOlderRevisions: 'Load older revisions', endOfHistory: 'All currently available event pages have been loaded.', actor: 'Actor', role: 'Role', unknownRole: 'Not recorded', entity: 'Entity', eventType: 'Event', eventSequence: 'Sequence',
+   'event.project-created': 'Project created', 'event.document-imported': 'Document imported', 'event.proposal-created': 'Proposal created', 'event.proposal-reviewed': 'Proposal reviewed', 'event.flow-created': 'Flow created', 'event.flow-frozen': 'Criteria frozen', 'event.flow-started': 'Work started', 'event.flow-submitted': 'Submitted for review', 'event.flow-accepted': 'Flow accepted', 'event.evidence-created': 'Evidence attached', 'event.revision-created': 'Revision created', 'event.line-selected': 'Integration line selected', 'event.delivery-created': 'Delivery recorded',
+   'event.documents-imported': 'Documents imported',
+
+--- apps/hub-web/src/i18n/context.ru.ts
+@@ 1,27 @@
+ export default {
++  historyEventType: "Тип события",
++  historyYou: "Вы",
++  historyIdentifiers: "Идентификаторы",
++  historyNoMatchingEvents: "В загруженной истории нет событий этого типа.",
++
++  noMatchingProposals: "Нет предложений с выбранным статусом.", chooseDeliveryRevision: "Перейти к ревизиям",
+   specifications: 'Спецификации',
+   backToList: 'К списку',
+   copyCode: 'Копировать код',
+   wrapLines: 'Перенос строк',
+   codeCopied: 'Код скопирован.',
+   codeCopyFailed: 'Не удалось скопировать код.',
+   fileTechnicalDetails: 'Технические данные файла',
+   codeLineLimit: 'Показаны первые {{count}} строк. Кнопка копирования сохраняет весь файл.',
+   missingRevision: 'Эта ревизия недоступна в выбранном проекте.',
+   loadMoreRevisions: 'Загрузить ещё ревизии',
+   documents: 'Документы', documentsDescription: 'Общие спецификации и вики с точными версиями и историей проверки.',
+   searchDocuments: 'Поиск по пути, типу или статусу проверки', noDocuments: 'В этом представлении документов нет.', selectDocument: 'Выберите документ, чтобы прочитать исходник и предложить изменение.', missingDocument: 'Документ недоступен в выбранном проекте.',
+   importDocument: 'Импорт документа', path: 'Путь относительно проекта', kind: 'Тип документа', specification: 'Спецификация', wiki: 'Вики', sourceRevision: 'Версия источника', sourceRevisionHint: 'Обязательное происхождение: например SHA коммита или manual:spec-v1.', markdownSource: 'Исходный Markdown', import: 'Импортировать', importHint: 'Изменение существующего документа создаёт предложение. Канонический текст не перезаписывается.',
+   requiredFields: 'Заполните все обязательные поля.', saved: 'Сохранено. Сервер принял операцию.', importSaved: 'Импорт сохранён: канонических документов — {{documents}}, предложений — {{proposals}}.', version: 'Версия', digest: 'Хеш содержимого', source: 'Источник', acceptedBy: 'Принял', createdBy: 'Создал', reviewedBy: 'Проверил', preview: 'Просмотр', rawSource: 'Исходник', proposeEdit: 'Предложить правку', reason: 'Причина', proposedContent: 'Предлагаемое содержимое', submitProposal: 'Отправить предложение', baseVersion: 'Базовая версия черновика', currentVersion: 'Текущая версия', useCurrentVersion: 'Явно использовать текущую версию', reconcileHint: 'Обновление данных не меняет базу черновика. Проверьте актуальный текст перед выбором новой базы.', draftPinned: 'Черновик сохраняет версию, показанную при его создании.',
+   proposals: 'Предложения', proposalsDescription: 'Проверяйте точное изменение перед обновлением общих знаний проекта.', noProposals: 'В этом представлении предложений нет.', all: 'Все', pending: 'Ожидает проверки', accepted: 'Принято', rejected: 'Отклонено', canonicalSource: 'Текущий канонический исходник', proposedSource: 'Точный предлагаемый исходник', reviewProposal: 'Проверить точное предложение', acceptProposal: 'Принять точный хеш', rejectProposal: 'Отклонить предложение', proposalAcknowledgment: 'Я проверил предложение с этим хешем и его текущую каноническую базу.', humanRequired: 'Это решение принимает оператор или рецензент-человек.', proposalBaseChanged: 'Каноническая версия отличается от базы предложения. Принятие будет отклонено; создайте новое предложение на актуальной версии.',
+   revisionId: 'Идентификатор ревизии', revisions: 'Ревизии кода', revisionsDescription: 'Неизменяемые результаты работы и явные решения об интеграции.', noRevisions: 'Ревизий кода пока нет.', createRevision: 'Создать текстовый снимок', revisionMessage: 'Описание ревизии', gitBaseSha: 'Базовый SHA Git', baseRevision: 'Базовый снимок', noBase: 'Без базы — новый полный снимок', changes: 'Текстовые изменения (JSON)', changesHint: 'Формат: [{"path":"README.md","content":"Текст","mode":"100644"}] или {"path":"old.txt","deleted":true}. Для полных деревьев и бинарных файлов используйте CLI.', invalidChanges: 'Укажите JSON-массив уникальных безопасных текстовых изменений с поддерживаемыми режимами файлов.', invalidSha: 'Укажите SHA Git из 40 или 64 шестнадцатеричных символов.', createSnapshot: 'Создать снимок', snapshot: 'Полный снимок', reviewBundle: 'Только ревью · публикация запрещена', reviewBundleHint: 'Это пакет для проверки, а не полная рабочая копия. Выбор для интеграции, публикация и применение коннектором заблокированы.', treeDigest: 'Хеш дерева', files: 'Файлы', selectFile: 'Выберите файл для просмотра его неизменяемого содержимого.', binaryFile: 'Бинарный файл или не UTF-8 · {{size}} байт. Для просмотра используйте CLI.', truncated: 'Просмотр ограничен 128 000 символов.', selectRevision: 'Посмотреть ревизию', selectedLine: 'Выбранная линия интеграции', noLine: 'Линия интеграции не выбрана', selectForIntegration: 'Выбрать точный снимок для интеграции', selectionAcknowledgment: 'Я проверил этот снимок и хочу изменить общую линию интеграции.', lineVersion: 'Версия линии интеграции', selectionSaved: 'Линия интеграции выбрана. Публикация в Git не выполнялась.',
+   delivery: 'Публикация в Git', deliveryDescription: 'Публикация выбранного снимка в управляемую ветку. Это отдельное действие от слияния и развёртывания.', noDeliveries: 'Попыток публикации пока нет.', remoteUrl: 'Адрес удалённого репозитория', baseBranch: 'Базовая ветка', publish: 'Опубликовать выбранный снимок', publishAcknowledgment: 'Я разрешаю публикацию этого точного снимка в указанном удалённом репозитории через управляемую ветку.', deliveryUnavailable: 'Перед публикацией выберите полный снимок как линию интеграции.', branch: 'Опубликованная ветка', commit: 'Коммит', tree: 'Дерево', receipt: 'Квитанция', viewPullRequest: 'Открыть pull request', deliveryResult: 'Попытка публикации записана. Проверьте её статус и квитанцию ниже.', conflict: 'Конфликт', failed: 'Ошибка', published: 'Опубликовано',
+   history: 'История', historyDescription: 'Долговечные события проекта с постраничной загрузкой по курсору.', noHistory: 'Событий пока нет.', loadMore: 'Загрузить ещё события', loadOlderRevisions: 'Загрузить более ранние ревизии', endOfHistory: 'Все доступные сейчас страницы событий загружены.', actor: 'Участник', role: 'Роль', unknownRole: 'Не записана', entity: 'Объект', eventType: 'Событие', eventSequence: 'Номер',
+   'event.project-created': 'Проект создан', 'event.document-imported': 'Документ импортирован', 'event.proposal-created': 'Предложение создано', 'event.proposal-reviewed': 'Предложение проверено', 'event.flow-created': 'Flow создан', 'event.flow-frozen': 'Критерии заморожены', 'event.flow-started': 'Работа начата', 'event.flow-submitted': 'Передано на приёмку', 'event.flow-accepted': 'Flow принят', 'event.evidence-created': 'Доказательство прикреплено', 'event.revision-created': 'Ревизия создана', 'event.line-selected': 'Линия интеграции выбрана', 'event.delivery-created': 'Попытка публикации записана',
+   'event.documents-imported': 'Документы импортированы',

@@ -1,0 +1,115 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Layout-relevant parts only: the styles.css hunks, apps/hub-web/tests/css-rules.ts, the stylesheet-asserting tests in breadcrumb.case.tsx and session-workspace.case.tsx. i18n, e2e script, client.ts/client.test.ts and non-CSS test files were not reviewed for layout. Static pass: no rendered geometry was measured."
+    }
+  ],
+  "summary": "Static pass, no engine measurements. One major: the new select chevron is a data: URI background image and the Hub serves the app under a CSP with no img-src (so default-src 'self' applies), which blocks it; every Select then renders with appearance:none and no arrow. The collapsed-rail and layer-placement rules read correctly against the cascade. Three smaller items on the tests that stand in for a layout tier, and one cosmetic observation about the 481-600px header.",
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "major",
+      "file": "apps/hub-web/src/styles.css",
+      "quote": "background-image: var(--hub-select-chevron);",
+      "problem": "The chevron is drawn from a data:image/svg+xml URI held in --hub-select-chevron (declared at :root and :root[data-theme=\"dark\"]), painted as a CSS background-image on every .hub-select:not([multiple]):not([size]) while that rule also sets appearance:none. The Hub serves the web app from src/hub/server.ts:175 with Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'\". There is no img-src, so images fall back to default-src 'self'. CSS background images are image requests governed by img-src, and 'self' does not match the data: scheme, so the browser refuses the image.",
+      "impact": "On any page served by the Hub (the production path, and the one tests/browser-journeys.e2e.mjs drives via fx.origin), every non-multiple Select (header project selector, session launch Flow/machine/checkout/profile selects, composer busy-policy select, context and proposal filters, and the rest) has its native arrow removed and nothing drawn in its place. The control shows 2.5rem of reserved empty space on the right and no dropdown affordance. A Vite dev server sends no such header, so a check there (the PR reports Chrome at 1366 and 390 px) would show the chevron. Neither the unit tests nor the e2e script assert that the chevron paints; the only chevron tests read the stylesheet text.",
+      "suggested_fix": "Do not rely on an image request. Draw the chevron with gradients, which are not subject to img-src and can read the tokens directly (for example two linear-gradient layers rotated into a V using var(--hub-muted)), which also removes the per-theme baked colour and the test that keeps the two copies in sync. Alternatively serve the SVG as a same-origin asset and reference it by URL, or add img-src 'self' data: to the Hub CSP (this widens the policy for the whole app). Add an e2e assertion against the Hub origin that a Select's computed background-image resolves and the console shows no CSP violation.",
+      "evidence": "src/hub/server.ts:175 sets the header text quoted above (read in full; no img-src anywhere in src/ or apps/hub-web). styles.css:15 and :42 define the data: URI; styles.css:650 applies it. keryx ctx rg for 'img-src|Content-Security-Policy' over src and apps/hub-web (generated and test files excluded) returns only server.ts:175. UNVERIFIED IN AN ENGINE: no browser was run in this pass. To settle it, open any Select-bearing page from a running Hub (not Vite) and read the console for a 'Refused to load the image data:image/svg+xml' violation, or read getComputedStyle(select).backgroundImage and look at the rendered control.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "class_scope": {
+        "sites": [
+          "apps/hub-web/src/components/ui.tsx:99 (Select, the only producer of the hub-select class)",
+          "apps/hub-web/src/app/App.tsx:471",
+          "apps/hub-web/src/features/context.tsx",
+          "apps/hub-web/src/features/remote/sessions.tsx",
+          "apps/hub-web/src/features/remote/work.tsx",
+          "apps/hub-web/src/features/remote/recovery.tsx",
+          "apps/hub-web/src/features/remote/settings.tsx",
+          "apps/hub-web/src/features/remote/fork.tsx",
+          "apps/hub-web/src/features/remote/association.tsx",
+          "apps/hub-web/src/features/global-flows.tsx",
+          "apps/hub-web/src/features/managed-work/native-selection.tsx",
+          "apps/hub-web/src/features/managed-work/contribute.tsx",
+          "apps/hub-web/src/features/managed-work/work-lists.tsx",
+          "apps/hub-web/src/features/managed-work/amendments.tsx"
+        ],
+        "enumeration_method": "keryx ctx rg '<Select' over apps/hub-web/src returned 26 matches in 13 files; all go through the Select component at ui.tsx:99, which appends the hub-select class, so the rule at styles.css:644 reaches each of them. The CSP is a single header at server.ts:175 applied to every web asset."
+      }
+    },
+    {
+      "id": "LY-002",
+      "severity": "minor",
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "quote": "for (const rule of css.filter((r) => r.selector.includes(\".rail-collapsed\") || /\\.hub-select\\b/.test(r.selector)))",
+      "problem": "The guard that keeps the new rules in @layer components selects rules by containing .rail-collapsed or .hub-select. The base rule `.nav-item.desktop-rail-toggle { display:none; }` (styles.css:635) matches neither, so it is not covered. The check also asserts only that a rule is inside some @layer, not that the layer is components.",
+      "impact": "Cost lands on the next editor of styles.css. If that rule is moved out of the layer block, it stays display:none at 1024px and above, because an unlayered declaration beats the layered `display:flex` in the media block, and the collapse toggle never appears. The test passes in that state. Nothing is wrong at the reviewed head.",
+      "suggested_fix": "Include the toggle in the filter (add `|| r.selector.includes(\"desktop-rail-toggle\")`), and make `layered` carry the layer name so the test can assert `components` rather than any layer.",
+      "evidence": "Read styles.css:632-658 and css-rules.ts: `layered` is computed as `stack.some((outer) => outer.layer)` where `layer` is `head.startsWith(\"@layer\")`; the selector filter above is the only caller that asserts it. Static reading of the cascade; not measured.",
+      "confidence": "high",
+      "reviewer": "review-layout"
+    },
+    {
+      "id": "LY-003",
+      "severity": "info",
+      "file": "apps/hub-web/src/styles.css",
+      "quote": "background-position: right .75rem center;",
+      "problem": "The Select rule pairs a logical padding (`padding-inline-end:2.5rem`) with a physical chevron position (`right .75rem`). Under dir=rtl the padding moves to the left edge while the chevron stays on the right, so the text would run under the arrow and the reserved space would sit on the wrong side. In LTR both are on the right.",
+      "impact": "None today: hub-web ships en and ru only, and no dir attribute or rtl handling exists under apps/hub-web/src (keryx ctx rg for 'rtl|dir=|dir:' finds only flex-direction). Filed as info because no supported locale reaches it. It becomes real the moment an RTL locale is added.",
+      "suggested_fix": "When RTL is added, key the position on direction (for example a `:dir(rtl)` or `[dir=rtl]` variant with `left .75rem center`), or draw the chevron with gradients positioned by logical properties.",
+      "evidence": "styles.css:645-653 read. Not measured. Would be settled by rendering a Select under dir=rtl.",
+      "confidence": "high",
+      "reviewer": "review-layout"
+    },
+    {
+      "id": "LY-004",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/session-workspace.css",
+      "quote": ".session-header-actions { flex-wrap:wrap; flex-shrink:1; min-width:0; }",
+      "problem": "At 481-600px the new rule lets the header row wrap, but the right-aligning rules (`width:100%; justify-content:flex-end` on .session-header-actions) exist only in the max-width:480px block. When a long session title pushes the actions onto a second line in the 481-600px band, that single item has nothing to align it, so it sits at the inline start of the second line. At 480px and below the same state puts it at the end. The new test asserts only flex-wrap, flex-shrink and min-width.",
+      "impact": "Cosmetic and unverified: the actions' position differs by a pixel of viewport width across 480/481px for identical content. Note this file is outside the slice-02 diff (it is the subject of the test in session-workspace.case.tsx) and was read for that reason.",
+      "suggested_fix": "If the 480px alignment is intended, apply `width:100%; justify-content:flex-end` at the 600px breakpoint too, or move those two declarations up into the 600px block.",
+      "evidence": "session-workspace.css lines 362-370 (max-width:480px) and 416-421 (max-width:600px) read. Not measured. Would be settled by loading a session with a long title at 560px host width in Playwright and reading the actions' bounding box.",
+      "confidence": "low",
+      "reviewer": "review-layout"
+    },
+    {
+      "id": "LY-005",
+      "severity": "info",
+      "file": "apps/hub-web/tests/css-rules.ts",
+      "quote": "if (!head.startsWith(\"@\")) {",
+      "problem": "parseCssRules clears its buffer only on `{` and `}`. A statement at-rule (`@import \"x\";` or `@layer a, b;`) sitting directly before a style rule becomes part of that rule's head, so the head starts with `@` and the rule is dropped from the result, and its `layered` and `media` context is wrong.",
+      "impact": "Not reachable at the reviewed head: styles.css has `@import \"tailwindcss\";` only before `@theme {`, and session-workspace.css has no statement at-rules. The risk is that the guards built on this helper (`expect(...length).toBeGreaterThan(0)` and per-rule loops) keep passing on a narrowed rule set if someone later adds such a statement.",
+      "suggested_fix": "Reset the buffer on `;` when the buffer starts with `@`, or strip statement at-rules in the pre-pass that already strips comments.",
+      "evidence": "Read css-rules.ts in full (diff lines 671-719). Not measured; would be settled by a unit test feeding `@import \"a\"; .x { display:none }` and expecting one rule.",
+      "confidence": "high",
+      "reviewer": "review-layout"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1,
+    "info": 3
+  },
+  "follow_ups": [
+    "Settle LY-001 in an engine: load a Select-bearing page from a running Hub (not the Vite dev server), read the console for a CSP image violation and the computed background-image of a .hub-select. No measurement was available to this static pass."
+  ]
+}
+```
+
+No rendered geometry was measured: this was a static pass against the stylesheets and the tests that assert on them, with no dev server, Storybook or Playwright run. Nothing below is a pixel claim except where marked unverified.
+
+**Select chevron blocked by the Hub CSP (LY-001, major, confidence medium).** The chevron is a `data:` URI used as a `background-image`, and the Hub serves the app with `default-src 'self'` and no `img-src` (`src/hub/server.ts:175`). `'self'` does not cover `data:`, so on a Hub-served page every non-multiple Select loses its native arrow (`appearance:none`) and gets no replacement. The PR's Chrome check at 390 and 1366 px would not show this if it ran against a dev server. The e2e script runs against the Hub origin but asserts nothing about the arrow. A gradient-drawn chevron avoids the image request and the per-theme colour copies. Settle it by loading a Select page from a running Hub and reading the console for the CSP violation.
+
+**Collapsed rail and layer placement read correctly.** The new rules sit in `@layer components`, apply only at 1024px and above where the unlayered 1023/767 media rules do not, and out-rank the base `.sidebar`, `.nav-item` and `.identity .hub-button` rules by specificity. The toggle is `display:none` below 1024px, and the focus query in `App.tsx` skips it. I found no cascade defect there.
+
+**Minor and info items.** LY-002 is a hole in the layering guard test (the toggle's base rule is not checked). LY-003 is a physical chevron position beside logical padding, unreachable because there is no RTL locale. LY-004 is the actions' alignment differing between the 481-600px and 480px-and-below bands, unverified. LY-005 is a parser hole for statement at-rules in the test helper, not reachable at this head.
+
+Not reviewed here: i18n files, the e2e script body, `client.ts`/`client.test.ts` and the non-CSS test files in the slice.

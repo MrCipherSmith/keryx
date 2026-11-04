@@ -1,0 +1,12 @@
+{
+ "reviewer": "review-security-code",
+ "slices": [
+  "slice-01"
+ ],
+ "result": "raw/review-security-code-w1.txt",
+ "definition": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+ "payload": {
+  "skill_path": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+ },
+ "model": "claude-sonnet-5-5"
+}

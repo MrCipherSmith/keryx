@@ -1,0 +1,113 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "summary": "slice-02 (remote/workflow copy in EN and RU, styles.css, the test suite): no blocker or major. Five minor findings and one info, all from reading the code and computing contrast from tokens; nothing was reviewed in a live engine.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "file": "apps/hub-web/src/i18n/workflow.en.ts",
+      "quote": "openManagedWork: \"Project work\",",
+      "problem": "In English the Flows page tells the user to \"Open Project work\" and labels its button \"Project work\", but the destination is named \"Managed work\" everywhere else in English: the sidebar item (App.tsx label(): ru ? \"Работа над проектом\" : \"Managed work\") and the page title (work.en.ts title: \"Managed work\"). The Russian copy is consistent: the button, the sentence, the sidebar item and the page title all read \"Работа над проектом\". So the EN and RU copy diverge in the term, and the Russian one is the correct one.",
+      "impact": "An English-speaking user who reads \"Open Project work\" and scans the sidebar finds \"Managed work\" and has to guess they are the same place (Nielsen #4, consistency). The button directly under the sentence still works, which keeps the cost small.",
+      "suggested_fix": "Pick one English name. Either openManagedWork: \"Managed work\" and the sentence \"Open Managed work to manage intents, attempts and results.\", or rename the sidebar item and the work.en.ts title to \"Project work\". Add the sidebar label to the i18n files while there, so a parity test can see it.",
+      "evidence": "workflow.en.ts flowWorkspaceDistinction and openManagedWork vs App.tsx lines 315-318 (\"Managed work\") vs work.en.ts line 162 (title: \"Managed work\"). workflow.ru.ts and work.ru.ts both say \"Работа над проектом\". flow-term.case.ts pins only the substring 'lists Flows based', so nothing catches the mismatch. Source-level comparison; not checked in a rendered page.",
+      "confidence": "high",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-002",
+      "severity": "minor",
+      "file": "apps/hub-web/src/i18n/remote.en.ts",
+      "quote": "launchFlow: \"Session Flow (optional)\"",
+      "problem": "The new optional Flow select in the New session form reuses the generic empty option t(\"choose\"), which reads \"Choose explicitly\" (RU \"Выберите явно\"). That wording belongs to the required machine, checkout and profile selects. Here the empty value means \"no Flow\", and the label says the field is optional. sessionLaunchFlowGone and sessionLaunchFlowsFailed both tell the user to \"clear the selection\" (RU \"сбросьте выбор\"), but no control is labelled as clearing anything.",
+      "impact": "With a stale or unloadable Flow the user is blocked with the advice \"clear the selection\". The way to do it is an option reading \"Choose explicitly\", which sounds like it demands a choice, the opposite of an optional field. Create session stays disabled until they guess it. On a fresh form an optional field that shows \"Choose explicitly\" invites the user to think a Flow is required. Both languages share the defect.",
+      "suggested_fix": "Add a dedicated key for the empty option, e.g. launchFlowNone: \"No Flow\" / \"Без Flow\", and use it for this select only. Keep \"clear the selection\" and point it at that label, e.g. \"choose No Flow\".",
+      "evidence": "sessions.tsx NewSession: the Flow select renders <option value=\"\">{t(\"choose\")}</option> before the stale and eligible options. remote.case.tsx clears the Flow with fireEvent.change(select, { target: { value: \"\" } }) and never asserts the option's text, so the wording is untested. remote.en.ts choose: 'Choose explicitly'.",
+      "confidence": "high",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-003",
+      "severity": "minor",
+      "file": "apps/hub-web/src/i18n/remote.en.ts",
+      "quote": "launchFlowUnchecked: \"{{id}} · not checked yet\"",
+      "problem": "A restored launch draft stores only flowId. When the Flow cannot be named, the disabled option falls back to the raw identifier: launchFlowUnchecked renders \"{{id}} · not checked yet\" while the Flows list is loading or failing, and launchFlowGone is called with title ?? draft.flowId when the Flow is absent from the list. The tests pin this as the visible text (\"f1 · not checked yet\", \"gone · no longer in progress\").",
+      "impact": "When the Flows request fails (503) or the Flow has dropped out of the list, the user sees an opaque id in the select and cannot tell which Flow they had chosen. The id is an internal identifier, not something a user can recognise.",
+      "suggested_fix": "Store the Flow title in the launch draft when the Flow is selected (flowTitle next to flowId) and use it in both fallbacks, with the id only when no title was ever stored. Update the two tests that pin the id text.",
+      "evidence": "sessions.tsx NewSession lines 273-275 (flows.data ? launchFlowGone(title ?? draft.flowId) : launchFlowUnchecked(id)). remote.case.tsx: 'a chosen Flow that cannot be checked stays visible in the select and can be cleared there' asserts the option name \"f1 · not checked yet\"; 'a stale Flow can be cleared from the select' asserts \"gone · no longer in progress\". Real Flow ids were not inspected, so how opaque they are is unconfirmed.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-004",
+      "severity": "minor",
+      "file": "apps/hub-web/src/styles.css",
+      "quote": ".rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects > span,.identity > p,.nav-label,.sidebar-projects .truncate) { display:none; }",
+      "problem": "In the collapsed rail the project switcher is reduced to a one-letter box (.project-initial, the first character of the project name) with the name hidden, and the only cue for the current project is .project-active: background var(--hub-surface) on the sidebar's var(--hub-subtle), plus ink instead of muted text colour on a 10px letter. The signed-in email, identity kind and role are hidden with no tooltip on the identity block (only Sign out has a title).",
+      "impact": "Two projects that start with the same letter (\"Hub\", \"Hub docs\") show identical boxes and differ only by a hover title, which a touch tablet at 1024 px does not have, and by the accessible name for screen readers. The current-project fill measures about 1.13:1 against the rail (#ffffff on #edf2ef), far under the 3:1 non-text floor (WCAG 1.4.11). The letter colour change, ink #20352b against muted #61756b, is about 2.7:1. aria-current is set, so assistive technology is served; sighted users are not.",
+      "suggested_fix": "In the collapsed rail give the active project a visible cue that does not depend on a faint fill, e.g. a 2px inset accent bar or accent-soft background with accent border (reuse the .nav-active treatment), and show the project name as a tooltip or flyout. Consider two letters, or a colour-keyed initial, when initials collide.",
+      "evidence": "Computed from tokens in styles.css, not measured on a render: #ffffff vs #edf2ef about 1.13:1; #20352b vs #61756b about 2.7:1; dark theme #1b2721 vs #223229 is also near 1.1:1. App.tsx project button: aria-label and title are set, the visible text is the first character of the name. The new collapsed-rail tests pin only that the buttons stay present and keep their title and aria-label.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-005",
+      "severity": "minor",
+      "file": "apps/hub-web/src/i18n/remote.en.ts",
+      "quote": "sessionOpeningNextStep: \"Check that the machine is available, then create a new session.\"",
+      "problem": "SessionSurface shows the same fixed sentence, \"The machine refused to open this session.\", plus the new next step, for every errorCode that /opening-status returns. That code is operation.deliveryFailure.error.code. Besides machine refusals (events.ts), it is also set to \"command-expired\" and \"recovery-required\" by delivery.ts when the create-session command was never picked up or the outcome is uncertain. In those cases the machine did not refuse anything. The sentence is pre-existing; this PR adds the next step and the details disclosure to it.",
+      "impact": "A user whose machine went offline before picking up the command (command-expired) is told it \"refused\", then told to check availability. The real cause is only in Technical details as a bare code, and the same applies to recovery-required. The recovery path (create a new session) is still correct, so the cost is a misleading cause, not a dead end.",
+      "suggested_fix": "Keep the neutral lead \"This session could not be opened.\" and name the cause only for refusal codes, or map command-expired and recovery-required to their own sentences. Keep the code in Technical details.",
+      "evidence": "src/hub/remote-v2/read-model.ts line 63 returns operation.deliveryFailure.error.code; delivery.ts line 17 sets \"command-expired\" or \"recovery-required\"; events.ts line 237 sets the machine-reported code with message \"The machine refused this operation before starting it\". sessions.tsx lines 352-360 render sessionOpeningRejected for any non-null code. remote.case.tsx tests only errorCode \"machine-refused\".",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-006",
+      "severity": "info",
+      "file": "apps/hub-web/src/i18n/remote.en.ts",
+      "quote": "launchMessage: \"First message (draft)\"",
+      "problem": "The launch form field is labelled \"First message (draft)\" and sits above Create session, with no line saying that creating the session only places the text in the new session's composer and that the user must still claim control and press Send. The only related text is launchHint, which does not mention the draft.",
+      "impact": "A user may assume Create session sends the message. If so they would find the session idle with an unsent composer. The \"(draft)\" label may be enough; this is unverified.",
+      "suggested_fix": "If the label proves ambiguous, add a one-line hint to the field: \"Placed in the new session's message box; you still send it.\" / \"Попадёт в поле сообщения новой сессии; отправить его нужно самостоятельно.\"",
+      "evidence": "sessions.tsx onSuccess stores prepareFlowMessageDraft(...) and navigates; remote.case.tsx 'creating a session with a Flow seeds the new session's composer' asserts only the stored draft. A moderated usability check would settle it; no render was available.",
+      "confidence": "low",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 1 },
+  "follow_ups": []
+}
+```
+
+Summary
+
+Nothing was reviewed in a live engine: no running app and no screenshots. Everything below comes from reading the diff, the code it renders, and contrast computed from tokens. Viewports, light and dark rendering, tab order and the 320 px reflow were not checked.
+
+No blocker or major in slice-02. The EN and RU catalogues carry the same 17 new remote keys and the same 2 new workflow keys; I found no missing or extra key. Gender, number and tone in the Russian strings are fine.
+
+Findings, all minor except the last:
+- UX-001: the EN term for the work destination ("Project work" in the Flows page copy and button) differs from the sidebar and page title ("Managed work"). RU is consistent.
+- UX-002: the optional Flow select's empty option says "Choose explicitly", yet the blocker messages tell the user to "clear the selection". Both languages.
+- UX-003: restored drafts fall back to the raw Flow id in the select, and two tests pin that text.
+- UX-004: the collapsed rail shows projects as one-letter boxes; the current-project cue is about 1.13:1 against the rail (computed, not measured).
+- UX-005: a "refused" message is shown for command-expired and recovery-required codes as well as real refusals.
+- UX-006 (info, question): the "First message (draft)" label does not say it is not sent.
+
+Looked at and left alone, as deliberate: the "/" shortcut (only in an empty field, never with Ctrl/Meta/Alt, Escape hands the slash back, hint wired to the textarea's description); the select chevron (colour baked per theme, forced-colors fallback, tested against --hub-muted); the rail rules kept in @layer components with a test that pins it; collapsed-rail targets of 44 px; Sign out keeping its name and title. The CSS tests are well aimed (they parse the rules because jsdom applies none).
+
+Outside my slice, for the slice-01 UI/UX reviewer: App.tsx's desktop rail toggle changes its aria-label ("Collapse menu" / "Expand menu") and also sets aria-expanded, which announces a contradiction. It has no title tooltip, and the rail and skip-link strings are hard-coded with `ru ? ... : ...` rather than i18n files.
+
+Checks not run: live render at 1440, 768 and 390 px; light and dark; reduced motion; 320 px reflow; focus-ring visibility; computed fonts; any screen reader pass. The 2 local test failures in src/lib/hub-machine are outside this reviewer's remit and were not claimed. Slop score: 0 tells from T1 to T3 in the stylesheet and copy of this slice; I did not look for a DESIGN.md, so no exemptions were applied.

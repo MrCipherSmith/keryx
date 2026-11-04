@@ -1,0 +1,111 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "The body's behavioural claims about slice-01 hold against the diff (launch Flow, reused Flow, outcomes in the transcript, display name, rejected-opening status, publication and proposal links, slash catalogue). The body dropped the repository's PR checklist, and against that checklist the title is not Conventional Commits and docs/ was not touched although user-visible behaviour changed. The body also omits several user-visible changes and states the verification only as an unlinked claim. Nothing here is a runtime defect.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "minor",
+      "file": "docs/docs/guides/team-hub-remote-sessions.md",
+      "quote": "2. Choose the **Machine**, **Checkout** and **Agent profile**, give it a **Title**",
+      "problem": "The PR template's row `Docs updated if behavior changed (README.md / docs/)` is absent from the body (the whole Checklist section was removed), and the diff changes behaviour a reader sees: session creation gains a Launch Flow select and a first-message field plus a line naming the first unmet launch condition (sessions.tsx CreateSession, i18n keys launchFlow, launchMessage, sessionLaunch*); the composer gains a `/` Commands button and search (work.tsx, settings.tsx `searchCommands`), and the Work mode / Flow selects are folded into a `<details class=\"composer-work-context\">`; command outcomes now render in the transcript; the Commands panel no longer sits in the Settings tab (sessions.tsx passes only `<Settings .../>` as `settings`); a rejected opening shows recovery guidance. The user guide that walks this exact flow was not touched: step 2 lists Machine, Checkout, Agent profile and Title only, step 4 says 'Write the **Message** and choose the **Work mode**' with no mention of the collapsed section or the `/` catalogue, and line 222-224 lists 'a native command catalogue' without saying where it opens.",
+      "impact": "A reader following the guide is not led wrong (every step still works; the Flow is optional), but nothing in docs/ tells them the first message can be prepared at creation, how the catalogue is opened, or that outcomes appear in the transcript. The cost is on the next reader of the guide.",
+      "suggested_fix": "Add the Launch Flow / first message to step 2, the `/` button and outcome-in-transcript behaviour to step 4, and a sentence under 'A session also has' saying the catalogue opens from the composer. Or state in the body why docs are not needed.",
+      "evidence": "docs/docs/guides/team-hub-remote-sessions.md:188-199 and :222-224 (read in full); `keryx ctx rg 'catalogue|Commands|Work mode' docs/docs/guides/team-hub-remote-sessions.md docs/requirements/hub-remote-sessions/` finds no other document that places the catalogue in the UI (specification.md:105 says only 'catalogue/config/routing versions'). .github/PULL_REQUEST_TEMPLATE.md:16 is the checklist row; pr-context.md has no checklist.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:docs-team-hub-remote-sessions-guide"
+    },
+    {
+      "id": "PC-002",
+      "severity": "minor",
+      "file": ".github/PULL_REQUEST_TEMPLATE.md",
+      "quote": "PR title must follow Conventional Commits, e.g.:",
+      "problem": "The template asks for a Conventional Commits title (`type(scope): summary`) and CONTRIBUTING.md:76 says the repository uses Conventional Commits. The title is 'Improve Hub session launch, chat and navigation', with no type or scope; the branch's own commits are `fix(hub-web): ...`. The body also deletes the template's 'What & Why' and 'Checklist' headings, so none of the five template rows (title, `bun run check`, tests, docs, zero runtime dependencies) is answered.",
+      "impact": "If the PR is squash-merged under its title, the history line is not a Conventional Commit and drops out of anything that reads types or scopes. No CI job checks the title (grep of .github/workflows finds no title check), so nothing else will catch it.",
+      "suggested_fix": "Retitle, for example `feat(hub-web): prepare the first message at session launch and show command outcomes in chat`, and restore the checklist with each box answered.",
+      "evidence": "pr-context.json intent.title; .github/PULL_REQUEST_TEMPLATE.md:1-17; CONTRIBUTING.md:76; keryx ctx rg 'Conventional|title' .github/workflows returned only release and docs-site titles.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "pr-contract:title-and-template"
+    },
+    {
+      "id": "PC-003",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/context.tsx",
+      "quote": "<Field label={t('historyEventType')}>",
+      "problem": "The body describes the session, navigation, publication and proposal changes and then says 'Other Hub UX findings are tracked in the [review notes]' (a chatgpt.com space page outside the repository; not followed). Several user-visible changes in this slice appear nowhere in the body: (1) History gets an event-type filter, shows 'You' for the signed-in actor, hides identifiers behind a collapsed 'Identifiers' details and adds links to Flows and Documents (context.tsx HistoryView); (2) the acceptance review gains a 'What needs manual review' section counting criteria without verification steps or evidence (acceptance/presentation.tsx, acceptance.*.ts reviewGaps, missingStepsCount, missingEvidenceCount); (3) the Flows page gains a notice explaining the difference from Managed work with an 'Open managed work' button (workflow.tsx, flowWorkspaceDistinction); (4) the Commands panel moves out of the Settings tab into the composer; (5) the composer's Work mode and Flow selects collapse into a details element; (6) `useRemoteQuery` accepts a function for `enabled` and `useAppliedReceipt` takes a `settled` callback, which stops following settled operations.",
+      "impact": "A reviewer or release-note reader who trusts the body would not look at the History, acceptance and Flows pages, and the scope pointer is a private page the repository cannot hold. The cost is on whoever audits the PR against its description.",
+      "suggested_fix": "List these changes in the body (one line each), or split them out. Replace the external link with the findings inline or with a repository path.",
+      "evidence": "slice-01.diff: context.tsx HistoryView hunk, acceptance/presentation.tsx hunk, workflow.tsx FlowsProject hunk, remote-hooks.ts hunks; pr-context.md 'Intent' section (no mention of History, review gaps or the Flows notice).",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "pr-contract:undeclared-user-visible-changes"
+    },
+    {
+      "id": "PC-004",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "Command outcomes are tab-local (the history endpoint carries only messages).",
+      "problem": "The body says 'command outcomes appear in the conversation' and 'the applied help outcome appeared in the transcript'. The code that implements it keeps outcomes in `useState` inside `SessionSurface` (`const [outcomes, setOutcomes] = useState<CommandEntry[]>([])`), and its own comment says they are tab-local because the history endpoint carries only messages. `SessionDetail` renders `SessionSurface` keyed by session id, so leaving the session page unmounts it.",
+      "impact": "Run `/help` in the composer, open another page and come back (or reload): the outcome row is gone from the transcript while the human message order is intact. The behaviour is deliberate and documented in the comment, so the code is right; the body states the capability without the limit, so a user or reviewer will expect a durable record.",
+      "suggested_fix": "Add 'for the current tab' to the body (and to the guide when PC-001 is fixed), or note the limit under Known limitations.",
+      "evidence": "slice-01.diff sessions.tsx SessionSurface hunk (`recordOutcome`, comment lines before it) and session-timeline.ts header comment; pr-context.md 'Intent'.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "pr-contract:outcomes-tab-local"
+    },
+    {
+      "id": "PC-005",
+      "severity": "info",
+      "file": ".github/PULL_REQUEST_TEMPLATE.md",
+      "quote": "- [ ] `bun run check` passes (typecheck + tests)",
+      "problem": "Unverified. The body claims 'Verified in Chrome at 1366 and 390 px against the native two-machine fixture. Both turns succeeded with identical Flow pins ... The publication and proposal links worked at both widths. Hub Web checks and 44 machine client and bridge tests passed.' It links no screenshot, recording or command output, and 'native two-machine fixture' names no repository path (the only 'two-machine' hits are requirement prose in docs/requirements/hub-remote-sessions/specification.md:144). The template's check is `bun run check`, not 'Hub Web checks' plus a count of 44. The local run in research-evidence/tests.txt shows 181 pass and 2 fail in src/lib/hub-machine; CI is green on all 20 required checks at this head, so the two failures are not established as defects.",
+      "impact": "None established. The browser walk-through and the count of 44 cannot be reproduced from this package, so they are read as the author's statement, not as evidence.",
+      "suggested_fix": "Link the recording or screenshots at both widths, name the fixture command, and report `bun run check` as the template asks. What would settle it: the fixture's launch command and a rerun of the 44 named tests.",
+      "evidence": "pr-context.md 'Intent' paragraph 4; research-evidence/tests.txt; pr-context.md 'CI: passing' (20 checks).",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "pr-contract:verification-unlinked"
+    },
+    {
+      "id": "PC-006",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/workflow.tsx",
+      "quote": "<select className={inputClass} value={draft.specDocumentId}",
+      "problem": "The body says 'select controls reserve space for the chevron'. The change adds `hub-select` (with padding and a baked chevron) in the shared `Select` component only (ui.tsx). workflow.tsx has three raw `<select className={inputClass}` sites (the create-Flow specification select at the quoted line, and two more in the revision-submit and evidence forms) that use the file-local `inputClass` and do not carry `hub-select`.",
+      "impact": "Unverified. I cannot say whether the native arrow on those three selects overlaps text, because the body does not state what defect `hub-select` fixes. If it was a defect of the `.hub-input` styling, these three keep it.",
+      "suggested_fix": "Either use the shared `Select` at those three sites or say in the body that the claim covers the shared component only. What would settle it: render the create-Flow form at 390 px and compare with a shared `Select`.",
+      "evidence": "keryx ctx rg '<select' apps/hub-web/src returns ui.tsx:99 and workflow.tsx:108, 165, 175; styles.css:644 applies the chevron only to `.hub-select`; ui.tsx:99 adds the class.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:select-chevron-scope"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 2 }
+}
+```
+
+## Summary for a human
+
+The body is a short list of claims with no checklist, so I worked each claim and each row of `.github/PULL_REQUEST_TEMPLATE.md` against slice-01.
+
+**Claims that hold in this slice:** the Launch Flow select and prepared first message (sessions.tsx, work.tsx `prepareFlowMessageDraft`), the Flow staying on the draft after the first send, command outcomes in the transcript, the machine display name in the session list, the distinct rejected-opening status and recovery text, the prerequisites line, the publication link to revisions (`tab:'code'`), the empty-proposal reset and documents buttons, the `/` and button entry to the catalogue, search over names and summaries, and unavailable entries staying selectable but not invokable. Every i18n key the slice uses exists in both languages (checked with `keryx ctx rg`).
+
+**Disagreements (all minor):** docs/ not updated (PC-001); non-Conventional title and a body that dropped the template (PC-002); user-visible History, review-gap and Flows-notice changes not described, with the scope deferred to a private external page (PC-003); the tab-local limit of outcomes not stated (PC-004).
+
+**Unverified (info):** the Chrome walk-through, the 44-test count and the fixture (PC-005); the reach of the chevron claim to three raw selects (PC-006).
+
+**Boxes with no disagreement:** Tests updated (the PR adds test files; the template row is unanswered but true), Breaking change (nothing in slice-01 removes or renames an exported symbol; `useRemoteQuery`'s `enabled` is widened, `Commands` and `SessionWorkspace` gain optional props), Screenshots (no box; covered by PC-005).
+
+**Not covered:** the body's machine-client claim ('accepts a bounded clock lead ... absolute expiration and the monotonic grant window remain enforced') is in `src/lib/hub-machine/client.ts`, which is slice-02; I did not read that slice and settle nothing about it. I did not open the chatgpt.com review-notes link.
+
+Routing audit: graph_used no (not-relevant; claims-to-diff lane), wiki_used no (not-relevant), ctx_used yes (`keryx ctx rg`), raw_rg_used no.

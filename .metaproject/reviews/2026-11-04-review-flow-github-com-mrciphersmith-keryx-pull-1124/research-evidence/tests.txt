@@ -1,0 +1,59 @@
+bun test v1.3.14 (0d9b296a)
+
+src/lib/hub-machine/bridge.network.test.ts:
+bridge notice invalid-frame
+bridge notice machine-stopping
+bridge notice machine-stopping
+bridge notice invalid-frame
+bridge notice machine-stopping
+bridge notice machine-disconnected
+bridge notice machine-request-aborted
+bridge notice machine-stopping
+bridge notice machine-disconnected
+bridge notice machine-stopping
+bridge notice invalid-frame
+bridge notice machine-stopping
+bridge notice project-context-setup-required
+bridge notice invalid-frame
+bridge notice quota-exceeded
+bridge notice recovery-required
+
+src/lib/hub-machine/bridge.durability.network.test.ts:
+28 | export const newFilePatch=(file:string,line:string)=>JSON.stringify({patch:`diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1 @@\n+${line}\n`});
+29 | export const allowAll:NonNullable<NativeRuntimeOptions['approve']>=async(_name,_input,meta)=>({approved:true,...(meta?{fingerprint:meta.fingerprint}:{})});
+30 | export const localCandidate:Control['RoutingAvailability']['candidates'][number]={candidateId:'scripted:m',providerId:'scripted',modelId:'m',reasoningEfforts:['none','low'],available:true,reason:'none',privacyClass:'local',costClass:'local'};
+31 | const ledgerPath=(configDir:string,hubId:string)=>path.join(machineStateDir(configDir,hubId),'control.sqlite');
+32 | // Real processes and sockets under a loaded parallel run can take seconds to settle. Every wait expects success, so the budget is time-based and generous; a passing wait returns on the first matching read.
+33 | export async function wait<T>(read:()=>Promise<T>,done:(value:T)=>boolean,attempts=150):Promise<T>{const deadline=Date.now()+Math.max(attempts*10,10_000);for(;;){const value=await read();if(done(value))return value;if(Date.now()>=deadline)throw new Error('bridge observation timeout');await Bun.sleep(10);}}
+                                                                                                                                                                                                                                                              ^
+error: bridge observation timeout
+      at wait (/Users/tsaitler.aleksandr/goodea/keryx/src/lib/hub-machine/bridge.test-support.ts:33:250)
+(fail) R4.4 Hub counts each run-log chunk by the bytes the machine sent and retained, so its own ingestion mask growing a chunk never refuses a retained chunk at the 10 MiB boundary [37600.23ms]
+
+src/lib/hub-machine/client.test.ts:
+129 |  /** A Hub that holds every request open and says when one arrived. */
+130 |  const holding=()=>{let arrived!:()=>void;const received=new Promise<void>(resolve=>{arrived=resolve;});const server=Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>{arrived();return new Promise<Response>(()=>{});}});return{server,received,origin:`http://127.0.0.1:${server.port}`};};
+131 |  // Refused: the Hub is gone before the request.
+132 |  const gone=holding();await gone.server.stop(true);
+133 |  const refused:unknown=await connection(gone.origin).request('/hub/v2/machines/m').catch((cause:unknown)=>cause);
+134 |  expect(refused).toMatchObject({name:'MachineError',code:'machine-request-failed'});expect(machineNoticeCode(refused,false)).toBe('machine-request-failed');
+                       ^
+error: expect(received).toMatchObject(expected)
+
+- {
+-   "code": "machine-request-failed",
+-   "name": "MachineError",
+- }
++ [Error: Unable to connect. Is the computer able to access the url?]
+
+- Expected  - 4
++ Received  + 1
+
+      at <anonymous> (/Users/tsaitler.aleksandr/goodea/keryx/src/lib/hub-machine/client.test.ts:134:18)
+(fail) a Hub request the network refuses or resets is a typed transport failure, never the generic state failure, and an abort keeps its own class [5.78ms]
+
+ 181 pass
+ 1 todo
+ 2 fail
+ 10158 expect() calls
+Ran 184 tests across 27 files. [541.86s]

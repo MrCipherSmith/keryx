@@ -1,0 +1,54 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "slice-02 holds the grant-window change in src/lib/hub-machine/client.ts plus CSS, i18n and test files. The 250 ms clock lead does not extend either deadline: the local request-age budget (elapsed < LIMITS.grantMs, monotonic, counted from before the Hub request) and the wall deadline (expires > now) are both unchanged, and no new retry, queue, cache, pool, timer or unbounded collection is introduced. One minor note: two overlapping future-grant tolerances with different bounds.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "minor",
+      "file": "src/lib/hub-machine/client.ts",
+      "quote": "if (wait > 0 && wait <= 500)",
+      "problem": "A grant stamped in the future by the Hub is now handled by two mechanisms with different bounds. authorize() already sleeps until authorizedAt when the lead is 1..500 ms (added in 565866111), and then calls verifyAuthorizationGrant with a fresh Date.now(). This PR adds a second tolerance, MAX_HUB_CLOCK_LEAD_MS = 250, inside verifyAuthorizationGrant. On the authorize() path the sleep has already moved Date.now() to or past authorizedAt, so the 250 ms lead is reached only if the timer wakes about a millisecond early or the wall clock steps back between the sleep and the check. Later createGrantApplication().valid() calls only see a later `now`. A Hub 251-500 ms ahead is accepted only because of the sleep; a Hub more than 500 ms ahead is refused; the constants 250 and 500 are unrelated and neither comment names the other.",
+      "impact": "No runtime harm: both deadlines stay strict, and the lead cannot extend the usable window because elapsed is measured from before the request. The cost lands on the next person tuning clock-skew tolerance, who has to find both sites and learn that the 500 ms sleep bound is the one that governs and the 250 ms constant is a backstop for early wake-up.",
+      "suggested_fix": "Add one sentence to the MAX_HUB_CLOCK_LEAD_MS comment (or the comment at the sleep) saying the constant is the backstop for timer wake-up and clock-step jitter after the pre-wait, and derive one bound from the other (or name both constants next to each other) so the two cannot drift apart.",
+      "evidence": "client.ts:204-210 (sleep up to 500 ms, then verify with Date.now()); client.ts:42 (issued <= now + MAX_HUB_CLOCK_LEAD_MS); git blame shows the sleep from 565866111 (2026-11-03) and the constant from this PR. createGrantApplication (client.ts:296) re-verifies with a wall clock read after authorize() returned, so `now` there is never earlier than the pre-wait's.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "HL-002",
+      "severity": "info",
+      "file": "src/lib/hub-machine/client.test.ts",
+      "quote": "expect(verifyAuthorizationGrant(grant(250), expected, now, 10)).toBe(true);",
+      "problem": "The new boundary test pins verifyAuthorizationGrant at 250 and 251 ms with an injected `now`, which is deterministic. It does not cover authorize()'s pre-wait path (a Hub 300 ms ahead and a Hub 600 ms ahead), which is where the lead is actually produced in production.",
+      "impact": "Observation only. The two local failures reported in research-evidence/tests.txt (R4.4 bridge observation timeout under load; client.test.ts:134 'Unable to connect') are not reproduced by CI and I do not claim them. A test that stubs Date.now and drives authorize() against a grant 300 ms and 600 ms ahead would settle whether the sleep and the 250 ms backstop agree.",
+      "suggested_fix": "Optional: one authorize()-level test with a fake clock for a 300 ms lead (accepted after the wait) and a 600 ms lead (refused without sleeping).",
+      "evidence": "client.test.ts new tests call verifyAuthorizationGrant directly; authorize() has no test in the diff for the future-grant wait.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## High-Load Review (slice-02)
+
+**Verdict:** no concurrency, resource or load defect in this slice.
+
+**The clock-lead change.** `verifyAuthorizationGrant` now accepts `issued <= now + 250` and rejects `expires <= issued`. I checked whether the lead lengthens the window in which a grant can be applied. It does not. `elapsed < LIMITS.grantMs` is monotonic and counted from before the Hub request (`started` in `authorize()`, `startedAt` in `authorization()`), so a grant is unusable 5 s after the request began no matter what the Hub stamped. `expires > now` is unchanged, and the Hub-ahead case cannot push the true expiry past `request start + 5 s`. A Hub behind the machine is still stricter, as before. `expires > issued` closes a zero-length or negative-length grant, which the old `expires - issued <= grantMs` check admitted when expires was before issued.
+
+**Clean areas.** No shared mutable state, retry, queue, cache, pool, transaction or unbounded collection is added in `client.ts` or elsewhere in the slice. The `Bun.sleep(wait)` is capped at 500 ms and is not held under a lock (pre-existing, 565866111). CSS, i18n and test files carry no runtime load surface. The polling and fetch fan-out for command outcomes live in slice-01 and were not reviewed here; the tests in `session-command-outcomes.case.tsx` assert that a settled outcome stops being fetched.
+
+**Minor.** HL-001: overlapping tolerances of 250 ms (verify) and 500 ms (pre-wait).
+
+**Not established.** The two local test failures from `research-evidence/tests.txt` are load-induced or environmental per the dispatch; I did not try to claim either.
+
+Routing audit: graph_used: no (layers block supplied, slice small) ; wiki_used: no (not-relevant) ; ctx_used: yes (`keryx ctx rg`) ; raw_rg_used: no (one raw `git diff` and one `git blame`, with stated reasons).

@@ -1,0 +1,200 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-ui-ux",
+  "slices": ["slice-01"],
+  "summary": "Read slice-01 (16 files) as code only: copy, states and flows as written, plus the rail CSS, workspace tabs and the remote/workflow locale files outside the slice that the slice's keys resolve against. Nothing was reviewed in a live engine; no render, no computed contrast, no measured target sizes. No blocker or major: the new states are largely complete (launch blocker line, rejected-opening recovery with focus handoff, slash/Escape handling, reduced-collapse scoped to >=1024px, EN/RU key parity holds for every new key). Findings are copy, information-hiding and recovery-path costs.",
+  "findings": [
+    {
+      "id": "UX-001",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "// The next New session starts from a clean form, not from this session's Flow and first message.",
+      "problem": "Session creation clears the launch draft on success, and the first message is moved into the new session's composer draft. The rejected-opening recovery then opens the same form via 'Create a new session', but that form is empty: machine, checkout, profile, title, Flow and first message are all gone.",
+      "impact": "Trigger: create a session with a Flow and a first message, the machine refuses to open it, click 'Create a new session'. The recovery path the change adds starts from a blank form; the typed first message survives only in the dead session's composer draft, and nothing says so. The user re-selects everything and retypes (or hunts for the old textarea).",
+      "suggested_fix": "On the rejected-opening recovery, seed the launch draft from the rejected session (machine, checkout, profile, title, Flow) and the first message from its composer draft, or keep the launch draft until the session has actually opened. At minimum say in the notice that the first message is still in this session's composer.",
+      "evidence": "Nielsen #9 (error recovery) / #3 (user control). Code: CreateSession.onSuccess calls clearDraft() right after useDraftStore.put(messageDraftKey(...)); onNewSession only sets create/focusForm and navigates. The test 'a created session clears the launch form...' asserts the draft is undefined; the rejected-opening test only checks the Machine select gets focus, not what the form holds. Code reading only, not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-002",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/context.tsx",
+      "quote": "<summary className=\"cursor-pointer\">{t('historyIdentifiers')}</summary>",
+      "problem": "History rows now show the entity only when it resolves to a Flow or a document (flowNames/documentNames). For every other event type (proposal-created, proposal-reviewed, revision-created, line-selected, delivery-created, evidence-created, project-created) the entity id moves from the row into a collapsed 'Identifiers' disclosure, so the row names no subject. Meanwhile the Actor line still prints the raw actorId for every other actor, which the disclosure repeats.",
+      "impact": "Trigger: open History on a project with proposal or revision events. The row reads 'Proposal created, date, #12, Actor: <raw id>, Role' with no indication which proposal; the one thing that said so before is behind a click. The identifiers are hidden for the readability of the entity but left raw for the actor, so the cleanup is half done.",
+      "suggested_fix": "Resolve proposals, revisions and deliveries the same way (names or short labels with a link to their view), or keep the entity id visible when it does not resolve. Show a display name for other actors or hide their raw id as well.",
+      "evidence": "Nielsen #2 (real-world language) and #6 (recognition over recall). Code: only two Maps are built from the flows and documents resources; the 'historyIdentifiers' details holds `{event.entityId} · {event.actorId}`; the Actor span renders `event.actorId` unless it equals principal.id. Not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-003",
+      "severity": "minor",
+      "file": "apps/hub-web/src/i18n/workflow.en.ts",
+      "quote": "openManagedWork: \"Project work\"",
+      "problem": "The new English button and its explainer say 'Project work', but the destination is called 'Managed work' in the navigation (App.tsx label()) and on its page title (work.en.ts title: \"Managed work\"). The Russian pair is consistent ('Работа над проектом' everywhere), so EN and RU diverge. Existing EN copy also uses 'Project work context' (acceptance.en.ts), so the EN vocabulary has two names for one place.",
+      "impact": "Trigger: English UI, Flows page. The notice tells the user to 'Open Project work' and the button says 'Project work', then the page that opens, and the nav item that is highlighted, say 'Managed work'. The user cannot match the label to the nav entry.",
+      "suggested_fix": "Use the nav label in both strings (openManagedWork: \"Managed work\" and the sentence in flowWorkspaceDistinction), or rename the nav label and page title once for all EN surfaces.",
+      "evidence": "Nielsen #4 (consistency). Matches from `keryx ctx rg` over apps/hub-web/src: work.en.ts:162 title \"Managed work\", App.tsx:318 \"Managed work\", workflow.en.ts:2-3 \"Project work\". Locale parity of keys itself holds.",
+      "confidence": "high",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-004",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/context.tsx",
+      "quote": "{proposals.data?.proposals.length ? t('all') : t('documents')}",
+      "problem": "The recovery buttons added to the empty proposal view are labelled with bare nouns, 'All' and 'Documents'. Neither says what pressing it does (reset the status filter / go to the documents tab), and the second empty state ('No proposals in this view.') does not say how a proposal comes to exist (it is created from a document's 'Propose an edit').",
+      "impact": "Trigger: Proposals tab with no proposals, or with a filter that hides all of them. A button reading 'All' under 'No proposals match the selected status.' is guessable, but 'Documents' under 'No proposals in this view.' gives no reason to go there. Generic CTA labels in both the EN and RU copy ('Все', 'Документы').",
+      "suggested_fix": "Name the action: 'Show all proposals' / 'Показать все предложения' and 'Open documents to propose a change' / 'Открыть документы, чтобы предложить правку', and add one sentence to the zero-proposals state saying proposals are created from a document.",
+      "evidence": "Nielsen #10 (help) / generic CTA label. Sites: ProposalsView EmptyState button (two labels, one control). The same EmptyState also keeps the 'Proposals' filter field label unchanged. Not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-005",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "quote": "{e.commandName} · {e.availability}</option>",
+      "problem": "Two state-communication gaps in the command catalogue the change moves into the composer. (a) Unavailable entries are now selectable 'to inspect the explanation', but the option text prints the raw enum (`availability`) untranslated, so a Russian UI shows 'help · available'. (b) For an entry that is available but not allowed (session busy and the command is not read-only or an owned control, or the human does not hold control), the Invoke button is disabled and no text says why; only `entry.reason` (the machine's own text, written for availability) is shown.",
+      "impact": "Trigger for (b): session in the busy state, select a workspace or session command that is 'available': Invoke is dead with no stated cause. Trigger for (a): ru locale, open the Select. Both are cosmetic/recovery costs, not wrong behaviour.",
+      "suggested_fix": "Translate the availability token ({t('availabilityStates.' + e.availability)}) and add a one-line disabled-reason beside Invoke derived from the same conditions that compute `allowed` (observer, busy, local-only, needs setup).",
+      "evidence": "Nielsen #1 (visibility of status) / #9. The `allowed` expression and the Invoke `disabled` expression were read; neither feeds a message. The raw `{e.availability}` is rendered in the option. Sibling disabled-without-reason also exists in Settings 'Save', so the class is wider than this diff. Not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-006",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "{outcome.errorCode && <p>{outcome.errorCode}</p>}",
+      "problem": "A command outcome in the conversation prints the machine's error code as a bare paragraph under the translated status, and a non-string result as pretty-printed JSON in a <pre>. The rejected-opening notice, added in the same change, deliberately puts its code behind a 'Technical details' disclosure; the transcript item does the opposite.",
+      "impact": "Trigger: invoke a command that the machine rejects. The transcript shows '/help', 'Rejected; no application confirmed', then an unlabelled code such as `machine-refused`. A command that returns structured data shows a JSON dump among human messages. The user gets no cause in words and no next step.",
+      "suggested_fix": "Map known error codes to a sentence with a next step, and put the raw code and the raw JSON result behind the existing 'Technical details' pattern (details/summary), keeping a short human line visible.",
+      "evidence": "Nielsen #9 (plain-language errors) and consistency with the rejected-opening notice in the same file. OutcomeItem was read; no mapping for errorCode exists. Not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-007",
+      "severity": "minor",
+      "file": "apps/hub-web/src/app/App.tsx",
+      "quote": "<span className=\"project-initial\">{p.name.slice(0, 1)}</span>",
+      "problem": "In the collapsed rail, each project is identified only by its first letter; the name is carried by `title` (hover only) and `aria-label` (screen readers only). Brand, the 'Projects' heading and the identity block (account, role) are all hidden by the collapsed rule.",
+      "impact": "Trigger: desktop width >=1024px, rail collapsed, two projects whose names start with the same letter (Alpha, Apex). A sighted keyboard user sees two identical 'A' buttons and gets no tooltip on focus; a touch-screen laptop gets none on tap. Which project is active is only shown by the highlight. The account/role line is also invisible while collapsed.",
+      "suggested_fix": "Show a disambiguating tooltip on focus as well as hover (or a custom focus-visible label), or use initials with a deterministic colour/second letter; keep the active project's name visible in the workspace breadcrumb (already present) and document that.",
+      "evidence": "WCAG 2.4.6 / Nielsen #6. CSS read: `.rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects > span,.identity > p,.nav-label,.sidebar-projects .truncate) { display:none }` inside `@media (min-width:1024px)`. Collapse is correctly scoped to desktop, so mobile is not affected. Not rendered; target size rule (min-height:44px) read, not measured.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-008",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "quote": "<summary>{mode === \"flow\" && selected ? selected.title : t(\"workMode\")}</summary>",
+      "problem": "The work-context disclosure closes itself as soon as an association is valid (`open={!association()}`) and its summary shows the Flow title only in Flow mode. In ad-hoc and managed modes the summary is the generic label 'Work mode', which does not say which mode is active. There is no affordance text saying the summary can be opened to change the Flow.",
+      "impact": "Trigger: switch to ad-hoc (with consent) or managed mode; the control collapses. Whether messages go with or without a Flow is visible only by expanding it (the consent checkbox stays outside, which partly mitigates it). After picking a Flow in Flow mode the controls collapse under the pointer and the way back is a one-line summary that reads as a title, not a control.",
+      "suggested_fix": "Put the mode into the summary ('Flow: <title>' / 'No Flow (ad hoc)' / 'Managed attempt') and add a visible 'Change' cue; consider not auto-collapsing while focus is inside the disclosure.",
+      "evidence": "Nielsen #1. Composer code read: `open` is derived from association(), summary text as quoted. Not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-009",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "<Field label={t(\"launchFlow\")}>",
+      "problem": "The optional launch Flow field has three small clarity gaps. The empty option is the shared 'Choose', while the optional label and the blocker copy ('Choose another Flow or clear the selection') speak of clearing. With no in-progress Flow the select holds only 'Choose' and nothing says why or where to create one. The 'First message (draft)' textarea does not say that Create session will not send it; it only seeds the new session's composer.",
+      "impact": "Trigger: open New session in a project without in-progress Flows, or choose a Flow and type a first message. The user may expect the message to be sent on Create session and finds an unsent draft in a session that still says 'opening'.",
+      "suggested_fix": "Add a 'No Flow' empty option, a hint under the select when `eligible` is empty ('No Flow is in progress; create or start one on the Flows tab'), and a hint under the message ('Saved as a draft in the session; you send it once the session is open').",
+      "evidence": "Nielsen #1/#10. Code: eligible = flows.filter(status === 'in-progress'); no branch for an empty list; the message Field has no hint prop. Locale keys launchFlow / launchMessage / sessionLaunchFlowGone read in both EN and RU. Not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-010",
+      "severity": "minor",
+      "file": "apps/hub-web/src/i18n/acceptance.ru.ts",
+      "quote": "missingEvidenceCount: \"Критериев без привязанных материалов или исключений: {{count}}\"",
+      "problem": "The RU gap line calls evidence 'материалы', while the rest of the same file calls the same thing 'отчёты' (openEvidence 'Прочитать отчёт', evidenceLoading 'Загружаются отчёты', historyUnavailable ...). EN uses 'evidence' throughout, so RU gains a third term here. The shared next-step line, 'Open the result and verify these criteria manually' (EN) / 'откройте результат работы' (RU), does not point at where the result is.",
+      "impact": "Trigger: Russian reviewer on a result with unreported criteria. 'Критериев без привязанных материалов' does not map to the 'Прочитать отчёт' links on the criterion rows, so it is unclear what is missing.",
+      "suggested_fix": "Use 'отчётов' (or whichever term the rest of the file uses) in missingEvidenceCount, and anchor the next-step line to the actual control (the Criteria list, or the technical details).",
+      "evidence": "Cross-reading acceptance.ru.ts: terms for evidence ('отчёт') in evidenceLoading, evidenceUnavailable, openEvidence, historyResult. Key parity EN/RU for the four new acceptance keys holds. Not rendered.",
+      "confidence": "medium",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-011",
+      "severity": "info",
+      "file": "apps/hub-web/src/app/App.tsx",
+      "quote": "aria-expanded={!railCollapsed}",
+      "problem": "The rail toggle changes its accessible name between 'Collapse menu' and 'Expand menu' and also toggles aria-expanded. ARIA practice keeps the name constant and lets aria-expanded carry the state. It is an icon-only button with no `title`, unlike the other rail items that gain one.",
+      "impact": "A screen reader hears 'Collapse menu, expanded' or 'Expand menu, collapsed': understandable, but a doubled signal. Sighted pointer users get no tooltip on the icon. The rail state is also not remembered across a reload, which I did not verify against any persistence elsewhere in the shell.",
+      "suggested_fix": "Keep one label ('Navigation menu' or 'Collapse menu') with aria-expanded, add a title, and consider persisting the choice per user in a try/catch'd localStorage.",
+      "evidence": "WAI-ARIA disclosure pattern; no measurement taken. Marked unverified: settle with a screen-reader pass.",
+      "confidence": "low",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-012",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/workflow.tsx",
+      "quote": "<p>{t('flowWorkspaceDistinction')}</p>",
+      "problem": "A permanent info Notice with a button is added to the top of the project's Flows page on every visit, above the primary content (create button, search, list). It explains a navigation distinction rather than reporting state.",
+      "impact": "Not a defect in behaviour; a restraint question. It occupies the first screen of the page it describes for users who already know the difference, and it renders as role=status. I could not judge it without a render, so I left it as an observation. The PR description does not mention this change.",
+      "suggested_fix": "Show it only when the project has no Flows, or make it dismissible, or fold it into the page description.",
+      "evidence": "Restraint (squint test), unmeasured; settle with a 1366px and 390px render of the Flows page.",
+      "confidence": "low",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "UX-013",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "quote": "<Input ref={searchInput} type=\"search\"",
+      "problem": "The 'catalogue' is a search field plus a native select, so results are not visible as a list, Enter and ArrowDown in the search box do not move into or choose a result, and a result count is not announced (only the zero case has a status notice). The composer hint 'Press / for commands' is shown to everyone, including observers (Invoke is disabled for them) and touch users (no physical slash key).",
+      "impact": "Slash-menu convention (Jakob) expects an inline list and keyboard selection; here a keyboard user types, tabs to a select, opens it, picks, then fills a JSON arguments textarea, then invokes. It works, it is slow. Cannot be settled without trying it with a keyboard and a screen reader.",
+      "suggested_fix": "If the interaction stays, make Enter/ArrowDown in the search move to the first match and add a polite result count; hide the shortcut hint when the human is not the controller.",
+      "evidence": "Code read only: Commands renders Field(search) then Field(command) as a Select; no onKeyDown on the search input; one role=status notice for zero matches. Unverified in a live engine.",
+      "confidence": "low",
+      "reviewer": "review-ui-ux",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 10, "info": 3 }
+}
+```
+
+## Summary
+
+Nothing was reviewed in a live engine: no render, no screenshots, no computed contrast or measured target sizes. Everything below comes from reading the diff, the CSS rules it depends on (the rail collapse is scoped to 1024px and up), the workspace tabs and the remote/workflow locale files that the slice's keys resolve against.
+
+No blocker or major. The new states hold up: the session-launch blocker line names the first unmet condition in order, the rejected-opening notice hands focus to the form, the slash and Escape handling is explicit and explained in the hint, and every new i18n key exists in both EN and RU.
+
+What is left is mostly cost on the user:
+
+- **Recovery path loses the launch values (UX-001).** After a rejected opening, 'Create a new session' opens a blank form because success cleared the launch draft; the first message survives only in the dead session's composer.
+- **History hides what it concerns (UX-002).** Only Flow and document entities resolve to names; proposal, revision and delivery rows show no subject, and other actors' raw ids are still printed.
+- **EN naming drift (UX-003).** The new button says 'Project work'; the nav and the page say 'Managed work'. RU is consistent.
+- **Copy and states (UX-004, UX-005, UX-006, UX-008, UX-009, UX-010).** Bare CTA labels 'All' and 'Documents', an untranslated availability token and a silently disabled Invoke, raw error codes and JSON in the transcript, a collapsing work-context summary that hides the mode, a launch Flow field that does not explain itself, and RU terminology drift for evidence.
+- **Collapsed rail (UX-007).** Projects with the same initial are indistinguishable for keyboard users, who get no hover tooltip.
+
+Three `info` observations (toggle ARIA doubling, a standing explainer notice on the Flows page, catalogue interaction depth) need a live pass or a screen-reader check to settle.
+
+Checks not run: viewports at 1440, 768 and 390; light and dark; reduced motion; computed contrast; tab-through of the rail, composer and catalogue; screen-reader announcements. Slop score not computed (admin console in an existing design system, no new look introduced). Routing audit: graph_used no (layers block handed in, not re-queried), wiki_used not-relevant, ctx_used yes (keryx ctx rg for every code search, Read for files), raw_rg_used no.

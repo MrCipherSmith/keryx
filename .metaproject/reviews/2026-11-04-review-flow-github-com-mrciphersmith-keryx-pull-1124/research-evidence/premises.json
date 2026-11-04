@@ -1,0 +1,283 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5",
+  "premises": [
+    {
+      "finding_id": "F-001",
+      "verdict": "upheld",
+      "reasoning": "Read src/hub/server.ts:172-175 at head: every non-/hub/v1/ GET (the HTML document and every web asset, so the built stylesheet too) carries default-src 'self' with no img-src, and the browser run in research-evidence/verify-LY-W2-001-2-browser.txt shows Chromium refusing the exact data: URI by the default-src fallback. Read styles.css:632-657: the only reason recorded for the data: URI is 'a background image cannot read tokens' (per-theme baked colour), which says nothing about the CSP, and the author did consider non-paintable contexts (the forced-colors fallback at :655 sets background-image:none) without considering this one. keryx ctx rg 'data:image' over src and apps/hub-web returns no other author data: URI, so there is no sibling establishing data: images as accepted here, and commit 0be1e7173 ('Drop the unused select-chevron.svg') shows the same-origin asset route was available and discarded. Trigger (open any Hub-served page) and outcome (appearance:none plus 40px reserved padding with nothing painted) are both named: major stands."
+    },
+    {
+      "finding_id": "F-002",
+      "verdict": "upheld",
+      "reasoning": "Read sessions.tsx:143-148 and work.tsx: the same query key and the same status === 'in-progress' rule now exist in a third place, with no comment or commit reason for the copy. A duplicated eligibility rule across three call sites whose divergence would let the launch form offer a Flow the composer refuses is the minor shape exactly."
+    },
+    {
+      "finding_id": "F-003",
+      "verdict": "upheld",
+      "reasoning": "Read work.tsx:46-53 (prepareFlowMessageDraft) against :136-156 (selectFlow): the four pin fields are written twice in one file with no comment tying them together. The pin is a server-checked contract, so hand-kept copies at a named site are a real maintenance cost; no intent signal argues for the duplication."
+    },
+    {
+      "finding_id": "F-004",
+      "verdict": "upheld",
+      "reasoning": "Read work.tsx:28 and :261, settings.tsx:22-27. The focusToken half does carry a documented reason (work.tsx:233 'Already open: no state change re-runs the focus effect, so ask for it explicitly'), so that half is a read choice — but the finding's first half stands on its own and is untouched by it: Commands is now mounted only inside MessageComposer while living in settings.tsx, which is a module-boundary claim no comment or commit answers. Upheld on that half."
+    },
+    {
+      "finding_id": "F-005",
+      "verdict": "upheld",
+      "reasoning": "Read remote-hooks.ts:156-175: settled is optional and enabled collapses to !!initial?.operationId when it is absent, so Commands' observer (settings.tsx:22, useAppliedReceipt(record, action.data)) stays enabled for as long as the composer is mounted. Commit 0be1e7173's 'a settled outcome stops polling through the query's enabled switch' landed only on the sessions.tsx:505 caller, which passes the isSettled predicate; the Commands caller was not changed with it. So the premise is right and the gate the hook documents is simply not used at one of its two call sites."
+    },
+    {
+      "finding_id": "F-006",
+      "verdict": "upheld",
+      "reasoning": "Read session-workspace.css:270-272 and 42/343, work.tsx:217/261. The child-combinator chain does have a reason (commit 2136617fb: 'hide only the composer panel's own header, not the headers of the command catalogue and cost confirmation inside it'), and the reviewer read it — but the reason explains why a descendant selector was rejected, not why the choice is expressed as feature CSS over the shared Panel's internal markup and the current nesting depth. The CSS site itself carries no comment. The claim (a shared component's markup and a component's position are now load-bearing for a feature stylesheet) is a maintenance cost at a named site, unanswered by that reason."
+    },
+    {
+      "finding_id": "F-007",
+      "verdict": "upheld",
+      "reasoning": "Read client.ts:29-49 and :204-211. Both sites carry a comment for themselves ('The Hub can be slightly ahead of the machine…' and 'Small clock differences can place an otherwise valid grant slightly in the future. Wait for its actual start time'), but neither states the relation, and the finding's reading of that relation is correct: after the <=500 ms sleep the lead is reached only through an early wake or the valid() re-verification at :296, so the 500 ms wait is what admits a Hub-ahead grant while only the 250 ms lead is named and only it is pinned by tests. A reader has to derive that; nothing in the code says it. Minor stands."
+    },
+    {
+      "finding_id": "F-008",
+      "verdict": "upheld",
+      "reasoning": "Read breadcrumb.case.tsx:110-174: the module-scope css parse plus a second readFileSync('src/styles.css') inside the chevron test, four rail/Select stylesheet tests in a file whose subject is the header breadcrumb, and a regex that scrapes --hub-muted out of the stylesheet text. Nothing marks the placement as deliberate. A cwd-relative read at module scope failing collection of the pre-existing breadcrumb tests is a named cost."
+    },
+    {
+      "finding_id": "F-009",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "apps/hub-web/src/styles.css:632-633",
+          "says": "the second block opens with the comment that names its purpose: 'Same layer as the rules they extend, so Tailwind utilities (layer utilities) can still override the rail and Select padding.'"
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "CSS Cascade and Inheritance Level 5, section 'Layer Blocks: the @layer block at-rule'",
+          "says": "several @layer blocks with the same name refer to one and the same layer; a named layer is meant to be re-opened and appended to, and doing so does not change the layer's position in the cascade"
+        }
+      ],
+      "reasoning": "Read styles.css:95, :142, :376-387 and :632-658. The finding concedes the rules are correct and the cascade is right, so the whole claim is file organisation — and on that, re-opening a named layer later in the file is specified, idiomatic CSS, not a smell, which is why appending a change's rules in their own block is a common house pattern. The one concrete remedy the finding offers short of folding the rules in ('name its purpose in a heading comment') is already there at :632-633. What is left is a preference about where new component rules live in this stylesheet, not a defect.",
+      "question": "Re-opening @layer components lower in styles.css is idiomatic CSS and the new block already names its purpose, so is appending a change's rules in their own block the pattern you want here, or must new component rules be folded into the first @layer components block next to the rules they extend?",
+      "options": [
+        "dismiss — appending a second named @layer components block is fine; the comment at styles.css:632-633 is the locality the finding asks for",
+        "uphold — fold the rail and Select rules into the first @layer components block beside .sidebar, .nav-item and .hub-input"
+      ]
+    },
+    {
+      "finding_id": "F-010",
+      "verdict": "upheld",
+      "reasoning": "Read context.tsx HistoryView and its useResource helper: two full project listings are fetched to turn ids into labels, and the documents listing is the same one ProposalCard reads doc?.content from, so it carries bodies. No guard, no field selection and the default staleTime, so every History mount pays it. No comment or commit treats the extra fetches as a deliberate trade. Reported as bandwidth cost, not a correctness defect, which is where the rubric puts it."
+    },
+    {
+      "finding_id": "F-011",
+      "verdict": "upheld",
+      "reasoning": "Read work.tsx:213 against :192: the plain route writes back {...submitted, text:'', prepared:false} (keeping mode, consent, consentVersion, busyPolicy and the pins) while sendNative in the same function still calls clearDraft. Commit d5129807d names only 'retain session Flow', so the retention of consent came along unstated, and the two sibling routes now disagree about it. The divergence is a defect whichever default the project wants; which default that is belongs to whoever fixes it, not to the premise."
+    },
+    {
+      "finding_id": "F-012",
+      "verdict": "upheld",
+      "reasoning": "Read presentation.tsx:12-17 and :25-30 and canonical.tsx:29/:62. The comment at :14 and commit 2136617fb do give a reason for counting only a resolved guide, and the reviewer read it — but it covers the resolved/unresolved split only: 'missing' is folded into resolved, and canonical.tsx:62 passes guide={{status:'missing', reason:'aggregate-manifest'}} by construction, so every aggregate Flow review reports N of N criteria without steps next to the guideMissing line that already says it. The section also never reads decision.readonly, while canonical.tsx:29 sets acceptedReadonly, so an accepted review still renders 'before deciding'. Neither state is answered by the recorded reason."
+    },
+    {
+      "finding_id": "F-013",
+      "verdict": "upheld",
+      "reasoning": "The chevron and the reserved padding hang off .hub-select, which only the shared <Select> applies; the three raw selects in workflow.tsx (a file this diff edits) keep the native arrow and no padding. Read styles.css:644-653 for the single carrier of those rules. No comment or commit exempts them, and the PR's own sentence ('select controls reserve space for the chevron') covers them. An inconsistent control on an edited form is the minor shape."
+    },
+    {
+      "finding_id": "F-015",
+      "verdict": "upheld",
+      "reasoning": "Two English names for one destination, with Russian consistent, is a straightforward copy defect at named sites; the reviewer checked for a reason ('Project work' exists nowhere else in EN navigation) and found none. Nothing in the commits introduces the second name deliberately."
+    },
+    {
+      "finding_id": "F-016",
+      "verdict": "upheld",
+      "reasoning": "Read styles.css:634-643 (the base display:none for the toggle, display:flex and every .rail-collapsed rule inside @media (min-width:1024px)) and breadcrumb.case.tsx:118-153, which never reads CssRule.media although the parser records it. The guard that keeps the collapsed rail usable is the media gate, and nothing pins it. Reported as a missing guard with the gate present at head, which is the minor shape for a test finding."
+    },
+    {
+      "finding_id": "F-020",
+      "verdict": "upheld",
+      "reasoning": "Read sessions.tsx:180-191: the digest is awaited inside an async per-call onSuccess, after the session has been created, and the draft put, clearDraft and navigate all sit behind that await. Computing it before mutate needs only selectedFlow.criteria, which is in hand at click time, so the suggested fix is sound and strictly reduces the window; nothing in the code argues for the current order. Reported at minor with the trigger stated as a non-secure-context deployment and confidence low, which is where the rubric leaves it."
+    },
+    {
+      "finding_id": "F-022",
+      "verdict": "upheld",
+      "reasoning": "Read breadcrumb.case.tsx:152-153 and styles.css:635: the filter selects on '.rail-collapsed' or '.hub-select', and '.nav-item.desktop-rail-toggle' matches neither, so the one rule whose un-layering would silently keep the toggle hidden is outside the guard; css-rules.ts computes `layered` as any enclosing @layer, not components. Accurate as read, nothing deliberate about the gap."
+    },
+    {
+      "finding_id": "F-023",
+      "verdict": "upheld",
+      "reasoning": "Read sessions.tsx:163-193 (SessionCreate carries machine/checkout/profile/title only) and work.tsx:213 plus state/drafts.ts: the only thing that makes a later message reuse the Flow is the in-memory draft write-back, so the PR body's session-level phrasing overstates it. The fix asked for is a reword, which is the right size; the claim itself is correct."
+    },
+    {
+      "finding_id": "F-024",
+      "verdict": "upheld",
+      "reasoning": "Read work.tsx:250-263 (Commands mounted only inside the div that takes hidden={commands !== 'open'}) and settings.tsx:37 (the Confirmation card renders inside Commands' own Panel). Closing the catalogue therefore hides the only control that can answer a confirmation-required outcome, while the transcript row prints the requirement with no control. The round-4 commit reworked the Escape hand-back but says nothing about keeping the panel open for a pending confirmation, so there is no reason recorded for this state. Recoverable by reopening, which is why it reads minor."
+    },
+    {
+      "finding_id": "F-027",
+      "verdict": "upheld",
+      "reasoning": "Read settings.tsx:22-37: the catalogue filter, the option list and JSON.stringify(entry.inputSchema, null, 2) all run in render, Commands takes no memo, and work.tsx:261 mounts it inside the composer that re-renders per keystroke. The finding claims wasted work that grows with catalogue and schema size and explicitly claims no user-visible lag, which is the minor shape; no comment or commit argues for the placement."
+    },
+    {
+      "finding_id": "F-028",
+      "verdict": "upheld",
+      "reasoning": "Read .github/PULL_REQUEST_TEMPLATE.md:16 ('Docs updated if behavior changed'), which is a project rule with no exception for UI-only change, and the guide steps the finding cites. Behaviour a reader of that guide follows did change and the guide was not touched. The fix offered includes 'or state in the body why docs are not needed', so it does not force documentation that is not wanted."
+    },
+    {
+      "finding_id": "F-029",
+      "verdict": "upheld",
+      "reasoning": "Read .github/PULL_REQUEST_TEMPLATE.md:1-17: the template states the Conventional Commits title requirement twice, in the comment and as a checklist row, and this title carries no type or scope while the branch's own commits do. One correction to the finding's impact, recorded here rather than in the finding: origin/main is merged, not squashed (its log alternates 'Merge pull request #NNNN' with conventional commits), so the title does not become the history line and the drop-out-of-tooling consequence does not follow. The rule violation and the deleted checklist stand on their own at minor."
+    },
+    {
+      "finding_id": "F-030",
+      "verdict": "upheld",
+      "reasoning": "Read pr-context.md's Intent section against the slice: History's filter, self-actor and Identifiers disclosure, the acceptance gaps section, the Flows notice, the Commands move and the two hook signature changes are all user-visible or contract-level and none is named in the body, which instead points at an off-repository page. Accurate as read; the cost on whoever audits the PR against its description is the stated minor."
+    },
+    {
+      "finding_id": "F-031",
+      "verdict": "upheld",
+      "reasoning": "The code is deliberate and says so in its own comment, and the finding says exactly that — its claim is against the PR body, which states the capability without its limit. Read sessions.tsx SessionSurface's outcomes state and comment. A body that promises a durable transcript record for tab-local state is a real documentation defect at minor."
+    },
+    {
+      "finding_id": "F-032",
+      "verdict": "upheld",
+      "reasoning": "Read sessions.tsx:180-191 against work.tsx:184-199, where sendNative takes generation = getClientScope() before its async work and returns if it changed; managed-work/operation.tsx and acceptance/use-legacy-decision.ts do the same. So the siblings in this feature establish the guard as the house pattern and the new async handler is the one place without it. A review-security-code finding is upheld or held, never lowered, and the finding already scopes itself as a hardening gap with no attacker-controlled vector."
+    },
+    {
+      "finding_id": "F-033",
+      "verdict": "upheld",
+      "reasoning": "Two surviving mutants with the commands recorded and a green baseline; the finding states the gates themselves are correct. Nothing about the fixture set is deliberate — the new clock-lead tests kill every other gate in the same expression, so these two are simply unreached. Mutation survivors stay as reported."
+    },
+    {
+      "finding_id": "F-034",
+      "verdict": "upheld",
+      "reasoning": "A recorded surviving mutant (the anchor sort deleted, 5/5 green) with the seven neighbouring mutants all red, so the gap is specific and not a blanket complaint about the file. The sort is what the round-3 commit added the helper for; nothing pins it. Stays as reported."
+    },
+    {
+      "finding_id": "F-035",
+      "verdict": "upheld",
+      "reasoning": "Read session-workspace.css:42 and :343 and the tests: the selector was changed for a DOM reason (a Settings button now precedes the toggle) and nothing in the suite ties it to that DOM, so reverting it passes. The finding is explicit that the replica run, not the real file, carried the assertions, which is why it reads medium confidence at minor; the gap itself is read from the test file."
+    },
+    {
+      "finding_id": "F-036",
+      "verdict": "upheld",
+      "reasoning": "Read breadcrumb.case.tsx:113-130: reachability is guarded by two regex exclusions over selector alternatives, so a rule hiding the same button by another spelling passes a test whose name promises it stays reachable. The composer-header test in session-workspace.case.tsx already uses the matches/closest technique the fix asks for, so the fix makes the suite more consistent, not less."
+    },
+    {
+      "finding_id": "F-037",
+      "verdict": "upheld",
+      "reasoning": "Spot-checked the negative greps myself over apps/hub-web/tests for hub-select, Collapse/Expand menu, rail-collapsed, historyYou, Browse revisions, noMatchingProposals, sessionOpeningFailed and 'Could not open': every hit is in breadcrumb.case.tsx and is stylesheet-text parsing, none is a rendered assertion. The finding labels itself an absence-of-reference finding with no mutants run, so it does not overclaim. Upheld at minor."
+    },
+    {
+      "finding_id": "F-038",
+      "verdict": "upheld",
+      "reasoning": "A negative assertion against the actor span that cannot fail, because the role it looks for is rendered in a sibling span — the test reads as coverage of the missing-role case while exercising nothing. Read the HistoryView markup the finding cites. There is no reading under which an assertion that cannot fail is deliberate."
+    },
+    {
+      "finding_id": "F-039",
+      "verdict": "upheld",
+      "reasoning": "Checked for a sibling convention: keryx ctx rg 'setTimeout(resolve' over apps/hub-web/tests returns only these two new sleeps plus the e2e journey helper, where a real browser makes sleeping normal. So fixed sleeps are not the established pattern in the unit suites, and the finding's claim that neither guards a condition that can change is consistent with the hook's enabled function. Minor, as reported, with no flake claimed."
+    },
+    {
+      "finding_id": "F-040",
+      "verdict": "upheld",
+      "reasoning": "A cast through unknown does switch the contract check off, and the producer type is named with line numbers. The finding states today's code is unaffected and points at remote-owned-controls.case.tsx as the sibling that already builds the full shape, so the fix increases consistency. Minor stands."
+    },
+    {
+      "finding_id": "F-041",
+      "verdict": "upheld",
+      "reasoning": "A recorded mutation run: two acceptance-catalog mutants green, the same edits red in all four covered catalogs, so the omission is the cause and not an artefact. The diff adds four acceptance keys, which is what brings the gap into this change. Stays as reported."
+    },
+    {
+      "finding_id": "F-042",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "apps/hub-web/src/features/remote/sessions.tsx:188-189",
+          "says": "the clear is introduced by its own comment: 'The next New session starts from a clean form, not from this session's Flow and first message.'"
+        },
+        {
+          "ref": "apps/hub-web/src/features/remote/sessions.tsx:180-187",
+          "says": "the typed first message is deliberately moved into the created session's composer draft before the launch form is cleared, so it is kept, not discarded"
+        }
+      ],
+      "reasoning": "Read sessions.tsx:180-193 and the test the finding cites, which pins the cleared launch draft. The main fix asked for — seed the launch form from the rejected session — is the exact behaviour the comment at :188 says was rejected, and the finding does not argue that reason wrong; it argues that one path (recovery after a rejected opening) is the case where re-filling would help. That is a product trade between a predictable clean form and a re-filled recovery form, and the finding's fallback ask (say in the notice where the first message went) is a different, smaller change. Held for the owner rather than sent to a fixer who would have to pick.",
+      "question": "After a rejected session opening, should 'Create a new session' re-fill the launch form from the rejected session, or keep the deliberately clean form and only say in the notice that the first message is still in that session's composer?",
+      "options": [
+        "dismiss the re-fill — keep the clean form the comment at sessions.tsx:188 chose, and fix only the notice wording",
+        "uphold — seed machine, checkout, profile, title, Flow and the first message from the rejected session on this recovery path"
+      ]
+    },
+    {
+      "finding_id": "F-043",
+      "verdict": "upheld",
+      "reasoning": "Read context.tsx HistoryView: two name maps are built, for Flows and documents only, so every other event type loses its subject from the row while the raw actorId stays on it, and the disclosure repeats it. The round-1 commit restored the actor for every event, so the actor's visibility was looked at; the entity's was not. The asymmetry the finding names is real and at a named site."
+    },
+    {
+      "finding_id": "F-045",
+      "verdict": "upheld",
+      "reasoning": "Bare-noun labels on recovery controls are a copy defect by ordinary UX practice (a control's label names its action), and the finding names both the sites and both locales. Nothing in the change marks the generic labels as deliberate. Minor, as reported."
+    },
+    {
+      "finding_id": "F-046",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "apps/hub-web/src/features/remote/settings.tsx:20",
+          "says": "the sibling selects in the same module print machine tokens raw and untranslated: the baseline option is `{c.providerId}/{c.modelId} · {c.reason} · {c.privacyClass} · {c.costClass}` and the reasoning option is the bare effort token"
+        },
+        {
+          "ref": "apps/hub-web/src/features/remote/settings.tsx:20",
+          "says": "the Save button next door is disabled by a compound expression (control.active, stale, pending, candidate availability, empty candidate list) with no reason line either — the finding records this sibling itself"
+        }
+      ],
+      "reasoning": "Read settings.tsx:20 and :22-37. Both halves of the claim describe the established pattern of this operator-facing surface rather than something this change introduced: machine-reported tokens are shown raw throughout the module, and controls are disabled without a stated cause throughout it. Translating `availability` in one option list while provider ids, reason, privacyClass, costClass and the effort tokens beside it stay raw would make the surface less consistent, not more, which is evidence against the premise as scoped to this one site. Whether this surface should localise machine tokens and explain every disabled control is a decision about the whole panel.",
+      "question": "The operator panel shows machine-reported tokens raw and disables controls without a reason line throughout, so should that stay its pattern, or should the whole panel — not just the command catalogue this change touched — localise those tokens and state why a control is disabled?",
+      "options": [
+        "dismiss — raw machine tokens and reasonless disabled controls are this panel's pattern; changing one option list alone would make it less consistent",
+        "uphold — treat it as a panel-wide gap and start with the command catalogue's availability token and the Invoke button's reason"
+      ]
+    },
+    {
+      "finding_id": "F-047",
+      "verdict": "upheld",
+      "reasoning": "Read sessions.tsx OutcomeItem: the error code renders as a bare paragraph and a non-string result as a JSON <pre> among human messages, while the rejected-opening notice added in the same change deliberately puts its code behind a Technical details disclosure. The inconsistency is inside this change, between two states the same author wrote days apart, so there is no prior choice to defer to."
+    },
+    {
+      "finding_id": "F-048",
+      "verdict": "upheld",
+      "reasoning": "Read styles.css:636-643 and the App.tsx project button. The collapsed state's only visual identifier is the first letter, with the name on title (hover) and aria-label (assistive technology) only, so a sighted keyboard or touch user has no disambiguation between same-initial projects. Note for the merge: this is the same class as F-055, which measures the same rail's contrast — one fix to the collapsed-rail project switcher closes both, and they should be fixed together rather than twice."
+    },
+    {
+      "finding_id": "F-049",
+      "verdict": "upheld",
+      "reasoning": "Read work.tsx:265-266: open={!association()} collapses the disclosure as soon as the association is valid, and the summary falls back to the generic 'Work mode' label in ad-hoc and managed mode, so which mode is active is behind a click. The auto-collapse is plainly deliberate; the summary not naming the mode it hides is not addressed by any comment or commit, and that is what the finding reports."
+    },
+    {
+      "finding_id": "F-051",
+      "verdict": "upheld",
+      "reasoning": "A third Russian term for 'evidence' inside one catalog whose other keys consistently use 'отчёт' is a terminology defect at a named site, with the cross-reading recorded. The finding also confirms EN/RU key parity holds, so the claim is about wording only. Minor stands."
+    },
+    {
+      "finding_id": "F-053",
+      "verdict": "upheld",
+      "reasoning": "Read sessions.tsx's Flow select and the two guidance strings. The sharp part of the claim is not the reuse of the generic `choose` key but the contradiction this change creates: two new messages tell the user to 'clear the selection' while the only control that clears it is labelled 'Choose explicitly'. That contradiction arrives with this change and no sibling or comment answers it."
+    },
+    {
+      "finding_id": "F-054",
+      "verdict": "upheld",
+      "reasoning": "I looked for the deliberate-choice reading first: commit e985e8e2a ('a stale Flow is labelled by its title') and the title ?? draft.flowId chain show the author did choose title-first with an id fallback. It does not save the finding, because I then read how a Hub Flow id is minted — src/hub/work/domain.ts:168, base = () => ({ id: randomUUID(), … }) — so the fallback is a bare UUID, which confirms the one part the reviewer marked unconfirmed. Showing a UUID in a select the user must act on is the defect as reported, and storing the title in the launch draft is a sound fix."
+    },
+    {
+      "finding_id": "F-055",
+      "verdict": "upheld",
+      "reasoning": "Read styles.css:636-643 and the tokens. WCAG 1.4.11 does apply: an active-project fill is visual information required to identify a component's state, so the 3:1 floor is the right measure, and the finding is explicit that the ratios are computed from tokens rather than measured on a render. aria-current serving assistive technology does not answer a sighted-user cue. Note for the merge: same class as F-048 — one collapsed-rail fix closes both."
+    },
+    {
+      "finding_id": "F-056",
+      "verdict": "upheld",
+      "reasoning": "Read the three producers of the code the finding names (read-model.ts, delivery.ts, events.ts) as cited and sessions.tsx:352-360, which renders the rejection block for any non-null code. The misleading lead sentence is pre-existing, which the finding states, but this change adds the next step and the details disclosure to that block and so extends copy that claims a machine refusal to command-expired and recovery-required. Reported as a misleading cause with the recovery path still correct, which is minor."
+    }
+  ]
+}

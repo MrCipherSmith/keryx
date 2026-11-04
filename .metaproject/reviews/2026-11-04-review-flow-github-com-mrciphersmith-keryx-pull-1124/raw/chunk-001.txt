@@ -1,0 +1,18 @@
+STATUS: DONE
+```json
+{"status":"DONE","reviewer":"review-regression","slices":[],"findings":[]}
+```
+
+No regression found at the 10 chunk-001 sites; the result is an honest empty one.
+
+- Select / hub-select: fork.tsx (checkout Select), work-lists.tsx (state filter Select inside `.work-filters`) and native-selection.tsx (attempt picker Select) all take the new `appearance:none` / `padding-inline-end:2.5rem` / chevron rule. None sets its own select padding, appearance or background. work.css `.work-filters` only lays out the container. The new rule sits in `@layer components`, so the unlayered feature CSS would win a conflict, and no conflict exists.
+- Button / Input ComponentPropsWithRef: decision-form.tsx, project-deletion.tsx, record-browser.tsx, revision-code-viewer.tsx, fork.tsx and work-lists.tsx pass only props the old types accepted (variant, className, type, disabled, aria-*, value, onChange, maxLength, autoComplete). None passes `ref`, so the widening changes nothing for them.
+- useRemoteQuery `enabled`: fork.tsx calls it with the default and no third argument, so it takes the boolean branch, same as before. `useAppliedReceipt` is not used by any of the 10 files.
+- CSS files:
+  - machine-cards.css has only `.machine-*` scoped rules, with none on `.hub-select`, `.nav-item`, `.rail-collapsed` or `.sidebar`.
+  - session-run-context.css is scoped to `.session-run-context .hub-button`, with no overlap with the new session-workspace composer selectors.
+  - project-overview.css is scoped to `.project-*`. Its `.hub-button` overrides are unlayered, so they still beat the layered base rules. The new rail rules touch only `.rail-collapsed .sidebar`, `.identity` and `.nav-item`.
+- fork.tsx: `ForkSession` renders from sessions.tsx:430 as part of the session inspector, not inside `.session-composer`, so the narrowed `.session-composer > .hub-panel > .hub-panel-header` rule and the Commands-panel move do not reach it.
+- Coverage: I read slice-01 only up to line 788 of 2069 and did not read slice-02, so `slices` is left empty. I checked the change surfaces named in the brief (ui.tsx, remote-hooks.ts, the styles.css rail and `hub-select` rules) directly in the working tree instead.
+- Cap: this chunk covers 10 of the 21 files the 40-file cap dropped. The other chunks are not covered here.
+- Graph limits: the graph cannot see CSS class collisions or cascade order. I checked those by reading the CSS and searching for the selectors, not from the computed set.

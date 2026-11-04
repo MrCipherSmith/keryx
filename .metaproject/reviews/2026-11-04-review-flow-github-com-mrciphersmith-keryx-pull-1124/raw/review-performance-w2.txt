@@ -1,0 +1,37 @@
+STATUS: DONE
+
+```json
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "findings": []
+}
+```
+
+## Performance review, slice-02 (round 1, re-dispatch)
+
+I re-read `slice-02.diff` end to end (18 files) and reached the same conclusion as the earlier pass: nothing at `minor` or above. This is my own reading, not a copy of the earlier reply.
+
+**Checked, with the execution frequency for each**
+
+- `src/lib/hub-machine/client.ts`, `verifyAuthorizationGrant`: adds the constant `MAX_HUB_CLOCK_LEAD_MS = 250`, one `expires > issued` comparison, and re-lays the existing boolean over several lines. No allocation, loop or I/O is added. It runs once per authorization grant, so there is no frequency at which it becomes a cost. The two new tests cover the lead boundary (75, 250, 251 ms) and the `expires <= issued` case.
+- `apps/hub-web/src/styles.css`:
+  - The select chevron is a `data:` SVG held in `--hub-select-chevron` (one value per theme). Every `.hub-select` resolves the same URL, so it is decoded once and cached.
+  - The collapsed-rail rules sit under a single `.rail-collapsed` class gate and use shallow descendant selectors inside `:is(...)`. Match cost is negligible.
+  - Wrapping the new block in `@layer components` changes cascade order only. It adds no layout or paint work.
+  - `appearance:none` on the select adds no layout work.
+- i18n catalogues (`remote.en/ru`, `workflow.en/ru`): they add string keys to static objects that are already loaded eagerly. Nothing runs per render.
+- `apps/hub-web/tests/css-rules.ts`: `parseCssRules` walks the stylesheet once per call with `buffer += ch` over a small file. It runs only in the test process. `breadcrumb.case.tsx` calls it once at module scope; `session-workspace.case.tsx` calls it once or twice per test.
+- Tests that pin performance-relevant production behaviour assert the right thing:
+  - `context.case.tsx` ("does not re-derive History events when only the type filter changes") pins the `mergeEvents` call count across a filter change.
+  - `session-command-outcomes.case.tsx` ("a settled outcome stops being fetched on later invalidations, while a queued one keeps following") pins that a settled operation is no longer re-fetched while a queued one keeps polling.
+  - The production code behind both belongs to slice-01 (`session-timeline.ts`, `work.tsx`, `settings.tsx`) and is out of this review's scope.
+- `browser-journeys.e2e.mjs`: `fit()` walks ancestors with `getComputedStyle` per element, and `openCommands` adds one attribute read and at most one click. It is a manual e2e harness that runs a handful of times per journey, not a hot path.
+- Memory leaks, unbounded collections, N+1, bundle imports, synchronous blocking in async contexts, pagination, MobX derived state in renders: no site in this slice. The only `readFileSync` calls are in test setup.
+
+**Not settled, for the record**
+
+The two local test failures named in DISPATCH (`R4.4` bridge observation timeout, `client.test.ts:134`) are outside performance scope, and CI is green at this head. I make no performance claim about either.
+
+Routing audit: graph_used: no (the payload layers block was read; not relevant to a slice of tests, CSS, strings and one boolean expression), wiki_used: no (not-relevant), ctx_used: yes (diff files were read directly; one `keryx ctx rg` run), raw_rg_used: no.

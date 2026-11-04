@@ -1,0 +1,13 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": [],
+  "findings": [],
+  "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md"
+}
+```
+
+Verdict: the change cannot break this file. It is the human-readable rendering of the same PR #1113 dispositions table and is read by no code. The 17 rows that mention changed files (App.tsx, remote-hooks.ts, work.tsx, workflow.tsx, sessions.tsx, session-workspace.tsx/.css, styles.css) are all status 'left' and quote line numbers at the PR #1113 head (e.g. App.tsx lines 280/298/314, session-workspace.css 67-68); those may no longer match after PR #1124, but a finding recorded against an earlier head is a dated statement, and a stale line number costs no user, caller or persisted state anything. Nothing in this pull request makes a recorded disposition false in a way that changes a gate or a behaviour.

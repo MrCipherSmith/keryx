@@ -1,0 +1,63 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-02 (i18n catalogues, stylesheet, hub-web test suite, hub-machine client and its test) shows no layer violation, dependency-direction error or module-boundary breach. Three minor structural notes: the clock-skew policy in the machine client now lives in two unrelated mechanisms, the stylesheet-contract tests sit in the breadcrumb test file behind a module-scope cwd-relative read, and the rail/Select rules were appended as a second @layer components block.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/lib/hub-machine/client.ts",
+      "quote": "const MAX_HUB_CLOCK_LEAD_MS = 250;",
+      "problem": "Clock-skew tolerance for a Hub grant now exists in two places with unrelated bounds. MachineConnection.authorize() already waits for a future-dated grant (`if (wait > 0 && wait <= 500) await Bun.sleep(wait)`, an unnamed 500 ms literal that predates this PR: commit 565866111a is an ancestor of the base), and then calls verifyAuthorizationGrant. The PR adds a named 250 ms lead inside the verifier. The two bounds are not derived from one another, and only the verifier's is named, exported to no one and duplicated as the literals 250/251 in client.test.ts.",
+      "impact": "The code behaves correctly today. The cost lands on the next editor of the grant path, who has to find both mechanisms and work out which one decides acceptance: because authorize() sleeps until authorizedAt before verifying, and createGrantApplication().valid() re-verifies at a later wall time, the 250 ms lead is reached only through an early timer wake or a backward wall-clock step, while the 500 ms wait is what actually admits a Hub-ahead grant.",
+      "suggested_fix": "Name both bounds next to each other (or derive the wait from the lead), export the lead constant or put it with the other grant limits so client.test.ts imports it instead of repeating 250/251, and say in the verifier comment that authorize() waits first. Alternatively add one authorize()-level test that exercises a grant dated 100-400 ms ahead end to end.",
+      "evidence": "client.ts lines 29-49 (verifier and constant) and 204-210 (existing wait before the verifier); `git blame -L 204,210` attributes the wait to 565866111a, and `git merge-base --is-ancestor 565866111a <base>` succeeds, so it is existing behaviour, not part of this PR. The only callers of verifyAuthorizationGrant are authorize() (line 209) and createGrantApplication().valid() (line 296), both reached after that wait. The slice's tests call the verifier directly and never authorize(). What would settle whether the lead is load-bearing: a run of the two-machine fixture with the lead removed and the wait kept.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "quote": "const css = parseCssRules(readFileSync(\"src/styles.css\", \"utf8\"));",
+      "problem": "Four stylesheet-contract tests (collapsed-rail Sign out, Select chevron background-color, project switcher layering, chevron colour matches --hub-muted) were added to breadcrumb.case.tsx, a file whose subject is the header Projects breadcrumb. The stylesheet is read at module scope with a path relative to the process cwd, and session-workspace.case.tsx does the same for session-workspace.css. The first test also scrapes the muted hex value out of the stylesheet text with a regex.",
+      "impact": "Behaviour is correct under `bun run --cwd apps/hub-web test`, the way check:hub-web invokes it. The cost is to the next reader and runner: a rail or Select CSS regression is reported under a breadcrumb file, and an unreadable stylesheet path fails collection of the whole breadcrumb file including its pre-existing breadcrumb and navigation tests rather than just the CSS tests.",
+      "suggested_fix": "Move the stylesheet tests to their own tests/stylesheet.case.tsx beside css-rules.ts, resolve paths from import.meta.url or the vitest root instead of cwd, and read the stylesheet inside the tests (or a lazy helper) rather than at module load.",
+      "evidence": "breadcrumb.case.tsx diff hunk adds `import { readFileSync } from \"node:fs\"` and the module-scope `const css = ...`; apps/hub-web/package.json defines `test: vitest run`, root package.json check:hub-web runs it with `--cwd apps/hub-web`, and vitest.config.ts includes tests/**/*.case.tsx. No other hub-web test reads a source file by cwd-relative path.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/hub-web/src/styles.css",
+      "quote": ".nav-item.desktop-rail-toggle { display:none; }",
+      "problem": "The rail and Select rules are appended as a second, unindented `@layer components { ... }` block at the end of the file, while styles.css already holds one indented `@layer components` block (opened near line 142) that defines the .sidebar, .nav-item and .hub-input rules these extend. The block's comment explains the layer choice but not why it is not part of the first block.",
+      "impact": "The rules are correct and the cascade is right: the rules sit in the same layer as .hub-input, so the new .hub-select padding and background-image win by specificity, and Tailwind utilities can still override them. The cost is to the next editor, who finds `.sidebar` and `.nav-item` in one place and `.rail-collapsed .sidebar` and `.rail-collapsed .nav-item` in another, with a source-order dependency between the two blocks.",
+      "suggested_fix": "Fold the new rules into the existing components layer next to the rules they extend (or leave the second block but name its purpose in a heading comment), and keep the layered-rules test.",
+      "evidence": "styles.css: `@layer base {` at 95, `@layer components {` at 142 (rules indented), second `@layer components {` at 634 (rules unindented). `.hub-input` (376) and `.hub-input:disabled` (387) are inside the first block, so the new `.hub-select:not([multiple]):not([size])` (specificity 0,3,0) overrides the disabled fill's background reset for background-image only, as its comment states. No unlayered rule in styles.css or session-workspace.css sets padding or background on .hub-input.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```
+
+## Architecture review of slice-02
+
+Stack: React with zustand and TanStack Query in `apps/hub-web`, a Bun TypeScript machine client in `src/lib/hub-machine`. The slice is almost entirely i18n, tests and CSS, so there is no new layer or dependency edge to judge.
+
+- **Layers and dependency direction:** none detected. Tests import from `../src/...` only, the test helper `css-rules.ts` has no source-side dependents, and the machine client change stays inside `client.ts` with no new imports.
+- **Module boundaries:** no breach. All 19 new i18n keys are consumed in `apps/hub-web/src`, and `localization.case.ts` already asserts en/ru key parity for the remote and workflow catalogues. `messageDraftKey` is imported by the test from `work.tsx`, where `sessions.tsx` also takes it, so the test follows the production import path.
+- **Findings, all minor:**
+  - **Clock-skew policy in two places (F-001):** the pre-existing 500 ms wait in `authorize()` and the new 250 ms lead in the verifier are not related. The lead is probably not the load-bearing mechanism; I could not settle that without a fixture run.
+  - **Stylesheet tests in the breadcrumb file (F-002):** they read the stylesheet at module scope with a cwd-relative path.
+  - **Second `@layer components` block (F-003):** the cascade is correct, but the rules are split across two blocks.
+- **Not mine:** the local test failures named in the dispatch (the R4.4 timeout and `client.test.ts:134`) are not claimed; CI is green at this head. Whether the 250 ms lead widens the effective grant window belongs to `review-security-code` and `review-logic`.
+
+Routing audit: graph_used: layers block from the payload (affected files, related tests) read, no extra gdgraph query; wiki_used: no (payload wiki empty, not relevant to a test/i18n/CSS slice); ctx_used: yes (`keryx ctx rg` for every search); raw_rg_used: no. Unrouted `git blame` and `git merge-base --is-ancestor` were read-only history checks (law 4).

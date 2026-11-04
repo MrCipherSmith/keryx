@@ -1,0 +1,1356 @@
+**Changes requested — 1 Major, 40 Minor, 3 questions.** One confirmed major holds the merge: the new Select chevron never paints on a Hub-served page, because the Hub's own Content-Security-Policy refuses its `data:` URI. Everything else is maintenance cost, copy and test-gap work, and nothing in the round disputes the pull request's own claim about the machine client's grant check.
+Reviewed `0be1e717365d` against `85fe58fad184` · round 1 · 35 files, +1259/−138 · CI green (20/20 required checks).
+Evidence level: ran — the hub-web and hub-machine suites at the reviewed head (`research-evidence/tests.txt`: 181 pass, 2 fail, both local-only and green in CI); a 56-mutant mutation pass over the gates this change adds (39 red, 17 green); a Chromium run against a reproduction of the Hub's asset CSP (`research-evidence/verify-LY-W2-001-2-browser.txt`). Did not run: the hub-web jsdom component suites (`apps/hub-web` has no `node_modules` here), any rendered-geometry measurement, and the Playwright browser journeys.
+
+### Major
+
+**F-001. The chevron is drawn from a data:image/svg+xml URI held in --hub-select-chevron (declared at :root and :root[data-theme="dark"]), painted as a CSS background-image on every .hub-select:not([multiple]):not([size]) while that rule also sets …** [`apps/hub-web/src/styles.css`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/styles.css), in the diff.
+On any page served by the Hub (the production path, and the one tests/browser-journeys.e2e.mjs drives via fx.origin), every non-multiple Select (header project selector, session launch Flow/machine/checkout/profile selects, composer busy-policy select, context and proposal filters, and the rest) has its native arrow removed and nothing drawn in its place. The control shows 2.5rem of reserved empty space on the right and no dropdown affordance. A Vite dev server sends no such header, so a check there (the PR reports Chrome at 1366 and 390 px) would show the chevron. Neither the unit tests nor the e2e script assert that the chevron paints; the only chevron tests read the stylesheet text. Verified: confirmed by review-verifier (execution).
+Fix: Do not rely on an image request. Draw the chevron with gradients, which are not subject to img-src and can read the tokens directly (for example two linear-gradient layers rotated into a V using var(--hub-muted)), which also removes the per-theme baked colour and the test that keeps the two copies in sync. Alternatively serve the SVG as a same-origin asset and reference it by URL, or add img-src 'self' data: to the Hub CSP (this widens the policy for the whole app). Add an e2e assertion against…
+
+Also at: `apps/hub-web/src/components/ui.tsx:99 (Select, the only producer of the hub-select class)`, `apps/hub-web/src/app/App.tsx:471`, `apps/hub-web/src/features/context.tsx`, `apps/hub-web/src/features/remote/sessions.tsx`, `apps/hub-web/src/features/remote/work.tsx`, `apps/hub-web/src/features/remote/recovery.tsx` and 8 more. Enumerated by: keryx ctx rg '<Select' over apps/hub-web/src returned 26 matches in 13 files; all go through the Select component at ui.tsx:99, which appends the hub-select class, so the rule at styles.css:644 reaches each of them. The CSP is a single hea…
+
+<details open><summary><b>Minor (40)</b></summary>
+
+- **F-002. CreateSession now repeats the Flow query (same key [scopeKey, projectId, "flows"], same endpoint) and the rule that only an "in-progress" Flow can be attached to a session message.** [`apps/hub-web/src/features/remote/sessions.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/sessions.tsx), in the diff — No wrong behaviour today. The cost lands on whoever changes what makes a Flow eligible for a session message: three sites must change together, and two of them (sessions.tsx, work.tsx) also own a query with the same key and must keep an identical queryFn. A divergence would let the launch form offer a Flow the composer then refuses, or the reverse. Fix: Add one hook next to the other remote helpers (for example useEligibleFlows(projectId) in features/remote/shared.tsx) that owns the query and the status filter, and call it from CreateSession and MessageComposer; association.tsx can adopt it later.
+- **F-003. The mapping from a HubFlow to the draft's pin fields (flowId, flowVersion, specDigest, criteriaDigest) is now written twice in the same file: prepareFlowMessageDraft (new, used by launch) and the setDraft call inside selectFlow (existing).** [`apps/hub-web/src/features/remote/work.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/work.tsx), in the diff — No wrong behaviour today. If the pin gains a field or one of the digests changes derivation, a first message seeded at launch and a Flow picked later in the composer can carry different pins, and association() would then accept one and reject the other. Fix: Extract the pin fields into one function, for example flowPin(flow, criteriaDigest), spread by both prepareFlowMessageDraft and selectFlow.
+- **F-004. Commands is now a child of the message composer (work.tsx imports it from ./settings and mounts it inside MessageComposer), but it still lives in settings.tsx, and its props now carry presentation protocol: `visible` plus a `focusToken` co…** [`apps/hub-web/src/features/remote/settings.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/settings.tsx), in the diff — No wrong behaviour today. A reader looking for the command catalogue goes to the settings module; the composer to settings dependency (work.tsx:28) runs against the module's name; and any new caller must learn that focus is requested by incrementing a number. Fix: Move Commands (and its catalogue search) into its own module such as features/remote/commands.tsx next to work.tsx, and expose focus through a forwarded ref or an imperative handle instead of a counter prop. Keeping Confirmation in settings.tsx is fine.
+- **F-005. OutcomeItem follows an operation only until it settles (`useAppliedReceipt(..., receipt => isSettled(receipt.status))`), with a comment saying a live query per outcome would refetch on every invalidation.** [`apps/hub-web/src/features/remote/settings.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/settings.tsx), in the diff — Small: one operation query refetches on each invalidation after it has settled, which is the cost the settled gate was written to avoid. The larger cost is for the next editor: the effect carries a hidden contract (invoke() must write the invokedAt and anchor refs before the receipt arrives) and three copies of the outcome can disagree in what they show. Fix: Pass the same `isSettled` predicate in Commands, or move isSettled next to useAppliedReceipt so every caller uses it. Longer term, let Commands only report the invocation (operationId, invokedAt, anchor) and let OutcomeItem own the following of the operation. Reached independently by review-architecture, review-highload, review-performance.
+- **F-006. Feature CSS now depends on the exact markup of the shared Panel and on component nesting: the composer's Panel header is hidden by a child-combinator chain because Commands renders its own titled Panel inside the composer's Panel (a descen…** [`apps/hub-web/src/features/remote/session-workspace.css`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/session-workspace.css), in the diff — No wrong behaviour today. If Panel wraps its header, or Commands is placed anywhere else in the composer, the composer title silently reappears or the Commands title disappears; the selector `[aria-expanded]` would also hide any later button in the header actions that gains that attribute. Fix: Give Panel an explicit prop (for example `hideHeader` or `variant="bare"`) and let MessageComposer and Commands choose, rather than styling by position; give the Navigation button and the rail toggle a named class or data attribute and select on that.
+- **F-007. Clock-skew tolerance for a Hub grant now exists in two places with unrelated bounds.** [`src/lib/hub-machine/client.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/src/lib/hub-machine/client.ts), in the diff — The code behaves correctly today. The cost lands on the next editor of the grant path, who has to find both mechanisms and work out which one decides acceptance: because authorize() sleeps until authorizedAt before verifying, and createGrantApplication().valid() re-verifies at a later wall time, the 250 ms lead is reached only through an early timer wake or a backward wall-clock step, while the 500 ms wait is what a… Fix: Name both bounds next to each other (or derive the wait from the lead), export the lead constant or put it with the other grant limits so client.test.ts imports it instead of repeating 250/251, and say in the verifier comment that authorize() waits first. Alternatively add one authorize()-level tes… Reached independently by review-architecture, review-degradation, review-highload, review-logic.
+- **F-008. Four stylesheet-contract tests (collapsed-rail Sign out, Select chevron background-color, project switcher layering, chevron colour matches --hub-muted) were added to breadcrumb.case.tsx, a file whose subject is the header Projects breadcr…** [`apps/hub-web/tests/breadcrumb.case.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/breadcrumb.case.tsx), in the diff — Behaviour is correct under `bun run --cwd apps/hub-web test`, the way check:hub-web invokes it. The cost is to the next reader and runner: a rail or Select CSS regression is reported under a breadcrumb file, and an unreadable stylesheet path fails collection of the whole breadcrumb file including its pre-existing breadcrumb and navigation tests rather than just the CSS tests. Fix: Move the stylesheet tests to their own tests/stylesheet.case.tsx beside css-rules.ts, resolve paths from import.meta.url or the vitest root instead of cwd, and read the stylesheet inside the tests (or a lazy helper) rather than at module load.
+- **F-009. The rail and Select rules are appended as a second, unindented `@layer components { ...** [`apps/hub-web/src/styles.css`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/styles.css), in the diff — The rules are correct and the cascade is right: the rules sit in the same layer as .hub-input, so the new .hub-select padding and background-image win by specificity, and Tailwind utilities can still override them. The cost is to the next editor, who finds `.sidebar` and `.nav-item` in one place and `.rail-collapsed .sidebar` and `.rail-collapsed .nav-item` in another, with a source-order dependency between the two … Fix: Fold the new rules into the existing components layer next to the rules they extend (or leave the second block but name its purpose in a heading comment), and keep the layered-rules test. **Held (challenged) by the premise judge — awaiting the operator.**
+- **F-010. HistoryView now calls useResource('flows') and useResource('documents') only to turn entity ids into labels.** [`apps/hub-web/src/features/context.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/context.tsx), in the diff — Opening History downloads every document body in the project to print a path next to an event. Nothing renders wrong, and ReadState waits only on events, so the cost is bandwidth and server work per History visit, growing with the documents stored. Not a correctness defect. Fix: Resolve names lazily (only for the entity ids on the visible page) or use a lightweight id-to-path listing if the Hub exposes one; otherwise leave the labels out of the first paint and fetch the lists only when the user expands 'Identifiers'. Reached independently by review-degradation, review-highload, review-performance.
+- **F-011. After a successful plain (non-managed) send the head writes back `{...submitted, text:"", prepared:false}`, so `mode`, `consent`, `consentVersion`, `busyPolicy`, `flowId` and the three pins all survive.** [`apps/hub-web/src/features/remote/work.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/work.tsx), in the diff — In ad-hoc mode `association()` needs `draft.consent`; on base each ad-hoc message needed the 'Send messages in this session without a Flow' box ticked again, on head the second message is sendable with no new acknowledgement. In the other direction a managed send drops the Flow that a plain send keeps. The label reads session-wide, so the head behaviour is defensible, but it is a default that moved without being sta… Fix: Decide one rule and apply it in both routes: reset consent/mode on send (keep only flowId and pins), or retain in both. State the choice in the PR text.
+- **F-012. ReviewPresentation now appends a 'What needs manual review' section that ends 'Open the result and verify these criteria manually before deciding.' It never reads `decision.readonly`, and it treats guide status 'missing' as 'steps are miss…** [`apps/hub-web/src/features/acceptance/presentation.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/acceptance/presentation.tsx), in the diff — Opening an aggregate Flow review always shows N of N criteria lacking steps, which the same page already says in 'How to check' (guideMissing); opening an accepted, read-only review shows a call to act before a decision that has been made. Screens that gate an accept/return decision now carry text that is wrong or redundant in these two states. Fix: Skip the section when `decision.readonly` is set, and count missing steps only for guides that can have steps (not the 'aggregate-manifest' reason).
+- **F-013. The description says 'select controls reserve space for the chevron'.** [`apps/hub-web/src/features/workflow.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/workflow.tsx), in the diff — On the Flow create form the specification select looks different from every other select in the app, and a long specification path can run under the native arrow, which is the symptom the change set out to remove. Cosmetic; selection still works. Fix: Render those three through <Select>, or add `hub-select` to their class. Reached independently by review-degradation, review-layout, review-pr-contract.
+- **F-015. The English UI now has two names for one destination.** [`apps/hub-web/src/i18n/workflow.en.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/i18n/workflow.en.ts), in the diff — An English user told to "open Project work" scans the sidebar for that label and finds "Managed work"; the button works, the sentence just points at a name that exists nowhere else in the EN navigation. Fix: Use the nav label in English ("Managed work"), or rename the nav and page to "Project work" in one change; add the label equality to flow-term.case.ts so the two cannot drift. Reached independently by review-degradation, review-ui-ux.
+- **F-016. The collapsed-rail tests parse styles.css and pin the layer and what is hidden, but nothing pins the one condition that keeps the rail usable: the .rail-collapsed rules sit inside @media (min-width:1024px) and the toggle is display:none be…** [`apps/hub-web/tests/breadcrumb.case.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/breadcrumb.case.tsx), in the diff — If a later edit moves the .rail-collapsed .nav-label rule out of the min-width block, a user who collapsed the rail on desktop and then opens the mobile drawer gets icon-only items and no visible toggle to restore them (the toggle is display:none there); every current test would still pass. Fix: Assert that every rule whose selector contains .rail-collapsed has a media entry equal to (min-width:1024px), and that .nav-item.desktop-rail-toggle has a base display:none rule outside it.
+- **F-020. In CreateSession the Flow pin is computed inside the mutate-level onSuccess, after the server has already created the session.** [`apps/hub-web/src/features/remote/sessions.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/sessions.tsx), in the diff — Trigger: Hub opened over http on a LAN or non-localhost address, a Flow selected, Create clicked. The session exists on the machine, the form stays open with Create enabled again (action.isPending is false), and a second click creates a duplicate session because the request carries no idempotency key. The same secure-context dependency already exists in work.tsx selectFlow, so such a deployment cannot use Flow pinni… Fix: Compute the digest before action.mutate (it needs only selectedFlow.criteria, available at click time) and carry it in the closure, so a failure aborts before the session is created. Or wrap the post-create block in try/catch and navigate regardless, leaving the composer's own Pin button (selectFlo… Reached independently by review-degradation, review-highload, review-logic.
+- **F-022. The guard that keeps the new rules in @layer components selects rules by containing .rail-collapsed or .hub-select.** [`apps/hub-web/tests/breadcrumb.case.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/breadcrumb.case.tsx), in the diff — Cost lands on the next editor of styles.css. If that rule is moved out of the layer block, it stays display:none at 1024px and above, because an unlayered declaration beats the layered `display:flex` in the media block, and the collapse toggle never appears. The test passes in that state. Nothing is wrong at the reviewed head. Fix: Include the toggle in the filter (add `|| r.selector.includes("desktop-rail-toggle")`), and make `layered` carry the layer name so the test can assert `components` rather than any layer.
+- **F-024. A command that needs human confirmation returns status 'confirmation-required'; its Confirmation card (Allow once / Deny, with expiry) is rendered inside Commands, which now sits in this collapsible catalogue wrapper.** [`apps/hub-web/src/features/remote/work.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/work.tsx), in the diff — Trigger: invoke a confirmation-requiring command, then close the catalogue. The transcript says confirmation is required, nothing visible lets the operator give it, and the card's own expiry check (Date.parse(card.expiresAt) <= Date.now()) can pass unnoticed, leaving the command unconfirmed. Recoverable by reopening the catalogue, so the cost is a confusing state, not data loss. Fix: Either keep the catalogue open while any receipt in it carries a confirmation, or render the Confirmation card (or a 'Reopen commands' button) from the transcript row of that outcome.
+- **F-027. Commands is now a child of MessageComposer and stays mounted (hidden) after its first open.** [`apps/hub-web/src/features/remote/work.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/work.tsx), in the diff — Hot path is every keypress in a message field of up to 32768 chars, in any session where the command panel was opened once. Catalogue size is not in the diff but is a native command list (tens of entries), so the per-keystroke cost is small and no user-visible lag is claimed; it is wasted work that grows with catalogue size and schema size and lands on whoever next adds weight to this panel. Fix: Wrap Commands in React.memo and keep its props referentially stable (`onOutcome` is already a useCallback; `control` would need to be memoised in useController or only the fields Commands reads passed down), or compute the schema string with useMemo keyed on `entry`. Unmounting the panel on close a…
+- **F-028. The PR template's row `Docs updated if behavior changed (README.md / docs/)` is absent from the body (the whole Checklist section was removed), and the diff changes behaviour a reader sees: session creation gains a Launch Flow select and a…** [`docs/docs/guides/team-hub-remote-sessions.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/docs/docs/guides/team-hub-remote-sessions.md), in the diff — A reader following the guide is not led wrong (every step still works; the Flow is optional), but nothing in docs/ tells them the first message can be prepared at creation, how the catalogue is opened, or that outcomes appear in the transcript. The cost is on the next reader of the guide. Fix: Add the Launch Flow / first message to step 2, the `/` button and outcome-in-transcript behaviour to step 4, and a sentence under 'A session also has' saying the catalogue opens from the composer. Or state in the body why docs are not needed.
+- **F-032. The launch onSuccess handler became async.** [`apps/hub-web/src/features/remote/sessions.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/sessions.tsx), in the diff — Attack vector: none that an attacker controls. The trigger is a 401 (or 403 access-denied) arriving from any concurrent request while the digest is pending. App.clear() then runs resetClient, queryClient.clear and useDraftStore.clearAll, and the stale handler still calls put() with the old scopeKey in the key and navigate() to the old session. Outcome: the typed first message stays in the in-memory draft store after… Fix: Take `const generation = getClientScope();` before the await and `if (generation !== getClientScope()) return;` after it, ahead of put() and navigate(), as sendNative does.
+- **F-034. Deleting the anchor sort leaves session-timeline.case.ts green (5/5).** [`apps/hub-web/src/features/remote/session-timeline.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/session-timeline.ts), in the diff — If a later edit removes or reverses the sort, outcomes reported out of anchor order would be drawn in the wrong place; the suite stays green for deletion and for no other reason. Fix: Add `mergeTimeline([message(1), message(2)], [entry('late', 2), entry('early', 1)])` expecting ['m1','early','m2','late'], and one with equal anchors given out of order to keep stability pinned.
+- **F-035. The selector changed from `button:first-child` to `button[aria-expanded]` because the header now starts with a Settings button (session-workspace.tsx puts it before the navigation toggle).** [`apps/hub-web/src/features/remote/session-workspace.css`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/session-workspace.css), in the diff — Re-introducing `:first-child` would hide the Settings button on desktop widths and show it in place of the navigation toggle on narrow ones, with the suite green. Fix: Mirror the composer-header test: parse the two rules, then assert in the rendered header that `querySelectorAll(selector)` matches exactly the navigation toggle (aria-expanded present) and does not match the Settings button.
+- **F-036. 'collapsed rail keeps an icon-only Sign out reachable' guards reachability with a blacklist of two spellings (`.identity`, `.identity > *`, `.hub-button` as the last token).** [`apps/hub-web/tests/breadcrumb.case.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/breadcrumb.case.tsx), in the diff — A later edit can hide the Sign out button in the collapsed rail while a test whose name says it stays reachable passes. Fix: Click the rail toggle first (this also covers the toggle, see F-005), then for every hiding alternative strip `.rail-collapsed` and assert `signOut.matches(alt)` and `signOut.closest(alt)` are false, the technique the composer-header test already uses.
+- **F-037. Behaviour the PR description names has no test reference anywhere in apps/hub-web/tests (negative greps, complete): (1) session list machine display name (`Laptop` appears only in machine-cards for the Machines view;** [`apps/hub-web/src/features/remote/sessions.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/sessions.tsx), in the diff — Each of these can be deleted or broken by a later edit with every suite green. This is an absence-of-reference finding, not a mutation result: none of the mutants below was run, because the component suite cannot run in this checkout. Fix: Run the listed mutants once the hub-web dependencies are installed; add one assertion per site (the display name in the session card, click-through of each recovery button asserting navigate arguments, a toggle click asserting aria-expanded and the shell class, and `container.querySelector('select.…
+- **F-038. The negative assertion cannot fail.** [`apps/hub-web/tests/context.case.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/context.case.tsx), in the diff — The test reads as coverage of the missing-role case it does not exercise; a regression that renders the actor wrongly when actorRole is absent is still caught only by the positive line. Fix: Assert on the list item: `within(actor.closest('li')!).getByText(en.unknownRole)` for the missing-role event, and keep the positive actor text assertion.
+- **F-039. Two fixed waits where the repository convention is an awaited condition: context.case.tsx (20 ms, before sampling the mergeEvents call count) and session-command-outcomes.case.tsx (50 ms, before sampling per-operation fetch counts).** [`apps/hub-web/tests/context.case.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/context.case.tsx), in the diff — No failing path found, so no flake is claimed; the cost is 70 ms per run and a pattern the next author copies where it would be load-bearing. Fix: Drop the sleeps, or wait on the request/render that proves the earlier queries settled (waitFor on the flows and documents requests in `fetched`/mocks.get).
+- **F-040. Fixtures are cast through `unknown`, which switches off the contract check.** [`apps/hub-web/tests/session-command-outcomes.case.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/session-command-outcomes.case.tsx), in the diff — If the UI later reads a field the fixture leaves out (sessionVersion, runId), the tests run against a shape no machine emits and cannot show it. Today's code is not affected: `receipt?.confirmation&&...` and `outcome.result !== null` behave the same. Fix: Build the fixtures with the full shape and drop the casts (`satisfies Control['CommandOutcome']`), as remote-owned-controls.case.tsx already does for its catalogue entry.
+- **F-041. The bilingual parity test covers four catalogs; `acceptance` is not among them, and the diff adds four keys to acceptance.en/ru (reviewGaps, missingStepsCount, missingEvidenceCount, manualReviewNext).** [`apps/hub-web/tests/localization.case.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/localization.case.ts), in the diff — A Russian user would see the English fallback or a count-less sentence in the review gaps block, with every suite green. Fix: Add ['acceptance', acceptanceEn, acceptanceRu] to the parity table.
+- **F-042. Session creation clears the launch draft on success, and the first message is moved into the new session's composer draft.** [`apps/hub-web/src/features/remote/sessions.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/sessions.tsx), in the diff — Trigger: create a session with a Flow and a first message, the machine refuses to open it, click 'Create a new session'. The recovery path the change adds starts from a blank form; the typed first message survives only in the dead session's composer draft, and nothing says so. The user re-selects everything and retypes (or hunts for the old textarea). Fix: On the rejected-opening recovery, seed the launch draft from the rejected session (machine, checkout, profile, title, Flow) and the first message from its composer draft, or keep the launch draft until the session has actually opened. At minimum say in the notice that the first message is still in … **Held (owner-decision) by the premise judge — awaiting the operator.**
+- **F-043. History rows now show the entity only when it resolves to a Flow or a document (flowNames/documentNames).** [`apps/hub-web/src/features/context.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/context.tsx), in the diff — Trigger: open History on a project with proposal or revision events. The row reads 'Proposal created, date, #12, Actor: <raw id>, Role' with no indication which proposal; the one thing that said so before is behind a click. The identifiers are hidden for the readability of the entity but left raw for the actor, so the cleanup is half done. Fix: Resolve proposals, revisions and deliveries the same way (names or short labels with a link to their view), or keep the entity id visible when it does not resolve. Show a display name for other actors or hide their raw id as well.
+- **F-045. The recovery buttons added to the empty proposal view are labelled with bare nouns, 'All' and 'Documents'.** [`apps/hub-web/src/features/context.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/context.tsx), in the diff — Trigger: Proposals tab with no proposals, or with a filter that hides all of them. A button reading 'All' under 'No proposals match the selected status.' is guessable, but 'Documents' under 'No proposals in this view.' gives no reason to go there. Generic CTA labels in both the EN and RU copy ('Все', 'Документы'). Fix: Name the action: 'Show all proposals' / 'Показать все предложения' and 'Open documents to propose a change' / 'Открыть документы, чтобы предложить правку', and add one sentence to the zero-proposals state saying proposals are created from a document.
+- **F-046. Two state-communication gaps in the command catalogue the change moves into the composer.** [`apps/hub-web/src/features/remote/settings.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/settings.tsx), in the diff — Trigger for (b): session in the busy state, select a workspace or session command that is 'available': Invoke is dead with no stated cause. Trigger for (a): ru locale, open the Select. Both are cosmetic/recovery costs, not wrong behaviour. Fix: Translate the availability token ({t('availabilityStates.' + e.availability)}) and add a one-line disabled-reason beside Invoke derived from the same conditions that compute `allowed` (observer, busy, local-only, needs setup). **Held (challenged) by the premise judge — awaiting the operator.**
+- **F-047. A command outcome in the conversation prints the machine's error code as a bare paragraph under the translated status, and a non-string result as pretty-printed JSON in a <pre>.** [`apps/hub-web/src/features/remote/sessions.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/sessions.tsx), in the diff — Trigger: invoke a command that the machine rejects. The transcript shows '/help', 'Rejected; no application confirmed', then an unlabelled code such as `machine-refused`. A command that returns structured data shows a JSON dump among human messages. The user gets no cause in words and no next step. Fix: Map known error codes to a sentence with a next step, and put the raw code and the raw JSON result behind the existing 'Technical details' pattern (details/summary), keeping a short human line visible.
+- **F-048. In the collapsed rail, each project is identified only by its first letter; the name is carried by `title` (hover only) and `aria-label` (screen readers only).** [`apps/hub-web/src/app/App.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/app/App.tsx), in the diff — Trigger: desktop width >=1024px, rail collapsed, two projects whose names start with the same letter (Alpha, Apex). A sighted keyboard user sees two identical 'A' buttons and gets no tooltip on focus; a touch-screen laptop gets none on tap. Which project is active is only shown by the highlight. The account/role line is also invisible while collapsed. Fix: Show a disambiguating tooltip on focus as well as hover (or a custom focus-visible label), or use initials with a deterministic colour/second letter; keep the active project's name visible in the workspace breadcrumb (already present) and document that.
+- **F-049. The work-context disclosure closes itself as soon as an association is valid (`open={!association()}`) and its summary shows the Flow title only in Flow mode.** [`apps/hub-web/src/features/remote/work.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/work.tsx), in the diff — Trigger: switch to ad-hoc (with consent) or managed mode; the control collapses. Whether messages go with or without a Flow is visible only by expanding it (the consent checkbox stays outside, which partly mitigates it). After picking a Flow in Flow mode the controls collapse under the pointer and the way back is a one-line summary that reads as a title, not a control. Fix: Put the mode into the summary ('Flow: <title>' / 'No Flow (ad hoc)' / 'Managed attempt') and add a visible 'Change' cue; consider not auto-collapsing while focus is inside the disclosure.
+- **F-051. The RU gap line calls evidence 'материалы', while the rest of the same file calls the same thing 'отчёты' (openEvidence 'Прочитать отчёт', evidenceLoading 'Загружаются отчёты', historyUnavailable ...).** [`apps/hub-web/src/i18n/acceptance.ru.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/i18n/acceptance.ru.ts), in the diff — Trigger: Russian reviewer on a result with unreported criteria. 'Критериев без привязанных материалов' does not map to the 'Прочитать отчёт' links on the criterion rows, so it is unclear what is missing. Fix: Use 'отчётов' (or whichever term the rest of the file uses) in missingEvidenceCount, and anchor the next-step line to the actual control (the Criteria list, or the technical details).
+- **F-053. The new optional Flow select in the New session form reuses the generic empty option t("choose"), which reads "Choose explicitly" (RU "Выберите явно").** [`apps/hub-web/src/i18n/remote.en.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/i18n/remote.en.ts), in the diff — With a stale or unloadable Flow the user is blocked with the advice "clear the selection". The way to do it is an option reading "Choose explicitly", which sounds like it demands a choice, the opposite of an optional field. Create session stays disabled until they guess it. On a fresh form an optional field that shows "Choose explicitly" invites the user to think a Flow is required. Both languages share the defect. Fix: Add a dedicated key for the empty option, e.g. launchFlowNone: "No Flow" / "Без Flow", and use it for this select only. Keep "clear the selection" and point it at that label, e.g. "choose No Flow".
+- **F-054. A restored launch draft stores only flowId.** [`apps/hub-web/src/i18n/remote.en.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/i18n/remote.en.ts), in the diff — When the Flows request fails (503) or the Flow has dropped out of the list, the user sees an opaque id in the select and cannot tell which Flow they had chosen. The id is an internal identifier, not something a user can recognise. Fix: Store the Flow title in the launch draft when the Flow is selected (flowTitle next to flowId) and use it in both fallbacks, with the id only when no title was ever stored. Update the two tests that pin the id text.
+- **F-055. In the collapsed rail the project switcher is reduced to a one-letter box (.project-initial, the first character of the project name) with the name hidden, and the only cue for the current project is .project-active: background var(--hub-s…** [`apps/hub-web/src/styles.css`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/styles.css), in the diff — Two projects that start with the same letter ("Hub", "Hub docs") show identical boxes and differ only by a hover title, which a touch tablet at 1024 px does not have, and by the accessible name for screen readers. The current-project fill measures about 1.13:1 against the rail (#ffffff on #edf2ef), far under the 3:1 non-text floor (WCAG 1.4.11). The letter colour change, ink #20352b against muted #61756b, is about 2… Fix: In the collapsed rail give the active project a visible cue that does not depend on a faint fill, e.g. a 2px inset accent bar or accent-soft background with accent border (reuse the .nav-active treatment), and show the project name as a tooltip or flyout. Consider two letters, or a colour-keyed ini…
+- **F-056. SessionSurface shows the same fixed sentence, "The machine refused to open this session.", plus the new next step, for every errorCode that /opening-status returns.** [`apps/hub-web/src/i18n/remote.en.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/i18n/remote.en.ts), in the diff — A user whose machine went offline before picking up the command (command-expired) is told it "refused", then told to check availability. The real cause is only in Technical details as a bare code, and the same applies to recovery-required. The recovery path (create a new session) is still correct, so the cost is a misleading cause, not a dead end. Fix: Keep the neutral lead "This session could not be opened." and name the cause only for refusal codes, or map command-expired and recovery-required to their own sentences. Keep the code in Technical details.
+
+</details>
+
+### Questions
+
+1. **F-059** — openCommands() calls waitFor() on panel(page, L.commands), which is page.locator('section').filter({has: heading 'Native command catalogue'}). [`apps/hub-web/tests/browser-journeys.e2e.mjs`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/tests/browser-journeys.e2e.mjs). Outside the unit and CI suites listed for this PR; found only by reading. Settles on one run.
+2. **F-075** — The Hub guide's 'Start a session from the web' section walks through Machine, Checkout, Agent profile and Title, then Message and Work mode, and mentions the command catalogue only as a feature in one sentence. [`docs/docs/guides/team-hub-remote-sessions.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/docs/docs/guides/team-hub-remote-sessions.md). A reader following the guide will not learn that a Flow can be chosen at creation or that / opens the catalogue. The documented steps still work.
+3. **F-076** — This claim, and 'Subsequent messages reuse that Flow', are backed in the body only by a manual Chrome run; no screenshot or recording is linked. [`.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md). None shown. It records which part of the claim rests on manual evidence.
+
+<details><summary><b>Scope — pull-request process (9)</b></summary>
+
+These are findings about the pull request rather than its code: the description, the title, the template and the documentation.
+
+- **F-023** (minor) — The PR body says session launch pins a Flow for the first message and that 'subsequent messages reuse that Flow'. [`apps/hub-web/src/features/remote/work.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/work.tsx). Fix: Reword the PR body to 'the composer keeps the chosen Flow for later messages in this tab' (or state that the pin is a client-side draft, not session state). No code change needed unless a session-level Flow is actually wanted.
+- **F-029** (minor) — The template asks for a Conventional Commits title (`type(scope): summary`) and CONTRIBUTING.md:76 says the repository uses Conventional Commits. [`.github/PULL_REQUEST_TEMPLATE.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/.github/PULL_REQUEST_TEMPLATE.md). Fix: Retitle, for example `feat(hub-web): prepare the first message at session launch and show command outcomes in chat`, and restore the checklist with each box answered.
+- **F-030** (minor) — The body describes the session, navigation, publication and proposal changes and then says 'Other Hub UX findings are tracked in the [review notes]' (a chatgpt.com space page outside the repository; not followed). [`apps/hub-web/src/features/context.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/context.tsx). Fix: List these changes in the body (one line each), or split them out. Replace the external link with the findings inline or with a repository path.
+- **F-031** (minor) — The body says 'command outcomes appear in the conversation' and 'the applied help outcome appeared in the transcript'. [`apps/hub-web/src/features/remote/sessions.tsx`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/apps/hub-web/src/features/remote/sessions.tsx). Fix: Add 'for the current tab' to the body (and to the guide when PC-001 is fixed), or note the limit under Known limitations.
+- **F-071** (info) — Unverified. [`.github/PULL_REQUEST_TEMPLATE.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/.github/PULL_REQUEST_TEMPLATE.md). Fix: Link the recording or screenshots at both widths, name the fixture command, and report `bun run check` as the template asks. What would settle it: the fixture's launch command and a rerun of the 44 named tests.
+- **F-073** (info) — The body states a count of 44 machine client and bridge tests. [`.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md). Fix: Name the command or file set behind the 44 (for example the bun test paths), or restate the count from CI. If the intended set was client.test.ts plus bridge.network.test.ts, the static count is 43 and the number needs a look.
+- **F-074** (info) — The body says 'The machine client accepts a bounded clock lead when checking the grant issue time.' The diff does that: `issued <= now + MAX_HUB_CLOCK_LEAD_MS` with the constant at 250, while `expires > now` and `elapsed < LIMITS.grantMs` … [`src/lib/hub-machine/client.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/src/lib/hub-machine/client.ts). Fix: Optionally add one sentence to the body: the tolerance covers the residual race after the existing wait, and a grant that expires at or before its issue time is refused.
+- **F-075** (info) — The Hub guide's 'Start a session from the web' section walks through Machine, Checkout, Agent profile and Title, then Message and Work mode, and mentions the command catalogue only as a feature in one sentence. [`docs/docs/guides/team-hub-remote-sessions.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/docs/docs/guides/team-hub-remote-sessions.md). Fix: Add a short note to step 2 about the optional Flow and first-message draft, and a line on the slash shortcut. This is a judgement call, since the body has no Documentation checkbox to disagree with.
+- **F-076** (info) — This claim, and 'Subsequent messages reuse that Flow', are backed in the body only by a manual Chrome run; no screenshot or recording is linked. [`.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md). Fix: Link the Chrome evidence, or point to the test that asserts two sends carry identical pins. The slice-01 reviewer can confirm whether work.tsx tests do.
+
+</details>
+
+<details><summary><b>Pre-existing (not blocking) (1)</b></summary>
+
+- **F-033** (minor) — Two gates in the rewritten verifyAuthorizationGrant expression survive deletion with the suite green: `elapsed >= 0` and `expires - issued <= LIMITS.grantMs`. [`src/lib/hub-machine/client.ts`](https://github.com/MrCipherSmith/keryx/blob/0be1e717365d980df900ded496ca90886fed09cf/src/lib/hub-machine/client.ts).
+
+</details>
+
+<details><summary><b>Verified clean</b></summary>
+
+One line per hypothesis that was tested and died, with how it was tested. Not a list of virtues.
+
+- **The pull request's central claim about the machine client holds.** `review-logic` traced
+  `verifyAuthorizationGrant` line by line: `expires > now` and the monotonic `elapsed < LIMITS.grantMs`
+  (counted from before the authorize request) are untouched, the lead is bounded at 250 ms, and the new
+  `expires > issued` guard is needed because the lead would otherwise admit a negative-length grant. The new
+  tests pin 250 accept / 251 refuse, expiry at `now + 5075` refuse, and `elapsed = 5000` refuse.
+- **The clock lead widens no attack surface.** `review-security-code` enumerated every consumer with
+  `keryx ctx rg`: `verifyAuthorizationGrant` is called only at `client.ts:209` and `:296`,
+  `createGrantApplication` only at `:216`, and `authorization()` only from five `bridge.ts` sites. A Hub that
+  controls its own clock gains nothing it did not already have, because it writes the whole grant anyway, and
+  the monotonic bound caps the usable lifetime regardless of the stated issue time.
+- **No regression at any of the 40 blast-radius sites, nor at the 21 the cap had dropped.**
+  `review-regression` walked both slices' radius and five chunk passes covered the rest: `useRemoteQuery`'s
+  widened `enabled` and `useAppliedReceipt`'s new `settled` are both optional, so every existing caller takes
+  the old branch; `Button`/`Input` moving to `ComponentPropsWithRef` changes nothing for callers that pass no
+  `ref`; `.hub-select:not([multiple]):not([size])` deliberately spares the multi-select in Settings.
+- **The mutation pass killed the gates the change added.** 39 of 56 mutants went red, including every
+  clock-lead gate in `client.ts` and all eight `session-timeline` placement candidates — the new tests can
+  actually fail.
+- **English and Russian catalogues are at parity.** 17 new `remote` keys and 2 new `workflow` keys exist in
+  both, checked key by key by three reviewers independently.
+- **The command catalogue's authorization did not loosen.** Unavailable entries became selectable for
+  inspection, but `invoke()` and its button are still gated by `allowed`, `stale`, `control.active`,
+  `control.binding`, the association requirement and the `local-only` / `sensitive-setup` exclusions; the new
+  early return is strictly tighter than the old one.
+
+</details>
+
+<details><summary><b>How this review was run</b></summary>
+
+- **Workflow:** `review-orchestrator`, run inline in the main session; canonical severity rubric and shared
+  laws from the skill. Round 1, first round — no previous round found (sources tried: local package, git
+  history, the PR's keryx block, PR comments; the package is not bound to a flow).
+- **Scope:** `85fe58fad184..0be1e717365d`, round 1, PR #1124. Scope A: 34 files in 2 deep slices
+  (279,902 bytes); `src/hub/web-assets.generated.ts` omitted as generated. Scope B: 40 files at distance ≤ 2,
+  with 21 more recovered by 5 chunk passes. Unchecked commits: none — the head did not move during the round.
+- **Models:** every reviewer dispatch ran on `claude-sonnet-5-5` at the operator's instruction; the Wave D
+  premise judge ran on `claude-opus-5` (`keryx review tier --premise` floors at the deep tier). Every
+  `keryx review tier` block printed `inherit: true`, so `Model assignment: adaptive`.
+- **Tools:** `keryx review plan|scope|blast-radius|slice|required|estimate|tier|layers|context-collect|comments collect|verify-run|chunks|ledger|ingest`,
+  `keryx ctx rg|run|read`, `keryx memory search`, `gh pr view|checks|diff`, `bun test`, and the Claude
+  desktop browser pane (Chromium) for the CSP measurement.
+- **Skills:** `review-orchestrator` (this one), and the reviewer definitions under
+  `.metaproject/skills/gdskills/review/`.
+- **Subagents:** 22 reviewer dispatches over 11 reviewers, all through the `general-purpose` fallback because
+  this runtime has no native agent type for these reviewer names — `review-logic`, `review-architecture`,
+  `review-security-code`, `review-highload`, `review-regression`, `review-degradation` (Wave A, 2 slices
+  each); `review-performance`, `review-layout`, `review-ui-ux`, `review-pr-contract` (Wave B, 2 slices each),
+  `review-testing-practices` (slice-02, the one `run-tests` dispatch, 900 s budget); `review-verifier`
+  (Wave C); `review-premise` (Wave D); plus 3 dispatches for the 5 chunk passes and 1 re-dispatch of
+  `review-performance` on slice-02, whose first reply carried no `status` inside its result object.
+- **Not run:** the hub-web jsdom component suites (remote, session-command-outcomes, breadcrumb, session-
+  workspace, context, flow-acceptance, remote-owned-controls) — `apps/hub-web` has no `node_modules` in this
+  checkout, so 85 of 131 mutation candidates were not reached; **layout: no engine** — no dev server,
+  Storybook or Playwright measurement was available, so both `review-layout` waves were static and every
+  geometry claim of theirs stayed `info`; CI triage — `review.jev.ci_triage` is not enabled and CI was green
+  anyway; the Jev CLI-engine reviewers and `jev-select` / `jev-triage` — opt-ins not enabled in this project.
+- **Skipped reviewers:** `review-frontend` and `review-frontend-conventions` (stack: the root `package.json`
+  declares no `react` or `mobx`, and `keryx review stack` filters on the root manifest — note `apps/hub-web`
+  does use React, so this exclusion is a limitation of the stack probe, not a statement about the code);
+  `review-backend` (no `nestjs`/`prisma`); `review-core-boundaries` and `review-flow-graph`
+  (`no-matching-paths`); `review-style` and `review-clean-code` (the round was not started with `--style`);
+  the legacy profile reviewers (flag-only, no flag passed).
+- **Verification:** `verification_mode: annotate`. 1 finding checked, 1 confirmed, 0 refuted, 0 unverifiable;
+  every other finding is `unverified` and stated as such. The premise judge upheld 43, downgraded 0, and held
+  3 (`F-009`, `F-046` challenged; `F-042` owner-decision) pending the operator's answer.
+- **Stage counts:** pre-filter dropped 1 file (generated) and 0 change blocks; 87 raw findings consolidated
+  to 71 by merging 7 duplicate classes (16 ids absorbed); verifier refuted 0; premise judge downgraded 0 and
+  held 3; 71 retained. Chunk passes: 5 of 5 done, 21 files covered, 0 findings. External PR comments
+  collected: 0 (inline 0, reviews 0, discussion 0) — nothing to reply to.
+- **Memory:** one stage query, recorded with `keryx review start --memory-query`. It matched 10 accepted
+  entries, none whose recorded scope intersects `apps/hub-web/**` or `src/lib/hub-machine/**`, so none was
+  handed to a reviewer as project truth.
+
+</details>
+
+## Review parity
+
+- **Not verified:** Run the 85 unreached mutants (the ids not listed in the mutation table, all in .tsx files) after `bun install --cwd apps/hub-web`; the nearest suite is `bun run --cwd apps/hub-web test` (vitest). I di (review-testing-practices-w1:fu1, narrowed, remains: 85 of 131 candidates, all in the hub-web jsdom component suites (remote, session-command-outcomes, breadcrumb DOM half, session-workspace DOM half, context, flow-acceptance, remote-owned-controls); run them after bun install in apps/hub-web, or read the CI typecheck-and-tests job, which is green at this head)
+- **Gaps without a launch after the plan was authorized: 2, longest 18 min (waits for operator cards are possible).**
+
+```json keryx:findings
+[
+ {
+  "id": "F-001",
+  "severity": "major",
+  "file": "apps/hub-web/src/styles.css",
+  "quote": "background-image: var(--hub-select-chevron);",
+  "problem": "The chevron is drawn from a data:image/svg+xml URI held in --hub-select-chevron (declared at :root and :root[data-theme=\"dark\"]), painted as a CSS background-image on every .hub-select:not([multiple]):not([size]) while that rule also sets appearance:none. The Hub serves the web app from src/hub/server.ts:175 with Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'\". There is no img-src, so images fall back to default-src 'self'. CSS background images are image requests governed by img-src, and 'self' does not match the data: scheme, so the browser refuses the image.",
+  "impact": "On any page served by the Hub (the production path, and the one tests/browser-journeys.e2e.mjs drives via fx.origin), every non-multiple Select (header project selector, session launch Flow/machine/checkout/profile selects, composer busy-policy select, context and proposal filters, and the rest) has its native arrow removed and nothing drawn in its place. The control shows 2.5rem of reserved empty space on the right and no dropdown affordance. A Vite dev server sends no such header, so a check there (the PR reports Chrome at 1366 and 390 px) would show the chevron. Neither the unit tests nor the e2e script assert that the chevron paints; the only chevron tests read the stylesheet text.",
+  "suggested_fix": "Do not rely on an image request. Draw the chevron with gradients, which are not subject to img-src and can read the tokens directly (for example two linear-gradient layers rotated into a V using var(--hub-muted)), which also removes the per-theme baked colour and the test that keeps the two copies in sync. Alternatively serve the SVG as a same-origin asset and reference it by URL, or add img-src 'self' data: to the Hub CSP (this widens the policy for the whole app). Add an e2e assertion against the Hub origin that a Select's computed background-image resolves and the console shows no CSP violation.",
+  "evidence": "src/hub/server.ts:175 sets the header text quoted above (read in full; no img-src anywhere in src/ or apps/hub-web). styles.css:15 and :42 define the data: URI; styles.css:650 applies it. keryx ctx rg for 'img-src|Content-Security-Policy' over src and apps/hub-web (generated and test files excluded) returns only server.ts:175. UNVERIFIED IN AN ENGINE: no browser was run in this pass. To settle it, open any Select-bearing page from a running Hub (not Vite) and read the console for a 'Refused to load the image data:image/svg+xml' violation, or read getComputedStyle(select).backgroundImage and look at the rendered control.",
+  "confidence": "medium",
+  "reviewer": "review-layout",
+  "class_scope": {
+   "sites": [
+    "apps/hub-web/src/components/ui.tsx:99 (Select, the only producer of the hub-select class)",
+    "apps/hub-web/src/app/App.tsx:471",
+    "apps/hub-web/src/features/context.tsx",
+    "apps/hub-web/src/features/remote/sessions.tsx",
+    "apps/hub-web/src/features/remote/work.tsx",
+    "apps/hub-web/src/features/remote/recovery.tsx",
+    "apps/hub-web/src/features/remote/settings.tsx",
+    "apps/hub-web/src/features/remote/fork.tsx",
+    "apps/hub-web/src/features/remote/association.tsx",
+    "apps/hub-web/src/features/global-flows.tsx",
+    "apps/hub-web/src/features/managed-work/native-selection.tsx",
+    "apps/hub-web/src/features/managed-work/contribute.tsx",
+    "apps/hub-web/src/features/managed-work/work-lists.tsx",
+    "apps/hub-web/src/features/managed-work/amendments.tsx"
+   ],
+   "enumeration_method": "keryx ctx rg '<Select' over apps/hub-web/src returned 26 matches in 13 files; all go through the Select component at ui.tsx:99, which appends the hub-select class, so the rule at styles.css:644 reaches each of them. The CSP is a single header at server.ts:175 applied to every web asset."
+  },
+  "reported_as": "LY-001",
+  "dispatch": "review-layout-w2"
+ },
+ {
+  "id": "F-002",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "const eligible = flows.data?.flows.filter(flow => flow.status === \"in-progress\") ?? [];",
+  "problem": "CreateSession now repeats the Flow query (same key [scopeKey, projectId, \"flows\"], same endpoint) and the rule that only an \"in-progress\" Flow can be attached to a session message. The rule already lived in MessageComposer and in the association picker; this change adds a third copy instead of lifting it.",
+  "impact": "No wrong behaviour today. The cost lands on whoever changes what makes a Flow eligible for a session message: three sites must change together, and two of them (sessions.tsx, work.tsx) also own a query with the same key and must keep an identical queryFn. A divergence would let the launch form offer a Flow the composer then refuses, or the reverse.",
+  "suggested_fix": "Add one hook next to the other remote helpers (for example useEligibleFlows(projectId) in features/remote/shared.tsx) that owns the query and the status filter, and call it from CreateSession and MessageComposer; association.tsx can adopt it later.",
+  "evidence": "keryx ctx rg 'in-progress' over apps/hub-web/src: work.tsx:118 (`flows.data?.flows.filter((f) => f.status === \"in-progress\")`), sessions.tsx:147, and association.tsx:13 (`f.status==='in-progress'`, pre-existing). Query: work.tsx:109-116 and sessions.tsx:149-152 use the identical key and `remoteProject(...) + \"/flows\"` path.",
+  "confidence": "high",
+  "reviewer": "review-architecture",
+  "reported_as": "F-001",
+  "dispatch": "review-architecture-w1"
+ },
+ {
+  "id": "F-003",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/work.tsx",
+  "quote": "specDigest: flow.specContentDigest, criteriaDigest, consent: false, consentVersion: null,",
+  "problem": "The mapping from a HubFlow to the draft's pin fields (flowId, flowVersion, specDigest, criteriaDigest) is now written twice in the same file: prepareFlowMessageDraft (new, used by launch) and the setDraft call inside selectFlow (existing). They are kept equal by hand.",
+  "impact": "No wrong behaviour today. If the pin gains a field or one of the digests changes derivation, a first message seeded at launch and a Flow picked later in the composer can carry different pins, and association() would then accept one and reject the other.",
+  "suggested_fix": "Extract the pin fields into one function, for example flowPin(flow, criteriaDigest), spread by both prepareFlowMessageDraft and selectFlow.",
+  "evidence": "work.tsx lines 47-53 (prepareFlowMessageDraft) against lines 136-156 (selectFlow, `flowVersion: flow.version, specDigest: flow.specContentDigest, criteriaDigest: digest`).",
+  "confidence": "high",
+  "reviewer": "review-architecture",
+  "reported_as": "F-002",
+  "dispatch": "review-architecture-w1"
+ },
+ {
+  "id": "F-004",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/settings.tsx",
+  "quote": "export function Commands({record,control,onOutcome,visible=true,focusToken=0}",
+  "problem": "Commands is now a child of the message composer (work.tsx imports it from ./settings and mounts it inside MessageComposer), but it still lives in settings.tsx, and its props now carry presentation protocol: `visible` plus a `focusToken` counter that the parent bumps to make the child run a focus effect.",
+  "impact": "No wrong behaviour today. A reader looking for the command catalogue goes to the settings module; the composer to settings dependency (work.tsx:28) runs against the module's name; and any new caller must learn that focus is requested by incrementing a number.",
+  "suggested_fix": "Move Commands (and its catalogue search) into its own module such as features/remote/commands.tsx next to work.tsx, and expose focus through a forwarded ref or an imperative handle instead of a counter prop. Keeping Confirmation in settings.tsx is fine.",
+  "evidence": "work.tsx:28 `import { Commands } from \"./settings\"`, work.tsx:261 passes visible and focusToken; settings.tsx:22 effect `if (visible) searchInput.current?.focus()` keyed on [visible, focusToken]. No cycle: settings.tsx imports neither work.tsx nor sessions.tsx (checked with an import grep over features/remote).",
+  "confidence": "high",
+  "reviewer": "review-architecture",
+  "reported_as": "F-003",
+  "dispatch": "review-architecture-w1"
+ },
+ {
+  "id": "F-005",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/settings.tsx",
+  "quote": "useEffect(()=>{if(receipt)onOutcome?.(receipt,invokedAt.current||new Date().toISOString(),anchor.current);},[receipt,onOutcome]);",
+  "problem": "OutcomeItem follows an operation only until it settles (`useAppliedReceipt(..., receipt => isSettled(receipt.status))`), with a comment saying a live query per outcome would refetch on every invalidation. Commands calls `useAppliedReceipt(record, action.data)` with no settled gate, on the same query key [\"operation\", sessionId, operationId], so the newest command's query keeps an enabled observer for as long as the composer stays mounted and the gate is moot for it. The same outcome is also held in three places: the mutation data, the parent `outcomes` state fed by this effect, and OutcomeItem's own follower.",
+  "impact": "Small: one operation query refetches on each invalidation after it has settled, which is the cost the settled gate was written to avoid. The larger cost is for the next editor: the effect carries a hidden contract (invoke() must write the invokedAt and anchor refs before the receipt arrives) and three copies of the outcome can disagree in what they show.",
+  "suggested_fix": "Pass the same `isSettled` predicate in Commands, or move isSettled next to useAppliedReceipt so every caller uses it. Longer term, let Commands only report the invocation (operationId, invokedAt, anchor) and let OutcomeItem own the following of the operation.",
+  "evidence": "settings.tsx:22 (Commands: `const observed=useAppliedReceipt(record,action.data)`; refs `invokedAt`/`anchor` written in invoke()) against sessions.tsx OutcomeItem (`useAppliedReceipt<Control[\"CommandOutcome\"]>(record, item.outcome, receipt => isSettled(receipt.status))`). remote-hooks.ts useAppliedReceipt builds the key from `initial?.operationId`, so both resolve to the same query.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "reported_as": "F-004",
+  "dispatch": "review-architecture-w1",
+  "reported_by": [
+   "review-architecture",
+   "review-highload",
+   "review-performance"
+  ],
+  "merged_ids": [
+   "F-019",
+   "F-070"
+  ],
+  "class": "Commands follows the same operation without the new settled predicate"
+ },
+ {
+  "id": "F-006",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/session-workspace.css",
+  "quote": ".session-composer > .hub-panel > .hub-panel-header {",
+  "problem": "Feature CSS now depends on the exact markup of the shared Panel and on component nesting: the composer's Panel header is hidden by a child-combinator chain because Commands renders its own titled Panel inside the composer's Panel (a descendant selector would hide both). Elsewhere the same change couples TSX to CSS class names: App.tsx focuses `button:not(.desktop-rail-toggle)`, and the header Navigation button is now found by `.session-header-actions > button[aria-expanded]` instead of `:first-child`.",
+  "impact": "No wrong behaviour today. If Panel wraps its header, or Commands is placed anywhere else in the composer, the composer title silently reappears or the Commands title disappears; the selector `[aria-expanded]` would also hide any later button in the header actions that gains that attribute.",
+  "suggested_fix": "Give Panel an explicit prop (for example `hideHeader` or `variant=\"bare\"`) and let MessageComposer and Commands choose, rather than styling by position; give the Navigation button and the rail toggle a named class or data attribute and select on that.",
+  "evidence": "ui.tsx Panel renders `<section class=\"hub-panel\"><header class=\"hub-panel-header\">`; work.tsx:217 Panel title=message with Commands (its own Panel title=commands) mounted at work.tsx:261; App.tsx effect `querySelector(\"button:not(.desktop-rail-toggle)\")`; session-workspace.css rules at lines ~736 and ~826 of the diff.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "reported_as": "F-006",
+  "dispatch": "review-architecture-w1"
+ },
+ {
+  "id": "F-007",
+  "severity": "minor",
+  "file": "src/lib/hub-machine/client.ts",
+  "quote": "const MAX_HUB_CLOCK_LEAD_MS = 250;",
+  "problem": "Clock-skew tolerance for a Hub grant now exists in two places with unrelated bounds. MachineConnection.authorize() already waits for a future-dated grant (`if (wait > 0 && wait <= 500) await Bun.sleep(wait)`, an unnamed 500 ms literal that predates this PR: commit 565866111a is an ancestor of the base), and then calls verifyAuthorizationGrant. The PR adds a named 250 ms lead inside the verifier. The two bounds are not derived from one another, and only the verifier's is named, exported to no one and duplicated as the literals 250/251 in client.test.ts.",
+  "impact": "The code behaves correctly today. The cost lands on the next editor of the grant path, who has to find both mechanisms and work out which one decides acceptance: because authorize() sleeps until authorizedAt before verifying, and createGrantApplication().valid() re-verifies at a later wall time, the 250 ms lead is reached only through an early timer wake or a backward wall-clock step, while the 500 ms wait is what actually admits a Hub-ahead grant.",
+  "suggested_fix": "Name both bounds next to each other (or derive the wait from the lead), export the lead constant or put it with the other grant limits so client.test.ts imports it instead of repeating 250/251, and say in the verifier comment that authorize() waits first. Alternatively add one authorize()-level test that exercises a grant dated 100-400 ms ahead end to end.",
+  "evidence": "client.ts lines 29-49 (verifier and constant) and 204-210 (existing wait before the verifier); `git blame -L 204,210` attributes the wait to 565866111a, and `git merge-base --is-ancestor 565866111a <base>` succeeds, so it is existing behaviour, not part of this PR. The only callers of verifyAuthorizationGrant are authorize() (line 209) and createGrantApplication().valid() (line 296), both reached after that wait. The slice's tests call the verifier directly and never authorize(). What would settle whether the lead is load-bearing: a run of the two-machine fixture with the lead removed and the wait kept.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "reported_as": "F-001",
+  "dispatch": "review-architecture-w2",
+  "reported_by": [
+   "review-architecture",
+   "review-degradation",
+   "review-highload",
+   "review-logic"
+  ],
+  "merged_ids": [
+   "F-014",
+   "F-021",
+   "F-025"
+  ],
+  "class": "two clock-skew bounds, 250 ms in the verifier and 500 ms in the pre-wait, with no stated relation"
+ },
+ {
+  "id": "F-008",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+  "quote": "const css = parseCssRules(readFileSync(\"src/styles.css\", \"utf8\"));",
+  "problem": "Four stylesheet-contract tests (collapsed-rail Sign out, Select chevron background-color, project switcher layering, chevron colour matches --hub-muted) were added to breadcrumb.case.tsx, a file whose subject is the header Projects breadcrumb. The stylesheet is read at module scope with a path relative to the process cwd, and session-workspace.case.tsx does the same for session-workspace.css. The first test also scrapes the muted hex value out of the stylesheet text with a regex.",
+  "impact": "Behaviour is correct under `bun run --cwd apps/hub-web test`, the way check:hub-web invokes it. The cost is to the next reader and runner: a rail or Select CSS regression is reported under a breadcrumb file, and an unreadable stylesheet path fails collection of the whole breadcrumb file including its pre-existing breadcrumb and navigation tests rather than just the CSS tests.",
+  "suggested_fix": "Move the stylesheet tests to their own tests/stylesheet.case.tsx beside css-rules.ts, resolve paths from import.meta.url or the vitest root instead of cwd, and read the stylesheet inside the tests (or a lazy helper) rather than at module load.",
+  "evidence": "breadcrumb.case.tsx diff hunk adds `import { readFileSync } from \"node:fs\"` and the module-scope `const css = ...`; apps/hub-web/package.json defines `test: vitest run`, root package.json check:hub-web runs it with `--cwd apps/hub-web`, and vitest.config.ts includes tests/**/*.case.tsx. No other hub-web test reads a source file by cwd-relative path.",
+  "confidence": "high",
+  "reviewer": "review-architecture",
+  "reported_as": "F-002",
+  "dispatch": "review-architecture-w2"
+ },
+ {
+  "id": "F-009",
+  "severity": "minor",
+  "file": "apps/hub-web/src/styles.css",
+  "quote": ".nav-item.desktop-rail-toggle { display:none; }",
+  "problem": "The rail and Select rules are appended as a second, unindented `@layer components { ... }` block at the end of the file, while styles.css already holds one indented `@layer components` block (opened near line 142) that defines the .sidebar, .nav-item and .hub-input rules these extend. The block's comment explains the layer choice but not why it is not part of the first block.",
+  "impact": "The rules are correct and the cascade is right: the rules sit in the same layer as .hub-input, so the new .hub-select padding and background-image win by specificity, and Tailwind utilities can still override them. The cost is to the next editor, who finds `.sidebar` and `.nav-item` in one place and `.rail-collapsed .sidebar` and `.rail-collapsed .nav-item` in another, with a source-order dependency between the two blocks.",
+  "suggested_fix": "Fold the new rules into the existing components layer next to the rules they extend (or leave the second block but name its purpose in a heading comment), and keep the layered-rules test.",
+  "evidence": "styles.css: `@layer base {` at 95, `@layer components {` at 142 (rules indented), second `@layer components {` at 634 (rules unindented). `.hub-input` (376) and `.hub-input:disabled` (387) are inside the first block, so the new `.hub-select:not([multiple]):not([size])` (specificity 0,3,0) overrides the disabled fill's background reset for background-image only, as its comment states. No unlayered rule in styles.css or session-workspace.css sets padding or background on .hub-input.",
+  "confidence": "medium",
+  "reviewer": "review-architecture",
+  "reported_as": "F-003",
+  "dispatch": "review-architecture-w2"
+ },
+ {
+  "id": "F-010",
+  "severity": "minor",
+  "degradation_class": "performance",
+  "evidence_kind": "consumer-trace",
+  "file": "apps/hub-web/src/features/context.tsx",
+  "quote": "const documents = useResource<{documents: HubDocument[]}>('documents');",
+  "problem": "HistoryView now calls useResource('flows') and useResource('documents') only to turn entity ids into labels. On base opening History issued one request (events). Now it also issues GET /projects/:id/flows and GET /projects/:id/documents. The documents list carries each document's full `content` (ProposalCard reads `doc?.content` from this same list, context.tsx ProposalCard `{doc?.content ?? t('missingDocument')}`), so the payload scales with the whole document corpus, not with the 500-event page the view shows. Both queries share the keys [scopeKey, projectId, 'flows'|'documents'] with other views, but staleTime is the default, so a mount refetches.",
+  "impact": "Opening History downloads every document body in the project to print a path next to an event. Nothing renders wrong, and ReadState waits only on events, so the cost is bandwidth and server work per History visit, growing with the documents stored. Not a correctness defect.",
+  "suggested_fix": "Resolve names lazily (only for the entity ids on the visible page) or use a lightweight id-to-path listing if the Hub exposes one; otherwise leave the labels out of the first paint and fetch the lists only when the user expands 'Identifiers'.",
+  "evidence": "base-diff: base HistoryView (diff lines for `const { projectId, scopeKey } = useHub();`) has one useInfiniteQuery and no useResource; head adds two. consumer-trace: context.tsx useResource builds `${projectPath(projectId)}/${resource}` with no field selection; ProposalCard uses `doc?.content` from the same documents list, so the list includes bodies. refute: read useMemo/ReadState, no guard limits the lists; Proposals view fetches documents too but needs the content, History needs only `doc.path`. Whether the server trims `content` on the list route was not read (server code is outside slice-01).",
+  "confidence": "medium",
+  "reviewer": "review-degradation",
+  "reported_as": "F-001",
+  "dispatch": "review-degradation-w1",
+  "reported_by": [
+   "review-degradation",
+   "review-highload",
+   "review-performance"
+  ],
+  "merged_ids": [
+   "F-018",
+   "F-026"
+  ],
+  "class": "History reads the whole documents collection, bodies included, to label events"
+ },
+ {
+  "id": "F-011",
+  "severity": "minor",
+  "degradation_class": "default-change",
+  "evidence_kind": "base-diff",
+  "file": "apps/hub-web/src/features/remote/work.tsx",
+  "quote": "if(current===submitted)store.put(draftKey,{...submitted,text:\"\",prepared:false});",
+  "problem": "After a successful plain (non-managed) send the head writes back `{...submitted, text:\"\", prepared:false}`, so `mode`, `consent`, `consentVersion`, `busyPolicy`, `flowId` and the three pins all survive. Base called `clearDraft(submitted)`, which removed the whole draft and returned every field to its default (mode \"\" , consent false, no Flow). The commit title (d5129807d 'retain session Flow') names only the Flow pin. The managed path in the same function (`sendNative`) still calls `clearDraft(submittedDraft)`, so after a managed send consent and the Flow pin reset while after a plain send they do not.",
+  "impact": "In ad-hoc mode `association()` needs `draft.consent`; on base each ad-hoc message needed the 'Send messages in this session without a Flow' box ticked again, on head the second message is sendable with no new acknowledgement. In the other direction a managed send drops the Flow that a plain send keeps. The label reads session-wide, so the head behaviour is defensible, but it is a default that moved without being stated, and the two send routes now disagree.",
+  "suggested_fix": "Decide one rule and apply it in both routes: reset consent/mode on send (keep only flowId and pins), or retain in both. State the choice in the PR text.",
+  "evidence": "base-diff: base `onSuccess:()=>setPreserved(!clearDraft(submitted))`; head `onSuccess:receipt=>{...store.put(draftKey,{...submitted,text:\"\",prepared:false})...}`; sendNative line `const preserved=!clearDraft(submittedDraft)` is unchanged. Read useDraft (state/drafts.ts): clear() removes the key so the next read falls back to `initial` (consent false). refute: label `chatConsent` is 'Send messages in this session without a Flow.' and the draft store is in-memory zustand, never persisted, so retention cannot outlive the tab; commit messages d5129807d..0be1e7173 mention retaining the Flow only.",
+  "confidence": "medium",
+  "reviewer": "review-degradation",
+  "reported_as": "F-002",
+  "dispatch": "review-degradation-w1"
+ },
+ {
+  "id": "F-012",
+  "severity": "minor",
+  "degradation_class": "behaviour-delta",
+  "evidence_kind": "consumer-trace",
+  "file": "apps/hub-web/src/features/acceptance/presentation.tsx",
+  "quote": "const missingSteps = guideResolved ? criteria.filter(row => !mappedCriteria.has(row.id)).length : 0;",
+  "problem": "ReviewPresentation now appends a 'What needs manual review' section that ends 'Open the result and verify these criteria manually before deciding.' It never reads `decision.readonly`, and it treats guide status 'missing' as 'steps are missing'. Two consumers reach the wrong cases: (1) CanonicalFlowReview passes `guide={{status:'missing',reason:'aggregate-manifest'}}` by construction, so every aggregate Flow review reports every criterion as 'without verification steps'; (2) CanonicalIntentReview/CanonicalFlowReview set `readonly:'acceptedReadonly'` once accepted, and the section still renders 'before deciding' for criteria that lack linked evidence.",
+  "impact": "Opening an aggregate Flow review always shows N of N criteria lacking steps, which the same page already says in 'How to check' (guideMissing); opening an accepted, read-only review shows a call to act before a decision that has been made. Screens that gate an accept/return decision now carry text that is wrong or redundant in these two states.",
+  "suggested_fix": "Skip the section when `decision.readonly` is set, and count missing steps only for guides that can have steps (not the 'aggregate-manifest' reason).",
+  "evidence": "consumer-trace: canonical.tsx CanonicalFlowReview `guide={{status:'missing',reason:'aggregate-manifest'}}`, `readonly:flow.state==='accepted'?'acceptedReadonly':undefined`; CanonicalIntentReview `const readonly=intent.state==='accepted'?'acceptedReadonly' as const:undefined`; legacy.tsx passes a resolved guide. Traced the three ReviewPresentation callers (canonical.tsx x2, legacy.tsx). refute: the added comment says only a resolved guide may count missing steps, and commit 2136617fb ('count missing steps only when the guide is available') shows intent; neither addresses the aggregate manifest or the read-only state. review-aggregate-evidence.case.tsx was not read (not in my slice), so a test may pin the aggregate count.",
+  "confidence": "medium",
+  "reviewer": "review-degradation",
+  "reported_as": "F-003",
+  "dispatch": "review-degradation-w1"
+ },
+ {
+  "id": "F-013",
+  "severity": "minor",
+  "degradation_class": "diff-vs-description",
+  "evidence_kind": "consumer-trace",
+  "file": "apps/hub-web/src/features/workflow.tsx",
+  "quote": "<select className={inputClass} value={draft.specDocumentId}",
+  "problem": "The description says 'select controls reserve space for the chevron'. The change adds the `hub-select` class (appearance:none, padding-inline-end, custom chevron) only inside the shared <Select>. Three native selects in workflow.tsx use `className={inputClass}` directly, never reach <Select>, and keep the native arrow and padding. workflow.tsx is itself edited by this diff.",
+  "impact": "On the Flow create form the specification select looks different from every other select in the app, and a long specification path can run under the native arrow, which is the symptom the change set out to remove. Cosmetic; selection still works.",
+  "suggested_fix": "Render those three through <Select>, or add `hub-select` to their class.",
+  "evidence": "consumer-trace: `keryx ctx rg -n \"<select className=\\{inputClass\\}\" apps/hub-web/src --all` returned 3 matches, all in workflow.tsx (lines 108, 165, 175); `.hub-select` is the only selector carrying the chevron rules (styles.css, `.hub-select:not([multiple]):not([size])`); `<Select ... className` has no caller in apps/hub-web/src. refute: no comment or commit says the raw selects are exempt.",
+  "confidence": "high",
+  "reviewer": "review-degradation",
+  "class_scope": {
+   "sites": [
+    "apps/hub-web/src/features/workflow.tsx:108",
+    "apps/hub-web/src/features/workflow.tsx:165",
+    "apps/hub-web/src/features/workflow.tsx:175"
+   ],
+   "enumeration_method": "keryx ctx rg for `<select` over apps/hub-web/src/**/*.tsx: 4 matches, 1 in components/ui.tsx (Select itself) and 3 raw ones in workflow.tsx"
+  },
+  "reported_as": "F-004",
+  "dispatch": "review-degradation-w1",
+  "reported_by": [
+   "review-degradation",
+   "review-layout",
+   "review-pr-contract"
+  ],
+  "merged_ids": [
+   "F-017",
+   "F-064",
+   "F-072"
+  ],
+  "class": "three raw selects in workflow.tsx keep the native arrow"
+ },
+ {
+  "id": "F-015",
+  "severity": "minor",
+  "file": "apps/hub-web/src/i18n/workflow.en.ts",
+  "quote": "openManagedWork: \"Project work\",",
+  "problem": "The English UI now has two names for one destination. The navigation tab and the page itself are \"Managed work\" (App.tsx label() returns \"Managed work\" for the work tab; work.en.ts title: \"Managed work\"), while the new Flow-view button and sentence say \"Project work\" (\"Open Project work to manage intents, attempts and results\"). Russian is consistent (\"\u0420\u0430\u0431\u043e\u0442\u0430 \u043d\u0430\u0434 \u043f\u0440\u043e\u0435\u043a\u0442\u043e\u043c\" in both). The new flow-term test pins that Flow is not translated but does not compare the button label with the nav label.",
+  "impact": "An English user told to \"open Project work\" scans the sidebar for that label and finds \"Managed work\"; the button works, the sentence just points at a name that exists nowhere else in the EN navigation.",
+  "suggested_fix": "Use the nav label in English (\"Managed work\"), or rename the nav and page to \"Project work\" in one change; add the label equality to flow-term.case.ts so the two cannot drift.",
+  "evidence": "consumer-trace: workflow.en.ts openManagedWork and flowWorkspaceDistinction -> workflow.tsx 103-104 (the Flow view button that navigates to tab 'work') -> App.tsx 316-318 nav label \"Managed work\" -> work.en.ts title \"Managed work\". Search for 'Project work|Managed work' across apps/hub-web/src and tests: the only 'Project work' strings are these two plus acceptance.en.ts workContext ('Project work context'). refute: no comment or commit gives a reason for the second name.",
+  "confidence": "high",
+  "reviewer": "review-degradation",
+  "degradation_class": "debt",
+  "evidence_kind": "consumer-trace",
+  "location_class": "in-diff",
+  "reported_as": "F-002",
+  "dispatch": "review-degradation-w2",
+  "reported_by": [
+   "review-degradation",
+   "review-ui-ux"
+  ],
+  "merged_ids": [
+   "F-044",
+   "F-052"
+  ],
+  "class": "English says Project work where the nav and page say Managed work"
+ },
+ {
+  "id": "F-016",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+  "quote": "// Unlayered author rules beat Tailwind utilities; rail and Select rules stay in @layer components.",
+  "problem": "The collapsed-rail tests parse styles.css and pin the layer and what is hidden, but nothing pins the one condition that keeps the rail usable: the .rail-collapsed rules sit inside @media (min-width:1024px) and the toggle is display:none below it. CssRule.media is recorded by parseCssRules and used only by the 600 px header test in session-workspace.case.tsx; breadcrumb.case.tsx never reads it. The Escape-focus test comment (\"The rail toggle is display:none below 1024px\") is likewise unverified under jsdom.",
+  "impact": "If a later edit moves the .rail-collapsed .nav-label rule out of the min-width block, a user who collapsed the rail on desktop and then opens the mobile drawer gets icon-only items and no visible toggle to restore them (the toggle is display:none there); every current test would still pass.",
+  "suggested_fix": "Assert that every rule whose selector contains .rail-collapsed has a media entry equal to (min-width:1024px), and that .nav-item.desktop-rail-toggle has a base display:none rule outside it.",
+  "evidence": "consumer-trace: styles.css lines 634-657 (new @layer block: .nav-item.desktop-rail-toggle {display:none} base, flex only in min-width:1024px, .rail-collapsed rules in the same block) -> App.tsx 333/358 (railCollapsed is plain useState, class kept on .app-shell at any width) -> tests: search for 'media|1024' in breadcrumb.case.tsx, session-workspace.case.tsx and css-rules.ts returns only the 600 px test and the comment. refute: the gate is present at head, so this is a missing guard, not a present bug.",
+  "confidence": "medium",
+  "reviewer": "review-degradation",
+  "degradation_class": "blind-test",
+  "evidence_kind": "consumer-trace",
+  "location_class": "in-diff",
+  "reported_as": "F-003",
+  "dispatch": "review-degradation-w2"
+ },
+ {
+  "id": "F-020",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "const criteriaDigest = await digestCriteria(selectedFlow.criteria);",
+  "problem": "In CreateSession the Flow pin is computed inside the mutate-level onSuccess, after the server has already created the session. digestCriteria calls crypto.subtle.digest, which is undefined outside secure contexts (plain http on a non-loopback host). The per-call onSuccess is async and TanStack Query does not await or catch it, so a throw becomes an unhandled rejection and the code after the await (draft put, clearDraft, hub.navigate) never runs.",
+  "impact": "Trigger: Hub opened over http on a LAN or non-localhost address, a Flow selected, Create clicked. The session exists on the machine, the form stays open with Create enabled again (action.isPending is false), and a second click creates a duplicate session because the request carries no idempotency key. The same secure-context dependency already exists in work.tsx selectFlow, so such a deployment cannot use Flow pinning in the composer either; this change adds a place where the failure lands after an irreversible write instead of before it.",
+  "suggested_fix": "Compute the digest before action.mutate (it needs only selectedFlow.criteria, available at click time) and carry it in the closure, so a failure aborts before the session is created. Or wrap the post-create block in try/catch and navigate regardless, leaving the composer's own Pin button (selectFlow) to recompute the digest.",
+  "evidence": "shared.tsx:68 `export async function digestCriteria(criteria:string[]){const bytes=await crypto.subtle.digest(...)`. useRemoteAction sets retry:false and the create call passes no operationId. Not reproduced in a browser; the unawaited-callback behaviour is from TanStack Query v5 MutationObserver notify, which I did not re-read in node_modules.",
+  "confidence": "low",
+  "reviewer": "review-highload",
+  "pattern": "Idempotency G1 - non-idempotent create followed by fallible work",
+  "reported_as": "HL-003",
+  "dispatch": "review-highload-w1",
+  "reported_by": [
+   "review-degradation",
+   "review-highload",
+   "review-logic"
+  ],
+  "merged_ids": [
+   "F-058",
+   "F-068"
+  ],
+  "class": "the Flow pin digest is awaited after the session has already been created"
+ },
+ {
+  "id": "F-022",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+  "quote": "for (const rule of css.filter((r) => r.selector.includes(\".rail-collapsed\") || /\\.hub-select\\b/.test(r.selector)))",
+  "problem": "The guard that keeps the new rules in @layer components selects rules by containing .rail-collapsed or .hub-select. The base rule `.nav-item.desktop-rail-toggle { display:none; }` (styles.css:635) matches neither, so it is not covered. The check also asserts only that a rule is inside some @layer, not that the layer is components.",
+  "impact": "Cost lands on the next editor of styles.css. If that rule is moved out of the layer block, it stays display:none at 1024px and above, because an unlayered declaration beats the layered `display:flex` in the media block, and the collapse toggle never appears. The test passes in that state. Nothing is wrong at the reviewed head.",
+  "suggested_fix": "Include the toggle in the filter (add `|| r.selector.includes(\"desktop-rail-toggle\")`), and make `layered` carry the layer name so the test can assert `components` rather than any layer.",
+  "evidence": "Read styles.css:632-658 and css-rules.ts: `layered` is computed as `stack.some((outer) => outer.layer)` where `layer` is `head.startsWith(\"@layer\")`; the selector filter above is the only caller that asserts it. Static reading of the cascade; not measured.",
+  "confidence": "high",
+  "reviewer": "review-layout",
+  "reported_as": "LY-002",
+  "dispatch": "review-layout-w2"
+ },
+ {
+  "id": "F-023",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/work.tsx",
+  "quote": "if(current===submitted)store.put(draftKey,{...submitted,text:\"\",prepared:false});",
+  "problem": "The PR body says session launch pins a Flow for the first message and that 'subsequent messages reuse that Flow'. The diff does not bind a Flow to the session anywhere (SessionCreate carries no Flow; CreateSession sends the same body as before). Reuse is produced only by this line: after a non-native send the composer draft is kept with its flowId/flowVersion/specDigest/criteriaDigest and only the text is blanked. That draft lives in useDraftStore, a plain in-memory zustand store (apps/hub-web/src/state/drafts.ts).",
+  "impact": "Nothing is wrong inside one tab: the second message does carry identical pins. But the claim reads as a session-level property; after a page reload, a new tab, or a scope change the draft is gone and the composer starts again from flowId '' (or hub.location.flowId), so the second message needs the Flow chosen again. A reader of the PR body would expect otherwise.",
+  "suggested_fix": "Reword the PR body to 'the composer keeps the chosen Flow for later messages in this tab' (or state that the pin is a client-side draft, not session state). No code change needed unless a session-level Flow is actually wanted.",
+  "evidence": "CreateSession.submit builds the SessionCreate body from machine/checkout/profile/title only (sessions.tsx); the Flow reaches the session solely via useDraftStore.getState().put(messageDraftKey(...), prepareFlowMessageDraft(...)) in onSuccess, and persists across sends only through this put. drafts.ts: create(set => ({drafts:{}, ...})) with no persistence middleware. Verified by reading both files at the reviewed head.",
+  "confidence": "high",
+  "reviewer": "review-logic",
+  "degradation_class": "diff-vs-description",
+  "location_class": "pr-process",
+  "reported_as": "F-001",
+  "dispatch": "review-logic-w1"
+ },
+ {
+  "id": "F-024",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/work.tsx",
+  "quote": "<div id={commandsId} hidden={commands !== \"open\"}",
+  "problem": "A command that needs human confirmation returns status 'confirmation-required'; its Confirmation card (Allow once / Deny, with expiry) is rendered inside Commands, which now sits in this collapsible catalogue wrapper. The transcript row for that outcome only prints 'Exact human confirmation is required' and has no control. When the catalogue is closed (trigger toggle or Escape) the wrapper is hidden and so is the card. Before this change Commands lived in the always-mounted Settings tab panel.",
+  "impact": "Trigger: invoke a confirmation-requiring command, then close the catalogue. The transcript says confirmation is required, nothing visible lets the operator give it, and the card's own expiry check (Date.parse(card.expiresAt) <= Date.now()) can pass unnoticed, leaving the command unconfirmed. Recoverable by reopening the catalogue, so the cost is a confusing state, not data loss.",
+  "suggested_fix": "Either keep the catalogue open while any receipt in it carries a confirmation, or render the Confirmation card (or a 'Reopen commands' button) from the transcript row of that outcome.",
+  "evidence": "work.tsx: Commands is mounted only inside this div and the div takes hidden={commands !== \"open\"}; settings.tsx Commands renders `{receipt?.confirmation&&<Confirmation .../>}` inside its own Panel; sessions.tsx OutcomeItem renders only status, errorCode and result. Whether the hub also moves the original operation to applied after the confirmation is answered is not visible in this slice; it does not change the hidden-card path.",
+  "confidence": "medium",
+  "reviewer": "review-logic",
+  "reported_as": "F-002",
+  "dispatch": "review-logic-w1"
+ },
+ {
+  "id": "F-027",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/work.tsx",
+  "quote": "<Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === \"open\"} focusToken={focusToken} />",
+  "problem": "Commands is now a child of MessageComposer and stays mounted (hidden) after its first open. MessageComposer re-renders on every keystroke because its draft lives in the zustand store, so the whole Commands body re-renders per keystroke too: the catalogue `.filter(...)` for search, the `<option>` list for every entry, and, when a command is selected, `JSON.stringify(entry.inputSchema, null, 2)` for the schema `<pre>`. Before this change Commands sat in the settings slot, a sibling of the composer under SessionSurface, so typing a message did not re-render it. Commands is not wrapped in React.memo.",
+  "impact": "Hot path is every keypress in a message field of up to 32768 chars, in any session where the command panel was opened once. Catalogue size is not in the diff but is a native command list (tens of entries), so the per-keystroke cost is small and no user-visible lag is claimed; it is wasted work that grows with catalogue size and schema size and lands on whoever next adds weight to this panel.",
+  "suggested_fix": "Wrap Commands in React.memo and keep its props referentially stable (`onOutcome` is already a useCallback; `control` would need to be memoised in useController or only the fields Commands reads passed down), or compute the schema string with useMemo keyed on `entry`. Unmounting the panel on close and keeping its state in the existing draft store is the other option.",
+  "evidence": "work.tsx lines 258-262 mount Commands inside MessageComposer; settings.tsx Commands body filters `query.data.entries` and calls JSON.stringify(entry.inputSchema) in render with no memoisation. session-workspace.tsx lines 319-325 show the old placement: `{settings}` in its own panel, not under the composer.",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "reported_as": "PERF-002",
+  "dispatch": "review-performance-w1"
+ },
+ {
+  "id": "F-028",
+  "severity": "minor",
+  "file": "docs/docs/guides/team-hub-remote-sessions.md",
+  "quote": "2. Choose the **Machine**, **Checkout** and **Agent profile**, give it a **Title**",
+  "problem": "The PR template's row `Docs updated if behavior changed (README.md / docs/)` is absent from the body (the whole Checklist section was removed), and the diff changes behaviour a reader sees: session creation gains a Launch Flow select and a first-message field plus a line naming the first unmet launch condition (sessions.tsx CreateSession, i18n keys launchFlow, launchMessage, sessionLaunch*); the composer gains a `/` Commands button and search (work.tsx, settings.tsx `searchCommands`), and the Work mode / Flow selects are folded into a `<details class=\"composer-work-context\">`; command outcomes now render in the transcript; the Commands panel no longer sits in the Settings tab (sessions.tsx passes only `<Settings .../>` as `settings`); a rejected opening shows recovery guidance. The user guide that walks this exact flow was not touched: step 2 lists Machine, Checkout, Agent profile and Title only, step 4 says 'Write the **Message** and choose the **Work mode**' with no mention of the collapsed section or the `/` catalogue, and line 222-224 lists 'a native command catalogue' without saying where it opens.",
+  "impact": "A reader following the guide is not led wrong (every step still works; the Flow is optional), but nothing in docs/ tells them the first message can be prepared at creation, how the catalogue is opened, or that outcomes appear in the transcript. The cost is on the next reader of the guide.",
+  "suggested_fix": "Add the Launch Flow / first message to step 2, the `/` button and outcome-in-transcript behaviour to step 4, and a sentence under 'A session also has' saying the catalogue opens from the composer. Or state in the body why docs are not needed.",
+  "evidence": "docs/docs/guides/team-hub-remote-sessions.md:188-199 and :222-224 (read in full); `keryx ctx rg 'catalogue|Commands|Work mode' docs/docs/guides/team-hub-remote-sessions.md docs/requirements/hub-remote-sessions/` finds no other document that places the catalogue in the UI (specification.md:105 says only 'catalogue/config/routing versions'). .github/PULL_REQUEST_TEMPLATE.md:16 is the checklist row; pr-context.md has no checklist.",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "dedupe_key": "pr-contract:docs-team-hub-remote-sessions-guide",
+  "reported_as": "PC-001",
+  "dispatch": "review-pr-contract-w1"
+ },
+ {
+  "id": "F-029",
+  "severity": "minor",
+  "file": ".github/PULL_REQUEST_TEMPLATE.md",
+  "quote": "PR title must follow Conventional Commits, e.g.:",
+  "problem": "The template asks for a Conventional Commits title (`type(scope): summary`) and CONTRIBUTING.md:76 says the repository uses Conventional Commits. The title is 'Improve Hub session launch, chat and navigation', with no type or scope; the branch's own commits are `fix(hub-web): ...`. The body also deletes the template's 'What & Why' and 'Checklist' headings, so none of the five template rows (title, `bun run check`, tests, docs, zero runtime dependencies) is answered.",
+  "impact": "If the PR is squash-merged under its title, the history line is not a Conventional Commit and drops out of anything that reads types or scopes. No CI job checks the title (grep of .github/workflows finds no title check), so nothing else will catch it.",
+  "suggested_fix": "Retitle, for example `feat(hub-web): prepare the first message at session launch and show command outcomes in chat`, and restore the checklist with each box answered.",
+  "evidence": "pr-context.json intent.title; .github/PULL_REQUEST_TEMPLATE.md:1-17; CONTRIBUTING.md:76; keryx ctx rg 'Conventional|title' .github/workflows returned only release and docs-site titles.",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "pr-contract:title-and-template",
+  "reported_as": "PC-002",
+  "dispatch": "review-pr-contract-w1"
+ },
+ {
+  "id": "F-030",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/context.tsx",
+  "quote": "<Field label={t('historyEventType')}>",
+  "problem": "The body describes the session, navigation, publication and proposal changes and then says 'Other Hub UX findings are tracked in the [review notes]' (a chatgpt.com space page outside the repository; not followed). Several user-visible changes in this slice appear nowhere in the body: (1) History gets an event-type filter, shows 'You' for the signed-in actor, hides identifiers behind a collapsed 'Identifiers' details and adds links to Flows and Documents (context.tsx HistoryView); (2) the acceptance review gains a 'What needs manual review' section counting criteria without verification steps or evidence (acceptance/presentation.tsx, acceptance.*.ts reviewGaps, missingStepsCount, missingEvidenceCount); (3) the Flows page gains a notice explaining the difference from Managed work with an 'Open managed work' button (workflow.tsx, flowWorkspaceDistinction); (4) the Commands panel moves out of the Settings tab into the composer; (5) the composer's Work mode and Flow selects collapse into a details element; (6) `useRemoteQuery` accepts a function for `enabled` and `useAppliedReceipt` takes a `settled` callback, which stops following settled operations.",
+  "impact": "A reviewer or release-note reader who trusts the body would not look at the History, acceptance and Flows pages, and the scope pointer is a private page the repository cannot hold. The cost is on whoever audits the PR against its description.",
+  "suggested_fix": "List these changes in the body (one line each), or split them out. Replace the external link with the findings inline or with a repository path.",
+  "evidence": "slice-01.diff: context.tsx HistoryView hunk, acceptance/presentation.tsx hunk, workflow.tsx FlowsProject hunk, remote-hooks.ts hunks; pr-context.md 'Intent' section (no mention of History, review gaps or the Flows notice).",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "pr-contract:undeclared-user-visible-changes",
+  "reported_as": "PC-003",
+  "dispatch": "review-pr-contract-w1"
+ },
+ {
+  "id": "F-031",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "Command outcomes are tab-local (the history endpoint carries only messages).",
+  "problem": "The body says 'command outcomes appear in the conversation' and 'the applied help outcome appeared in the transcript'. The code that implements it keeps outcomes in `useState` inside `SessionSurface` (`const [outcomes, setOutcomes] = useState<CommandEntry[]>([])`), and its own comment says they are tab-local because the history endpoint carries only messages. `SessionDetail` renders `SessionSurface` keyed by session id, so leaving the session page unmounts it.",
+  "impact": "Run `/help` in the composer, open another page and come back (or reload): the outcome row is gone from the transcript while the human message order is intact. The behaviour is deliberate and documented in the comment, so the code is right; the body states the capability without the limit, so a user or reviewer will expect a durable record.",
+  "suggested_fix": "Add 'for the current tab' to the body (and to the guide when PC-001 is fixed), or note the limit under Known limitations.",
+  "evidence": "slice-01.diff sessions.tsx SessionSurface hunk (`recordOutcome`, comment lines before it) and session-timeline.ts header comment; pr-context.md 'Intent'.",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "pr-contract:outcomes-tab-local",
+  "reported_as": "PC-004",
+  "dispatch": "review-pr-contract-w1"
+ },
+ {
+  "id": "F-032",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "const criteriaDigest = await digestCriteria(selectedFlow.criteria);",
+  "problem": "The launch onSuccess handler became async. After the receipt arrives it awaits a crypto.subtle digest and then writes the first-message draft into the draft store and navigates, using the hub closure captured at render. It does not compare getClientScope() before and after the await. The session-recovery paths in the same feature do take that snapshot: work.tsx sendNative (`const generation=getClientScope()` ... `if(generation!==getClientScope())return;`), managed-work/operation.tsx and acceptance/use-legacy-decision.ts. The previous handler was a single synchronous navigate, so there was no gap to guard.",
+  "impact": "Attack vector: none that an attacker controls. The trigger is a 401 (or 403 access-denied) arriving from any concurrent request while the digest is pending. App.clear() then runs resetClient, queryClient.clear and useDraftStore.clearAll, and the stale handler still calls put() with the old scopeKey in the key and navigate() to the old session. Outcome: the typed first message stays in the in-memory draft store after sign-out until the page reloads, and the logged-out navigation state points at the previous identity's session id. The key embeds the old scopeKey, so the next principal never reads it. The window is one subtle-crypto call, which makes this a hardening gap, not an exploitable path.",
+  "suggested_fix": "Take `const generation = getClientScope();` before the await and `if (generation !== getClientScope()) return;` after it, ahead of put() and navigate(), as sendNative does.",
+  "evidence": "sessions.tsx CreateSession.submit onSuccess (async, await digestCriteria, then useDraftStore.getState().put and hub.navigate). App.tsx clear() calls useDraftStore.getState().clearAll() and setScope(s=>s+1) on auth loss. drafts.ts is an in-memory zustand store with no persistence, so the only retention is until reload. Siblings with the guard: work.tsx:185-195.",
+  "confidence": "medium",
+  "reviewer": "review-security-code",
+  "reported_as": "SEC-1",
+  "dispatch": "review-security-code-w1"
+ },
+ {
+  "id": "F-033",
+  "severity": "minor",
+  "file": "src/lib/hub-machine/client.ts",
+  "quote": "&& expires > issued && expires - issued <= LIMITS.grantMs",
+  "problem": "Two gates in the rewritten verifyAuthorizationGrant expression survive deletion with the suite green: `elapsed >= 0` and `expires - issued <= LIMITS.grantMs`. No fixture builds the input that separates them: every grant in the three grant tests has a 5000 ms window, and every elapsed value is 10 or 5000. The new clock-lead tests kill every other gate in the expression (lead removed, 249/251/1000, expires>issued, expires>=issued, expires>now, expires>=now, issued<, elapsed<=, window cap strict), so the two survivors are the only unpinned pieces.",
+  "impact": "A grant whose window is longer than LIMITS.grantMs, or a call with a negative elapsed, would be accepted after someone edits the line again; nothing red tells them. The gates themselves are correct.",
+  "suggested_fix": "Add to the 'rejects a grant that expires at or before it was issued' test: a grant with expiresAt = authorizedAt + 5001 ms that is otherwise valid (expect false), and verifyAuthorizationGrant(grant, expected, now, -1) (expect false).",
+  "evidence": "Mutation run, command `bun test ./src/lib/hub-machine/client.test.ts -t \"grant application\" --timeout 30000`: deleting `elapsed >= 0 && ` -> 3 pass 0 fail (green); deleting `&& expires - issued <= LIMITS.grantMs` -> 3 pass 0 fail (green). Baseline 3 pass.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "pre-existing",
+  "reported_as": "F-001",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-034",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/session-timeline.ts",
+  "quote": "const byAnchor = [...outcomes].sort((a, b) => a.anchor - b.anchor);",
+  "problem": "Deleting the anchor sort leaves session-timeline.case.ts green (5/5). Every test hands mergeTimeline outcomes that are already in ascending anchor order (a=2; early=0 then late=Infinity; a,b,c all 1; a=2), so no fixture separates a sorted list from an unsorted one. The sort is what lets an outcome reported out of order still land after the last message at or below its anchor.",
+  "impact": "If a later edit removes or reverses the sort, outcomes reported out of anchor order would be drawn in the wrong place; the suite stays green for deletion and for no other reason.",
+  "suggested_fix": "Add `mergeTimeline([message(1), message(2)], [entry('late', 2), entry('early', 1)])` expecting ['m1','early','m2','late'], and one with equal anchors given out of order to keep stability pinned.",
+  "evidence": "Mutation run, command `bun test ./apps/hub-web/tests/session-timeline.case.ts --timeout 30000`: `[...outcomes].sort(...)` -> `[...outcomes]` gave 5 pass 0 fail (green). The other seven mutants of this file (anchor <=, anchor<cursor-1, descending sort, trailing loop deleted, latest compare flipped, latest initial -1, first page only) each went red.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-002",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-035",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/session-workspace.css",
+  "quote": ".session-header-actions > button[aria-expanded] {\n  display: none;",
+  "problem": "The selector changed from `button:first-child` to `button[aria-expanded]` because the header now starts with a Settings button (session-workspace.tsx puts it before the navigation toggle). Nothing ties the selector to the DOM: the CSS-reading tests only look at `.hub-panel-header` and the 600px block, and jsdom applies no CSS. Reverting either occurrence to `:first-child` leaves the CSS assertions green.",
+  "impact": "Re-introducing `:first-child` would hide the Settings button on desktop widths and show it in place of the navigation toggle on narrow ones, with the suite green.",
+  "suggested_fix": "Mirror the composer-header test: parse the two rules, then assert in the rendered header that `querySelectorAll(selector)` matches exactly the navigation toggle (aria-expanded present) and does not match the Settings button.",
+  "evidence": "Mutation run against a replica of the CSS-only assertion bodies (see Limits): `button[aria-expanded]` -> `button:first-child` in the desktop rule: 6 pass 0 fail; in the media rule: 6 pass 0 fail. The DOM halves of session-workspace.case.tsx cannot see CSS. grep for `session-header-actions` in apps/hub-web/tests finds only the 600px test.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-003",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-036",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+  "quote": "expect(alternative).not.toMatch(/\\.identity(\\s*>\\s*\\*)?$/);",
+  "problem": "'collapsed rail keeps an icon-only Sign out reachable' guards reachability with a blacklist of two spellings (`.identity`, `.identity > *`, `.hub-button` as the last token). A rule that hides the same button another way passes: adding `.identity button` or `.identity [type=button]` to the collapsed-rail hide list leaves the test green, and the DOM half (nav-label present, title attribute) does not depend on CSS.",
+  "impact": "A later edit can hide the Sign out button in the collapsed rail while a test whose name says it stays reachable passes.",
+  "suggested_fix": "Click the rail toggle first (this also covers the toggle, see F-005), then for every hiding alternative strip `.rail-collapsed` and assert `signOut.matches(alt)` and `signOut.closest(alt)` are false, the technique the composer-header test already uses.",
+  "evidence": "Mutation run against the replica of the CSS half, command `bun test <scratchpad>/css-replica.test.ts`: `.identity > p,.nav-label,` -> `.identity > p,.identity button,.nav-label,` 6 pass 0 fail; -> `.identity [type=button]` 6 pass 0 fail. Probe: selectorAlternatives('.rail-collapsed .identity button') returns it unchanged and neither regex matches.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-004",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-037",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "?.displayName ?? s.machineId",
+  "problem": "Behaviour the PR description names has no test reference anywhere in apps/hub-web/tests (negative greps, complete): (1) session list machine display name (`Laptop` appears only in machine-cards for the Machines view; SessionsView is rendered only by remote.case.tsx and session-command-outcomes.case.tsx, neither reads the Machine cell); (2) header status 'Could not open' (`sessionOpeningFailed`); (3) 'No matching commands' notice; (4) the `hub-select` class on rendered Select (only CSS text is parsed); (5) the rail toggle (no test contains 'Collapse menu', 'Expand menu', or clicks the toggle; aria-expanded flip and the `rail-collapsed` shell class are unread); (6) ProposalsView empty-state buttons and `noMatchingProposals`; (7) DeliveryView 'Browse revisions' recovery; (8) History self-actor substitution (`historyYou`/email: no event in any test has actorId equal to the mocked principal 'human:owner'); (9) acceptance 'what needs manual review' missing-evidence line; (10) Flows 'Project work' button (flow-term only pins the copy string); (11) header Settings button handler (setTab, scroll, focus).",
+  "impact": "Each of these can be deleted or broken by a later edit with every suite green. This is an absence-of-reference finding, not a mutation result: none of the mutants below was run, because the component suite cannot run in this checkout.",
+  "suggested_fix": "Run the listed mutants once the hub-web dependencies are installed; add one assertion per site (the display name in the session card, click-through of each recovery button asserting navigate arguments, a toggle click asserting aria-expanded and the shell class, and `container.querySelector('select.hub-select')`).",
+  "evidence": "Greps over apps/hub-web/tests (all files, including the e2e .mjs): `Could not open|No matching commands|noCommandsFound|hub-select|Collapse menu|Expand menu|Project work|openManagedWork|noMatchingProposals|chooseDeliveryRevision|Browse revisions|historyYou|linked evidence|reviewGaps|historyNoMatching` hit only breadcrumb.case.tsx (CSS parsing) and flow-term.case.ts (copy string). Candidate ids: session-list-display-name-dropped, header-status-ignores-rejection, search-no-match-notice-deleted, select-class-dropped, rail-toggle-inert, rail-toggle-aria-expanded-inverted, rail-collapsed-class-dropped, proposals-empty-*, delivery-recovery-wrong-target, history-self-actor-substitution-dropped, gaps-missing-evidence-zero, flows-project-work-button-inert, header-settings-*.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "class_scope": {
+   "sites": [
+    "apps/hub-web/src/features/remote/sessions.tsx",
+    "apps/hub-web/src/features/remote/session-workspace.tsx",
+    "apps/hub-web/src/features/remote/settings.tsx",
+    "apps/hub-web/src/components/ui.tsx",
+    "apps/hub-web/src/app/App.tsx",
+    "apps/hub-web/src/features/context.tsx",
+    "apps/hub-web/src/features/acceptance/presentation.tsx",
+    "apps/hub-web/src/features/workflow.tsx"
+   ],
+   "enumeration_method": "keryx ctx rg over apps/hub-web/tests for the literal string, key or class of each added behaviour; zero hits outside CSS-parsing and copy-string tests"
+  },
+  "reported_as": "F-005",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-038",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/context.case.tsx",
+  "quote": "expect(actor).not.toHaveTextContent(en.unknownRole);",
+  "problem": "The negative assertion cannot fail. `actor` is the `<span>` that renders `Actor: <id>`; the role is a sibling `<span>` rendering `Role: ...`, and en.unknownRole is 'Not recorded' (read from context.en.ts). The text of the actor span can never contain it, so the check says nothing about 'even without an actorRole'. Only the positive `toHaveTextContent('Actor: agent:connector')` is live.",
+  "impact": "The test reads as coverage of the missing-role case it does not exercise; a regression that renders the actor wrongly when actorRole is absent is still caught only by the positive line.",
+  "suggested_fix": "Assert on the list item: `within(actor.closest('li')!).getByText(en.unknownRole)` for the missing-role event, and keep the positive actor text assertion.",
+  "evidence": "Read of context.tsx HistoryView: actor span `{t('actor')}: {...}` and role span `{t('role')}: {... t('unknownRole')}` are siblings. `bun -e` print of context.en: unknownRole = 'Not recorded', actor = 'Actor'.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-006",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-039",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/context.case.tsx",
+  "quote": "await new Promise(resolve => setTimeout(resolve, 20));",
+  "problem": "Two fixed waits where the repository convention is an awaited condition: context.case.tsx (20 ms, before sampling the mergeEvents call count) and session-command-outcomes.case.tsx (50 ms, before sampling per-operation fetch counts). Neither guards a condition that can occur: in both, the sampled counter cannot change between the preceding waitFor and the sample (the memo deps are unchanged; the settled operation's query is disabled), so the sleep adds time without adding signal.",
+  "impact": "No failing path found, so no flake is claimed; the cost is 70 ms per run and a pattern the next author copies where it would be load-bearing.",
+  "suggested_fix": "Drop the sleeps, or wait on the request/render that proves the earlier queries settled (waitFor on the flows and documents requests in `fetched`/mocks.get).",
+  "evidence": "Read of both tests against HistoryView's useMemo deps and useRemoteQuery's `enabled` function. No run was needed or made.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-007",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-040",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/session-command-outcomes.case.tsx",
+  "quote": "({ operationId, sessionId: \"s\", commandName, status, errorCode: null, result: null }) as unknown as Control[\"CommandOutcome\"]",
+  "problem": "Fixtures are cast through `unknown`, which switches off the contract check. The generated CommandOutcome (src/remote-control/generated/types.ts:51) also requires sessionVersion, confirmationId, confirmation, runId, turnId; the fixture omits all five, so `receipt.confirmation` is undefined where the producer sends null. The SessionMessage fixtures (here and in session-timeline.case.ts) omit the required sessionId (types.ts:38). The catalogue entry fixture is cast the same way although its fields match.",
+  "impact": "If the UI later reads a field the fixture leaves out (sessionVersion, runId), the tests run against a shape no machine emits and cannot show it. Today's code is not affected: `receipt?.confirmation&&...` and `outcome.result !== null` behave the same.",
+  "suggested_fix": "Build the fixtures with the full shape and drop the casts (`satisfies Control['CommandOutcome']`), as remote-owned-controls.case.tsx already does for its catalogue entry.",
+  "evidence": "Producer type read at src/remote-control/generated/types.ts:51 and :38 at the reviewed head.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-008",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-041",
+  "severity": "minor",
+  "file": "apps/hub-web/tests/localization.case.ts",
+  "quote": "[['common',commonEn,commonRu],['workflow',workflowEn,workflowRu],['context',contextEn,contextRu],['remote',remoteEn,remoteRu]]",
+  "problem": "The bilingual parity test covers four catalogs; `acceptance` is not among them, and the diff adds four keys to acceptance.en/ru (reviewGaps, missingStepsCount, missingEvidenceCount, manualReviewNext). Deleting a Russian key, or dropping `{{count}}` from the Russian string, stays green. The Russian acceptance strings are named in no test (grep for '\u041a\u0440\u0438\u0442\u0435\u0440\u0438\u0435\u0432', '\u0427\u0442\u043e \u043d\u0443\u0436\u043d\u043e \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c').",
+  "impact": "A Russian user would see the English fallback or a count-less sentence in the review gaps block, with every suite green.",
+  "suggested_fix": "Add ['acceptance', acceptanceEn, acceptanceRu] to the parity table.",
+  "evidence": "Mutation run, command `bun test ./apps/hub-web/tests/localization.case.ts ./apps/hub-web/tests/flow-term.case.ts`: deleting ru `reviewGaps` -> 5 pass 0 fail; ru `missingStepsCount` without {{count}} -> 5 pass 0 fail. The same edits in the remote, workflow and context catalogs each went red (4 of 4).",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-009",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-042",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "// The next New session starts from a clean form, not from this session's Flow and first message.",
+  "problem": "Session creation clears the launch draft on success, and the first message is moved into the new session's composer draft. The rejected-opening recovery then opens the same form via 'Create a new session', but that form is empty: machine, checkout, profile, title, Flow and first message are all gone.",
+  "impact": "Trigger: create a session with a Flow and a first message, the machine refuses to open it, click 'Create a new session'. The recovery path the change adds starts from a blank form; the typed first message survives only in the dead session's composer draft, and nothing says so. The user re-selects everything and retypes (or hunts for the old textarea).",
+  "suggested_fix": "On the rejected-opening recovery, seed the launch draft from the rejected session (machine, checkout, profile, title, Flow) and the first message from its composer draft, or keep the launch draft until the session has actually opened. At minimum say in the notice that the first message is still in this session's composer.",
+  "evidence": "Nielsen #9 (error recovery) / #3 (user control). Code: CreateSession.onSuccess calls clearDraft() right after useDraftStore.put(messageDraftKey(...)); onNewSession only sets create/focusForm and navigates. The test 'a created session clears the launch form...' asserts the draft is undefined; the rejected-opening test only checks the Machine select gets focus, not what the form holds. Code reading only, not rendered.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-001",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-043",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/context.tsx",
+  "quote": "<summary className=\"cursor-pointer\">{t('historyIdentifiers')}</summary>",
+  "problem": "History rows now show the entity only when it resolves to a Flow or a document (flowNames/documentNames). For every other event type (proposal-created, proposal-reviewed, revision-created, line-selected, delivery-created, evidence-created, project-created) the entity id moves from the row into a collapsed 'Identifiers' disclosure, so the row names no subject. Meanwhile the Actor line still prints the raw actorId for every other actor, which the disclosure repeats.",
+  "impact": "Trigger: open History on a project with proposal or revision events. The row reads 'Proposal created, date, #12, Actor: <raw id>, Role' with no indication which proposal; the one thing that said so before is behind a click. The identifiers are hidden for the readability of the entity but left raw for the actor, so the cleanup is half done.",
+  "suggested_fix": "Resolve proposals, revisions and deliveries the same way (names or short labels with a link to their view), or keep the entity id visible when it does not resolve. Show a display name for other actors or hide their raw id as well.",
+  "evidence": "Nielsen #2 (real-world language) and #6 (recognition over recall). Code: only two Maps are built from the flows and documents resources; the 'historyIdentifiers' details holds `{event.entityId} \u00b7 {event.actorId}`; the Actor span renders `event.actorId` unless it equals principal.id. Not rendered.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-002",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-045",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/context.tsx",
+  "quote": "{proposals.data?.proposals.length ? t('all') : t('documents')}",
+  "problem": "The recovery buttons added to the empty proposal view are labelled with bare nouns, 'All' and 'Documents'. Neither says what pressing it does (reset the status filter / go to the documents tab), and the second empty state ('No proposals in this view.') does not say how a proposal comes to exist (it is created from a document's 'Propose an edit').",
+  "impact": "Trigger: Proposals tab with no proposals, or with a filter that hides all of them. A button reading 'All' under 'No proposals match the selected status.' is guessable, but 'Documents' under 'No proposals in this view.' gives no reason to go there. Generic CTA labels in both the EN and RU copy ('\u0412\u0441\u0435', '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b').",
+  "suggested_fix": "Name the action: 'Show all proposals' / '\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0432\u0441\u0435 \u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u044f' and 'Open documents to propose a change' / '\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b, \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0438\u0442\u044c \u043f\u0440\u0430\u0432\u043a\u0443', and add one sentence to the zero-proposals state saying proposals are created from a document.",
+  "evidence": "Nielsen #10 (help) / generic CTA label. Sites: ProposalsView EmptyState button (two labels, one control). The same EmptyState also keeps the 'Proposals' filter field label unchanged. Not rendered.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-004",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-046",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/settings.tsx",
+  "quote": "{e.commandName} \u00b7 {e.availability}</option>",
+  "problem": "Two state-communication gaps in the command catalogue the change moves into the composer. (a) Unavailable entries are now selectable 'to inspect the explanation', but the option text prints the raw enum (`availability`) untranslated, so a Russian UI shows 'help \u00b7 available'. (b) For an entry that is available but not allowed (session busy and the command is not read-only or an owned control, or the human does not hold control), the Invoke button is disabled and no text says why; only `entry.reason` (the machine's own text, written for availability) is shown.",
+  "impact": "Trigger for (b): session in the busy state, select a workspace or session command that is 'available': Invoke is dead with no stated cause. Trigger for (a): ru locale, open the Select. Both are cosmetic/recovery costs, not wrong behaviour.",
+  "suggested_fix": "Translate the availability token ({t('availabilityStates.' + e.availability)}) and add a one-line disabled-reason beside Invoke derived from the same conditions that compute `allowed` (observer, busy, local-only, needs setup).",
+  "evidence": "Nielsen #1 (visibility of status) / #9. The `allowed` expression and the Invoke `disabled` expression were read; neither feeds a message. The raw `{e.availability}` is rendered in the option. Sibling disabled-without-reason also exists in Settings 'Save', so the class is wider than this diff. Not rendered.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-005",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-047",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "{outcome.errorCode && <p>{outcome.errorCode}</p>}",
+  "problem": "A command outcome in the conversation prints the machine's error code as a bare paragraph under the translated status, and a non-string result as pretty-printed JSON in a <pre>. The rejected-opening notice, added in the same change, deliberately puts its code behind a 'Technical details' disclosure; the transcript item does the opposite.",
+  "impact": "Trigger: invoke a command that the machine rejects. The transcript shows '/help', 'Rejected; no application confirmed', then an unlabelled code such as `machine-refused`. A command that returns structured data shows a JSON dump among human messages. The user gets no cause in words and no next step.",
+  "suggested_fix": "Map known error codes to a sentence with a next step, and put the raw code and the raw JSON result behind the existing 'Technical details' pattern (details/summary), keeping a short human line visible.",
+  "evidence": "Nielsen #9 (plain-language errors) and consistency with the rejected-opening notice in the same file. OutcomeItem was read; no mapping for errorCode exists. Not rendered.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-006",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-048",
+  "severity": "minor",
+  "file": "apps/hub-web/src/app/App.tsx",
+  "quote": "<span className=\"project-initial\">{p.name.slice(0, 1)}</span>",
+  "problem": "In the collapsed rail, each project is identified only by its first letter; the name is carried by `title` (hover only) and `aria-label` (screen readers only). Brand, the 'Projects' heading and the identity block (account, role) are all hidden by the collapsed rule.",
+  "impact": "Trigger: desktop width >=1024px, rail collapsed, two projects whose names start with the same letter (Alpha, Apex). A sighted keyboard user sees two identical 'A' buttons and gets no tooltip on focus; a touch-screen laptop gets none on tap. Which project is active is only shown by the highlight. The account/role line is also invisible while collapsed.",
+  "suggested_fix": "Show a disambiguating tooltip on focus as well as hover (or a custom focus-visible label), or use initials with a deterministic colour/second letter; keep the active project's name visible in the workspace breadcrumb (already present) and document that.",
+  "evidence": "WCAG 2.4.6 / Nielsen #6. CSS read: `.rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects > span,.identity > p,.nav-label,.sidebar-projects .truncate) { display:none }` inside `@media (min-width:1024px)`. Collapse is correctly scoped to desktop, so mobile is not affected. Not rendered; target size rule (min-height:44px) read, not measured.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-007",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-049",
+  "severity": "minor",
+  "file": "apps/hub-web/src/features/remote/work.tsx",
+  "quote": "<summary>{mode === \"flow\" && selected ? selected.title : t(\"workMode\")}</summary>",
+  "problem": "The work-context disclosure closes itself as soon as an association is valid (`open={!association()}`) and its summary shows the Flow title only in Flow mode. In ad-hoc and managed modes the summary is the generic label 'Work mode', which does not say which mode is active. There is no affordance text saying the summary can be opened to change the Flow.",
+  "impact": "Trigger: switch to ad-hoc (with consent) or managed mode; the control collapses. Whether messages go with or without a Flow is visible only by expanding it (the consent checkbox stays outside, which partly mitigates it). After picking a Flow in Flow mode the controls collapse under the pointer and the way back is a one-line summary that reads as a title, not a control.",
+  "suggested_fix": "Put the mode into the summary ('Flow: <title>' / 'No Flow (ad hoc)' / 'Managed attempt') and add a visible 'Change' cue; consider not auto-collapsing while focus is inside the disclosure.",
+  "evidence": "Nielsen #1. Composer code read: `open` is derived from association(), summary text as quoted. Not rendered.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-008",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-051",
+  "severity": "minor",
+  "file": "apps/hub-web/src/i18n/acceptance.ru.ts",
+  "quote": "missingEvidenceCount: \"\u041a\u0440\u0438\u0442\u0435\u0440\u0438\u0435\u0432 \u0431\u0435\u0437 \u043f\u0440\u0438\u0432\u044f\u0437\u0430\u043d\u043d\u044b\u0445 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432 \u0438\u043b\u0438 \u0438\u0441\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0439: {{count}}\"",
+  "problem": "The RU gap line calls evidence '\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b', while the rest of the same file calls the same thing '\u043e\u0442\u0447\u0451\u0442\u044b' (openEvidence '\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u043e\u0442\u0447\u0451\u0442', evidenceLoading '\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u044e\u0442\u0441\u044f \u043e\u0442\u0447\u0451\u0442\u044b', historyUnavailable ...). EN uses 'evidence' throughout, so RU gains a third term here. The shared next-step line, 'Open the result and verify these criteria manually' (EN) / '\u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0440\u0430\u0431\u043e\u0442\u044b' (RU), does not point at where the result is.",
+  "impact": "Trigger: Russian reviewer on a result with unreported criteria. '\u041a\u0440\u0438\u0442\u0435\u0440\u0438\u0435\u0432 \u0431\u0435\u0437 \u043f\u0440\u0438\u0432\u044f\u0437\u0430\u043d\u043d\u044b\u0445 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432' does not map to the '\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u043e\u0442\u0447\u0451\u0442' links on the criterion rows, so it is unclear what is missing.",
+  "suggested_fix": "Use '\u043e\u0442\u0447\u0451\u0442\u043e\u0432' (or whichever term the rest of the file uses) in missingEvidenceCount, and anchor the next-step line to the actual control (the Criteria list, or the technical details).",
+  "evidence": "Cross-reading acceptance.ru.ts: terms for evidence ('\u043e\u0442\u0447\u0451\u0442') in evidenceLoading, evidenceUnavailable, openEvidence, historyResult. Key parity EN/RU for the four new acceptance keys holds. Not rendered.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-010",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-053",
+  "severity": "minor",
+  "file": "apps/hub-web/src/i18n/remote.en.ts",
+  "quote": "launchFlow: \"Session Flow (optional)\"",
+  "problem": "The new optional Flow select in the New session form reuses the generic empty option t(\"choose\"), which reads \"Choose explicitly\" (RU \"\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u044f\u0432\u043d\u043e\"). That wording belongs to the required machine, checkout and profile selects. Here the empty value means \"no Flow\", and the label says the field is optional. sessionLaunchFlowGone and sessionLaunchFlowsFailed both tell the user to \"clear the selection\" (RU \"\u0441\u0431\u0440\u043e\u0441\u044c\u0442\u0435 \u0432\u044b\u0431\u043e\u0440\"), but no control is labelled as clearing anything.",
+  "impact": "With a stale or unloadable Flow the user is blocked with the advice \"clear the selection\". The way to do it is an option reading \"Choose explicitly\", which sounds like it demands a choice, the opposite of an optional field. Create session stays disabled until they guess it. On a fresh form an optional field that shows \"Choose explicitly\" invites the user to think a Flow is required. Both languages share the defect.",
+  "suggested_fix": "Add a dedicated key for the empty option, e.g. launchFlowNone: \"No Flow\" / \"\u0411\u0435\u0437 Flow\", and use it for this select only. Keep \"clear the selection\" and point it at that label, e.g. \"choose No Flow\".",
+  "evidence": "sessions.tsx NewSession: the Flow select renders <option value=\"\">{t(\"choose\")}</option> before the stale and eligible options. remote.case.tsx clears the Flow with fireEvent.change(select, { target: { value: \"\" } }) and never asserts the option's text, so the wording is untested. remote.en.ts choose: 'Choose explicitly'.",
+  "confidence": "high",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-002",
+  "dispatch": "review-ui-ux-w2",
+  "reported_by": [
+   "review-ui-ux"
+  ],
+  "merged_ids": [
+   "F-050",
+   "F-087"
+  ],
+  "class": "the optional launch Flow select and the first-message field do not explain themselves"
+ },
+ {
+  "id": "F-054",
+  "severity": "minor",
+  "file": "apps/hub-web/src/i18n/remote.en.ts",
+  "quote": "launchFlowUnchecked: \"{{id}} \u00b7 not checked yet\"",
+  "problem": "A restored launch draft stores only flowId. When the Flow cannot be named, the disabled option falls back to the raw identifier: launchFlowUnchecked renders \"{{id}} \u00b7 not checked yet\" while the Flows list is loading or failing, and launchFlowGone is called with title ?? draft.flowId when the Flow is absent from the list. The tests pin this as the visible text (\"f1 \u00b7 not checked yet\", \"gone \u00b7 no longer in progress\").",
+  "impact": "When the Flows request fails (503) or the Flow has dropped out of the list, the user sees an opaque id in the select and cannot tell which Flow they had chosen. The id is an internal identifier, not something a user can recognise.",
+  "suggested_fix": "Store the Flow title in the launch draft when the Flow is selected (flowTitle next to flowId) and use it in both fallbacks, with the id only when no title was ever stored. Update the two tests that pin the id text.",
+  "evidence": "sessions.tsx NewSession lines 273-275 (flows.data ? launchFlowGone(title ?? draft.flowId) : launchFlowUnchecked(id)). remote.case.tsx: 'a chosen Flow that cannot be checked stays visible in the select and can be cleared there' asserts the option name \"f1 \u00b7 not checked yet\"; 'a stale Flow can be cleared from the select' asserts \"gone \u00b7 no longer in progress\". Real Flow ids were not inspected, so how opaque they are is unconfirmed.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-003",
+  "dispatch": "review-ui-ux-w2"
+ },
+ {
+  "id": "F-055",
+  "severity": "minor",
+  "file": "apps/hub-web/src/styles.css",
+  "quote": ".rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects > span,.identity > p,.nav-label,.sidebar-projects .truncate) { display:none; }",
+  "problem": "In the collapsed rail the project switcher is reduced to a one-letter box (.project-initial, the first character of the project name) with the name hidden, and the only cue for the current project is .project-active: background var(--hub-surface) on the sidebar's var(--hub-subtle), plus ink instead of muted text colour on a 10px letter. The signed-in email, identity kind and role are hidden with no tooltip on the identity block (only Sign out has a title).",
+  "impact": "Two projects that start with the same letter (\"Hub\", \"Hub docs\") show identical boxes and differ only by a hover title, which a touch tablet at 1024 px does not have, and by the accessible name for screen readers. The current-project fill measures about 1.13:1 against the rail (#ffffff on #edf2ef), far under the 3:1 non-text floor (WCAG 1.4.11). The letter colour change, ink #20352b against muted #61756b, is about 2.7:1. aria-current is set, so assistive technology is served; sighted users are not.",
+  "suggested_fix": "In the collapsed rail give the active project a visible cue that does not depend on a faint fill, e.g. a 2px inset accent bar or accent-soft background with accent border (reuse the .nav-active treatment), and show the project name as a tooltip or flyout. Consider two letters, or a colour-keyed initial, when initials collide.",
+  "evidence": "Computed from tokens in styles.css, not measured on a render: #ffffff vs #edf2ef about 1.13:1; #20352b vs #61756b about 2.7:1; dark theme #1b2721 vs #223229 is also near 1.1:1. App.tsx project button: aria-label and title are set, the visible text is the first character of the name. The new collapsed-rail tests pin only that the buttons stay present and keep their title and aria-label.",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-004",
+  "dispatch": "review-ui-ux-w2"
+ },
+ {
+  "id": "F-056",
+  "severity": "minor",
+  "file": "apps/hub-web/src/i18n/remote.en.ts",
+  "quote": "sessionOpeningNextStep: \"Check that the machine is available, then create a new session.\"",
+  "problem": "SessionSurface shows the same fixed sentence, \"The machine refused to open this session.\", plus the new next step, for every errorCode that /opening-status returns. That code is operation.deliveryFailure.error.code. Besides machine refusals (events.ts), it is also set to \"command-expired\" and \"recovery-required\" by delivery.ts when the create-session command was never picked up or the outcome is uncertain. In those cases the machine did not refuse anything. The sentence is pre-existing; this PR adds the next step and the details disclosure to it.",
+  "impact": "A user whose machine went offline before picking up the command (command-expired) is told it \"refused\", then told to check availability. The real cause is only in Technical details as a bare code, and the same applies to recovery-required. The recovery path (create a new session) is still correct, so the cost is a misleading cause, not a dead end.",
+  "suggested_fix": "Keep the neutral lead \"This session could not be opened.\" and name the cause only for refusal codes, or map command-expired and recovery-required to their own sentences. Keep the code in Technical details.",
+  "evidence": "src/hub/remote-v2/read-model.ts line 63 returns operation.deliveryFailure.error.code; delivery.ts line 17 sets \"command-expired\" or \"recovery-required\"; events.ts line 237 sets the machine-reported code with message \"The machine refused this operation before starting it\". sessions.tsx lines 352-360 render sessionOpeningRejected for any non-null code. remote.case.tsx tests only errorCode \"machine-refused\".",
+  "confidence": "medium",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-005",
+  "dispatch": "review-ui-ux-w2"
+ },
+ {
+  "id": "F-057",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/remote/work.tsx",
+  "quote": "...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{})",
+  "problem": "The new `prepared` flag turns the message draft into an implicit state machine spread over five sites (seeded by prepareFlowMessageDraft, cleared by the pinning effect, by editText, by the post-send reset, and checked in `stale` and `submit`). One path looks odd: for a prepared draft with an empty first message, the first keystroke while the session is still \"opening\" clears `prepared` and pins sessionVersion/configVersion to the opening record, which skips the pinning effect meant for the opened session.",
+  "impact": "Possible only if the record's version or config version changes when the session leaves \"opening\" (sessions are created at version 1 and the open event replaces the record, so it may). In that case the composer would show the stale notice and ask for a rebase on a draft the user only just typed. This is not confirmed, so it is info.",
+  "suggested_fix": "A test that opens a Flow-seeded session with an empty first message, types during \"opening\", then moves the record to idle with a higher version and asserts that no stale notice appears would settle it. If it does show the notice, have editText keep `prepared` until the record has left \"opening\", or represent the draft phase as one field (`phase: \"seeded\" | \"pinned\"`) instead of a boolean plus two zeroed versions.",
+  "evidence": "work.tsx effect on [draft.prepared, record.state, ...] returns early while `record.state === \"opening\"`; editText clears `prepared` on the first character regardless of state; hub sessions.ts:44 creates the record with `version: 1` in the opening state. Existing tests mentioning opening/prepared: remote.case.tsx (8 mentions); I did not find a case for the typing-during-opening path.",
+  "confidence": "low",
+  "reviewer": "review-architecture",
+  "reported_as": "F-005",
+  "dispatch": "review-architecture-w1"
+ },
+ {
+  "id": "F-059",
+  "severity": "info",
+  "file": "apps/hub-web/tests/browser-journeys.e2e.mjs",
+  "quote": "await commands.waitFor();return commands;",
+  "problem": "openCommands() calls waitFor() on panel(page, L.commands), which is page.locator('section').filter({has: heading 'Native command catalogue'}). The Commands panel is now rendered inside the composer's own Panel (work.tsx 250-262), so the same heading is a descendant of at least two <section> elements (the Commands panel and the composer Message panel). Playwright's waitFor is strict and fails on a locator that resolves to more than one element. The old code only chained getByLabel/locator off this locator, which de-duplicates, so it never hit strict mode. If true: minor, journey 3 (typed help and settings/status inspection) fails at its first step in the e2e run; the shipped app is unaffected.",
+  "impact": "Outside the unit and CI suites listed for this PR; found only by reading. Settles on one run.",
+  "suggested_fix": "Check: run the journeys (or in a Playwright REPL against the fixture count panel(page, L.commands)); if it is above 1, scope the locator to the innermost section or use .last().",
+  "evidence": "consumer-trace: e2e helper -> Panel renders <section class=hub-panel> (ui.tsx 41) -> Commands is a Panel (settings.tsx 34) mounted inside the composer Panel (work.tsx 217, 250-261); session-workspace.case.tsx 'composer header rule' asserts the nesting. Not run: no Playwright here, and the e2e file is not among the CI checks listed in pr-context.md. refute: if the composer Message panel were not a <section> ancestor the count would be 1; work.tsx 217 shows it is a Panel.",
+  "confidence": "low",
+  "reviewer": "review-degradation",
+  "degradation_class": "blind-test",
+  "evidence_kind": "consumer-trace",
+  "location_class": "in-diff",
+  "publication": "question",
+  "reported_as": "F-005",
+  "dispatch": "review-degradation-w2"
+ },
+ {
+  "id": "F-060",
+  "severity": "info",
+  "file": "src/lib/hub-machine/client.test.ts",
+  "quote": "expect(verifyAuthorizationGrant(grant(250), expected, now, 10)).toBe(true);",
+  "problem": "The new boundary test pins verifyAuthorizationGrant at 250 and 251 ms with an injected `now`, which is deterministic. It does not cover authorize()'s pre-wait path (a Hub 300 ms ahead and a Hub 600 ms ahead), which is where the lead is actually produced in production.",
+  "impact": "Observation only. The two local failures reported in research-evidence/tests.txt (R4.4 bridge observation timeout under load; client.test.ts:134 'Unable to connect') are not reproduced by CI and I do not claim them. A test that stubs Date.now and drives authorize() against a grant 300 ms and 600 ms ahead would settle whether the sleep and the 250 ms backstop agree.",
+  "suggested_fix": "Optional: one authorize()-level test with a fake clock for a 300 ms lead (accepted after the wait) and a 600 ms lead (refused without sleeping).",
+  "evidence": "client.test.ts new tests call verifyAuthorizationGrant directly; authorize() has no test in the diff for the future-grant wait.",
+  "confidence": "low",
+  "reviewer": "review-highload",
+  "location_class": "in-diff",
+  "publication": "omit",
+  "reported_as": "HL-002",
+  "dispatch": "review-highload-w2"
+ },
+ {
+  "id": "F-061",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "<div ref={form} className=\"contents\">",
+  "problem": "CreateSession is rendered as a direct child of `<div className=\"space-y-5\">` in SessionsView. The diff wraps its Panel in `<div ref={form} className=\"contents\">` only to give the focus effect a node to querySelector from. Tailwind 4.3.3 implements space-y as `:where(& > :not(:last-child)) { margin-block-end: ... }`, so the 20px margin now lands on the wrapper. A `display: contents` element generates no box, and CSS ignores margins on it. The margin the Panel used to receive is gone. UNVERIFIED: not measured, derived from the stylesheet and the CSS display:contents rule.",
+  "impact": "Trigger: click New session on the Sessions tab while the project has at least one session, so the card grid renders right after the form. Expected outcome: the form Panel's bottom border sits directly against the first row of session cards instead of 20px above them, at every viewport width. Filed as info only because no pixels were measured; the lane's own table would put a measured 20px loss at minor.",
+  "suggested_fix": "Make the wrapper a real block (`<div ref={form}>`, no `contents`) so the space-y margin lands on a box that renders, or drop the wrapper and focus through an id on the first Select. What would settle it: getComputedStyle margin-bottom on the Panel and the bounding-rect gap between the form Panel and `.grid` at 1366 px with one session present.",
+  "evidence": "apps/hub-web/src/features/remote/sessions.tsx SessionsView `<div className=\"space-y-5\">` ... `{create && <CreateSession focusOnOpen={focusForm} />}` followed by Feedback and `<div className=\"grid min-w-0 gap-4 lg:grid-cols-2\">`; CreateSession return value wrapped in `<div ref={form} className=\"contents\">` in this diff; apps/hub-web/package.json pins tailwindcss 4.3.3. No engine measurement taken.",
+  "confidence": "medium",
+  "reviewer": "review-layout",
+  "dedupe_key": "layout:display-contents-swallows-space-y",
+  "reported_as": "LY-001",
+  "dispatch": "review-layout-w1"
+ },
+ {
+  "id": "F-062",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/remote/session-workspace.css",
+  "quote": "min-height: 90px;",
+  "problem": "session-workspace.css is imported as plain, unlayered CSS (session-workspace.tsx line 23), while Tailwind utilities live in `@layer utilities`; unlayered rules beat layered ones regardless of specificity. `.session-composer textarea { min-height: 90px; }` therefore overrides the `min-h-28` (112px) that the shared `Textarea` component sets. This diff moves the Commands panel, and its arguments `<Textarea>`, from the Settings tab into the composer (work.tsx renders `<Commands>` inside `.session-composer`), so that textarea is now inside the selector's reach. UNVERIFIED: not measured.",
+  "impact": "Trigger: open the composer's command catalogue and select a command with arguments. Expected outcome: the JSON arguments textarea starts about 22px shorter (90px instead of 112px) than it did in the Settings tab. Cosmetic, and the textarea is `resize-y`.",
+  "suggested_fix": "Scope the composer rule to the message field, for example `.session-composer .composer-message textarea`, or `.session-composer > .hub-panel > .hub-panel-body > div > textarea`. What would settle it: offsetHeight of the arguments textarea in the composer with an empty value, compared with 112px.",
+  "evidence": "apps/hub-web/src/features/remote/session-workspace.css `.session-composer textarea { min-height: 90px; }`; apps/hub-web/src/components/ui.tsx Textarea className `min-h-28`; apps/hub-web/src/features/remote/settings.tsx Commands renders `<Textarea value={draft.args} .../>`; apps/hub-web/src/features/remote/work.tsx renders `<Commands ...>` inside MessageComposer. No engine measurement taken.",
+  "confidence": "medium",
+  "reviewer": "review-layout",
+  "dedupe_key": "layout:unlayered-composer-textarea-min-height",
+  "reported_as": "LY-002",
+  "dispatch": "review-layout-w1"
+ },
+ {
+  "id": "F-063",
+  "severity": "info",
+  "file": "apps/hub-web/src/styles.css",
+  "quote": "background-position: right .75rem center;",
+  "problem": "The Select chevron reserves its space with the logical `padding-inline-end: 2.5rem` but is placed with the physical `background-position: right .75rem center`. Under `dir=\"rtl\"` the reserved padding moves to the left edge while the chevron stays on the right, over the start of the text. The component otherwise uses logical properties elsewhere in this diff (`padding-inline`). UNVERIFIED: not measured.",
+  "impact": "No trigger exists today: hub-web ships en and ru only, and no `dir` attribute or RTL handling was found anywhere under apps/hub-web/src (searched `dir=`, `rtl`, `documentElement.dir`). Reachable only if an RTL locale is added.",
+  "suggested_fix": "If RTL is ever supported, position with `background-position: right .75rem center` plus an `:dir(rtl)` override (`left .75rem center`), or draw the chevron with a pseudo-element placed using `inset-inline-end`. Nothing to change for the current locales. What would settle it: a locale with dir=rtl entering the catalogue.",
+  "evidence": "apps/hub-web/src/styles.css `.hub-select:not([multiple]):not([size]) { padding-inline-end:2.5rem; ... background-position: right .75rem center; }`; ripgrep for `dir=|rtl|documentElement.dir` under apps/hub-web/src returned no matches. No engine measurement taken.",
+  "confidence": "low",
+  "reviewer": "review-layout",
+  "dedupe_key": "layout:select-chevron-physical-position",
+  "reported_as": "LY-003",
+  "dispatch": "review-layout-w1"
+ },
+ {
+  "id": "F-065",
+  "severity": "info",
+  "file": "apps/hub-web/src/styles.css",
+  "quote": "background-position: right .75rem center;",
+  "problem": "The Select rule pairs a logical padding (`padding-inline-end:2.5rem`) with a physical chevron position (`right .75rem`). Under dir=rtl the padding moves to the left edge while the chevron stays on the right, so the text would run under the arrow and the reserved space would sit on the wrong side. In LTR both are on the right.",
+  "impact": "None today: hub-web ships en and ru only, and no dir attribute or rtl handling exists under apps/hub-web/src (keryx ctx rg for 'rtl|dir=|dir:' finds only flex-direction). Filed as info because no supported locale reaches it. It becomes real the moment an RTL locale is added.",
+  "suggested_fix": "When RTL is added, key the position on direction (for example a `:dir(rtl)` or `[dir=rtl]` variant with `left .75rem center`), or draw the chevron with gradients positioned by logical properties.",
+  "evidence": "styles.css:645-653 read. Not measured. Would be settled by rendering a Select under dir=rtl.",
+  "confidence": "high",
+  "reviewer": "review-layout",
+  "reported_as": "LY-003",
+  "dispatch": "review-layout-w2"
+ },
+ {
+  "id": "F-066",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/remote/session-workspace.css",
+  "quote": ".session-header-actions { flex-wrap:wrap; flex-shrink:1; min-width:0; }",
+  "problem": "At 481-600px the new rule lets the header row wrap, but the right-aligning rules (`width:100%; justify-content:flex-end` on .session-header-actions) exist only in the max-width:480px block. When a long session title pushes the actions onto a second line in the 481-600px band, that single item has nothing to align it, so it sits at the inline start of the second line. At 480px and below the same state puts it at the end. The new test asserts only flex-wrap, flex-shrink and min-width.",
+  "impact": "Cosmetic and unverified: the actions' position differs by a pixel of viewport width across 480/481px for identical content. Note this file is outside the slice-02 diff (it is the subject of the test in session-workspace.case.tsx) and was read for that reason.",
+  "suggested_fix": "If the 480px alignment is intended, apply `width:100%; justify-content:flex-end` at the 600px breakpoint too, or move those two declarations up into the 600px block.",
+  "evidence": "session-workspace.css lines 362-370 (max-width:480px) and 416-421 (max-width:600px) read. Not measured. Would be settled by loading a session with a long title at 560px host width in Playwright and reading the actions' bounding box.",
+  "confidence": "low",
+  "reviewer": "review-layout",
+  "reported_as": "LY-004",
+  "dispatch": "review-layout-w2"
+ },
+ {
+  "id": "F-067",
+  "severity": "info",
+  "file": "apps/hub-web/tests/css-rules.ts",
+  "quote": "if (!head.startsWith(\"@\")) {",
+  "problem": "parseCssRules clears its buffer only on `{` and `}`. A statement at-rule (`@import \"x\";` or `@layer a, b;`) sitting directly before a style rule becomes part of that rule's head, so the head starts with `@` and the rule is dropped from the result, and its `layered` and `media` context is wrong.",
+  "impact": "Not reachable at the reviewed head: styles.css has `@import \"tailwindcss\";` only before `@theme {`, and session-workspace.css has no statement at-rules. The risk is that the guards built on this helper (`expect(...length).toBeGreaterThan(0)` and per-rule loops) keep passing on a narrowed rule set if someone later adds such a statement.",
+  "suggested_fix": "Reset the buffer on `;` when the buffer starts with `@`, or strip statement at-rules in the pre-pass that already strips comments.",
+  "evidence": "Read css-rules.ts in full (diff lines 671-719). Not measured; would be settled by a unit test feeding `@import \"a\"; .x { display:none }` and expecting one rule.",
+  "confidence": "high",
+  "reviewer": "review-layout",
+  "reported_as": "LY-005",
+  "dispatch": "review-layout-w2"
+ },
+ {
+  "id": "F-069",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "{outcome.result !== null && <pre className=\"whitespace-pre-wrap break-all\">{formatResult(outcome.result)}</pre>}",
+  "problem": "OutcomeItem calls JSON.stringify(result, null, 2) on every render, and OutcomeItem is not memoised. History re-renders whenever SessionSurface re-renders (each session, history or queue refetch), so every outcome in the tab-local list is re-stringified each time.",
+  "impact": "Result is a BoundedJson (a command's output, a few KB for help-style commands) and outcomes are user-invoked, so tens at most. Cost is sub-millisecond per render; no trigger that makes it user-visible is reachable from the diff. Recorded so the next person who raises the result bound or makes outcomes persistent knows the stringify is unmemoised.",
+  "suggested_fix": "useMemo(() => formatResult(outcome.result), [outcome.result]) inside OutcomeItem.",
+  "evidence": "sessions.tsx OutcomeItem and formatResult; `outcomes` is an unbounded tab-local array in SessionSurface state, appended per invoked command.",
+  "confidence": "medium",
+  "reviewer": "review-performance",
+  "reported_as": "PERF-003",
+  "dispatch": "review-performance-w1"
+ },
+ {
+  "id": "F-071",
+  "severity": "info",
+  "file": ".github/PULL_REQUEST_TEMPLATE.md",
+  "quote": "- [ ] `bun run check` passes (typecheck + tests)",
+  "problem": "Unverified. The body claims 'Verified in Chrome at 1366 and 390 px against the native two-machine fixture. Both turns succeeded with identical Flow pins ... The publication and proposal links worked at both widths. Hub Web checks and 44 machine client and bridge tests passed.' It links no screenshot, recording or command output, and 'native two-machine fixture' names no repository path (the only 'two-machine' hits are requirement prose in docs/requirements/hub-remote-sessions/specification.md:144). The template's check is `bun run check`, not 'Hub Web checks' plus a count of 44. The local run in research-evidence/tests.txt shows 181 pass and 2 fail in src/lib/hub-machine; CI is green on all 20 required checks at this head, so the two failures are not established as defects.",
+  "impact": "None established. The browser walk-through and the count of 44 cannot be reproduced from this package, so they are read as the author's statement, not as evidence.",
+  "suggested_fix": "Link the recording or screenshots at both widths, name the fixture command, and report `bun run check` as the template asks. What would settle it: the fixture's launch command and a rerun of the 44 named tests.",
+  "evidence": "pr-context.md 'Intent' paragraph 4; research-evidence/tests.txt; pr-context.md 'CI: passing' (20 checks).",
+  "confidence": "medium",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "pr-contract:verification-unlinked",
+  "reported_as": "PC-005",
+  "dispatch": "review-pr-contract-w1"
+ },
+ {
+  "id": "F-073",
+  "severity": "info",
+  "file": ".metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md",
+  "quote": "Hub Web checks and 44 machine client and bridge tests passed.",
+  "problem": "The body states a count of 44 machine client and bridge tests. Slice-02 adds 2 machine tests, both in src/lib/hub-machine/client.test.ts (the clock-lead boundary test and the expires-before-issued test) and no bridge test. A static count at the reviewed head gives 15 tests in client.test.ts and 28 in bridge.network.test.ts, 43 together; the other bridge files add 4 (control), 9 (approvals), 10 (results) and so on, so no obvious set of files sums to 44. The package test run (research-evidence/tests.txt) is 181 pass, 2 fail, 184 tests over 27 files, with no per-file breakdown, and one of its two failures is client.test.ts:134. So the 44 is neither supported nor contradicted by what this slice holds.",
+  "impact": "A reader trusting the sentence cannot tell which tests were run or whether the two added grant tests are among the 44. Nothing runs differently. CI is green on all 20 checks, and the two local failures are environment observations per the dispatch note.",
+  "suggested_fix": "Name the command or file set behind the 44 (for example the bun test paths), or restate the count from CI. If the intended set was client.test.ts plus bridge.network.test.ts, the static count is 43 and the number needs a look.",
+  "evidence": "Settled by the exact command the author ran (file list), or by the CI log of the typecheck-and-tests job. Static counts: keryx ctx rg -c on src/lib/hub-machine/*.test.ts gives client.test.ts 15 and bridge.network.test.ts 28. Slice diff lines 1510 and 1525 are the only machine tests added.",
+  "confidence": "medium",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "pr-body-test-count-44",
+  "reported_as": "PC-001",
+  "dispatch": "review-pr-contract-w2"
+ },
+ {
+  "id": "F-074",
+  "severity": "info",
+  "file": "src/lib/hub-machine/client.ts",
+  "quote": "if (wait > 0 && wait <= 500)",
+  "problem": "The body says 'The machine client accepts a bounded clock lead when checking the grant issue time.' The diff does that: `issued <= now + MAX_HUB_CLOCK_LEAD_MS` with the constant at 250, while `expires > now` and `elapsed < LIMITS.grantMs` are unchanged, so both deadlines are as before. The claim holds. Two facts the body does not say: (1) authorize() already waited out a future issue time of up to 500 ms before calling the verifier (commit 565866111a, 2026-11-03, already on base). On that path, once the sleep ends `issued <= now` holds without the new tolerance, so the 250 ms lead matters only for a sub-millisecond early return of the sleep, for leads above 500 ms that are still refused, and for direct callers such as the apply-time re-check in createGrantApplication. (2) The change adds `expires > issued`, which the body does not mention. On base it was implied by `issued <= now && expires > now`; with the lead it is needed, and the second new test pins it.",
+  "impact": "None at runtime: expiry, request age and the 250 ms bound all behave as the body describes. The cost is a reader who takes 'accepts a bounded clock lead' as a new capability when the 0-500 ms case was already handled by waiting.",
+  "suggested_fix": "Optionally add one sentence to the body: the tolerance covers the residual race after the existing wait, and a grant that expires at or before its issue time is refused.",
+  "evidence": "git blame -L 196,212 src/lib/hub-machine/client.ts shows the wait block from 565866111a (2026-11-03). Slice-02 diff, client.ts hunk, and client.test.ts lines 1510-1537 for the boundary cases (75, 250 pass; 251 fails; expiry at now+5075 fails; elapsed 5000 fails; expires <= issued fails).",
+  "confidence": "high",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "grant-clock-lead-claim",
+  "reported_as": "PC-002",
+  "dispatch": "review-pr-contract-w2"
+ },
+ {
+  "id": "F-075",
+  "severity": "info",
+  "file": "docs/docs/guides/team-hub-remote-sessions.md",
+  "quote": "settings that apply at the next idle point, a native command catalogue, and",
+  "problem": "The Hub guide's 'Start a session from the web' section walks through Machine, Checkout, Agent profile and Title, then Message and Work mode, and mentions the command catalogue only as a feature in one sentence. Slice-02's i18n adds visible strings the guide never describes: an optional 'Session Flow (optional)' field and a 'First message (draft)' field at session creation (remote.en.ts launchFlow, launchMessage), and the composer hint 'Press / for commands. To type a literal slash instead, press Escape right after it.' (commandsHint). The guide is not contradicted. It is incomplete for these additions, and the PR touches no file under docs/.",
+  "impact": "A reader following the guide will not learn that a Flow can be chosen at creation or that / opens the catalogue. The documented steps still work.",
+  "suggested_fix": "Add a short note to step 2 about the optional Flow and first-message draft, and a line on the slash shortcut. This is a judgement call, since the body has no Documentation checkbox to disagree with.",
+  "evidence": "keryx ctx rg for 'native command catalogue|Press / |Session Flow|first message' over docs, README.md and apps/hub-web: the guide line above is the only user-guide hit, and no hit describes the new fields. The 35-file diff list has no docs/ path.",
+  "confidence": "low",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "hub-guide-session-launch-flow",
+  "publication": "question",
+  "reported_as": "PC-003",
+  "dispatch": "review-pr-contract-w2"
+ },
+ {
+  "id": "F-076",
+  "severity": "info",
+  "file": ".metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md",
+  "quote": "Both turns succeeded with identical Flow pins, and the applied help outcome appeared in the transcript.",
+  "problem": "This claim, and 'Subsequent messages reuse that Flow', are backed in the body only by a manual Chrome run; no screenshot or recording is linked. Slice-02's tests cover seeding the new session's composer draft with the prepared first message (remote.case.tsx 'creating a session with a Flow seeds the new session's composer...') and outcome placement, but no test in this slice sends a second message and asserts its Flow pins equal the first's. The body has no checkbox, so no box is contradicted. An existing test outside this slice may cover the reuse, and I did not read work.tsx or its tests (slice-01).",
+  "impact": "None shown. It records which part of the claim rests on manual evidence.",
+  "suggested_fix": "Link the Chrome evidence, or point to the test that asserts two sends carry identical pins. The slice-01 reviewer can confirm whether work.tsx tests do.",
+  "evidence": "Slice-02 diff lines 965-980 (seed test) and the full list of tests added in this slice; no test sending two messages with a pinned Flow appears.",
+  "confidence": "low",
+  "reviewer": "review-pr-contract",
+  "location_class": "pr-process",
+  "dedupe_key": "flow-pin-reuse-evidence",
+  "publication": "question",
+  "reported_as": "PC-004",
+  "dispatch": "review-pr-contract-w2"
+ },
+ {
+  "id": "F-077",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/remote/sessions.tsx",
+  "quote": "<Textarea value={draft.firstMessage} maxLength={32768} onChange={event => setDraft({ ...draft, firstMessage: event.target.value })}/>",
+  "problem": "The new first-message field in the New session form carries no `secretWarning` hint. Every other free-text field that ends up in a model prompt or a machine command has one: the chat composer (`<p className=\"composer-hint\">{t(\"secretWarning\")}</p>`) and the command arguments field (`hint={t('secretWarning')}`).",
+  "impact": "Attack vector: none. A user can paste a credential into a field that, once the session opens, becomes the first model message, without the reminder the other two fields give. This is a consistency gap in user guidance and no harm path is shown in the code, so it is recorded at info.",
+  "suggested_fix": "Pass `hint={t(\"secretWarning\")}` to the `Field label={t(\"launchMessage\")}`.",
+  "evidence": "Field is `<Field label={t(\"launchMessage\")}>` with no hint prop in sessions.tsx; secretWarning is used in work.tsx (composer-hint) and settings.tsx Commands (arguments Field hint).",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "reported_as": "SEC-2",
+  "dispatch": "review-security-code-w1"
+ },
+ {
+  "id": "F-078",
+  "severity": "info",
+  "file": "src/lib/hub-machine/client.ts",
+  "quote": "issued <= now + MAX_HUB_CLOCK_LEAD_MS && expires > now",
+  "problem": "The grant issue time may now be up to 250 ms ahead of the machine clock. Worst case the wall-clock check admits a grant that expires at now + 5250 ms (issued <= now + 250, expires <= issued + 5000), 250 ms beyond LIMITS.grantMs on the wall axis. Every consumer also applies the monotonic bound, so the extra 250 ms is never usable.",
+  "impact": "None established. Attack vector considered: a Hub (or a party that skews the Hub clock) issues authorizedAt = now + 250 ms and expiresAt = authorizedAt + 5000 ms to stretch the window. The grant is only reachable through MachineConnection.authorization(), whose startedAt is taken before the authorize request and re-checked by valid() on every apply(): elapsed < 5000 ms from that start caps total lifetime regardless of the issue time. The same Hub could already issue authorizedAt = now and expiresAt = now + 5000 ms with no lead, so a clock-controlling issuer gains no authority, and the lead does not let a grant be minted ahead of its request (still bounded by the in-flight request age and by 250 ms). Replay is untouched: a replayed grant has a past issue time, and the Hub-side replay path (remote_authorization_grant) is pre-existing and unchanged. The new expires > issued check closes the one inversion the lead would otherwise open (expires == issued or earlier while expires > now), and both boundaries are pinned by tests.",
+  "suggested_fix": "None required. Optional: note in the comment that the wall-clock expiry can be up to 250 ms later than grantMs and that the monotonic request age is the real upper bound, so the next editor does not tighten or loosen the wrong axis.",
+  "evidence": "client.ts:41-43 (verifyAuthorizationGrant), :199-211 (authorize: started = performance.now() before the request; pre-existing sleep for a lead of up to 500 ms from commit 565866111), :213-219 and :287-296 (authorization/createGrantApplication re-verify with startedAt and the wall clock on every apply, single-use via consumed). All consumers enumerated with keryx ctx rg over src, scripts and apps: verifyAuthorizationGrant is called only at client.ts:209 and :296; createGrantApplication only at :216; authorization() only from bridge.ts:661, 689, 740, 818, 886. Hub issuer at src/hub/remote-v2/index.ts:347-349 issues authorizedAt = iso(issuedAt), expiresAt = iso(issuedAt + LIMITS.grantMs) from one clock read. Choice history read: the original `issued <= now` came with the prototype checkpoint 5e6e33e7f; the comment on this change and the PR statement give the reason (Hub slightly ahead of the machine). Reachability of the 250 ms window: in authorize() the pre-existing wait/Bun.sleep consumes any lead up to 500 ms before verification, so the tolerance is reached by clock skew, a wall-clock step, or a sleep that wakes marginally early, and by no input an attacker can add beyond what the Hub already controls.",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "publication": "omit",
+  "reported_as": "SEC-001",
+  "dispatch": "review-security-code-w2"
+ },
+ {
+  "id": "F-079",
+  "severity": "info",
+  "file": "apps/hub-web/tests/session-command-outcomes.case.tsx",
+  "quote": "test(\"a settled outcome stops being fetched on later invalidations, while a queued one keeps following\", async () => {",
+  "problem": "Two tests share the same setup and the core assertion (an applied operation is not refetched after invalidateQueries): 'a settled outcome stops being fetched but its receipt stays in the query cache' and this one. The later one adds the queued-keeps-following half; the earlier adds the cache read.",
+  "impact": "Duplicate maintenance; no signal lost.",
+  "suggested_fix": "Merge into one test asserting stop, keep-following and cache retention.",
+  "evidence": "Read of the two test bodies.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-010",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-080",
+  "severity": "info",
+  "file": "apps/hub-web/tests/css-rules.ts",
+  "quote": "stack.push({ head, layer: head.startsWith(\"@layer\") });",
+  "problem": "parseCssRules keeps a statement at-rule in the buffer, so it becomes the head of the next block and that block is dropped as an at-rule. Probe: parseCssRules('@import \"x.css\";\\n.rail-collapsed .identity { display:none; }') returns no rules. Today's files are safe (styles.css has `@import ...;` followed by `@theme {`), so nothing is lost now.",
+  "impact": "Latent: a `@layer a, b;` or `@import` line added before a rule would make the guards that read hide-lists see nothing; the `length > 0` checks would turn red, but with a message about the rules rather than the parser.",
+  "suggested_fix": "Reset `buffer` when a `;` is met at depth 0.",
+  "evidence": "Probe test run with bun (scratchpad parser-probe.test.ts): rules = [] for the input above.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-011",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-081",
+  "severity": "info",
+  "file": "apps/hub-web/tests/flow-term.case.ts",
+  "quote": "not.toMatch(/\u043f\u043e\u0442\u043e\u043a\u0438/i)",
+  "problem": "The guard that the Russian copy keeps the term 'Flow' forbids one inflection of the rejected word. '\u043f\u043e\u0442\u043e\u043a\u043e\u0432', '\u043f\u043e\u0442\u043e\u043a\u0430', '\u043f\u043e\u0442\u043e\u043a\u0443' pass. The positive `toContain('\u043d\u0430\u0445\u043e\u0434\u044f\u0442\u0441\u044f Flow \u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u0435')` already pins the sentence, so the negative line adds little, and both assertions fail on any rewording of the copy (checked: an English or Russian rewording goes red).",
+  "impact": "A change detector for one string; harmless.",
+  "suggested_fix": "Assert `/\\bFlow\\b/` present and `/\u043f\u043e\u0442\u043e\u043a/i` absent in the Russian string.",
+  "evidence": "Mutation run, command `bun test ./apps/hub-web/tests/localization.case.ts ./apps/hub-web/tests/flow-term.case.ts`: ru 'Flow' -> '\u043f\u043e\u0442\u043e\u043a\u0438' red; en rewording red.",
+  "confidence": "high",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-012",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-082",
+  "severity": "info",
+  "file": "apps/hub-web/src/styles.css",
+  "quote": "padding-inline-end:2.5rem;",
+  "problem": "CSS declarations the diff adds that no tier pins: select `padding-inline-end:2.5rem` (the point of the 'reserve space for the chevron' fix), the forced-colors fallback, the 1024px rail breakpoint, the toggle's `display:none` below it, the collapsed width 60px and 44px target, composer `font-size:16px` at 600px, and the `composer-work-context` rules. jsdom applies no CSS and the e2e fit check does not open the collapsed rail or measure a select.",
+  "impact": "Presentation only; a regression in any of them is visible only to a person.",
+  "suggested_fix": "Leave as is, or extend the e2e fit check (it already runs at a narrow width) to open the rail and read a select's computed padding.",
+  "evidence": "Mutation run against the replica of the CSS-only assertions: padding deleted, forced-colors appearance changed, breakpoint 1024->1, toggle display:flex, width 60->600, target 44->20, font-size 16->12, summary margin removed: each 6 pass 0 fail.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-013",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-083",
+  "severity": "info",
+  "file": "apps/hub-web/tests/remote.case.tsx",
+  "quote": "test(\"creating a session with a Flow seeds the new session's composer with the prepared first message\", async () => {",
+  "problem": "The PR claims two turns succeeded with identical Flow pins. Automated coverage stops at seeding and pinning the prepared draft; no unit test sends the prepared message and then a second one, and the e2e journeys create ad-hoc sessions (no `launchFlow` in browser-journeys.e2e.mjs). The `store.put(draftKey, {...submitted, text: \"\", prepared: false})` line that keeps the pins after a send is the gate that carries 'subsequent messages reuse that Flow'.",
+  "impact": "The claim rests on the manual Chrome run described in the PR body.",
+  "suggested_fix": "Add a unit test: seed a prepared Flow draft, send, assert the draft keeps mode/flowId/specDigest/criteriaDigest with empty text, send again and assert the same pins in the second request body.",
+  "evidence": "grep for launchFlow|Session Flow|firstMessage in browser-journeys.e2e.mjs: no matches; remote.case.tsx has no test that submits a prepared draft. Candidate ids: send-success-keeps-text, prepared-submit-guard-deleted.",
+  "confidence": "medium",
+  "reviewer": "review-testing-practices",
+  "location_class": "in-diff",
+  "reported_as": "F-014",
+  "dispatch": "review-testing-practices-w1"
+ },
+ {
+  "id": "F-084",
+  "severity": "info",
+  "file": "apps/hub-web/src/app/App.tsx",
+  "quote": "aria-expanded={!railCollapsed}",
+  "problem": "The rail toggle changes its accessible name between 'Collapse menu' and 'Expand menu' and also toggles aria-expanded. ARIA practice keeps the name constant and lets aria-expanded carry the state. It is an icon-only button with no `title`, unlike the other rail items that gain one.",
+  "impact": "A screen reader hears 'Collapse menu, expanded' or 'Expand menu, collapsed': understandable, but a doubled signal. Sighted pointer users get no tooltip on the icon. The rail state is also not remembered across a reload, which I did not verify against any persistence elsewhere in the shell.",
+  "suggested_fix": "Keep one label ('Navigation menu' or 'Collapse menu') with aria-expanded, add a title, and consider persisting the choice per user in a try/catch'd localStorage.",
+  "evidence": "WAI-ARIA disclosure pattern; no measurement taken. Marked unverified: settle with a screen-reader pass.",
+  "confidence": "low",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-011",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-085",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/workflow.tsx",
+  "quote": "<p>{t('flowWorkspaceDistinction')}</p>",
+  "problem": "A permanent info Notice with a button is added to the top of the project's Flows page on every visit, above the primary content (create button, search, list). It explains a navigation distinction rather than reporting state.",
+  "impact": "Not a defect in behaviour; a restraint question. It occupies the first screen of the page it describes for users who already know the difference, and it renders as role=status. I could not judge it without a render, so I left it as an observation. The PR description does not mention this change.",
+  "suggested_fix": "Show it only when the project has no Flows, or make it dismissible, or fold it into the page description.",
+  "evidence": "Restraint (squint test), unmeasured; settle with a 1366px and 390px render of the Flows page.",
+  "confidence": "low",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-012",
+  "dispatch": "review-ui-ux-w1"
+ },
+ {
+  "id": "F-086",
+  "severity": "info",
+  "file": "apps/hub-web/src/features/remote/settings.tsx",
+  "quote": "<Input ref={searchInput} type=\"search\"",
+  "problem": "The 'catalogue' is a search field plus a native select, so results are not visible as a list, Enter and ArrowDown in the search box do not move into or choose a result, and a result count is not announced (only the zero case has a status notice). The composer hint 'Press / for commands' is shown to everyone, including observers (Invoke is disabled for them) and touch users (no physical slash key).",
+  "impact": "Slash-menu convention (Jakob) expects an inline list and keyboard selection; here a keyboard user types, tabs to a select, opens it, picks, then fills a JSON arguments textarea, then invokes. It works, it is slow. Cannot be settled without trying it with a keyboard and a screen reader.",
+  "suggested_fix": "If the interaction stays, make Enter/ArrowDown in the search move to the first match and add a polite result count; hide the shortcut hint when the human is not the controller.",
+  "evidence": "Code read only: Commands renders Field(search) then Field(command) as a Select; no onKeyDown on the search input; one role=status notice for zero matches. Unverified in a live engine.",
+  "confidence": "low",
+  "reviewer": "review-ui-ux",
+  "location_class": "in-diff",
+  "reported_as": "UX-013",
+  "dispatch": "review-ui-ux-w1"
+ }
+]
+```
+
+## Token spend
+
+token spend: unknown (26 dispatch(es), none reported usage)

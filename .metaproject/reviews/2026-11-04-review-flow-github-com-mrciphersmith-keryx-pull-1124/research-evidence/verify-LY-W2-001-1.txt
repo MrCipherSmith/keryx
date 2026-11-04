@@ -1,0 +1,18 @@
+# keryx review verify-run
+finding: LY-W2-001
+command: curl -sS -D - -o /dev/null http://127.0.0.1:7782/
+cwd: /Users/tsaitler.aleksandr/goodea/keryx
+time: 2026-11-04T06:15:48.536Z
+exit: 0
+
+--- stdout ---
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'
+Referrer-Policy: no-referrer
+Date: Wed, 04 Nov 2026 06:15:48 GMT
+Content-Length: 380
+--- stderr ---
+

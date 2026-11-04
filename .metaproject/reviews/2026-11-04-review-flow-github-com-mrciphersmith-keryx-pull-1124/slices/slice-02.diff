@@ -1,0 +1,1621 @@
+--- apps/hub-web/src/i18n/remote.en.ts
+@@ 1,23 @@
+ export default {
++  searchCommands: "Search Keryx commands", noCommandsFound: "No matching commands.",
++ sessionOpeningFailed: "Could not open", sessionOpeningNextStep: "Check that the machine is available, then create a new session.", sessionLaunchRequirements: "Choose an available machine, a clean checkout and a ready profile, then enter a title.", sessionLaunchOperatorOnly: "Only operators can create sessions. Ask an operator or switch to an operator account.", sessionLaunchEnterTitle: "Enter a session title to continue.", sessionLaunchFlowGone: "The selected Flow is no longer in progress. Choose another Flow or clear the selection.",
++ sessionLaunchFlowsLoading: "Loading the Flows to check the selected one…", sessionLaunchFlowsFailed: "The Flows could not be loaded, so the selected Flow cannot be checked. Retry, or clear the selection.", sessionOpeningCreateNew: "Create a new session", sessionOpeningDetails: "Technical details", commandsHint: "Press / for commands. To type a literal slash instead, press Escape right after it.",
++ launchFlow: "Session Flow (optional)", launchFlowGone: "{{title}} · no longer in progress", launchFlowUnchecked: "{{id}} · not checked yet", launchMessage: "First message (draft)",
+   goToController: "Go to session control",
+   sessionOpeningRejected: "The machine refused to open this session.",
+ 
+   sessionNotOpen: "The machine has not opened this session. Return to Sessions and try creating a new session.",
+   sessionNeedsRecovery: "This session needs recovery on the machine before it can accept messages.",
+   controlApplying: "The machine is applying your request to take control.",
+   adHocUnavailable: "This machine has not reported permission for chat without a Flow.",
+   chatOptions: "Message options",
+   busyPolicyHelp: "Choose whether a new message waits in the queue or is declined while the agent is busy.",
+   chatConsent: "Send messages in this session without a Flow.",
+ 
+ sessionDetails:'Details',machineOverview:'Sessions, context and actions on each machine.',loadingSessions:'Loading sessions…',notObserved:'Not observed yet',loadedSessions:'Sessions loaded',checkouts:'Checkouts',noMachineSessions:'No sessions in this project',sessionsIncomplete:'The session list has not loaded completely',machineAccess:'Access management',activeRunFlow:'Active run Flow',noController:'No controller',lastObservedSession:'Last observed: machine is offline',runDetailsUnavailable:'Run context unavailable; open the session to reconcile',
+ "recoverController":"Recover expired control","controllerRecoveryHint":"Select a fresh verified local observation. Explicit recovery does not release local filesystem locks or retry uncertain work.",
+ "reviewRelease":"I reviewed the verified release receipt","reviewRecovery":"I reviewed the local recovery observation",
+ "technicalDetails":"Technical receipt details","deadline":"Approval deadline","timelineOverflow":"Critical event display capacity reached. Reconcile current run status before further actions.","replayConflict":"Conflicting event replay. Actions are blocked until reconciliation.","takeover":"Take over released control","releaseReceipt":"Verified controller release receipt","recoverRun":"Resolve run after local reconciliation","reconciliation":"Verified local reconciliation report","reason":"Reason","noRecoveryEvidence":"No current verified local recovery receipt is available. Recover locally and refresh; do not invent a receipt or assume work stopped.","decisionReconciled":"Reconcile proven running work","decisionLost":"Mark confirmed stopped work as lost","receiptStatuses":{"waiting": "Waiting for your decision", "recorded": "Answer recorded in Hub", "delivered": "Delivered to the local executor", "applied": "Applied by the local executor", "not-applied": "Not applied by the local executor", "expired": "Expired without application", "requested": "Request recorded; awaiting executor confirmation", "received": "Received by the local executor", "admitted": "Admitted by the local executor", "queued": "Queued for a safe idle boundary", "pending": "Recorded; waiting for local application", "rejected": "Rejected; no application confirmed", "recovery-required": "Local recovery is required", "confirmation-required": "Exact human confirmation is required"},
+  states:{"opening": "Opening", "idle": "Idle", "busy": "Busy", "paused": "Paused", "closed": "Closed", "recovery-required": "Recovery required", "dispatching": "Dispatching", "received": "Received", "starting": "Starting", "running": "Running", "waiting-approval": "Waiting for approval", "cancelling": "Cancelling", "succeeded": "Succeeded", "failed": "Failed", "cancelled": "Cancelled", "rejected": "Rejected", "unknown": "Unknown", "lost": "Lost", "queued": "Queued", "admitted": "Admitted", "applied": "Applied", "removed": "Removed", "suspended": "Suspended"},
+  revokeConfirm:'I confirm revocation of this machine',machines:'Machines',sessions:'Sessions',runsEmpty:'Runs appear here once a connected machine starts handling a message. Send a message from Sessions to get started.',runs:'Runs',description:'Local execution. Shared context. Human review.',newSession:'New session',createSession:'Create session',machine:'Machine',checkout:'Checkout',profile:'Agent profile',title:'Title',choose:'Choose explicitly',online:'Online',offline:'Offline — last observed',revoked:'Revoked',ready:'Ready',setup:'Setup required',dirty:'Uncommitted changes',busy:'Busy',head:'Git HEAD',policy:'Policy digest',capability:'Capability digest',inventory:'Inventory version',lastSeen:'Last seen',empty:'No records yet',back:'Back',details:'Details',refresh:'Refresh',newPairing:'Create enrollment code',machineName:'Machine display name',pairingHelp:'One-use code expires in 10 minutes. Supply it through KERYX_HUB_PAIR_CODE locally; never put it in command arguments. Pairing alone does not allow a checkout.',pairingCode:'Enrollment code — shown once',dismissCode:'Dismiss code',revoke:'Revoke machine',revokeReason:'Reason for revocation',localSetup:'On the target machine: pair, explicitly allow a clean checkout and native profile, then run opted-in keryx serve. Provider credentials remain local.',state:'Observed state',connection:'Control channel',connected:'Live updates connected',disconnected:'Updates disconnected; refresh to reconcile. This does not mean execution stopped.',controller:'Controller',claim:'Claim control',release:'Release control',observer:'Observer. Claim control explicitly before sending commands.',controlLost:'Control expired or renewal failed. Reconcile and explicitly claim again.',leaseExpires:'Control expires',history:'History',more:'Load next page',gap:'History/log gap — earlier output is unavailable; execution state remains separate.',message:'Message',send:'Send message',workMode:'Work mode',flow:'Managed Flow',adHoc:'Ad-hoc work',adHocConsent:'I explicitly choose locally permitted ad-hoc work',consentVersion:'Local profile consent version',chooseFlow:'Select an in-progress Flow',pins:'Pinned specification / criteria',busyPolicy:'When busy',reject:'Reject',enqueue:'Queue',queue:'Queue',remove:'Remove',edit:'Edit message',reauthorize:'Reauthorize under current controller',save:'Save',stale:'Base versions changed. Your draft is preserved. Review current data before preparing a new request.',rebase:'Use current versions',required:'Complete the required explicit selections.',versions:'Versions',sessionVersion:'Session',configVersion:'Configuration',historyVersion:'History',queueVersion:'Queue',settings:'Model and routing',baseline:'Baseline model',reasoning:'Reasoning effort',routing:'Routing enabled',routingProfile:'Routing profile',candidates:'Allowed routing candidates',fallback:'Fallback candidate',queueAtIdle:'Apply at idle',saveConfig:'Request configuration change',receipt:'Operation receipt',pending:'Recorded; waiting for local application',applied:'Applied by executor',confirmation:'Exact cost/privacy confirmation',allowOnce:'Allow once',deny:'Deny',expired:'Expired',cost:'Cost effect',privacy:'Privacy effect',commands:'Native command catalogue',command:'Command',arguments:'Structured arguments',invoke:'Invoke command',unavailable:'Unavailable',resume:'Resume session',close:'Close when idle',fork:'Fork session',forkTitle:'Fork title',targetCheckout:'Fork checkout',startFromFlow:'Run on a machine',launchHint:'Create or open a session, claim control, then send work with the exact Flow selected.',run:'Run',cancel:'Request cancellation',cancelReason:'Cancellation reason',cancelHint:'Requested cancellation is not proof that the executor or its children stopped.',approval:'Tool approval',fingerprint:'Action fingerprint',approvalExpired:'Approval expired; it cannot be applied.',approvalReceipt:'Answer delivery / application',result:'Review-only result',partial:'Partial result',actual:'Actual execution state',unknown:'Unknown — local reconciliation required',noAuthority:'Only a current human operator with this tab’s explicit controller claim can mutate the session.',profileReason:'Local readiness',noReady:'No ready native profile. Complete local setup before creating a session.',output:'Redacted progress',operation:'Operation',notApplied:'Not applied',scope:'Project scope',kind:'Kind',status:'Status',nextTurn:'Effective from turn',reload:'Refresh status',terminal:'Terminal result is retained; no automatic acceptance or Git publication.',secretWarning:'Do not paste provider credentials, tokens or environment values into messages or command arguments.'
+ };
+
+--- apps/hub-web/src/i18n/remote.ru.ts
+@@ 1,23 @@
+ export default {
++  searchCommands: "Поиск команд Keryx", noCommandsFound: "Подходящих команд нет.",
++ sessionOpeningFailed: "Не открылась", sessionOpeningNextStep: "Проверьте доступность машины и создайте новую сессию.", sessionLaunchRequirements: "Выберите доступную машину, чистую рабочую копию и готовый профиль, затем введите название.", sessionLaunchOperatorOnly: "Создавать сессии могут только операторы. Обратитесь к оператору или войдите под учётной записью оператора.", sessionLaunchEnterTitle: "Введите название сессии, чтобы продолжить.", sessionLaunchFlowGone: "Выбранный Flow больше не в работе. Выберите другой Flow или сбросьте выбор.",
++ sessionLaunchFlowsLoading: "Загружаем Flow, чтобы проверить выбранный…", sessionLaunchFlowsFailed: "Не удалось загрузить Flow, поэтому выбранный Flow нельзя проверить. Повторите или сбросьте выбор.", sessionOpeningCreateNew: "Создать новую сессию", sessionOpeningDetails: "Технические подробности", commandsHint: "Нажмите /, чтобы открыть команды. Чтобы ввести саму косую черту, сразу нажмите Escape.",
++ launchFlow: "Flow для сессии (необязательно)", launchFlowGone: "{{title}} · больше не в работе", launchFlowUnchecked: "{{id}} · ещё не проверен", launchMessage: "Первое сообщение (черновик)",
+   goToController: "Перейти к управлению сессией",
+   sessionOpeningRejected: "Машина отклонила открытие этой сессии.",
+ 
+   sessionNotOpen: "Машина ещё не открыла эту сессию. Вернитесь в «Сессии» и попробуйте создать новую.",
+   sessionNeedsRecovery: "Перед отправкой сообщения нужно восстановить сессию на машине.",
+   controlApplying: "Машина применяет запрос на управление.",
+   adHocUnavailable: "Машина пока не сообщила, что разрешает чат без Flow.",
+   chatOptions: "Параметры сообщения",
+   busyPolicyHelp: "Выберите, поставить новое сообщение в очередь или отклонить его, пока агент занят.",
+   chatConsent: "Отправлять сообщения в этой сессии без Flow.",
+ 
+ sessionDetails:'Подробности',machineOverview:'Сессии, контекст и действия на каждой машине.',loadingSessions:'Загружаем сессии…',notObserved:'Ещё не наблюдалась',loadedSessions:'Сессии загружены',checkouts:'Рабочие копии',noMachineSessions:'Нет сессий в этом проекте',sessionsIncomplete:'Список сессий ещё не загружен полностью',machineAccess:'Управление доступом',activeRunFlow:'Flow активного запуска',noController:'Без управляющего',lastObservedSession:'Последнее наблюдение: машина не в сети',runDetailsUnavailable:'Контекст запуска недоступен; откройте сессию для сверки',
+ "recoverController":"Восстановить истёкшее управление","controllerRecoveryHint":"Выберите свежий проверенный результат локальной сверки. Восстановление не снимает блокировки файлов и не повторяет неопределённую работу.",
+ "reviewRelease":"Я проверил квитанцию освобождения управления","reviewRecovery":"Я проверил результат локального восстановления",
+ "technicalDetails":"Технические детали квитанции","deadline":"Срок подтверждения","timelineOverflow":"Достигнут предел показа критических событий. Сверьте состояние запуска перед действиями.","replayConflict":"Обнаружено противоречие при повторе событий. Действия заблокированы до сверки.","takeover":"Принять отпущенное управление","releaseReceipt":"Проверенная квитанция освобождения управления","recoverRun":"Разрешить неопределённость после локальной сверки","reconciliation":"Проверенный отчёт локальной сверки","reason":"Причина","noRecoveryEvidence":"Нет актуальной проверенной квитанции локального восстановления. Выполните сверку локально и обновите данные; не придумывайте квитанцию и не считайте работу остановленной.","decisionReconciled":"Сверить доказанно выполняющуюся работу","decisionLost":"Отметить подтверждённо остановленную работу как потерянную","receiptStatuses":{"waiting": "Ожидает вашего решения", "recorded": "Ответ записан в Hub", "delivered": "Доставлено локальному исполнителю", "applied": "Применено локальным исполнителем", "not-applied": "Не применено локальным исполнителем", "expired": "Истекло без применения", "requested": "Запрос записан; ожидается подтверждение исполнителя", "received": "Получено локальным исполнителем", "admitted": "Допущено локальным исполнителем", "queued": "В очереди до безопасного простоя", "pending": "Записано; ожидается применение локально", "rejected": "Отклонено; применение не подтверждено", "recovery-required": "Нужно локальное восстановление", "confirmation-required": "Нужно точное подтверждение человека"},
+  states:{"opening": "Открывается", "idle": "Ожидает", "busy": "Выполняется", "paused": "Приостановлено", "closed": "Закрыта", "recovery-required": "Нужно восстановление", "dispatching": "Отправляется", "received": "Получено", "starting": "Запускается", "running": "Выполняется", "waiting-approval": "Ожидает подтверждения", "cancelling": "Отменяется", "succeeded": "Завершено успешно", "failed": "Ошибка", "cancelled": "Отменено", "rejected": "Отклонено", "unknown": "Неизвестно", "lost": "Связь с исполнителем потеряна", "queued": "В очереди", "admitted": "Допущено", "applied": "Применено", "removed": "Удалено", "suspended": "Требуется новое разрешение"},
+  revokeConfirm:'Подтверждаю отзыв доступа этой машины',machines:'Машины',sessions:'Сессии',runsEmpty:'Запуски появятся здесь, когда подключённая машина начнёт выполнять задание. Отправьте сообщение агенту в разделе «Сессии».',runs:'Запуски',description:'Локальное выполнение. Общий контекст. Приёмка человеком.',newSession:'Новая сессия',createSession:'Создать сессию',machine:'Машина',checkout:'Рабочая копия',profile:'Профиль агента',title:'Название',choose:'Выберите явно',online:'В сети',offline:'Не в сети — последнее наблюдение',revoked:'Доступ отозван',ready:'Готов',setup:'Нужна настройка',dirty:'Незакоммиченные изменения',busy:'Занят',head:'Git HEAD',policy:'Digest политики',capability:'Digest возможностей',inventory:'Версия инвентаря',lastSeen:'Последний контакт',empty:'Пока нет записей',back:'Назад',details:'Подробности',refresh:'Обновить',newPairing:'Создать код подключения',machineName:'Название машины',pairingHelp:'Одноразовый код действует 10 минут. Передайте локально через KERYX_HUB_PAIR_CODE; не указывайте в аргументах команды. Подключение само по себе не разрешает рабочие копии.',pairingCode:'Код подключения — показывается один раз',dismissCode:'Скрыть код',revoke:'Отозвать доступ машины',revokeReason:'Причина отзыва',localSetup:'На целевой машине: подключите Hub, явно разрешите чистую рабочую копию и native-профиль, затем запустите keryx serve с включённой функцией. Ключи провайдеров остаются локально.',state:'Наблюдаемое состояние',connection:'Канал управления',connected:'Обновления подключены',disconnected:'Обновления отключены; обновите состояние для сверки. Это не означает остановку выполнения.',controller:'Управляющий',claim:'Взять управление',release:'Отпустить управление',observer:'Режим наблюдения. Явно возьмите управление перед отправкой команд.',controlLost:'Управление истекло или продление не удалось. Сверьте состояние и возьмите управление явно.',leaseExpires:'Управление действует до',history:'История',more:'Следующая страница',gap:'Пропуск истории или логов — старый вывод недоступен; состояние выполнения хранится отдельно.',message:'Сообщение',send:'Отправить сообщение',workMode:'Режим работы',flow:'Задача Flow',adHoc:'Работа без Flow',adHocConsent:'Я явно выбираю локально разрешённую работу без Flow',consentVersion:'Версия локального согласия профиля',chooseFlow:'Выберите Flow в работе',pins:'Закреплённая спецификация / критерии',busyPolicy:'Если занят',reject:'Отклонить',enqueue:'В очередь',queue:'Очередь',remove:'Удалить',edit:'Изменить сообщение',reauthorize:'Разрешить заново текущим управляющим',save:'Сохранить',stale:'Базовые версии изменились. Черновик сохранён. Проверьте данные перед новым запросом.',rebase:'Использовать текущие версии',required:'Заполните обязательные поля и сделайте явный выбор.',versions:'Версии',sessionVersion:'Сессия',configVersion:'Конфигурация',historyVersion:'История',queueVersion:'Очередь',settings:'Модель и маршрутизация',baseline:'Базовая модель',reasoning:'Уровень рассуждений',routing:'Маршрутизация включена',routingProfile:'Профиль маршрутизации',candidates:'Разрешённые кандидаты',fallback:'Резервный кандидат',queueAtIdle:'Применить при простое',saveConfig:'Запросить изменение настроек',receipt:'Квитанция операции',pending:'Записано; ожидается применение локально',applied:'Применено исполнителем',confirmation:'Точное подтверждение стоимости и приватности',allowOnce:'Разрешить один раз',deny:'Отказать',expired:'Истекло',cost:'Изменение стоимости',privacy:'Изменение приватности',commands:'Каталог native-команд',command:'Команда',arguments:'Структурированные аргументы',invoke:'Выполнить команду',unavailable:'Недоступно',resume:'Продолжить сессию',close:'Закрыть при простое',fork:'Ответвить сессию',forkTitle:'Название ответвления',targetCheckout:'Рабочая копия ответвления',startFromFlow:'Запустить на машине',launchHint:'Создайте или откройте сессию, возьмите управление и отправьте работу с выбранным точным Flow.',run:'Запуск',cancel:'Запросить отмену',cancelReason:'Причина отмены',cancelHint:'Запрос отмены ещё не доказывает остановку исполнителя и его дочерних процессов.',approval:'Подтверждение инструмента',fingerprint:'Отпечаток действия',approvalExpired:'Подтверждение истекло; применить его нельзя.',approvalReceipt:'Доставка и применение ответа',result:'Результат для ревью',partial:'Частичный результат',actual:'Фактическое состояние выполнения',unknown:'Неизвестно — нужна локальная сверка',noAuthority:'Изменения доступны только действующему оператору-человеку с явным управлением в этой вкладке.',profileReason:'Готовность локально',noReady:'Нет готового native-профиля. Завершите локальную настройку.',output:'Прогресс после удаления секретов',operation:'Операция',notApplied:'Не применено',scope:'Проекты',kind:'Тип',status:'Статус',nextTurn:'Применяется начиная с хода',reload:'Обновить состояние',terminal:'Результат сохранён; автоматической приёмки или публикации в Git нет.',secretWarning:'Не вставляйте ключи провайдеров, токены или переменные окружения в сообщения и аргументы команд.'
+ };
+
+--- apps/hub-web/src/i18n/workflow.en.ts
+@@ 1,24 @@
+ export default {
++  flowWorkspaceDistinction: "This view lists Flows based on specifications. Open Project work to manage intents, attempts and results.",
++  openManagedWork: "Project work",
++
+   projectWorkspaceDescription:
+     "Flows, decisions and execution in this project.",
+   projectDecisions: "Needs your decision",
+   projectMachines: "Machines",
+   projectContext: "Project context",
+   projectExplicitDecisions: "Review exact results and proposed changes",
+   projectLoadingSection: "Loading {{section}}…",
+   projectSectionUnavailable: "{{section}} could not be loaded.",
+   projectResultReview: "Flow ready for acceptance",
+   projectReviewResult: "Review result",
+   projectContextProposal: "Context proposal",
+   projectNoDecisions: "No pending Flow or context decisions.",
+   projectOpenMachines: "View machines",
+   projectMachineRevoked: "Access revoked",
+   projectMachineOnline: "Online",
+   projectMachineOffline: "Offline",
+   projectCheckoutCount: "Checkouts: {{count}}",
+   projectMachineRecovery: "Recovery required",
+   projectNoMachines: "No machines connected to this project yet.",
+   projectOpenContext: "Browse",
+
+--- apps/hub-web/src/i18n/workflow.ru.ts
+@@ 1,24 @@
+ export default {
++  flowWorkspaceDistinction: "Здесь находятся Flow на основе спецификаций. Для управления намерениями, попытками и результатами откройте «Работа над проектом».",
++  openManagedWork: "Работа над проектом",
++
+   projectWorkspaceDescription:
+     "Flows, решения и выполнение в контексте проекта.",
+   projectDecisions: "Требует решения",
+   projectMachines: "Машины",
+   projectContext: "Контекст проекта",
+   projectExplicitDecisions: "Приёмка результатов и предложенные изменения",
+   projectLoadingSection: "Загружается раздел «{{section}}»…",
+   projectSectionUnavailable: "Не удалось загрузить раздел «{{section}}».",
+   projectResultReview: "Flow готов к приёмке",
+   projectReviewResult: "Проверить результат",
+   projectContextProposal: "Предложение контекста",
+   projectNoDecisions: "Нет ожидающих решений по Flows и контексту.",
+   projectOpenMachines: "Все машины",
+   projectMachineRevoked: "Доступ отозван",
+   projectMachineOnline: "В сети",
+   projectMachineOffline: "Не в сети",
+   projectCheckoutCount: "Рабочих копий: {{count}}",
+   projectMachineRecovery: "Нужно восстановление",
+   projectNoMachines: "К проекту пока не подключены машины.",
+   projectOpenContext: "Открыть",
+
+--- apps/hub-web/src/styles.css
+@@ 1,62 @@
+ @import "tailwindcss";
+ @theme {
+   --font-sans:
+     "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+     "Segoe UI", sans-serif;
+ }
+ :root {
+   color-scheme: only light;
+   --hub-text: var(--hub-ink);
+   --hub-canvas: #f4f7f5;
+   --hub-surface: #fff;
+   --hub-subtle: #edf2ef;
+   --hub-ink: #20352b;
+   --hub-muted: #61756b;
++  --hub-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%2361756b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); /* tracks --hub-muted */
+   --hub-border: #dce5df;
+   --hub-accent: #265f50;
+   --hub-accent-soft: #e4f0e9;
+   --hub-danger: #a33337;
+   --hub-warning: #946117;
+   --hub-focus: #26816b;
+   --color-white: var(--hub-surface);
+   --color-slate-50: #f6f8f7;
+   --color-slate-100: #edf2ef;
+   --color-slate-200: #dce5df;
+   --color-slate-300: #c4d2c9;
+   --color-slate-400: #82968a;
+   --color-slate-500: #61756b;
+   --color-slate-600: #52675c;
+   --color-slate-700: #3c5447;
+   --color-slate-800: #2b4235;
+   --color-slate-900: #20352b;
+   --color-slate-950: #15271c;
+ }
+ :root[data-theme="dark"] {
+   color-scheme: dark;
+   --hub-canvas: #131c18;
+   --hub-surface: #1b2721;
+   --hub-subtle: #223229;
+   --hub-ink: #e1ece5;
+   --hub-muted: #a2b7aa;
++  --hub-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23a2b7aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); /* tracks --hub-muted */
+   --hub-border: #35483c;
+   --hub-accent: #8dc7ab;
+   --hub-accent-soft: #294639;
+   --hub-danger: #f5a3a4;
+   --hub-warning: #f0c57d;
+   --hub-focus: #8dc7ab;
+   --color-slate-50: #1e2c24;
+   --color-slate-100: #25372b;
+   --color-slate-200: #35483c;
+   --color-slate-300: #496351;
+   --color-slate-400: #8fa899;
+   --color-slate-500: #a2b7aa;
+   --color-slate-600: #b4c7bc;
+   --color-slate-700: #c7d7cc;
+   --color-slate-800: #d8e5dc;
+   --color-slate-900: #e1ece5;
+   --color-slate-950: #eff6f1;
+   --color-stone-50: var(--hub-canvas);
+   --color-emerald-50: #243b2d;
+   --color-emerald-100: #294639;
+
+--- apps/hub-web/src/styles.css
+@@ 611,658 @@
+ .session-conversation pre {
+   overflow-wrap: anywhere;
+   white-space: pre-wrap;
+ }
+ .session-inspector .hub-panel-body {
+   font-size: 12px;
+ }
+ @media (max-width: 1199px) {
+   .session-cockpit-grid {
+     grid-template-columns: minmax(0, 1fr);
+   }
+   .session-inspector {
+     grid-template-columns: repeat(2, minmax(0, 1fr));
+   }
+ }
+ @media (max-width: 767px) {
+   .session-inspector {
+     grid-template-columns: minmax(0, 1fr);
+   }
+ }
++
++/* Same layer as the rules they extend, so Tailwind utilities (layer utilities)
++   can still override the rail and Select padding. */
++@layer components {
++.nav-item.desktop-rail-toggle { display:none; }
++@media (min-width:1024px) {
++  .nav-item.desktop-rail-toggle { display:flex; }
++  .rail-collapsed .sidebar { width:60px; padding-inline:7px; }
++  .rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects > span,.identity > p,.nav-label,.sidebar-projects .truncate) { display:none; }
++  .rail-collapsed .identity { padding-inline:0; }
++  .rail-collapsed .identity .hub-button { width:100%; justify-content:center; min-height:44px; margin-top:0; }
++  .rail-collapsed .nav-item { justify-content:center; min-height:44px; padding-inline:0; }
++}
++.hub-select:not([multiple]):not([size]) {
++  appearance:none;
++  padding-inline-end:2.5rem;
++  /* Longhands only: the rule must not reset background-color, or it
++     overrides the .hub-input:disabled fill. The chevron colour is baked per
++     theme in --hub-select-chevron (a background image cannot read tokens). */
++  background-image: var(--hub-select-chevron);
++  background-repeat: no-repeat;
++  background-position: right .75rem center;
++  background-size: 1rem;
++}
++@media (forced-colors:active) {
++  .hub-select:not([multiple]):not([size]) { appearance:auto; background-image:none; }
++}
++}
+
+--- apps/hub-web/tests/breadcrumb.case.tsx
+@@ 1,35 @@
+ import {
+   act,
+   fireEvent,
+   render,
+   screen,
+   waitFor,
+ } from "@testing-library/react";
++import { readFileSync } from "node:fs";
+ import { beforeEach, expect, test, vi } from "vitest";
+ import i18n from "../src/i18n";
+ import { App, queryClient } from "../src/app/App";
+ import { resetClient, setAuthLossHandler } from "../src/api/client";
+ import { navigate } from "../src/app/navigation";
+ import { useDraftStore } from "../src/state/drafts";
++import { parseCssRules, selectorAlternatives } from "./css-rules";
+ const principal = {
+   id: "operator",
+   kind: "human",
+   role: "operator",
+   email: "owner@example.test",
+ };
+ const project = {
+   id: "p1",
+   name: "A project name long enough to need truncation on a 375 px phone header",
+   description: "",
+   version: 1,
+   createdAt: "2026-10-29T00:00:00.000Z",
+   updatedAt: "2026-10-29T00:00:00.000Z",
+ };
+ function reply(value: unknown, status = 200) {
+   return Response.json(value, { status });
+ }
+ beforeEach(() => {
+   vi.restoreAllMocks();
+   setAuthLossHandler(() => undefined);
+
+--- apps/hub-web/tests/breadcrumb.case.tsx
+@@ 36,174 @@
+   resetClient();
+   queryClient.clear();
+   useDraftStore.getState().clearAll();
+   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+     const path = String(input);
+     if (path.endsWith("/session")) return reply({ principal });
+     if (path.endsWith("/projects")) return reply({ projects: [project] });
+     return reply({ error: { code: "not-found", message: "Not stubbed" } }, 404);
+   });
+ });
+ // jsdom has no layout, so this pins the contract the real 375 px browser journeys measure: the Projects control never shrinks or clips
+ // its label, the long project name is the part that truncates and keeps its full text, and the control stays a keyboard-reachable button.
+ for (const [language, label] of [
+   ["en", "Projects"],
+   ["ru", "Проекты"],
+ ] as const)
+   test(`the ${language} Projects breadcrumb keeps its whole label and stays keyboard reachable while a long project name truncates`, async () => {
+     await act(() => i18n.changeLanguage(language));
+     navigate({ projectId: project.id, tab: "machines" }, true);
+     render(<App />);
+-    const name = await screen.findByTitle(project.name);
++    // The sidebar project button carries the same title (its collapsed-rail name); the header crumb is the truncating one.
++    const name = (await screen.findAllByTitle(project.name)).find((el) => el.classList.contains("truncate"))!;
+     const breadcrumb = screen.getByRole("button", { name: label });
+     expect(breadcrumb.tagName).toBe("BUTTON");
+     expect(breadcrumb).toHaveAttribute("type", "button");
+     expect(breadcrumb.className.split(/\s+/)).toEqual(
+       expect.arrayContaining(["shrink-0", "whitespace-nowrap"]),
+     );
+     expect(breadcrumb.className.split(/\s+/)).not.toContain("truncate");
+     expect(name.textContent).toBe(project.name);
+     expect(name.className.split(/\s+/)).toEqual(
+       expect.arrayContaining(["min-w-0", "truncate"]),
+     );
+     breadcrumb.focus();
+     expect(document.activeElement).toBe(breadcrumb);
+     fireEvent.click(breadcrumb);
+     await waitFor(() =>
+       expect(window.location.search).not.toContain("project=p1"),
+     );
+   });
+ 
+ test("global navigation opens real flow overview without selecting a project", async () => {
+   await act(() => i18n.changeLanguage("en"));
+   navigate({ projectId: null, tab: "overview" }, true);
+   render(<App />);
+   await screen.findByText(principal.email);
+   fireEvent.click(screen.getByRole("button", { name: "Flows" }));
+   expect(
+     await screen.findByRole("heading", { name: "All Flows" }),
+   ).toBeInTheDocument();
+   expect(new URLSearchParams(window.location.search).get("project")).toBeNull();
+ });
+ test("mobile navigation Escape returns focus to the opening button", async () => {
+   await act(() => i18n.changeLanguage("en"));
+   navigate({ projectId: null, tab: "overview" }, true);
+   render(<App />);
+   await screen.findByText(principal.email);
+   const opener = screen.getByRole("button", { name: "Open navigation" });
+   fireEvent.click(opener);
+   const nav = screen.getByRole("navigation");
+   await waitFor(() => expect(nav.contains(document.activeElement)).toBe(true));
++  // The rail toggle is display:none below 1024px; focus must not land on it.
++  expect(document.activeElement!.classList).not.toContain(
++    "desktop-rail-toggle",
++  );
+   fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+   expect(opener).toHaveAttribute("aria-expanded", "false");
+   expect(opener).toHaveFocus();
+ });
++
++const css = parseCssRules(readFileSync("src/styles.css", "utf8"));
++
++test("collapsed rail keeps an icon-only Sign out reachable", async () => {
++  await act(() => i18n.changeLanguage("en"));
++  navigate({ projectId: null, tab: "overview" }, true);
++  render(<App />);
++  await screen.findByText(principal.email);
++  const signOut = screen.getByRole("button", { name: "Sign out" });
++  expect(signOut.querySelector(".nav-label")).not.toBeNull();
++  expect(signOut).toHaveAttribute("title", "Sign out");
++  // No collapsed-rail rule may hide the identity block or its button; only the
++  // text children (.nav-label, .identity > p) are hidden.
++  const hidden = css
++    .filter((rule) => rule.selector.includes(".rail-collapsed"))
++    .filter(
++      (rule) =>
++        /^none(\s*!important)?$/i.test(rule.decls.get("display") ?? "") ||
++        /^hidden(\s*!important)?$/i.test(rule.decls.get("visibility") ?? ""),
++    )
++    .flatMap((rule) => selectorAlternatives(rule.selector));
++  expect(hidden.length).toBeGreaterThan(0);
++  for (const alternative of hidden) {
++    expect(alternative).not.toMatch(/\.identity(\s*>\s*\*)?$/);
++    expect(alternative).not.toMatch(/\.hub-button$/);
++  }
++});
++
++test("hub-select chevron rule leaves background-color to the layered disabled fill", () => {
++  const selectRules = css.filter(
++    (rule) => /\.hub-select\b/.test(rule.selector),
++  );
++  expect(selectRules.length).toBeGreaterThan(0);
++  for (const rule of selectRules) {
++    expect(rule.decls.has("background")).toBe(false);
++    expect(rule.decls.has("background-color")).toBe(false);
++  }
++  expect(selectRules.some((rule) => rule.decls.has("background-image"))).toBe(true);
++});
++
++test("collapsed rail keeps the project switcher as initials and layers its rules", async () => {
++  // The collapsed rail hides only the project name text and heading, never the buttons.
++  const hiddenRules = css.filter((rule) => rule.selector.includes(".rail-collapsed") && /^none/i.test(rule.decls.get("display") ?? ""));
++  const alternatives = hiddenRules.flatMap((rule) => selectorAlternatives(rule.selector));
++  expect(alternatives.some((a) => /\.sidebar-projects\s+\.truncate$/.test(a))).toBe(true);
++  for (const a of alternatives) expect(a).not.toMatch(/\.sidebar-projects$/);
++  // Unlayered author rules beat Tailwind utilities; rail and Select rules stay in @layer components.
++  for (const rule of css.filter((r) => r.selector.includes(".rail-collapsed") || /\.hub-select\b/.test(r.selector)))
++    expect(rule.layered, rule.selector).toBe(true);
++
++  await act(() => i18n.changeLanguage("en"));
++  navigate({ projectId: project.id, tab: "machines" }, true);
++  render(<App />);
++  const initial = (await screen.findAllByText(project.name.slice(0, 1))).find((el) => el.classList.contains("project-initial"))!;
++  const button = initial.closest("button")!;
++  expect(button).toHaveAttribute("aria-label", project.name);
++  expect(button).toHaveAttribute("title", project.name);
++});
++
++test("select chevron follows the muted token in both themes", () => {
++  const source = readFileSync("src/styles.css", "utf8");
++  const light = source.match(/:root \{[\s\S]*?\n\}/)![0];
++  const dark = source.match(/:root\[data-theme="dark"\] \{[\s\S]*?\n\}/)![0];
++  for (const block of [light, dark]) {
++    const muted = block.match(/--hub-muted:\s*#([0-9a-f]{6})/i)![1]!;
++    expect(block).toContain(`stroke='%23${muted}'`);
++  }
++  const select = css.find((r) => /^\.hub-select:not/.test(r.selector) && r.decls.has("background-image"))!;
++  expect(select.decls.get("background-image")).toBe("var(--hub-select-chevron)");
++});
+
+--- apps/hub-web/tests/browser-journeys.e2e.mjs
+@@ 72,113 @@
+  const blocked=(n,title,reason)=>{const j=begin(n,title);j.notRun.push(reason);return j;};
+  const panel=(page,title)=>page.locator('section').filter({has:page.getByRole('heading',{name:title,exact:true})});
+  const navButton=(page,name)=>page.getByRole('navigation',{name:C.appName}).getByRole('button',{name,exact:true});
+  const fit=page=>page.evaluate(()=>{const width=window.innerWidth;const scrollable=el=>{for(let n=el.parentElement;n;n=n.parentElement){const s=window.getComputedStyle(n);if(['auto','scroll'].includes(s.overflowX))return true;}return false;};const outside=[...document.querySelectorAll('button,label,h1,h2,p,dt,dd,select,input,textarea,a,summary')].filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.right>width+1&&!scrollable(el);}).map(el=>(el.textContent||el.tagName).trim().slice(0,40));const clipped=[...document.querySelectorAll('button')].filter(el=>el.scrollWidth>el.clientWidth+1).map(el=>(el.textContent||'').trim().slice(0,40));return {documentWidth:document.documentElement.scrollWidth,viewport:width,outside:outside.slice(0,5),clipped:clipped.slice(0,5)};});
+  const fits=(j,label,value)=>soft(j,`${label}: no horizontal overflow and every label inside the viewport`,value.documentWidth<=value.viewport&&value.outside.length===0&&value.clipped.length===0,value);
+  const hookCount=tool=>{const log=path.join(m1.cwd,'.metaproject','trial-hook-events.jsonl');return existsSync(log)?readFileSync(log,'utf8').split('\n').filter(line=>line.includes(`"keryxToolName":"${tool}"`)).length:0;};
+  try{
+   const context=await login();const page=await context.newPage();const read=api(context);const errors=[];page.on('pageerror',e=>errors.push(String(e).slice(0,200)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text().slice(0,200));});
+   // Refused Hub requests by path and error code only: response bodies of refusals carry no credential.
+   const refusals=[];const mutations=[];cell.mutations=mutations;page.on('response',async response=>{if(response.request().method()!=='GET')mutations.push({path:new URL(response.url()).pathname.replace(/[0-9a-f-]{36}|[0-9a-f]{64}/g,':id'),method:response.request().method(),status:response.status(),at:new Date().toISOString()});if(response.status()<400)return;let code='';try{code=(await response.json())?.error?.code??'';}catch{/* Not JSON. */}refusals.push({path:new URL(response.url()).pathname.replace(/[0-9a-f-]{36}|[0-9a-f]{64}/g,':id'),method:response.request().method(),status:response.status(),code});});cell.refusals=refusals;
+   // Every cell starts from the default (RU) locale and switches explicitly, so both toggles are exercised.
+   await page.goto(fx.origin+'/');await page.getByLabel((await dictionaries('ru')).C.project,{exact:true}).waitFor();
+   const languages=page.getByRole('group',{name:(await dictionaries('ru')).C.language}).first();
+   await languages.getByRole('button',{name:lang.toUpperCase(),exact:true}).click();await until(()=>page.evaluate(()=>document.documentElement.lang),v=>v===lang,5000,'html lang');await page.getByLabel(C.project,{exact:true}).waitFor();
+   let ordinal=0;let sessionId='';let sessionPath='';const runs={};
+   const sessionRecord=()=>read(sessionPath);
+   const latestRun=async(after=new Set())=>until(async()=>(await read(`/hub/v2/projects/${fx.projectId}/runs`)).runs.filter(r=>r.sessionId===sessionId&&!after.has(r.runId)),list=>list.length>0,20000,'run admitted').then(list=>list.at(-1));
+   const runState=(runId,done,ms=30000)=>until(()=>read(`/hub/v2/projects/${fx.projectId}/runs/${runId}`),done,ms,`run ${runId}`);
+   // In-app navigation only: a full reload makes this tab an observer again (its explicit controller claim is not persisted).
+   const openSession=async()=>{await navButton(page,L.sessions).click();await panel(page,`Browser ${id}`).getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.controller).waitFor();};
++  /** The command catalogue lives in the composer and mounts only after its toggle (or '/') opens it. */
++  const openCommands=async()=>{const toggle=page.getByRole('button',{name:L.commands,exact:true});if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();const commands=panel(page,L.commands);await commands.waitFor();return commands;};
+   const openRun=async runId=>{await navButton(page,L.runs).click();const card=panel(page,runId);await card.getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.actual).waitFor();};
+   /** The session version this tab displays (Versions panel), to wait until the page caught up with Hub. */
+   const shownVersion=()=>page.evaluate(label=>{const dt=[...document.querySelectorAll('dt')].find(d=>d.textContent?.trim()===label);return dt?Number(dt.nextElementSibling?.textContent):NaN;},L.sessionVersion);
+   const settled=async()=>until(async()=>[await shownVersion(),(await sessionRecord()).version],([a,b])=>a===b,15000,'page caught up with the session version');
+   /** After the human's own completed work moved the versions, a draft is rebased the way the page offers it. */
+   const rebases=[];const rebase=async(where)=>{await settled();const button=page.getByRole('button',{name:L.rebase,exact:true});const n=await button.count();for(let i=0;i<n;i++){if(await button.nth(i).isVisible()){await button.nth(i).click();rebases.push(where);}}};cell.rebases=rebases;
+   /** Fills the composer as a human would: literal text, explicit ad-hoc work with consent, the chosen busy policy. */
+   const compose=async(text,policy='reject',rebaseFirst=true)=>{if(rebaseFirst)await rebase('composer');const composer=panel(page,L.message);await composer.getByLabel(L.message,{exact:true}).fill(text);await composer.getByLabel(L.workMode,{exact:true}).selectOption('ad-hoc');await composer.getByLabel(L.adHocConsent).check();await composer.getByLabel(L.busyPolicy,{exact:true}).selectOption(policy);return composer;};
+   const send=async(text,policy='reject',expected='admitted')=>{const before=new Set((await read(`/hub/v2/projects/${fx.projectId}/runs`)).runs.map(r=>r.runId));const composer=await compose(text,policy);await composer.getByRole('button',{name:L.send,exact:true}).click();try{await composer.getByText(L.receiptStatuses[expected],{exact:true}).waitFor({timeout:20000});}catch{throw new JourneyFailure(`no ${expected} receipt: ${(await composer.locator('[role=alert]').allTextContents()).join(' | ').slice(0,300)} ${JSON.stringify(refusals.slice(-3))}`);}return before;};
+ 
+   // Journey 1: exact selection, readiness, fit, keyboard, observer.
+   const j1=begin(1,'Select exact project/machine/checkout/profile; ready vs offline/setup-required/unsupported; labels fit; keyboard access; observer cannot mutate or silently claim control');
+   await attempt(j1,async()=>{
+    await page.getByLabel(C.project,{exact:true}).selectOption(fx.projectId);await navButton(page,L.machines).click();
+    for(const [index,t] of [m1,m2].entries()){const card=panel(page,`Deterministic serve machine ${index+1}`);await card.waitFor();check(j1,`${t.machine} shown online`,await card.getByText(L.online,{exact:true}).isVisible());check(j1,`${t.machine} profile shown ready from the published inventory`,await card.getByText(`remote-restricted · ${L.ready} · none`,{exact:true}).isVisible());}
+    const listed=await read(`/hub/v2/machines?projectId=${fx.projectId}`);check(j1,'Hub inventory agrees: both machines connected and ready',listed.machines.length===2&&listed.machines.every(m=>m.connected&&m.inventory.checkouts.every(c=>c.agentProfiles.every(p=>p.readiness==='ready'))),listed.machines.map(m=>({machineId:m.machineId,connected:m.connected})));
+    fits(j1,'machines',await fit(page));await shot(j1,page,'machines');
+    // Keyboard: Tab reaches the Sessions navigation item and Enter opens it.
+    let reached=false;for(let i=0;i<60&&!reached;i++){await page.keyboard.press('Tab');reached=await page.evaluate(name=>document.activeElement?.tagName==='BUTTON'&&document.activeElement.textContent?.trim()===name,L.sessions);}
+    check(j1,'Tab reaches the Sessions navigation item',reached);await page.keyboard.press('Enter');await until(()=>page.evaluate(()=>window.location.search),v=>v.includes('view=sessions'),5000,'keyboard navigation');check(j1,'Enter on the focused navigation item opens Sessions',true);
+
+--- apps/hub-web/tests/browser-journeys.e2e.mjs
+@@ 131,171 @@
+    const controller=panel(page,L.controller);await controller.getByRole('button',{name:L.claim,exact:true}).click();await controller.getByRole('button',{name:L.release,exact:true}).waitFor({timeout:20000});
+    const held=await until(sessionRecord,v=>v.controller?.state==='held',20000,'controller held');check(j2,'controller claimed explicitly by the human operator',held.controller.actorKind==='human-operator');j2.receipts.controllerLeaseId=held.controller.controllerLeaseId;
+    const before=await send(turn(++ordinal,'read seed.txt'));const run=await latestRun(before);runs.read1=run.runId;j2.receipts.readRunId=run.runId;
+    const done=await runState(run.runId,v=>v.state==='succeeded');check(j2,'the read turn succeeded on the machine (Hub run record)',done.state==='succeeded');
+    const history=panel(page,L.history);await history.getByText(TRIAL_REPLY).first().waitFor({timeout:20000});check(j2,'history shows the operator turn then the assistant reply in order',(await history.locator('li pre').allTextContents()).join('\n').indexOf(turn(1,'read seed.txt'))<(await history.locator('li pre').allTextContents()).join('\n').indexOf(TRIAL_REPLY));
+    await openRun(run.runId);check(j2,'run page shows the actual succeeded state',await panel(page,L.actual).getByText(L.states.succeeded,{exact:true}).isVisible());check(j2,'run output shows the real read_file tool progress',await panel(page,L.output).getByText(/read_file/).first().isVisible());check(j2,'the serve child hook saw exactly one read_file call',hookCount('read_file')===1,hookCount('read_file'));
+    fits(j2,'run page',await fit(page));await shot(j2,page,'read-run');
+    await openSession();const draft=turn(++ordinal,'read seed.txt');await compose(draft);
+    const first=(await sessionRecord()).controller.expiresAt;const renewals=new Set([first]);
+    await until(async()=>{renewals.add((await sessionRecord()).controller?.expiresAt);return renewals.size;},n=>n>=3,55000,'two controller renewals');j2.receipts.renewedExpiries=[...renewals];await settled();await sleep(500);
+    const composer=panel(page,L.message);check(j2,'after two real renewals the unsent draft is intact',await composer.getByLabel(L.message,{exact:true}).inputValue()===draft);check(j2,'no manual version rebasing was needed',!(await composer.getByText(L.stale).isVisible()));check(j2,'send stays enabled',await composer.getByRole('button',{name:L.send,exact:true}).isEnabled());
+    const beforeLater=new Set((await read(`/hub/v2/projects/${fx.projectId}/runs`)).runs.map(r=>r.runId));await composer.getByRole('button',{name:L.send,exact:true}).click();try{await composer.getByText(L.receiptStatuses.admitted,{exact:true}).waitFor({timeout:20000});}catch{throw new JourneyFailure(`later read not admitted: ${(await composer.locator('[role=alert]').allTextContents()).join(' | ').slice(0,300)} ${JSON.stringify(refusals.slice(-3))}`);}
+    const later=await latestRun(beforeLater);j2.receipts.laterReadRunId=later.runId;check(j2,'the later real read succeeded',(await runState(later.runId,v=>v.state==='succeeded')).state==='succeeded');check(j2,'two read_file calls in total, none repeated',hookCount('read_file')===2,hookCount('read_file'));
+    await shot(j2,page,'after-renewals');
+   });
+ 
+   // Journey 3: typed help, settings inspection and a read command; malformed input reports validation; no Flow involved.
+   const j3=begin(3,'Typed help, settings inspection and a real allowed read through one command surface; malformed command reports validation; inspection stays Flow-free');
+   await attempt(j3,async()=>{
+    if(!j2.receipts.controllerLeaseId)throw new JourneyFailure('no controller from journey 2');
+-   await openSession();await until(sessionRecord,v=>v.state==='idle',20000,'idle');const commands=panel(page,L.commands);const operations=[];
++   await openSession();await until(sessionRecord,v=>v.state==='idle',20000,'idle');const commands=await openCommands();const operations=[];
+    for(const name of ['settings','status']){await commands.getByLabel(L.command,{exact:true}).selectOption(name);await rebase('commands');await commands.getByLabel(L.arguments,{exact:true}).fill('{}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();await commands.getByText(L.receiptStatuses.applied,{exact:true}).waitFor({timeout:20000});
+     const receipt=JSON.parse(await commands.locator('details pre').last().textContent());operations.push({commandName:receipt.commandName,operationId:receipt.operationId,status:receipt.status});check(j3,`${name} applied by the machine through the shared handler`,receipt.commandName===name&&receipt.status==='applied'&&receipt.errorCode===null,{status:receipt.status});}
+    j3.receipts.operations=operations;
+    const before=await sessionRecord();const toolCalls=['read_file','apply_patch','shell_exec'].map(hookCount);
+    await commands.getByLabel(L.command,{exact:true}).selectOption('status');await commands.getByLabel(L.arguments,{exact:true}).fill('{"unterminated":');await commands.getByRole('button',{name:L.invoke,exact:true}).click();
+    check(j3,'malformed JSON arguments are refused locally with a validation notice',await commands.getByText(L.required,{exact:true}).isVisible());
+    await commands.getByLabel(L.arguments,{exact:true}).fill('{"bogus":true}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();await until(async()=>commands.locator('[role=alert]').count(),n=>n>0,20000,'schema refusal');
+    const after=await sessionRecord();check(j3,'schema-invalid arguments reach no provider turn or tool',after.historyVersion===before.historyVersion&&['read_file','apply_patch','shell_exec'].map(hookCount).join()===toolCalls.join(),{history:[before.historyVersion,after.historyVersion]});
+    const flows=await read(`/hub/v1/projects/${fx.projectId}/flows`);check(j3,'no Flow exists or was needed for inspection',Array.isArray(flows.flows)&&flows.flows.length===0);fits(j3,'commands',await fit(page));await shot(j3,page,'commands');
+   });
+ 
+   // Journey 4: an approved patch applies once; a denied one has no effect.
+   const j4=begin(4,'Workspace patch: no effect before exact Allow once, recorded/delivered/applied distinction, one allowance one mutation, a denied action has no effect');
+   await attempt(j4,async()=>{
+    await openSession();await until(sessionRecord,v=>v.state==='idle',20000,'idle');
+    const before=await send(turn(++ordinal,'write an approved native patch'));const run=await latestRun(before);runs.patch=run.runId;j4.receipts.approvedRunId=run.runId;const file=path.join(m1.cwd,`trial-edit-${ordinal}.txt`);
+    await runState(run.runId,v=>v.state==='waiting-approval');await openRun(run.runId);const card=panel(page,L.approval);await card.waitFor({timeout:20000});
+    const summary=await card.locator('p').first().textContent();check(j4,'the approval shows the original target and action',summary.includes(`trial-edit-${ordinal}.txt`),summary.slice(0,200));check(j4,'waiting for the human decision',await card.getByText(L.receiptStatuses.waiting,{exact:true}).isVisible());check(j4,'no workspace effect before Allow once',!existsSync(file));
+    await shot(j4,page,'approval-waiting');await card.getByRole('button',{name:L.allowOnce,exact:true}).click();
+    await card.getByText(L.receiptStatuses.applied,{exact:true}).waitFor({timeout:30000});const ended=await runState(run.runId,v=>v.state==='succeeded'&&v.result!==undefined);j4.receipts.approvalId=ended.approvals[0]?.approvalId;j4.receipts.revisionId=ended.result.revisionId;
+
+--- apps/hub-web/tests/browser-journeys.e2e.mjs
+@@ 227,267 @@
+ 
+   // Journey 10: the result is a review-only bundle; deep links survive refresh and Back/Forward.
+   const j10=begin(10,'Code Revision stays review-only: Git Select/Delivery blocked; no acceptance by automation; refresh and Back/Forward keep loaded data');
+   await attempt(j10,async()=>{
+    if(!runs.patch)throw new JourneyFailure('no approved patch from journey 4');
+    await openRun(runs.patch);await panel(page,L.actual).getByRole('button',{name:L.result,exact:true}).click();await until(()=>page.evaluate(()=>window.location.search),v=>v.includes('view=code')&&v.includes('revision='),10000,'revision deep link');
+    await page.getByText(X.reviewBundleHint,{exact:true}).waitFor({timeout:20000});check(j10,'the revision is labelled a review bundle with selection and delivery blocked',true);check(j10,'no Select-for-integration control exists for it',await page.getByRole('button',{name:X.selectForIntegration}).count()===0);
+    const preview=await page.locator('pre').filter({hasText:'deterministic native edit'}).first().textContent();check(j10,'the review file content is the machine-written change',preview.includes('deterministic native edit'));
+    const revision=await read(`/hub/v1/projects/${fx.projectId}/revisions/${j4.receipts.revisionId}`);check(j10,'Hub stores it as a review-bundle revision',revision.purpose==='review-bundle');j10.receipts.revisionId=revision.id;
+    const url=page.url();await page.reload();await page.getByText(X.reviewBundleHint,{exact:true}).waitFor({timeout:20000});check(j10,'refresh keeps the deep-linked revision',page.url()===url);
+    await page.goBack();await panel(page,L.actual).waitFor({timeout:20000});check(j10,'Back returns to the run',page.url().includes(`run=${runs.patch}`));await page.goForward();await page.getByText(X.reviewBundleHint,{exact:true}).waitFor({timeout:20000});check(j10,'Forward returns to the revision',page.url()===url);
+    const project=await read(`/hub/v1/projects/${fx.projectId}`);check(j10,'nothing selected the bundle for integration',project.lineRevisionId!==revision.id);fits(j10,'revision',await fit(page));await shot(j10,page,'review-bundle');
+    j10.notRun.push('machine checks shown as self-reported Flow Evidence: ad-hoc runs carry RunChecks only, Flow Evidence needs journey 9','inline failure without cross-project leakage: single-project fixture');
+   });
+   // Journey 3, final part: typed help in a fresh session on the second machine (a refused help result wedges its session, so it runs last).
+   await attempt(j3,async()=>{
+    if(j3.hard)throw new JourneyFailure(j3.error);
+    await navButton(page,L.sessions).click();await page.getByRole('button',{name:L.newSession,exact:true}).click();const form=panel(page,L.newSession);await form.getByLabel(L.machine,{exact:true}).selectOption(m2.machineId);await form.getByLabel(L.checkout,{exact:true}).selectOption(m2.checkoutId);await form.getByLabel(L.profile,{exact:true}).selectOption('remote-restricted');await form.getByLabel(L.title,{exact:true}).fill(`Help ${id}`);await form.getByRole('button',{name:L.createSession,exact:true}).click();
+    await until(()=>page.evaluate(()=>new URLSearchParams(window.location.search).get('session')),v=>!!v&&v!==sessionId,20000,'help session');const helpSession=await page.evaluate(()=>new URLSearchParams(window.location.search).get('session'));j3.receipts.helpSessionId=helpSession;const helpPath=`/hub/v2/projects/${fx.projectId}/sessions/${helpSession}`;
+    await until(()=>read(helpPath),v=>v.state==='idle',20000,'help session idle');const controller=panel(page,L.controller);await controller.getByRole('button',{name:L.claim,exact:true}).click();await controller.getByRole('button',{name:L.release,exact:true}).waitFor({timeout:20000});
+-   const commands=panel(page,L.commands);await commands.getByLabel(L.command,{exact:true}).selectOption('help');await commands.getByLabel(L.arguments,{exact:true}).fill('{}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();
++   const commands=await openCommands();await commands.getByLabel(L.command,{exact:true}).selectOption('help');await commands.getByLabel(L.arguments,{exact:true}).fill('{}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();
+    const outcome=await until(async()=>{const text=await commands.locator('details pre').last().textContent().catch(()=>'');try{const receipt=JSON.parse(text);return receipt.operationId?await read(`${helpPath}/operations/${receipt.operationId}`):null;}catch{return null;}},v=>v!==null&&v.status!=='queued'&&v.status!=='pending',20000,'help outcome').catch(error=>({status:'unsettled',error:String(error.message).slice(0,200)}));
+    j3.receipts.help={status:outcome.status,errorCode:outcome.errorCode??null};check(j3,'help applied by the machine through the shared handler',outcome.status==='applied',j3.receipts.help);
+   });
+   // Journey 1, final part: an offline machine is distinguished from a ready one and cannot be chosen.
+   await attempt(j1,async()=>{
+    if(j1.hard)throw new JourneyFailure(j1.error);
+    process.kill(m2.servePid,'SIGTERM');await until(async()=>(await read(`/hub/v2/machines/${m2.machineId}`)).connected,v=>v===false,30000,'second machine offline');
+    await page.goto(`${fx.origin}/?project=${fx.projectId}&view=machines`);await panel(page,'Deterministic serve machine 2').getByText(L.offline,{exact:true}).waitFor({timeout:15000});check(j1,'an offline machine is shown offline',true);
+    await navButton(page,L.sessions).click();await page.getByRole('button',{name:L.newSession,exact:true}).click();const option=panel(page,L.newSession).getByLabel(L.machine,{exact:true}).locator(`option[value="${m2.machineId}"]`);check(j1,'an offline machine cannot be chosen',await option.isDisabled());await shot(j1,page,'offline');
+   });
+   cell.consoleErrors=errors;
+  }finally{
+   for(const context of contexts)await context.close();
+   await fx.stop();cell.endedAt=new Date().toISOString();cell.teardown='browser contexts closed (non-persistent, no storage state written); serve children and Hub stopped; fixture root removed';
+  }
+  return cell;
+ }
+ 
+ const meta={startedAt:new Date().toISOString(),candidate:await candidate(),browser:null,cells:[]};
+ const browser=await chromium.launch({headless:true});meta.browser={engine:'chromium',version:browser.version(),playwrightModule,headless:true};
+
+--- apps/hub-web/tests/context.case.tsx
+@@ 1,35 @@
+ import { useState } from 'react';
+ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+ import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+ import { I18nextProvider } from 'react-i18next';
+ import { createInstance } from 'i18next';
+ import { beforeEach, describe, expect, it, vi } from 'vitest';
+ import en from '../src/i18n/context.en';
+ import { useDraftStore } from '../src/state/drafts';
+ import ru from '../src/i18n/context.ru';
++import { mergeEvents } from '../src/features/context-model';
+ import { DocumentsView, ProposalsView, RevisionsView, DeliveryView, HistoryView } from '../src/features/context';
+ 
+ const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), navigate: vi.fn(), location: { projectId: 'p', tab: 'documents', documentId: 'd' as string | undefined, revisionId: 'r' }, principal: { id: 'human:owner', kind: 'human', role: 'operator' } }));
+ vi.mock('../src/app/hub-context', () => ({ useHub: () => ({ projectId: 'p', principal: mocks.principal, scopeKey: 1, location: mocks.location, navigate: mocks.navigate, refresh: vi.fn() }) }));
++vi.mock('../src/features/context-model', async importOriginal => { const actual = await importOriginal<typeof import('../src/features/context-model')>(); return { ...actual, mergeEvents: vi.fn(actual.mergeEvents) }; });
+ vi.mock('../src/api/client', () => ({ getJson: mocks.get, postJson: mocks.post, errorMessage: (error: Error) => error.message }));
+ 
+ const project = { id: 'p', name: 'Keryx', version: 2, contextRevision: 1, lineVersion: 0, lineRevisionId: null };
+ const document = { id: 'd', projectId: 'p', path: 'specs/example.md', kind: 'spec', content: '# Exact source', contentDigest: 'digest', version: 4, approval: 'unreviewed', sourceRevision: 'manual:v1' };
+ const revision = { id: 'r', projectId: 'p', baseRevisionId: null, gitBaseSha: 'a'.repeat(40), message: 'Review candidate', files: [], createdBy: 'agent:connector', createdAt: '2026-10-26T00:00:00Z', treeDigest: 'tree', purpose: 'review-bundle' };
+ 
+ async function mount(component: React.ReactNode) {
+   const i18n = createInstance();
+   await i18n.init({ lng: 'en', fallbackLng: 'en', resources: { en: { context: en, common: { loading: 'Loading', retry: 'Retry', empty: 'Empty', refresh: 'Refresh', error: 'Error' } }, ru: { context: ru } }, interpolation: { escapeValue: false } });
+   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+   return { client, i18n, ...render(<I18nextProvider i18n={i18n}><QueryClientProvider client={client}>{component}</QueryClientProvider></I18nextProvider>) };
+ }
+ 
+ beforeEach(() => {
+   vi.clearAllMocks();
+   useDraftStore.getState().clearAll();
+   mocks.principal = { id: 'human:owner', kind: 'human', role: 'operator' };
+   mocks.location = { projectId: 'p', tab: 'documents', documentId: 'd', revisionId: 'r' };
+   mocks.get.mockImplementation((path: string) => {
+     if (path.endsWith('/documents')) return Promise.resolve({ documents: [document] });
+
+--- apps/hub-web/tests/context.case.tsx
+@@ 206,294 @@
+   expect(await screen.findByRole('button', { name: /Older snapshot/ })).toBeVisible();
+   expect(screen.queryByRole('button', { name: en.loadMoreRevisions })).not.toBeInTheDocument();
+ });
+ 
+ it('switches application copy to Russian while preserving private draft content', async () => {
+   const { i18n } = await mount(<DocumentsView />);
+   fireEvent.click(await screen.findByText(en.importDocument));
+   fireEvent.change(screen.getByLabelText(en.markdownSource), { target: { value: '# User content stays exact' } });
+   await i18n.changeLanguage('ru');
+   expect(await screen.findByText(ru.importDocument)).toBeVisible();
+   expect(screen.getByLabelText(ru.markdownSource)).toHaveValue('# User content stays exact');
+ });
+ 
+ it('keeps complete matching Russian and English context catalogs', () => {
+   expect(Object.keys(ru).sort()).toEqual(Object.keys(en).sort());
+   expect(Object.values(ru).every(value => value.trim().length > 0)).toBe(true);
+ });
+ 
+ it('loads cursor pages without duplicate events', async () => {
+   const events = Array.from({ length: 500 }, (_, i) => ({ sequence: i + 1, projectId: 'p', type: 'flow-created', actorId: 'agent:connector', entityId: `flow-${i}`, createdAt: '2026-10-26T00:00:00Z' }));
+-  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('after=0') ? { events, cursor: 500 } : { events: [{ ...events[499], sequence: 501, entityId: 'flow-501' }], cursor: 501 }));
++  mocks.get.mockImplementation((path: string) => {
++    if (path.endsWith('/flows')) return Promise.resolve({flows: [{id:'flow-501',title:'Follow-up flow'}]});
++    if (path.endsWith('/documents')) return Promise.resolve({documents: []});
++    return Promise.resolve(path.endsWith('after=0') ? { events, cursor: 500 } : { events: [{ ...events[499], sequence: 501, entityId: 'flow-501' }], cursor: 501 });
++  });
+   await mount(<HistoryView />);
+   fireEvent.click(await screen.findByRole('button', { name: en.loadMore }));
+   await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/projects/p/events?after=500', expect.any(AbortSignal)));
+-  expect(await screen.findByText('flow-501')).toBeVisible();
++  expect(await screen.findByRole('button', {name:'Follow-up flow'})).toBeVisible();
++  // The recorded actor stays visible outside the collapsed Identifiers block, even without an actorRole.
++  const actors = screen.getAllByText(/^Actor:/);
++  expect(actors.length).toBeGreaterThan(0);
++  for (const actor of actors) { expect(actor).toHaveTextContent('Actor: agent:connector'); expect(actor).not.toHaveTextContent(en.unknownRole); }
++});
++
++it('tells apart different actors who share a role in History', async () => {
++  const base = { projectId: 'p', type: 'flow-created', entityId: 'x', createdAt: '2026-10-26T00:00:00Z', actorRole: 'operator' };
++  const events = [{ ...base, sequence: 1, actorId: 'human:alice' }, { ...base, sequence: 2, actorId: 'human:bob' }];
++  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [] } : path.endsWith('/documents') ? { documents: [] } : { events, cursor: 2 }));
++  await mount(<HistoryView />);
++  expect(await screen.findByText('Actor: human:alice')).toBeVisible();
++  expect(screen.getByText('Actor: human:bob')).toBeVisible();
+ });
+ 
++it('lets History flow titles and document paths break instead of widening the panel', async () => {
++  const longPath = 'docs/requirements/' + 'a-very-long-unbreakable-document-name-'.repeat(2) + 'end.md';
++  const base = { projectId: 'p', type: 'document-imported', actorId: 'human:alice', createdAt: '2026-10-26T00:00:00Z' };
++  const events = [{ ...base, sequence: 1, entityId: 'doc-1' }, { ...base, sequence: 2, entityId: 'flow-1' }];
++  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [{ id: 'flow-1', title: 'Flow-title-without-any-break-opportunity' }] } : path.endsWith('/documents') ? { documents: [{ id: 'doc-1', path: longPath }] } : { events, cursor: 2 }));
++  await mount(<HistoryView />);
++  for (const name of [longPath, 'Flow-title-without-any-break-opportunity']) {
++    const button = await screen.findByRole('button', { name });
++    expect(button.className).toContain('max-w-full');
++    expect(within(button).getByText(name).className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'break-all']));
++  }
++});
++
++it('does not re-derive History events when only the type filter changes', async () => {
++  const events = [{ sequence: 1, projectId: 'p', type: 'flow-created', actorId: 'a', entityId: 'x', createdAt: '2026-10-26T00:00:00Z' }, { sequence: 2, projectId: 'p', type: 'document-imported', actorId: 'a', entityId: 'y', createdAt: '2026-10-26T00:00:00Z' }];
++  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [] } : path.endsWith('/documents') ? { documents: [] } : { events, cursor: 2 }));
++  await mount(<HistoryView />);
++  const select = await screen.findByLabelText(en.historyEventType);
++  await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2));
++  await new Promise(resolve => setTimeout(resolve, 20));
++  const before = vi.mocked(mergeEvents).mock.calls.length;
++  fireEvent.change(select, { target: { value: 'flow-created' } });
++  await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1));
++  expect(vi.mocked(mergeEvents).mock.calls.length).toBe(before);
++});
+ 
+ it('loads revision metadata without full trees and fetches only the selected immutable revision', async () => {
+   mocks.location.revisionId = '';
+   const { client, i18n, rerender } = await mount(<RevisionsView />);
+   expect(await screen.findByText(revision.message)).toBeVisible();
+   expect(mocks.get).toHaveBeenCalledWith('/projects/p/revisions?summary=1', expect.any(AbortSignal));
+   expect(mocks.get.mock.calls.some(([path]) => /\/revisions\/[^?]+$/.test(path))).toBe(false);
+   mocks.location.revisionId = 'r';
+   rerender(<I18nextProvider i18n={i18n}><QueryClientProvider client={client}><RevisionsView /></QueryClientProvider></I18nextProvider>);
+   await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/projects/p/revisions/r', expect.any(AbortSignal)));
+   expect(mocks.get.mock.calls.filter(([path]) => path === '/projects/p/revisions/r')).toHaveLength(1);
+   expect(mocks.get.mock.calls.some(([path]) => path === '/projects/p/revisions')).toBe(false);
+ });
+ 
+ it('keeps a newer import draft after leaving, reopening and receiving the earlier success', async () => {
+   let resolve!: (value: unknown) => void;
+   mocks.post.mockImplementation(() => new Promise(done => { resolve = done; }));
+   const mounted = await mount(<DocumentsView />);
+   fireEvent.click(await screen.findByText(en.importDocument));
+   fireEvent.change(screen.getByLabelText(en.path), { target: { value: 'specs/a.md' } });
+
+--- apps/hub-web/tests/css-rules.ts
+@@ 1,47 @@
++export type CssRule = { selector: string; decls: Map<string, string>; layered: boolean; media: string[] };
++
++// Flattens styles.css into style rules, tracking whether each sits inside an
++// @layer block and which @media heads enclose it (outermost first). jsdom applies no CSS, so the cascade is checked on the parsed
++// rules rather than on the spelling of one old bug.
++export function parseCssRules(source: string): CssRule[] {
++  const text = source.replace(/\/\*[\s\S]*?\*\//g, "");
++  const rules: CssRule[] = [];
++  const stack: { layer: boolean; head: string }[] = [];
++  let buffer = "";
++  for (const ch of text) {
++    if (ch === "{") {
++      const head = buffer.trim();
++      buffer = "";
++      stack.push({ head, layer: head.startsWith("@layer") });
++    } else if (ch === "}") {
++      const { head } = stack.pop()!;
++      if (!head.startsWith("@")) {
++        const decls = new Map<string, string>();
++        for (const part of buffer.split(";")) {
++          const at = part.indexOf(":");
++          if (at > 0)
++            decls.set(part.slice(0, at).trim().toLowerCase(), part.slice(at + 1).trim());
++        }
++        rules.push({
++          selector: head,
++          decls,
++          layered: stack.some((outer) => outer.layer),
++          media: stack.filter((outer) => outer.head.startsWith("@media")).map((outer) => outer.head),
++        });
++      }
++      buffer = "";
++    } else buffer += ch;
++  }
++  return rules;
++}
++
++// Selector alternatives after splitting top-level commas and one :is(...) level.
++export function selectorAlternatives(selector: string): string[] {
++  const top = selector.split(/,(?![^()]*\))/).map((part) => part.trim());
++  return top.flatMap((part) => {
++    const is = part.match(/^(.*?):is\(([^()]*)\)(.*)$/);
++    return is
++      ? is[2]!.split(",").map((inner) => `${is[1]}${inner.trim()}${is[3]}`)
++      : [part];
++  });
++}
+
+--- apps/hub-web/tests/flow-acceptance.case.tsx
+@@ 23,74 @@
+  expect(screen.queryByRole('textbox',{name:/digest|submission id/i})).not.toBeInTheDocument();
+ });
+ 
+ test('canonical guide resolves its exact immutable document and copy stays inert',async()=>{
+  const copy=vi.fn().mockResolvedValue(undefined);Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:copy}});const open=vi.spyOn(window,'open').mockImplementation(()=>null);
+  mountAcceptance('canonical');await screen.findByRole('heading',{name:'How to check'});
+  expect(await screen.findByText('Open the disposable project')).toBeVisible();expect(screen.getByText('Hub browser')).toBeVisible();expect(screen.getByText('The highlighted result is visible')).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'Copy instruction'}));
+  await waitFor(()=>expect(copy).toHaveBeenCalledWith("printf 'review-only'"));expect(await screen.findByText('Instruction copied',{selector:'[role=status]'})).toBeVisible();
+  expect(fixture.requests.some(request=>request.url.includes('/documents/guide-doc/versions/1?digest='+fixture.guideDigest))).toBe(true);
+  expect(mutationRequests(fixture)).toHaveLength(0);expect(open).not.toHaveBeenCalled();
+ });
+ 
+ test.each(['missing-selector','mismatched-artifact','ambiguous-artifact','malformed-envelope'] as const)('canonical %s guide is explicit and never scans another document',async(mode)=>{
+  if(mode==='missing-selector')fixture.subject.report='Contributor plain report';
+  if(mode==='mismatched-artifact')fixture.subject.artifacts=fixture.subject.artifacts.filter(artifact=>artifact.kind!=='document');
+  if(mode==='ambiguous-artifact')fixture.subject.artifacts.push({kind:'document',reference:fixture.guideRef,proposalId:null});
+  if(mode==='malformed-envelope')fixture.subject.report='{"format":"review-report/v1","summary":42}';
+  mountAcceptance('canonical');await screen.findByRole('heading',{name:'How to check'});
+  expect(await screen.findByText(mode==='missing-selector'?'No verification steps were supplied':'Verification guidance is unavailable')).toBeVisible();
++ if(mode==='missing-selector')expect(screen.getByText(`Criteria without verification steps: ${fixture.revision.criteria.length}`)).toBeVisible();
++ else expect(screen.queryByText(/Criteria without verification steps/)).not.toBeInTheDocument();
+  expect(fixture.requests.filter(request=>request.url.includes('/documents/')&&!request.url.includes('/guide-doc/'))).toHaveLength(0);
+  expect(mutationRequests(fixture)).toHaveLength(0);
+ });
+ 
++test('an available canonical guide still counts criteria that no step maps',async()=>{
++ fixture.revision.criteria.push({criterionId:'ci-unmapped',text:'Unmapped criterion',waivable:false});
++ mountAcceptance('canonical');await screen.findByRole('heading',{name:'How to check'});await screen.findByText('The highlighted result is visible');
++ expect(screen.getByText('Criteria without verification steps: '+(fixture.revision.criteria.length-1))).toBeVisible();
++});
++
+ test('canonical review lists every pinned criterion with conflicting and missing support instead of the last green report',async()=>{
+  addCoverageCases(fixture);mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria',level:2});
+  for(const [criterion,status] of [['Passing criterion','Reported pass'],['Failing criterion','Failing support'],['Inconclusive criterion','Inconclusive'],['Missing criterion','Missing support'],['Conflicting criterion','Conflicting support']]){
+   expect(within(screen.getByRole('group',{name:criterion})).getByText(status!)).toBeVisible();
+  }
+  expect(screen.getByRole('button',{name:'Accept result'})).toBeDisabled();
+  expect(screen.getByRole('group',{name:'Conflicting criterion'})).toHaveTextContent('Evidence for ci-conflict: fail');
+ });
+ 
+ test('review provenance distinguishes contributor agent human and observed CI without trusting method names',async()=>{
+  const template=recordOf(fixture.records,'evidence','ev-agent')!;
+  template.method='Verified by CI (contributor text)';
+  const extra=[{id:'independent-agent',source:'machine-observation' as const,createdBy:'agent:independent',sourceRunId:'independent-run',report:'Independent agent check'},{id:'human-check',source:'human-review' as const,createdBy:'human:reviewer',sourceRunId:null,report:'Human review check'},{id:'observed-ci',source:'ci-observation' as const,createdBy:'server:ci-observer',sourceRunId:null,sourceObservationId:'ci-observation-1',report:'Provider-observed CI result'}];
+  fixture.records.push(...extra.map(record=>({...template,...record})));fixture.submission.evidenceIds.push(...extra.map(record=>record.id));fixture.submission.coverage[0]!.evidenceIds.push(...extra.map(record=>record.id));
+  mountAcceptance('canonical');await screen.findByRole('heading',{name:'Acceptance criteria',level:2});
+  expect(screen.getByText('Contributor report')).toBeVisible();expect(screen.getByText('Agent report')).toBeVisible();expect(screen.getByText('Human review')).toBeVisible();expect(screen.getByText('Observed CI')).toBeVisible();
+  const independent=screen.getByText('Agent report').closest('[role=group]')!;expect(independent).toHaveTextContent('Independent agent check');expect(independent).not.toHaveTextContent('Observed CI');
+ });
+ 
+ test('canonical accept confirms the Intent effect and preserves exact command pins without accepting the Flow',async()=>{
+
+--- apps/hub-web/tests/flow-acceptance.case.tsx
+@@ 162,202 @@
+  view.scope({projectId:'q',location:{projectId:'q',tab:'flows',flowId:'legacy-flow'}});expect(await openReturn()).toHaveValue('');fireEvent.change(screen.getByRole('textbox',{name:'Return comment'}),{target:{value:'Other project draft'}});
+  view.scope({projectId:'p',location:{projectId:'p',tab:'flows',flowId:'legacy-flow'}});expect(await openReturn()).toHaveValue('Private draft for project P');
+  view.scope({principal:{id:'human:other',kind:'human',role:'operator'}});expect(await openReturn()).toHaveValue('');
+  view.scope({principal:{id:'human:reviewer',kind:'human',role:'operator'}});expect(await openReturn()).toHaveValue('Private draft for project P');
+  await act(async()=>{await i18n.changeLanguage('ru');});expect(screen.getByRole('textbox',{name:'Комментарий для доработки'})).toHaveValue('Private draft for project P');
+ });
+ 
+ test('historical completed legacy results are readable but never reopened or returned',async()=>{
+  fixture.legacyFlow.status='done';fixture.legacyFlow.acceptedBy='human:reviewer';fixture.legacyResult.files=[];mountAcceptance('legacy');await screen.findByRole('heading',{name:'What was done'});
+  expect(screen.getByText(/completed result.*read.only/i)).toBeVisible();expect(screen.queryByRole('button',{name:'Accept result'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Return for changes'})).not.toBeInTheDocument();expect(mutationRequests(fixture)).toHaveLength(0);
+ });
+ 
+ test('legacy return feedback appears in project Overview without inventing an assignee',async()=>{
+  const decision=returnedDecision(fixture);fixture.legacyFlow.status='in-progress';fixture.legacyFlow.reviewFeedback=decision;fixture.legacyFlow.lastReturnDecisionId=decision.id;
+  mountAcceptance('overview');expect(await screen.findByText(decision.comment)).toBeVisible();expect(screen.getAllByText(/returned for changes|changes requested/i).length).toBeGreaterThan(0);expect(screen.queryByText('Assigned to human:reviewer')).not.toBeInTheDocument();
+ });
+ 
+ test.each([403,404])('unavailable canonical guide (%s) stays explicit without inventing steps or granting authority',async(status)=>{
+  fixture.documentStatus=status;mountAcceptance('canonical');await screen.findByRole('heading',{name:'How to check'});
+  expect(await screen.findByText('Verification guidance is unavailable')).toBeVisible();expect(screen.queryByText('The highlighted result is visible')).not.toBeInTheDocument();expect(mutationRequests(fixture)).toHaveLength(0);
++ expect(screen.queryByText(/Criteria without verification steps/)).not.toBeInTheDocument();
+ });
+ 
+ test('an agent cannot accept or return through permissive canonical command hints',async()=>{
+  mountAcceptance('canonical',{principal:{id:'agent:contributor',kind:'agent',role:'agent'}});await screen.findByRole('heading',{name:'Decision'});
+  expect(screen.getByText(/authorized human|human reviewer/i)).toBeVisible();
+  for(const name of ['Accept result','Return for changes']){const button=screen.queryByRole('button',{name});if(button)expect(button).toBeDisabled();}
+  expect(mutationRequests(fixture)).toHaveLength(0);
+ });
+ 
+ test('unknown canonical execution outcome remains a visible acceptance block despite passing support',async()=>{
+  fixture.attempt.executionOutcome='unknown';mountAcceptance('canonical');await screen.findByRole('heading',{name:'Decision'});
+  expect(screen.getByText(/execution.*unknown|unknown.*execution/i)).toBeVisible();expect(screen.getByRole('button',{name:'Accept result'})).toBeDisabled();expect(mutationRequests(fixture)).toHaveLength(0);
+ });
+ 
+ test('an accepted canonical Intent is read-only and a return cannot reset its accepted decision',async()=>{
+  fixture.intent.state='accepted';fixture.intent.acceptanceDecisionId='accepted-decision';fixture.attempt.state='accepted';mountAcceptance('canonical');await screen.findByRole('heading',{name:'What was done'});
+  expect(screen.getByText(/accepted result.*read.only/i)).toBeVisible();expect(screen.queryByRole('button',{name:'Return for changes'})).not.toBeInTheDocument();expect(mutationRequests(fixture)).toHaveLength(0);
+ });
+ 
+ test('canonical aggregate confirmation names required accepted deliverables and binds only its Flow submission',async()=>{
+
+--- apps/hub-web/tests/flow-term.case.ts
+@@ 1,3 @@
++import { expect,test } from 'vitest';
++import workflowEn from '../src/i18n/workflow.en';import workflowRu from '../src/i18n/workflow.ru';
++test('flowWorkspaceDistinction keeps the product term Flow in both locales',()=>{expect(workflowEn.flowWorkspaceDistinction).toContain('lists Flows based');expect(workflowRu.flowWorkspaceDistinction).toContain('находятся Flow на основе');expect(workflowRu.flowWorkspaceDistinction).not.toMatch(/потоки/i);});
+
+--- apps/hub-web/tests/remote-owned-controls.case.tsx
+@@ 1,16 @@
+ import { fireEvent,render,screen,waitFor } from '@testing-library/react';
+ import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+ import { beforeEach,expect,test,vi } from 'vitest';
+ import { HubContext,type HubContextValue } from '../src/app/hub-context';
+ import { useController } from '../src/features/remote/shared';
+ import { Commands } from '../src/features/remote/settings';
+ import { sessionFixture } from './remote-fixtures';
+ import { useDraftStore } from '../src/state/drafts';
+ import i18n from '../src/i18n';
+ import type { Control } from '../src/api/remote';
+ const record={...sessionFixture,state:'busy' as const,activeRunId:'r',activeTurnId:'t'};const context:HubContextValue={projectId:'p',principal:{id:'human:test',kind:'human',role:'operator'},scopeKey:1,location:{projectId:'p',tab:'sessions'},navigate:()=>undefined,refresh:async()=>undefined};
+-const entry=(commandName:string):Control['CommandCatalogueEntry']=>({commandName,summary:commandName,handlerId:commandName,inputSchema:{type:'object',additionalProperties:false,properties:{taskId:{type:'string',maxLength:200}},required:['taskId']},resultSchema:{type:'object',additionalProperties:false,properties:{},required:[]},mutationClass:'session',states:['idle','busy','paused'],busyPolicy:'reject',confirmation:'none',availability:'available',reason:'none'});
++const entry=(commandName:string,summary=commandName):Control['CommandCatalogueEntry']=>({commandName,summary,handlerId:commandName,inputSchema:{type:'object',additionalProperties:false,properties:{taskId:{type:'string',maxLength:200}},required:['taskId']},resultSchema:{type:'object',additionalProperties:false,properties:{},required:[]},mutationClass:'session',states:['idle','busy','paused'],busyPolicy:'reject',confirmation:'none',availability:'available',reason:'none'});
+ function Probe(){const control=useController(record);return <><button onClick={control.claim}>claim</button><Commands record={record} control={control}/></>;}
+-beforeEach(async()=>{useDraftStore.getState().clearAll();await i18n.changeLanguage('en');vi.spyOn(globalThis,'fetch').mockImplementation(async(url)=>String(url).endsWith('/controller/claim')?Response.json({receiptId:'r',sessionVersion:3,lease:record.controller}):Response.json({catalogueVersion:1,catalogueDigest:'a'.repeat(64),capabilityDigest:'a'.repeat(64),entries:[entry('tasks.kill'),entry('session.configure')]}));});
+-test('busy exception is only for exact shared owned-resource commands, never general session mutation',async()=>{render(<QueryClientProvider client={new QueryClient()}><HubContext.Provider value={context}><Probe/></HubContext.Provider></QueryClientProvider>);fireEvent.click(screen.getByRole('button',{name:'claim'}));await screen.findByRole('option',{name:'tasks.kill · available'});fireEvent.change(screen.getByLabelText('Command'),{target:{value:'session.configure'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Invoke command'})).toBeDisabled());fireEvent.change(screen.getByLabelText('Command'),{target:{value:'tasks.kill'}});fireEvent.change(screen.getByLabelText('Structured arguments'),{target:{value:'{"taskId":"owned-task"}'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Invoke command'})).toBeEnabled());});
++beforeEach(async()=>{useDraftStore.getState().clearAll();await i18n.changeLanguage('en');vi.spyOn(globalThis,'fetch').mockImplementation(async(url)=>String(url).endsWith('/controller/claim')?Response.json({receiptId:'r',sessionVersion:3,lease:record.controller}):Response.json({catalogueVersion:1,catalogueDigest:'a'.repeat(64),capabilityDigest:'a'.repeat(64),entries:[entry('tasks.kill'),entry('session.configure','Adjust zebra settings')]}));});
++test('busy exception is only for exact shared owned-resource commands, never general session mutation',async()=>{render(<QueryClientProvider client={new QueryClient()}><HubContext.Provider value={context}><Probe/></HubContext.Provider></QueryClientProvider>);fireEvent.click(screen.getByRole('button',{name:'claim'}));await screen.findByRole('option',{name:'tasks.kill · available'});fireEvent.change(screen.getByRole('searchbox'),{target:{value:'/session'}});expect(screen.queryByRole('option',{name:'tasks.kill · available'})).toBeNull();expect(screen.getByRole('option',{name:'session.configure · available'})).toBeInTheDocument();fireEvent.change(screen.getByLabelText('Command'),{target:{value:'session.configure'}});expect(screen.getByLabelText('Command')).toHaveValue('session.configure');await waitFor(()=>expect(screen.getByRole('button',{name:'Invoke command'})).toBeDisabled());fireEvent.change(screen.getByRole('searchbox'),{target:{value:'tasks.kill'}});fireEvent.change(screen.getByLabelText('Command'),{target:{value:'tasks.kill'}});fireEvent.change(screen.getByLabelText('Structured arguments'),{target:{value:'{"taskId":"owned-task"}'}});await waitFor(()=>expect(screen.getByRole('button',{name:'Invoke command'})).toBeEnabled());});
++test('catalogue search also matches the summary when the command name does not',async()=>{render(<QueryClientProvider client={new QueryClient()}><HubContext.Provider value={context}><Probe/></HubContext.Provider></QueryClientProvider>);fireEvent.click(screen.getByRole('button',{name:'claim'}));await screen.findByRole('option',{name:'tasks.kill · available'});fireEvent.change(screen.getByRole('searchbox'),{target:{value:'zebra'}});expect(screen.queryByRole('option',{name:'tasks.kill · available'})).toBeNull();expect(screen.getByRole('option',{name:'session.configure · available'})).toBeInTheDocument();});
+
+--- apps/hub-web/tests/remote.case.tsx
+@@ 1,38 @@
+ import {
+   act,
++  cleanup,
+   fireEvent,
+   render,
+   screen,
+   waitFor,
+ } from "@testing-library/react";
+ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+ import { beforeEach, expect, test, vi } from "vitest";
+ import i18n from "../src/i18n";
+ import { HubContext, type HubContextValue } from "../src/app/hub-context";
+ import { SessionsView } from "../src/features/remote";
+ import { useDraftStore } from "../src/state/drafts";
+ import { resetClient } from "../src/api/client";
+ import { navigate, useLocation } from "../src/app/navigation";
+ import { sessionFixture, machineFixture } from "./remote-fixtures";
++import { messageDraftKey } from "../src/features/remote/work";
+ const requests: { url: string; init?: RequestInit }[] = [];
+ let role = "operator";
+ let claimed = false;
+ function Harness() {
+   const location = useLocation();
+   const ctx = {
+     projectId: "p",
+     principal: { id: "human:test", kind: "human", role },
+     scopeKey: 2,
+     location,
+     navigate,
+     refresh: async () => undefined,
+   } as HubContextValue;
+   return (
+     <HubContext.Provider value={ctx}>
+       <SessionsView />
+     </HubContext.Provider>
+   );
+ }
+ function show() {
+
+--- apps/hub-web/tests/remote.case.tsx
+@@ 260,525 @@
+     const path = String(url);
+     if (path.endsWith("/controller/claim")) {
+       claimKey = new Headers(init?.headers).get("idempotency-key");
+       return Response.json({receiptId: "pending", sessionVersion: 3, lease: sessionFixture.controller});
+     }
+     if (path.includes("/controller-claims/")) {
+       expect(path.endsWith("/" + claimKey)).toBe(true);
+       return Response.json({error: {code: "recovery-required", message: "Machine refused"}}, {status: 409});
+     }
+     return original(url, init);
+   });
+   show();
+   await screen.findByRole("heading", { name: "Test session" });
+   fireEvent.change(screen.getByLabelText("Message"), {target: {value: "Keep this message"}});
+   fireEvent.click(screen.getByRole("button", {name: "Claim control"}));
+   await screen.findByText(/\(recovery-required\)/);
+   expect(screen.queryByRole("button", {name: "Release control"})).not.toBeInTheDocument();
+   expect(screen.getByRole("button", {name: "Send message"})).toBeDisabled();
+   expect(screen.getByLabelText("Message")).toHaveValue("Keep this message");
+ });
++
++const launchDraft = { machineId: "m", checkoutId: "c", profileId: "native", title: "My session", flowId: "", firstMessage: "" };
++test("a non-operator is told only operators can create sessions, not to choose what they already chose", async () => {
++  role = "reviewer";
++  useDraftStore.getState().put("remote-create:2:p", launchDraft);
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  await waitFor(() => expect(screen.getByLabelText("Machine")).toHaveValue("m"));
++  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
++  expect(screen.getByText(/Only operators can create sessions/)).toBeVisible();
++  expect(screen.queryByText(/Choose an available machine/)).toBeNull();
++});
++test("a restored draft whose Flow left in-progress names the Flow as the blocker", async () => {
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "gone" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  await waitFor(() => expect(screen.getByLabelText("Checkout")).toHaveValue("c"));
++  expect(await screen.findByText(/selected Flow is no longer in progress/)).toBeVisible();
++  expect(screen.queryByText(/Choose an available machine/)).toBeNull();
++  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
++});
++test("a stale Flow can be cleared from the select, which re-enables Create session", async () => {
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "gone", firstMessage: "stale text" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  await screen.findByText(/selected Flow is no longer in progress/);
++  const select = screen.getByLabelText("Session Flow (optional)");
++  expect(select).toHaveValue("gone");
++  expect(screen.getByRole("option", { name: "gone · no longer in progress" })).toBeDisabled();
++  expect(screen.queryByLabelText("First message (draft)")).toBeNull();
++  fireEvent.change(select, { target: { value: "" } });
++  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
++  expect(screen.queryByText(/no longer in progress/)).toBeNull();
++});
++const flow = { id: "f1", title: "Ship it", version: 4, status: "in-progress", criteria: ["works"], specContentDigest: "d".repeat(64) };
++function serveCreate(flows: unknown[]) {
++  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
++  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
++    const path = String(url);
++    if (path.endsWith("/flows")) return Response.json({ flows });
++    if (path.endsWith("/projects/p/sessions") && init?.method === "POST") {
++      requests.push({ url: path, init });
++      return Response.json({ sessionId: "s2", receiptId: "r2" });
++    }
++    return original(url, init);
++  });
++}
++test("a stale Flow that still exists is named by its title, not its id", async () => {
++  serveCreate([{ ...flow, id: "f9", title: "Ship it", status: "completed" }]);
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f9" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  expect(await screen.findByRole("option", { name: "Ship it · no longer in progress" })).toBeDisabled();
++});
++test("creating a session with a Flow seeds the new session's composer with the prepared first message", async () => {
++  serveCreate([flow]);
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1", firstMessage: "Start with the parser" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  await waitFor(() => expect(screen.getByLabelText("Session Flow (optional)")).toHaveValue("f1"));
++  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
++  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
++  const key = messageDraftKey(2, "p", "s2");
++  await waitFor(() => expect(useDraftStore.getState().drafts[key]).toBeDefined());
++  const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(flow.criteria)))), byte => byte.toString(16).padStart(2, "0")).join("");
++  expect(useDraftStore.getState().drafts[key]).toMatchObject({
++    text: "Start with the parser", prepared: true, mode: "flow", flowId: "f1", flowVersion: 4, specDigest: "d".repeat(64), criteriaDigest: digest,
++  });
++  await waitFor(() => expect(window.location.search).toContain("session=s2"));
++});
++test("creating a session without a Flow writes no message draft", async () => {
++  serveCreate([flow]);
++  useDraftStore.getState().put("remote-create:2:p", launchDraft);
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
++  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
++  await waitFor(() => expect(window.location.search).toContain("session=s2"));
++  expect(useDraftStore.getState().drafts[messageDraftKey(2, "p", "s2")]).toBeUndefined();
++});
++test("an empty title is named as the remaining requirement", async () => {
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, title: "" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  expect(await screen.findByText(/Enter a session title/)).toBeVisible();
++});
++test("pressing / in the empty composer refocuses the command search when the catalogue is already open", async () => {
++  navigate({ tab: "sessions", sessionId: "s" }, true);
++  show();
++  await screen.findByRole("heading", { name: "Test session" });
++  fireEvent.click(screen.getByRole("button", { name: "Native command catalogue" }));
++  const search = await screen.findByLabelText("Search Keryx commands");
++  await waitFor(() => expect(search).toHaveFocus());
++  const message = screen.getByLabelText("Message");
++  message.focus();
++  expect(message).toHaveFocus();
++  fireEvent.keyDown(message, { key: "/" });
++  await waitFor(() => expect(search).toHaveFocus());
++});
++test("a created session clears the launch form so the next one does not inherit the Flow and first message", async () => {
++  serveCreate([flow]);
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1", firstMessage: "Start with the parser" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
++  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
++  await waitFor(() => expect(window.location.search).toContain("session=s2"));
++  expect(useDraftStore.getState().drafts["remote-create:2:p"]).toBeUndefined();
++});
++test("a rejected opening offers to create a new session and keeps the error code in details", async () => {
++  navigate({ tab: "sessions", sessionId: "s" }, true);
++  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
++  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
++    const path = String(url);
++    if (path.endsWith("/sessions/s/opening-status")) return Response.json({ errorCode: "machine-refused" });
++    if (path.endsWith("/sessions/s")) return Response.json({ ...sessionFixture, state: "opening", controller: null });
++    return original(url, init);
++  });
++  show();
++  const create = await screen.findByRole("button", { name: "Create a new session" });
++  const notice = create.parentElement as HTMLElement;
++  expect(notice.querySelector("details")).toHaveTextContent("machine-refused");
++  expect(notice.textContent).not.toContain("(machine-refused)");
++  fireEvent.click(create);
++  await waitFor(() => expect(window.location.search).not.toContain("session=s"));
++  const machine = await screen.findByLabelText("Machine");
++  expect(machine).toBeVisible();
++  await waitFor(() => expect(machine).toHaveFocus());
++});
++test("a chosen Flow whose list is failing says so, offers a retry and keeps Create session disabled", async () => {
++  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
++  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
++    String(url).endsWith("/flows")
++      ? Response.json({ error: { code: "unavailable", message: "Flows down" } }, { status: 503 })
++      : original(url, init));
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  expect(await screen.findByText(/Flows could not be loaded/)).toBeVisible();
++  expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
++  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
++});
++test("a chosen Flow whose list is still loading names that as the blocker", async () => {
++  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
++  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
++    String(url).endsWith("/flows") ? new Promise<Response>(() => undefined) : original(url, init));
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  expect(await screen.findByText(/Loading the Flows to check/)).toBeVisible();
++  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
++});
++const toggle = () => screen.getByRole("button", { name: "Native command catalogue" });
++test("Escape right after / closes the catalogue and types the slash; typing in it first keeps Escape a plain close", async () => {
++  navigate({ tab: "sessions", sessionId: "s" }, true);
++  show();
++  await screen.findByRole("heading", { name: "Test session" });
++  const message = screen.getByLabelText("Message");
++  expect(message).toHaveAccessibleDescription(/press Escape right after it/);
++  fireEvent.keyDown(message, { key: "/" });
++  const search = await screen.findByLabelText("Search Keryx commands");
++  expect(toggle()).toHaveAttribute("aria-expanded", "true");
++  expect(search).toBeVisible();
++  fireEvent.keyDown(search, { key: "Escape" });
++  await waitFor(() => expect(message).toHaveValue("/"));
++  expect(message).toHaveFocus();
++  expect(toggle()).toHaveAttribute("aria-expanded", "false");
++  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
++  fireEvent.change(message, { target: { value: "" } });
++  fireEvent.keyDown(message, { key: "/" });
++  expect(toggle()).toHaveAttribute("aria-expanded", "true");
++  expect(screen.getByLabelText("Search Keryx commands")).toBeVisible();
++  fireEvent.keyDown(screen.getByLabelText("Search Keryx commands"), { key: "a" });
++  fireEvent.keyDown(screen.getByLabelText("Search Keryx commands"), { key: "Escape" });
++  expect(toggle()).toHaveAttribute("aria-expanded", "false");
++  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
++  expect(message).toHaveValue("");
++});
++test("Escape in a catalogue opened from the toggle closes it, returns focus to the toggle and leaves the message empty", async () => {
++  navigate({ tab: "sessions", sessionId: "s" }, true);
++  show();
++  await screen.findByRole("heading", { name: "Test session" });
++  fireEvent.click(toggle());
++  const search = await screen.findByLabelText("Search Keryx commands");
++  expect(search).toBeVisible();
++  fireEvent.keyDown(search, { key: "Escape" });
++  expect(toggle()).toHaveAttribute("aria-expanded", "false");
++  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
++  expect(toggle()).toHaveFocus();
++  expect(screen.getByLabelText("Message")).toHaveValue("");
++});
++test("pointer or change activity in a catalogue opened by / keeps Escape a plain close", async () => {
++  navigate({ tab: "sessions", sessionId: "s" }, true);
++  show();
++  await screen.findByRole("heading", { name: "Test session" });
++  const message = screen.getByLabelText("Message");
++  for (const act of ["pointer", "change"] as const) {
++    fireEvent.keyDown(message, { key: "/" });
++    const search = await screen.findByLabelText("Search Keryx commands");
++    if (act === "pointer") fireEvent.pointerDown(search);
++    else fireEvent.change(search, { target: { value: "re" } });
++    fireEvent.keyDown(search, { key: "Escape" });
++    expect(toggle()).toHaveAttribute("aria-expanded", "false");
++    expect(message).toHaveValue("");
++  }
++});
++test("a prepared first message is pinned to the versions first seen, so later config drift raises the stale notice", async () => {
++  navigate({ tab: "sessions", sessionId: "s" }, true);
++  const key = messageDraftKey(2, "p", "s");
++  useDraftStore.getState().put(key, {
++    text: "First words", prepared: true, mode: "flow", flowId: "", flowVersion: 0, specDigest: "", criteriaDigest: "",
++    consent: false, consentVersion: null, busyPolicy: "reject", sessionVersion: 0, configVersion: 0,
++  });
++  show();
++  await screen.findByRole("heading", { name: "Test session" });
++  await waitFor(() => expect(useDraftStore.getState().drafts[key]).toMatchObject({ prepared: false, sessionVersion: 2, configVersion: 1 }));
++  expect(screen.queryByText(/Base versions changed/)).toBeNull();
++  cleanup();
++  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
++  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
++    String(url).endsWith("/sessions/s")
++      ? Response.json({ ...sessionFixture, config: { ...sessionFixture.config, configVersion: 2 } })
++      : original(url, init));
++  show();
++  await screen.findByRole("heading", { name: "Test session" });
++  expect(await screen.findByText(/Base versions changed/)).toBeVisible();
++});
++
++test("a chosen Flow that cannot be checked stays visible in the select and can be cleared there", async () => {
++  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
++  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
++    String(url).endsWith("/flows")
++      ? Response.json({ error: { code: "unavailable", message: "Flows down" } }, { status: 503 })
++      : original(url, init));
++  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1" });
++  show();
++  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
++  expect(await screen.findByText(/Flows could not be loaded/)).toBeVisible();
++  const select = screen.getByLabelText("Session Flow (optional)") as HTMLSelectElement;
++  expect(select).toHaveValue("f1");
++  expect(screen.getByRole("option", { name: "f1 · not checked yet" })).toBeDisabled();
++  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
++  fireEvent.change(select, { target: { value: "" } });
++  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
++  expect(screen.queryByText(/Flows could not be loaded/)).toBeNull();
++});
+
+--- apps/hub-web/tests/session-command-outcomes.case.tsx
+@@ 1,189 @@
++import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
++import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
++import { beforeEach, expect, test, vi } from "vitest";
++import i18n from "../src/i18n";
++import { HubContext, type HubContextValue } from "../src/app/hub-context";
++import { SessionsView } from "../src/features/remote";
++import { useDraftStore } from "../src/state/drafts";
++import { resetClient } from "../src/api/client";
++import { navigate, useLocation } from "../src/app/navigation";
++import { sessionFixture, machineFixture } from "./remote-fixtures";
++import type { Control } from "../src/api/remote";
++// The real Commands panel runs here; only the network is faked. The machine clock on the messages is
++// deliberately far from the browser clock: placement must follow the history cursor, not the clocks.
++const entry = (commandName: string) => ({
++  commandName, summary: commandName, handlerId: commandName,
++  inputSchema: { type: "object", additionalProperties: false, properties: {}, required: [] },
++  resultSchema: { type: "object", additionalProperties: false, properties: {}, required: [] },
++  mutationClass: "read", states: ["idle", "busy", "paused"], busyPolicy: "read-only", confirmation: "none",
++  availability: "available", reason: "none",
++}) as unknown as Control["CommandCatalogueEntry"];
++const outcome = (operationId: string, commandName: string, status: string) =>
++  ({ operationId, sessionId: "s", commandName, status, errorCode: null, result: null }) as unknown as Control["CommandOutcome"];
++const message = (n: number, role: "human" | "assistant", createdAt: string, text: string) =>
++  ({ messageId: "m" + n, role, text, createdAt, historyCursor: n, runId: null }) as unknown as Control["SessionMessage"];
++let messages: Control["SessionMessage"][] = [];
++let claimed = false;
++let appliedOperations = new Set<string>();
++let invokeCount = 0;
++let pagedHistory = false;
++let failHistory = false;
++let onInvoke: (() => void) | undefined;
++const fetched: string[] = [];
++function Harness() {
++  const location = useLocation();
++  const ctx = { projectId: "p", principal: { id: "human:test", kind: "human", role: "operator" }, scopeKey: 2, location, navigate, refresh: async () => undefined } as HubContextValue;
++  return <HubContext.Provider value={ctx}><SessionsView /></HubContext.Provider>;
++}
++beforeEach(async () => {
++  resetClient();
++  useDraftStore.getState().clearAll();
++  await i18n.changeLanguage("en");
++  claimed = false;
++  invokeCount = 0;
++  pagedHistory = false;
++  failHistory = false;
++  onInvoke = undefined;
++  fetched.length = 0;
++  appliedOperations = new Set();
++  // The machine's clock is years ahead of this browser.
++  messages = [message(1, "human", "2099-01-01T00:00:00Z", "first message")];
++  navigate({ projectId: "p", tab: "sessions", sessionId: "s" }, true);
++  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
++    const path = String(url);
++    fetched.push(path);
++    if (path.endsWith("/controller/claim")) { claimed = true; return Response.json({ receiptId: "claimed", sessionVersion: 3, lease: sessionFixture.controller }); }
++    if (path.includes("/controller-claims/")) return Response.json({ applied: claimed });
++    if (path.endsWith("/machines?projectId=p")) return Response.json({ machines: [machineFixture] });
++    if (path.endsWith("/chat-consent")) return Response.json({ profileConsentVersion: 7 });
++    if (path.endsWith("/flows")) return Response.json({ flows: [] });
++    // Paged mode serves messages oldest first in two pages (1..3, then 4..5), as the Hub does.
++    if (path.endsWith("/sessions/s/history?after=0")) {
++      if (failHistory) return Response.json({ error: { code: "unavailable", message: "history down" } }, { status: 503 });
++      const page = pagedHistory ? messages.slice(0, 3) : messages;
++      return Response.json({ messages: page, cursor: page.length, hasMore: pagedHistory, historyVersion: 1, retainedFromCursor: 0, gap: false });
++    }
++    if (path.endsWith("/sessions/s/history?after=3")) return Response.json({ messages: messages.slice(3), cursor: messages.length, hasMore: false, historyVersion: 1, retainedFromCursor: 0, gap: false });
++    if (path.endsWith("/sessions/s/queue")) return Response.json({ items: [], queueVersion: 0, cursor: 0, hasMore: false });
++    if (path.endsWith("/sessions/s/routing")) return Response.json({ version: 1, policyDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), candidates: [], profileIds: [] });
++    if (path.endsWith("/sessions/s/commands")) return Response.json({ catalogueVersion: 1, catalogueDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), entries: [entry("status"), entry("help")] });
++    if (path.endsWith("/commands/invoke") && init?.method === "POST") {
++      const { commandName } = JSON.parse(String(init.body)) as { commandName: string };
++      onInvoke?.();
++      return Response.json(outcome("op-" + commandName + "-" + ++invokeCount, commandName, "queued"));
++    }
++    const operation = /\/operations\/([^/?]+)$/.exec(path);
++    if (operation) return Response.json(outcome(operation[1], operation[1].split("-")[1], appliedOperations.has(operation[1]) ? "applied" : "queued"));
++    if (path.endsWith("/sessions/s")) return Response.json({ ...sessionFixture, version: claimed ? 3 : 2, controller: claimed ? sessionFixture.controller : null, historyCursor: messages.length });
++    return Response.json({ error: { code: "not-found", message: "no" } }, { status: 404 });
++  });
++});
++async function open(client: QueryClient) {
++  render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>);
++  await screen.findByText("first message");
++  fireEvent.click(screen.getByRole("button", { name: "Claim control" }));
++  await waitFor(() => expect(screen.getByRole("button", { name: "Release control" })).toBeEnabled());
++  fireEvent.click(screen.getByRole("button", { name: "Native command catalogue" }));
++  await screen.findByRole("option", { name: "status · available" });
++}
++async function invoke(name: string) {
++  fireEvent.change(screen.getByLabelText("Command"), { target: { value: name } });
++  const rebase = screen.queryByRole("button", { name: "Use current versions" });
++  if (rebase) fireEvent.click(rebase);
++  const button = screen.getByRole("button", { name: "Invoke command" });
++  await waitFor(() => expect(button).toBeEnabled());
++  fireEvent.click(button);
++  await screen.findByText("/" + name);
++}
++const order = () => screen.getAllByRole("listitem").map(item => item.textContent ?? "");
++const queued = () => i18n.t("receiptStatuses.queued", { ns: "remote" });
++const applied = () => i18n.t("receiptStatuses.applied", { ns: "remote" });
++const itemFor = (name: string) => screen.getByText("/" + name).closest("li")!;
++test("an outcome is placed by the history cursor at invocation, not by comparing the browser clock with the machine clock", async () => {
++  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
++  await open(client);
++  // The reply lands on the machine while the command is being sent.
++  onInvoke = () => { messages = [...messages, message(2, "assistant", "2099-01-01T00:00:01Z", "later reply")]; };
++  await invoke("status");
++  await act(async () => { await client.invalidateQueries({ queryKey: [2, "p", "remote", "history"] }); });
++  await screen.findByText("later reply");
++  const items = order();
++  const at = (needle: string) => items.findIndex(text => text.includes(needle));
++  expect(at("first message")).toBeLessThan(at("/status"));
++  expect(at("/status")).toBeLessThan(at("later reply"));
++  expect(itemFor("status").querySelector("time")).not.toBeNull();
++});
++test("every invoked command keeps following its own operation, not only the latest one", async () => {
++  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
++  await open(client);
++  await invoke("status");
++  await invoke("help");
++  expect(itemFor("status")).toHaveTextContent(queued());
++  expect(itemFor("help")).toHaveTextContent(queued());
++  appliedOperations.add("op-status-1");
++  await act(async () => { await client.invalidateQueries(); });
++  await waitFor(() => expect(itemFor("status")).toHaveTextContent(applied()));
++  expect(itemFor("help")).toHaveTextContent(queued());
++  expect(fetched.some(path => path.endsWith("/operations/op-status-1"))).toBe(true);
++});
++test("a settled outcome stops being fetched but its receipt stays in the query cache", async () => {
++  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
++  await open(client);
++  await invoke("status");
++  await invoke("help");
++  appliedOperations.add("op-status-1");
++  await act(async () => { await client.invalidateQueries(); });
++  await waitFor(() => expect(itemFor("status")).toHaveTextContent(applied()));
++  const fetchesOf = () => fetched.filter(path => path.endsWith("/operations/op-status-1")).length;
++  const before = fetchesOf();
++  await act(async () => { await client.invalidateQueries(); });
++  expect(fetchesOf()).toBe(before);
++  expect(client.getQueryData<Control["CommandOutcome"]>([2, "p", "remote", "operation", "s", "op-status-1"])?.status).toBe("applied");
++  expect(itemFor("status")).toHaveTextContent(applied());
++});
++const fiveMessages = () => [1, 2, 3, 4, 5].map(n => message(n, n % 2 ? "human" : "assistant", "2026-01-01T00:00:0" + n + "Z", n === 1 ? "first message" : "msg " + n));
++const after = (items: string[], needle: string, other: string) =>
++  items.findIndex(text => text.includes(needle)) > items.findIndex(text => text.includes(other));
++test("an outcome invoked before the next history page is loaded still follows every earlier message", async () => {
++  pagedHistory = true;
++  messages = fiveMessages();
++  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
++  await open(client);
++  expect(screen.queryByText("msg 5")).toBeNull();
++  await invoke("status");
++  fireEvent.click(screen.getByRole("button", { name: i18n.t("more", { ns: "remote" }) }));
++  await screen.findByText("msg 5");
++  expect(after(order(), "/status", "msg 5")).toBe(true);
++});
++test("an outcome invoked before any history has loaded is not drawn above the messages that already existed", async () => {
++  messages = fiveMessages();
++  failHistory = true;
++  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
++  render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>);
++  fireEvent.click(await screen.findByRole("button", { name: "Claim control" }));
++  await waitFor(() => expect(screen.getByRole("button", { name: "Release control" })).toBeEnabled());
++  fireEvent.click(screen.getByRole("button", { name: "Native command catalogue" }));
++  await screen.findByRole("option", { name: "status · available" });
++  expect(client.getQueryData([2, "p", "remote", "history", "s", "workspace"])).toBeUndefined();
++  await invoke("status");
++  failHistory = false;
++  await act(async () => { await client.invalidateQueries({ queryKey: [2, "p", "remote", "history"] }); });
++  await screen.findByText("msg 5");
++  expect(after(order(), "/status", "msg 5")).toBe(true);
++});
++test("a settled outcome stops being fetched on later invalidations, while a queued one keeps following", async () => {
++  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
++  await open(client);
++  await invoke("status");
++  await invoke("help");
++  appliedOperations.add("op-status-1");
++  await act(async () => { await client.invalidateQueries(); });
++  await waitFor(() => expect(itemFor("status")).toHaveTextContent(applied()));
++  const count = (id: string) => fetched.filter(path => path.endsWith("/operations/" + id)).length;
++  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
++  const before = { status: count("op-status-1"), help: count("op-help-2") };
++  await act(async () => { await client.invalidateQueries(); });
++  await waitFor(() => expect(count("op-help-2")).toBeGreaterThan(before.help));
++  expect(count("op-status-1")).toBe(before.status);
++  expect(itemFor("status")).toHaveTextContent(applied());
++});
+
+--- apps/hub-web/tests/session-timeline.case.ts
+@@ 1,28 @@
++import { expect, test } from "vitest";
++import type { InfiniteData } from "@tanstack/react-query";
++import type { Control } from "../src/api/remote";
++import { latestHistoryCursor, mergeTimeline, type CommandEntry } from "../src/features/remote/session-timeline";
++const message = (cursor: number, createdAt = "2026-01-01T00:00:00Z") =>
++  ({ messageId: "m" + cursor, role: "human", text: "t" + cursor, createdAt, historyCursor: cursor, runId: null }) as unknown as Control["SessionMessage"];
++const entry = (operationId: string, anchor: number, invokedAt = "2026-01-01T00:00:00Z"): CommandEntry =>
++  ({ outcome: { operationId } as unknown as Control["CommandOutcome"], invokedAt, anchor });
++const label = (timeline: ReturnType<typeof mergeTimeline>) =>
++  timeline.map(item => item.kind === "message" ? item.message.messageId : item.item.outcome.operationId);
++test("an outcome goes after the last message at or below its anchor and before later ones", () => {
++  expect(label(mergeTimeline([message(1), message(2), message(3)], [entry("a", 2)]))).toEqual(["m1", "m2", "a", "m3"]);
++});
++test("an outcome anchored before any message goes first, and one anchored past the end goes last", () => {
++  expect(label(mergeTimeline([message(5)], [entry("early", 0), entry("late", Number.POSITIVE_INFINITY)]))).toEqual(["early", "m5", "late"]);
++});
++test("outcomes sharing an anchor keep the order they were given", () => {
++  expect(label(mergeTimeline([message(1), message(2)], [entry("a", 1), entry("b", 1), entry("c", 1)]))).toEqual(["m1", "a", "b", "c", "m2"]);
++});
++test("wall-clock times play no part in placement", () => {
++  const skewed = [message(1, "2099-01-01T00:00:00Z"), message(2, "2099-01-01T00:00:10Z")];
++  expect(label(mergeTimeline(skewed, [entry("a", 2, "2026-01-01T00:00:07Z")]))).toEqual(["m1", "m2", "a"]);
++});
++test("the latest cursor is the highest loaded historyCursor, or 0 with nothing loaded", () => {
++  const pages = (...cursors: number[][]) => ({ pages: cursors.map(list => ({ messages: list.map(cursor => message(cursor)) })), pageParams: [] }) as unknown as InfiniteData<Control["HistoryPage"]>;
++  expect(latestHistoryCursor(pages([1, 2], [3]))).toBe(3);
++  expect(latestHistoryCursor(undefined)).toBe(0);
++});
+
+--- apps/hub-web/tests/session-workspace.case.tsx
+@@ 1,38 @@
+ import {
+   act,
+   fireEvent,
+   render,
+   screen,
+   waitFor,
+   within,
+ } from "@testing-library/react";
+ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
++import { readFileSync } from "node:fs";
+ import { beforeEach, expect, test, vi } from "vitest";
+ import i18n from "../src/i18n";
+ import { HubContext, type HubContextValue } from "../src/app/hub-context";
+ import { SessionSurface } from "../src/features/remote/sessions";
+ import { sessionFixture, machineFixture } from "./remote-fixtures";
+ import { resetClient } from "../src/api/client";
+ import { useDraftStore } from "../src/state/drafts";
++import { parseCssRules, selectorAlternatives } from "./css-rules";
+ const navigate = vi.fn();
+ const context: HubContextValue = {
+   projectId: "p",
+   principal: { id: "human:test", kind: "human", role: "reviewer" },
+   scopeKey: 13,
+   location: { projectId: "p", tab: "sessions", sessionId: "s" },
+   navigate,
+   refresh: async () => {},
+ };
+ function show() {
+   return render(
+     <QueryClientProvider
+       client={
+         new QueryClient({ defaultOptions: { queries: { retry: false } } })
+       }
+     >
+       <HubContext.Provider value={context}>
+         <SessionSurface record={sessionFixture} />
+       </HubContext.Provider>
+     </QueryClientProvider>,
+
+--- apps/hub-web/tests/session-workspace.case.tsx
+@@ 161,231 @@
+     runId: "finished-run",
+     sessionId: undefined,
+   });
+ });
+ test("inspector tabs support keyboard navigation and keep observer controls disabled", async () => {
+   show();
+   await screen.findByText("First message");
+   const contextTab = screen.getByRole("tab", { name: "Context" });
+   contextTab.focus();
+   fireEvent.keyDown(contextTab, { key: "End" });
+   const settingsTab = screen.getByRole("tab", { name: "Settings" });
+   expect(settingsTab).toHaveAttribute("aria-selected", "true");
+   expect(settingsTab).toHaveFocus();
+   expect(screen.getByRole("button", { name: "Fork session" })).toBeDisabled();
+   expect(screen.getByRole("button", { name: "Claim control" })).toBeDisabled();
+   fireEvent.keyDown(settingsTab, { key: "Home" });
+   await waitFor(() =>
+     expect(contextTab).toHaveAttribute("aria-selected", "true"),
+   );
+ });
++// jsdom applies no CSS, so this checks the parsed stylesheet rules and the DOM shape they rely on:
++// only the composer's own panel header may be hidden; the nested Commands and Confirmation Panels keep their headings.
++test("composer header rule hides only the composer's own panel header", async () => {
++  const { container } = show();
++  await screen.findByText("First message");
++  const rules = parseCssRules(
++    readFileSync("src/features/remote/session-workspace.css", "utf8"),
++  );
++  const hiding = rules
++    .filter(
++      (rule) =>
++        /^none(\s*!important)?$/i.test(rule.decls.get("display") ?? "") ||
++        /^hidden(\s*!important)?$/i.test(rule.decls.get("visibility") ?? ""),
++    )
++    .flatMap((rule) => selectorAlternatives(rule.selector))
++    .filter((alternative) => alternative.includes(".hub-panel-header"));
++  expect(hiding.length).toBeGreaterThan(0);
++  for (const alternative of hiding)
++    expect(alternative).toBe(".session-composer > .hub-panel > .hub-panel-header");
++  const composer = container.querySelector(".session-composer") as HTMLElement;
++  fireEvent.click(
++    within(composer).getByRole("button", { name: "Native command catalogue" }),
++  );
++  await waitFor(() =>
++    expect(composer.querySelectorAll(".hub-panel .hub-panel .hub-panel-header").length).toBeGreaterThan(0),
++  );
++  const own = [...composer.querySelectorAll(":scope > .hub-panel > .hub-panel-header")];
++  expect(own.length).toBeGreaterThan(0);
++  for (const header of composer.querySelectorAll(".hub-panel .hub-panel .hub-panel-header"))
++    expect(own).not.toContain(header);
++});
++// jsdom applies no CSS: fold the rules of the 600px media block per selector (source order, last wins).
++// The wrap has to sit on the header row that is actually constrained (and its actions must be allowed
++// to shrink), or it is inert at 481-600px.
++test("the 600px header rules wrap the header row and let the actions shrink", () => {
++  const rules = parseCssRules(readFileSync("src/features/remote/session-workspace.css", "utf8"));
++  const folded = (selector: string) => {
++    const out = new Map<string, string>();
++    for (const rule of rules)
++      if (
++        rule.media.some((head) => head.replace(/\s/g, "").includes("(max-width:600px)")) &&
++        selectorAlternatives(rule.selector).includes(selector)
++      )
++        for (const [prop, value] of rule.decls) out.set(prop, value);
++    return out;
++  };
++  expect(folded(".session-workbench-header").get("flex-wrap")).toBe("wrap");
++  const actions = folded(".session-header-actions");
++  expect(actions.get("flex-shrink")).toBe("1");
++  expect(actions.get("min-width")).toBe("0");
++});
+
+--- src/lib/hub-machine/client.test.ts
+@@ 1,60 @@
+ import { expect, test } from 'bun:test';
+ import { MachineConnection, enrollMachine, verifyAuthorizationGrant } from './client';
+ import type { Control } from '../../remote-control/protocol';
+ const target = { scope: 'session', sessionId: 's', expectedSessionVersion: 0 } as Control['CommandTarget'];
+ const authorization = { commandDigest: 'a'.repeat(64), policyDigest: 'b'.repeat(64), target, controller: null };
+ test('grant application checks exact binding, server deadline and monotonic request age', () => {
+     const now = Date.now();
+     const grant = { ...authorization, grantId: 'g', commandId: 'c', authorizedBy: 'human', authorizedAt: new Date(now).toISOString(), expiresAt: new Date(now + 5000).toISOString() };
+     expect(verifyAuthorizationGrant(grant, { ...authorization, commandId: 'c', authorizedBy: 'human' }, now, 10)).toBe(true);
+     expect(verifyAuthorizationGrant(grant, { ...authorization, commandId: 'different', authorizedBy: 'human' }, now, 10)).toBe(false);
+     expect(verifyAuthorizationGrant(grant, { ...authorization, commandId: 'c', authorizedBy: 'human' }, now, 5000)).toBe(false);
+ });
++test('grant application tolerates small Hub clock lead without extending either deadline', () => {
++    const now = Date.now();
++    const expected = { ...authorization, commandId: 'c', authorizedBy: 'human' };
++    const grant = (lead: number) => ({
++        ...expected,
++        grantId: 'g',
++        authorizedAt: new Date(now + lead).toISOString(),
++        expiresAt: new Date(now + lead + 5000).toISOString(),
++    });
++    expect(verifyAuthorizationGrant(grant(75), expected, now, 10)).toBe(true);
++    expect(verifyAuthorizationGrant(grant(250), expected, now, 10)).toBe(true);
++    expect(verifyAuthorizationGrant(grant(251), expected, now, 10)).toBe(false);
++    expect(verifyAuthorizationGrant(grant(75), expected, now + 5075, 10)).toBe(false);
++    expect(verifyAuthorizationGrant(grant(75), expected, now, 5000)).toBe(false);
++});
++test('grant application rejects a grant that expires at or before it was issued', () => {
++    const now = Date.now();
++    const expected = { ...authorization, commandId: 'c', authorizedBy: 'human' };
++    const grant = (issuedOffset: number, expiresOffset: number) => ({
++        ...expected,
++        grantId: 'g',
++        authorizedAt: new Date(now + issuedOffset).toISOString(),
++        expiresAt: new Date(now + expiresOffset).toISOString(),
++    });
++    expect(verifyAuthorizationGrant(grant(200, 100), expected, now, 10)).toBe(false);
++    expect(verifyAuthorizationGrant(grant(100, 100), expected, now, 10)).toBe(false);
++    expect(verifyAuthorizationGrant(grant(0, 100), expected, now, 10)).toBe(true);
++});
+ test('real HTTP enrollment uses exact v2 path and one-use body without bearer inheritance', async () => {
+     let seen: unknown;
+     const server = Bun.serve({ port: 0, fetch: async (r) => { seen = { url: new URL(r.url).pathname, auth: r.headers.get('authorization'), body: await r.json() }; return Response.json({ machineId: 'machine-a', secret: 's'.repeat(43) }); } });
+     try {
+         expect(await enrollMachine(server.url.origin, { code: 'c'.repeat(22), agentVersion: 'test', ledgerId: 'ledger-a' })).toEqual({ machineId: 'machine-a', secret: 's'.repeat(43) });
+         expect(seen).toEqual({ url: '/hub/v2/machines/enroll', auth: null, body: { code: 'c'.repeat(22), agentVersion: 'test', ledgerId: 'ledger-a' } });
+     }
+     finally {
+         server.stop(true);
+     }
+ });
+ test('real socket sends machine bearer/subprotocol, waits for welcome and fences stale epochs', async () => {
+     let headers: Headers | undefined;
+     const frames: unknown[] = [];
+     let peer: {
+         send: (s: string) => unknown;
+     } | undefined;
+     const server = Bun.serve({ port: 0, fetch(r, s) { headers = r.headers; if (s.upgrade(r))
+             return; return new Response('', { status: 400 }); }, websocket: { open(ws) { peer = ws; }, message(ws, raw) { frames.push(JSON.parse(String(raw))); ws.send(JSON.stringify({ v: 2, type: 'welcome', messageId: 'welcome', epoch: 4, payload: { machineId: 'machine-a', heartbeatSeconds: 20, heartbeatTimeoutSeconds: 60, resumeMode: 'replay', hubSequence: 0 } })); } } });
+     let received = 0;
+
+--- src/lib/hub-machine/client.ts
+@@ 9,68 @@
+     secret: string;
+ }> {
+     const checked = validateControl('EnrollmentRequest', request);
+     if (!checked.ok)
+         throw new MachineError('invalid-enrollment');
+     const access = hubAccessHeaders(hubUrl);
+     const response = await fetch(`${trustedHubUrl(hubUrl)}/hub/v2/machines/enroll`, { method: 'POST', headers: { ...access, 'Content-Type': 'application/json' }, body: JSON.stringify(checked.value), redirect: 'error', signal: AbortSignal.timeout(30000) });
+     if (!response.ok) {
+         await response.body?.cancel();
+         throw new MachineError('enrollment-rejected');
+     }
+     const text = await readBoundedResponse(response, LIMITS.frameBytes);
+     const parsed = parseClosedJson(text);
+     if (!parsed.ok || !parsed.value || typeof parsed.value !== 'object')
+         throw new MachineError('invalid-enrollment');
+     const v = parsed.value as Record<string, unknown>;
+     if (Object.keys(v).sort().join(',') !== 'machineId,secret' || typeof v.machineId !== 'string' || typeof v.secret !== 'string' || !/^[-_A-Za-z0-9]{43,256}$/.test(v.secret))
+         throw new MachineError('invalid-enrollment');
+     return { machineId: v.machineId, secret: v.secret };
+ }
++const MAX_HUB_CLOCK_LEAD_MS = 250;
++
+ export function verifyAuthorizationGrant(value: unknown, expected: Control['AuthorizeCommand'] & {
+     commandId: string;
+     authorizedBy: string;
+ }, now: number, elapsed: number): boolean {
+     const checked = validateControl('AuthorizationGrant', value);
+     if (!checked.ok)
+         return false;
+     const g = checked.value;
+     const issued = Date.parse(g.authorizedAt), expires = Date.parse(g.expiresAt);
+-    return elapsed >= 0 && elapsed < LIMITS.grantMs && issued <= now && expires > now && expires - issued <= LIMITS.grantMs && g.commandId === expected.commandId && g.authorizedBy === expected.authorizedBy && g.commandDigest === expected.commandDigest && g.policyDigest === expected.policyDigest && g.actionFingerprint === expected.actionFingerprint && canonicalDigest(g.target) === canonicalDigest(expected.target) && canonicalDigest(g.controller) === canonicalDigest(expected.controller);
++    // The Hub can be slightly ahead of the machine. Keep the expiry and local request age strict.
++    return elapsed >= 0 && elapsed < LIMITS.grantMs
++        && issued <= now + MAX_HUB_CLOCK_LEAD_MS && expires > now
++        && expires > issued && expires - issued <= LIMITS.grantMs
++        && g.commandId === expected.commandId && g.authorizedBy === expected.authorizedBy
++        && g.commandDigest === expected.commandDigest && g.policyDigest === expected.policyDigest
++        && g.actionFingerprint === expected.actionFingerprint
++        && canonicalDigest(g.target) === canonicalDigest(expected.target)
++        && canonicalDigest(g.controller) === canonicalDigest(expected.controller);
+ }
+ // lib.dom masks Bun's documented constructor options in this project.
+ const NativeWebSocket = WebSocket as unknown as {
+     new (url: URL, options: Bun.WebSocketOptions): WebSocket;
+ };
+ export interface MachineConnectionOptions {
+     hubUrl: string;
+     machineId: string;
+     secret: string;
+     ledgerId: string;
+     daemonId: string;
+     agentVersion: string;
+     lastHubSequence?: number;
+     runCursors?: Array<{
+         runId: string;
+         lastLocalSeq: number;
+     }>;
+     sessionCursors?: Array<{
+         sessionId: string;
+         lastSessionEventSeq: number;

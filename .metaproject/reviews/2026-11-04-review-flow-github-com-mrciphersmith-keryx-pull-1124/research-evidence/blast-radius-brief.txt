@@ -1,0 +1,69 @@
+range: 85fe58fad184...0be1e717365d (base from flag)
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+SCOPE: blast-radius
+
+QUESTION: does the change break an existing behaviour at any of these sites? Nothing else. These files are under
+regression check, not under review — a finding about their style, naming or architecture is rejected by the
+orchestrator in code, whatever its merit, because this round did not ask that question.
+
+Anchor every finding to one of the 40 files below or to a changed file, at severity
+`major` or above, and name the change it breaks. A finding that cites none of the changed files is not a
+regression claim.
+
+CHANGED (35): apps/hub-web/src/api/remote-hooks.ts, apps/hub-web/src/app/App.tsx, apps/hub-web/src/components/ui.tsx, apps/hub-web/src/features/acceptance/presentation.tsx, apps/hub-web/src/features/context.tsx, apps/hub-web/src/features/remote/session-timeline.ts, apps/hub-web/src/features/remote/session-workspace.css, apps/hub-web/src/features/remote/session-workspace.tsx, apps/hub-web/src/features/remote/sessions.tsx, apps/hub-web/src/features/remote/settings.tsx, apps/hub-web/src/features/remote/work.tsx, apps/hub-web/src/features/workflow.tsx, apps/hub-web/src/i18n/acceptance.en.ts, apps/hub-web/src/i18n/acceptance.ru.ts, apps/hub-web/src/i18n/context.en.ts, apps/hub-web/src/i18n/context.ru.ts, apps/hub-web/src/i18n/remote.en.ts, apps/hub-web/src/i18n/remote.ru.ts, apps/hub-web/src/i18n/workflow.en.ts, apps/hub-web/src/i18n/workflow.ru.ts, apps/hub-web/src/styles.css, apps/hub-web/tests/breadcrumb.case.tsx, apps/hub-web/tests/browser-journeys.e2e.mjs, apps/hub-web/tests/context.case.tsx, apps/hub-web/tests/css-rules.ts, apps/hub-web/tests/flow-acceptance.case.tsx, apps/hub-web/tests/flow-term.case.ts, apps/hub-web/tests/remote-owned-controls.case.tsx, apps/hub-web/tests/remote.case.tsx, apps/hub-web/tests/session-command-outcomes.case.tsx, apps/hub-web/tests/session-timeline.case.ts, apps/hub-web/tests/session-workspace.case.tsx, src/hub/web-assets.generated.ts, src/lib/hub-machine/client.test.ts, src/lib/hub-machine/client.ts
+
+UNDER REGRESSION CHECK (40, closest first, graph depth <= 2):
+  - src/hub/domain.ts  [hop 1]  src/hub/domain.ts -> apps/hub-web/tests/context.case.tsx
+  - src/trigger/config.ts  [hop 1]  src/trigger/config.ts -> apps/hub-web/src/features/remote/work.tsx
+  - apps/hub-web/src/i18n/index.ts  [hop 1]  apps/hub-web/src/i18n/index.ts -> apps/hub-web/src/i18n/acceptance.en.ts
+  - apps/hub-web/src/features/remote/shared.tsx  [hop 1]  apps/hub-web/src/features/remote/shared.tsx -> apps/hub-web/src/api/remote-hooks.ts
+  - apps/hub-web/src/features/managed-work/operation.tsx  [hop 1]  apps/hub-web/src/features/managed-work/operation.tsx -> apps/hub-web/src/components/ui.tsx
+  - src/lib/templates.ts  [hop 1]  src/lib/templates.ts -> apps/hub-web/src/features/context.tsx
+  - apps/hub-web/src/features/managed-work/updates.tsx  [hop 1]  apps/hub-web/src/features/managed-work/updates.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/revision-review.tsx  [hop 1]  apps/hub-web/src/features/managed-work/revision-review.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/view.tsx  [hop 1]  apps/hub-web/src/features/managed-work/view.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/work-panels.tsx  [hop 1]  apps/hub-web/src/features/managed-work/work-panels.tsx -> apps/hub-web/src/components/ui.tsx
+  - src/lib/hub-machine/bridge.ts  [hop 1]  src/lib/hub-machine/bridge.ts -> src/lib/hub-machine/client.ts
+  - apps/hub-web/src/components/Markdown.tsx  [hop 1]  apps/hub-web/src/components/Markdown.tsx -> apps/hub-web/src/features/context.tsx
+  - apps/hub-web/src/features/managed-work/contribute.tsx  [hop 1]  apps/hub-web/src/features/managed-work/contribute.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/overview-attention.tsx  [hop 1]  apps/hub-web/src/features/managed-work/overview-attention.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/global-flows.tsx  [hop 1]  apps/hub-web/src/features/global-flows.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/amendments.tsx  [hop 1]  apps/hub-web/src/features/managed-work/amendments.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/revision-editor.tsx  [hop 1]  apps/hub-web/src/features/managed-work/revision-editor.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/work.css  [hop 1]  apps/hub-web/src/features/managed-work/work.css -> apps/hub-web/src/features/context.tsx
+  - apps/hub-web/src/features/remote/recovery.tsx  [hop 1]  apps/hub-web/src/features/remote/recovery.tsx -> apps/hub-web/src/api/remote-hooks.ts
+  - apps/hub-web/src/features/revisions-query.tsx  [hop 1]  apps/hub-web/src/features/revisions-query.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/acceptance/canonical.tsx  [hop 1]  apps/hub-web/src/features/acceptance/canonical.tsx -> apps/hub-web/src/features/acceptance/presentation.tsx
+  - apps/hub-web/src/features/managed-work/attempt-detail.tsx  [hop 1]  apps/hub-web/src/features/managed-work/attempt-detail.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/flow-review.tsx  [hop 1]  apps/hub-web/src/features/managed-work/flow-review.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/legacy.tsx  [hop 1]  apps/hub-web/src/features/managed-work/legacy.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/managed-work/observations.tsx  [hop 1]  apps/hub-web/src/features/managed-work/observations.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/project-overview.tsx  [hop 1]  apps/hub-web/src/features/project-overview.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/remote/association.tsx  [hop 1]  apps/hub-web/src/features/remote/association.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/remote/machines.tsx  [hop 1]  apps/hub-web/src/features/remote/machines.tsx -> apps/hub-web/src/api/remote-hooks.ts
+  - apps/hub-web/src/features/remote/runs.tsx  [hop 1]  apps/hub-web/src/features/remote/runs.tsx -> apps/hub-web/src/api/remote-hooks.ts
+  - apps/hub-web/src/features/remote/session-run-context.tsx  [hop 1]  apps/hub-web/src/features/remote/session-run-context.tsx -> apps/hub-web/src/api/remote-hooks.ts
+  - apps/hub-web/src/i18n/common.en.ts  [hop 1]  apps/hub-web/src/i18n/common.en.ts -> apps/hub-web/src/app/App.tsx
+  - apps/hub-web/src/i18n/common.ru.ts  [hop 1]  apps/hub-web/src/i18n/common.ru.ts -> apps/hub-web/src/app/App.tsx
+  - apps/hub-web/src/theme.tsx  [hop 1]  apps/hub-web/src/theme.tsx -> apps/hub-web/src/features/context.tsx
+  - scripts/verify-native-coverage.ts  [hop 1]  scripts/verify-native-coverage.ts -> src/lib/hub-machine/client.ts
+  - apps/hub-web/src/features/acceptance/acceptance.css  [hop 1]  apps/hub-web/src/features/acceptance/acceptance.css -> apps/hub-web/src/features/context.tsx
+  - apps/hub-web/src/features/acceptance/decision-controls.tsx  [hop 1]  apps/hub-web/src/features/acceptance/decision-controls.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/acceptance/legacy-history.tsx  [hop 1]  apps/hub-web/src/features/acceptance/legacy-history.tsx -> apps/hub-web/src/components/ui.tsx
+  - apps/hub-web/src/features/acceptance/legacy.tsx  [hop 1]  apps/hub-web/src/features/acceptance/legacy.tsx -> apps/hub-web/src/features/acceptance/presentation.tsx
+  - apps/hub-web/src/features/global-flows.css  [hop 1]  apps/hub-web/src/features/global-flows.css -> apps/hub-web/src/features/context.tsx
+  - apps/hub-web/src/features/managed-work/create-flow.tsx  [hop 1]  apps/hub-web/src/features/managed-work/create-flow.tsx -> apps/hub-web/src/components/ui.tsx
+
+NOT CHECKED (21 dropped by the cap or the pre-filter). This round does not cover them.
+
+OMITTED WITH A REASON (694: they import none of the changed names, sit behind a damped hub, mention a hub string key, or are tests to run). Context, not under regression check.
+
+TESTS TO RUN: 38 tests exercise the changed code — run them: `bun test apps/hub-web/tests/accessibility.case.tsx apps/hub-web/tests/auth.case.tsx apps/hub-web/tests/flow-acceptance.fixture.tsx apps/hub-web/tests/global-flows.case.tsx apps/hub-web/tests/legacy-review-history.case.tsx apps/hub-web/tests/localization.case.ts apps/hub-web/tests/machine-cards.case.tsx apps/hub-web/tests/managed-native-message.case.tsx apps/hub-web/tests/managed-work-advanced.case.tsx apps/hub-web/tests/managed-work.case.tsx apps/hub-web/tests/pending-recovery.case.tsx apps/hub-web/tests/project-overview.case.tsx apps/hub-web/tests/remote-controller.case.tsx apps/hub-web/tests/remote-draft-renewal.case.tsx apps/hub-web/tests/remote-recovery.case.tsx apps/hub-web/tests/remote-runs.case.tsx apps/hub-web/tests/remote-settings.case.tsx apps/hub-web/tests/review-aggregate-evidence.case.tsx apps/hub-web/tests/review-draft-recovery.case.tsx apps/hub-web/tests/review-flow-reject.case.tsx apps/hub-web/tests/review-knowledge-followup.case.tsx apps/hub-web/tests/review-legacy-evidence.case.tsx apps/hub-web/tests/revision-pagination.case.tsx apps/hub-web/tests/session-run-context.case.tsx apps/hub-web/tests/work-incremental.case.tsx apps/hub-web/tests/work-live-amendments.case.tsx apps/hub-web/tests/work-live-attention.case.tsx apps/hub-web/tests/work-live-choices.case.tsx apps/hub-web/tests/work-live-updates.case.tsx apps/hub-web/tests/work-revision-members.case.tsx apps/hub-web/tests/work-sequences.case.tsx apps/hub-web/tests/workflow-pagination.case.tsx apps/hub-web/tests/workflow.case.tsx src/lib/hub-machine/access.test.ts src/lib/hub-machine/admission.test.ts src/lib/hub-machine/bridge.inventory.network.test.ts src/lib/hub-machine/bridge.network.test.ts src/remote/topic-history.test.ts`
+
+NOT ANSWERABLE (2 changed files absent from the code graph). Their blast radius is unknown, not empty.
+omitted with a reason: 4 unrelated-symbol, 0 hub-damped, 652 text-hub, 38 test-consumer. They are context, not owed a chunk pass.
+38 tests exercise the changed code — run them: `bun test apps/hub-web/tests/accessibility.case.tsx apps/hub-web/tests/auth.case.tsx apps/hub-web/tests/flow-acceptance.fixture.tsx apps/hub-web/tests/global-flows.case.tsx apps/hub-web/tests/legacy-review-history.case.tsx apps/hub-web/tests/localization.case.ts apps/hub-web/tests/machine-cards.case.tsx apps/hub-web/tests/managed-native-message.case.tsx apps/hub-web/tests/managed-work-advanced.case.tsx apps/hub-web/tests/managed-work.case.tsx apps/hub-web/tests/pending-recovery.case.tsx apps/hub-web/tests/project-overview.case.tsx apps/hub-web/tests/remote-controller.case.tsx apps/hub-web/tests/remote-draft-renewal.case.tsx apps/hub-web/tests/remote-recovery.case.tsx apps/hub-web/tests/remote-runs.case.tsx apps/hub-web/tests/remote-settings.case.tsx apps/hub-web/tests/review-aggregate-evidence.case.tsx apps/hub-web/tests/review-draft-recovery.case.tsx apps/hub-web/tests/review-flow-reject.case.tsx apps/hub-web/tests/review-knowledge-followup.case.tsx apps/hub-web/tests/review-legacy-evidence.case.tsx apps/hub-web/tests/revision-pagination.case.tsx apps/hub-web/tests/session-run-context.case.tsx apps/hub-web/tests/work-incremental.case.tsx apps/hub-web/tests/work-live-amendments.case.tsx apps/hub-web/tests/work-live-attention.case.tsx apps/hub-web/tests/work-live-choices.case.tsx apps/hub-web/tests/work-live-updates.case.tsx apps/hub-web/tests/work-revision-members.case.tsx apps/hub-web/tests/work-sequences.case.tsx apps/hub-web/tests/workflow-pagination.case.tsx apps/hub-web/tests/workflow.case.tsx src/lib/hub-machine/access.test.ts src/lib/hub-machine/admission.test.ts src/lib/hub-machine/bridge.inventory.network.test.ts src/lib/hub-machine/bridge.network.test.ts src/remote/topic-history.test.ts`
+tests to run: /Users/tsaitler.aleksandr/goodea/keryx/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/tests-to-run.json
+cap: 21 of 99 candidate files were NOT reviewed (blast_radius_max_files=40). They are listed in the record. Cut blast radius: run the waves — keryx review chunks plan --package .metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124
+chunk plan: 5 chunk(s) for 21 dropped file(s) written to chunks.json; next: keryx review chunks estimate --package .metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124
+unresolved: 2 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

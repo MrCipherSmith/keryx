@@ -1,0 +1,52 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-02 (i18n, stylesheet, hub-web tests, hub-machine client and its test) is logically sound. The client.ts claim holds: expiry and the monotonic grant window stay strict, the lead is bounded at 250 ms, and the new test pins all three plus the new expires > issued guard. One minor: the new tolerance has no production path that needs it, because authorize() already waits out a future-dated grant.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/lib/hub-machine/client.ts",
+      "quote": "&& issued <= now + MAX_HUB_CLOCK_LEAD_MS && expires > now",
+      "problem": "The 250 ms lead tolerance in verifyAuthorizationGrant is almost unreachable from production callers, so it reads as the mechanism that admits Hub-ahead grants when the pre-existing wait in authorize() already does that. Every production caller of verifyAuthorizationGrant runs after authorize() has slept until authorizedAt (when 0 < wait <= 500): authorize() verifies with Date.now() taken after Bun.sleep, and authorization() builds createGrantApplication from that already-verified grant with wall: Date.now. So issued <= now already holds on both paths. The tolerance only fires if the timer wakes a millisecond early or the wall clock steps back by at most 250 ms between the sleep and the check. A second skew threshold now sits beside the first (sleep window 500 ms, accepted lead 250 ms) with no stated relation.",
+      "impact": "No wrong behaviour: a grant is never accepted that the strict check would have wrongly refused in a way the user would see, and nothing is weakened (the monotonic elapsed < grantMs bound starts before the request, so a lead grant cannot be used longer than grantMs). The cost lands on the next editor of client.ts: someone lowering the sleep cap, or setting MAX_HUB_CLOCK_LEAD_MS to 0, will not see from the code or from client.test.ts which path breaks, because the end-to-end test 'fresh authorization waits for a slightly future server timestamp' (skew 150) passes with the constant at 0 on the strength of the sleep alone.",
+      "suggested_fix": "Say in the comment above MAX_HUB_CLOCK_LEAD_MS that the tolerance is a guard against early timer wake and small wall-clock steps after authorize() has waited, and why it is 250 ms against the 500 ms wait cap. Optionally add an authorize()-level test with a Hub 2xx ms ahead that asserts the grant is held until authorizedAt, which would pin the pair rather than the function alone.",
+      "evidence": "client.ts:41-42 (the check), client.ts:206-210 (wait <= 500 then verifyAuthorizationGrant at Date.now()), client.ts:216 (createGrantApplication with wall: Date.now after authorize returns). Callers enumerated with keryx ctx rg for verifyAuthorizationGrant|createGrantApplication|.authorization(|.authorize( over src, scripts, apps: production uses are client.ts:209, client.ts:296 and the five bridge.ts .authorization( calls (661, 689, 740, 818, 886); every other hit is a test. Lead values that exceed the sleep window (> 500 ms) are refused identically before and after the change; values in (0, 500] are slept out identically before and after.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+## Logic review: slice-02, PR #1124 round 1
+
+**client.ts: is the PR's claim true?** Yes. In `verifyAuthorizationGrant` the three guards are all still strict conjuncts:
+- Absolute expiry is untouched: `expires > now`, so a grant whose `expiresAt` equals `now` is refused.
+- The monotonic window is untouched: `elapsed >= 0 && elapsed < LIMITS.grantMs`. `authorization()` takes `startedAt` before the request goes out, so a grant carrying a lead still cannot be used for longer than 5000 ms of local time from the request start.
+- The lead is bounded at 250 ms (`issued <= now + MAX_HUB_CLOCK_LEAD_MS`).
+- `expires > issued` is new and needed. Without it a grant with `issued` up to 250 ms ahead and `expires` before `issued` would pass, since `expires - issued <= grantMs` is satisfied by a negative span.
+- `expires - issued <= LIMITS.grantMs` still bounds the span, and the Hub issues exactly 5000 ms from one clock read (`remote-v2/index.ts:348`), so the test grants (lead + 5000) are realistic.
+
+**Does the new test pin it?** Yes, deterministically, since `now` is passed in:
+- lead 75 and 250 are accepted and 251 is refused, so the bound is exact;
+- lead 75 with `now + 5075` is refused (`expires === now` fails the strict `>`), so the absolute deadline is not extended by the lead;
+- lead 75 with `elapsed = 5000` is refused, so the monotonic window is not extended;
+- `grant(200,100)` and `grant(100,100)` are refused and `grant(0,100)` accepted, so the new `expires > issued` guard is pinned (the span is -100 and 0, which `expires - issued <= grantMs` alone would let through).
+
+Two limits to the pin: it exercises the function, not `authorize()`, and the combined lead-plus-window behaviour rests on the conjuncts being independent, which they are. F-001 is about the first limit.
+
+**Rest of the slice.** No other logic defects found:
+- The new i18n keys match one for one between en and ru (17 in remote, 2 in workflow) and every one is referenced from `src/features`.
+- `css-rules.ts` handles the data-URI chevron (no `;`, first `:` splits) and the `:is()` split used by the collapsed-rail rules, so the rail and select tests can fail.
+- `flow-acceptance` expectation `criteria.length - 1` is correct for any fixture size, since the guide maps `criteria[0]` only and one criterion is pushed.
+- The command-outcome placement tests assert by history cursor and not clock, and the history-failed case needs `record.historyCursor` as the anchor, which the fixture supplies.
+- In `work.tsx` the `/` handler calls `preventDefault`, so the Escape-hands-the-slash-back test matches real-browser behaviour.
+- The two local failures named in the dispatch (`R4.4` and `client.test.ts:134`) were not claimed; neither is a slice-02 defect on the code read, and `client.test.ts:134` is an environment-dependent connect-refused test that predates this diff.
+
+Routing audit: graph_used: partial (payload layers block only); wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg` for every search); raw_rg_used: no. One raw `git show` of the base `client.ts` into the scratchpad, to compare the unchanged `authorize()` wait logic, carried a stated escape reason.

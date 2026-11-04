@@ -1,0 +1,71 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-01 (hub-web source and i18n) is logically sound: the first-message Flow draft, command-outcome timeline, settled-receipt following, slash/Escape handling and the empty/rejected-state recovery paths all trace correctly. No blocker or major. Three observations: the 'subsequent messages reuse that Flow' claim is delivered as per-tab draft retention (minor, description vs approach), a confirmation card can be hidden behind a closed catalogue panel (minor), and an unguarded async step after session creation (info).",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "quote": "if(current===submitted)store.put(draftKey,{...submitted,text:\"\",prepared:false});",
+      "problem": "The PR body says session launch pins a Flow for the first message and that 'subsequent messages reuse that Flow'. The diff does not bind a Flow to the session anywhere (SessionCreate carries no Flow; CreateSession sends the same body as before). Reuse is produced only by this line: after a non-native send the composer draft is kept with its flowId/flowVersion/specDigest/criteriaDigest and only the text is blanked. That draft lives in useDraftStore, a plain in-memory zustand store (apps/hub-web/src/state/drafts.ts).",
+      "impact": "Nothing is wrong inside one tab: the second message does carry identical pins. But the claim reads as a session-level property; after a page reload, a new tab, or a scope change the draft is gone and the composer starts again from flowId '' (or hub.location.flowId), so the second message needs the Flow chosen again. A reader of the PR body would expect otherwise.",
+      "suggested_fix": "Reword the PR body to 'the composer keeps the chosen Flow for later messages in this tab' (or state that the pin is a client-side draft, not session state). No code change needed unless a session-level Flow is actually wanted.",
+      "evidence": "CreateSession.submit builds the SessionCreate body from machine/checkout/profile/title only (sessions.tsx); the Flow reaches the session solely via useDraftStore.getState().put(messageDraftKey(...), prepareFlowMessageDraft(...)) in onSuccess, and persists across sends only through this put. drafts.ts: create(set => ({drafts:{}, ...})) with no persistence middleware. Verified by reading both files at the reviewed head.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "degradation_class": "diff-vs-description",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "quote": "<div id={commandsId} hidden={commands !== \"open\"}",
+      "problem": "A command that needs human confirmation returns status 'confirmation-required'; its Confirmation card (Allow once / Deny, with expiry) is rendered inside Commands, which now sits in this collapsible catalogue wrapper. The transcript row for that outcome only prints 'Exact human confirmation is required' and has no control. When the catalogue is closed (trigger toggle or Escape) the wrapper is hidden and so is the card. Before this change Commands lived in the always-mounted Settings tab panel.",
+      "impact": "Trigger: invoke a confirmation-requiring command, then close the catalogue. The transcript says confirmation is required, nothing visible lets the operator give it, and the card's own expiry check (Date.parse(card.expiresAt) <= Date.now()) can pass unnoticed, leaving the command unconfirmed. Recoverable by reopening the catalogue, so the cost is a confusing state, not data loss.",
+      "suggested_fix": "Either keep the catalogue open while any receipt in it carries a confirmation, or render the Confirmation card (or a 'Reopen commands' button) from the transcript row of that outcome.",
+      "evidence": "work.tsx: Commands is mounted only inside this div and the div takes hidden={commands !== \"open\"}; settings.tsx Commands renders `{receipt?.confirmation&&<Confirmation .../>}` inside its own Panel; sessions.tsx OutcomeItem renders only status, errorCode and result. Whether the hub also moves the original operation to applied after the confirmation is answered is not visible in this slice; it does not change the hidden-card path.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "const criteriaDigest = await digestCriteria(selectedFlow.criteria);",
+      "problem": "onSuccess is async and runs after the session already exists. digestCriteria uses crypto.subtle.digest; if it throws (crypto.subtle is undefined outside a secure context) the callback rejects unhandled, hub.navigate and clearDraft are skipped, and the form stays rendered with ready === true.",
+      "impact": "Only in a non-secure-context deployment: the operator would see no navigation and could press Create again, making a second session. Within secure contexts (https, localhost) the path does not occur, and the composer's own Flow selection (selectFlow) and crypto.randomUUID() in sendNative already require a secure context, so such a deployment is unusable for Flow work anyway. Reported as info because that deployment shape is not shown in the code.",
+      "suggested_fix": "Navigate regardless of seeding: wrap the digest and put in try/catch, call clearDraft and hub.navigate in a finally block. What would settle it: whether the Hub is ever served over plain http to non-localhost origins.",
+      "evidence": "shared.tsx digestCriteria: `await crypto.subtle.digest('SHA-256', ...)`; sessions.tsx onSuccess awaits it before clearDraft() and hub.navigate(...).",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+## Logic review, PR #1124, slice-01
+
+Scope read: the whole of `slice-01.diff` (16 files) plus the head versions of `work.tsx`, `session-workspace.tsx`, `drafts.ts`, `shared.tsx`, `ui.tsx`, `styles.css` (rail and select layers), the generated protocol types, and `remote.en.ts` for key presence. Spec gate: the PR body is the spec (no issue, no task doc).
+
+**Spec versus diff.** Each claim in the body that falls in this slice is delivered: launch with a selected Flow and a prepared first message (`CreateSession` + `prepareFlowMessageDraft`), command outcomes in the transcript (`mergeTimeline`, `OutcomeItem`), header Settings button, icon-collapsing rail, `hub-select` chevron room, machine display name in the session list, rejected-opening status and recovery button, launch prerequisites (`firstUnmetLaunchCondition`), Delivery to Revisions link, proposal empty-state actions, slash and button entry to the catalogue with name/summary search, and inspectable unavailable entries (options no longer disabled, `allowed` still gates invoke). No unimplemented claim. One wording gap, F-001: "subsequent messages reuse that Flow" is draft retention in an in-memory store, not session state. The client bounded-clock-lead claim lives in slice-02 and was not assessed here.
+
+**Paths traced and found correct.**
+- Prepared draft: seeded with `prepared: true` and zero versions, un-prepared by the effect once `record.state !== "opening"`, `submit` and the Send button are both gated while opening, `stale` ignores empty/prepared drafts. The effect cannot loop because it exits when `prepared` is false, even though `useDraft`'s `setDraft` identity changes each render.
+- Send success: `useDraft` returns the stored reference, so `current === submitted` is a real identity check; the draft keeps the Flow and blanks the text, and a mid-flight edit still routes to `draftPreserved`. Rejected receipts keep the text.
+- Timeline: anchors are history cursors (record cursor or loaded pages, whichever is ahead); with ascending, paged history an outcome sits after all loaded messages at or below its anchor and later pages insert before it correctly. Equal anchors keep invoke order (stable sort). `Infinity - Infinity` in the comparator yields NaN, which sorts as equal.
+- Outcome following: `useRemoteQuery` with a function `enabled` is supported by the pinned TanStack Query 5.105; invalidation skips a query whose function returns false, so settled outcomes stop refetching while the cached receipt stays. `Settings` calls `useAppliedReceipt` without `settled`, so its behaviour is unchanged.
+- `Button` and `Input` ref forwarding relies on `ComponentPropsWithRef` plus React 19.3.1, which the app pins.
+- Slash and Escape: `/` is taken only in an empty field with no modifier, no IME composition and no repeat; Escape hands the slash back only while `slashOpened` is untouched.
+- i18n: every key used in this slice exists in the EN files read (remote, acceptance, context); `receiptStatuses.*` covers all `CommandOutcome.status` values.
+- Empty and recovery states (`ProposalsView`, `DeliveryView`, `HistoryView` filter, `ReviewPresentation` gaps) behave correctly for the inputs that reach them; the gaps block deliberately ignores unresolved guides.
+
+**Not run.** No tests were executed; the two local failures in `src/lib/hub-machine` belong to slice-02 and are not claimed here.
+
+Routing audit: graph_used: yes (layers block, payload); wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg`, `ctx` summaries); raw_rg_used: no.
