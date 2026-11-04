@@ -12,7 +12,6 @@
   --hub-subtle: #edf2ef;
   --hub-ink: #20352b;
   --hub-muted: #61756b;
-  --hub-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%2361756b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); /* tracks --hub-muted */
   --hub-border: #dce5df;
   --hub-accent: #265f50;
   --hub-accent-soft: #e4f0e9;
@@ -39,7 +38,6 @@
   --hub-subtle: #223229;
   --hub-ink: #e1ece5;
   --hub-muted: #a2b7aa;
-  --hub-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23a2b7aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); /* tracks --hub-muted */
   --hub-border: #35483c;
   --hub-accent: #8dc7ab;
   --hub-accent-soft: #294639;
@@ -645,12 +643,18 @@
   appearance:none;
   padding-inline-end:2.5rem;
   /* Longhands only: the rule must not reset background-color, or it
-     overrides the .hub-input:disabled fill. The chevron colour is baked per
-     theme in --hub-select-chevron (a background image cannot read tokens). */
-  background-image: var(--hub-select-chevron);
-  background-repeat: no-repeat;
-  background-position: right .75rem center;
-  background-size: 1rem;
+     overrides the .hub-input:disabled fill. The chevron is two gradient
+     strokes, not an image: the Hub serves this app with `default-src 'self'`
+     and no `img-src` (src/hub/server.ts), so a data: URI is refused and the
+     control would show reserved space and no arrow. A gradient is not an
+     image request, and it reads --hub-muted directly, so the colour needs no
+     per-theme copy. The two halves meet to form the chevron: `\` then `/`. */
+  background-image:
+    linear-gradient(45deg, transparent calc(50% - .7px), var(--hub-muted) calc(50% - .7px), var(--hub-muted) calc(50% + .7px), transparent calc(50% + .7px)),
+    linear-gradient(135deg, transparent calc(50% - .7px), var(--hub-muted) calc(50% - .7px), var(--hub-muted) calc(50% + .7px), transparent calc(50% + .7px));
+  background-repeat: no-repeat, no-repeat;
+  background-position: right 1.125rem center, right .75rem center;
+  background-size: .375rem .375rem;
 }
 @media (forced-colors:active) {
   .hub-select:not([multiple]):not([size]) { appearance:auto; background-image:none; }

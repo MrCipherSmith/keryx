@@ -161,14 +161,16 @@ test("collapsed rail keeps the project switcher as initials and layers its rules
   expect(button).toHaveAttribute("title", project.name);
 });
 
-test("select chevron follows the muted token in both themes", () => {
-  const source = readFileSync("src/styles.css", "utf8");
-  const light = source.match(/:root \{[\s\S]*?\n\}/)![0];
-  const dark = source.match(/:root\[data-theme="dark"\] \{[\s\S]*?\n\}/)![0];
-  for (const block of [light, dark]) {
-    const muted = block.match(/--hub-muted:\s*#([0-9a-f]{6})/i)![1]!;
-    expect(block).toContain(`stroke='%23${muted}'`);
-  }
+test("select chevron reads the muted token and makes no image request", () => {
+  // The Hub serves every web asset with `default-src 'self'` and no `img-src`
+  // (src/hub/server.ts), so an image request for the chevron is refused and the
+  // control shows its reserved space with no arrow. A gradient is not an image
+  // request and reads the token directly, so it needs no per-theme copy.
   const select = css.find((r) => /^\.hub-select:not/.test(r.selector) && r.decls.has("background-image"))!;
-  expect(select.decls.get("background-image")).toBe("var(--hub-select-chevron)");
+  const chevron = select.decls.get("background-image")!;
+  expect(chevron).toContain("var(--hub-muted)");
+  expect(chevron).not.toMatch(/url\(/);
+  for (const rule of css)
+    for (const property of ["background", "background-image"])
+      expect(rule.decls.get(property) ?? "", `${rule.selector} { ${property} }`).not.toMatch(/url\(\s*["']?data:/);
 });
