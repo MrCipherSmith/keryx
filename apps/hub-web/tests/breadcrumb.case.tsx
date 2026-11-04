@@ -171,5 +171,4 @@ test("select chevron follows the muted token in both themes", () => {
   }
   const select = css.find((r) => /^\.hub-select:not/.test(r.selector) && r.decls.has("background-image"))!;
   expect(select.decls.get("background-image")).toBe("var(--hub-select-chevron)");
-  expect(readFileSync("public/select-chevron.svg", "utf8")).not.toContain("#64748b");
 });

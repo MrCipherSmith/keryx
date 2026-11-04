@@ -11,13 +11,16 @@ import { ApiError, invalidateAuthentication, type NativeWorkHint } from "./clien
 export function useRemoteQuery<T>(
   key: readonly unknown[],
   path: string,
-  enabled = true,
+  enabled: boolean | ((data: T | undefined) => boolean) = true,
 ) {
   const { scopeKey, projectId } = useHub();
   return useQuery({
     queryKey: [scopeKey, projectId, "remote", ...key],
     queryFn: ({ signal }) => remoteGet<T>(path, signal),
-    enabled: !!projectId && enabled,
+    // A function decides from the query's own cached data, so a query can stop itself and keep what it holds.
+    enabled: typeof enabled === "function"
+      ? (query) => !!projectId && enabled(query.state.data)
+      : !!projectId && enabled,
   });
 }
 export function useRemoteAction<T = unknown>() {
@@ -150,16 +153,23 @@ export function requireController(
     );
   return binding;
 }
-/** Follow the immutable operation identity on invalidation; no polling or resubmission. */
+/**
+ * Follow the immutable operation identity on invalidation; no polling or resubmission.
+ * `settled` stops the following once the receipt (or the first-reported one) cannot change; the cached receipt stays.
+ */
 export function useAppliedReceipt<T extends { operationId: string }>(
   record: import("./remote").Control["SessionRecord"],
   initial: T | undefined,
+  settled?: (receipt: T) => boolean,
 ) {
   return useRemoteQuery<T>(
     ["operation", record.sessionId, initial?.operationId],
     sessionPath(record.projectId, record.sessionId) +
       "/operations/" +
       encodeURIComponent(initial?.operationId ?? ""),
-    !!initial?.operationId,
+    (data) => {
+      const latest = data ?? initial;
+      return !!initial?.operationId && !(latest && settled?.(latest));
+    },
   );
 }

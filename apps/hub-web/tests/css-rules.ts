@@ -1,7 +1,7 @@
-export type CssRule = { selector: string; decls: Map<string, string>; layered: boolean };
+export type CssRule = { selector: string; decls: Map<string, string>; layered: boolean; media: string[] };
 
 // Flattens styles.css into style rules, tracking whether each sits inside an
-// @layer block. jsdom applies no CSS, so the cascade is checked on the parsed
+// @layer block and which @media heads enclose it (outermost first). jsdom applies no CSS, so the cascade is checked on the parsed
 // rules rather than on the spelling of one old bug.
 export function parseCssRules(source: string): CssRule[] {
   const text = source.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -26,6 +26,7 @@ export function parseCssRules(source: string): CssRule[] {
           selector: head,
           decls,
           layered: stack.some((outer) => outer.layer),
+          media: stack.filter((outer) => outer.head.startsWith("@media")).map((outer) => outer.head),
         });
       }
       buffer = "";

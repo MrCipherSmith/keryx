@@ -126,6 +126,21 @@ test("every invoked command keeps following its own operation, not only the late
   expect(itemFor("help")).toHaveTextContent(queued());
   expect(fetched.some(path => path.endsWith("/operations/op-status-1"))).toBe(true);
 });
+test("a settled outcome stops being fetched but its receipt stays in the query cache", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  await open(client);
+  await invoke("status");
+  await invoke("help");
+  appliedOperations.add("op-status-1");
+  await act(async () => { await client.invalidateQueries(); });
+  await waitFor(() => expect(itemFor("status")).toHaveTextContent(applied()));
+  const fetchesOf = () => fetched.filter(path => path.endsWith("/operations/op-status-1")).length;
+  const before = fetchesOf();
+  await act(async () => { await client.invalidateQueries(); });
+  expect(fetchesOf()).toBe(before);
+  expect(client.getQueryData<Control["CommandOutcome"]>([2, "p", "remote", "operation", "s", "op-status-1"])?.status).toBe("applied");
+  expect(itemFor("status")).toHaveTextContent(applied());
+});
 const fiveMessages = () => [1, 2, 3, 4, 5].map(n => message(n, n % 2 ? "human" : "assistant", "2026-01-01T00:00:0" + n + "Z", n === 1 ? "first message" : "msg " + n));
 const after = (items: string[], needle: string, other: string) =>
   items.findIndex(text => text.includes(needle)) > items.findIndex(text => text.includes(other));

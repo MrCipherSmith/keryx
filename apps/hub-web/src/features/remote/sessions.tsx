@@ -2,7 +2,7 @@ import { getJson } from '../../api/client';
 import type { HubFlow } from '../../api/types';
 import { digestCriteria } from './shared';
 import { Textarea } from '../../components/ui';
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { remoteGet } from "../../api/remote";
 import { formatDate } from "../../i18n/format";
@@ -45,6 +45,8 @@ export function SessionsView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
   const [create, setCreate] = useState(false);
+  // Set when the form is opened from the rejected-opening recovery, which unmounts the focused button.
+  const [focusForm, setFocusForm] = useState(false);
   const sessions = useRemoteQuery<Control["SessionPage"]>(
     ["sessions"],
     remoteProject(hub.projectId ?? "") + "/sessions",
@@ -57,7 +59,7 @@ export function SessionsView() {
       <SessionDetail
         key={hub.projectId + ":" + hub.location.sessionId}
         sessionId={hub.location.sessionId}
-        onNewSession={() => { setCreate(true); hub.navigate({ tab: "sessions", sessionId: undefined }); }}
+        onNewSession={() => { setCreate(true); setFocusForm(true); hub.navigate({ tab: "sessions", sessionId: undefined }); }}
       />
     );
   return (
@@ -66,10 +68,10 @@ export function SessionsView() {
         title={t("sessions")}
         description={t("description")}
         action={
-          <Button onClick={() => setCreate(!create)}>{t("newSession")}</Button>
+          <Button onClick={() => { setFocusForm(false); setCreate(!create); }}>{t("newSession")}</Button>
         }
       />
-      {create && <CreateSession />}
+      {create && <CreateSession focusOnOpen={focusForm} />}
       <Feedback query={sessions} />
       {sessions.data?.sessions.length === 0 && (
         <EmptyState>{t("empty")}</EmptyState>
@@ -114,8 +116,12 @@ function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowsState
   if (flowGone) return "sessionLaunchFlowGone";
   return null;
 }
-function CreateSession() {
+function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
   const hub = useHub();
+  const form = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusOnOpen) form.current?.querySelector("select")?.focus();
+  }, [focusOnOpen]);
   const { t } = useTranslation("remote");
   const operator = useOperator();
   const machines = useRemoteQuery<{ machines: MachineSummary[] }>(
@@ -187,6 +193,7 @@ function CreateSession() {
     );
   }
   return (
+    <div ref={form} className="contents">
     <Panel title={t("newSession")}>
       <Field label={t("machine")}>
         <Select
@@ -263,7 +270,9 @@ function CreateSession() {
       <Field label={t("launchFlow")}>
         <Select value={draft.flowId} onChange={event => setDraft({ ...draft, flowId: event.target.value })}>
           <option value="">{t("choose")}</option>
-          {flowGone && flows.data && <option value={draft.flowId} disabled>{t("launchFlowGone", { title: flows.data.flows.find(flow => flow.id === draft.flowId)?.title ?? draft.flowId })}</option>}
+          {draft.flowId && !selectedFlow && <option value={draft.flowId} disabled>{flows.data
+            ? t("launchFlowGone", { title: flows.data.flows.find(flow => flow.id === draft.flowId)?.title ?? draft.flowId })
+            : t("launchFlowUnchecked", { id: draft.flowId })}</option>}
           {eligible.map(flow => <option key={flow.id} value={flow.id}>{flow.title} · v{flow.version}</option>)}
         </Select>
       </Field>
@@ -289,6 +298,7 @@ function CreateSession() {
         {t("createSession")}
       </Button>
     </Panel>
+    </div>
   );
 }
 export function SessionDetail({ sessionId, onNewSession }: { sessionId: string; onNewSession?: () => void }) {
@@ -492,14 +502,8 @@ function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item:
   const { t, i18n } = useTranslation("remote");
   // Follow the operation only until it settles: an applied or rejected record cannot change, and a live
   // query per outcome would be refetched on every invalidation for the tab's lifetime.
-  const [settled, setSettled] = useState<Control["CommandOutcome"] | undefined>();
-  const done = settled !== undefined || isSettled(item.outcome.status);
-  const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, done ? undefined : item.outcome);
-  const seen = followed.data;
-  useEffect(() => {
-    if (seen && isSettled(seen.status)) setSettled(seen);
-  }, [seen]);
-  const outcome = settled ?? seen ?? item.outcome;
+  const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, item.outcome, receipt => isSettled(receipt.status));
+  const outcome = followed.data ?? item.outcome;
   return (
     <li className="session-message system">
       <span className="session-avatar" aria-hidden="true">/</span>

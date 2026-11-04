@@ -64,7 +64,8 @@ export function MessageComposer({
   const [focusToken, setFocusToken] = useState(0);
   const commandsId = useId();
   const commandTrigger = useRef<HTMLButtonElement>(null);
-  // Set while the catalogue was opened by '/' and nothing has been done in it yet: Escape then hands the slash back.
+  // Set while the catalogue was opened by '/' and nothing has been done in it yet (no key other than Escape, no
+  // pointer press, no change inside it): Escape then hands the slash back.
   const slashOpened = useRef<HTMLTextAreaElement | null>(null);
   function closeCommands() {
     slashOpened.current = null;
@@ -219,7 +220,7 @@ export function MessageComposer({
       ) : control.claimPending ? <Notice>{t("controlApplying")}</Notice> : !control.active && !record.controller && (
         <Notice>{t("observer")} {control.operator && <a href="#session-controller" className="underline">{t("goToController")}</a>}</Notice>
       )}
-      <Field label={t("message")}>
+      <Field label={t("message")} hint={t("commandsHint")}>
         <Textarea
           value={draft.text}
           rows={3}
@@ -247,7 +248,10 @@ export function MessageComposer({
         <span aria-hidden="true">/</span> {t("commands")}
       </Button>
       {commands !== "unopened" && (
-        <div id={commandsId} hidden={commands !== "open"} onKeyDown={(event) => {
+        <div id={commandsId} hidden={commands !== "open"}
+          onPointerDownCapture={() => { slashOpened.current = null; }}
+          onChangeCapture={() => { slashOpened.current = null; }}
+          onKeyDown={(event) => {
           if (event.key !== "Escape") { slashOpened.current = null; return; }
           if (event.defaultPrevented) return;
           const field = slashOpened.current;
@@ -257,7 +261,6 @@ export function MessageComposer({
           <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} focusToken={focusToken} />
         </div>
       )}
-      <p className="composer-hint">{t("commandsHint")}</p>
       <p className="composer-hint">{t("secretWarning")}</p>
       <details open={!association()} className="composer-work-context">
         <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>

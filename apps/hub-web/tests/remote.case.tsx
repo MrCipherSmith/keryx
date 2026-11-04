@@ -402,7 +402,9 @@ test("a rejected opening offers to create a new session and keeps the error code
   expect(notice.textContent).not.toContain("(machine-refused)");
   fireEvent.click(create);
   await waitFor(() => expect(window.location.search).not.toContain("session=s"));
-  expect(await screen.findByLabelText("Machine")).toBeVisible();
+  const machine = await screen.findByLabelText("Machine");
+  expect(machine).toBeVisible();
+  await waitFor(() => expect(machine).toHaveFocus());
 });
 test("a chosen Flow whose list is failing says so, offers a retry and keeps Create session disabled", async () => {
   const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
@@ -427,22 +429,59 @@ test("a chosen Flow whose list is still loading names that as the blocker", asyn
   expect(await screen.findByText(/Loading the Flows to check/)).toBeVisible();
   expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
 });
+const toggle = () => screen.getByRole("button", { name: "Native command catalogue" });
 test("Escape right after / closes the catalogue and types the slash; typing in it first keeps Escape a plain close", async () => {
   navigate({ tab: "sessions", sessionId: "s" }, true);
   show();
   await screen.findByRole("heading", { name: "Test session" });
-  expect(screen.getByText(/press Escape right after it/)).toBeVisible();
   const message = screen.getByLabelText("Message");
+  expect(message).toHaveAccessibleDescription(/press Escape right after it/);
   fireEvent.keyDown(message, { key: "/" });
   const search = await screen.findByLabelText("Search Keryx commands");
+  expect(toggle()).toHaveAttribute("aria-expanded", "true");
+  expect(search).toBeVisible();
   fireEvent.keyDown(search, { key: "Escape" });
   await waitFor(() => expect(message).toHaveValue("/"));
   expect(message).toHaveFocus();
+  expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
   fireEvent.change(message, { target: { value: "" } });
   fireEvent.keyDown(message, { key: "/" });
-  fireEvent.keyDown(await screen.findByLabelText("Search Keryx commands"), { key: "a" });
+  expect(toggle()).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByLabelText("Search Keryx commands")).toBeVisible();
+  fireEvent.keyDown(screen.getByLabelText("Search Keryx commands"), { key: "a" });
   fireEvent.keyDown(screen.getByLabelText("Search Keryx commands"), { key: "Escape" });
+  expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
   expect(message).toHaveValue("");
+});
+test("Escape in a catalogue opened from the toggle closes it, returns focus to the toggle and leaves the message empty", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  fireEvent.click(toggle());
+  const search = await screen.findByLabelText("Search Keryx commands");
+  expect(search).toBeVisible();
+  fireEvent.keyDown(search, { key: "Escape" });
+  expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
+  expect(toggle()).toHaveFocus();
+  expect(screen.getByLabelText("Message")).toHaveValue("");
+});
+test("pointer or change activity in a catalogue opened by / keeps Escape a plain close", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  const message = screen.getByLabelText("Message");
+  for (const act of ["pointer", "change"] as const) {
+    fireEvent.keyDown(message, { key: "/" });
+    const search = await screen.findByLabelText("Search Keryx commands");
+    if (act === "pointer") fireEvent.pointerDown(search);
+    else fireEvent.change(search, { target: { value: "re" } });
+    fireEvent.keyDown(search, { key: "Escape" });
+    expect(toggle()).toHaveAttribute("aria-expanded", "false");
+    expect(message).toHaveValue("");
+  }
 });
 test("a prepared first message is pinned to the versions first seen, so later config drift raises the stale notice", async () => {
   navigate({ tab: "sessions", sessionId: "s" }, true);
@@ -464,4 +503,23 @@ test("a prepared first message is pinned to the versions first seen, so later co
   show();
   await screen.findByRole("heading", { name: "Test session" });
   expect(await screen.findByText(/Base versions changed/)).toBeVisible();
+});
+
+test("a chosen Flow that cannot be checked stays visible in the select and can be cleared there", async () => {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
+    String(url).endsWith("/flows")
+      ? Response.json({ error: { code: "unavailable", message: "Flows down" } }, { status: 503 })
+      : original(url, init));
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByText(/Flows could not be loaded/)).toBeVisible();
+  const select = screen.getByLabelText("Session Flow (optional)") as HTMLSelectElement;
+  expect(select).toHaveValue("f1");
+  expect(screen.getByRole("option", { name: "f1 · not checked yet" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+  fireEvent.change(select, { target: { value: "" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  expect(screen.queryByText(/Flows could not be loaded/)).toBeNull();
 });
