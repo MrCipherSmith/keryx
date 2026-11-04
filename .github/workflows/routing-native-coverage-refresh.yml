@@ -39,6 +39,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - run: bun install --frozen-lockfile
       - run: bun install --cwd apps/hub-web --no-save
       - run: bun run --cwd apps/hub-web typecheck
       - run: bun run --cwd apps/hub-web test tests/remote.case.tsx
