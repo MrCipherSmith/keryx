@@ -1,0 +1,161 @@
+import { expect, test } from "bun:test";
+import { normalizeRoutingV2Config, type RoutingV2ConfigLayer } from "./config-v2";
+import type { ModelRef } from "./model-class";
+import { executeRoutingWithFallback } from "./routing-execution-v2";
+import type { RoutingRequest } from "./routing-request";
+import type { RoutingModelFacts, RoutingSnapshot } from "./snapshot";
+import type { NormalizedEvent, NormalizedRequest, ProviderPort } from "../provider/types";
+
+const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId });
+const first = ref("alpha", "expert-a");
+const second = ref("beta", "expert-b");
+
+function facts(target: ModelRef): RoutingModelFacts {
+  return { target, connected: true, credentialsAvailable: true, policyAllowed: true, parentAllowed: true, availability: "available", capabilities: ["tools"], contextLength: 100_000, cooldown: false, estimatedCostUsd: 0.1, observedLatencyMs: 10 };
+}
+
+function setup() {
+  const layer: RoutingV2ConfigLayer = {
+    schemaVersion: 2,
+    classes: { expert: { candidates: [{ target: first, enabled: true, priority: 2 }, { target: second, enabled: true, priority: 1 }], selection: "priority", fallbackClasses: [] } },
+    categories: { coding: { mode: "class", modelClass: "expert" } },
+    execution: { maxAttempts: 3, selectionTimeoutMs: 3_000, maxEstimatedCostUsd: null, unknownCost: "allow" },
+  };
+  const config = normalizeRoutingV2Config({ user: layer });
+  const request: RoutingRequest = { requestId: "run", category: "coding", origin: "operator", baseline: first, requirements: { capabilities: [], inputTokensRequired: 10, outputTokensReserved: 10 } };
+  const snapshot: RoutingSnapshot = { configDigest: config.configDigest, snapshotDigest: "snapshot", baseline: first, models: [facts(first), facts(second)] };
+  return { config, request, snapshot };
+}
+
+function requestFor(target: ModelRef, attemptId: string): NormalizedRequest {
+  return { providerId: target.providerId, modelId: target.modelId, systemInstruction: "", messages: [], budget: { maxOutputTokens: 10, runReservation: 10 }, stream: true, requestId: attemptId, parentRunId: "parent" };
+}
+
+function provider(events: (attemptId: string) => readonly NormalizedEvent[]): ProviderPort {
+  return {
+    describe() { throw new Error("not used"); },
+    async *stream(_request, options) {
+      for (const event of events(options.attemptId)) yield event;
+    },
+  };
+}
+
+const errorEvent = (attemptId: string, kind: "rate_limit" | "overloaded" | "unavailable" | "authentication" | "cancelled", retryable = true): NormalizedEvent => ({
+  kind: "provider_error",
+  sequence: 1,
+  attemptId,
+  error: { kind, retryable, message: kind },
+});
+
+test("confirmed 429 before output selects the next model and links receipts", async () => {
+  const input = setup();
+  const result = await executeRoutingWithFallback({
+    ...input,
+    buildRequest: requestFor,
+    providerFor: (target) => target.providerId === "alpha"
+      ? provider((attemptId) => [errorEvent(attemptId, "rate_limit")])
+      : provider((attemptId) => [{ kind: "model_end", sequence: 1, attemptId }]),
+  });
+  expect(result.status).toBe("completed");
+  expect(result.attempts.map((attempt) => attempt.target)).toEqual([first, second]);
+  expect(result.receipts[1]?.previousDecisionId).toBe(result.receipts[0]?.decision.decisionId);
+  expect(result.receipts[1]?.fallbackReason).toBe("cooldown");
+});
+
+test("confirmed unavailable model falls back even when the failed pair is not retryable", async () => {
+  const input = setup();
+  const result = await executeRoutingWithFallback({
+    ...input,
+    buildRequest: requestFor,
+    providerFor: (target) => target.providerId === "alpha"
+      ? provider((attemptId) => [errorEvent(attemptId, "unavailable", false)])
+      : provider((attemptId) => [{ kind: "model_end", sequence: 1, attemptId }]),
+  });
+  expect(result.status).toBe("completed");
+  expect(result.attempts.map((attempt) => attempt.target)).toEqual([first, second]);
+});
+
+test("visible output makes provider failure terminal without replay", async () => {
+  const input = setup();
+  const result = await executeRoutingWithFallback({
+    ...input,
+    buildRequest: requestFor,
+    providerFor: () => provider((attemptId) => [
+      { kind: "text_delta", sequence: 1, attemptId, text: "visible" },
+      { ...errorEvent(attemptId, "overloaded"), sequence: 2 },
+    ]),
+  });
+  expect(result.status).toBe("interrupted");
+  expect(result.attempts).toHaveLength(1);
+  expect(result.attempts[0]?.emittedVisibleOutput).toBe(true);
+});
+
+test("tool-call activity makes failure terminal without replay", async () => {
+  const input = setup();
+  const result = await executeRoutingWithFallback({
+    ...input,
+    buildRequest: requestFor,
+    providerFor: () => provider((attemptId) => [
+      { kind: "tool_call_start", sequence: 1, attemptId, toolCallId: "t", toolName: "write" },
+      { ...errorEvent(attemptId, "overloaded"), sequence: 2 },
+    ]),
+  });
+  expect(result.status).toBe("interrupted");
+  expect(result.attempts).toHaveLength(1);
+  expect(result.attempts[0]?.emittedToolCall).toBe(true);
+});
+
+test("unknown remote outcome never invokes fallback", async () => {
+  const input = setup();
+  const throwing: ProviderPort = {
+    describe() { throw new Error("not used"); },
+    async *stream() { throw new Error("transport reset"); },
+  };
+  const result = await executeRoutingWithFallback({ ...input, buildRequest: requestFor, providerFor: () => throwing });
+  expect(result.status).toBe("interrupted");
+  expect(result.attempts).toHaveLength(1);
+  expect(result.attempts[0]?.reason).toBe("uncertain-outcome");
+});
+
+test("provider cancellation is terminal and does not invoke fallback", async () => {
+  const input = setup();
+  const result = await executeRoutingWithFallback({ ...input, buildRequest: requestFor, providerFor: () => provider((attemptId) => [errorEvent(attemptId, "cancelled", false)]) });
+  expect(result.status).toBe("cancelled");
+  expect(result.attempts).toHaveLength(1);
+});
+
+test("caller cancellation stops before provider I/O and never invokes fallback", async () => {
+  const input = setup();
+  const controller = new AbortController();
+  controller.abort("stop");
+  let providerCalls = 0;
+  const result = await executeRoutingWithFallback({
+    ...input,
+    signal: controller.signal,
+    buildRequest: requestFor,
+    providerFor: () => {
+      providerCalls += 1;
+      return provider(() => []);
+    },
+  });
+  expect(result.status).toBe("cancelled");
+  expect(providerCalls).toBe(0);
+  expect(result.attempts).toHaveLength(0);
+});
+
+test("maxAttempts stops before another provider pair is invoked", async () => {
+  const input = setup();
+  const providers: string[] = [];
+  const result = await executeRoutingWithFallback({
+    ...input,
+    maxAttempts: 1,
+    buildRequest: requestFor,
+    providerFor: (target) => {
+      providers.push(target.providerId);
+      return provider((attemptId) => [errorEvent(attemptId, "rate_limit")]);
+    },
+  });
+  expect(result.status).toBe("blocked");
+  if (result.status === "blocked") expect(result.reason).toBe("attempts-exhausted");
+  expect(providers).toEqual(["alpha"]);
+});

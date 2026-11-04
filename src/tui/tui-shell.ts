@@ -10963,7 +10963,12 @@ export async function launchTuiAgentShell(opts: {
           } catch {
             // fail-closed: classification must never block or fail the turn.
           }
-          if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {
+          if (!turnSignal.aborted && routingOutcome?.blockTurn === true) {
+            io.onSystem?.(`[route blocked: ${routingOutcome.fallbackReason ?? "no eligible model"}]\n`);
+            foregroundOperation.settle(operation);
+            if (!foregroundOperation.isDisposed) stopBusy();
+            return;
+          } else if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {
             try {
               deps = {
                 ...(await opts.makeAgentDeps({ provider: routingOutcome.routed.providerId, model: routingOutcome.routed.modelId }, liveSlateSession, busClientRef)),

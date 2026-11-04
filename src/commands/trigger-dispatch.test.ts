@@ -28,6 +28,7 @@ import { withFileLock } from "../lib/fs";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import { loadShellPermissions, shellPermissionsPath } from "../lib/shell-permissions";
 import { acquireCwd, releaseCwd } from "../lib/test-cwd";
+import { normalizeRoutingV2Config, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
 
@@ -87,6 +88,23 @@ const USAGE_NONE: Partial<NormalizedEvent> = { kind: "usage_update", usage: { in
 const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
 /** 1000 in + 200 out at the rates above. */
 const ROUND_1_USD = (1000 * 3 + 200 * 15) / 1_000_000;
+
+function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connected"): NormalizedRoutingV2Config {
+  return normalizeRoutingV2Config({
+    project: {
+      schemaVersion: 2,
+      categories: { unattended: { mode: "class", modelClass: "frontier" } },
+      classes: {
+        frontier: {
+          candidates: [{ target: { providerId: "other", modelId: "frontier" }, enabled: true, priority: 100 }],
+          selection: "priority",
+          fallbackClasses: [],
+        },
+      },
+      providers: { scope, allowlist: scope === "allowlist" ? ["other"] : [], preferSessionProvider: false },
+    },
+  });
+}
 
 /** A "sandbox" that wraps nothing — for tests whose subject is not containment. */
 const UNWRAPPED_SANDBOX: UnattendedSandboxPlan = {
@@ -1050,4 +1068,46 @@ describe("R700-01/D9: project-hook trust is looked up under the main project roo
       await rm(config, { recursive: true, force: true });
     }
   }, projectHookIntegrationTimeoutMs);
+});
+
+describe("routing v2: unattended flow dispatch", () => {
+  test("an active v2 category cannot replace the trigger's explicit provider/model pin", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const provider = scripted([[USAGE_ROUND_1, { kind: "text_delta", text: "inspected" }, { kind: "model_end" }]]);
+    let selected: { provider: string; model: string } | undefined;
+
+    await run(provider, {
+      loadActiveRoutingV2: () => activeRoutingConfig(),
+      routingCredentialsAvailable: () => true,
+      makeProvider: (dispatch: { provider: string; model: string }) => {
+        selected = dispatch;
+        return provider;
+      },
+    });
+
+    expect(selected).toMatchObject({ provider: "scripted", model: "m" });
+    expect(provider.calls()).toBe(1);
+  });
+
+  test("an active v2 provider scope blocks the explicit pin before provider construction", async () => {
+    await writeTriggers([dispatchEntry()]);
+    const provider = scripted([]);
+    let built = false;
+
+    await run(provider, {
+      loadActiveRoutingV2: () => activeRoutingConfig("allowlist"),
+      routingCredentialsAvailable: () => true,
+      makeProvider: () => {
+        built = true;
+        return provider;
+      },
+    });
+
+    const record = await lastRecord();
+    expect(built).toBe(false);
+    expect(provider.calls()).toBe(0);
+    expect(record.outcome).toBe("dispatch-refused");
+    expect(record.dispatch?.refusal).toBe("routing-blocked");
+    expect(record.detail).toContain("provider-scope-conflict");
+  });
 });

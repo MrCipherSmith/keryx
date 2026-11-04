@@ -87,7 +87,9 @@ test("flow411: captured turn signal cancels classification and gates executor di
   expect(end).toBeGreaterThan(start);
   const body = SOURCE.slice(start, end);
   expect(body).toContain("signal: turnSignal,");
-  expect(body).toContain("if (!turnSignal.aborted && routingOutcome?.routed !== undefined)");
+  expect(body).toContain("routingOutcome?.blockTurn === true");
+  expect(body).toContain("foregroundOperation.settle(operation)");
+  expect(body).toContain("else if (!turnSignal.aborted && routingOutcome?.routed !== undefined)");
   expect(body).toContain("turnSignal.aborted ? Promise.resolve() : runAgentTurn(");
   // Headless source audit only: the behavioral chain is exercised separately.
 });

@@ -7,7 +7,7 @@ import type { ShadowGitRequest } from "../rewind/shadow";
 import type { BackgroundProcessHandle } from "../harness/tool/builtin/background-job-registry";
 import { randomUUID } from "node:crypto";
 import { buildAgentSystemInstruction, runAgentTurn, toolCallHash, type AgentDeps, type AgentIO, type RunAgentTurnOptions, type RunAgentTurnResult } from "../commands/agent";
-import type { NativeClassifierContext, NativeRoutingClassifier } from "./native-classifier";
+import { NativeClassifierError, type NativeClassifierContext, type NativeRoutingClassifier } from "./native-classifier";
 import { applyRuntimeSwitchToSlate } from "./runtime-switch";
 import { runGoalCommand } from "../commands/goal-command";
 import { goalCommands } from "./commands/goal";
@@ -294,7 +294,10 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
         return binding === undefined ? { ...candidate, available: false, reason: "local-policy" } : { ...candidate, providerId: binding.providerId, modelId: binding.modelId }; });
       const serviceCandidate = this.analysisCandidate();
       if (serviceCandidate !== undefined) { const index = availability.candidates.findIndex((candidate) => candidate.candidateId === serviceCandidate.candidateId); if (index < 0) availability.candidates.push(serviceCandidate); else availability.candidates[index] = serviceCandidate; }
-      return createSessionRouting({ config, availability, ...(options.nativeClassifier !== undefined ? { classify: (text: string, value: Control["SessionConfig"]) => context === undefined ? Promise.resolve(undefined) : options.nativeClassifier!(text, value, context).catch((cause: unknown) => { context.onRefusal?.(cause instanceof Error && "code" in cause && typeof cause.code === "string" ? cause.code : "native-classifier-refused"); throw cause; }) } : options.classify === undefined ? {} : { classify: options.classify }) });
+      return createSessionRouting({ config, availability, ...(options.nativeClassifier !== undefined ? {
+        classify: (text: string, value: Control["SessionConfig"]) => context === undefined ? Promise.resolve(undefined) : options.nativeClassifier!(text, value, context).catch((cause: unknown) => { context.onRefusal?.(cause instanceof Error && "code" in cause && typeof cause.code === "string" ? cause.code : "native-classifier-refused"); throw cause; }),
+        fatalClassificationError: (cause: unknown) => cause instanceof NativeClassifierError && cause.fatal,
+      } : options.classify === undefined ? {} : { classify: options.classify }) });
     },
     async run(io: AgentIO, history: NormalizedMessage[], text: string, snapshot: Control["ConfigSnapshot"], turnOptions: RunAgentTurnOptions & { nativeGoal?: { text: string; workspaceId?: string; autoRounds?: number; canonicalFlowId?: string } }): Promise<NativeRuntimeTurnResult> {
       let modelActions = 0; let toolActions = 0;

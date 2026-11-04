@@ -19,6 +19,7 @@ import { appendTriggerRunRecord, openReservations, readTriggerRuns, type Trigger
 import { addConfirmedSchedule, readScheduleStore } from "../trigger/store";
 import { buildGrantedArgv, grantedToolSpec } from "../trigger/granted-tools";
 import { writeFileAtomic } from "../lib/fs";
+import { normalizeRoutingV2Config, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
 
 // Flow 295 (F1): confirming a schedule creates the per-machine signing key in keryx's
 // user-global directory. Point HOME and XDG_DATA_HOME at a throwaway directory so no
@@ -88,6 +89,23 @@ function finalText(text: string): Round {
 
 const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
 const ROUND_USD = (1000 * 3 + 200 * 15) / 1_000_000;
+
+function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connected"): NormalizedRoutingV2Config {
+  return normalizeRoutingV2Config({
+    project: {
+      schemaVersion: 2,
+      categories: { unattended: { mode: "class", modelClass: "frontier" } },
+      classes: {
+        frontier: {
+          candidates: [{ target: { providerId: "other", modelId: "frontier" }, enabled: true, priority: 100 }],
+          selection: "priority",
+          fallbackClasses: [],
+        },
+      },
+      providers: { scope, allowlist: scope === "allowlist" ? ["other"] : [], preferSessionProvider: false },
+    },
+  });
+}
 
 /** A sandbox whose "wrap" runs nothing — for tests whose subject is the floor, not containment. */
 const INERT_SANDBOX: UnattendedSandboxPlan = { ok: true, launcher: "none", args: [], env: { PATH: "/usr/bin:/bin" }, wrap: () => ["/bin/true"] };
@@ -552,5 +570,47 @@ describe("R700-01: an untrusted project hook is reported headless, on stderr", (
       if (savedHooks === undefined) delete process.env["KERYX_HOOKS"];
       else process.env["KERYX_HOOKS"] = savedHooks;
     }
+  });
+});
+
+describe("routing v2: scheduled agent task", () => {
+  test("an active v2 category cannot replace the schedule's explicit provider/model pin", async () => {
+    await addConfirmedSchedule(root, entry());
+    const provider = scripted([finalText("done")]);
+    let selected: { provider: string; model: string } | undefined;
+
+    await run(provider, "check-github", {
+      loadActiveRoutingV2: () => activeRoutingConfig(),
+      routingCredentialsAvailable: () => true,
+      makeProvider: (dispatch: { provider: string; model: string }) => {
+        selected = dispatch;
+        return provider;
+      },
+    });
+
+    expect(selected).toMatchObject({ provider: "scripted", model: "m" });
+    expect(provider.calls()).toBe(1);
+  });
+
+  test("an active v2 provider scope blocks the explicit pin before provider construction", async () => {
+    await addConfirmedSchedule(root, entry());
+    const provider = scripted([]);
+    let built = false;
+
+    await run(provider, "check-github", {
+      loadActiveRoutingV2: () => activeRoutingConfig("allowlist"),
+      routingCredentialsAvailable: () => true,
+      makeProvider: () => {
+        built = true;
+        return provider;
+      },
+    });
+
+    const record = await lastRecord();
+    expect(built).toBe(false);
+    expect(provider.calls()).toBe(0);
+    expect(record.outcome).toBe("dispatch-refused");
+    expect(record.agentTask?.refusal).toBe("routing-blocked");
+    expect(record.detail).toContain("provider-scope-conflict");
   });
 });

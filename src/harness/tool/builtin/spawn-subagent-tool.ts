@@ -66,13 +66,19 @@ import {
   type TierRankAgent,
   type TierRankCache,
 } from "../../../gdskills/model-tier";
-import type { ChildModelRequest } from "../../child/model";
+import { providerClass, resolveChildModel, type ChildModelRequest } from "../../child/model";
 import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
 import { loadRoutingConfig } from "../../routing/config";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../../routing/table";
 import { canonicalExternalAgentId } from "../../external/registry";
 import { resolveExternalSetting } from "../../../lib/external-switch";
 import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../../../lib/external-providers";
+import { loadActiveRoutingV2 } from "../../routing/active-v2";
+import { MODEL_CLASSES, isModelClass } from "../../routing/model-class";
+import { loadModelProfiles } from "../../routing/model-profile";
+import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../../routing/routing-runtime";
+import { buildCatalogRoutingSnapshot } from "../../routing/snapshot-adapter";
+import type { RoutingRequest } from "../../routing/routing-request";
 
 export type SubagentMode = "read_only" | "general";
 
@@ -662,6 +668,8 @@ export interface SpawnSubagentToolDeps {
    * `resolveSubagentCwd`), which defaults to this value when omitted.
    */
   cwd: string;
+  /** Optional user-config directory override for isolated routing tests. */
+  routingConfigDir?: string;
   /** Parent provider/model (inherited by child unless MAE resolves otherwise). */
   getParentModel: () => { providerId: string; modelId: string; baseUrl?: string };
   /** Build a ProviderPort for a resolved provider/model. */
@@ -1088,8 +1096,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "lack shell/test execution and nested spawn; summaries are capped at 16000 chars. " +
         "Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
-        "trivial questions (answer yourself). Optionally accepts a 'model_tier' " +
-        "(light|standard|deep) to size the child's model against your own, and a 'runtime' " +
+        "trivial questions (answer yourself). Legacy routing optionally accepts a 'model_tier' " +
+        "(light|standard|deep); active routing v2 instead accepts a 'model_class' recommendation " +
+        "(light|standard|expert|frontier), below the configured subagents category. A 'runtime' " +
         "block to delegate the child to an external vendor coding CLI instead of running it " +
         "in-process. Optional 'cwd' runs the child's tools against a different directory than " +
         "yours (e.g. a review worktree checked out at a PR head) — accepted only when it is your " +
@@ -1192,6 +1201,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
               "'standard' for ordinary work (same as omitting it), 'deep' for genuinely hard " +
               "reasoning. Resolved against the models this session's provider actually reports; " +
               "when they cannot be ranked the child keeps your model.",
+          },
+          model_class: {
+            type: "string",
+            enum: [...MODEL_CLASSES],
+            description:
+              "Routing v2 only: recommend an absolute model class for this task. The configured " +
+              "subagents category keeps precedence; this is never treated as a user override.",
           },
           /**
            * Flow 176 — the external runtime request
@@ -1449,21 +1465,111 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         name: p.name,
         models: p.models ?? [],
       }));
-      // The model's requested tier, or `undefined` for "inherit the parent",
-      // which is what every dispatch authored before this field means. A value
-      // `parseModelTier` cannot read (including a model NAME, which is the point)
-      // is `undefined` too: an unreadable tier inherits rather than guessing.
-      const requestedTier = parseModelTier(typeof input.model_tier === "string" ? input.model_tier : undefined);
-      // Flow 305 (AC6/AC7): when the dispatcher named no explicit model (no
-      // `model_tier`), resolve the `subagents` category from the routing
-      // table and construct an explicit `ChildModelRequest` from it, BEFORE
-      // `resolveChildModel`'s G1/G2/G3 gates ever see it — those gates are
-      // applied to this request exactly as to any other (model.ts is not
-      // touched by this flow). A dispatcher-supplied `model_tier` short-
-      // circuits this branch entirely, so the category is never even looked
-      // up when the dispatcher named its own tier (AC7).
+      const activeRoutingV2 = loadActiveRoutingV2(deps.cwd, deps.routingConfigDir);
+      if (input.model_class !== undefined && !isModelClass(input.model_class)) {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
+        return { status: "Error", output: "spawn_subagent model_class must be light, standard, expert, or frontier", isError: true };
+      }
+      if (activeRoutingV2 === undefined && input.model_class !== undefined) {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-legacy", task });
+        return { status: "Error", output: "spawn_subagent model_class requires active routing v2", isError: true };
+      }
+      if (activeRoutingV2 !== undefined && input.model_tier !== undefined) {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-v2", task });
+        return {
+          status: "Error",
+          output: "spawn_subagent model_tier is legacy-only while routing v2 is active; use model_class",
+          isError: true,
+        };
+      }
+      if (activeRoutingV2 !== undefined && isExternalRuntimeRequest && input.model_class !== undefined) {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-unmanaged", task });
+        return {
+          status: "Error",
+          output: "spawn_subagent model_class is unavailable for external runtimes, whose model routing is unmanaged",
+          isError: true,
+        };
+      }
+
+      // v2 and legacy are separate engines. The relative legacy tier is never
+      // translated into an absolute v2 class; an agent class is a recommendation
+      // only and cannot populate RoutingRequest.userOverride.
+      const requestedTier = activeRoutingV2 === undefined
+        ? parseModelTier(typeof input.model_tier === "string" ? input.model_tier : undefined)
+        : undefined;
       let categoryModelRequest: ChildModelRequest | undefined;
-      if (requestedTier === undefined) {
+      let routingV2Receipt: RoutingDecisionReceipt | undefined;
+      if (activeRoutingV2 !== undefined && !isExternalRuntimeRequest) {
+        const external = await resolveExternalSetting({ cwd: deps.cwd });
+        const { config: externalConfig } = loadExternalProvidersConfig();
+        const parentConnected = connectedPredicateFrom(catalog, session);
+        const policyConnected = externalAllowedConnectedPredicate(parentConnected, external.value === "on", externalConfig);
+        const allowedProviders = new Set((detected.length > 0 ? detected : [{ name: parent.providerId }]).map((entry) => entry.name));
+        const childAuthorized = (providerId: string, modelId: string): boolean => resolveChildModel(
+          session,
+          { kind: "explicit", providerId, modelId },
+          { allowedProviders, policy: childReadOnlyPolicy(), providerClass },
+        ).ok;
+        const request: RoutingRequest = {
+          requestId: `subagent:${workerId}:${randomUUID()}`,
+          category: "subagents",
+          origin: "subagent",
+          baseline: session,
+          requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
+          ...(isModelClass(input.model_class)
+            ? { recommendation: { modelClass: input.model_class, source: "agent" } }
+            : {}),
+        };
+        const snapshot = buildCatalogRoutingSnapshot({
+          configDigest: activeRoutingV2.configDigest,
+          baseline: session,
+          providers: catalog,
+          profiles: loadModelProfiles(deps.routingConfigDir),
+          request,
+          policy: {
+            credentialsAvailable: (target) => parentConnected(target.providerId, target.modelId),
+            policyAllowed: (target) => policyConnected(target.providerId, target.modelId)
+              && childAuthorized(target.providerId, target.modelId),
+            parentAllowed: (target) => parentConnected(target.providerId, target.modelId),
+            availability: (target) => parentConnected(target.providerId, target.modelId) ? "available" : undefined,
+            capabilities: () => [],
+            cooldown: () => false,
+            observedLatencyMs: () => null,
+          },
+        });
+        routingV2Receipt = resolveRoutingForRuntime({ request, snapshot, config: activeRoutingV2 });
+        const decision = routingV2Receipt.decision;
+        if (decision.status !== "selected") {
+          const reason = decision.status === "blocked" ? decision.reason : decision.status;
+          emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: `routing-${reason}`, task });
+          emitFleetEvent({
+            kind: "log",
+            id: workerId,
+            entry: { kind: "system", text: `routing v2 ${decision.decisionId}: ${decision.status} (${reason})` },
+          });
+          return {
+            status: "Denied",
+            output: `spawn_subagent denied by routing v2: ${reason} (decision ${decision.decisionId})`,
+            isError: true,
+          };
+        }
+        categoryModelRequest = {
+          kind: "explicit",
+          providerId: decision.selection.providerId,
+          modelId: decision.selection.modelId,
+        };
+        emitFleetEvent({
+          kind: "log",
+          id: workerId,
+          entry: {
+            kind: "system",
+            text: `routing v2 ${decision.decisionId}: ${decision.assignmentSource}/${decision.recommendationSource} -> ${decision.selection.providerId}/${decision.selection.modelId}`,
+          },
+        });
+      } else if (activeRoutingV2 === undefined && requestedTier === undefined) {
+        // Legacy Flow 305: when the dispatcher named no explicit model tier,
+        // resolve the legacy `subagents` category before the unchanged child
+        // G1/G2/G3 authorization gates.
         // `{cwd: deps.cwd}` — the project layer's `routing.config.json` lives at
         // the project root; the user layer ignores `cwd` entirely and reads the
         // operator's real global config (no `userConfigDir` override here, same

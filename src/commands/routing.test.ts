@@ -402,3 +402,32 @@ test("keryx routing stats --json: valid JSON, one row per (provider, model, cate
   expect(parsed.stats).toHaveLength(1);
   expect(parsed.stats[0]).toMatchObject({ providerId: "anthropic", modelId: "claude-x", category: "subagents", n: 1, medianCostUsd: 0.01 });
 });
+
+test("routing CLI previews a confirmed v2 migration and restores legacy on rollback", async () => {
+  const baseline = { providerId: "anthropic", modelId: "claude-x" };
+  const d = await deps({ session: () => baseline });
+  const proposed = path.join(d.cwd, "proposed.json");
+  await writeFile(proposed, JSON.stringify({
+    user: {
+      schemaVersion: 2,
+      categories: { review: { mode: "class", modelClass: "expert" } },
+      classes: { expert: { candidates: [], selection: "priority", fallbackClasses: [] } },
+    },
+  }));
+  const dryRun = await capture(() => routingCommand(["migrate", "--dry-run", proposed], d));
+  const plan = path.join(d.cwd, "migration.json");
+  await writeFile(plan, dryRun.stdout.join(""));
+  const before = await capture(() => routingCommand(["list", "--json"], d));
+  expect(JSON.parse(before.stdout.join("")).engineVersion).toBeUndefined();
+  await capture(() => routingCommand(["migrate", "--apply", plan, "--confirm"], d));
+  const active = await capture(() => routingCommand(["list", "--json"], d));
+  expect(JSON.parse(active.stdout.join(""))).toMatchObject({
+    engineVersion: 2,
+    decisions: expect.arrayContaining([
+      expect.objectContaining({ category: "review", decision: expect.objectContaining({ status: "blocked", reason: "empty-class" }) }),
+    ]),
+  });
+  await capture(() => routingCommand(["migrate", "--rollback", plan, "--confirm"], d));
+  const rolledBack = await capture(() => routingCommand(["list", "--json"], d));
+  expect(JSON.parse(rolledBack.stdout.join("")).engineVersion).toBeUndefined();
+}, 30_000);

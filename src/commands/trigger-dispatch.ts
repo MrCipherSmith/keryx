@@ -77,6 +77,13 @@ import type {
 import { NETWORK_ON_WARNING } from "../trigger/describe";
 import { reserveTriggerSpend } from "../trigger/run";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
+import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import { routingV2Digest, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import type { RoutingDecision } from "../harness/routing/decision";
+import { sameModelRef } from "../harness/routing/model-class";
+import { resolveRoutingDecision } from "../harness/routing/resolver";
+import type { RoutingRequest } from "../harness/routing/routing-request";
+import type { RoutingSnapshot } from "../harness/routing/snapshot";
 
 const execFileAsync = promisify(execFile);
 
@@ -96,7 +103,14 @@ export interface HealthGateResult {
 }
 
 /** Injectable seams. Production passes only `service`; tests replace the model, the gate and the clock. */
-export interface DispatchDeps {
+export interface UnattendedRoutingV2Deps {
+  /** Test seam; production reads the shared activation marker and v2 layers. */
+  readonly loadActiveRoutingV2?: (cwd: string) => NormalizedRoutingV2Config | undefined;
+  /** Test seam for the credential fact frozen into the v2 snapshot. */
+  readonly routingCredentialsAvailable?: (dispatch: Pick<TriggerDispatch, "provider" | "model" | "baseUrl">) => boolean;
+}
+
+export interface DispatchDeps extends UnattendedRoutingV2Deps {
   readonly service: FlowService;
   /** Build the provider for the entry. Default: `makeProvider` with saved API keys; a missing credential or unknown usage reporting is refused. */
   readonly makeProvider?: (dispatch: TriggerDispatch) => ProviderPort | { readonly error: string; readonly code?: DispatchRefusalCode };
@@ -235,6 +249,64 @@ export function providerHasUsableCredential(
   });
   const reason = credentialProblem(dispatch.provider, provider);
   return reason === undefined ? { ok: true } : { ok: false, reason };
+}
+
+/**
+ * Resolve an internal unattended dispatch through the active v2 engine.
+ *
+ * Trigger and schedule files already contain an operator-confirmed concrete
+ * provider/model. That pair is therefore a request-scoped `mode:model`
+ * override: v2 may reject it through the common gates, but may not silently
+ * replace it with the category's class recommendation. External CLI agents do
+ * not use either unattended dispatcher and remain unmanaged by this adapter.
+ */
+export function resolveUnattendedRoutingV2(
+  projectRoot: string,
+  dispatch: TriggerDispatch,
+  requestId: string,
+  deps: UnattendedRoutingV2Deps = {},
+): RoutingDecision | undefined {
+  const config = (deps.loadActiveRoutingV2 ?? loadActiveRoutingV2)(projectRoot);
+  if (config === undefined) return undefined;
+
+  const baseline = { providerId: dispatch.provider, modelId: dispatch.model };
+  const request: RoutingRequest = {
+    requestId,
+    category: "unattended",
+    origin: "unattended",
+    baseline,
+    requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
+    userOverride: { mode: "model", target: baseline },
+  };
+  const credentialsAvailable = deps.routingCredentialsAvailable?.(dispatch) ?? providerHasUsableCredential(dispatch).ok;
+  const snapshotBody: Omit<RoutingSnapshot, "snapshotDigest"> = {
+    configDigest: config.configDigest,
+    baseline,
+    models: [{
+      target: baseline,
+      connected: true,
+      credentialsAvailable,
+      policyAllowed: true,
+      parentAllowed: true,
+      availability: "available",
+      capabilities: [],
+      contextLength: null,
+      cooldown: false,
+      estimatedCostUsd: null,
+      observedLatencyMs: null,
+    }],
+  };
+  const snapshot: RoutingSnapshot = { ...snapshotBody, snapshotDigest: routingV2Digest(snapshotBody) };
+  const decision = resolveRoutingDecision(request, snapshot, config);
+  if (decision.status === "selected" && !sameModelRef(decision.selection, baseline)) {
+    throw new Error("routing v2 changed an explicit unattended provider/model pin");
+  }
+  return decision;
+}
+
+function routingDecisionFailure(decision: Exclude<RoutingDecision, { readonly status: "selected" }>): string {
+  const reason = decision.status === "blocked" ? decision.reason : decision.status;
+  return `routing v2 refused the explicit unattended provider/model pin: ${reason} (decision ${decision.decisionId})`;
 }
 
 /** Default provider construction: fails closed on a missing credential and on unknown usage reporting. */
@@ -631,6 +703,11 @@ async function dispatchLocked(
       `task ${task.id} already has ${attemptsSoFar} attempt(s), at the cap of ${dispatch.maxAttempts} (dispatch.maxAttempts) — not dispatching it again unattended.`,
       task,
     );
+  }
+
+  const routingDecision = resolveUnattendedRoutingV2(projectRoot, dispatch, `unattended:${runId}:flow-next`, deps);
+  if (routingDecision !== undefined && routingDecision.status !== "selected") {
+    return refusal(runId, flow, "routing-blocked", routingDecisionFailure(routingDecision), task);
   }
 
   // Flow 457 (security review B1): a review task takes the same path as every other task below: containment,

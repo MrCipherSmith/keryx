@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createNativeRoutingClassifier } from "./native-classifier";
 import { scriptedProvider } from "../commands/agent.test-helpers";
 import { saveRoutingConfig } from "../harness/routing/config";
+import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../harness/routing/migration-v2";
+import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
 import type { Control } from "../remote-control/protocol";
 const digest = "a".repeat(64);
 const standard = "claude-sonnet-5"; const deep = "claude-opus-4-8";
@@ -13,6 +15,15 @@ const availability: Control["RoutingAvailability"] = { version: 1, policyDigest:
 const config: Control["SessionConfig"] = { configVersion: 1, baselineCandidateId: standard, reasoningEffort: "none", policyDigest: digest, capabilityDigest: digest,
   routing: { enabled: true, profileId: "local", candidateIds: [standard, deep], fallbackCandidateId: standard } };
 const bindings = () => [standard, deep].map((modelId) => ({ providerId: "anthropic", modelId, actualProviderId: "anthropic", actualModelId: modelId }));
+
+async function activateV2(cwd: string) {
+  const project = { schemaVersion: 2 as const,
+    categories: { review: { mode: "class" as const, modelClass: "expert" as const } },
+    classes: { expert: { selection: "priority" as const, fallbackClasses: [], candidates: [{ target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 }] } } };
+  const plan = await createRoutingV2MigrationPlan({ cwd, configDir: cwd, project });
+  await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir: cwd });
+  return plan;
+}
 
 test("production classifier composition uses the actual shared service with owned provider selection and reported usage", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-")); const script = scriptedProvider([[{ kind: "text_delta", text: "coding" }, { kind: "usage_update", usage: { inputTokens: 7, outputTokens: 1 } }, { kind: "model_end" }]]);
@@ -23,6 +34,36 @@ test("production classifier composition uses the actual shared service with owne
     expect(await classifier("Help me handle this situation carefully", config, { signal: new AbortController().signal, beforeIo: async (provider) => { effects.push(provider.candidateId); }, onUsage: (_provider, value) => usage.push(value) })).toBe(deep);
     expect(script.requests).toHaveLength(1); expect(effects).toEqual([standard]); expect(usage).toEqual([{ inputTokens: 7, outputTokens: 1 }]);
     expect(script.requests[0]?.budget.maxOutputTokens).toBe(16);
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("active v2 uses the shared resolver and returns its canonical selection receipt", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-"));
+  const script = scriptedProvider([[{ kind: "text_delta", text: "review" }, { kind: "model_end" }]]);
+  try {
+    await activateV2(cwd);
+    expect(loadActiveRoutingV2(cwd, cwd)?.categories.review).toEqual({ mode: "class", modelClass: "expert" });
+    const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: { ANTHROPIC_API_KEY: "fixture" }, availability: () => availability, bindings,
+      providerFactory: () => script.provider });
+    const result = await classifier("Review PR", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} });
+    expect(result).toEqual({ candidateId: deep, selectionReceiptId: expect.any(String) });
+    expect((result as { selectionReceiptId: string }).selectionReceiptId).toHaveLength(64);
+    expect(script.requests).toHaveLength(0);
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("an inconsistent active v2 snapshot fails before classifier I/O and is marked fatal", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-invalid-"));
+  const script = scriptedProvider([[{ kind: "text_delta", text: "coding" }, { kind: "model_end" }]]);
+  try {
+    const plan = await activateV2(cwd);
+    const raw = JSON.parse(await readFile(plan.locations.projectFile, "utf8")) as Record<string, unknown>;
+    await writeFile(plan.locations.projectFile, `${JSON.stringify({ ...raw, modelRouting: { schemaVersion: 2, categories: { review: { mode: "not-valid" } } } })}\n`);
+    const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: { ANTHROPIC_API_KEY: "fixture" }, availability: () => availability, bindings,
+      providerFactory: () => script.provider });
+    const failure = classifier("Review PR", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} });
+    await expect(failure).rejects.toMatchObject({ code: "routing-v2-config-invalid", fatal: true });
+    expect(script.requests).toHaveLength(0);
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
 
@@ -37,7 +78,7 @@ test("shared classifier catch-all cannot turn authority refusal into a baseline 
 test("a cooperative real provider timeout falls back only after its classifier stream actually stops", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-timeout-")); let started = 0; let stopped = 0;
   const base = scriptedProvider([]).provider;
-  try { const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: {}, timeoutMs: 20, availability: () => availability, bindings,
+  try { const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: {}, timeoutMs: 2500, availability: () => availability, bindings,
     providerFactory: () => ({ ...base, stream: (_request, options) => (async function* () { started++; try { await new Promise<void>((resolve) => { options.signal?.addEventListener("abort", () => resolve(), { once: true }); if (options.signal?.aborted) resolve(); }); } finally { stopped++; } })() }) });
     expect(await classifier("Help me handle this situation carefully", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} })).toBeUndefined();
     expect(started).toBe(1); expect(stopped).toBe(1);
@@ -47,7 +88,7 @@ test("a cooperative real provider timeout falls back only after its classifier s
 test("a classifier stream that cannot prove termination refuses admission instead of falling back", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-unknown-")); let release!: () => void; const held = new Promise<void>((resolve) => { release = resolve; });
   const base = scriptedProvider([]).provider;
-  try { const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: {}, timeoutMs: 10, availability: () => availability, bindings,
+  try { const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: {}, timeoutMs: 2500, availability: () => availability, bindings,
     providerFactory: () => ({ ...base, stream: () => (async function* () { await held; })() }) });
     await expect(classifier("Help me handle this situation carefully", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} })).rejects.toThrow("classifier-stop-unconfirmed");
   } finally { release(); await rm(cwd, { recursive: true, force: true }); }

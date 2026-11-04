@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
@@ -139,6 +140,12 @@ import {
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import { loadRoutingConfig } from "../harness/routing/config";
+import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { loadModelProfiles } from "../harness/routing/model-profile";
+import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
+import { buildCatalogRoutingSnapshot } from "../harness/routing/snapshot-adapter";
+import type { RoutingRequest } from "../harness/routing/routing-request";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
 import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
 import { resolveExternalSetting } from "../lib/external-switch";
@@ -1559,13 +1566,73 @@ interface ReviewRoutingResult {
   readonly routed: boolean;
   /** Human-readable lines to surface alongside the tier output — never silent. */
   readonly notices: readonly string[];
+  /** Present only when the explicitly activated v2 engine made this selection. */
+  readonly routingV2?: RoutingDecisionReceipt;
+}
+
+async function resolveReviewRoutingV2(
+  cwd: string,
+  catalog: readonly DiscoveredProvider[],
+  session: SessionModelContext,
+  activeRoutingV2: NormalizedRoutingV2Config | undefined = loadActiveRoutingV2(cwd),
+): Promise<RoutingDecisionReceipt | undefined> {
+  if (activeRoutingV2 === undefined) return undefined;
+  const external = await resolveExternalSetting({ cwd });
+  const { config: externalConfig } = loadExternalProvidersConfig();
+  const baseline = { providerId: session.providerId, modelId: session.modelId };
+  const parentConnected = connectedPredicateFrom(catalog, baseline);
+  const policyConnected = externalAllowedConnectedPredicate(parentConnected, external.value === "on", externalConfig);
+  const request: RoutingRequest = {
+    requestId: `review:${randomUUID()}`,
+    category: "review",
+    origin: "review",
+    baseline,
+    requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
+  };
+  const snapshot = buildCatalogRoutingSnapshot({
+    configDigest: activeRoutingV2.configDigest,
+    baseline,
+    providers: catalog,
+    profiles: loadModelProfiles(),
+    request,
+    policy: {
+      credentialsAvailable: (target) => parentConnected(target.providerId, target.modelId),
+      policyAllowed: (target) => policyConnected(target.providerId, target.modelId),
+      parentAllowed: (target) => parentConnected(target.providerId, target.modelId),
+      availability: (target) => parentConnected(target.providerId, target.modelId) ? "available" : undefined,
+      capabilities: () => [],
+      cooldown: () => false,
+      observedLatencyMs: () => null,
+    },
+  });
+  return resolveRoutingForRuntime({ request, snapshot, config: activeRoutingV2 });
 }
 
 async function applyReviewRoutingCategory(
   decision: DispatchModelDecision,
   cwd: string,
   catalog: readonly DiscoveredProvider[],
+  session: SessionModelContext,
+  activeRoutingV2: NormalizedRoutingV2Config | undefined,
 ): Promise<ReviewRoutingResult> {
+  const receipt = await resolveReviewRoutingV2(cwd, catalog, session, activeRoutingV2);
+  if (receipt !== undefined) {
+    if (receipt.decision.status !== "selected") {
+      const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
+      throw new Error(`routing v2 refused review selection: ${reason} (decision ${receipt.decision.decisionId})`);
+    }
+    return {
+      decision: {
+        ...decision,
+        provider: receipt.decision.selection.providerId,
+        model: receipt.decision.selection.modelId,
+      },
+      routed: true,
+      notices: [],
+      routingV2: receipt,
+    };
+  }
+
   const location = { cwd };
   const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
   const notices: string[] = [];
@@ -1635,10 +1702,19 @@ async function runTier(args: string[]): Promise<void> {
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
-  const { decision, routed, notices } = await applyReviewRoutingCategory(
-    await decideTierWithFallback(session, signals, catalog),
+  const activeRoutingV2 = loadActiveRoutingV2(process.cwd());
+  // The legacy tier remains a compatibility/reporting field under v2, but it
+  // must not rank candidates or call the legacy ranking agent. Only the v2
+  // receipt below may select the dispatch provider/model.
+  const tierDecision = activeRoutingV2 === undefined
+    ? await decideTierWithFallback(session, signals, catalog)
+    : decideDispatchModel(session, signals, []);
+  const { decision, routed, notices, routingV2 } = await applyReviewRoutingCategory(
+    tierDecision,
     process.cwd(),
     catalog,
+    session,
+    activeRoutingV2,
   );
   // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s
   // `pinsModel`-gated provider/model — that path exists for the TIER's own
@@ -1649,7 +1725,11 @@ async function runTier(args: string[]): Promise<void> {
     : dispatchModelBlock(decision);
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ model: block, ...(notices.length > 0 ? { notices } : {}) }, null, 2));
+    console.log(JSON.stringify({
+      model: block,
+      ...(routingV2 !== undefined ? { routing_v2: routingV2 } : {}),
+      ...(notices.length > 0 ? { notices } : {}),
+    }, null, 2));
     return;
   }
 
@@ -1669,7 +1749,13 @@ async function runTier(args: string[]): Promise<void> {
   if (routed) {
     console.log(`provider: ${decision.provider}`);
     console.log(`model: ${decision.model}`);
-    console.log(`routed: true (from the routing table's "review" category — not tier-discovered)`);
+    if (routingV2 !== undefined) {
+      console.log(`routed: true (routing v2 decision ${routingV2.decision.decisionId})`);
+      console.log(`routing_assignment: ${routingV2.decision.assignmentSource}`);
+      console.log(`routing_recommendation: ${routingV2.decision.recommendationSource}`);
+    } else {
+      console.log(`routed: true (from the routing table's "review" category — not tier-discovered)`);
+    }
   } else if (pinsModel(decision)) {
     console.log(`provider: ${decision.provider}`);
     console.log(`model: ${decision.model}`);
@@ -2603,6 +2689,20 @@ async function scoreConformClauses(
 
 /** AC7: the `review`-category model (the session model when unset), same resolution `applyReviewRoutingCategory` uses, without the live provider-catalog probe a text explanation does not need. */
 async function resolveConformExplainModel(cwd: string): Promise<{ provider?: string; model?: string }> {
+  if (loadActiveRoutingV2(cwd) !== undefined) {
+    const session = resolveCallerSession();
+    if (session.providerId === "" || session.modelId === "") {
+      throw new Error("routing v2 requires the caller session provider/model for review explanations");
+    }
+    const catalog = await tierCatalog([], session);
+    const receipt = await resolveReviewRoutingV2(cwd, catalog, session);
+    if (receipt === undefined) throw new Error("routing v2 activation changed while resolving review explanation");
+    if (receipt.decision.status !== "selected") {
+      const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
+      throw new Error(`routing v2 refused review explanation: ${reason} (decision ${receipt.decision.decisionId})`);
+    }
+    return { provider: receipt.decision.selection.providerId, model: receipt.decision.selection.modelId };
+  }
   const location = { cwd };
   const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
   const { assignment } = resolveCategoryDetailed("review", { project: project.table, user: user.table });

@@ -7,11 +7,16 @@ export interface NativeClassifierContext {
   onRefusal?(code: string): void;
   onUsage(provider: NativeClassifierProvider, usage: NormalizedUsage): void;
 }
-export type NativeRoutingClassifier = (text: string, config: Control["SessionConfig"], context: NativeClassifierContext) => Promise<string | undefined>;
+export interface NativeRoutingSelection { readonly candidateId?: string; readonly selectionReceiptId?: string }
+export type NativeRoutingClassifier = (text: string, config: Control["SessionConfig"], context: NativeClassifierContext) => Promise<string | NativeRoutingSelection | undefined>;
 
 import { runRoutingClassifierForTurn } from "../tui/routing-classifier-source";
 import type { ProviderPort } from "../harness/provider/types";
+import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import { routingV2Digest, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { classifyDeterministic } from "../harness/decision/deterministic-shortcuts";
 import type { NativeModelBinding } from "./model-identity";
+import { resolveNativeRoutingV2, type NativeRoutingV2Resolution } from "./native-routing-v2";
 export interface NativeRoutingClassifierOptions {
   cwd: string; configDir?: string; env: Readonly<Record<string, string | undefined>>;
   availability(config: Control["SessionConfig"]): Control["RoutingAvailability"];
@@ -21,16 +26,24 @@ export interface NativeRoutingClassifierOptions {
   /** One aggregate native service budget, including cleanup, never above the frozen original work window. */
   timeoutMs?: number;
 }
-export class NativeClassifierError extends Error { constructor(readonly code: string) { super(code); this.name = "NativeClassifierError"; } }
+export class NativeClassifierError extends Error {
+  constructor(readonly code: string, readonly fatal = false) { super(code); this.name = "NativeClassifierError"; }
+}
 /** Production composition of the shipped classifier. Only advertised native ProviderPorts are authorized;
  * a global service credential alone never imports a second service-only provider into a remote run. */
 export function createNativeRoutingClassifier(options: NativeRoutingClassifierOptions): NativeRoutingClassifier {
   return async (text, config, context) => {
     context.signal.throwIfAborted();
-    const available = options.availability(config).candidates.filter((candidate) => candidate.available && candidate.reason === "none"
+    let routingV2: NormalizedRoutingV2Config | undefined;
+    try { routingV2 = loadActiveRoutingV2(options.cwd, options.configDir); }
+    catch { throw new NativeClassifierError("routing-v2-config-invalid", true); }
+    const frozenAvailability = options.availability(config);
+    const frozenBindings = options.bindings();
+    const available = frozenAvailability.candidates.filter((candidate) => candidate.available && candidate.reason === "none"
+      && candidate.reasoningEfforts.includes(config.reasoningEffort)
       && [config.baselineCandidateId, ...config.routing.candidateIds].includes(candidate.candidateId));
     const choices = available.flatMap((candidate) => {
-      const binding = options.bindings().find((binding) => binding.providerId === candidate.providerId && binding.modelId === candidate.modelId);
+      const binding = frozenBindings.find((binding) => binding.providerId === candidate.providerId && binding.modelId === candidate.modelId);
       return binding === undefined || options.allowed?.(binding.actualProviderId, binding.actualModelId) === false ? [] : [{ candidate, binding }];
     });
     const actual = (providerId: string, modelId: string) => choices.find((choice) => choice.binding.actualProviderId === providerId && choice.binding.actualModelId === modelId);
@@ -75,6 +88,30 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
     if (authorityRefused) throw new NativeClassifierError("classifier-authority-refused");
     if (pending.size > 0) throw new NativeClassifierError("classifier-stop-unconfirmed");
     context.signal.throwIfAborted();
+    if (routingV2 !== undefined) {
+      const category = classifyDeterministic(text) ?? result?.category ?? "default";
+      let resolution: NativeRoutingV2Resolution;
+      try {
+        resolution = resolveNativeRoutingV2({
+          sessionConfig: config,
+          availability: frozenAvailability,
+          bindings: frozenBindings,
+          routingConfig: routingV2,
+          ...(options.allowed === undefined ? {} : { allowed: options.allowed }),
+          request: {
+            requestId: routingV2Digest({ origin: "native-session", category, text }),
+            category,
+            origin: "native-session",
+            requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 },
+          },
+        });
+      } catch { throw new NativeClassifierError("routing-v2-snapshot-invalid", true); }
+      if (resolution.decision.status === "selected" && resolution.candidateId !== undefined) {
+        return { candidateId: resolution.candidateId, selectionReceiptId: resolution.receiptId };
+      }
+      const reason = resolution.decision.status === "blocked" ? resolution.decision.reason : "config-invalid";
+      throw new NativeClassifierError(`routing-v2-${reason}`, true);
+    }
     return result?.routed === undefined ? undefined : actual(result.routed.providerId, result.routed.modelId)?.candidate.candidateId;
   };
 }

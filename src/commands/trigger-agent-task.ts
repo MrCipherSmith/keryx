@@ -86,6 +86,8 @@ import {
   guardUsage,
   keryxInvocation,
   NETWORK_ON_WARNING,
+  resolveUnattendedRoutingV2,
+  type UnattendedRoutingV2Deps,
 } from "./trigger-dispatch";
 
 /** What `./trigger.ts` records and prints for one agent-task run. */
@@ -98,7 +100,7 @@ export interface AgentTaskResult {
 }
 
 /** Injectable seams. Production passes none. */
-export interface AgentTaskDeps {
+export interface AgentTaskDeps extends UnattendedRoutingV2Deps {
   readonly makeProvider?: (dispatch: TriggerDispatch) => ProviderPort | { readonly error: string; readonly code?: DispatchRefusalCode };
   readonly planSandbox?: (input: UnattendedSandboxInput) => UnattendedSandboxPlan;
   readonly armTimeout?: (ms: number, fire: () => void) => () => void;
@@ -411,6 +413,16 @@ async function runLocked(
   if (changed !== undefined) return refusal(runId, changed.code, changed.reason, action);
   const binaries = await verifyGrantedBinaries(projectRoot, action, (deps.grantedEnv ?? process.env)["PATH"]);
   if (!binaries.ok) return refusal(runId, "grants-changed", `refusing to run: ${binaries.reason}`, action);
+  const routingDecision = resolveUnattendedRoutingV2(projectRoot, dispatch, `unattended:${runId}:agent-task`, deps);
+  if (routingDecision !== undefined && routingDecision.status !== "selected") {
+    const reason = routingDecision.status === "blocked" ? routingDecision.reason : routingDecision.status;
+    return refusal(
+      runId,
+      "routing-blocked",
+      `routing v2 refused the explicit unattended provider/model pin: ${reason} (decision ${routingDecision.decisionId})`,
+      action,
+    );
+  }
 
   // --- 3. containment -------------------------------------------------------
   // Every run's scratch lives under one 0700 parent, and that parent is hidden inside

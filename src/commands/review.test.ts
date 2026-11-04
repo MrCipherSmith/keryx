@@ -19,6 +19,8 @@ import type { StructuredReviewFinding } from "../review/types";
 import { readyResearchFixture } from "../review/research.test-helpers";
 import { loadRoutingConfigRaw } from "../harness/routing/config";
 import { approveProjectRouting } from "../harness/routing/trust";
+import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../harness/routing/migration-v2";
+import type { RoutingV2ConfigLayer } from "../harness/routing/config-v2";
 
 const ORIGINAL_CWD = process.cwd();
 const refusingAgent: TierRankAgent = async () => {
@@ -944,6 +946,11 @@ function modelBlock(): Record<string, unknown> {
   return (JSON.parse(logs.join("\n")) as { model: Record<string, unknown> }).model;
 }
 
+async function activateRoutingV2(user: RoutingV2ConfigLayer): Promise<void> {
+  const plan = await createRoutingV2MigrationPlan({ cwd: ROOT, user });
+  await applyRoutingV2Migration(plan, { confirmed: true, cwd: ROOT });
+}
+
 test("`review tier` floors a blast-radius round at deep and names the rule that did it", async () => {
   // A blast-radius round over a twelve-line diff is still a blast-radius round:
   // the floor is applied AFTER the small-scope downgrade.
@@ -983,6 +990,43 @@ test("`review tier --json` prints the model block a dispatch document carries", 
     "demo-medium",
     "demo-mini",
   ]);
+});
+
+test("routing v2 review category is the canonical selection, not the legacy relative tier", async () => {
+  await activateRoutingV2({
+    schemaVersion: 2,
+    categories: { review: { mode: "model", target: { providerId: "demo", modelId: "demo-large" } } },
+  });
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  expect(process.exitCode).toBe(0);
+  const parsed = JSON.parse(logs.join("\n")) as {
+    model: Record<string, unknown>;
+    routing_v2: { decision: { status: string; assignmentSource: string; selection: { providerId: string; modelId: string } } };
+  };
+  expect(parsed.model).toMatchObject({
+    provider: "demo",
+    model: "demo-large",
+    routed: true,
+    model_discovery: { candidates: [] },
+  });
+  expect(parsed.routing_v2.decision).toMatchObject({
+    status: "selected",
+    assignmentSource: "user",
+    selection: { providerId: "demo", modelId: "demo-large" },
+  });
+});
+
+test("routing v2 review refuses an unauthorized catalog target without falling back to the legacy tier", async () => {
+  await activateRoutingV2({
+    schemaVersion: 2,
+    categories: { review: { mode: "model", target: { providerId: "other", modelId: "unlisted" } } },
+  });
+  await tier("--findings", "2", "--diff-lines", "20", "--json");
+
+  expect(process.exitCode).toBe(1);
+  expect(logs).toEqual([]);
+  expect(errors.join("\n")).toContain("routing v2 refused review selection: candidate-unverified");
 });
 
 test("`review tier` never runs a security finding below standard, even when verified by execution", async () => {

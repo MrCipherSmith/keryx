@@ -36,6 +36,14 @@ import { resolveJevClassifierCredential } from "../harness/decision/jev-classifi
 import { resolveExternalSetting } from "../lib/external-switch";
 import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../lib/external-providers";
 import { availablePredicateFromProfiles, loadModelProfiles } from "../harness/routing/model-profile";
+import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import { runRoutingClassifierChain, type RoutingClassifierAdapter } from "../harness/routing/classifier-chain-v2";
+import { jevRoutingClassifierAdapter, mainModelRoutingClassifierAdapter } from "../harness/routing/classifier-adapters-v2";
+import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { buildCatalogRoutingSnapshot } from "../harness/routing/snapshot-adapter";
+import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
+import { applyRoutingClassificationResult } from "../harness/routing/routing-classification-runtime";
+import type { RoutingAssignmentV2 } from "../harness/routing/config-v2";
 
 /**
  * The interactive turn's candidate vocabulary: every catalogue category
@@ -82,6 +90,8 @@ export interface RoutingClassifierTurnResult {
   readonly fallbackReason?: string;
   /** `undefined` when the resolved assignment is `session-default` — nothing to route to, the session's own model applies unchanged. */
   readonly routed?: { readonly providerId: string; readonly modelId: string };
+  /** v2 resolver denial is terminal; callers must not silently run the baseline. */
+  readonly blockTurn?: boolean;
 }
 
 /**
@@ -124,12 +134,156 @@ async function loadTurnProviders(
   }
 }
 
+function legacyAssignment(assignment: RoutingAssignmentV2): CategoryAssignment {
+  if (assignment.mode === "model") return { kind: "model", providerId: assignment.target.providerId, modelId: assignment.target.modelId };
+  return { kind: "session-default" };
+}
+
+function v2ProviderAllowed(config: NormalizedRoutingV2Config, sessionProvider: string, providerId: string): boolean {
+  if (config.providers.scope === "all-connected") return true;
+  if (config.providers.scope === "session-only") return providerId === sessionProvider;
+  return config.providers.allowlist.includes(providerId);
+}
+
+async function runRoutingClassifierForTurnV2(
+  line: string,
+  opts: RoutingClassifierTurnOptions,
+  config: NormalizedRoutingV2Config,
+  providers: readonly FlatPickerProvider[],
+  profiles: ReturnType<typeof loadModelProfiles>,
+  env: Record<string, string | undefined>,
+  externalAllowed: (providerId: string, modelId?: string) => boolean,
+  fallbackModel: { readonly providerId: string; readonly modelId: string } | undefined,
+  deadline: number,
+): Promise<RoutingClassifierTurnResult | undefined> {
+  const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
+  if (config.execution.maxEstimatedCostUsd !== null) {
+    return {
+      classification: { result: { ok: false, reason: "shared routing budget enforcement unavailable" }, trace: [] },
+      category: "default",
+      baseline,
+      assignment: { kind: "session-default" },
+      fallbackReason: "finite routing budget cannot be enforced by the TUI execution boundary",
+      blockTurn: true,
+    };
+  }
+  const adapters: RoutingClassifierAdapter<string>[] = config.classifier.chain.map((entry) => {
+    if (entry.adapterId.toLowerCase() === "jev") {
+      const target = entry.target ?? { providerId: "openrouter", modelId: "jev-1.13" };
+      const denied = !v2ProviderAllowed(config, opts.sessionProvider, target.providerId)
+        || !externalAllowed(target.providerId, target.modelId)
+        || !(opts.classifierAllowed?.(target.providerId, target.modelId) ?? true)
+        || !hasCredential(target.providerId, env);
+      if (opts.jevEnabled && opts.jevAllowed !== false && !denied) {
+        return jevRoutingClassifierAdapter(entry.adapterId, {
+          ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
+          env,
+          ...(opts.userConfigDir === undefined ? {} : { dir: opts.userConfigDir }),
+          timeoutMs: Math.max(1, deadline - performance.now()),
+        });
+      }
+    } else {
+      const target = entry.target ?? fallbackModel;
+      const denied = target !== undefined && (!v2ProviderAllowed(config, opts.sessionProvider, target.providerId)
+        || !externalAllowed(target.providerId, target.modelId)
+        || !(opts.classifierAllowed?.(target.providerId, target.modelId) ?? true)
+        || (opts.providerFactory === undefined && !hasCredential(target.providerId, env)));
+      if (target === undefined || denied) return { id: entry.adapterId, classify: async () => { throw new Error("classifier adapter is unavailable or denied"); } };
+      return mainModelRoutingClassifierAdapter(entry.adapterId, {
+        providerId: target.providerId,
+        modelId: target.modelId,
+        env,
+        ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
+        ...(opts.providerFactory === undefined ? {} : { providerFactory: opts.providerFactory }),
+      });
+    }
+    return { id: entry.adapterId, classify: async () => { throw new Error("classifier adapter is unavailable or denied"); } };
+  });
+  const classified = await runRoutingClassifierChain(line, {
+    adapters,
+    deadlineMs: Math.max(1, Math.ceil(deadline - performance.now())),
+    minConfidence: config.classifier.minConfidence,
+    onFailure: config.classifier.onFailure,
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  });
+  if (classified.status === "cancelled" || opts.signal?.aborted) return undefined;
+  const receiptId = classified.receiptId;
+  const applied = applyRoutingClassificationResult({
+    requestId: receiptId,
+    category: "default",
+    origin: "operator" as const,
+    baseline,
+    requirements: {
+      capabilities: [],
+      inputTokensRequired: Math.max(1, Math.ceil(line.length / 4)),
+      outputTokensReserved: 4_096,
+    },
+  }, classified);
+  if (applied.status === "cancelled") return undefined;
+  const request = applied.request;
+  const category = request.category;
+  const snapshot = buildCatalogRoutingSnapshot({
+    configDigest: config.configDigest,
+    baseline,
+    providers,
+    profiles,
+    request,
+    policy: {
+      credentialsAvailable: (target) => target.providerId === baseline.providerId || hasCredential(target.providerId, env),
+      policyAllowed: (target) => externalAllowed(target.providerId, target.modelId) && (opts.executorAllowed?.(target.providerId, target.modelId) ?? true),
+      parentAllowed: () => true,
+      capabilities: () => [],
+      cooldown: () => false,
+      observedLatencyMs: () => null,
+      availability: (target) => target.providerId === baseline.providerId && target.modelId === baseline.modelId ? "available" : undefined,
+    },
+  });
+  const decision = resolveRoutingForRuntime({ request, snapshot, config, ...(classified.status === "fallback" ? { fallbackReason: "classifier-failed" as const } : {}) }).decision;
+  const source = classified.status === "classified" && classified.adapterId.toLowerCase() === "jev" ? "jev" as const : "main-model" as const;
+  const classification: ClassifyTurnResult = classified.status === "classified"
+    ? { result: { ok: true, category, confidence: classified.classification.confidence, source }, trace: [] }
+    : { result: { ok: false, reason: "classifier-failed" }, trace: [] };
+  const fallbackReason = decision.status === "blocked" ? decision.reason
+    : decision.status === "needs-classification" ? "classification required"
+    : classified.status === "fallback" ? "classifier-failed" : undefined;
+  const assignment = decision.status === "selected"
+    ? decision.selection.providerId === baseline.providerId && decision.selection.modelId === baseline.modelId
+      ? { kind: "session-default" as const }
+      : { kind: "model" as const, providerId: decision.selection.providerId, modelId: decision.selection.modelId }
+    : legacyAssignment(config.categories[category]);
+  const result: RoutingClassifierTurnResult = {
+    classification,
+    category,
+    baseline,
+    assignment,
+    ...(fallbackReason === undefined ? {} : { fallbackReason }),
+    ...(decision.status === "blocked" || decision.status === "needs-classification" ? { blockTurn: true } : {}),
+  };
+  return decision.status === "selected" && assignment.kind === "model"
+    ? { ...result, routed: { providerId: assignment.providerId, modelId: assignment.modelId } }
+    : result;
+}
+
 export async function runRoutingClassifierForTurn(
   line: string,
   opts: RoutingClassifierTurnOptions,
 ): Promise<RoutingClassifierTurnResult | undefined> {
   if (opts.signal?.aborted) return undefined;
   if (!opts.enabled) return undefined;
+  let activeV2: NormalizedRoutingV2Config | undefined;
+  try {
+    activeV2 = loadActiveRoutingV2(opts.cwd, opts.userConfigDir);
+  } catch (error) {
+    const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
+    return {
+      classification: { result: { ok: false, reason: "invalid active routing v2 configuration" }, trace: [] },
+      category: "default",
+      baseline,
+      assignment: { kind: "session-default" },
+      fallbackReason: redactSensitiveText(`active routing v2 configuration is invalid: ${error instanceof Error ? error.message : String(error)}`),
+      blockTurn: true,
+    };
+  }
 
   const deadline = performance.now() + Math.max(0, opts.timeoutMs ?? CLASSIFY_TURN_TIMEOUT_MS);
   const profiles = loadModelProfiles(opts.userConfigDir);
@@ -149,6 +303,20 @@ export async function runRoutingClassifierForTurn(
     (opts.classifierAllowed?.(providerId, modelId) ?? true) &&
     (opts.providerFactory !== undefined || hasCredential(providerId, env)),
   );
+  if (activeV2 !== undefined) {
+    try {
+      return await runRoutingClassifierForTurnV2(line, opts, activeV2, providers, profiles, env, externalAllowed, fallbackModel, deadline);
+    } catch (error) {
+      return {
+        classification: { result: { ok: false, reason: "routing v2 resolution failed" }, trace: [] },
+        category: "default",
+        baseline: { providerId: opts.sessionProvider, modelId: opts.sessionModel },
+        assignment: { kind: "session-default" },
+        fallbackReason: redactSensitiveText(`routing v2 resolution failed: ${error instanceof Error ? error.message : String(error)}`),
+        blockTurn: true,
+      };
+    }
+  }
   const classification = await classifyTurn(line, TURN_CLASSIFIER_CATEGORIES, {
     jevEnabled: opts.jevEnabled && opts.jevAllowed !== false && external.value === "on",
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),

@@ -27,6 +27,11 @@ import {
   type RoutingConfigLocation,
   type RoutingConfigResult,
 } from "../harness/routing/config";
+import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import type { RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
+import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
+import { buildCatalogRoutingSnapshot, type RoutingSnapshotPolicy } from "../harness/routing/snapshot-adapter";
 import {
   connectedPredicateFrom,
   describeAssignment,
@@ -64,6 +69,10 @@ import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } fro
 import { onThemeChange } from "./theme";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { dimChunk, roleChunk } from "./theme-text";
+import { hasCredential } from "../harness/provider/single-turn";
+import { envWithSavedApiKeys } from "../lib/shell-config";
+import { resolveExternalSetting } from "../lib/external-switch";
+import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../lib/external-providers";
 
 type OpenTui = typeof import("@opentui/core");
 
@@ -82,6 +91,52 @@ export interface RoutingCategoryRow {
   readonly source: RoutingSource;
   /** AC10 — the layer's own entry, when one was rejected (not connected, or — flow 327 — unavailable) before landing here. */
   readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource; readonly reason?: "unavailable" };
+}
+
+export interface RoutingCategoryV2Row {
+  readonly category: RoutingCategory;
+  readonly receipt: RoutingDecisionReceipt;
+}
+
+export function formatRoutingV2ListLines(rows: readonly RoutingCategoryV2Row[], selected: number): string[] {
+  return rows.map((row, index) => {
+    const mark = index === selected ? ">" : " ";
+    const decision = row.receipt.decision;
+    const outcome = decision.status === "selected"
+      ? `${decision.selection.providerId}/${decision.selection.modelId}`
+      : decision.status === "blocked" ? `blocked: ${decision.reason}`
+      : decision.status;
+    return `${mark} ${row.category.padEnd(12)} ${outcome}  [${decision.assignmentSource}]`;
+  });
+}
+
+export function previewCatalogRoutingCategoriesV2(options: {
+  readonly config: NormalizedRoutingV2Config;
+  readonly providers: readonly FlatPickerProvider[];
+  readonly profiles: Readonly<Record<string, ModelProfile>>;
+  readonly baseline: { readonly providerId: string; readonly modelId: string };
+  readonly policy: RoutingSnapshotPolicy;
+  readonly now?: () => Date;
+}): RoutingCategoryV2Row[] {
+  return ROUTING_CATEGORIES.map((category) => {
+    const request = {
+      requestId: `routing-inspector:${category}`,
+      category,
+      origin: "operator" as const,
+      baseline: options.baseline,
+      requirements: { capabilities: [] as const, inputTokensRequired: 0, outputTokensReserved: 0 },
+    };
+    const snapshot = buildCatalogRoutingSnapshot({
+      configDigest: options.config.configDigest,
+      baseline: options.baseline,
+      providers: options.providers,
+      profiles: options.profiles,
+      request,
+      policy: options.policy,
+      ...(options.now === undefined ? {} : { now: options.now }),
+    });
+    return { category, receipt: resolveRoutingForRuntime({ request, snapshot, config: options.config }) };
+  });
 }
 
 /**
@@ -215,6 +270,14 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   const loadProviders = options.providers ?? (() => loadRoutingProviders(options.redetect, options.catalog));
   const providersTimeoutMs = options.timeoutMs ?? ROUTING_PROVIDERS_TIMEOUT_MS;
   const loadProfiles = options.loadProfiles ?? ((dir) => loadModelProfiles(dir));
+  let activeV2: NormalizedRoutingV2Config | undefined;
+  let activeV2Error: string | undefined;
+  try {
+    activeV2 = loadActiveRoutingV2(options.cwd, options.userConfigDir);
+  } catch (error) {
+    activeV2Error = error instanceof Error ? error.message : String(error);
+  }
+  const usesV2 = activeV2 !== undefined || activeV2Error !== undefined;
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const panelRows =
     typeof rendererHint?.width === "number" && typeof rendererHint.height === "number"
@@ -223,6 +286,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   const bodyRows = Math.max(1, options.visibleRows ?? panelRows);
 
   let rows: RoutingCategoryRow[] = [];
+  let rowsV2: RoutingCategoryV2Row[] = [];
   let flatOptions: FlatModelOption[] = [];
   let providers: readonly FlatPickerProvider[] = [];
   /** Why the provider list could not be read (loader rejected or timed out) — shown on the Model tab and behind "provider list unavailable". */
@@ -250,7 +314,9 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   const selectedRow = (): RoutingCategoryRow | undefined => rows[selected];
 
   const listLines = (): string[] =>
-    rows.length === 0
+    usesV2
+      ? rowsV2.length === 0 ? [loadError === undefined ? "Reading routing v2 snapshot…" : `routing v2 unavailable: ${loadError}`] : formatRoutingV2ListLines(rowsV2, selected)
+      : rows.length === 0
       ? [loadError === undefined ? "Reading routing table…" : `routing table unavailable: ${loadError}`]
       : formatRoutingListLines(rows, selected, options.session?.providerId, taskCostFor, { providers, unavailable: providersError !== undefined });
 
@@ -305,6 +371,40 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   };
 
   const reloadUnguarded = async (): Promise<void> => {
+    if (activeV2Error !== undefined) throw new Error(activeV2Error);
+    if (activeV2 !== undefined) {
+      if (options.session === undefined) throw new Error("routing v2 preview requires a session baseline");
+      const loaded = await loadProvidersBounded();
+      loadError = undefined;
+      providers = loaded.list;
+      providersError = loaded.error;
+      profiles = loadProfiles(location.userConfigDir);
+      projectIsUntrusted = false;
+      const connected = connectedPredicateFrom(providers, options.session);
+      const external = await resolveExternalSetting({ cwd: location.cwd, ...(location.userConfigDir === undefined ? {} : { dir: location.userConfigDir }) });
+      const allowed = externalAllowedConnectedPredicate(connected, external.value === "on", loadExternalProvidersConfig(location.userConfigDir).config);
+      const env = envWithSavedApiKeys(process.env, location.userConfigDir);
+      rowsV2 = previewCatalogRoutingCategoriesV2({
+        config: activeV2,
+        providers,
+        profiles,
+        baseline: options.session,
+        policy: {
+          credentialsAvailable: (target) => target.providerId === options.session!.providerId || hasCredential(target.providerId, env),
+          policyAllowed: (target) => allowed(target.providerId, target.modelId),
+          parentAllowed: () => true,
+          capabilities: () => [],
+          cooldown: () => false,
+          observedLatencyMs: () => null,
+          availability: (target) => target.providerId === options.session!.providerId && target.modelId === options.session!.modelId ? "available" : undefined,
+        },
+      });
+      rows = [];
+      selected = Math.min(selected, Math.max(0, rowsV2.length - 1));
+      statusText = "routing v2 preview · assignments are managed by routing.config.json";
+      paintList();
+      return;
+    }
     const [project, user, loaded] = await Promise.all([load("project", location), load("user", location), loadProvidersBounded()]);
     loadError = undefined;
     providers = loaded.list;
@@ -370,9 +470,9 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     title: ROUTING_COMMAND,
     tabs: [
       { id: "list", label: "Categories" },
-      { id: "picker", label: "Model" },
+      ...(activeV2 === undefined && activeV2Error === undefined ? [{ id: "picker", label: "Model" }] : []),
     ],
-    footer: ROUTING_FOOTER,
+    footer: usesV2 ? [{ key: "↑/↓", label: "move" }, { key: "esc", label: "close" }] : ROUTING_FOOTER,
     renderTab: (tabId, body) => {
       currentTab = tabId;
       const parent = body as { add(child: unknown): void };
@@ -399,11 +499,12 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
             selected = Math.max(0, selected - 1);
             paintList();
           } else if (token === "down" || token === "j") {
-            selected = Math.min(Math.max(0, rows.length - 1), selected + 1);
+            const rowCount = activeV2 === undefined ? rows.length : rowsV2.length;
+            selected = Math.min(Math.max(0, rowCount - 1), selected + 1);
             paintList();
           } else if (token === "return" || token === "enter") {
-            if (selectedRow() !== undefined) host.handle?.setTab("picker");
-          } else if (token === "t") {
+            if (activeV2 === undefined && selectedRow() !== undefined) host.handle?.setTab("picker");
+          } else if (token === "t" && !usesV2) {
             inFlight = armApproval();
           }
         });
@@ -473,7 +574,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     reload,
     status: () => statusText,
     visibleLines: () => windowLines(listLines(), bodyRows),
-    selectedCategory: () => selectedRow()?.category,
+    selectedCategory: () => activeV2 === undefined ? selectedRow()?.category : rowsV2[selected]?.category,
     pickerOptions: () => flatOptions,
     projectUntrusted: () => projectIsUntrusted,
     settled: () => inFlight,
