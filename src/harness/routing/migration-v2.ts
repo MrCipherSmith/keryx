@@ -635,9 +635,12 @@ async function originalRoot(target: BackupTarget): Promise<RootSnapshot> {
 }
 
 function assertOriginalPlanConsistency(plan: RoutingV2MigrationPlan, project: RootSnapshot, user: RootSnapshot): void {
+  const projectDiff = plan.diff[0];
+  const userDiff = plan.diff[1];
+  if (projectDiff === undefined || userDiff === undefined) throw new Error("routing v2 migration diff is incomplete");
   const pairs = [
-    { root: project, target: plan.targets.project, diff: plan.diff[0] },
-    { root: user, target: plan.targets.user, diff: plan.diff[1] },
+    { root: project, target: plan.targets.project, diff: projectDiff },
+    { root: user, target: plan.targets.user, diff: userDiff },
   ] as const;
   for (const { root, target, diff } of pairs) {
     const before = root.value[target.key];

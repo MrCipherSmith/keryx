@@ -215,6 +215,13 @@ test("auto waits for classification and applies fallback only after explicit fai
   expect(decision.recommendationSource).toBe("classifier-fallback");
   expect(decision.classifierReceiptId).toBe("classifier-1");
   expect(decision.fallbackReason).toBe("classifier-fallback");
+
+  const overrideAuto = request({ userOverride: { mode: "auto" }, recommendation: { modelClass: "expert", source: "agent" } });
+  const override = setup(layer, [facts(expert)], overrideAuto);
+  const overrideDecision = resolveRoutingDecision(overrideAuto, override.snapshot, override.config);
+  expect(selectionOf(overrideDecision)).toEqual(expert);
+  expect(overrideDecision.assignmentSource).toBe("user-override");
+  expect(overrideDecision.recommendationSource).toBe("agent");
 });
 
 test("validation rejects schema drift at every nested boundary", () => {
