@@ -177,7 +177,7 @@ const openReview = (): Awaited<ReturnType<typeof findReviewGateState>> => ({
   signature: "open",
 });
 
-test("TP-004: a scan that aborts the turn and then RESOLVES the open review is not nudged", async () => {
+test("a scan that aborts the turn and then RESOLVES the open review is not nudged (TP-004)", async () => {
   const controller = new AbortController();
   // A scan that throws AbortError is swallowed by the caller's own `.catch`; only the check after the scan can stop a
   // scan that settles normally once the signal has fired.
@@ -190,7 +190,7 @@ test("TP-004: a scan that aborts the turn and then RESOLVES the open review is n
   expect(system.join("")).not.toContain("[review-gate]");
 });
 
-test("LOGIC-003: a text-only stop whose turn was aborted during the gate prints the [stopped] line", async () => {
+test("a text-only stop whose turn was aborted during the gate prints the [stopped] line (LOGIC-003)", async () => {
   const controller = new AbortController();
   const reviewGateState: typeof findReviewGateState = async () => {
     controller.abort();
@@ -202,7 +202,7 @@ test("LOGIC-003: a text-only stop whose turn was aborted during the gate prints 
   expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
 });
 
-test("LOGIC-003 / LOGIC-R2-001: a no-progress stop whose turn was aborted during the gate ends there, with no wrap-up", async () => {
+test("a no-progress stop whose turn was aborted during the gate ends there, with no wrap-up (LOGIC-003 / LOGIC-R2-001)", async () => {
   const controller = new AbortController();
   let callsAtGate = -1;
   const { provider, calls: modelCalls } = countingProvider([sameFailingCall("a1"), sameFailingCall("a2"), sameFailingCall("a3"), sameFailingCall("a4")]);
@@ -223,7 +223,7 @@ test("LOGIC-003 / LOGIC-R2-001: a no-progress stop whose turn was aborted during
   expect(modelCalls()).toBe(callsAtGate);
 });
 
-test("TP-004: a turn already aborted when the gate runs never calls the scan and gets no nudge", async () => {
+test("a turn already aborted when the gate runs never calls the scan and gets no nudge (TP-004)", async () => {
   const controller = new AbortController();
   let scans = 0;
   const reviewGateState: typeof findReviewGateState = async () => {
@@ -232,7 +232,9 @@ test("TP-004: a turn already aborted when the gate runs never calls the scan and
   };
   const { provider, calls: modelCalls } = countingProvider([[{ kind: "text_delta", text: "all done" }, { kind: "model_end" }]]);
   // `permissionMode` is read between the last abort check of the text-only stop and the gate: the operator presses
-  // Ctrl+C in that window, so only the check ahead of the scan can keep the scan from running.
+  // Ctrl+C in that window, so only the check ahead of the scan can keep the scan from running. The read is plan
+  // follow-through's (`io.permissionMode?.() === "trust"` in runAgentTurn's text-only stop); if a change moves or drops
+  // it, the first assertion below fails and points here (TP-R3-003).
   const permissionMode = () => {
     if (modelCalls() > 0) controller.abort();
     return "ask" as const;

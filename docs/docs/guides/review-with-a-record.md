@@ -194,12 +194,11 @@ is: `behavior` (the default) or `presentation` (copy, class names, display order
 
 `mutate` applies each proposed mutant in a scratch copy of the worktree (the
 worktree is never written) and records whether the tests failed. The copy leaves
-out linked worktrees, such as those under `.claude/worktrees/` and `.worktrees/`;
-submodules and embedded clones are copied, and the repository's own mutate-scratch
-never is, also with `--scratch tmp`. Before copying, a pass removes the operator's
-own `keryx-mutate-*` directories whose owner died (no heartbeat for two minutes)
-or stopped refreshing its marker for ten minutes, and unmarked ones older than six
-hours; the record carries `sweptScratch` and `sweepMs` only when it removed some. The table in
+out linked worktrees, such as those under `.claude/worktrees/` and `.worktrees/`,
+and before copying a pass removes scratch that earlier, dead passes left behind;
+the [CLI reference](../cli-reference.md#review) (`mutate`) says exactly what is
+copied and when a leftover counts as dead. The record carries `sweptScratch` and
+`sweepMs` only when the pass removed some. The table in
 `research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
 test command it was judged by and that command's exit code. A mutant that
 **survived** means no test pins that behaviour. A survivor shows a

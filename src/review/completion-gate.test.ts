@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { constants, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { REPEATABLE_TOOL_NAMES } from "../commands/agent";
@@ -15,6 +15,7 @@ import {
   findReviewGateState,
   hashedFileCount,
   hashReadCount,
+  MAX_CONTENT_HASH_BYTES,
   MAX_HASHED_FILES,
   MAX_REVIEW_GATE_STALLS,
   MAX_SIGNATURE_FILES,
@@ -777,7 +778,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(hashReadCount()).toBe(reads);
   }, 30_000);
 
-  test("TP-005: one budget covers a nested tree, so only the shared budget stops a walk whose every directory is small", async () => {
+  test("one budget covers a nested tree, so only the shared budget stops a walk whose every directory is small (TP-005)", async () => {
     const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
     const dirs = 40;
     const perDir = 60;
@@ -787,8 +788,8 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
       for (let f = 0; f < perDir; f += 1) await writeFile(path.join(sub, `f${String(f).padStart(2, "0")}.txt`), `${d}-${f}`);
     }
     // 40 x 60 = 2400 files is over MAX_SIGNATURE_FILES, yet no directory is. Directories spend budget too: each fully read
-    // directory costs 1 + perDir entries, and `d` sorts before `manifest.json`. The walk fits floor(MAX / 61) = 33 of
-    // them, then the 34th directory entry itself (1), then the files that are left.
+    // directory costs 1 + perDir entries, and `manifest.json`, written first, is the oldest and comes last. The walk fits
+    // floor(MAX / 61) = 33 of them, then the 34th directory entry itself (1), then the files that are left.
     const cost = 1 + perDir;
     const whole = Math.floor(MAX_SIGNATURE_FILES / cost);
     const left = MAX_SIGNATURE_FILES - whole * cost - 1;
@@ -801,7 +802,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(state?.signature).toContain(TRUNCATION_MARKER);
   }, 30_000);
 
-  test("TP-006 / DEG-001: both walks over budget fit the hash cache, so an unchanged second stop reads nothing", async () => {
+  test("both walks over budget fit the hash cache, so an unchanged second stop reads nothing (TP-006 / DEG-001)", async () => {
     expect(SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES).toBeLessThanOrEqual(MAX_HASHED_FILES);
     const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
     const data = path.join(root, ".metaproject", "data", "review");
@@ -821,6 +822,42 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(hashReadCount()).toBe(afterFirst);
   }, 30_000);
 
+  test("the walk spends its budget newest first, so old history past the budget cannot hide a fresh file (HL-002)", async () => {
+    const data = path.join(root, ".metaproject", "data", "review");
+    // Old history that sorts first by name and alone is over the budget.
+    const history = path.join(data, "autonomous", "run-1");
+    await mkdir(history, { recursive: true });
+    for (let i = 0; i < MAX_SIGNATURE_FILES + 10; i += 1) await writeFile(path.join(history, `n${String(i).padStart(5, "0")}.json`), String(i));
+    const old = new Date(Date.now() - 3_600_000);
+    await utimes(path.join(data, "autonomous"), old, old);
+    const scope = path.join(data, "scope.json");
+    await writeFile(scope, "one");
+    const first = await findReviewGateState(root, 0, {}, { now: aged() });
+    expect(first?.signature).toContain(TRUNCATION_MARKER);
+    // A different size, so the change shows even if both writes land in the same mtime tick.
+    await writeFile(scope, "three");
+    const second = await findReviewGateState(root, 0, {}, { now: aged() });
+    // In name order `autonomous/` would spend the whole budget and `scope.json` would never be read.
+    expect(second?.signature).not.toBe(first?.signature as string);
+  }, 30_000);
+
+  test("a file over MAX_CONTENT_HASH_BYTES is signed by its metadata and never read, and a change to it still shows (HL-003)", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const log = path.join(dir, "trace.log");
+    await writeFile(log, "x".repeat(MAX_CONTENT_HASH_BYTES + 1));
+    const reads = hashReadCount();
+    expect(await fileHash(log)).toStartWith("meta:");
+    expect(hashReadCount()).toBe(reads);
+    // At the cap the file is still hashed by content.
+    const atCap = path.join(dir, "at-cap.log");
+    await writeFile(atCap, "x".repeat(MAX_CONTENT_HASH_BYTES));
+    expect(await fileHash(atCap)).toMatch(/^[0-9a-f]{64}$/);
+    const first = await findReviewGateState(root, 0, {}, { now: aged() });
+    await appendFile(log, "y");
+    const second = await findReviewGateState(root, 0, {}, { now: aged() });
+    expect(second?.signature).not.toBe(first?.signature as string);
+  });
+
   test("AC3: an already-aborted signal rejects with AbortError and hashes no file", async () => {
     await writePackage("live", { mode: "review-flow", status: "draft" });
     const data = path.join(root, ".metaproject", "data", "review");
@@ -833,18 +870,11 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(hashReadCount()).toBe(reads);
   });
 
-  /**
-   * A signal whose `aborted` flag turns true once more than `after` reads of it are counted. A read `ignore` accepts is
-   * not counted and never aborts.
-   */
-  const abortsAfterReads = (
-    after: number,
-    { ignore }: { ignore?: () => boolean } = {},
-  ): { signal: AbortSignal; reads: () => number } => {
+  /** A signal whose `aborted` flag turns true once it has been read more than `after` times. */
+  const abortsAfterReads = (after: number): { signal: AbortSignal; reads: () => number } => {
     let count = 0;
     const signal = {
       get aborted(): boolean {
-        if (ignore?.() === true) return false;
         count += 1;
         return count > after;
       },
@@ -866,7 +896,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     return files;
   }
 
-  test("TP-003: an abort during the walk of the working data stops it part-way, with an open package", async () => {
+  test("an abort during the walk of the working data stops it part-way, with an open package (TP-003)", async () => {
     const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
     for (let f = 0; f < 20; f += 1) await writeFile(path.join(dir, `p${f}.txt`), String(f));
     const workingFiles = await writeWorkingTree();
@@ -880,7 +910,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(hashed).toBeLessThan(workingFiles);
   });
 
-  test("TP-003: an abort during the walk of the working data stops it part-way, with no package", async () => {
+  test("an abort during the walk of the working data stops it part-way, with no package (TP-003)", async () => {
     const workingFiles = await writeWorkingTree();
     const reads = hashReadCount();
     const { signal } = abortsAfterReads(20);
@@ -890,38 +920,31 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(hashed).toBeLessThan(workingFiles);
   });
 
-  /**
-   * Counts only the gate's own straight-line checks: a read from inside the signature walk (`dirSignature` on the stack)
-   * is ignored and never aborts, so a deleted straight-line check shows as a call that resolves instead of one that is
-   * stopped later by the walk.
-   */
-  const abortsAfterStraightLineReads = (after: number): { signal: AbortSignal; reads: () => number } =>
-    abortsAfterReads(after, { ignore: () => (new Error().stack ?? "").includes("dirSignature") });
-
-  // With a package and no working data the gate's straight-line checks are: on entry (k = 0), after the root scan (1), before
-  // the completion blockers are computed (2), after them (3). Aborting on the (k + 1)-th must stop there, not at a later one.
+  // With a package that holds only its manifest and no working data, the gate reads the signal in this order: on entry
+  // (k = 0), after the root scan (1), before the completion blockers are computed (2), after them (3), and then once for
+  // the one entry of the package walk. Aborting on the (k + 1)-th read stops at check k + 1, before anything is hashed.
   for (const k of [0, 1, 2, 3]) {
-    test(`TP-R2-001: an abort that lands on straight-line check ${k + 1} of 4 stops there`, async () => {
+    test(`an abort that lands on straight-line check ${k + 1} of 4 stops there (TP-R2-001)`, async () => {
       await writePackage("live", { mode: "review-flow", status: "draft" });
       const reads = hashReadCount();
-      const { signal, reads: signalReads } = abortsAfterStraightLineReads(k);
+      const { signal, reads: signalReads } = abortsAfterReads(k);
       await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
       expect(signalReads()).toBe(k + 1);
       expect(hashReadCount()).toBe(reads);
     });
   }
 
-  // Pins the helper above: with no abort among the four checks the call resolves after exactly four counted reads. If
-  // `dirSignature` were renamed, the walk's reads would be counted, abort the walk, and this test would fail.
-  test("TP-R2-001: the gate makes exactly four straight-line checks, and the walk's reads are not counted among them", async () => {
+  // Pins the order the tests above count by: four straight-line checks, then one read per entry walked. A deleted check
+  // makes the count three plus one, so this fails where the loop above alone would not.
+  test("the gate makes exactly four straight-line checks, then one per entry it walks (TP-R2-001)", async () => {
     await writePackage("live", { mode: "review-flow", status: "draft" });
-    const { signal, reads: signalReads } = abortsAfterStraightLineReads(4);
+    const { signal, reads: signalReads } = abortsAfterReads(Number.POSITIVE_INFINITY);
     const state = await findReviewGateState(root, 0, {}, { signal, now: aged() });
     expect(state).not.toBeNull();
-    expect(signalReads()).toBe(4);
+    expect(signalReads()).toBe(4 + 1);
   });
 
-  test("TP-R2-001: an abort inside the package walk stops it part-way", async () => {
+  test("an abort inside the package walk stops it part-way (TP-R2-001)", async () => {
     const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
     const files = 300;
     for (let f = 0; f < files; f += 1) await writeFile(path.join(dir, `f${String(f).padStart(3, "0")}.txt`), String(f));
@@ -934,7 +957,7 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
     expect(hashed).toBeLessThan(files);
   });
 
-  test("SEC-002: a FIFO in the package does not block the evaluation", async () => {
+  test("a FIFO in the package does not block the evaluation (SEC-002)", async () => {
     if (process.platform === "win32") return;
     const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
     const made = spawnSync("mkfifo", [path.join(dir, "pipe")]);
@@ -961,7 +984,7 @@ describe("a stall stop on a truncated signature says what the gate could see", (
       lastSignature: signature,
     });
 
-  test("UX-003: the reason names the entries the gate reads instead of claiming no new artifact", () => {
+  test("the reason names the entries the gate reads instead of claiming no new artifact (UX-003)", () => {
     const decision = stalled(`a:1,${TRUNCATION_MARKER}#`);
     expect(decision.action).toBe("stop");
     if (decision.action !== "stop") return;

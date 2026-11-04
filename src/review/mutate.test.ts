@@ -305,6 +305,9 @@ describe("nested git checkouts and stale scratch", () => {
     await mkdir(path.join(tree, "odd", "wt"), { recursive: true });
     await writeFile(path.join(tree, "odd", "wt", ".git"), "gitdir: /x/.git/worktrees/odd-wt\n");
     await writeFile(path.join(tree, "odd", ".gitmodules"), '[submodule "e"]\n\tpath =\nwt\n');
+    // Copied: a `.git` file over 8 KiB is not read, so its worktree-shaped first line proves nothing.
+    await mkdir(path.join(tree, "huge-gitfile"), { recursive: true });
+    await writeFile(path.join(tree, "huge-gitfile", ".git"), `gitdir: /x/.git/worktrees/huge\n${"x".repeat(8 * 1024)}\n`);
     await writeFile(
       path.join(tree, ".gitmodules"),
       '[submodule "a"]\n\tpath = listed\n\turl = ../a\n[submodule "b"]\n\t path = "listed quoted"\n\turl = ../b\n[submodule "c"]\n\tpath=listed-dir\n\turl = ../c\n',
@@ -329,13 +332,13 @@ describe("nested git checkouts and stale scratch", () => {
     }
     const seen = (await readFile(`${out}.ls`, "utf8")).split("\n");
     const deep = (await readFile(`${out}.deep`, "utf8")).split("\n");
-    for (const copied of ["sub", "winsub", "wtsub", "listed", "listed quoted", "listed-dir", "clone", "linked", "no-gitdir", "plain", "modules"]) expect(seen).toContain(copied);
+    for (const copied of ["sub", "winsub", "wtsub", "listed", "listed quoted", "listed-dir", "clone", "linked", "no-gitdir", "plain", "modules", "huge-gitfile"]) expect(seen).toContain(copied);
     // An unreadable gitfile is not proof of a worktree: the directory is copied (root reads it, and then it is one).
     if (!isRoot) expect(seen).toContain("unreadable");
     for (const skipped of ["nested-wt", "with-commondir", "backslash-wt"]) expect(seen).not.toContain(skipped);
     expect(deep).not.toContain("modules/app");
     expect(deep).toContain("vendor/lib");
-    // TP-R3-001: the size cap and the line-by-line parse of `.gitmodules`.
+    // The size cap and the line-by-line parse of `.gitmodules` (TP-R3-001).
     expect(deep).toContain("big");
     expect(deep).not.toContain("big/wt");
     expect(deep).toContain("odd");
@@ -351,6 +354,19 @@ describe("nested git checkouts and stale scratch", () => {
     const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(BaselineError);
     expect((error as Error).message).toMatch(/the copy left out 2 linked worktree\(s\) \(first: (wt-a|deep[\\/]wt-b)\)/);
+  });
+
+  test("a red baseline prints a left-out worktree's name escaped, so the name cannot act on the terminal (SEC-R2-002)", async () => {
+    if (process.platform === "win32") return;
+    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
+    const name = "wt\u001b[2J\u009b31m";
+    await mkdir(path.join(tree, name), { recursive: true });
+    await writeFile(path.join(tree, name, ".git"), "gitdir: /x/.git/worktrees/w\n");
+    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
+    const message = (error as Error).message;
+    expect(message).toContain("(first: wt\\x1b[2J\\x9b31m)");
+    expect(message).not.toContain("\u001b");
+    expect(message).not.toContain("\u009b");
   });
 
   test("a red baseline with no linked worktree says nothing about them", async () => {
@@ -369,7 +385,7 @@ describe("nested git checkouts and stale scratch", () => {
     expect((await readFile(`${out}.ls`, "utf8")).split("\n")).not.toContain("owner.json");
   });
 
-  test("LOGIC-001: the repository's own scratch is never copied, with the copy elsewhere, and dead passes in it are swept", async () => {
+  test("the repository's own scratch is never copied, with the copy elsewhere, and dead passes in it are swept (LOGIC-001)", async () => {
     await writeFile(path.join(tree, "probe.js"), PROBE);
     const repoScratch = path.join(tree, SCRATCH_DIR);
     // A dead pass (its marker is old, its pid is not alive) and a live one (this process, a fresh marker).
@@ -418,7 +434,7 @@ describe("nested git checkouts and stale scratch", () => {
 
   describe("the real liveness probe", () => {
     // The default `isAlive` is `process.kill(pid, 0)`: alive and EPERM mean the process exists, only ESRCH means it is gone.
-    test("TP-001: this process and pid 1 are kept; the pid of a process that has exited is removed", async () => {
+    test("this process and pid 1 are kept; the pid of a process that has exited is removed (TP-001)", async () => {
       const exited = spawnSync(process.execPath, ["-e", ""]);
       expect(exited.pid).toBeGreaterThan(0);
       await make("keryx-mutate-SELFSE", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_DEAD_PID_GRACE });
@@ -431,14 +447,14 @@ describe("nested git checkouts and stale scratch", () => {
   });
 
   describe("a marker that stops being refreshed ages out", () => {
-    test("HL-001: a live pid whose marker is older than STALE_HEARTBEAT_MS is removed, whatever the pid says", async () => {
+    test("a live pid whose marker is older than STALE_HEARTBEAT_MS is removed, whatever the pid says (HL-001)", async () => {
       await make("keryx-mutate-REUSED", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: STALE_HEARTBEAT_MS + 60_000 });
       await make("keryx-mutate-FRESHH", { pid: process.pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: STALE_HEARTBEAT_MS - 60_000 });
       expect(await sweepStaleScratch(scratch)).toBe(1);
       expect(await readdir(scratch)).toEqual(["keryx-mutate-FRESHH"]);
     });
 
-    test("HL-001: a dead pid with a fresh marker is kept (another PID namespace sees a live pass as gone); it goes after the grace heartbeats", async () => {
+    test("a dead pid with a fresh marker is kept (another PID namespace sees a live pass as gone); it goes after the grace heartbeats (HL-001)", async () => {
       await make("keryx-mutate-FRESHH", { pid: 999, startedAt: "x" }, { ageMs: 1000 });
       await make("keryx-mutate-JUSTIN", { pid: 999, startedAt: "x" }, { ageMs: 1000, markerAgeMs: DEAD_PID_GRACE_HEARTBEATS * HEARTBEAT_MS - 30_000 });
       await make("keryx-mutate-JUSTAF", { pid: 999, startedAt: "x" }, { ageMs: 1000, markerAgeMs: DEAD_PID_GRACE_HEARTBEATS * HEARTBEAT_MS + 30_000 });
@@ -453,7 +469,7 @@ describe("nested git checkouts and stale scratch", () => {
       expect(await sweepStaleScratch(scratch, { staleHeartbeatMs: 1_000 })).toBe(1);
     });
 
-    test("HL-001: a running pass refreshes its owner marker", async () => {
+    test("a running pass refreshes its owner marker (HL-001)", async () => {
       await writeFile(
         path.join(tree, "beat.mjs"),
         'import fs from "node:fs";\nconst old = new Date(Date.now() - 3_600_000);\nfs.utimesSync("../owner.json", old, old);\n' +
@@ -467,7 +483,7 @@ describe("nested git checkouts and stale scratch", () => {
   describe("the sweep touches only the operator's own directories and never blocks", () => {
     const dead = { pid: 111, startedAt: "x" };
 
-    test("SEC-001: a directory owned by another uid is kept", async () => {
+    test("a directory owned by another uid is kept (SEC-001)", async () => {
       if (uid === undefined) return;
       await make("keryx-mutate-FOREIG", dead, { ageMs: 1000, markerAgeMs: PAST_DEAD_PID_GRACE });
       expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid: uid + 1 })).toBe(0);
@@ -475,7 +491,7 @@ describe("nested git checkouts and stale scratch", () => {
       expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid })).toBe(1);
     });
 
-    test("SEC-001: a FIFO named owner.json does not stall the sweep; the directory is unmarked", async () => {
+    test("a FIFO named owner.json does not stall the sweep; the directory is unmarked (SEC-001)", async () => {
       if (process.platform === "win32") return;
       const old = STALE_SCRATCH_MS + 60_000;
       const stale = await make("keryx-mutate-FIFOOL", undefined, { ageMs: old });
@@ -489,7 +505,7 @@ describe("nested git checkouts and stale scratch", () => {
       expect(await readdir(scratch)).toEqual(["keryx-mutate-FIFOFR"]);
     });
 
-    test("TP-R2-006: an owner.json that is a link to a valid marker counts as unmarked: a fresh directory is kept, whatever the target's pid says", async () => {
+    test("an owner.json that is a link to a valid marker counts as unmarked: a fresh directory is kept, whatever the target's pid says (TP-R2-006)", async () => {
       const target = path.join(base, "elsewhere-owner.json");
       await writeFile(target, JSON.stringify(dead));
       const old = new Date(Date.now() - PAST_DEAD_PID_GRACE);
@@ -503,7 +519,7 @@ describe("nested git checkouts and stale scratch", () => {
       expect(existsSync(dir)).toBe(true);
     });
 
-    test("SEC-001: an oversize marker counts as unmarked, so a fresh directory is kept", async () => {
+    test("an oversize marker counts as unmarked, so a fresh directory is kept (SEC-001)", async () => {
       const dir = await make("keryx-mutate-BIGBIG", dead, { ageMs: 1000, markerAgeMs: PAST_DEAD_PID_GRACE });
       await writeFile(path.join(dir, "owner.json"), JSON.stringify({ ...dead, pad: "x".repeat(8192) }));
       const marker = new Date(Date.now() - PAST_DEAD_PID_GRACE);
@@ -511,14 +527,14 @@ describe("nested git checkouts and stale scratch", () => {
       expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
     });
 
-    test("TP-M32: a pid of 0, a negative pid or a fractional one is no marker, so a fresh directory is kept", async () => {
+    test("a pid of 0, a negative pid or a fractional one is no marker, so a fresh directory is kept (TP-M32)", async () => {
       for (const [name, pid] of [["keryx-mutate-ZEROZE", 0], ["keryx-mutate-NEGNEG", -5], ["keryx-mutate-FRACFR", 1.5], ["keryx-mutate-STRSTR", "7"]] as const)
         await make(name, { pid, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_DEAD_PID_GRACE });
       expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
       expect(await readdir(scratch)).toHaveLength(4);
     });
 
-    test("TP-M34: a file or a link named like a scratch directory is left alone", async () => {
+    test("a file or a link named like a scratch directory is left alone (TP-M34)", async () => {
       await writeFile(path.join(scratch, "keryx-mutate-FILEFI"), "not a directory");
       const target = path.join(base, "target");
       await mkdir(target);
@@ -542,7 +558,7 @@ describe("nested git checkouts and stale scratch", () => {
     expect("sweepMs" in clean).toBe(false);
   });
 
-  test("TP-M41: a pass whose baseline is red still carries what it swept", async () => {
+  test("a pass whose baseline is red still carries what it swept, in the record and in the message the terminal shows (TP-M41)", async () => {
     await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
     await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, { ageMs: 1000, markerAgeMs: PAST_DEAD_PID_GRACE });
     const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
@@ -550,6 +566,14 @@ describe("nested git checkouts and stale scratch", () => {
     const record = (error as BaselineError).record;
     expect(record.sweptScratch).toBe(1);
     expect(typeof record.sweepMs).toBe("number");
+    // UX-R2-002: on a red baseline the operator sees only the message.
+    expect((error as Error).message.split("\n")).toContain(`Swept: 1 scratch copy left by dead passes (${record.sweepMs} ms).`);
+  });
+
+  test("a red baseline with nothing swept prints no Swept line", async () => {
+    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
+    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
+    expect((error as Error).message).not.toContain("Swept:");
   });
 });
 

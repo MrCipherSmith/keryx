@@ -3,8 +3,8 @@
 // used to accept it; a review is finished when `keryx review complete` accepts
 // the package, not when the model stops writing. Deterministic: no model judges.
 
-import { constants, readFileSync } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { constants, readFileSync, type Dirent, type Stats } from "node:fs";
+import { lstat, opendir, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { resolveActiveReview } from "./active-review";
@@ -23,7 +23,7 @@ export type OpenManagedReview = {
   blockers: string[];
   /**
    * Changes whenever the package or the working data under it gains or changes an artifact within what the gate reads:
-   * at most {@link MAX_SIGNATURE_FILES} entries per tree (data/review and the package), in name order, with the mutation
+   * at most {@link MAX_SIGNATURE_FILES} entries per tree (data/review and the package), newest first, with the mutation
    * scratch left out. A tree larger than that ends in the truncation marker, and a change past that point is not seen.
    */
   signature: string;
@@ -56,14 +56,26 @@ let fileReads = 0;
 export const hashReadCount = (): number => fileReads;
 
 /**
+ * A file larger than this is signed by its size, times and inode instead of its content, so one evaluation never reads
+ * more than this from one file (a log redirected into a package can grow without bound). A rewrite of such a file with
+ * the same bytes then reads as a change.
+ */
+export const MAX_CONTENT_HASH_BYTES = 1024 * 1024;
+
+/**
  * `now` is injectable so a test can age a file past {@link RACY_WINDOW_MS} without sleeping. Anything that is not a
  * regular file (a FIFO, a socket, a device) is never opened: reading a FIFO blocks until a writer appears.
  */
 export async function fileHash(file: string, now: number = Date.now()): Promise<string> {
-  const info = await stat(file).catch(() => undefined);
+  return hashWithInfo(file, await stat(file).catch(() => undefined), now);
+}
+
+/** {@link fileHash} for a file whose stat the caller already holds. */
+async function hashWithInfo(file: string, info: Stats | undefined, now: number = Date.now()): Promise<string> {
   if (info === undefined) return "unreadable";
   if (!info.isFile()) return `special:${(info.mode & constants.S_IFMT).toString(8)}`;
   const key = `${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.ino}`;
+  if (info.size > MAX_CONTENT_HASH_BYTES) return `meta:${key}`;
   const hit = fileHashes.get(file);
   if (hit !== undefined && hit.key === key) return hit.hash;
   fileReads += 1;
@@ -102,29 +114,59 @@ type SignatureOptions = {
 };
 
 /**
- * A signature of the files under `dir` (by content; a file unchanged since the last stop is not read again): at most
- * {@link MAX_SIGNATURE_FILES} entries (files and directories) in name order, with `skip` left out and symlinks and
- * special files never read. When the budget runs out the signature ends in {@link TRUNCATION_MARKER}, so a change past
- * that point is not seen.
+ * At most `limit` entries of `dir`, in the order the filesystem lists them (stable for an unchanged directory), and
+ * whether it holds more. A directory of 10^5 entries costs `limit` reads, not a full listing and sort.
+ */
+async function listEntries(dir: string, limit: number): Promise<{ entries: Dirent[]; more: boolean }> {
+  const handle = await opendir(dir);
+  try {
+    const entries: Dirent[] = [];
+    for (let entry = await handle.read(); entry !== null; entry = await handle.read()) {
+      if (entries.length >= limit) return { entries, more: true };
+      entries.push(entry);
+    }
+    return { entries, more: false };
+  } finally {
+    await handle.close().catch(() => {});
+  }
+}
+
+/** Code-unit order: deterministic, and far cheaper than locale collation. */
+const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * A signature of the files under `dir` (by content; a file unchanged since the last stop is not read again, and one
+ * over {@link MAX_CONTENT_HASH_BYTES} is signed by its metadata): at most {@link MAX_SIGNATURE_FILES} entries (files
+ * and directories), newest first by mtime and then by name, with `skip` left out and symlinks and special files never
+ * read. Newest first, so when the budget runs out what is cut off is the oldest history, not what this session just
+ * wrote. A directory is listed only as far as the budget can reach. When the budget runs out the signature ends in
+ * {@link TRUNCATION_MARKER}, so a change past that point is not seen.
  */
 async function dirSignature(dir: string, options: SignatureOptions = {}): Promise<string> {
   const { skip, signal, now } = options;
   const budget = options.budget ?? { remaining: MAX_SIGNATURE_FILES };
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
+    const { entries, more } = await listEntries(dir, budget.remaining + 1);
+    const walked = entries
+      .map((entry) => ({ entry, file: path.join(dir, entry.name) }))
+      .filter(({ entry, file }) => !entry.isSymbolicLink() && skip?.has(file) !== true);
+    const dated = await mapBounded(walked, SCAN_CONCURRENCY, async (item) => ({ ...item, info: await lstat(item.file).catch(() => undefined) }));
+    dated.sort((a, b) => (b.info?.mtimeMs ?? 0) - (a.info?.mtimeMs ?? 0) || byName(a.entry.name, b.entry.name));
     const parts: string[] = [];
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const { entry, file, info } of dated) {
       throwIfAborted(signal);
-      const file = path.join(dir, entry.name);
-      if (entry.isSymbolicLink() || skip?.has(file) === true) continue;
       if (budget.remaining <= 0) {
         parts.push(TRUNCATION_MARKER);
-        break;
+        return parts.join(",");
       }
       budget.remaining -= 1;
-      const content = entry.isDirectory() ? await dirSignature(file, { skip, budget, signal, now }) : await fileHash(file, now);
+      // The stat is the authority on the type; a filesystem that lists an entry with no type still gets it right.
+      const isDirectory = info?.isDirectory() ?? entry.isDirectory();
+      const content = isDirectory ? await dirSignature(file, { skip, budget, signal, now }) : await hashWithInfo(file, info, now);
       parts.push(`${entry.name}:${content}`);
     }
+    // The listing stopped short of the directory's end: what it did not list is not seen either.
+    if (more) parts.push(TRUNCATION_MARKER);
     return parts.join(",");
   } catch (error) {
     // A cancelled scan must reach the caller; every other failure keeps the old meaning of "nothing readable here".

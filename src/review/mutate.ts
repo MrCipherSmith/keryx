@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { constants, existsSync } from "node:fs";
+import { constants, existsSync, writeFileSync } from "node:fs";
 import { cp, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { loadavg, tmpdir } from "node:os";
 import path from "node:path";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
+import { terminalSafe } from "../lib/terminal-safe";
 import { worktreeProvenance } from "./worktree-provenance";
 
 /**
@@ -103,6 +104,8 @@ const SCRATCH_NAME = new RegExp(`^${SCRATCH_PREFIX}[A-Za-z0-9]{6}$`);
 const OWNER_MAX_BYTES = 4096;
 /** The largest `.gitmodules` the copy reads. */
 const GITMODULES_MAX_BYTES = 64 * 1024;
+/** A gitfile is one `gitdir: <path>` line; a larger `.git` file is not read and is not a linked worktree's. */
+const GITFILE_MAX_BYTES = 8 * 1024;
 const BASELINE_TAIL_LINES = 60;
 const OUTPUT_KEEP_CHARS = 256 * 1024;
 
@@ -235,7 +238,7 @@ function lineOf(text: string, index: number): number {
  * It is a second working copy of a repository, often with hundreds of thousands of files, and not part of the tree
  * under review. Everything else is copied as the base copy did, because the tests may load it: a submodule (listed in
  * `submodules`, or a `.git` file pointing under `.git/modules`), an embedded clone (a `.git` directory), a `.git`
- * link, and a `.git` that cannot be read or has no `gitdir:` line.
+ * link, and a `.git` that cannot be read, is larger than {@link GITFILE_MAX_BYTES} or has no `gitdir:` line.
  * A `.git` file is a linked worktree's when the admin directory it names holds a `commondir` file (git's own marker,
  * the one `harness/process/sandbox/git-protect.ts` uses), or when the path it names ends in `.git/worktrees/<name>`;
  * a `modules` segment before that decides nothing.
@@ -245,7 +248,8 @@ async function isLinkedWorktree(dir: string, submodules: ReadonlySet<string>): P
   const dotGit = path.join(dir, ".git");
   let value: string;
   try {
-    if (!(await lstat(dotGit)).isFile()) return false;
+    const info = await lstat(dotGit);
+    if (!info.isFile() || info.size > GITFILE_MAX_BYTES) return false;
     const match = /^gitdir:\s*(.+)$/m.exec(await readFile(dotGit, "utf8"));
     if (match === null) return false;
     value = match[1]!.trim();
@@ -414,10 +418,12 @@ async function sweepLeftovers(scratchBase: string, repoScratch: string): Promise
  * Writes the owner marker beside the copy, never inside it, so a later pass can tell a live owner from a dead one, and
  * touches it every `heartbeatMs` while the pass runs: a sweep reads a marker that stopped being touched as abandoned.
  * `stop` ends the heartbeat and may be called twice.
+ * The write is synchronous, so no SIGINT or SIGTERM handler can run while it is in flight: a cleanup that ran then
+ * would race the file's creation, and `rm` would fail on a directory that gained `owner.json` under it.
  */
-async function startOwnerMarker(scratch: string, startedAt: string, heartbeatMs: number): Promise<{ stop(): void }> {
+function startOwnerMarker(scratch: string, startedAt: string, heartbeatMs: number): { stop(): void } {
   const ownerFile = path.join(scratch, OWNER_FILE);
-  await writeFile(ownerFile, JSON.stringify({ pid: process.pid, startedAt }));
+  writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, startedAt }));
   const heartbeat = setInterval(() => {
     const at = new Date();
     void utimes(ownerFile, at, at).catch(() => {});
@@ -483,10 +489,11 @@ export async function runMutation(options: {
   // The copy has no .git; without a ceiling a git command run by the tests would walk up into the real repository.
   const env = runEnv(scratchBase);
   let marker: { stop(): void } | undefined;
-  // The marker is written inside this scope, so a failed write still removes the directory it was made in.
+  // The marker is written inside this scope, so a failed write still removes the directory it was made in. The body runs
+  // synchronously up to its first await, so the marker exists before any signal handler can run.
   return withScratchSignalCleanup(async () => { marker?.stop(); killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
   try {
-    marker = await startOwnerMarker(scratch, startedAt, options.heartbeatMs ?? HEARTBEAT_MS);
+    marker = startOwnerMarker(scratch, startedAt, options.heartbeatMs ?? HEARTBEAT_MS);
     const copy = path.join(scratch, "tree");
     const copyStarted = Date.now();
     const leftOut = await copyTree(worktree, copy, new Set([scratchBase, repoScratch, scratch]));
@@ -501,7 +508,10 @@ export async function runMutation(options: {
         `baseline cwd: ${copy}`,
         `last ${BASELINE_TAIL_LINES} lines of output:`,
         tail === "" ? "(no output)" : tail,
-        ...(leftOut.length === 0 ? [] : [`the copy left out ${leftOut.length} linked worktree(s) (first: ${leftOut[0]})`]),
+        // The name comes from the reviewed tree: escaped, so it cannot act on the operator's terminal.
+        ...(leftOut.length === 0 ? [] : [`the copy left out ${leftOut.length} linked worktree(s) (first: ${terminalSafe(leftOut[0]!).text})`]),
+        // On a red baseline the terminal shows this message, not the table that carries the Swept line.
+        ...sweptLines(sweepFields),
       ].join("\n");
       throw new BaselineError(message, {
         schemaVersion: 1,
@@ -573,6 +583,12 @@ export async function runMutation(options: {
   });
 }
 
+/** The one Swept sentence for a pass that removed earlier passes' scratch, or none. */
+function sweptLines({ sweptScratch, sweepMs }: Pick<MutationRecord, "sweptScratch" | "sweepMs">): string[] {
+  if (sweptScratch === undefined || sweptScratch <= 0) return [];
+  return [`Swept: ${sweptScratch} scratch ${sweptScratch === 1 ? "copy" : "copies"} left by dead passes${sweepMs === undefined ? "" : ` (${sweepMs} ms)`}.`];
+}
+
 function costLine(record: MutationRecord): string[] {
   const parts: string[] = [];
   if (record.provenanceMs !== undefined) parts.push(`provenance ${record.provenanceMs} ms`);
@@ -611,9 +627,7 @@ export function renderMutationTable(record: MutationRecord): string {
     `Command: \`${record.command}\` (baseline exit ${record.baseline.exitCode}, ${record.baseline.ms} ms). Run in a scratch copy; the worktree was not written.`,
     "",
     ...(record.bail === true ? ["Bail: applied (mutants ran with --bail; baseline in full).", ""] : []),
-    ...(record.sweptScratch !== undefined && record.sweptScratch > 0
-      ? [`Swept: ${record.sweptScratch} scratch ${record.sweptScratch === 1 ? "copy" : "copies"} left by dead passes${record.sweepMs === undefined ? "" : ` (${record.sweepMs} ms)`}.`, ""]
-      : []),
+    ...sweptLines(record).flatMap((line) => [line, ""]),
     ...costLine(record),
     ...provenanceLine(record),
     ...(record.baseline.tail === undefined

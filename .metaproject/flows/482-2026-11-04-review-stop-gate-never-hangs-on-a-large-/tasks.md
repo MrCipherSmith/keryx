@@ -13,5 +13,5 @@ with `--disposition skipped --reason "<why>"`, not left open.
 | T2 | implement | Stop gate: bounded, scratch-skipping, abortable signature walk; holdReviewGate passes the turn signal (AC1-AC4) |
 | T3 | test | Add/adjust tests and make them pass (folded into T2/T5: each worker writes its tests red-first) |
 | T4 | review | Review round on the PR |
-| T5 | implement | Mutation pass: skip nested git checkouts in copyTree, owner marker, sweep stale scratch; help + guide text (AC5, AC6) |
+| T5 | implement | Mutation pass: skip linked worktrees in copyTree, owner marker, sweep stale scratch; help + guide text (AC5, AC6) |
 | T6 | verify | Before/after measurement of one gate evaluation on a fixture with large scratch + nested worktree (AC8) |

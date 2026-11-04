@@ -11,6 +11,9 @@
      unchanged tree is served from the cache on the next stop. When the budget runs out the walk stops and the
      signature carries a deterministic truncation marker (same tree → same signature, so stall detection still works on
      the walked part).
+   - The budget is spent newest first (mtime, then name), so a truncated walk cuts off old history rather than what the
+     session just wrote; a directory is listed only as far as the budget reaches; a file over `MAX_CONTENT_HASH_BYTES`
+     (1 MiB) is signed by its size, times and inode instead of being read (T10, after HL-002, HL-003 and PERF-002).
    - The signal is checked before each entry; an aborted signal throws an `AbortError`.
 2. `findReviewGateState(cwd, since, named, { signal, now })` passes the signal to the walks and checks it around
    `scanRoot` / `reviewCompletionBlockers`.
@@ -20,8 +23,8 @@
 ### B. Mutation pass (`src/review/mutate.ts`)
 
 The design was narrowed after the round-1 review (see AC5/AC6 and journal.md); this describes the code at head.
-The flow's recorded title and task T5's title (flow.json, tasks.md) keep the original "nested checkouts" wording:
-they record what was planned, and no flow command renames them.
+The flow's title and task T5's title (flow.json, tasks.md) were reworded to "linked worktrees" by hand in T10, since no
+flow command renames them; the journal and the event log keep the wording they were recorded with.
 
 1. `copyTree` leaves out only a linked worktree: a subdirectory whose `.git` file names an admin directory that holds a
    `commondir` file, or a path ending `.git/worktrees/<name>` (either slash). Submodules, paths a `.gitmodules` of the
