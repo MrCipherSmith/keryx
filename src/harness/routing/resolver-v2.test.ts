@@ -217,7 +217,7 @@ test("normalization replaces classes atomically and rejects duplicate or self fa
   expect(() => normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["model"]) })).toThrow(/not registered/);
   expect(normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["jev"]) }).classifier.chain).toHaveLength(1);
   const untargetedModel = { ...classifierLayer, classifier: { ...classifierLayer.classifier!, chain: [{ adapterId: "model" }] } };
-  expect(() => normalizeRoutingV2Config({ user: untargetedModel }, { classifierAdapters: new Set(["model"]) })).toThrow(/explicit target/);
+  expect(() => normalizeRoutingV2Config({ user: untargetedModel }, { classifierAdapters: new Set(["model"]) })).toThrow(/target is required for model adapter/);
 });
 
 test("auto waits for classification and applies fallback only after explicit failure", () => {
