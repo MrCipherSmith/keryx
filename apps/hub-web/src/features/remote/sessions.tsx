@@ -57,6 +57,7 @@ export function SessionsView() {
       <SessionDetail
         key={hub.projectId + ":" + hub.location.sessionId}
         sessionId={hub.location.sessionId}
+        onNewSession={() => { setCreate(true); hub.navigate({ tab: "sessions", sessionId: undefined }); }}
       />
     );
   return (
@@ -104,10 +105,12 @@ export function SessionsView() {
   );
 }
 /** The first launch requirement that is not met, in the order the operator should fix them. */
-function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowGone }: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowGone: boolean }) {
+function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowsState, flowGone }: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowsState: "ready" | "loading" | "failed"; flowGone: boolean }) {
   if (!operator) return "sessionLaunchOperatorOnly";
   if (!targetReady) return "sessionLaunchRequirements";
   if (!hasTitle) return "sessionLaunchEnterTitle";
+  if (flowsState === "loading") return "sessionLaunchFlowsLoading";
+  if (flowsState === "failed") return "sessionLaunchFlowsFailed";
   if (flowGone) return "sessionLaunchFlowGone";
   return null;
 }
@@ -120,7 +123,7 @@ function CreateSession() {
     "/machines?projectId=" + encodeURIComponent(hub.projectId ?? ""),
   );
   const action = useRemoteAction<Control["SessionOperationReceipt"]>();
-  const [draft, setDraft] = useDraft(
+  const [draft, setDraft, clearDraft] = useDraft(
     `remote-create:${hub.scopeKey}:${hub.projectId}`,
     { machineId: "", checkoutId: "", profileId: "", title: "", flowId: "", firstMessage: "" },
   );
@@ -146,11 +149,11 @@ function CreateSession() {
     !c.busy &&
     profile?.adapter === "keryx-native-v1" &&
     profile.readiness === "ready";
-  const flowGone = !!draft.flowId && !selectedFlow;
-  const unmet = firstUnmetLaunchCondition({ operator, targetReady: !!targetReady, hasTitle: !!draft.title.trim(), flowGone });
-  const ready = unmet === null;
-  // Name the first condition that is actually unmet; the Flow is not blamed until the Flows have loaded.
-  const blocker = unmet === "sessionLaunchFlowGone" && !flows.data ? null : unmet;
+  // A chosen Flow cannot be checked until the Flows are known: name that instead of blaming the Flow.
+  const flowsState = !draft.flowId || flows.data ? "ready" : flows.isError ? "failed" : "loading";
+  const flowGone = !!draft.flowId && !!flows.data && !selectedFlow;
+  const blocker = firstUnmetLaunchCondition({ operator, targetReady: !!targetReady, hasTitle: !!draft.title.trim(), flowsState, flowGone });
+  const ready = blocker === null;
   function submit() {
     if (!ready || !m?.inventory || !c || !profile || !hub.projectId) return;
     action.mutate(
@@ -176,6 +179,8 @@ function CreateSession() {
               prepareFlowMessageDraft(selectedFlow, criteriaDigest, draft.firstMessage),
             );
           }
+          // The next New session starts from a clean form, not from this session's Flow and first message.
+          clearDraft();
           hub.navigate({ tab: "sessions", sessionId: receipt.sessionId });
         },
       },
@@ -277,6 +282,7 @@ function CreateSession() {
         </dl>
       )}
       <Feedback query={machines} />
+      <Feedback query={flows} />
       <ActionFeedback action={action} />
       {blocker && <p className="text-sm text-slate-500">{t(blocker)}</p>}
       <Button disabled={!ready || action.isPending} onClick={submit}>
@@ -285,7 +291,7 @@ function CreateSession() {
     </Panel>
   );
 }
-export function SessionDetail({ sessionId }: { sessionId: string }) {
+export function SessionDetail({ sessionId, onNewSession }: { sessionId: string; onNewSession?: () => void }) {
   const hub = useHub();
   const { t } = useTranslation("remote");
   const query = useRemoteQuery<Control["SessionRecord"]>(
@@ -301,14 +307,16 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         ← {t("back")}
       </Button>
       <Feedback query={query} />
-      {query.data && <SessionSurface key={query.data.sessionId} record={query.data} />}
+      {query.data && <SessionSurface key={query.data.sessionId} record={query.data} onNewSession={onNewSession} />}
     </div>
   );
 }
 export function SessionSurface({
   record,
+  onNewSession,
 }: {
   record: Control["SessionRecord"];
+  onNewSession?: () => void;
 }) {
   const { t } = useTranslation("remote");
   const control = useController(record);
@@ -332,7 +340,14 @@ export function SessionSurface({
   return (
     <>
     {openingError && (
-      <Notice tone="error">{t("sessionOpeningRejected")} ({openingError}) {t("sessionOpeningNextStep")}</Notice>
+      <Notice tone="error">
+        {t("sessionOpeningRejected")} {t("sessionOpeningNextStep")}
+        {onNewSession && <Button variant="secondary" onClick={onNewSession}>{t("sessionOpeningCreateNew")}</Button>}
+        <details>
+          <summary>{t("sessionOpeningDetails")}</summary>
+          <code>{openingError}</code>
+        </details>
+      </Notice>
     )}
     <SessionWorkspace
       openingRejected={!!openingError}

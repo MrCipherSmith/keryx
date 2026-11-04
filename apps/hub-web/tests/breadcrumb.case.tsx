@@ -53,7 +53,8 @@ for (const [language, label] of [
     await act(() => i18n.changeLanguage(language));
     navigate({ projectId: project.id, tab: "machines" }, true);
     render(<App />);
-    const name = await screen.findByTitle(project.name);
+    // The sidebar project button carries the same title (its collapsed-rail name); the header crumb is the truncating one.
+    const name = (await screen.findAllByTitle(project.name)).find((el) => el.classList.contains("truncate"))!;
     const breadcrumb = screen.getByRole("button", { name: label });
     expect(breadcrumb.tagName).toBe("BUTTON");
     expect(breadcrumb).toHaveAttribute("type", "button");
@@ -131,7 +132,7 @@ test("collapsed rail keeps an icon-only Sign out reachable", async () => {
 
 test("hub-select chevron rule leaves background-color to the layered disabled fill", () => {
   const selectRules = css.filter(
-    (rule) => !rule.layered && /\.hub-select\b/.test(rule.selector),
+    (rule) => /\.hub-select\b/.test(rule.selector),
   );
   expect(selectRules.length).toBeGreaterThan(0);
   for (const rule of selectRules) {
@@ -139,4 +140,36 @@ test("hub-select chevron rule leaves background-color to the layered disabled fi
     expect(rule.decls.has("background-color")).toBe(false);
   }
   expect(selectRules.some((rule) => rule.decls.has("background-image"))).toBe(true);
+});
+
+test("collapsed rail keeps the project switcher as initials and layers its rules", async () => {
+  // The collapsed rail hides only the project name text and heading, never the buttons.
+  const hiddenRules = css.filter((rule) => rule.selector.includes(".rail-collapsed") && /^none/i.test(rule.decls.get("display") ?? ""));
+  const alternatives = hiddenRules.flatMap((rule) => selectorAlternatives(rule.selector));
+  expect(alternatives.some((a) => /\.sidebar-projects\s+\.truncate$/.test(a))).toBe(true);
+  for (const a of alternatives) expect(a).not.toMatch(/\.sidebar-projects$/);
+  // Unlayered author rules beat Tailwind utilities; rail and Select rules stay in @layer components.
+  for (const rule of css.filter((r) => r.selector.includes(".rail-collapsed") || /\.hub-select\b/.test(r.selector)))
+    expect(rule.layered, rule.selector).toBe(true);
+
+  await act(() => i18n.changeLanguage("en"));
+  navigate({ projectId: project.id, tab: "machines" }, true);
+  render(<App />);
+  const initial = (await screen.findAllByText(project.name.slice(0, 1))).find((el) => el.classList.contains("project-initial"))!;
+  const button = initial.closest("button")!;
+  expect(button).toHaveAttribute("aria-label", project.name);
+  expect(button).toHaveAttribute("title", project.name);
+});
+
+test("select chevron follows the muted token in both themes", () => {
+  const source = readFileSync("src/styles.css", "utf8");
+  const light = source.match(/:root \{[\s\S]*?\n\}/)![0];
+  const dark = source.match(/:root\[data-theme="dark"\] \{[\s\S]*?\n\}/)![0];
+  for (const block of [light, dark]) {
+    const muted = block.match(/--hub-muted:\s*#([0-9a-f]{6})/i)![1]!;
+    expect(block).toContain(`stroke='%23${muted}'`);
+  }
+  const select = css.find((r) => /^\.hub-select:not/.test(r.selector) && r.decls.has("background-image"))!;
+  expect(select.decls.get("background-image")).toBe("var(--hub-select-chevron)");
+  expect(readFileSync("public/select-chevron.svg", "utf8")).not.toContain("#64748b");
 });

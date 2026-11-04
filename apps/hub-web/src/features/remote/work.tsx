@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
@@ -64,7 +64,10 @@ export function MessageComposer({
   const [focusToken, setFocusToken] = useState(0);
   const commandsId = useId();
   const commandTrigger = useRef<HTMLButtonElement>(null);
+  // Set while the catalogue was opened by '/' and nothing has been done in it yet: Escape then hands the slash back.
+  const slashOpened = useRef<HTMLTextAreaElement | null>(null);
   function closeCommands() {
+    slashOpened.current = null;
     setCommands("closed");
     commandTrigger.current?.focus();
   }
@@ -114,10 +117,21 @@ export function MessageComposer({
     flows.data?.flows.filter((f) => f.status === "in-progress") ?? [];
   const [validation, setValidation] = useState("");
   const [preserved, setPreserved] = useState(false);
+  // A draft prepared at session creation carries no versions yet. Pin it to the versions the human first
+  // sees once the machine has opened the session, so later drift raises the same stale notice as any draft.
+  useEffect(() => {
+    if (!draft.prepared || record.state === "opening") return;
+    setDraft(old => old.prepared
+      ? { ...old, prepared: false, sessionVersion: record.version, configVersion: record.config.configVersion }
+      : old);
+  }, [draft.prepared, record.state, record.version, record.config.configVersion, setDraft]);
   const stale = !!draft.text && !draft.prepared && (
     control.advanceVersion(draft.sessionVersion) !== record.version ||
     draft.configVersion !== record.config.configVersion);
   const selected = eligible.find((f) => f.id === draft.flowId);
+  function editText(text: string) {
+    setDraft({ ...draft, ...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{}), text });
+  }
   async function selectFlow(id: string) {
     const flow = eligible.find((f) => f.id === id);
     if (!flow) {
@@ -186,10 +200,11 @@ export function MessageComposer({
   function submit() {
     const assoc=association();
     if(nativeOperation||nativePending.error)return;
+    if(draft.prepared)return;
     if(!control.binding||!control.active||stale||!assoc||!draft.text.trim()) {setValidation(t('required'));return;}
     if(mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
     const submitted=draft;
-    const body={expectedSessionVersion:submitted.prepared?record.version:control.advanceVersion(submitted.sessionVersion),controller:control.binding,expectedConfigVersion:submitted.prepared?record.config.configVersion:submitted.configVersion,text:submitted.text,interpretation:'literal-message',association:assoc,busyPolicy:submitted.busyPolicy} satisfies Control['MessageSubmit'];
+    const body={expectedSessionVersion:control.advanceVersion(submitted.sessionVersion),controller:control.binding,expectedConfigVersion:submitted.configVersion,text:submitted.text,interpretation:'literal-message',association:assoc,busyPolicy:submitted.busyPolicy} satisfies Control['MessageSubmit'];
     if(mode==='managed'&&managed.hint){
       if(assoc.mode!=='ad-hoc'){setValidation(workT('nativeConsentRequired'));return;}
       const original:NativeSubmission={scope:nativeScope,operationId:crypto.randomUUID(),path:sessionPath(record.projectId,record.sessionId)+'/messages',body:structuredClone(body),hint:Object.freeze({...managed.hint}),phase:'sending'};
@@ -212,12 +227,13 @@ export function MessageComposer({
             if (event.key !== "/" || draft.text || event.nativeEvent.isComposing ||
                 event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
             event.preventDefault();
+            slashOpened.current = event.currentTarget;
             setCommands("open");
             // Already open: no state change re-runs the focus effect, so ask for it explicitly.
             setFocusToken(token => token + 1);
           }}
           maxLength={32768}
-          onChange={(e) => setDraft({ ...draft, ...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{}), text: e.target.value })}
+          onChange={(e) => editText(e.target.value)}
         />
       </Field>
       <Button
@@ -232,11 +248,16 @@ export function MessageComposer({
       </Button>
       {commands !== "unopened" && (
         <div id={commandsId} hidden={commands !== "open"} onKeyDown={(event) => {
-          if (event.key === "Escape" && !event.defaultPrevented) closeCommands();
+          if (event.key !== "Escape") { slashOpened.current = null; return; }
+          if (event.defaultPrevented) return;
+          const field = slashOpened.current;
+          closeCommands();
+          if (field && !draft.text) { editText("/"); field.focus(); }
         }}>
           <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} focusToken={focusToken} />
         </div>
       )}
+      <p className="composer-hint">{t("commandsHint")}</p>
       <p className="composer-hint">{t("secretWarning")}</p>
       <details open={!association()} className="composer-work-context">
         <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>

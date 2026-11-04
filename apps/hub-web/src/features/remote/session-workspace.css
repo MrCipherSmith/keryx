@@ -414,6 +414,8 @@
 .composer-work-context > summary { cursor:pointer; overflow-wrap:anywhere; }
 .composer-work-context[open] > summary { margin-bottom:.5rem; }
 @media (max-width:600px) {
-  .session-header-actions { flex-wrap:wrap; }
+  /* The wrap must sit on the constrained container: let the header and its actions shrink and wrap together. */
+  .session-workbench-header { flex-wrap:wrap; }
+  .session-header-actions { flex-wrap:wrap; flex-shrink:1; min-width:0; }
   .session-composer :is(textarea, select) { font-size:16px; }
 }

@@ -209,3 +209,11 @@ test("composer header rule hides only the composer's own panel header", async ()
   for (const header of composer.querySelectorAll(".hub-panel .hub-panel .hub-panel-header"))
     expect(own).not.toContain(header);
 });
+// jsdom applies no CSS: read the 600px block of the stylesheet. The wrap has to sit on the header row
+// that is actually constrained (and its actions must be allowed to shrink), or it is inert at 481-600px.
+test("the 600px header rules wrap the header row and let the actions shrink", () => {
+  const css = readFileSync("src/features/remote/session-workspace.css", "utf8");
+  const block = css.slice(css.lastIndexOf("@media (max-width:600px)"));
+  expect(block).toMatch(/\.session-workbench-header\s*\{[^}]*flex-wrap:\s*wrap/);
+  expect(block).toMatch(/\.session-header-actions\s*\{[^}]*flex-shrink:\s*1[^}]*min-width:\s*0/);
+});

@@ -12,6 +12,7 @@
   --hub-subtle: #edf2ef;
   --hub-ink: #20352b;
   --hub-muted: #61756b;
+  --hub-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%2361756b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); /* tracks --hub-muted */
   --hub-border: #dce5df;
   --hub-accent: #265f50;
   --hub-accent-soft: #e4f0e9;
@@ -38,6 +39,7 @@
   --hub-subtle: #223229;
   --hub-ink: #e1ece5;
   --hub-muted: #a2b7aa;
+  --hub-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23a2b7aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); /* tracks --hub-muted */
   --hub-border: #35483c;
   --hub-accent: #8dc7ab;
   --hub-accent-soft: #294639;
@@ -627,11 +629,14 @@
   }
 }
 
+/* Same layer as the rules they extend, so Tailwind utilities (layer utilities)
+   can still override the rail and Select padding. */
+@layer components {
 .nav-item.desktop-rail-toggle { display:none; }
 @media (min-width:1024px) {
   .nav-item.desktop-rail-toggle { display:flex; }
   .rail-collapsed .sidebar { width:60px; padding-inline:7px; }
-  .rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects,.identity > p,.nav-label) { display:none; }
+  .rail-collapsed .sidebar :is(.sidebar-brand,.sidebar-projects > span,.identity > p,.nav-label,.sidebar-projects .truncate) { display:none; }
   .rail-collapsed .identity { padding-inline:0; }
   .rail-collapsed .identity .hub-button { width:100%; justify-content:center; min-height:44px; margin-top:0; }
   .rail-collapsed .nav-item { justify-content:center; min-height:44px; padding-inline:0; }
@@ -639,13 +644,15 @@
 .hub-select:not([multiple]):not([size]) {
   appearance:none;
   padding-inline-end:2.5rem;
-  /* Longhands only: the unlayered rule must not reset background-color, or it
-     overrides the layered .hub-input:disabled fill. */
-  background-image: url("/select-chevron.svg");
+  /* Longhands only: the rule must not reset background-color, or it
+     overrides the .hub-input:disabled fill. The chevron colour is baked per
+     theme in --hub-select-chevron (a background image cannot read tokens). */
+  background-image: var(--hub-select-chevron);
   background-repeat: no-repeat;
   background-position: right .75rem center;
   background-size: 1rem;
 }
 @media (forced-colors:active) {
   .hub-select:not([multiple]):not([size]) { appearance:auto; background-image:none; }
+}
 }

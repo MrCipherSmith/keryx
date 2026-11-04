@@ -394,6 +394,9 @@ function Shell({
               <button
                 type="button"
                 key={p.id}
+                aria-label={p.name}
+                title={p.name}
+                aria-current={projectId === p.id ? "true" : undefined}
                 className={
                   "nav-item " + (projectId === p.id ? "project-active" : "")
                 }

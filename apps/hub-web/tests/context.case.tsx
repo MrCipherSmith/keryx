@@ -7,10 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import en from '../src/i18n/context.en';
 import { useDraftStore } from '../src/state/drafts';
 import ru from '../src/i18n/context.ru';
+import { mergeEvents } from '../src/features/context-model';
 import { DocumentsView, ProposalsView, RevisionsView, DeliveryView, HistoryView } from '../src/features/context';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), navigate: vi.fn(), location: { projectId: 'p', tab: 'documents', documentId: 'd' as string | undefined, revisionId: 'r' }, principal: { id: 'human:owner', kind: 'human', role: 'operator' } }));
 vi.mock('../src/app/hub-context', () => ({ useHub: () => ({ projectId: 'p', principal: mocks.principal, scopeKey: 1, location: mocks.location, navigate: mocks.navigate, refresh: vi.fn() }) }));
+vi.mock('../src/features/context-model', async importOriginal => { const actual = await importOriginal<typeof import('../src/features/context-model')>(); return { ...actual, mergeEvents: vi.fn(actual.mergeEvents) }; });
 vi.mock('../src/api/client', () => ({ getJson: mocks.get, postJson: mocks.post, errorMessage: (error: Error) => error.message }));
 
 const project = { id: 'p', name: 'Keryx', version: 2, contextRevision: 1, lineVersion: 0, lineRevisionId: null };
@@ -245,6 +247,31 @@ it('tells apart different actors who share a role in History', async () => {
   expect(screen.getByText('Actor: human:bob')).toBeVisible();
 });
 
+it('lets History flow titles and document paths break instead of widening the panel', async () => {
+  const longPath = 'docs/requirements/' + 'a-very-long-unbreakable-document-name-'.repeat(2) + 'end.md';
+  const base = { projectId: 'p', type: 'document-imported', actorId: 'human:alice', createdAt: '2026-10-26T00:00:00Z' };
+  const events = [{ ...base, sequence: 1, entityId: 'doc-1' }, { ...base, sequence: 2, entityId: 'flow-1' }];
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [{ id: 'flow-1', title: 'Flow-title-without-any-break-opportunity' }] } : path.endsWith('/documents') ? { documents: [{ id: 'doc-1', path: longPath }] } : { events, cursor: 2 }));
+  await mount(<HistoryView />);
+  for (const name of [longPath, 'Flow-title-without-any-break-opportunity']) {
+    const button = await screen.findByRole('button', { name });
+    expect(button.className).toContain('max-w-full');
+    expect(within(button).getByText(name).className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'break-all']));
+  }
+});
+
+it('does not re-derive History events when only the type filter changes', async () => {
+  const events = [{ sequence: 1, projectId: 'p', type: 'flow-created', actorId: 'a', entityId: 'x', createdAt: '2026-10-26T00:00:00Z' }, { sequence: 2, projectId: 'p', type: 'document-imported', actorId: 'a', entityId: 'y', createdAt: '2026-10-26T00:00:00Z' }];
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [] } : path.endsWith('/documents') ? { documents: [] } : { events, cursor: 2 }));
+  await mount(<HistoryView />);
+  const select = await screen.findByLabelText(en.historyEventType);
+  await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const before = vi.mocked(mergeEvents).mock.calls.length;
+  fireEvent.change(select, { target: { value: 'flow-created' } });
+  await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1));
+  expect(vi.mocked(mergeEvents).mock.calls.length).toBe(before);
+});
 
 it('loads revision metadata without full trees and fetches only the selected immutable revision', async () => {
   mocks.location.revisionId = '';
