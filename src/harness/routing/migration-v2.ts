@@ -410,14 +410,19 @@ function assertApplicablePlan(plan: RoutingV2MigrationPlan, confirmed: boolean, 
     || plan.targets.user.proposedDigest !== routingV2Digest(plan.targets.user.proposed)) {
     throw new Error("routing v2 migration proposed digest mismatch");
   }
-  const expectedDiff = [
-    { layer: "project", path: "/modelRouting", after: plan.targets.project.proposed },
-    { layer: "user", path: "/routingV2", after: plan.targets.user.proposed },
-  ];
-  if (plan.diff.length !== expectedDiff.length || plan.diff.some((entry, index) => {
-    const expected = expectedDiff[index];
-    return entry.layer !== expected.layer || entry.path !== expected.path || canonicalDigest(entry.after) !== canonicalDigest(expected.after);
-  })) throw new Error("routing v2 migration diff does not match its targets");
+  const projectDiff = plan.diff[0];
+  const userDiff = plan.diff[1];
+  if (
+    plan.diff.length !== 2
+    || projectDiff === undefined
+    || projectDiff.layer !== "project"
+    || projectDiff.path !== "/modelRouting"
+    || canonicalDigest(projectDiff.after) !== canonicalDigest(plan.targets.project.proposed)
+    || userDiff === undefined
+    || userDiff.layer !== "user"
+    || userDiff.path !== "/routingV2"
+    || canonicalDigest(userDiff.after) !== canonicalDigest(plan.targets.user.proposed)
+  ) throw new Error("routing v2 migration diff does not match its targets");
 }
 
 type TargetState = "pending" | "staged" | "noop" | "stale";
@@ -622,6 +627,37 @@ async function ensureBackup(plan: RoutingV2MigrationPlan, project: RootSnapshot,
   return createBackup(plan, project, user);
 }
 
+async function originalRoot(target: BackupTarget): Promise<RootSnapshot> {
+  if (!target.existed) return { file: target.path, existed: false, bytes: "", value: {} };
+  const bytes = await readFile(target.backupFile, "utf8");
+  if (sha256(bytes) !== target.digest) throw new Error(`routing v2 backup digest mismatch for ${target.path}`);
+  return { file: target.path, existed: true, bytes, value: parseRoot(bytes, target.path) };
+}
+
+function assertOriginalPlanConsistency(plan: RoutingV2MigrationPlan, project: RootSnapshot, user: RootSnapshot): void {
+  const pairs = [
+    { root: project, target: plan.targets.project, diff: plan.diff[0] },
+    { root: user, target: plan.targets.user, diff: plan.diff[1] },
+  ] as const;
+  for (const { root, target, diff } of pairs) {
+    const before = root.value[target.key];
+    const beforeLayer = before === undefined ? null : validateLayer(before, `original ${diff.layer}`);
+    if (sha256(root.bytes) !== target.inputDigest || root.existed !== target.existed) {
+      throw new Error(`routing v2 migration ${diff.layer} input digest mismatch`);
+    }
+    if (canonicalDigest(withoutKey(root.value, target.key)) !== target.baseDigest) {
+      throw new Error(`routing v2 migration ${diff.layer} base digest mismatch`);
+    }
+    if (canonicalDigest(diff.before) !== canonicalDigest(beforeLayer)) {
+      throw new Error(`routing v2 migration ${diff.layer} diff before value mismatch`);
+    }
+    const writeRequired = routingV2Digest(beforeLayer) !== target.proposedDigest;
+    if (target.writeRequired !== writeRequired) {
+      throw new Error(`routing v2 migration ${diff.layer} write metadata mismatch`);
+    }
+  }
+}
+
 function mergeTarget(root: RootSnapshot, target: RoutingV2MigrationTarget): string {
   const next = { ...root.value };
   if (target.proposed === null) delete next[target.key];
@@ -739,18 +775,32 @@ export async function applyRoutingV2Migration(plan: RoutingV2MigrationPlan, opti
     const projectState = targetState(project, plan.targets.project);
     const userState = targetState(user, plan.targets.user);
     if (projectState === "stale" || userState === "stale") throw new Error("routing v2 migration plan is stale");
-    await ensureBackup(plan, project, user, [projectState, userState]);
+    const backup = await ensureBackup(plan, project, user, [projectState, userState]);
+    if (projectState === "staged" || userState === "staged") {
+      const [originalProject, originalUser] = await Promise.all([
+        originalRoot(backup.targets.project),
+        originalRoot(backup.targets.user),
+      ]);
+      assertOriginalPlanConsistency(plan, originalProject, originalUser);
+    } else {
+      assertOriginalPlanConsistency(plan, project, user);
+    }
     await options.fault?.("after-backup");
 
-    if (projectState === "pending") await writeFileAtomic(plan.targets.project.file, mergeTarget(project, plan.targets.project));
+    if (projectState === "pending") {
+      const currentProject = await readRoot(plan.targets.project.file);
+      if (targetState(currentProject, plan.targets.project) !== "pending") throw new Error("routing v2 project configuration became stale during apply");
+      await writeFileAtomic(plan.targets.project.file, mergeTarget(currentProject, plan.targets.project));
+    }
     await options.fault?.("after-project-write");
     if (userState === "pending") writeUserTarget(plan);
     await options.fault?.("after-user-write");
 
-    const staged = await verifyStaged(plan);
+    await verifyStaged(plan);
     await options.fault?.("before-activation");
+    const finalStaged = await verifyStaged(plan);
     ensureKeryxSubdir(["routing-v2", "activations"], plan.locations.configRoot);
-    await writeFileAtomic(plan.locations.activationFile, markerJson(activeMarkerFor(plan, staged.project, staged.user)), { mode: 0o600 });
+    await writeFileAtomic(plan.locations.activationFile, markerJson(activeMarkerFor(plan, finalStaged.project, finalStaged.user)), { mode: 0o600 });
     readActiveRoutingV2Layers(plan.locations.projectRoot, plan.locations.configRoot);
     return { status: "applied", migrationId: plan.migrationId, activationFile: plan.locations.activationFile };
   });

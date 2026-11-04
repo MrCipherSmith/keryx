@@ -38,7 +38,10 @@ function stubProvider(): ProviderPort {
   };
 }
 
-async function activeTool(user: RoutingV2ConfigLayer) {
+async function activeTool(
+  user: RoutingV2ConfigLayer,
+  detected: readonly { name: string; models?: readonly string[] }[] = [{ name: "ollama", models: ["medium", "max"] }],
+) {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-project-"));
   const configDir = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-config-"));
   roots.push(cwd, configDir);
@@ -52,7 +55,7 @@ async function activeTool(user: RoutingV2ConfigLayer) {
     cwd,
     routingConfigDir: configDir,
     getParentModel: () => ({ providerId: "ollama", modelId: "medium" }),
-    getDetectedProviders: () => [{ name: "ollama", models: ["medium", "max"] }],
+    getDetectedProviders: () => detected,
     makeProvider: (providerId, modelId) => {
       built.push({ providerId, modelId });
       return stubProvider();
@@ -123,6 +126,21 @@ test("routing v2 blocks an unverified subagent target before provider constructi
 
   expect(result).toMatchObject({ status: "Denied", isError: true });
   expect(result.output).toContain("candidate-unverified");
+  expect(built).toEqual([]);
+});
+
+test("routing v2 snapshot preserves the child provider authorization gate", async () => {
+  const { tool, built } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "mystery", modelId: "x" } } },
+  }, [
+    { name: "ollama", models: ["medium"] },
+    { name: "mystery", models: ["x"] },
+  ]);
+  const result = await tool.invoke({ task: "must stay authorized", mode: "read_only" });
+
+  expect(result).toMatchObject({ status: "Denied", isError: true });
+  expect(result.output).toContain("policy-denied");
   expect(built).toEqual([]);
 });
 

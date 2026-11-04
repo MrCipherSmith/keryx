@@ -87,9 +87,8 @@ function validFacts(facts: RoutingModelFacts): boolean {
 }
 
 function assignmentFor(request: RoutingRequest, config: NormalizedRoutingV2Config): AssignmentResolution {
-  if (request.userOverride !== undefined) return { assignment: request.userOverride, source: "user-override", recommendationSource: "none" };
-  const configured = config.categories[request.category];
-  const source = config.categorySources[request.category];
+  const configured = request.userOverride ?? config.categories[request.category];
+  const source = request.userOverride !== undefined ? "user-override" : config.categorySources[request.category];
   if (configured.mode !== "auto") return { assignment: configured, source, recommendationSource: "none" };
   if (request.recommendation !== undefined) {
     return {

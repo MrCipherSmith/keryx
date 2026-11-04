@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { RoutingTable } from "./table";
@@ -16,6 +17,17 @@ import {
 } from "./migration-v2";
 
 const roots: string[] = [];
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (typeof value !== "object" || value === null) return value;
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(Object.keys(record).sort().map((key) => [key, canonical(record[key])]));
+}
+
+function digest(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+}
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-routing-v2-migration-"));
@@ -80,6 +92,15 @@ describe("routing v2 migration", () => {
     await expect(applyRoutingV2Migration({ ...plan, migrationId: "tampered" }, { confirmed: true, cwd: f.cwd, configDir: f.configDir })).rejects.toThrow("digest");
   });
 
+  test("apply rejects an internally inconsistent plan even with a recomputed envelope digest", async () => {
+    const f = await fixture();
+    const plan = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
+    const changed = { ...plan, diff: plan.diff.map((entry) => entry.layer === "project" ? { ...entry, after: null } : entry) };
+    const { planDigest: _oldDigest, ...body } = changed;
+    const tampered = { ...body, planDigest: digest(body) } as typeof plan;
+    await expect(applyRoutingV2Migration(tampered, { confirmed: true, cwd: f.cwd, configDir: f.configDir })).rejects.toThrow("diff does not match");
+  });
+
   test("malformed source config blocks dry-run without creating trusted state", async () => {
     const f = await fixture();
     await writeFile(f.projectFile, "{not-json");
@@ -110,6 +131,68 @@ describe("routing v2 migration", () => {
     await expect(applyRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir, fault: failAt })).rejects.toThrow("simulated crash");
     expect(readActiveRoutingV2Layers(f.cwd, f.configDir)).toBeUndefined();
     expect(await applyRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir })).toMatchObject({ status: "applied" });
+  });
+
+  test("concurrent project edits at transaction seams are preserved and never activated", async () => {
+    const f = await fixture();
+    const plan = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
+    await expect(applyRoutingV2Migration(plan, {
+      confirmed: true,
+      cwd: f.cwd,
+      configDir: f.configDir,
+      fault: async (point) => {
+        if (point === "after-backup") await writeFile(f.projectFile, '{"concurrent":"must-survive"}\n');
+      },
+    })).rejects.toThrow("became stale");
+    expect(await readFile(f.projectFile, "utf8")).toBe('{"concurrent":"must-survive"}\n');
+    expect(await Bun.file(routingV2ActivationPath(f.cwd, f.configDir)).exists()).toBe(false);
+
+    const retry = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
+    await expect(applyRoutingV2Migration(retry, {
+      confirmed: true,
+      cwd: f.cwd,
+      configDir: f.configDir,
+      fault: async (point) => {
+        if (point !== "before-activation") return;
+        const current = JSON.parse(await readFile(f.projectFile, "utf8"));
+        await writeFile(f.projectFile, `${JSON.stringify({ ...current, modelRouting: { schemaVersion: 2, categories: { coding: { mode: "baseline" } } } }, null, 2)}\n`);
+      },
+    })).rejects.toThrow("verification failed");
+    expect(await Bun.file(routingV2ActivationPath(f.cwd, f.configDir)).exists()).toBe(false);
+  });
+
+  test("null and already-identical target layers are no-op writes but may be activated", async () => {
+    const f = await fixture();
+    const oneLayer = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project });
+    expect(oneLayer.targets.user.writeRequired).toBe(false);
+    await applyRoutingV2Migration(oneLayer, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
+    expect((JSON.parse(await readFile(f.userFile, "utf8")) as Record<string, unknown>).routingV2).toBeUndefined();
+    await rollbackRoutingV2Migration(oneLayer, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
+
+    const projectBytes = `${JSON.stringify({ keep: "project", modelRouting: f.project })}\n`;
+    const userBytes = `${JSON.stringify({ keep: "user", routingV2: f.user })}\n`;
+    await writeFile(f.projectFile, projectBytes);
+    await writeFile(f.userFile, userBytes, { mode: 0o600 });
+    const identical = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
+    expect([identical.targets.project.writeRequired, identical.targets.user.writeRequired]).toEqual([false, false]);
+    await applyRoutingV2Migration(identical, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
+    expect(await readFile(f.projectFile, "utf8")).toBe(projectBytes);
+    expect(await readFile(f.userFile, "utf8")).toBe(userBytes);
+  });
+
+  test("migration refuses project and auth symlinks", async () => {
+    const f = await fixture();
+    const shared = path.join(f.root, "shared.json");
+    await writeFile(shared, "{}\n");
+    await rm(f.projectFile);
+    await symlink(shared, f.projectFile);
+    await expect(createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project })).rejects.toThrow("non-symlink");
+
+    await rm(f.projectFile);
+    await writeFile(f.projectFile, "{}\n");
+    await rm(f.userFile);
+    await symlink(path.join(f.root, "missing-auth.json"), f.userFile);
+    await expect(createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project })).rejects.toThrow("non-symlink");
   });
 
   test("rollback restores exact bytes, flips the marker, and is idempotent", async () => {
