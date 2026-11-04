@@ -430,6 +430,24 @@ test("a chosen Flow whose list is still loading names that as the blocker", asyn
   expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
 });
 const toggle = () => screen.getByRole("button", { name: "Native command catalogue" });
+test("provider, model and routing shortcuts open the typed catalogue from the chat composer", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  const message = screen.getByLabelText("Message");
+
+  fireEvent.click(screen.getByRole("button", { name: "/connect" }));
+  const search = await screen.findByLabelText("Search Keryx commands");
+  expect(search).toHaveValue("/connect");
+  fireEvent.click(screen.getByRole("button", { name: "/model" }));
+  expect(search).toHaveValue("/model");
+
+  fireEvent.change(message, { target: { value: "/routing" } });
+  fireEvent.keyDown(message, { key: "Enter" });
+  expect(search).toHaveValue("/routing");
+  expect(message).toHaveValue("");
+});
+
 test("Escape right after / closes the catalogue and types the slash; typing in it first keeps Escape a plain close", async () => {
   navigate({ tab: "sessions", sessionId: "s" }, true);
   show();

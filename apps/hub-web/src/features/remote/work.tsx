@@ -34,6 +34,9 @@ import {
   Feedback,
   type Controller,
 } from "./shared";
+const chatCommandShortcuts = ["/connect", "/model", "/routing"] as const;
+type ChatCommandShortcut = typeof chatCommandShortcuts[number];
+
 export type MessageDraft = {
   text: string; prepared: boolean; mode: string; flowId: string; flowVersion: number; specDigest: string;
   criteriaDigest: string; consent: boolean; consentVersion: number | null; busyPolicy: "reject" | "enqueue";
@@ -62,6 +65,7 @@ export function MessageComposer({
 }) {
   const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
   const [focusToken, setFocusToken] = useState(0);
+  const [commandShortcut, setCommandShortcut] = useState<ChatCommandShortcut>();
   const commandsId = useId();
   const commandTrigger = useRef<HTMLButtonElement>(null);
   // Set while the catalogue was opened by '/' and nothing has been done in it yet (no key other than Escape, no
@@ -198,7 +202,23 @@ export function MessageComposer({
       }
     });
   }
+  function openCommandShortcut(shortcut: ChatCommandShortcut) {
+    slashOpened.current = null;
+    setCommandShortcut(shortcut);
+    setCommands("open");
+    setFocusToken(token => token + 1);
+  }
+
+  function openDraftCommand(): boolean {
+    const shortcut = chatCommandShortcuts.find(command => command === draft.text.trim());
+    if (shortcut === undefined || draft.prepared || nativeOperation || nativePending.error) return false;
+    editText("");
+    openCommandShortcut(shortcut);
+    return true;
+  }
+
   function submit() {
+    if (openDraftCommand()) return;
     const assoc=association();
     if(nativeOperation||nativePending.error)return;
     if(draft.prepared)return;
@@ -225,10 +245,15 @@ export function MessageComposer({
           value={draft.text}
           rows={3}
           onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && openDraftCommand()) {
+              event.preventDefault();
+              return;
+            }
             if (event.key !== "/" || draft.text || event.nativeEvent.isComposing ||
                 event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
             event.preventDefault();
             slashOpened.current = event.currentTarget;
+            setCommandShortcut(undefined);
             setCommands("open");
             // Already open: no state change re-runs the focus effect, so ask for it explicitly.
             setFocusToken(token => token + 1);
@@ -247,6 +272,11 @@ export function MessageComposer({
       >
         <span aria-hidden="true">/</span> {t("commands")}
       </Button>
+      {chatCommandShortcuts.map(shortcut => (
+        <Button key={shortcut} variant="secondary" onClick={() => openCommandShortcut(shortcut)}>
+          {shortcut}
+        </Button>
+      ))}
       {commands !== "unopened" && (
         <div id={commandsId} hidden={commands !== "open"}
           onPointerDownCapture={() => { slashOpened.current = null; }}
@@ -258,7 +288,8 @@ export function MessageComposer({
           closeCommands();
           if (field && !draft.text) { editText("/"); field.focus(); }
         }}>
-          <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} focusToken={focusToken} />
+          <Commands record={record} control={control} onOutcome={onCommandOutcome}
+            visible={commands === "open"} focusToken={focusToken} initialSearch={commandShortcut} />
         </div>
       )}
       <p className="composer-hint">{t("secretWarning")}</p>
