@@ -320,11 +320,17 @@ async function loginSubscriptionInReadline(io: ShellIO, deps: PickProviderModelD
  */
 export async function pickProviderModel(
   io: ShellIO,
-  detected: DetectedProvider[],
+  allDetected: DetectedProvider[],
   deps: PickProviderModelDeps = {},
 ): Promise<{ provider: string; model: string; baseUrl?: string }> {
   const fetchFn = deps.fetch ?? globalThis.fetch;
   const env = deps.env ?? process.env;
+  // `detectProviders()` always lists anthropic so `/connect` can prompt for a key;
+  // without one, selecting it would build an unusable FakeProvider. Drop it here
+  // unless a key is present.
+  const hasAnthropicKey = typeof env.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.length > 0;
+  const detected = allDetected.filter((d) => d.name !== "anthropic" || hasAnthropicKey);
+  if (detected.length === 0) throw new Error("No usable providers available; configure a provider credential first.");
   const iterator = io.lines[Symbol.asyncIterator]();
   const nextLine = async (): Promise<string | undefined> => {
     const result = await iterator.next();
