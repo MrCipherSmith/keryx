@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "482",
+  "slug": "review-stop-gate-never-hangs-on-a-large-",
+  "title": "Review stop gate never hangs on a large tree; mutation pass copies no nested checkouts and sweeps stale scratch",
+  "status": "in-progress",
+  "createdAt": "2026-11-04T07:17:01.660Z",
+  "updatedAt": "2026-11-04T07:41:08.572Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6ab1d57f2a1c9b730fcbd67613ad309a1a3dd8267b260fe01e2e12b3c75a0136",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-04T07:21:04.220Z",
+            "outcome": "started",
+            "detail": "482-T2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written red-first inside T2 and T5 by the implementing worker (TDD); a separate test task would split one change across two dispatches"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Mutation pass: skip nested git checkouts in copyTree, owner marker, sweep stale scratch; help + guide text (AC5, AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-04T07:21:07.037Z",
+            "outcome": "started",
+            "detail": "482-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Before/after measurement of one gate evaluation on a fixture with large scratch + nested worktree (AC8)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-04T07:17:01.660Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-04T07:20:13.658Z",
+      "event": "task-added",
+      "detail": "T5: Mutation pass: skip nested git checkouts in copyTree, owner marker, sweep stale scratch; help + guide text (AC5, AC6)"
+    },
+    {
+      "at": "2026-11-04T07:20:16.764Z",
+      "event": "task-added",
+      "detail": "T6: Before/after measurement of one gate evaluation on a fixture with large scratch + nested worktree (AC8)"
+    },
+    {
+      "at": "2026-11-04T07:20:23.028Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-04T07:20:30.104Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-04T07:20:34.040Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-04T07:20:37.572Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-04T07:21:04.220Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 482-T2"
+    },
+    {
+      "at": "2026-11-04T07:21:07.037Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 482-T5"
+    },
+    {
+      "at": "2026-11-04T07:40:57.467Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-04T07:41:05.478Z",
+      "event": "task-done",
+      "detail": "T5: Mutation pass: skip nested git checkouts in copyTree, owner marker, sweep stale scratch; help + guide text (AC5, AC6)"
+    },
+    {
+      "at": "2026-11-04T07:41:08.572Z",
+      "event": "task-done",
+      "detail": "T6: Before/after measurement of one gate evaluation on a fixture with large scratch + nested worktree (AC8)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/completion-gate.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/completion-gate.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/completion-gate.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/agent-review-gate.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun run typecheck"
+    },
+    "AC8": {
+      "kind": "judged"
+    }
+  }
+}
