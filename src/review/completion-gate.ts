@@ -21,18 +21,24 @@ export type OpenManagedReview = {
   reviewId: string;
   packageDir: string;
   blockers: string[];
-  /** Changes whenever the package or the working data under it gains or changes an artifact. */
+  /**
+   * Changes whenever the package or the working data under it gains or changes an artifact within what the gate reads:
+   * at most {@link MAX_SIGNATURE_FILES} entries per tree (data/review and the package), in name order, with the mutation
+   * scratch left out. A tree larger than that ends in the truncation marker, and a change past that point is not seen.
+   */
   signature: string;
 };
 
 /** At most this many file hashes are remembered between stops; the oldest goes first. */
-const MAX_HASHED_FILES = 4096;
+export const MAX_HASHED_FILES = 4096;
+/** The trees the gate signs per stop: the working data under `data/review` and the package itself. */
+export const SIGNATURE_WALKS_PER_STOP = 2;
 /**
  * Entries (files and directories) one {@link dirSignature} walk visits before it stops and marks the signature
- * truncated. The gate walks two trees per stop (data/review and the package), so two budgets together stay within
+ * truncated. The gate walks {@link SIGNATURE_WALKS_PER_STOP} trees per stop, so their budgets together stay within
  * {@link MAX_HASHED_FILES}: an unchanged tree is then served entirely from the hash cache on the next stop.
  */
-export const MAX_SIGNATURE_FILES = 2048;
+export const MAX_SIGNATURE_FILES = MAX_HASHED_FILES / SIGNATURE_WALKS_PER_STOP;
 /**
  * A remembered hash is reused only for a file whose timestamps were already this much older than the moment it was
  * hashed. Inside a filesystem's timestamp granularity a same-size rewrite can leave size and times unchanged (git's
@@ -45,13 +51,22 @@ const fileHashes = new Map<string, { key: string; hash: string }>();
 /** The number of file hashes currently remembered (for tests). */
 export const hashedFileCount = (): number => fileHashes.size;
 
-/** `now` is injectable so a test can age a file past {@link RACY_WINDOW_MS} without sleeping. */
+let fileReads = 0;
+/** How many times {@link fileHash} actually read a file's bytes (a cache miss), since the process started (for tests). */
+export const hashReadCount = (): number => fileReads;
+
+/**
+ * `now` is injectable so a test can age a file past {@link RACY_WINDOW_MS} without sleeping. Anything that is not a
+ * regular file (a FIFO, a socket, a device) is never opened: reading a FIFO blocks until a writer appears.
+ */
 export async function fileHash(file: string, now: number = Date.now()): Promise<string> {
   const info = await stat(file).catch(() => undefined);
   if (info === undefined) return "unreadable";
+  if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;
   const key = `${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.ino}`;
   const hit = fileHashes.get(file);
   if (hit !== undefined && hit.key === key) return hit.hash;
+  fileReads += 1;
   const hash = await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
   fileHashes.delete(file);
   if (hash !== "unreadable" && now - Math.max(info.mtimeMs, info.ctimeMs) > RACY_WINDOW_MS) {
@@ -74,7 +89,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 /** Appended where a walk ran out of budget; fixed text keeps an unchanged tree's signature stable. */
-const TRUNCATION_MARKER = "…truncated";
+export const TRUNCATION_MARKER = "…truncated";
 
 type SignatureOptions = {
   /** Absolute paths never walked or hashed. */
@@ -82,11 +97,18 @@ type SignatureOptions = {
   /** Entries this walk may still visit; shared by the recursion so one tree has one budget. */
   budget?: { remaining: number };
   signal?: AbortSignal | undefined;
+  /** The clock {@link fileHash} judges a file's age by; a test moves it instead of sleeping. */
+  now?: number | undefined;
 };
 
-/** A signature of every file under `dir` (by content; a file unchanged since the last stop is not read again). */
+/**
+ * A signature of the files under `dir` (by content; a file unchanged since the last stop is not read again): at most
+ * {@link MAX_SIGNATURE_FILES} entries (files and directories) in name order, with `skip` left out and symlinks and
+ * special files never read. When the budget runs out the signature ends in {@link TRUNCATION_MARKER}, so a change past
+ * that point is not seen.
+ */
 async function dirSignature(dir: string, options: SignatureOptions = {}): Promise<string> {
-  const { skip, signal } = options;
+  const { skip, signal, now } = options;
   const budget = options.budget ?? { remaining: MAX_SIGNATURE_FILES };
   try {
     const entries = await readdir(dir, { withFileTypes: true });
@@ -100,7 +122,7 @@ async function dirSignature(dir: string, options: SignatureOptions = {}): Promis
         break;
       }
       budget.remaining -= 1;
-      const content = entry.isDirectory() ? await dirSignature(file, { skip, budget, signal }) : await fileHash(file);
+      const content = entry.isDirectory() ? await dirSignature(file, { skip, budget, signal, now }) : await fileHash(file, now);
       parts.push(`${entry.name}:${content}`);
     }
     return parts.join(",");
@@ -746,6 +768,7 @@ export async function findReviewGateState(
   since: number,
   named: Partial<SessionReviewNames> = {},
   signal?: AbortSignal,
+  now?: number,
 ): Promise<OpenManagedReview | null> {
   throwIfAborted(signal);
   const roots = [...new Set([cwd, ...(named.roots ?? [])].map((r) => path.resolve(r)))];
@@ -766,6 +789,7 @@ export async function findReviewGateState(
     skip: new Set([path.join(workingRoot, SCRATCH_DIR)]),
     budget: { remaining: MAX_SIGNATURE_FILES },
     signal,
+    now,
   });
   if (best === null) {
     return {
@@ -778,7 +802,7 @@ export async function findReviewGateState(
   throwIfAborted(signal);
   const blockers = await reviewCompletionBlockers(best.dir);
   throwIfAborted(signal);
-  const packageSignature = await dirSignature(best.dir, { budget: { remaining: MAX_SIGNATURE_FILES }, signal });
+  const packageSignature = await dirSignature(best.dir, { budget: { remaining: MAX_SIGNATURE_FILES }, signal, now });
   return {
     reviewId: displayId(best.id, best.dir),
     packageDir: best.dir,
@@ -860,11 +884,15 @@ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
   const card = input.cardAvailable !== false;
   const stalls = input.lastSignature === open.signature ? input.stalls + 1 : 0;
   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
+    // A signature that ran out of budget only vouches for its first entries: say so instead of claiming no artifact is new.
+    const stalled = open.signature.includes(TRUNCATION_MARKER)
+      ? ` and no change in the first ${MAX_SIGNATURE_FILES} entries the gate reads in the last ${stalls}`
+      : ` and no new artifact in the last ${stalls}`;
     return {
       action: "stop",
       report:
         `Review ${open.reviewId} is not complete after ${input.continues} continue(s)` +
-        `${stalls >= MAX_REVIEW_GATE_STALLS ? " and no new artifact in the last " + stalls : ""}. ` +
+        `${stalls >= MAX_REVIEW_GATE_STALLS ? stalled : ""}. ` +
         `${card ? "The review_complete card" : "`keryx review complete`"} would still be refused on:\n${describeBlockers(open, card)}`,
     };
   }

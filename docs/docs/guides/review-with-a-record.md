@@ -194,9 +194,12 @@ is: `behavior` (the default) or `presentation` (copy, class names, display order
 
 `mutate` applies each proposed mutant in a scratch copy of the worktree (the
 worktree is never written) and records whether the tests failed. The copy leaves
-out nested git checkouts, such as the worktrees under `.claude/worktrees/` and
-`.worktrees/`, and a pass first removes scratch that earlier passes left behind
-when they died. The table in
+out linked worktrees, such as those under `.claude/worktrees/` and `.worktrees/`;
+submodules and embedded clones are copied, and the repository's own mutate-scratch
+never is, also with `--scratch tmp`. Before copying, a pass removes the operator's
+own `keryx-mutate-*` directories whose owner died (no heartbeat for two minutes)
+or stopped refreshing its marker for ten minutes, and unmarked ones older than six
+hours; the record carries `sweptScratch` and `sweepMs` only when it removed some. The table in
 `research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
 test command it was judged by and that command's exit code. A mutant that
 **survived** means no test pins that behaviour. A survivor shows a
@@ -956,7 +959,8 @@ model stops writing. Once the session has loaded `review-orchestrator` or run a 
 the shell does not accept a text-only finish while no package is closed: it names what is still missing
 (no package opened yet, missing artifacts, research or dispatch errors) and the next step, prints a
 `[review-gate]` line in the pane, and continues the turn. It gives up after 20 continues, or after three
-in a row that added no new artifact, and then reports the state instead of looping.
+in a row that added no new artifact, and then reports the state instead of looping. Progress is judged
+on the first 2 048 entries of each tree it reads, so on a larger package the gate can give up early.
 
 ## Verify the findings before you report them
 
@@ -1133,8 +1137,9 @@ your own copy, because keryx holds none.
 A review run in the shell is finished when `keryx review complete` accepts the package, not when the
 model stops writing. While a review package is open and `review complete` would still refuse, the
 shell does not accept a text-only finish: it names what is still missing, prints a `[review-gate]`
-line in the pane, and continues the turn. It gives up after 20 continues, or after two in a row that
-added no new artifact, and then reports the state instead of looping.
+line in the pane, and continues the turn. It gives up after 20 continues, or after three in a row that
+added no new artifact, and then reports the state instead of looping. Progress is judged on the first
+2 048 entries of each tree it reads, so on a larger package the gate can give up early.
 
 ## Verify
 

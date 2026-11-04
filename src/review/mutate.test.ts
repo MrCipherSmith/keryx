@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { BaselineError, doneMutantIds, EVIDENCE_DIR, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, STALE_SCRATCH_MS, sweepStaleScratch, unjudgedMutants, withBail, writeMutationEvidence } from "./mutate";
+import { BaselineError, doneMutantIds, EVIDENCE_DIR, HEARTBEAT_MS, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, STALE_HEARTBEAT_MS, STALE_SCRATCH_MS, sweepStaleScratch, unjudgedMutants, withBail, writeMutationEvidence } from "./mutate";
 import { DEFAULT_PROVENANCE_LIMITS, REVIEW_PACKAGES_DIR, worktreeProvenance } from "./worktree-provenance";
 
 let base: string;
@@ -236,79 +237,281 @@ describe("nested git checkouts and stale scratch", () => {
   const PROBE =
     'const fs = require("fs");\nconst out = process.argv[2];\n' +
     'fs.writeFileSync(out + ".ls", fs.readdirSync(".").sort().join("\\n"));\n' +
-    'fs.writeFileSync(out + ".owner", fs.readFileSync("../owner.json", "utf8"));\n';
+    'fs.writeFileSync(out + ".owner", fs.readFileSync("../owner.json", "utf8"));\n' +
+    'const deep = [];\nfor (const a of fs.readdirSync(".", { withFileTypes: true })) {\n' +
+    '  if (!a.isDirectory()) continue;\n  deep.push(a.name);\n' +
+    '  for (const b of fs.readdirSync(a.name, { withFileTypes: true })) if (b.isDirectory()) deep.push(a.name + "/" + b.name);\n}\n' +
+    'fs.writeFileSync(out + ".deep", deep.sort().join("\\n"));\n' +
+    'fs.writeFileSync(out + ".scratch", fs.existsSync(".metaproject/data/review/mutate-scratch") ? "yes" : "no");\n';
+  const spec = () => parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]);
+  const uid = process.getuid?.();
+  const isRoot = uid === 0;
 
-  test("a pass copies a submodule and ordinary directories but not embedded clones or linked worktrees", async () => {
+  /** A scratch directory with an owner marker (`owner` undefined: none); `ageMs` is the directory's age, `markerAgeMs` the marker's. */
+  async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {
+    const dir = path.join(into, name);
+    await mkdir(path.join(dir, "tree"), { recursive: true });
+    if (owner !== undefined) {
+      await writeFile(path.join(dir, "owner.json"), JSON.stringify(owner));
+      const marker = new Date(Date.now() - markerAgeMs);
+      await utimes(path.join(dir, "owner.json"), marker, marker);
+    }
+    const when = new Date(Date.now() - ageMs);
+    await utimes(dir, when, when);
+    return dir;
+  }
+
+  test("a pass leaves out linked worktrees and copies submodules, embedded clones and everything else", async () => {
     await writeFile(path.join(tree, "probe.js"), PROBE);
+    // Left out: a gitfile into a worktree admin dir, the same under a `modules` path, and one whose admin dir has commondir.
     await mkdir(path.join(tree, "nested-wt"), { recursive: true });
     await writeFile(path.join(tree, "nested-wt", ".git"), "gitdir: /x/.git/worktrees/nested-wt\n");
-    await mkdir(path.join(tree, "clone", ".git"), { recursive: true });
-    await mkdir(path.join(tree, "linked"), { recursive: true });
-    await symlink(path.join(base, "elsewhere"), path.join(tree, "linked", ".git"));
-    await mkdir(path.join(tree, "broken"), { recursive: true });
-    await mkdir(path.join(tree, "broken", ".git"), { recursive: true });
+    await mkdir(path.join(tree, "modules", "app"), { recursive: true });
+    await writeFile(path.join(tree, "modules", "app", ".git"), "gitdir: /x/modules/app/.git/worktrees/wt\n");
+    const admin = path.join(base, "admin", "wt-common");
+    await mkdir(admin, { recursive: true });
+    await writeFile(path.join(admin, "commondir"), "../..\n");
+    await mkdir(path.join(tree, "with-commondir"), { recursive: true });
+    await writeFile(path.join(tree, "with-commondir", ".git"), `gitdir: ${admin}\n`);
+    // Copied: submodules (their history is under .git/modules), a worktree-shaped gitfile that .gitmodules names, ...
     await mkdir(path.join(tree, "sub"), { recursive: true });
     await writeFile(path.join(tree, "sub", ".git"), "gitdir: ../.git/modules/sub\n");
     await mkdir(path.join(tree, "winsub"), { recursive: true });
     await writeFile(path.join(tree, "winsub", ".git"), "gitdir: ..\\.git\\modules\\winsub\n");
+    // A submodule checked out inside a linked worktree: its gitdir is under the worktree's admin dir, not one itself.
+    await mkdir(path.join(tree, "wtsub"), { recursive: true });
+    await writeFile(path.join(tree, "wtsub", ".git"), "gitdir: /x/.git/worktrees/wt/modules/wtsub\n");
+    await mkdir(path.join(tree, "listed"), { recursive: true });
+    await writeFile(path.join(tree, "listed", ".git"), "gitdir: /x/.git/worktrees/listed\n");
+    await mkdir(path.join(tree, "listed quoted"), { recursive: true });
+    await writeFile(path.join(tree, "listed quoted", ".git"), "gitdir: /x/.git/worktrees/listed-quoted\n");
+    await mkdir(path.join(tree, "listed-dir", ".git"), { recursive: true });
+    await writeFile(
+      path.join(tree, ".gitmodules"),
+      '[submodule "a"]\n\tpath = listed\n\turl = ../a\n[submodule "b"]\n\t path = "listed quoted"\n\turl = ../b\n[submodule "c"]\n\tpath=listed-dir\n\turl = ../c\n',
+    );
+    // ... an embedded clone, a `.git` link, a gitfile with no gitdir line, an unreadable gitfile, and ordinary directories.
+    await mkdir(path.join(tree, "clone", ".git"), { recursive: true });
+    await mkdir(path.join(tree, "linked"), { recursive: true });
+    await symlink(path.join(base, "elsewhere"), path.join(tree, "linked", ".git"));
+    await mkdir(path.join(tree, "no-gitdir"), { recursive: true });
+    await writeFile(path.join(tree, "no-gitdir", ".git"), "not a gitfile\n");
+    const unreadable = path.join(tree, "unreadable", ".git");
+    await mkdir(path.dirname(unreadable), { recursive: true });
+    await writeFile(unreadable, "gitdir: /x/.git/worktrees/unreadable\n");
+    if (!isRoot) await chmod(unreadable, 0o000);
     await mkdir(path.join(tree, "plain"), { recursive: true });
     await writeFile(path.join(tree, "plain", "a.txt"), "a");
     const out = path.join(base, "seen");
-    await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
+    try {
+      await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: spec() });
+    } finally {
+      if (!isRoot) await chmod(unreadable, 0o600);
+    }
     const seen = (await readFile(`${out}.ls`, "utf8")).split("\n");
-    expect(seen).toContain("sub");
-    expect(seen).toContain("winsub");
-    expect(seen).toContain("plain");
-    for (const skipped of ["nested-wt", "clone", "linked", "broken"]) expect(seen).not.toContain(skipped);
+    const deep = (await readFile(`${out}.deep`, "utf8")).split("\n");
+    for (const copied of ["sub", "winsub", "wtsub", "listed", "listed quoted", "listed-dir", "clone", "linked", "no-gitdir", "plain", "modules"]) expect(seen).toContain(copied);
+    // An unreadable gitfile is not proof of a worktree: the directory is copied (root reads it, and then it is one).
+    if (!isRoot) expect(seen).toContain("unreadable");
+    for (const skipped of ["nested-wt", "with-commondir"]) expect(seen).not.toContain(skipped);
+    expect(deep).not.toContain("modules/app");
+  });
+
+  test("a red baseline names how many linked worktrees the copy left out", async () => {
+    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
+    for (const dir of ["wt-a", path.join("deep", "wt-b")]) {
+      await mkdir(path.join(tree, dir), { recursive: true });
+      await writeFile(path.join(tree, dir, ".git"), "gitdir: /x/.git/worktrees/w\n");
+    }
+    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BaselineError);
+    expect((error as Error).message).toMatch(/the copy left out 2 linked worktree\(s\) \(first: (wt-a|deep[\\/]wt-b)\)/);
+  });
+
+  test("a red baseline with no linked worktree says nothing about them", async () => {
+    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
+    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
+    expect((error as Error).message).not.toContain("linked worktree");
   });
 
   test("a pass writes owner.json with its own pid beside the copy, not inside it", async () => {
     await writeFile(path.join(tree, "probe.js"), PROBE);
     const out = path.join(base, "seen");
-    await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
+    await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: spec() });
     const owner = JSON.parse(await readFile(`${out}.owner`, "utf8")) as { pid: number; startedAt: string };
     expect(owner.pid).toBe(process.pid);
     expect(Number.isNaN(Date.parse(owner.startedAt))).toBe(false);
     expect((await readFile(`${out}.ls`, "utf8")).split("\n")).not.toContain("owner.json");
   });
 
+  test("LOGIC-001: the repository's own scratch is never copied, with the copy elsewhere, and dead passes in it are swept", async () => {
+    await writeFile(path.join(tree, "probe.js"), PROBE);
+    const repoScratch = path.join(tree, SCRATCH_DIR);
+    // A dead pass (its marker is old, its pid is not alive) and a live one (this process, a fresh marker).
+    const dead = await make("keryx-mutate-DEADDD", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS, repoScratch);
+    await writeFile(path.join(dead, "tree", "stale.txt"), "stale");
+    const live = await make("keryx-mutate-LIVEEE", { pid: process.pid, startedAt: "x" }, 1000, 1000, repoScratch);
+    const out = path.join(base, "seen");
+    const record = await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: spec() });
+    expect(await readFile(`${out}.scratch`, "utf8")).toBe("no");
+    expect(existsSync(dead)).toBe(false);
+    expect(existsSync(live)).toBe(true);
+    expect(record.sweptScratch).toBe(1);
+  });
+
   test("sweepStaleScratch removes dead-owner and old unmarked passes and keeps live, fresh and foreign-named ones", async () => {
-    const now = Date.now();
-    const make = async (name: string, owner: unknown, ageMs: number) => {
-      const dir = path.join(scratch, name);
-      await mkdir(path.join(dir, "tree"), { recursive: true });
-      if (owner !== undefined) await writeFile(path.join(dir, "owner.json"), JSON.stringify(owner));
-      const when = new Date(now - ageMs);
-      await utimes(dir, when, when);
-    };
     const old = STALE_SCRATCH_MS + 60_000;
-    await make("keryx-mutate-AAAAAA", { pid: 111, startedAt: "x" }, 1000);
+    // A marker counts as dead only once it is also older than two heartbeats, so a dead owner's marker is aged past that.
+    await make("keryx-mutate-AAAAAA", { pid: 111, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
     await make("keryx-mutate-BBBBBB", undefined, old);
-    await make("keryx-mutate-CCCCCC", { pid: 222, startedAt: "x" }, old);
+    await make("keryx-mutate-CCCCCC", { pid: 222, startedAt: "x" }, old, 3 * HEARTBEAT_MS);
     await make("keryx-mutate-DDDDDD", undefined, 1000);
     await make("keryx-mutate-test-xyz", undefined, old);
-    const removed = await sweepStaleScratch(scratch, { now: () => now, isAlive: (pid) => pid === 222 });
+    const removed = await sweepStaleScratch(scratch, { isAlive: (pid) => pid === 222 });
     expect(removed).toBe(2);
     expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-CCCCCC", "keryx-mutate-DDDDDD", "keryx-mutate-test-xyz"]);
   });
 
-  test("sweepStaleScratch treats EPERM as alive and a missing base as nothing to do", async () => {
-    await mkdir(path.join(scratch, "keryx-mutate-EEEEEE"), { recursive: true });
-    await writeFile(path.join(scratch, "keryx-mutate-EEEEEE", "owner.json"), JSON.stringify({ pid: 1, startedAt: "x" }));
-    expect(await sweepStaleScratch(scratch, { isAlive: () => { throw Object.assign(new Error("no"), { code: "EPERM" }); } })).toBe(0);
+  test("sweepStaleScratch: a missing base is nothing to do", async () => {
     expect(await sweepStaleScratch(path.join(base, "absent"))).toBe(0);
   });
 
-  test("a pass sweeps a dead pass's scratch first and reports how many it removed", async () => {
-    const stale = path.join(scratch, "keryx-mutate-ZZZZZZ");
-    await mkdir(path.join(stale, "tree"), { recursive: true });
-    // pid 2^31-2 is never a live process on a normal host, so process.kill(pid, 0) reports ESRCH.
-    await writeFile(path.join(stale, "owner.json"), JSON.stringify({ pid: 2147483646, startedAt: "x" }));
-    const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
+  test("sweepStaleScratch: a probe that throws keeps the directory, and the sweep goes on to the next one", async () => {
+    for (let i = 1; i <= 4; i += 1) {
+      await make(`keryx-mutate-AAAAA${i}`, { pid: 111, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+      await make(`keryx-mutate-ZZZZZ${i}`, { pid: 222, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+    }
+    const removed = await sweepStaleScratch(scratch, {
+      isAlive: (pid) => {
+        if (pid === 111) throw Object.assign(new Error("no"), { code: "EPERM" });
+        return false;
+      },
+    });
+    expect(removed).toBe(4);
+    expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-AAAAA1", "keryx-mutate-AAAAA2", "keryx-mutate-AAAAA3", "keryx-mutate-AAAAA4"]);
+  });
+
+  describe("the real liveness probe", () => {
+    // The default `isAlive` is `process.kill(pid, 0)`: alive and EPERM mean the process exists, only ESRCH means it is gone.
+    const staleButNotAbandoned = 3 * HEARTBEAT_MS;
+    test("TP-001: this process and pid 1 are kept; the pid of a process that has exited is removed", async () => {
+      const exited = spawnSync(process.execPath, ["-e", ""]);
+      expect(exited.pid).toBeGreaterThan(0);
+      await make("keryx-mutate-SELFSE", { pid: process.pid, startedAt: "x" }, 1000, staleButNotAbandoned);
+      // pid 1 is EPERM for a process that is not root, and alive for root.
+      await make("keryx-mutate-INITIN", { pid: 1, startedAt: "x" }, 1000, staleButNotAbandoned);
+      await make("keryx-mutate-GONEGO", { pid: exited.pid, startedAt: "x" }, 1000, staleButNotAbandoned);
+      expect(await sweepStaleScratch(scratch)).toBe(1);
+      expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-INITIN", "keryx-mutate-SELFSE"]);
+    });
+  });
+
+  describe("a marker that stops being refreshed ages out", () => {
+    test("HL-001: a live pid whose marker is older than STALE_HEARTBEAT_MS is removed, whatever the pid says", async () => {
+      await make("keryx-mutate-REUSED", { pid: process.pid, startedAt: "x" }, 1000, STALE_HEARTBEAT_MS + 60_000);
+      await make("keryx-mutate-FRESHH", { pid: process.pid, startedAt: "x" }, 1000, STALE_HEARTBEAT_MS - 60_000);
+      expect(await sweepStaleScratch(scratch)).toBe(1);
+      expect(await readdir(scratch)).toEqual(["keryx-mutate-FRESHH"]);
+    });
+
+    test("HL-001: a dead pid with a fresh marker is kept (another PID namespace sees a live pass as gone); it goes after two heartbeats", async () => {
+      await make("keryx-mutate-FRESHH", { pid: 999, startedAt: "x" }, 1000, 1000);
+      await make("keryx-mutate-JUSTIN", { pid: 999, startedAt: "x" }, 1000, 2 * HEARTBEAT_MS - 30_000);
+      await make("keryx-mutate-JUSTAF", { pid: 999, startedAt: "x" }, 1000, 2 * HEARTBEAT_MS + 30_000);
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(1);
+      expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-FRESHH", "keryx-mutate-JUSTIN"]);
+    });
+
+    test("the thresholds are the options' when given", async () => {
+      await make("keryx-mutate-ONEONE", { pid: 999, startedAt: "x" }, 1000, 5_000);
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false, heartbeatMs: 1_000 })).toBe(1);
+      await make("keryx-mutate-TWOTWO", { pid: process.pid, startedAt: "x" }, 1000, 5_000);
+      expect(await sweepStaleScratch(scratch, { staleHeartbeatMs: 1_000 })).toBe(1);
+    });
+
+    test("HL-001: a running pass refreshes its owner marker", async () => {
+      await writeFile(
+        path.join(tree, "beat.mjs"),
+        'import fs from "node:fs";\nconst old = new Date(Date.now() - 3_600_000);\nfs.utimesSync("../owner.json", old, old);\n' +
+          'await new Promise((resolve) => setTimeout(resolve, 600));\nif (fs.statSync("../owner.json").mtimeMs < Date.now() - 300_000) process.exit(1);\n',
+      );
+      const record = await runMutation({ worktree: tree, command: `"${process.execPath}" beat.mjs`, scratchRoot: scratch, heartbeatMs: 50, mutants: spec() });
+      expect(record.baseline.exitCode).toBe(0);
+    });
+  });
+
+  describe("the sweep touches only the operator's own directories and never blocks", () => {
+    const dead = { pid: 111, startedAt: "x" };
+
+    test("SEC-001: a directory owned by another uid is kept", async () => {
+      if (uid === undefined) return;
+      await make("keryx-mutate-FOREIG", dead, 1000, 3 * HEARTBEAT_MS);
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid: uid + 1 })).toBe(0);
+      expect(await readdir(scratch)).toEqual(["keryx-mutate-FOREIG"]);
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid })).toBe(1);
+    });
+
+    test("SEC-001: a FIFO named owner.json does not stall the sweep; the directory is unmarked", async () => {
+      if (process.platform === "win32") return;
+      const old = STALE_SCRATCH_MS + 60_000;
+      const stale = await make("keryx-mutate-FIFOOL", undefined, old);
+      const fresh = await make("keryx-mutate-FIFOFR", undefined, 1000);
+      for (const dir of [stale, fresh]) expect(spawnSync("mkfifo", [path.join(dir, "owner.json")]).status).toBe(0);
+      // Creating the FIFO touched the directory; put its age back.
+      const aged = new Date(Date.now() - old);
+      await utimes(stale, aged, aged);
+      const outcome = await Promise.race([sweepStaleScratch(scratch), new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 5_000))]);
+      expect(outcome).toBe(1);
+      expect(await readdir(scratch)).toEqual(["keryx-mutate-FIFOFR"]);
+    });
+
+    test("SEC-001: an oversize marker counts as unmarked, so a fresh directory is kept", async () => {
+      const dir = await make("keryx-mutate-BIGBIG", dead, 1000, 3 * HEARTBEAT_MS);
+      await writeFile(path.join(dir, "owner.json"), JSON.stringify({ ...dead, pad: "x".repeat(8192) }));
+      const marker = new Date(Date.now() - 3 * HEARTBEAT_MS);
+      await utimes(path.join(dir, "owner.json"), marker, marker);
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
+    });
+
+    test("TP-M32: a pid of 0, a negative pid or a fractional one is no marker, so a fresh directory is kept", async () => {
+      for (const [name, pid] of [["keryx-mutate-ZEROZE", 0], ["keryx-mutate-NEGNEG", -5], ["keryx-mutate-FRACFR", 1.5], ["keryx-mutate-STRSTR", "7"]] as const)
+        await make(name, { pid, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
+      expect(await readdir(scratch)).toHaveLength(4);
+    });
+
+    test("TP-M34: a file or a link named like a scratch directory is left alone", async () => {
+      await writeFile(path.join(scratch, "keryx-mutate-FILEFI"), "not a directory");
+      const target = path.join(base, "target");
+      await mkdir(target);
+      await writeFile(path.join(target, "owner.json"), JSON.stringify(dead));
+      await symlink(target, path.join(scratch, "keryx-mutate-LINKLI"), "dir");
+      expect(await sweepStaleScratch(scratch, { isAlive: () => false, now: () => Date.now() + 10 * STALE_SCRATCH_MS })).toBe(0);
+      expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-FILEFI", "keryx-mutate-LINKLI"]);
+      expect(existsSync(path.join(target, "owner.json"))).toBe(true);
+    });
+  });
+
+  test("a pass sweeps a dead pass's scratch first and reports how many it removed and how long it took", async () => {
+    // pid 2^31-2 is never a live process on a normal host, so process.kill(pid, 0) reports ESRCH; the marker is old enough to count.
+    const stale = await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+    const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() });
     expect(record.sweptScratch).toBe(1);
+    expect(typeof record.sweepMs).toBe("number");
     expect(existsSync(stale)).toBe(false);
-    const clean = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
+    const clean = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() });
     expect("sweptScratch" in clean).toBe(false);
+    expect("sweepMs" in clean).toBe(false);
+  });
+
+  test("TP-M41: a pass whose baseline is red still carries what it swept", async () => {
+    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
+    await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BaselineError);
+    const record = (error as BaselineError).record;
+    expect(record.sweptScratch).toBe(1);
+    expect(typeof record.sweepMs).toBe("number");
   });
 });
 
@@ -383,6 +586,15 @@ describe("renderMutationTable", () => {
     expect(lines).toContain("Cost: provenance 12 ms, copy 1234 ms, mutants 56789 ms, load 3.1/2.8/2.5.");
     expect(lines).toContain("started 2026-10-24T05:00:00.000Z, head 0123456789ab, treeHash fedcba987654.");
     expect(text).not.toContain("undefined");
+  });
+
+  test("a record that swept scratch copies prints one Swept line beside the Bail line, and one that swept none prints none", () => {
+    const rec = record([mutant({})]);
+    expect(renderMutationTable({ ...rec, sweptScratch: 2, sweepMs: 15 }).split("\n")).toContain("Swept: 2 scratch copies left by dead passes (15 ms).");
+    expect(renderMutationTable({ ...rec, sweptScratch: 1, sweepMs: 3 }).split("\n")).toContain("Swept: 1 scratch copy left by dead passes (3 ms).");
+    expect(renderMutationTable({ ...rec, sweptScratch: 2 })).toContain("Swept: 2 scratch copies left by dead passes.");
+    expect(renderMutationTable(rec)).not.toContain("Swept:");
+    expect(renderMutationTable({ ...rec, sweptScratch: 0, sweepMs: 1 })).not.toContain("Swept:");
   });
 
   test("a new record without a bail has no Bail line", () => {

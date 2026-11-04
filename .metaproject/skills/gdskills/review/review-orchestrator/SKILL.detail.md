@@ -781,13 +781,18 @@ costs the time to its first failure, not the whole suite. The baseline always ru
 a green run is the same with or without the flag, so a survivor stays a survivor. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. Any other command shape
 (`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off and takes no value.
 The `.json` record carries `bail: true` when it was applied; always `startedAt`, `loadavg` (sampled
-at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` only when it removed leftover scratch; and `head` and `treeHash` only
+at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` and `sweepMs` only when it removed leftover scratch; and `head` and `treeHash` only
 when the worktree is the root of a git checkout and the size and time limits of that step held.
 `treeHash` hashes the tracked changes against HEAD (staged or not) and the untracked, non-ignored
 files, so two passes over the same code agree. It leaves out the review packages under
-`.metaproject/reviews`, ignored files (the scratch copy still includes them), the inside of an
+`.metaproject/reviews`, ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out), the inside of an
 untracked nested repository, and the content of an untracked file over 10 MiB (counted by size).
 Records written before these fields exist stay valid.
+The scratch copy leaves out linked worktrees (such as those under `.claude/worktrees/` and `.worktrees/`);
+submodules and embedded clones are copied, and the repository's own mutate-scratch never is, also with
+`--scratch tmp`. Before copying, a pass removes the operator's own `keryx-mutate-*` directories whose owner
+died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older
+than six hours.
 
 `keryx review complete` refuses while proposed mutants are unrun on an attended round, unless the
 operator waived the pass themselves: the `review_waive_mutation` card in keryx shell, or their answer to

@@ -154,6 +154,48 @@ test("AC4: the turn's abort signal reaches the gate scan, and an aborted turn is
   expect(system.join("")).not.toContain("[review-gate]");
 });
 
+const openReview = (): Awaited<ReturnType<typeof findReviewGateState>> => ({
+  reviewId: "pr-1-all",
+  packageDir: path.join(root, ".metaproject", "reviews", "pr-1-all"),
+  blockers: ["missing artifacts: report.md"],
+  signature: "open",
+});
+
+test("TP-004: a scan that aborts the turn and then RESOLVES the open review is not nudged", async () => {
+  const controller = new AbortController();
+  // A scan that throws AbortError is swallowed by the caller's own `.catch`; only the check after the scan can stop a
+  // scan that settles normally once the signal has fired.
+  const reviewGateState: typeof findReviewGateState = async () => {
+    controller.abort();
+    return openReview();
+  };
+  const { history, system } = await run({ reviewGateState }, { signal: controller.signal });
+  expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
+  expect(system.join("")).not.toContain("[review-gate]");
+});
+
+test("LOGIC-003: a text-only stop whose turn was aborted during the gate prints the [stopped] line", async () => {
+  const controller = new AbortController();
+  const reviewGateState: typeof findReviewGateState = async () => {
+    controller.abort();
+    return openReview();
+  };
+  const textOnly = scriptedProvider([[{ kind: "text_delta", text: "all done" }, { kind: "model_end" }]]);
+  const { history, system } = await run({ reviewGateState, provider: textOnly }, { signal: controller.signal });
+  expect(system.join("")).toContain("[stopped] Model turn interrupted by user.");
+  expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
+});
+
+test("LOGIC-003: a no-progress stop whose turn was aborted during the gate prints the [stopped] line", async () => {
+  const controller = new AbortController();
+  const reviewGateState: typeof findReviewGateState = async () => {
+    controller.abort();
+    return openReview();
+  };
+  const { system } = await run({ reviewGateState }, { signal: controller.signal });
+  expect(system.join("")).toContain("[stopped] Model turn interrupted by user.");
+});
+
 test("an unattended run is not held: there is no one to re-prompt", async () => {
   const { history, finishReason } = await run({ unattended: true });
   expect(history.some((m) => m.content.includes("The managed review"))).toBe(false);

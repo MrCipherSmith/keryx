@@ -4278,6 +4278,11 @@ async function runAgentTurnCore(
       // accepts the package, not when the model stops. Independent of the plan
       // (a blocked plan item must not end it); unattended children are excluded.
       if (await holdReviewGate()) continue;
+      // The gate returns false for an aborted turn too: the operator took the turn back, so it ends like the other abort sites.
+      if (isAborted()) {
+        system("\n[stopped] Model turn interrupted by user.\n");
+        return {};
+      }
 
       if (hasActionableExecutionPlanItems(currentPlan)) {
         const actionable = currentPlan?.items.filter(
