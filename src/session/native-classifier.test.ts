@@ -100,6 +100,39 @@ test("active v2 uses the shared resolver and returns its canonical selection rec
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
 
+test("Hub native routing admits the replacement when the preferred model cannot be prepared", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-fallback-"));
+  const script = scriptedProvider([]);
+  try {
+    await activateV2(cwd, {
+      schemaVersion: 2,
+      categories: { review: { mode: "class", modelClass: "expert" } },
+      classes: { expert: { selection: "priority", fallbackClasses: [], candidates: [
+        { target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 },
+        { target: { providerId: "anthropic", modelId: standard }, enabled: true, priority: 1 },
+      ] } },
+    });
+    const prepared: string[] = [];
+    const classifier = createNativeRoutingClassifier({
+      cwd, configDir: cwd, env: {}, availability: () => availability, bindings, outputTokensReserved: 100,
+      modelFacts: () => ({ capabilities: ["tools"], contextLength: 200_000, estimatedCostUsd: 0 }),
+      providerFactory: (_providerId, modelId) => {
+        prepared.push(modelId);
+        if (modelId === deep) throw new Error("fixture: model unavailable");
+        return script.provider;
+      },
+    });
+    const result = await classifier("Review PR", config, {
+      signal: new AbortController().signal,
+      beforeIo: async () => { throw new Error("unexpected classifier I/O"); },
+      onUsage() {},
+    });
+    expect(result).toEqual({ candidateId: standard, selectionReceiptId: expect.any(String) });
+    expect(prepared).toEqual([deep, standard]);
+    expect(script.requests).toHaveLength(0);
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
 test("an inconsistent active v2 snapshot fails before classifier I/O and is marked fatal", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-invalid-"));
   const script = scriptedProvider([[{ kind: "text_delta", text: "coding" }, { kind: "model_end" }]]);

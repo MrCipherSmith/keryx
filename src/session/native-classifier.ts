@@ -19,6 +19,7 @@ import { runRoutingClassifierChain } from "../harness/routing/classifier-chain-v
 import { buildRoutingClassifierAdapters } from "../harness/routing/classifier-production-v2";
 import { applyRoutingClassificationResult } from "../harness/routing/routing-classification-runtime";
 import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
+import { prepareRoutingCandidate } from "../harness/routing/routing-execution-v2";
 import type { RoutingRequest } from "../harness/routing/routing-request";
 import type { NativeModelBinding } from "./model-identity";
 import { nativeRoutingV2Resolution, prepareNativeRoutingV2, type NativeRoutingV2FactsProvider, type NativeRoutingV2Resolution } from "./native-routing-v2";
@@ -147,11 +148,38 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
           ...(modelFacts === undefined ? {} : { modelFacts }),
           request,
         });
-        const receipt = resolveRoutingForRuntime({ request: prepared.request, snapshot: prepared.frozen.snapshot, config: routingV2,
-          journal: { cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }), kind: "dispatch" } });
-        receiptId = receipt.receiptId;
-        resolution = nativeRoutingV2Resolution(prepared.frozen, receipt.decision);
-      } catch { throw new NativeClassifierError("routing-v2-snapshot-invalid", true); }
+        const journal = { cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }) };
+        const route = { request: prepared.request, snapshot: prepared.frozen.snapshot, config: routingV2 };
+        const receipt = resolveRoutingForRuntime({ ...route, journal: { ...journal, kind: "dispatch" } });
+        const candidate = await prepareRoutingCandidate({
+          ...route, journal, receipt, signal: context.signal,
+          prepare: async (target) => {
+            const choice = actual(target.providerId, target.modelId);
+            if (choice === undefined || options.allowed?.(target.providerId, target.modelId) === false) {
+              return { ok: false, reason: "policy-denied" };
+            }
+            const current = options.availability(config).candidates.find((item) => item.candidateId === choice.candidate.candidateId);
+            if (current === undefined || !current.available || current.reason !== "none"
+              || !current.reasoningEfforts.includes(config.reasoningEffort)) {
+              return { ok: false, reason: "model-unavailable" };
+            }
+            try {
+              // Construction only. The host must still admit the final candidate
+              // before the native runtime may open its provider stream.
+              options.providerFactory(target.providerId, target.modelId);
+            } catch {
+              return { ok: false, reason: "model-unavailable" };
+            }
+            return { ok: true, value: undefined };
+          },
+        });
+        if (!candidate.ok) throw new NativeClassifierError(`routing-v2-${candidate.reason}`, true);
+        receiptId = candidate.receipt.receiptId;
+        resolution = nativeRoutingV2Resolution(prepared.frozen, candidate.receipt.decision);
+      } catch (cause) {
+        if (cause instanceof NativeClassifierError) throw cause;
+        throw new NativeClassifierError("routing-v2-snapshot-invalid", true);
+      }
       if (resolution.decision.status === "selected" && resolution.candidateId !== undefined) {
         return { candidateId: resolution.candidateId, selectionReceiptId: receiptId };
       }
