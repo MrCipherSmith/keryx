@@ -1,0 +1,19 @@
+STATUS: DONE
+
+```json
+{"status":"DONE","reviewer":"review-regression","slices":[],"findings":[]}
+```
+
+Scope B, chunk-005: no regression found at any of the 8 files.
+
+**Grant path (startup.ts, bridge.test-support.ts).** The only caller of `verifyAuthorizationGrant` outside tests is inside `client.ts` itself: `MachineConnection.authorize` and `createGrantApplication`. Neither `startup.ts` nor `bridge.test-support.ts` references the function, a grant, or `authorizedAt`/`expiresAt`. They reach it only through `MachineBridge` -> `MachineConnection`. The new predicate accepts a superset of the old one. The lead tolerance (`issued <= now + MAX_HUB_CLOCK_LEAD_MS`) is looser. `expires > issued` is new but was already implied by the old `issued <= now && expires > now`. NaN dates fail the same way as before. `authorize()` already sleeps up to 500 ms to a future `authorizedAt` before verifying, and `createGrantApplication.valid()` re-verifies later against a later wall clock, so the 250 ms lead is never the deciding term. Nothing that passed before is refused now. The fixture sets no clock: `bridge.test-support.ts` has no Date mock or fake timers, and `Date.now()` appears only inside `wait()`.
+
+**`wait()` timeout.** The change cannot reach it. `wait()` is untouched by the PR, is deadline-based (`max(attempts*10, 10_000)` ms) and polls Hub reads. The failing `R4.4` test is in `bridge.durability.network.test.ts`, which contains no grant or authorize reference. A 37.6 s test against a 10 s wait deadline means individual reads stalled under the loaded parallel run, so it is load-induced; CI is green. The `client.test.ts:134` "Unable to connect" failure is a refused-connection error class in the transport test, unrelated to grant timing.
+
+**Other files.**
+- `scripts/native-lifecycle-parity.ts` imports `MachineBridge` and `enrollMachine` and so reaches the grant check only through the bridge. It is unaffected for the reason above.
+- `apps/hub-web/src/main.tsx` only mounts `App` (still `export function App`) and imports `./i18n` and `./styles.css`. The changes there are additive: 30 CSS lines and new i18n keys.
+- `apps/hub-web/src/features/managed-work/attempt-artifacts.tsx` imports only `WorkBadge` from `work-panels`. It uses nothing from `ui.tsx`, whose `Button`/`Input` prop-type widening and the new `hub-select` class on `Select` are the only changes.
+- The two `review-layout/SKILL.md` copies (byte-identical) and the wiki page `src-trigger.md` are documents reached by text links. The PR touches none of them, and this change cannot break them.
+
+**Coverage.** The cap dropped 21 of 99 candidate files; those are other chunks. This chunk is the 8 files named above, all read. The radius answers the question for the code files; for the three documents it is empty by nature.

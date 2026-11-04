@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 1124,
+  "headSha": "0be1e717365d980df900ded496ca90886fed09cf",
+  "collectedAt": "2026-11-04T05:50:27.526Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "Improve Hub session launch, chat and navigation",
+    "body": "Creating a Hub session can now prepare the first message with a selected Flow. Subsequent messages reuse that Flow, and command outcomes appear in the conversation. The session header opens settings, the desktop navigation collapses to icons, and select controls reserve space for the chevron.\n\nThe session list uses the machine's display name when available. A rejected session opening has a distinct status and recovery guidance. Session creation explains its prerequisites. Blocked publication links to revisions, and empty proposal views offer a way to reset the filter or open documents.\n\nThe machine client accepts a bounded clock lead when checking the grant issue time. Absolute expiration and the monotonic grant window remain enforced.\n\nVerified in Chrome at 1366 and 390 px against the native two-machine fixture. Both turns succeeded with identical Flow pins, and the applied help outcome appeared in the transcript. The publication and proposal links worked at both widths. Hub Web checks and 44 machine client and bridge tests passed.\n\nOther Hub UX findings are tracked in the [review notes](https://chatgpt.com/space/page_6656e7b328b88191bfb699ebbd2d00d1).\n\n\nThe chat composer opens the machine's native command catalogue from its slash button or by pressing `/` in an empty message field. Search matches command names and summaries. Commands use the existing argument, controller, workspace and confirmation rules from #1098. Unavailable entries can be inspected for the machine's explanation.\n"
+  },
+  "ci": {
+    "state": "passing",
+    "checks": [
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "typecheck-and-tests",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "team-hub-distribution",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [
+    {
+      "kind": "pull",
+      "ref": "#1098",
+      "line": "The chat composer opens the machine's native command catalogue from its slash button or by pressing `/` in an empty message field. Search matches command names and summaries. Commands use the existing argument, controller, workspace and confirmation rules from #1098. Unavailable entries can be inspe",
+      "source": "pull request body"
+    }
+  ],
+  "comments": []
+}

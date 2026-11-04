@@ -1,4 +1,10 @@
 export default {
+  historyEventType: "Тип события",
+  historyYou: "Вы",
+  historyIdentifiers: "Идентификаторы",
+  historyNoMatchingEvents: "В загруженной истории нет событий этого типа.",
+
+  noMatchingProposals: "Нет предложений с выбранным статусом.", chooseDeliveryRevision: "Перейти к ревизиям",
   specifications: 'Спецификации',
   backToList: 'К списку',
   copyCode: 'Копировать код',

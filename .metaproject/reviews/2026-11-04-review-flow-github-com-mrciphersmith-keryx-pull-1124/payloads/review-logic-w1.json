@@ -1,0 +1,622 @@
+{
+ "review_context": {
+  "request": {
+   "raw": "1 round of adaptive review of PR 1124 via review-orchestrator, reviewers in parallel",
+   "flags": [],
+   "review_mode": "diff",
+   "paths": [],
+   "commit_range": "85fe58fad18461213e860768056d5cbc4c744019..0be1e717365d980df900ded496ca90886fed09cf"
+  },
+  "git": {
+   "repo": "MrCipherSmith/keryx",
+   "branch": "feat-hub-chat-review",
+   "base": "85fe58fad18461213e860768056d5cbc4c744019",
+   "head": "0be1e717365d980df900ded496ca90886fed09cf",
+   "merge_base": "85fe58fad18461213e860768056d5cbc4c744019",
+   "pr_number": 1124,
+   "pr_url": "https://github.com/MrCipherSmith/keryx/pull/1124"
+  },
+  "pr": {
+   "number": 1124,
+   "url": "https://github.com/MrCipherSmith/keryx/pull/1124",
+   "title": "Improve Hub session launch, chat and navigation",
+   "state": "open",
+   "ci": "passing (20/20 required checks; GitHub Pages deploy skipped)",
+   "body_file": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md"
+  },
+  "scope": {
+   "mode": "diff",
+   "files": [
+    "apps/hub-web/src/api/remote-hooks.ts",
+    "apps/hub-web/src/app/App.tsx",
+    "apps/hub-web/src/components/ui.tsx",
+    "apps/hub-web/src/features/acceptance/presentation.tsx",
+    "apps/hub-web/src/features/context.tsx",
+    "apps/hub-web/src/features/remote/session-timeline.ts",
+    "apps/hub-web/src/features/remote/session-workspace.css",
+    "apps/hub-web/src/features/remote/session-workspace.tsx",
+    "apps/hub-web/src/features/remote/sessions.tsx",
+    "apps/hub-web/src/features/remote/settings.tsx",
+    "apps/hub-web/src/features/remote/work.tsx",
+    "apps/hub-web/src/features/workflow.tsx",
+    "apps/hub-web/src/i18n/acceptance.en.ts",
+    "apps/hub-web/src/i18n/acceptance.ru.ts",
+    "apps/hub-web/src/i18n/context.en.ts",
+    "apps/hub-web/src/i18n/context.ru.ts",
+    "apps/hub-web/src/i18n/remote.en.ts",
+    "apps/hub-web/src/i18n/remote.ru.ts",
+    "apps/hub-web/src/i18n/workflow.en.ts",
+    "apps/hub-web/src/i18n/workflow.ru.ts",
+    "apps/hub-web/src/styles.css",
+    "apps/hub-web/tests/breadcrumb.case.tsx",
+    "apps/hub-web/tests/browser-journeys.e2e.mjs",
+    "apps/hub-web/tests/context.case.tsx",
+    "apps/hub-web/tests/css-rules.ts",
+    "apps/hub-web/tests/flow-acceptance.case.tsx",
+    "apps/hub-web/tests/flow-term.case.ts",
+    "apps/hub-web/tests/remote-owned-controls.case.tsx",
+    "apps/hub-web/tests/remote.case.tsx",
+    "apps/hub-web/tests/session-command-outcomes.case.tsx",
+    "apps/hub-web/tests/session-timeline.case.ts",
+    "apps/hub-web/tests/session-workspace.case.tsx",
+    "src/lib/hub-machine/client.test.ts",
+    "src/lib/hub-machine/client.ts"
+   ],
+   "high_risk": [
+    "src/lib/hub-machine/client.ts",
+    "apps/hub-web/src/features/remote/sessions.tsx",
+    "apps/hub-web/src/features/remote/work.tsx"
+   ],
+   "generated_or_ignored": [
+    "src/hub/web-assets.generated.ts"
+   ]
+  },
+  "requirements": {
+   "issue_url": null,
+   "context_doc": null,
+   "acceptance_criteria": [],
+   "spec_source": "pull request body (no issue, no task doc) \u2014 see pr-context.md"
+  },
+  "rules": [
+   ".metaproject/index.md",
+   "CLAUDE.md",
+   ".metaproject/rules/core/opus-5-5-prompting.mdc"
+  ],
+  "cross_repo": [],
+  "memory": {
+   "query": "hub-web session launch chat command catalogue, hub machine client grant clock, hub-web i18n and tests",
+   "entries": [],
+   "searched": true,
+   "note": "10 accepted entries matched the query; none has a recorded scope intersecting apps/hub-web/** or src/lib/hub-machine/**, so none is handed on as project truth."
+  },
+  "routing": {
+   "selected_reviewers": [
+    "review-architecture",
+    "review-degradation",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-pr-contract",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices",
+    "review-ui-ux"
+   ],
+   "skipped": [
+    {
+     "reviewer": "review-frontend",
+     "reason": "stack: none of [react] declared in root package.json"
+    },
+    {
+     "reviewer": "review-frontend-conventions",
+     "reason": "stack: none of [react, mobx] declared in root package.json"
+    },
+    {
+     "reviewer": "review-backend",
+     "reason": "stack: none of [nestjs, prisma] declared"
+    },
+    {
+     "reviewer": "review-core-boundaries",
+     "reason": "no-matching-paths (no src/core/** in scope A)"
+    },
+    {
+     "reviewer": "review-flow-graph",
+     "reason": "no-matching-paths"
+    },
+    {
+     "reviewer": "review-style",
+     "reason": "round not started with --style"
+    },
+    {
+     "reviewer": "review-clean-code",
+     "reason": "round not started with --style"
+    },
+    {
+     "reviewer": "review-jev-*",
+     "reason": "opt-in review.jev.* not enabled in this project"
+    },
+    {
+     "reviewer": "legacy profiles",
+     "reason": "flag-only, no flag passed"
+    }
+   ],
+   "decisions": "roster from `keryx review required --depth auto --scope` (adaptive depth, full round on a 34-file deep diff); review-pr-contract added because pr-context.md is in the package"
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "omissions": [
+    "src/hub/web-assets.generated.ts \u2014 generated: generated: filename ends with \".generated.ts\""
+   ],
+   "model_plan": {
+    "strategy": "adaptive",
+    "current_model": "claude-opus-5",
+    "note": "every `keryx review tier` block printed inherit:true; the host assigned claude-sonnet-5-5 to every reviewer dispatch at the operator's instruction, and claude-opus-5 to the Wave D premise judge"
+   },
+   "slices": {
+    "slice-01": {
+     "bytes": 143568,
+     "files": 16
+    },
+    "slice-02": {
+     "bytes": 136334,
+     "files": 18
+    }
+   }
+  },
+  "review_plan": {
+   "round": 1,
+   "mode": "first",
+   "waves": "A: logic, architecture, security-code, highload, regression, degradation \u2014 B: performance, layout, ui-ux, testing-practices, pr-contract \u2014 C: verifier on first blocker/major \u2014 D: premise",
+   "dispatch_plan": [
+    {
+     "reviewer": "review-architecture",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-degradation",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "deep"
+    },
+    {
+     "reviewer": "review-highload",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-layout",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-logic",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-performance",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-pr-contract",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-regression",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "deep"
+    },
+    {
+     "reviewer": "review-security-code",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-testing-practices",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    },
+    {
+     "reviewer": "review-ui-ux",
+     "runtime": "general-purpose-fallback",
+     "model": "claude-sonnet-5-5",
+     "tier": "standard"
+    }
+   ]
+  }
+ },
+ "reviewer": "review-logic",
+ "scope_mode": "diff",
+ "slices": [
+  "slice-01"
+ ],
+ "context_doc": null,
+ "issue_url": null,
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "inherit": true,
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "the session names no model to anchor the ranking on"
+  }
+ },
+ "budget": {
+  "max_prompt_tokens": null,
+  "max_findings": 25
+ },
+ "branch": "feat-hub-chat-review",
+ "base_sha": "85fe58fad18461213e860768056d5cbc4c744019",
+ "diff": null,
+ "pr_context": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md",
+ "round": 1,
+ "is_fix_round": false,
+ "allowed_tools": "read-only",
+ "exec_budget_s": 0,
+ "layers": {
+  "version": 1,
+  "files": [
+   "apps/hub-web/src/api/remote-hooks.ts",
+   "apps/hub-web/src/app/App.tsx",
+   "apps/hub-web/src/components/ui.tsx",
+   "apps/hub-web/src/features/acceptance/presentation.tsx",
+   "apps/hub-web/src/features/context.tsx",
+   "apps/hub-web/src/features/remote/session-timeline.ts",
+   "apps/hub-web/src/features/remote/session-workspace.css",
+   "apps/hub-web/src/features/remote/session-workspace.tsx",
+   "apps/hub-web/src/features/remote/sessions.tsx",
+   "apps/hub-web/src/features/remote/settings.tsx",
+   "apps/hub-web/src/features/remote/work.tsx",
+   "apps/hub-web/src/features/workflow.tsx",
+   "apps/hub-web/src/i18n/acceptance.en.ts",
+   "apps/hub-web/src/i18n/acceptance.ru.ts",
+   "apps/hub-web/src/i18n/context.en.ts",
+   "apps/hub-web/src/i18n/context.ru.ts"
+  ],
+  "prHead": "0be1e717365d980df900ded496ca90886fed09cf",
+  "graphCommit": "0be1e717365d980df900ded496ca90886fed09cf",
+  "maxBytes": 8192,
+  "affected": {
+   "depth": 1,
+   "files": [
+    "apps/hub-web/src/features/acceptance/canonical.tsx",
+    "apps/hub-web/src/features/acceptance/decision-controls.tsx",
+    "apps/hub-web/src/features/acceptance/legacy-history.tsx",
+    "apps/hub-web/src/features/acceptance/legacy.tsx",
+    "apps/hub-web/src/features/global-flows.tsx",
+    "apps/hub-web/src/features/managed-work/amendments.tsx",
+    "apps/hub-web/src/features/managed-work/attempt-detail.tsx",
+    "apps/hub-web/src/features/managed-work/contribute.tsx",
+    "apps/hub-web/src/features/managed-work/create-flow.tsx",
+    "apps/hub-web/src/features/managed-work/decision-form.tsx",
+    "apps/hub-web/src/features/managed-work/flow-review.tsx",
+    "apps/hub-web/src/features/managed-work/legacy.tsx",
+    "apps/hub-web/src/features/managed-work/native-selection.tsx",
+    "apps/hub-web/src/features/managed-work/observations.tsx",
+    "apps/hub-web/src/features/managed-work/operation.tsx",
+    "apps/hub-web/src/features/managed-work/overview-attention.tsx",
+    "apps/hub-web/src/features/managed-work/revision-editor.tsx",
+    "apps/hub-web/src/features/managed-work/revision-review.tsx",
+    "apps/hub-web/src/features/managed-work/updates.tsx",
+    "apps/hub-web/src/features/managed-work/view.tsx",
+    "apps/hub-web/src/features/managed-work/work-lists.tsx"
+   ]
+  },
+  "symbols": [
+   {
+    "file": "apps/hub-web/src/api/remote-hooks.ts",
+    "name": "useRemoteQuery",
+    "kind": "function",
+    "line": 11,
+    "callers": [
+     "Commands (apps/hub-web/src/features/remote/settings.tsx:22)",
+     "ControllerPanel (apps/hub-web/src/features/remote/recovery.tsx:9)",
+     "CreateSession (apps/hub-web/src/features/remote/sessions.tsx:119)",
+     "ForkSession (apps/hub-web/src/features/remote/fork.tsx:9)"
+    ],
+    "callees": [
+     "remoteGet (apps/hub-web/src/api/remote.ts:3)",
+     "useHub (apps/hub-web/src/app/hub-context.tsx:6)"
+    ]
+   },
+   {
+    "file": "apps/hub-web/src/api/remote-hooks.ts",
+    "name": "useRemoteAction",
+    "kind": "function",
+    "line": 26,
+    "callers": [
+     "ApprovalCard (apps/hub-web/src/features/remote/runs.tsx:29)",
+     "Commands (apps/hub-web/src/features/remote/settings.tsx:22)",
+     "Confirmation (apps/hub-web/src/features/remote/settings.tsx:14)",
+     "CreateSession (apps/hub-web/src/features/remote/sessions.tsx:119)"
+    ],
+    "callees": [
+     "remoteMutate (apps/hub-web/src/api/remote.ts:4)",
+     "useHub (apps/hub-web/src/app/hub-context.tsx:6)"
+    ]
+   },
+   {
+    "file": "apps/hub-web/src/api/remote-hooks.ts",
+    "name": "sessionPath",
+    "kind": "function",
+    "line": 48,
+    "callers": [
+     "Commands (apps/hub-web/src/features/remote/settings.tsx:22)",
+     "ControllerPanel (apps/hub-web/src/features/remote/recovery.tsx:9)",
+     "ForkSession (apps/hub-web/src/features/remote/fork.tsx:9)",
+     "History (apps/hub-web/src/features/remote/sessions.tsx:438)"
+    ],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/api/remote-hooks.ts",
+    "name": "useRemoteEvents",
+    "kind": "function",
+    "line": 50,
+    "callers": [
+     "GlobalProbe (apps/hub-web/tests/remote-events.case.tsx:204)",
+     "Probe (apps/hub-web/tests/remote-events.case.tsx:20)",
+     "RemoteUpdates (apps/hub-web/src/app/App.tsx:124)"
+    ],
+    "callees": [
+     "InvalidationBatch (apps/hub-web/src/api/browser-invalidations.ts:17)",
+     "InvalidationWindow (apps/hub-web/src/api/browser-invalidations.ts:12)",
+     "connect (apps/hub-web/src/api/remote-hooks.ts:96)",
+     "invalidateAuthentication (apps/hub-web/src/api/client.ts:174)"
+    ]
+   },
+   {
+    "file": "apps/hub-web/src/api/remote-hooks.ts",
+    "name": "refresh",
+    "kind": "function",
+    "line": 71,
+    "callers": [
+     "useRemoteEvents (apps/hub-web/src/api/remote-hooks.ts:50)"
+    ],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/api/remote-hooks.ts",
+    "name": "schedule",
+    "kind": "function",
+    "line": 80,
+    "callers": [
+     "useRemoteEvents (apps/hub-web/src/api/remote-hooks.ts:50)"
+    ],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/app/App.tsx",
+    "name": "RemoteUpdates",
+    "kind": "function",
+    "line": 124,
+    "callers": [],
+    "callees": [
+     "useRemoteEvents (apps/hub-web/src/api/remote-hooks.ts:50)"
+    ]
+   },
+   {
+    "file": "apps/hub-web/src/app/App.tsx",
+    "name": "bootstrap",
+    "kind": "function",
+    "line": 142,
+    "callers": [
+     "App (apps/hub-web/src/app/App.tsx:562)"
+    ],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/app/App.tsx",
+    "name": "PersonalSettings",
+    "kind": "function",
+    "line": 183,
+    "callers": [],
+    "callees": [
+     "getJson (apps/hub-web/src/api/client.ts:132)",
+     "postJson (apps/hub-web/src/api/client.ts:135)"
+    ]
+   },
+   {
+    "file": "apps/hub-web/src/app/App.tsx",
+    "name": "Locale",
+    "kind": "function",
+    "line": 211,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/app/App.tsx",
+    "name": "Brand",
+    "kind": "function",
+    "line": 239,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/app/App.tsx",
+    "name": "Shell",
+    "kind": "function",
+    "line": 249,
+    "callers": [],
+    "callees": [
+     "action (apps/hub-web/src/app/App.tsx:289)",
+     "closeMenu (apps/hub-web/src/app/App.tsx:301)",
+     "getJson (apps/hub-web/src/api/client.ts:132)",
+     "label (apps/hub-web/src/app/App.tsx:314)"
+    ]
+   },
+   {
+    "file": "apps/hub-web/src/components/ui.tsx",
+    "name": "Button",
+    "kind": "function",
+    "line": 13,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/components/ui.tsx",
+    "name": "Panel",
+    "kind": "function",
+    "line": 29,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/components/ui.tsx",
+    "name": "Field",
+    "kind": "function",
+    "line": 52,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/components/ui.tsx",
+    "name": "Input",
+    "kind": "function",
+    "line": 89,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/components/ui.tsx",
+    "name": "Select",
+    "kind": "function",
+    "line": 95,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/components/ui.tsx",
+    "name": "Textarea",
+    "kind": "function",
+    "line": 101,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/features/acceptance/presentation.tsx",
+    "name": "ReviewPresentation",
+    "kind": "function",
+    "line": 10,
+    "callers": [],
+    "callees": [
+     "formatDate (apps/hub-web/src/i18n/format.ts:1)"
+    ]
+   },
+   {
+    "file": "apps/hub-web/src/features/context.tsx",
+    "name": "projectPath",
+    "kind": "function",
+    "line": 17,
+    "callers": [
+     "HistoryView (apps/hub-web/src/features/context.tsx:327)",
+     "RevisionDetail (apps/hub-web/src/features/context.tsx:242)",
+     "useResource (apps/hub-web/src/features/context.tsx:35)",
+     "useWrite (apps/hub-web/src/features/context.tsx:40)"
+    ],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/features/context.tsx",
+    "name": "Value",
+    "kind": "function",
+    "line": 20,
+    "callers": [],
+    "callees": []
+   },
+   {
+    "file": "apps/hub-web/src/features/context.tsx",
+    "name": "ErrorNotice",
+    "kind": "function",
+    "line": 24,
+    "callers": [],
+    "callees": []
+   }
+  ],
+  "relatedTests": [
+   "apps/hub-web/tests/accessibility.case.tsx",
+   "apps/hub-web/tests/auth.case.tsx",
+   "apps/hub-web/tests/breadcrumb.case.tsx",
+   "apps/hub-web/tests/context.case.tsx",
+   "apps/hub-web/tests/flow-acceptance.fixture.tsx",
+   "apps/hub-web/tests/localization.case.ts",
+   "apps/hub-web/tests/managed-native-message.case.tsx",
+   "apps/hub-web/tests/remote-draft-renewal.case.tsx",
+   "apps/hub-web/tests/remote-events.case.tsx",
+   "apps/hub-web/tests/remote-owned-controls.case.tsx",
+   "apps/hub-web/tests/remote-settings.case.tsx",
+   "apps/hub-web/tests/remote.case.tsx",
+   "apps/hub-web/tests/revision-pagination.case.tsx",
+   "apps/hub-web/tests/session-timeline.case.ts",
+   "apps/hub-web/tests/session-workspace.case.tsx",
+   "apps/hub-web/tests/workflow-pagination.case.tsx",
+   "apps/hub-web/tests/workflow.case.tsx"
+  ],
+  "wiki": [],
+  "memory": [],
+  "truncated": [
+   {
+    "section": "affected",
+    "shown": 21,
+    "total": 54,
+    "command": "keryx gdgraph affected 'apps/hub-web/src/api/remote-hooks.ts' --depth 2 --data-dir '.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/layers/graph'"
+   },
+   {
+    "section": "symbols",
+    "shown": 22,
+    "total": 55,
+    "command": "keryx gdgraph symbol '<name>' --data-dir '.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/layers/graph'"
+   }
+  ],
+  "unavailable": []
+ },
+ "metaproject": {
+  "memory": [],
+  "wiki": [],
+  "graph": {
+   "source": "keryx review layers block",
+   "see": "layers"
+  }
+ },
+ "slice_paths": [
+  "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/slices/slice-01.diff"
+ ],
+ "slice_files": [
+  "apps/hub-web/src/api/remote-hooks.ts",
+  "apps/hub-web/src/app/App.tsx",
+  "apps/hub-web/src/components/ui.tsx",
+  "apps/hub-web/src/features/acceptance/presentation.tsx",
+  "apps/hub-web/src/features/context.tsx",
+  "apps/hub-web/src/features/remote/session-timeline.ts",
+  "apps/hub-web/src/features/remote/session-workspace.css",
+  "apps/hub-web/src/features/remote/session-workspace.tsx",
+  "apps/hub-web/src/features/remote/sessions.tsx",
+  "apps/hub-web/src/features/remote/settings.tsx",
+  "apps/hub-web/src/features/remote/work.tsx",
+  "apps/hub-web/src/features/workflow.tsx",
+  "apps/hub-web/src/i18n/acceptance.en.ts",
+  "apps/hub-web/src/i18n/acceptance.ru.ts",
+  "apps/hub-web/src/i18n/context.en.ts",
+  "apps/hub-web/src/i18n/context.ru.ts"
+ ]
+}

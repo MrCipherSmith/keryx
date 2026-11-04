@@ -1,4 +1,7 @@
 export default {
+  flowWorkspaceDistinction: "This view lists Flows based on specifications. Open Project work to manage intents, attempts and results.",
+  openManagedWork: "Project work",
+
   projectWorkspaceDescription:
     "Flows, decisions and execution in this project.",
   projectDecisions: "Needs your decision",

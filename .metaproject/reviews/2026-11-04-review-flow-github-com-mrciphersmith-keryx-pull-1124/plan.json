@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1124",
+    "base": "85fe58fad18461213e860768056d5cbc4c744019",
+    "head": "0be1e717365d980df900ded496ca90886fed09cf"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "85fe58fad18461213e860768056d5cbc4c744019",
+      "head": "0be1e717365d980df900ded496ca90886fed09cf"
+    },
+    "fixHunks": 0,
+    "newHunks": 149,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          "apps/hub-web/src/api/remote-hooks.ts",
+          "apps/hub-web/src/app/App.tsx",
+          "apps/hub-web/src/components/ui.tsx",
+          "apps/hub-web/src/features/acceptance/presentation.tsx",
+          "apps/hub-web/src/features/context.tsx",
+          "apps/hub-web/src/features/remote/session-timeline.ts",
+          "apps/hub-web/src/features/remote/session-workspace.css",
+          "apps/hub-web/src/features/remote/session-workspace.tsx",
+          "apps/hub-web/src/features/remote/sessions.tsx",
+          "apps/hub-web/src/features/remote/settings.tsx",
+          "apps/hub-web/src/features/remote/work.tsx",
+          "apps/hub-web/src/features/workflow.tsx",
+          "apps/hub-web/src/i18n/acceptance.en.ts",
+          "apps/hub-web/src/i18n/acceptance.ru.ts",
+          "apps/hub-web/src/i18n/context.en.ts",
+          "apps/hub-web/src/i18n/context.ru.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          "apps/hub-web/src/i18n/remote.en.ts",
+          "apps/hub-web/src/i18n/remote.ru.ts",
+          "apps/hub-web/src/i18n/workflow.en.ts",
+          "apps/hub-web/src/i18n/workflow.ru.ts",
+          "apps/hub-web/src/styles.css",
+          "apps/hub-web/tests/breadcrumb.case.tsx",
+          "apps/hub-web/tests/browser-journeys.e2e.mjs",
+          "apps/hub-web/tests/context.case.tsx",
+          "apps/hub-web/tests/css-rules.ts",
+          "apps/hub-web/tests/flow-acceptance.case.tsx",
+          "apps/hub-web/tests/flow-term.case.ts",
+          "apps/hub-web/tests/remote-owned-controls.case.tsx",
+          "apps/hub-web/tests/remote.case.tsx",
+          "apps/hub-web/tests/session-command-outcomes.case.tsx",
+          "apps/hub-web/tests/session-timeline.case.ts",
+          "apps/hub-web/tests/session-workspace.case.tsx",
+          "src/lib/hub-machine/client.test.ts",
+          "src/lib/hub-machine/client.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-layout",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-highload",
+    "review-layout",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices",
+    "review-ui-ux"
+  ],
+  "dispatches": 19,
+  "minutes": {
+    "min": 10,
+    "max": 25
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "938ff1c5f3b5ae45",
+  "warnings": [],
+  "next": "dispatch"
+}

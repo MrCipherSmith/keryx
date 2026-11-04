@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 21,
+  "droppedKey": "a66fa458ce23e27a",
+  "fileBytes": {
+    ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.json": 305290,
+    ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md": 191892,
+    ".metaproject/keryx-dashboard.html": 752287,
+    ".metaproject/skills/gdskills/review/review-layout/SKILL.md": 12043,
+    ".metaproject/wiki/components/src-trigger.md": 9055,
+    "apps/hub-web/src/features/managed-work/attempt-artifacts.tsx": 3682,
+    "apps/hub-web/src/features/managed-work/decision-form.tsx": 5738,
+    "apps/hub-web/src/features/managed-work/native-selection.tsx": 6072,
+    "apps/hub-web/src/features/managed-work/work-lists.tsx": 4661,
+    "apps/hub-web/src/features/project-deletion.tsx": 3976,
+    "apps/hub-web/src/features/project-overview.css": 6978,
+    "apps/hub-web/src/features/record-browser.tsx": 1979,
+    "apps/hub-web/src/features/remote/fork.tsx": 2976,
+    "apps/hub-web/src/features/remote/machine-cards.css": 5277,
+    "apps/hub-web/src/features/remote/session-run-context.css": 676,
+    "apps/hub-web/src/features/revision-code-viewer.tsx": 5128,
+    "apps/hub-web/src/main.tsx": 249,
+    "scripts/native-lifecycle-parity.ts": 24401,
+    "src/gdskills/bundled/skills/review/review-layout/SKILL.md": 12043,
+    "src/lib/hub-machine/bridge.test-support.ts": 18767,
+    "src/lib/hub-machine/startup.ts": 3420
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "apps/hub-web/src/features/managed-work/decision-form.tsx",
+        "apps/hub-web/src/features/managed-work/native-selection.tsx",
+        "apps/hub-web/src/features/managed-work/work-lists.tsx",
+        "apps/hub-web/src/features/project-deletion.tsx",
+        "apps/hub-web/src/features/project-overview.css",
+        "apps/hub-web/src/features/record-browser.tsx",
+        "apps/hub-web/src/features/remote/fork.tsx",
+        "apps/hub-web/src/features/remote/machine-cards.css",
+        "apps/hub-web/src/features/remote/session-run-context.css",
+        "apps/hub-web/src/features/revision-code-viewer.tsx"
+      ],
+      "bytes": 43461
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.json"
+      ],
+      "bytes": 305290
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.md"
+      ],
+      "bytes": 191892
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        ".metaproject/keryx-dashboard.html"
+      ],
+      "bytes": 752287
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-layout/SKILL.md",
+        ".metaproject/wiki/components/src-trigger.md",
+        "apps/hub-web/src/main.tsx",
+        "src/gdskills/bundled/skills/review/review-layout/SKILL.md",
+        "src/lib/hub-machine/bridge.test-support.ts",
+        "src/lib/hub-machine/startup.ts",
+        "apps/hub-web/src/features/managed-work/attempt-artifacts.tsx",
+        "scripts/native-lifecycle-parity.ts"
+      ],
+      "bytes": 83660
+    }
+  ]
+}

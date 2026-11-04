@@ -1,0 +1,96 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-layout",
+  "summary": "Static pass over slice-01: no rendered geometry was measured (no dev server, Storybook or Playwright run was available, and the author's Chrome 1366/390 px verification is unreproduced here). Under the lane's own law every layout claim is therefore info. The collapsing rail, the [aria-expanded] selector fix and the @layer placement read correct against the stylesheets. The strongest candidate is a display:contents wrapper that swallows the parent's space-y margin; it should be measured before the author acts on it.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "LY-001",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "<div ref={form} className=\"contents\">",
+      "problem": "CreateSession is rendered as a direct child of `<div className=\"space-y-5\">` in SessionsView. The diff wraps its Panel in `<div ref={form} className=\"contents\">` only to give the focus effect a node to querySelector from. Tailwind 4.3.3 implements space-y as `:where(& > :not(:last-child)) { margin-block-end: ... }`, so the 20px margin now lands on the wrapper. A `display: contents` element generates no box, and CSS ignores margins on it. The margin the Panel used to receive is gone. UNVERIFIED: not measured, derived from the stylesheet and the CSS display:contents rule.",
+      "impact": "Trigger: click New session on the Sessions tab while the project has at least one session, so the card grid renders right after the form. Expected outcome: the form Panel's bottom border sits directly against the first row of session cards instead of 20px above them, at every viewport width. Filed as info only because no pixels were measured; the lane's own table would put a measured 20px loss at minor.",
+      "suggested_fix": "Make the wrapper a real block (`<div ref={form}>`, no `contents`) so the space-y margin lands on a box that renders, or drop the wrapper and focus through an id on the first Select. What would settle it: getComputedStyle margin-bottom on the Panel and the bounding-rect gap between the form Panel and `.grid` at 1366 px with one session present.",
+      "evidence": "apps/hub-web/src/features/remote/sessions.tsx SessionsView `<div className=\"space-y-5\">` ... `{create && <CreateSession focusOnOpen={focusForm} />}` followed by Feedback and `<div className=\"grid min-w-0 gap-4 lg:grid-cols-2\">`; CreateSession return value wrapped in `<div ref={form} className=\"contents\">` in this diff; apps/hub-web/package.json pins tailwindcss 4.3.3. No engine measurement taken.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "layout:display-contents-swallows-space-y"
+    },
+    {
+      "id": "LY-002",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/session-workspace.css",
+      "quote": "min-height: 90px;",
+      "problem": "session-workspace.css is imported as plain, unlayered CSS (session-workspace.tsx line 23), while Tailwind utilities live in `@layer utilities`; unlayered rules beat layered ones regardless of specificity. `.session-composer textarea { min-height: 90px; }` therefore overrides the `min-h-28` (112px) that the shared `Textarea` component sets. This diff moves the Commands panel, and its arguments `<Textarea>`, from the Settings tab into the composer (work.tsx renders `<Commands>` inside `.session-composer`), so that textarea is now inside the selector's reach. UNVERIFIED: not measured.",
+      "impact": "Trigger: open the composer's command catalogue and select a command with arguments. Expected outcome: the JSON arguments textarea starts about 22px shorter (90px instead of 112px) than it did in the Settings tab. Cosmetic, and the textarea is `resize-y`.",
+      "suggested_fix": "Scope the composer rule to the message field, for example `.session-composer .composer-message textarea`, or `.session-composer > .hub-panel > .hub-panel-body > div > textarea`. What would settle it: offsetHeight of the arguments textarea in the composer with an empty value, compared with 112px.",
+      "evidence": "apps/hub-web/src/features/remote/session-workspace.css `.session-composer textarea { min-height: 90px; }`; apps/hub-web/src/components/ui.tsx Textarea className `min-h-28`; apps/hub-web/src/features/remote/settings.tsx Commands renders `<Textarea value={draft.args} .../>`; apps/hub-web/src/features/remote/work.tsx renders `<Commands ...>` inside MessageComposer. No engine measurement taken.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "layout:unlayered-composer-textarea-min-height"
+    },
+    {
+      "id": "LY-003",
+      "severity": "info",
+      "file": "apps/hub-web/src/styles.css",
+      "quote": "background-position: right .75rem center;",
+      "problem": "The Select chevron reserves its space with the logical `padding-inline-end: 2.5rem` but is placed with the physical `background-position: right .75rem center`. Under `dir=\"rtl\"` the reserved padding moves to the left edge while the chevron stays on the right, over the start of the text. The component otherwise uses logical properties elsewhere in this diff (`padding-inline`). UNVERIFIED: not measured.",
+      "impact": "No trigger exists today: hub-web ships en and ru only, and no `dir` attribute or RTL handling was found anywhere under apps/hub-web/src (searched `dir=`, `rtl`, `documentElement.dir`). Reachable only if an RTL locale is added.",
+      "suggested_fix": "If RTL is ever supported, position with `background-position: right .75rem center` plus an `:dir(rtl)` override (`left .75rem center`), or draw the chevron with a pseudo-element placed using `inset-inline-end`. Nothing to change for the current locales. What would settle it: a locale with dir=rtl entering the catalogue.",
+      "evidence": "apps/hub-web/src/styles.css `.hub-select:not([multiple]):not([size]) { padding-inline-end:2.5rem; ... background-position: right .75rem center; }`; ripgrep for `dir=|rtl|documentElement.dir` under apps/hub-web/src returned no matches. No engine measurement taken.",
+      "confidence": "low",
+      "reviewer": "review-layout",
+      "dedupe_key": "layout:select-chevron-physical-position"
+    },
+    {
+      "id": "LY-004",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/workflow.tsx",
+      "quote": "<select className={inputClass} value={draft.specDocumentId}",
+      "problem": "The chevron treatment is attached to the shared `Select` component (`hub-select` class), but `workflow.tsx` renders its own `<select className={inputClass} ...>` for the specification picker (and two more raw selects further down the same file). Those keep the native arrow and the default 10px end padding, so selects in the app now draw two different affordances. Whether the native arrow collides with a long option label was not measured.",
+      "impact": "Trigger: open Flows and click Create flow; the Specification select looks different from every `Select`-based control. Cosmetic inconsistency against the PR's stated intent that select controls reserve space for the chevron. No overlap was observed or measured.",
+      "suggested_fix": "Switch the three raw selects in workflow.tsx to the shared `Select`, or add `hub-select` to their className. What would settle it: rendering the Create flow form beside a Select-based form and comparing the arrow.",
+      "evidence": "ripgrep `<select` under apps/hub-web/src: components/ui.tsx:99 (the shared Select) and workflow.tsx lines 108, 165, 175. The workflow.tsx hunk in this diff does not touch them. No engine measurement taken.",
+      "confidence": "medium",
+      "reviewer": "review-layout",
+      "dedupe_key": "layout:raw-selects-without-hub-select",
+      "class_scope": {
+        "sites": [
+          "apps/hub-web/src/features/workflow.tsx:108",
+          "apps/hub-web/src/features/workflow.tsx:165",
+          "apps/hub-web/src/features/workflow.tsx:175"
+        ],
+        "enumeration_method": "keryx ctx rg '<select' apps/hub-web/src: 4 matches, one is the shared Select in components/ui.tsx, three are raw selects in workflow.tsx"
+      }
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 4
+  }
+}
+```
+
+## Summary
+
+No rendered geometry was measured in this pass. There was no hub-web dev server, no Storybook and no Playwright run, and the PR's "verified in Chrome at 1366 and 390 px" is unreproduced here. Reasoning about CSS does not become a measurement, so all four findings are `info`, marked unverified. Each one says what would settle it.
+
+**Checked and found sound (static):**
+- The `.session-header-actions > button[aria-expanded]` change is correct. The header's first button is now Settings, so the old `button:first-child` rule would have hidden it at 1280 px and wider. Only the navigation toggle carries `aria-expanded`.
+- The new rail and Select rules sit inside `@layer components`, next to the rules they extend. The unlayered max-width media queries that set `.sidebar` width (1023 px and 767 px) cannot overlap the new `min-width: 1024px` rail rules, so the unlayered-beats-layered trap does not apply there.
+- The collapsed rail is internally consistent. The 60px sidebar with 7px side padding leaves about 45px for 17px icons and a 20px project initial. Every text node that is hidden has an `aria-label` and `title`. `.desktop-rail-toggle` is `display: none` below 1024 px and is excluded from the mobile menu's focus query.
+- The `.hub-select` rule uses only background longhands, and its specificity (0,3,0) beats `.hub-input:disabled` (0,2,0), so the disabled fill and the chevron both survive. `multiple` and `size` selects are excluded.
+
+**Most worth measuring first:** LY-001. A `display: contents` wrapper around CreateSession swallows the parent's `space-y-5` margin. If the 20px gap is confirmed missing, it is a `minor`.
+
+**Not filed:**
+- A 12px select font on `.composer-controls select` wins between 601 px and 767 px over the 16px rule, which covers only up to 600 px. This is theoretical without a named device, so I did not file it.
+- The `max-width: 600px` block repeats part of the 480 px block. This is a readability point, outside this lane.
+
+Routing audit: graph_used no (payload `layers` block read instead); wiki_used not-relevant; ctx_used yes (`keryx ctx rg`); raw_rg_used no. Raw `git diff` was used three times with a stated reason, to read the exact CSS and JSX hunks.

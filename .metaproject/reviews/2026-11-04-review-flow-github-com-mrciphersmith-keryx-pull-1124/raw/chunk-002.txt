@@ -1,0 +1,13 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": [],
+  "findings": [],
+  "file": ".metaproject/flows/480-2026-11-01-implement-collaborative-hub-work-metadat/review-fixes/dispositions.json"
+}
+```
+
+Verdict: the change cannot break this file. It is a closed-flow record of 493 PR #1113 review dispositions (275 left, 215 fixed, 3 already-fixed). No code reads it: the only 'dispositions.json' consumer in src/ and scripts/ is scripts/review-precision-baseline.ts, which reads a different ledger (.metaproject/reviews/dispositions.json). Its entries carry file paths but no quote, line or hash, so nothing validates them against the tree, and this pull request touches no file under .metaproject/. 35 'left' entries are about files this PR changes (remote-hooks.ts, App.tsx, work.tsx, workflow.tsx, sessions.tsx, session-workspace.tsx/.css, styles.css); their line numbers and wording describe the PR #1113 head, so some are stale by construction, which is the nature of a point-in-time record and not a behaviour regression. The blast-radius cap dropped 21 files from the set; this chunk is one of them.

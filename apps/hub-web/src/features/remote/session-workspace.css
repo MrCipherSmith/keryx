@@ -39,7 +39,7 @@
   gap: 6px;
   flex-shrink: 0;
 }
-.session-header-actions > button:first-child {
+.session-header-actions > button[aria-expanded] {
   display: none;
 }
 .session-location {
@@ -267,7 +267,7 @@
   justify-content: space-between;
   border-top: 1px solid var(--hub-border);
 }
-.session-composer .hub-panel-header {
+.session-composer > .hub-panel > .hub-panel-header {
   display: none;
 }
 .session-composer .hub-panel {
@@ -340,7 +340,7 @@
     display: block;
     grid-column: 1/-1;
   }
-  .session-header-actions > button:first-child {
+  .session-header-actions > button[aria-expanded] {
     display: inline-flex;
   }
 }
@@ -408,4 +408,14 @@
   .composer-footer select {
     font-size: 16px;
   }
+}
+
+.composer-work-context { min-width:0; }
+.composer-work-context > summary { cursor:pointer; overflow-wrap:anywhere; }
+.composer-work-context[open] > summary { margin-bottom:.5rem; }
+@media (max-width:600px) {
+  /* The wrap must sit on the constrained container: let the header and its actions shrink and wrap together. */
+  .session-workbench-header { flex-wrap:wrap; }
+  .session-header-actions { flex-wrap:wrap; flex-shrink:1; min-width:0; }
+  .session-composer :is(textarea, select) { font-size:16px; }
 }

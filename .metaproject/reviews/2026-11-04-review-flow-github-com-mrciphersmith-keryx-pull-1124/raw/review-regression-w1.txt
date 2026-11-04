@@ -1,0 +1,37 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B, slice-01 (hub-web source and i18n half). No existing behaviour was found broken at major or above. The changed shared symbols that dependents call (useRemoteQuery, useAppliedReceipt, Button, Input, Select, ReviewPresentation, the context.tsx views) all widen their contract or add optional props; every dependent in the computed set still passes arguments the new signatures accept. The cap dropped 21 files and 2 changed files are absent from the graph, so this is not a complete sweep. Tests were not run (payload allowed_tools is read-only).",
+  "findings": [],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Summary for a human
+
+**Result: no regression found in the slice-01 blast radius.** Nothing is filed, because every candidate I traced either keeps the old behaviour for callers that did not opt in, or is the deliberate effect of a stated change.
+
+**What I walked, caller first**
+
+- `useRemoteQuery` (`apps/hub-web/src/api/remote-hooks.ts`): `enabled` now also accepts a function. Callers in `runs.tsx`, `recovery.tsx`, `shared.tsx`, `machines.tsx`, `session-run-context.tsx` and `sessions.tsx` pass a boolean, which takes the unchanged `!!projectId && enabled` branch.
+- `useAppliedReceipt`: the new `settled` argument is optional. Its other callers (`Settings` and `Commands` in `settings.tsx`) omit it, and `!(latest && settled?.(latest))` then evaluates to true, so they keep following the operation exactly as before. Only `OutcomeItem` stops following once an operation is `applied` or `rejected`. `OutcomeItem` shares the query key `["operation", sessionId, operationId]` with `Commands`' own observer, so the latest command stays live through that observer. That limits the saving the comment claims. It breaks nothing.
+- `components/ui.tsx`: `Button` and `Input` move to `ComponentPropsWithRef`, and the app is on React 19.3.1, so `ref` passes through as a prop. `Select` gains `hub-select`; the CSS rule is `.hub-select:not([multiple]):not([size])`, so the multi-select in `Settings` (candidates) is not given a chevron. The graph has no edge for that CSS-class coupling; I read `styles.css` to check it.
+- Shared query keys: `CreateSession`, `MessageComposer`, `FlowsProject` and `HistoryView` (through `useResource`) all use `[scopeKey, projectId, "flows"]` with the same URL, because `remoteProject()` and `projectPath()` produce the same path. `["machines"]` in `SessionsView`, `CreateSession` and `session-workspace.tsx` is the same key with the same path. There is no shape collision.
+- `Commands` left the Settings slot: its only importer is `work.tsx`, and `Settings` has no other consumer of it. The unavailable-entry `disabled` is gone from the options, but `allowed` still gates the Invoke button.
+- `ReviewPresentation` (callers `canonical.tsx` and `legacy.tsx`): `row.reports` and `row.waivers` were already dereferenced in the same component, so the new `.length` reads cannot be the first access to undefined. Step criterion ids and `row.id` use the same id space (`criterionId`, `legacy:<digest>:N`). The aggregate Flow review passes `guide={{status:'missing'}}`, so it always lists every criterion as lacking steps. That matches the "no verification steps" line already shown there.
+- `CreateSession`: with no Flow chosen, `flowsState` is "ready" and `flowGone` is false, so `ready` equals the old condition. Creating a session without a Flow behaves as before.
+- i18n: every key slice-01 uses exists in both `remote.en.ts` and `remote.ru.ts`. The new acceptance and context keys exist in both languages.
+
+**Observation, not filed (below major, and a stated decision)**: the non-managed send path now keeps `consent`, `mode`, `flowId` and the digests after a send, where `clearDraft` used to reset them. For ad-hoc mode the "Send messages in this session without a Flow" box therefore stays ticked for the next message. Commit `d5129807d` ("retain session Flow ... in chat") makes the retention deliberate. The consent carry-over comes with it and is not mentioned in the PR text. If the project wants a per-message consent re-tick, that is a scope-A call on `work.tsx`.
+
+**What the radius could not see**
+
+- The cap dropped 21 of 99 candidate files (chunk plan in `chunks.json`); I did not cover them.
+- 2 changed files are absent from the code graph, so their blast radius is unknown, not empty.
+- String-keyed i18n lookups and CSS class coupling (`hub-select`, `nav-label`, `desktop-rail-toggle`, `session-header-actions > button[aria-expanded]`) have no graph edges. I checked those by reading `styles.css`, `session-workspace.css` and `session-workspace.tsx`, not from the computed set.
+- I read only slice-01. `src/lib/hub-machine/client.ts` and its dependents (`bridge.ts`, `scripts/verify-native-coverage.ts`) belong to slice-02.
+- I did not run the 38 listed tests (read-only payload). CI is green on all 20 required checks at this head.

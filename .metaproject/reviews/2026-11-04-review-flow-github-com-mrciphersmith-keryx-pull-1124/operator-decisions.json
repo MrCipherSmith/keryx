@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124#F-009",
+      "answer": "dismiss",
+      "reason": "operator settled the house pattern: appending a change's component rules in their own named @layer components block is accepted here, so the finding is dismissed as a file-organisation preference rather than a defect",
+      "quote": "Отклонить находку",
+      "at": "2026-11-04T07:32:26.151Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "9ed82bec41ff49ef6dea0b50afdb353286d032b55ef0a2a856f431ee03579ad2"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-F-009",
+        "questionText": "F-009: новые component-правила дописаны вторым блоком `@layer components` в конце styles.css. Это и есть здешний паттерн, или их надо вкладывать в первый блок?",
+        "answerText": "Отклонить находку",
+        "time": "2026-11-04T07:32:26.151Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124#F-042",
+      "answer": "dismiss",
+      "reason": "operator kept the deliberately clean form that the comment at sessions.tsx:188 chose and its test pins; the finding is dismissed as a premise the code already settled, and only the notice wording is left to say where the first message went",
+      "quote": "dismiss — чистая форма",
+      "at": "2026-11-04T07:34:32.976Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "61da22e8f266415ff23c73ed58910c839d73a6cf4079de7058b91450c0cd0432"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-F-042-r2",
+        "questionText": "F-042 (повторно, ради записи): предзаполнять форму из отклонённой сессии — это uphold находки. Подтверждаете?",
+        "answerText": "dismiss — чистая форма",
+        "time": "2026-11-04T07:34:32.976Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124#F-046",
+      "answer": "uphold",
+      "reason": "operator ruled it a panel-wide gap rather than the panel's pattern: machine-reported tokens should be localised and a disabled control should state its cause, starting with the command catalogue's availability token and the Invoke button",
+      "quote": "uphold — пробел панели",
+      "at": "2026-11-04T07:34:39.963Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "c5143a336dde76fef61987f0e56416c586e5b2d775812abd8bdffcc36db03194"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-F-046-r2",
+        "questionText": "F-046 (повторно, ради записи): считать это пробелом всей панели — это uphold находки. Подтверждаете?",
+        "answerText": "uphold — пробел панели",
+        "time": "2026-11-04T07:34:39.963Z"
+      }
+    }
+  ]
+}

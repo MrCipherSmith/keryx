@@ -1,0 +1,272 @@
+[
+  {
+    "file": "apps/hub-web/tests/accessibility.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/auth.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "App",
+      "queryClient"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/flow-acceptance.fixture.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowsView",
+      "OverviewView"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/global-flows.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "default"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/legacy-review-history.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountAcceptance"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/localization.case.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "default"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/machine-cards.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "MachinesView"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/managed-native-message.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/managed-work-advanced.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/managed-work.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ManagedWorkView"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/pending-recovery.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "useWorkOperation",
+      "validCommand"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/project-overview.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ProjectOverview"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/remote-controller.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/remote-draft-renewal.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/remote-recovery.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/remote-runs.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RunsView"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/remote-settings.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/review-aggregate-evidence.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountAcceptance"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/review-draft-recovery.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountAcceptance"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/review-flow-reject.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/review-knowledge-followup.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/review-legacy-evidence.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountAcceptance"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/revision-pagination.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/session-run-context.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SessionRunContext",
+      "SessionRunMode"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/work-incremental.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "useWorkEvents"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/work-live-amendments.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/work-live-attention.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/work-live-choices.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/work-live-updates.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/work-revision-members.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/work-sequences.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ManagedWorkView"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/workflow-pagination.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowsView"
+    ]
+  },
+  {
+    "file": "apps/hub-web/tests/workflow.case.tsx",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowsView",
+      "OverviewView",
+      "ProjectsView"
+    ]
+  },
+  {
+    "file": "src/lib/hub-machine/access.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "MachineConnection"
+    ]
+  },
+  {
+    "file": "src/lib/hub-machine/admission.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/lib/hub-machine/bridge.inventory.network.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "MachineBridge"
+    ]
+  },
+  {
+    "file": "src/lib/hub-machine/bridge.network.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "MachineBridge"
+    ]
+  },
+  {
+    "file": "src/remote/topic-history.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  }
+]

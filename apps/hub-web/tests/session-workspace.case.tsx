@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, test, vi } from "vitest";
 import i18n from "../src/i18n";
 import { HubContext, type HubContextValue } from "../src/app/hub-context";
@@ -14,6 +15,7 @@ import { SessionSurface } from "../src/features/remote/sessions";
 import { sessionFixture, machineFixture } from "./remote-fixtures";
 import { resetClient } from "../src/api/client";
 import { useDraftStore } from "../src/state/drafts";
+import { parseCssRules, selectorAlternatives } from "./css-rules";
 const navigate = vi.fn();
 const context: HubContextValue = {
   projectId: "p",
@@ -175,4 +177,55 @@ test("inspector tabs support keyboard navigation and keep observer controls disa
   await waitFor(() =>
     expect(contextTab).toHaveAttribute("aria-selected", "true"),
   );
+});
+// jsdom applies no CSS, so this checks the parsed stylesheet rules and the DOM shape they rely on:
+// only the composer's own panel header may be hidden; the nested Commands and Confirmation Panels keep their headings.
+test("composer header rule hides only the composer's own panel header", async () => {
+  const { container } = show();
+  await screen.findByText("First message");
+  const rules = parseCssRules(
+    readFileSync("src/features/remote/session-workspace.css", "utf8"),
+  );
+  const hiding = rules
+    .filter(
+      (rule) =>
+        /^none(\s*!important)?$/i.test(rule.decls.get("display") ?? "") ||
+        /^hidden(\s*!important)?$/i.test(rule.decls.get("visibility") ?? ""),
+    )
+    .flatMap((rule) => selectorAlternatives(rule.selector))
+    .filter((alternative) => alternative.includes(".hub-panel-header"));
+  expect(hiding.length).toBeGreaterThan(0);
+  for (const alternative of hiding)
+    expect(alternative).toBe(".session-composer > .hub-panel > .hub-panel-header");
+  const composer = container.querySelector(".session-composer") as HTMLElement;
+  fireEvent.click(
+    within(composer).getByRole("button", { name: "Native command catalogue" }),
+  );
+  await waitFor(() =>
+    expect(composer.querySelectorAll(".hub-panel .hub-panel .hub-panel-header").length).toBeGreaterThan(0),
+  );
+  const own = [...composer.querySelectorAll(":scope > .hub-panel > .hub-panel-header")];
+  expect(own.length).toBeGreaterThan(0);
+  for (const header of composer.querySelectorAll(".hub-panel .hub-panel .hub-panel-header"))
+    expect(own).not.toContain(header);
+});
+// jsdom applies no CSS: fold the rules of the 600px media block per selector (source order, last wins).
+// The wrap has to sit on the header row that is actually constrained (and its actions must be allowed
+// to shrink), or it is inert at 481-600px.
+test("the 600px header rules wrap the header row and let the actions shrink", () => {
+  const rules = parseCssRules(readFileSync("src/features/remote/session-workspace.css", "utf8"));
+  const folded = (selector: string) => {
+    const out = new Map<string, string>();
+    for (const rule of rules)
+      if (
+        rule.media.some((head) => head.replace(/\s/g, "").includes("(max-width:600px)")) &&
+        selectorAlternatives(rule.selector).includes(selector)
+      )
+        for (const [prop, value] of rule.decls) out.set(prop, value);
+    return out;
+  };
+  expect(folded(".session-workbench-header").get("flex-wrap")).toBe("wrap");
+  const actions = folded(".session-header-actions");
+  expect(actions.get("flex-shrink")).toBe("1");
+  expect(actions.get("min-width")).toBe("0");
 });

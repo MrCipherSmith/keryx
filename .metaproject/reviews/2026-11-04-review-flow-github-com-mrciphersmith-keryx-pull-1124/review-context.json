@@ -1,0 +1,239 @@
+{
+ "request": {
+  "raw": "1 round of adaptive review of PR 1124 via review-orchestrator, reviewers in parallel",
+  "flags": [],
+  "review_mode": "diff",
+  "paths": [],
+  "commit_range": "85fe58fad18461213e860768056d5cbc4c744019..0be1e717365d980df900ded496ca90886fed09cf"
+ },
+ "git": {
+  "repo": "MrCipherSmith/keryx",
+  "branch": "feat-hub-chat-review",
+  "base": "85fe58fad18461213e860768056d5cbc4c744019",
+  "head": "0be1e717365d980df900ded496ca90886fed09cf",
+  "merge_base": "85fe58fad18461213e860768056d5cbc4c744019",
+  "pr_number": 1124,
+  "pr_url": "https://github.com/MrCipherSmith/keryx/pull/1124"
+ },
+ "pr": {
+  "number": 1124,
+  "url": "https://github.com/MrCipherSmith/keryx/pull/1124",
+  "title": "Improve Hub session launch, chat and navigation",
+  "state": "open",
+  "ci": "passing (20/20 required checks; GitHub Pages deploy skipped)",
+  "body_file": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md"
+ },
+ "scope": {
+  "mode": "diff",
+  "files": [
+   "apps/hub-web/src/api/remote-hooks.ts",
+   "apps/hub-web/src/app/App.tsx",
+   "apps/hub-web/src/components/ui.tsx",
+   "apps/hub-web/src/features/acceptance/presentation.tsx",
+   "apps/hub-web/src/features/context.tsx",
+   "apps/hub-web/src/features/remote/session-timeline.ts",
+   "apps/hub-web/src/features/remote/session-workspace.css",
+   "apps/hub-web/src/features/remote/session-workspace.tsx",
+   "apps/hub-web/src/features/remote/sessions.tsx",
+   "apps/hub-web/src/features/remote/settings.tsx",
+   "apps/hub-web/src/features/remote/work.tsx",
+   "apps/hub-web/src/features/workflow.tsx",
+   "apps/hub-web/src/i18n/acceptance.en.ts",
+   "apps/hub-web/src/i18n/acceptance.ru.ts",
+   "apps/hub-web/src/i18n/context.en.ts",
+   "apps/hub-web/src/i18n/context.ru.ts",
+   "apps/hub-web/src/i18n/remote.en.ts",
+   "apps/hub-web/src/i18n/remote.ru.ts",
+   "apps/hub-web/src/i18n/workflow.en.ts",
+   "apps/hub-web/src/i18n/workflow.ru.ts",
+   "apps/hub-web/src/styles.css",
+   "apps/hub-web/tests/breadcrumb.case.tsx",
+   "apps/hub-web/tests/browser-journeys.e2e.mjs",
+   "apps/hub-web/tests/context.case.tsx",
+   "apps/hub-web/tests/css-rules.ts",
+   "apps/hub-web/tests/flow-acceptance.case.tsx",
+   "apps/hub-web/tests/flow-term.case.ts",
+   "apps/hub-web/tests/remote-owned-controls.case.tsx",
+   "apps/hub-web/tests/remote.case.tsx",
+   "apps/hub-web/tests/session-command-outcomes.case.tsx",
+   "apps/hub-web/tests/session-timeline.case.ts",
+   "apps/hub-web/tests/session-workspace.case.tsx",
+   "src/lib/hub-machine/client.test.ts",
+   "src/lib/hub-machine/client.ts"
+  ],
+  "high_risk": [
+   "src/lib/hub-machine/client.ts",
+   "apps/hub-web/src/features/remote/sessions.tsx",
+   "apps/hub-web/src/features/remote/work.tsx"
+  ],
+  "generated_or_ignored": [
+   "src/hub/web-assets.generated.ts"
+  ]
+ },
+ "requirements": {
+  "issue_url": null,
+  "context_doc": null,
+  "acceptance_criteria": [],
+  "spec_source": "pull request body (no issue, no task doc) \u2014 see pr-context.md"
+ },
+ "rules": [
+  ".metaproject/index.md",
+  "CLAUDE.md",
+  ".metaproject/rules/core/opus-5-5-prompting.mdc"
+ ],
+ "cross_repo": [],
+ "memory": {
+  "query": "hub-web session launch chat command catalogue, hub machine client grant clock, hub-web i18n and tests",
+  "entries": [],
+  "searched": true,
+  "note": "10 accepted entries matched the query; none has a recorded scope intersecting apps/hub-web/** or src/lib/hub-machine/**, so none is handed on as project truth."
+ },
+ "routing": {
+  "selected_reviewers": [
+   "review-architecture",
+   "review-degradation",
+   "review-highload",
+   "review-layout",
+   "review-logic",
+   "review-performance",
+   "review-pr-contract",
+   "review-regression",
+   "review-security-code",
+   "review-testing-practices",
+   "review-ui-ux"
+  ],
+  "skipped": [
+   {
+    "reviewer": "review-frontend",
+    "reason": "stack: none of [react] declared in root package.json"
+   },
+   {
+    "reviewer": "review-frontend-conventions",
+    "reason": "stack: none of [react, mobx] declared in root package.json"
+   },
+   {
+    "reviewer": "review-backend",
+    "reason": "stack: none of [nestjs, prisma] declared"
+   },
+   {
+    "reviewer": "review-core-boundaries",
+    "reason": "no-matching-paths (no src/core/** in scope A)"
+   },
+   {
+    "reviewer": "review-flow-graph",
+    "reason": "no-matching-paths"
+   },
+   {
+    "reviewer": "review-style",
+    "reason": "round not started with --style"
+   },
+   {
+    "reviewer": "review-clean-code",
+    "reason": "round not started with --style"
+   },
+   {
+    "reviewer": "review-jev-*",
+    "reason": "opt-in review.jev.* not enabled in this project"
+   },
+   {
+    "reviewer": "legacy profiles",
+    "reason": "flag-only, no flag passed"
+   }
+  ],
+  "decisions": "roster from `keryx review required --depth auto --scope` (adaptive depth, full round on a 34-file deep diff); review-pr-contract added because pr-context.md is in the package"
+ },
+ "token_policy": {
+  "context_mode": "light",
+  "omissions": [
+   "src/hub/web-assets.generated.ts \u2014 generated: generated: filename ends with \".generated.ts\""
+  ],
+  "model_plan": {
+   "strategy": "adaptive",
+   "current_model": "claude-opus-5",
+   "note": "every `keryx review tier` block printed inherit:true; the host assigned claude-sonnet-5-5 to every reviewer dispatch at the operator's instruction, and claude-opus-5 to the Wave D premise judge"
+  },
+  "slices": {
+   "slice-01": {
+    "bytes": 143568,
+    "files": 16
+   },
+   "slice-02": {
+    "bytes": 136334,
+    "files": 18
+   }
+  }
+ },
+ "review_plan": {
+  "round": 1,
+  "mode": "first",
+  "waves": "A: logic, architecture, security-code, highload, regression, degradation \u2014 B: performance, layout, ui-ux, testing-practices, pr-contract \u2014 C: verifier on first blocker/major \u2014 D: premise",
+  "dispatch_plan": [
+   {
+    "reviewer": "review-architecture",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-degradation",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "deep"
+   },
+   {
+    "reviewer": "review-highload",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-layout",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-logic",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-performance",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-pr-contract",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-regression",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "deep"
+   },
+   {
+    "reviewer": "review-security-code",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-testing-practices",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   },
+   {
+    "reviewer": "review-ui-ux",
+    "runtime": "general-purpose-fallback",
+    "model": "claude-sonnet-5-5",
+    "tier": "standard"
+   }
+  ]
+ }
+}

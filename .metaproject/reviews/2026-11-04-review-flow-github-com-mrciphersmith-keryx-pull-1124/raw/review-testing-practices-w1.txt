@@ -1,0 +1,428 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+ "status": "DONE_WITH_CONCERNS",
+ "reviewer": "review-testing-practices",
+ "slices": [
+  "slice-02"
+ ],
+ "summary": "Mutation pass ran 56 mutants where the suites can run here (46 of the 131 candidates plus 10 extras): all 14 client.ts grant-gate candidates, all 8 session-timeline candidates, 24 CSS candidates against a replica of the CSS-only assertion bodies, and 8 catalog edits. 39 went red, 17 stayed green. The jsdom component suites (remote, session-command-outcomes, breadcrumb DOM halves, session-workspace DOM halves, context, flow-acceptance, remote-owned-controls) could not run: apps/hub-web has no node_modules (react, jsdom, @testing-library absent). 85 candidates were not reached.",
+ "findings": [
+  {
+   "id": "F-001",
+   "severity": "minor",
+   "file": "src/lib/hub-machine/client.ts",
+   "quote": "&& expires > issued && expires - issued <= LIMITS.grantMs",
+   "problem": "Two gates in the rewritten verifyAuthorizationGrant expression survive deletion with the suite green: `elapsed >= 0` and `expires - issued <= LIMITS.grantMs`. No fixture builds the input that separates them: every grant in the three grant tests has a 5000 ms window, and every elapsed value is 10 or 5000. The new clock-lead tests kill every other gate in the expression (lead removed, 249/251/1000, expires>issued, expires>=issued, expires>now, expires>=now, issued<, elapsed<=, window cap strict), so the two survivors are the only unpinned pieces.",
+   "impact": "A grant whose window is longer than LIMITS.grantMs, or a call with a negative elapsed, would be accepted after someone edits the line again; nothing red tells them. The gates themselves are correct.",
+   "suggested_fix": "Add to the 'rejects a grant that expires at or before it was issued' test: a grant with expiresAt = authorizedAt + 5001 ms that is otherwise valid (expect false), and verifyAuthorizationGrant(grant, expected, now, -1) (expect false).",
+   "evidence": "Mutation run, command `bun test ./src/lib/hub-machine/client.test.ts -t \"grant application\" --timeout 30000`: deleting `elapsed >= 0 && ` -> 3 pass 0 fail (green); deleting `&& expires - issued <= LIMITS.grantMs` -> 3 pass 0 fail (green). Baseline 3 pass.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "pre-existing"
+  },
+  {
+   "id": "F-002",
+   "severity": "minor",
+   "file": "apps/hub-web/src/features/remote/session-timeline.ts",
+   "quote": "const byAnchor = [...outcomes].sort((a, b) => a.anchor - b.anchor);",
+   "problem": "Deleting the anchor sort leaves session-timeline.case.ts green (5/5). Every test hands mergeTimeline outcomes that are already in ascending anchor order (a=2; early=0 then late=Infinity; a,b,c all 1; a=2), so no fixture separates a sorted list from an unsorted one. The sort is what lets an outcome reported out of order still land after the last message at or below its anchor.",
+   "impact": "If a later edit removes or reverses the sort, outcomes reported out of anchor order would be drawn in the wrong place; the suite stays green for deletion and for no other reason.",
+   "suggested_fix": "Add `mergeTimeline([message(1), message(2)], [entry('late', 2), entry('early', 1)])` expecting ['m1','early','m2','late'], and one with equal anchors given out of order to keep stability pinned.",
+   "evidence": "Mutation run, command `bun test ./apps/hub-web/tests/session-timeline.case.ts --timeout 30000`: `[...outcomes].sort(...)` -> `[...outcomes]` gave 5 pass 0 fail (green). The other seven mutants of this file (anchor <=, anchor<cursor-1, descending sort, trailing loop deleted, latest compare flipped, latest initial -1, first page only) each went red.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-003",
+   "severity": "minor",
+   "file": "apps/hub-web/src/features/remote/session-workspace.css",
+   "quote": ".session-header-actions > button[aria-expanded] {\n  display: none;",
+   "problem": "The selector changed from `button:first-child` to `button[aria-expanded]` because the header now starts with a Settings button (session-workspace.tsx puts it before the navigation toggle). Nothing ties the selector to the DOM: the CSS-reading tests only look at `.hub-panel-header` and the 600px block, and jsdom applies no CSS. Reverting either occurrence to `:first-child` leaves the CSS assertions green.",
+   "impact": "Re-introducing `:first-child` would hide the Settings button on desktop widths and show it in place of the navigation toggle on narrow ones, with the suite green.",
+   "suggested_fix": "Mirror the composer-header test: parse the two rules, then assert in the rendered header that `querySelectorAll(selector)` matches exactly the navigation toggle (aria-expanded present) and does not match the Settings button.",
+   "evidence": "Mutation run against a replica of the CSS-only assertion bodies (see Limits): `button[aria-expanded]` -> `button:first-child` in the desktop rule: 6 pass 0 fail; in the media rule: 6 pass 0 fail. The DOM halves of session-workspace.case.tsx cannot see CSS. grep for `session-header-actions` in apps/hub-web/tests finds only the 600px test.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-004",
+   "severity": "minor",
+   "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+   "quote": "expect(alternative).not.toMatch(/\\.identity(\\s*>\\s*\\*)?$/);",
+   "problem": "'collapsed rail keeps an icon-only Sign out reachable' guards reachability with a blacklist of two spellings (`.identity`, `.identity > *`, `.hub-button` as the last token). A rule that hides the same button another way passes: adding `.identity button` or `.identity [type=button]` to the collapsed-rail hide list leaves the test green, and the DOM half (nav-label present, title attribute) does not depend on CSS.",
+   "impact": "A later edit can hide the Sign out button in the collapsed rail while a test whose name says it stays reachable passes.",
+   "suggested_fix": "Click the rail toggle first (this also covers the toggle, see F-005), then for every hiding alternative strip `.rail-collapsed` and assert `signOut.matches(alt)` and `signOut.closest(alt)` are false, the technique the composer-header test already uses.",
+   "evidence": "Mutation run against the replica of the CSS half, command `bun test <scratchpad>/css-replica.test.ts`: `.identity > p,.nav-label,` -> `.identity > p,.identity button,.nav-label,` 6 pass 0 fail; -> `.identity [type=button]` 6 pass 0 fail. Probe: selectorAlternatives('.rail-collapsed .identity button') returns it unchanged and neither regex matches.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-005",
+   "severity": "minor",
+   "file": "apps/hub-web/src/features/remote/sessions.tsx",
+   "quote": "?.displayName ?? s.machineId",
+   "problem": "Behaviour the PR description names has no test reference anywhere in apps/hub-web/tests (negative greps, complete): (1) session list machine display name (`Laptop` appears only in machine-cards for the Machines view; SessionsView is rendered only by remote.case.tsx and session-command-outcomes.case.tsx, neither reads the Machine cell); (2) header status 'Could not open' (`sessionOpeningFailed`); (3) 'No matching commands' notice; (4) the `hub-select` class on rendered Select (only CSS text is parsed); (5) the rail toggle (no test contains 'Collapse menu', 'Expand menu', or clicks the toggle; aria-expanded flip and the `rail-collapsed` shell class are unread); (6) ProposalsView empty-state buttons and `noMatchingProposals`; (7) DeliveryView 'Browse revisions' recovery; (8) History self-actor substitution (`historyYou`/email: no event in any test has actorId equal to the mocked principal 'human:owner'); (9) acceptance 'what needs manual review' missing-evidence line; (10) Flows 'Project work' button (flow-term only pins the copy string); (11) header Settings button handler (setTab, scroll, focus).",
+   "impact": "Each of these can be deleted or broken by a later edit with every suite green. This is an absence-of-reference finding, not a mutation result: none of the mutants below was run, because the component suite cannot run in this checkout.",
+   "suggested_fix": "Run the listed mutants once the hub-web dependencies are installed; add one assertion per site (the display name in the session card, click-through of each recovery button asserting navigate arguments, a toggle click asserting aria-expanded and the shell class, and `container.querySelector('select.hub-select')`).",
+   "evidence": "Greps over apps/hub-web/tests (all files, including the e2e .mjs): `Could not open|No matching commands|noCommandsFound|hub-select|Collapse menu|Expand menu|Project work|openManagedWork|noMatchingProposals|chooseDeliveryRevision|Browse revisions|historyYou|linked evidence|reviewGaps|historyNoMatching` hit only breadcrumb.case.tsx (CSS parsing) and flow-term.case.ts (copy string). Candidate ids: session-list-display-name-dropped, header-status-ignores-rejection, search-no-match-notice-deleted, select-class-dropped, rail-toggle-inert, rail-toggle-aria-expanded-inverted, rail-collapsed-class-dropped, proposals-empty-*, delivery-recovery-wrong-target, history-self-actor-substitution-dropped, gaps-missing-evidence-zero, flows-project-work-button-inert, header-settings-*.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff",
+   "class_scope": {
+    "sites": [
+     "apps/hub-web/src/features/remote/sessions.tsx",
+     "apps/hub-web/src/features/remote/session-workspace.tsx",
+     "apps/hub-web/src/features/remote/settings.tsx",
+     "apps/hub-web/src/components/ui.tsx",
+     "apps/hub-web/src/app/App.tsx",
+     "apps/hub-web/src/features/context.tsx",
+     "apps/hub-web/src/features/acceptance/presentation.tsx",
+     "apps/hub-web/src/features/workflow.tsx"
+    ],
+    "enumeration_method": "keryx ctx rg over apps/hub-web/tests for the literal string, key or class of each added behaviour; zero hits outside CSS-parsing and copy-string tests"
+   }
+  },
+  {
+   "id": "F-006",
+   "severity": "minor",
+   "file": "apps/hub-web/tests/context.case.tsx",
+   "quote": "expect(actor).not.toHaveTextContent(en.unknownRole);",
+   "problem": "The negative assertion cannot fail. `actor` is the `<span>` that renders `Actor: <id>`; the role is a sibling `<span>` rendering `Role: ...`, and en.unknownRole is 'Not recorded' (read from context.en.ts). The text of the actor span can never contain it, so the check says nothing about 'even without an actorRole'. Only the positive `toHaveTextContent('Actor: agent:connector')` is live.",
+   "impact": "The test reads as coverage of the missing-role case it does not exercise; a regression that renders the actor wrongly when actorRole is absent is still caught only by the positive line.",
+   "suggested_fix": "Assert on the list item: `within(actor.closest('li')!).getByText(en.unknownRole)` for the missing-role event, and keep the positive actor text assertion.",
+   "evidence": "Read of context.tsx HistoryView: actor span `{t('actor')}: {...}` and role span `{t('role')}: {... t('unknownRole')}` are siblings. `bun -e` print of context.en: unknownRole = 'Not recorded', actor = 'Actor'.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-007",
+   "severity": "minor",
+   "file": "apps/hub-web/tests/context.case.tsx",
+   "quote": "await new Promise(resolve => setTimeout(resolve, 20));",
+   "problem": "Two fixed waits where the repository convention is an awaited condition: context.case.tsx (20 ms, before sampling the mergeEvents call count) and session-command-outcomes.case.tsx (50 ms, before sampling per-operation fetch counts). Neither guards a condition that can occur: in both, the sampled counter cannot change between the preceding waitFor and the sample (the memo deps are unchanged; the settled operation's query is disabled), so the sleep adds time without adding signal.",
+   "impact": "No failing path found, so no flake is claimed; the cost is 70 ms per run and a pattern the next author copies where it would be load-bearing.",
+   "suggested_fix": "Drop the sleeps, or wait on the request/render that proves the earlier queries settled (waitFor on the flows and documents requests in `fetched`/mocks.get).",
+   "evidence": "Read of both tests against HistoryView's useMemo deps and useRemoteQuery's `enabled` function. No run was needed or made.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-008",
+   "severity": "minor",
+   "file": "apps/hub-web/tests/session-command-outcomes.case.tsx",
+   "quote": "({ operationId, sessionId: \"s\", commandName, status, errorCode: null, result: null }) as unknown as Control[\"CommandOutcome\"]",
+   "problem": "Fixtures are cast through `unknown`, which switches off the contract check. The generated CommandOutcome (src/remote-control/generated/types.ts:51) also requires sessionVersion, confirmationId, confirmation, runId, turnId; the fixture omits all five, so `receipt.confirmation` is undefined where the producer sends null. The SessionMessage fixtures (here and in session-timeline.case.ts) omit the required sessionId (types.ts:38). The catalogue entry fixture is cast the same way although its fields match.",
+   "impact": "If the UI later reads a field the fixture leaves out (sessionVersion, runId), the tests run against a shape no machine emits and cannot show it. Today's code is not affected: `receipt?.confirmation&&...` and `outcome.result !== null` behave the same.",
+   "suggested_fix": "Build the fixtures with the full shape and drop the casts (`satisfies Control['CommandOutcome']`), as remote-owned-controls.case.tsx already does for its catalogue entry.",
+   "evidence": "Producer type read at src/remote-control/generated/types.ts:51 and :38 at the reviewed head.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-009",
+   "severity": "minor",
+   "file": "apps/hub-web/tests/localization.case.ts",
+   "quote": "[['common',commonEn,commonRu],['workflow',workflowEn,workflowRu],['context',contextEn,contextRu],['remote',remoteEn,remoteRu]]",
+   "problem": "The bilingual parity test covers four catalogs; `acceptance` is not among them, and the diff adds four keys to acceptance.en/ru (reviewGaps, missingStepsCount, missingEvidenceCount, manualReviewNext). Deleting a Russian key, or dropping `{{count}}` from the Russian string, stays green. The Russian acceptance strings are named in no test (grep for 'Критериев', 'Что нужно проверить').",
+   "impact": "A Russian user would see the English fallback or a count-less sentence in the review gaps block, with every suite green.",
+   "suggested_fix": "Add ['acceptance', acceptanceEn, acceptanceRu] to the parity table.",
+   "evidence": "Mutation run, command `bun test ./apps/hub-web/tests/localization.case.ts ./apps/hub-web/tests/flow-term.case.ts`: deleting ru `reviewGaps` -> 5 pass 0 fail; ru `missingStepsCount` without {{count}} -> 5 pass 0 fail. The same edits in the remote, workflow and context catalogs each went red (4 of 4).",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-010",
+   "severity": "info",
+   "file": "apps/hub-web/tests/session-command-outcomes.case.tsx",
+   "quote": "test(\"a settled outcome stops being fetched on later invalidations, while a queued one keeps following\", async () => {",
+   "problem": "Two tests share the same setup and the core assertion (an applied operation is not refetched after invalidateQueries): 'a settled outcome stops being fetched but its receipt stays in the query cache' and this one. The later one adds the queued-keeps-following half; the earlier adds the cache read.",
+   "impact": "Duplicate maintenance; no signal lost.",
+   "suggested_fix": "Merge into one test asserting stop, keep-following and cache retention.",
+   "evidence": "Read of the two test bodies.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-011",
+   "severity": "info",
+   "file": "apps/hub-web/tests/css-rules.ts",
+   "quote": "stack.push({ head, layer: head.startsWith(\"@layer\") });",
+   "problem": "parseCssRules keeps a statement at-rule in the buffer, so it becomes the head of the next block and that block is dropped as an at-rule. Probe: parseCssRules('@import \"x.css\";\\n.rail-collapsed .identity { display:none; }') returns no rules. Today's files are safe (styles.css has `@import ...;` followed by `@theme {`), so nothing is lost now.",
+   "impact": "Latent: a `@layer a, b;` or `@import` line added before a rule would make the guards that read hide-lists see nothing; the `length > 0` checks would turn red, but with a message about the rules rather than the parser.",
+   "suggested_fix": "Reset `buffer` when a `;` is met at depth 0.",
+   "evidence": "Probe test run with bun (scratchpad parser-probe.test.ts): rules = [] for the input above.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-012",
+   "severity": "info",
+   "file": "apps/hub-web/tests/flow-term.case.ts",
+   "quote": "not.toMatch(/потоки/i)",
+   "problem": "The guard that the Russian copy keeps the term 'Flow' forbids one inflection of the rejected word. 'потоков', 'потока', 'потоку' pass. The positive `toContain('находятся Flow на основе')` already pins the sentence, so the negative line adds little, and both assertions fail on any rewording of the copy (checked: an English or Russian rewording goes red).",
+   "impact": "A change detector for one string; harmless.",
+   "suggested_fix": "Assert `/\\bFlow\\b/` present and `/поток/i` absent in the Russian string.",
+   "evidence": "Mutation run, command `bun test ./apps/hub-web/tests/localization.case.ts ./apps/hub-web/tests/flow-term.case.ts`: ru 'Flow' -> 'потоки' red; en rewording red.",
+   "confidence": "high",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-013",
+   "severity": "info",
+   "file": "apps/hub-web/src/styles.css",
+   "quote": "padding-inline-end:2.5rem;",
+   "problem": "CSS declarations the diff adds that no tier pins: select `padding-inline-end:2.5rem` (the point of the 'reserve space for the chevron' fix), the forced-colors fallback, the 1024px rail breakpoint, the toggle's `display:none` below it, the collapsed width 60px and 44px target, composer `font-size:16px` at 600px, and the `composer-work-context` rules. jsdom applies no CSS and the e2e fit check does not open the collapsed rail or measure a select.",
+   "impact": "Presentation only; a regression in any of them is visible only to a person.",
+   "suggested_fix": "Leave as is, or extend the e2e fit check (it already runs at a narrow width) to open the rail and read a select's computed padding.",
+   "evidence": "Mutation run against the replica of the CSS-only assertions: padding deleted, forced-colors appearance changed, breakpoint 1024->1, toggle display:flex, width 60->600, target 44->20, font-size 16->12, summary margin removed: each 6 pass 0 fail.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  },
+  {
+   "id": "F-014",
+   "severity": "info",
+   "file": "apps/hub-web/tests/remote.case.tsx",
+   "quote": "test(\"creating a session with a Flow seeds the new session's composer with the prepared first message\", async () => {",
+   "problem": "The PR claims two turns succeeded with identical Flow pins. Automated coverage stops at seeding and pinning the prepared draft; no unit test sends the prepared message and then a second one, and the e2e journeys create ad-hoc sessions (no `launchFlow` in browser-journeys.e2e.mjs). The `store.put(draftKey, {...submitted, text: \"\", prepared: false})` line that keeps the pins after a send is the gate that carries 'subsequent messages reuse that Flow'.",
+   "impact": "The claim rests on the manual Chrome run described in the PR body.",
+   "suggested_fix": "Add a unit test: seed a prepared Flow draft, send, assert the draft keeps mode/flowId/specDigest/criteriaDigest with empty text, send again and assert the same pins in the second request body.",
+   "evidence": "grep for launchFlow|Session Flow|firstMessage in browser-journeys.e2e.mjs: no matches; remote.case.tsx has no test that submits a prepared draft. Candidate ids: send-success-keeps-text, prepared-submit-guard-deleted.",
+   "confidence": "medium",
+   "reviewer": "review-testing-practices",
+   "location_class": "in-diff"
+  }
+ ],
+ "stats": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 9,
+  "info": 5
+ },
+ "needs_context": [],
+ "follow_ups": [
+  "Run the 85 unreached mutants (the ids not listed in the mutation table, all in .tsx files) after `bun install --cwd apps/hub-web`; the nearest suite is `bun run --cwd apps/hub-web test` (vitest). I did not install dependencies: it is a network download outside this dispatch."
+ ],
+ "mutant_candidates": [
+  {"id": "client-lead-removed", "file": "src/lib/hub-machine/client.ts", "anchor": "issued <= now + MAX_HUB_CLOCK_LEAD_MS", "replacement": "issued <= now", "kind": "behavior"},
+  {"id": "client-lead-251", "file": "src/lib/hub-machine/client.ts", "anchor": "MAX_HUB_CLOCK_LEAD_MS = 250", "replacement": "MAX_HUB_CLOCK_LEAD_MS = 251", "kind": "behavior"},
+  {"id": "client-lead-249", "file": "src/lib/hub-machine/client.ts", "anchor": "MAX_HUB_CLOCK_LEAD_MS = 250", "replacement": "MAX_HUB_CLOCK_LEAD_MS = 249", "kind": "behavior"},
+  {"id": "client-lead-1000", "file": "src/lib/hub-machine/client.ts", "anchor": "MAX_HUB_CLOCK_LEAD_MS = 250", "replacement": "MAX_HUB_CLOCK_LEAD_MS = 1000", "kind": "behavior"},
+  {"id": "client-issued-strict", "file": "src/lib/hub-machine/client.ts", "anchor": "issued <= now + MAX_HUB_CLOCK_LEAD_MS", "replacement": "issued < now + MAX_HUB_CLOCK_LEAD_MS", "kind": "behavior"},
+  {"id": "client-expires-gt-issued-deleted", "file": "src/lib/hub-machine/client.ts", "anchor": "&& expires > issued && expires - issued", "replacement": "&& expires - issued", "kind": "behavior"},
+  {"id": "client-expires-ge-issued", "file": "src/lib/hub-machine/client.ts", "anchor": "&& expires > issued &&", "replacement": "&& expires >= issued &&", "kind": "behavior"},
+  {"id": "client-expires-ge-now", "file": "src/lib/hub-machine/client.ts", "anchor": "&& expires > now", "replacement": "&& expires >= now", "kind": "behavior"},
+  {"id": "client-expires-now-deleted", "file": "src/lib/hub-machine/client.ts", "anchor": "&& expires > now", "replacement": "", "kind": "behavior"},
+  {"id": "client-expiry-also-leads", "file": "src/lib/hub-machine/client.ts", "anchor": "&& expires > now", "replacement": "&& expires + MAX_HUB_CLOCK_LEAD_MS > now", "kind": "behavior"},
+  {"id": "client-elapsed-nonneg-deleted", "file": "src/lib/hub-machine/client.ts", "anchor": "elapsed >= 0 && ", "replacement": "", "kind": "behavior"},
+  {"id": "client-elapsed-le-grant", "file": "src/lib/hub-machine/client.ts", "anchor": "elapsed < LIMITS.grantMs", "replacement": "elapsed <= LIMITS.grantMs", "kind": "behavior"},
+  {"id": "client-window-cap-deleted", "file": "src/lib/hub-machine/client.ts", "anchor": "&& expires - issued <= LIMITS.grantMs", "replacement": "", "kind": "behavior"},
+  {"id": "client-window-cap-strict", "file": "src/lib/hub-machine/client.ts", "anchor": "expires - issued <= LIMITS.grantMs", "replacement": "expires - issued < LIMITS.grantMs", "kind": "behavior"},
+  {"id": "timeline-anchor-le", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "byAnchor[next].anchor < message.historyCursor", "replacement": "byAnchor[next].anchor <= message.historyCursor", "kind": "behavior"},
+  {"id": "timeline-anchor-minus-one", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "byAnchor[next].anchor < message.historyCursor", "replacement": "byAnchor[next].anchor < message.historyCursor - 1", "kind": "behavior"},
+  {"id": "timeline-sort-deleted", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "[...outcomes].sort((a, b) => a.anchor - b.anchor)", "replacement": "[...outcomes]", "kind": "behavior"},
+  {"id": "timeline-sort-descending", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "a.anchor - b.anchor", "replacement": "b.anchor - a.anchor", "kind": "behavior"},
+  {"id": "timeline-trailing-loop-deleted", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "  while (next < byAnchor.length) timeline.push({ kind: \"outcome\", item: byAnchor[next++] });\n  return timeline;", "replacement": "  return timeline;", "kind": "behavior"},
+  {"id": "timeline-latest-compare", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "message.historyCursor > latest", "replacement": "message.historyCursor < latest", "kind": "behavior"},
+  {"id": "timeline-latest-initial", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "let latest = 0;", "replacement": "let latest = -1;", "kind": "behavior"},
+  {"id": "timeline-latest-first-page-only", "file": "apps/hub-web/src/features/remote/session-timeline.ts", "anchor": "data?.pages.forEach", "replacement": "data?.pages.slice(0, 1).forEach", "kind": "behavior"},
+  {"id": "launch-blocker-operator-deleted", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "if (!operator) return \"sessionLaunchOperatorOnly\";", "replacement": "", "kind": "behavior"},
+  {"id": "launch-blocker-requirements-deleted", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "if (!targetReady) return \"sessionLaunchRequirements\";", "replacement": "", "kind": "behavior"},
+  {"id": "launch-blocker-title-deleted", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "if (!hasTitle) return \"sessionLaunchEnterTitle\";", "replacement": "", "kind": "behavior"},
+  {"id": "launch-blocker-flows-loading-deleted", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "if (flowsState === \"loading\") return \"sessionLaunchFlowsLoading\";", "replacement": "", "kind": "behavior"},
+  {"id": "launch-blocker-flows-failed-deleted", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "if (flowsState === \"failed\") return \"sessionLaunchFlowsFailed\";", "replacement": "", "kind": "behavior"},
+  {"id": "launch-blocker-flow-gone-deleted", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "if (flowGone) return \"sessionLaunchFlowGone\";", "replacement": "", "kind": "behavior"},
+  {"id": "launch-flows-state-always-ready", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "const flowsState = !draft.flowId || flows.data ? \"ready\" : flows.isError ? \"failed\" : \"loading\";", "replacement": "const flowsState = \"ready\";", "kind": "behavior"},
+  {"id": "launch-eligible-unfiltered", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "flows.data?.flows.filter(flow => flow.status === \"in-progress\") ?? []", "replacement": "flows.data?.flows ?? []", "kind": "behavior"},
+  {"id": "launch-first-message-dropped", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "prepareFlowMessageDraft(selectedFlow, criteriaDigest, draft.firstMessage)", "replacement": "prepareFlowMessageDraft(selectedFlow, criteriaDigest, \"\")", "kind": "behavior"},
+  {"id": "launch-form-not-cleared", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "clearDraft();", "replacement": "", "kind": "behavior"},
+  {"id": "session-list-display-name-dropped", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId", "replacement": "s.machineId", "kind": "behavior"},
+  {"id": "opening-recovery-focus-flag-dropped", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "setCreate(true); setFocusForm(true);", "replacement": "setCreate(true);", "kind": "behavior"},
+  {"id": "opening-recovery-focus-effect-deleted", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "if (focusOnOpen) form.current?.querySelector(\"select\")?.focus();", "replacement": "", "kind": "behavior"},
+  {"id": "opening-error-state-gate-dropped", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "const openingError = record.state === \"opening\" ? opening.data?.errorCode : null;", "replacement": "const openingError = opening.data?.errorCode;", "kind": "behavior"},
+  {"id": "opening-header-status-dropped", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "openingRejected={!!openingError}", "replacement": "openingRejected={false}", "kind": "behavior"},
+  {"id": "history-empty-ignores-outcomes", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "!ordered.length && !outcomes.length", "replacement": "!ordered.length", "kind": "behavior"},
+  {"id": "outcome-settled-applied-only", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "status === \"applied\" || status === \"rejected\"", "replacement": "status === \"applied\"", "kind": "behavior"},
+  {"id": "outcome-default-anchor-zero", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "anchor ?? Number.POSITIVE_INFINITY", "replacement": "anchor ?? 0", "kind": "behavior"},
+  {"id": "outcome-reanchored-on-later-report", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "at === index ? { ...item, outcome } : item", "replacement": "at === index ? { outcome, invokedAt, anchor: anchor ?? item.anchor } : item", "kind": "behavior"},
+  {"id": "session-surface-unkeyed", "file": "apps/hub-web/src/features/remote/sessions.tsx", "anchor": "<SessionSurface key={query.data.sessionId} record={query.data}", "replacement": "<SessionSurface record={query.data}", "kind": "behavior"},
+  {"id": "command-anchor-record-cursor-only", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "anchor.current=Math.max(record.historyCursor,latestHistoryCursor(queryClient.getQueryData<InfiniteData<Control['HistoryPage']>>(historyQueryKey(hub.scopeKey,record.projectId,record.sessionId))));", "replacement": "anchor.current=record.historyCursor;", "kind": "behavior"},
+  {"id": "command-anchor-loaded-pages-only", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "anchor.current=Math.max(record.historyCursor,latestHistoryCursor(queryClient.getQueryData<InfiniteData<Control['HistoryPage']>>(historyQueryKey(hub.scopeKey,record.projectId,record.sessionId))));", "replacement": "anchor.current=latestHistoryCursor(queryClient.getQueryData<InfiniteData<Control['HistoryPage']>>(historyQueryKey(hub.scopeKey,record.projectId,record.sessionId)));", "kind": "behavior"},
+  {"id": "search-leading-slash-kept", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "search.trim().replace(/^\\//, \"\").toLowerCase()", "replacement": "search.trim().toLowerCase()", "kind": "behavior"},
+  {"id": "search-not-trimmed", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "search.trim().replace(/^\\//, \"\").toLowerCase()", "replacement": "search.replace(/^\\//, \"\").toLowerCase()", "kind": "behavior"},
+  {"id": "search-case-sensitive", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "search.trim().replace(/^\\//, \"\").toLowerCase()", "replacement": "search.trim().replace(/^\\//, \"\")", "kind": "behavior"},
+  {"id": "search-summary-clause-deleted", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": " || item.summary.toLowerCase().includes(needle)", "replacement": "", "kind": "behavior"},
+  {"id": "search-name-clause-deleted", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "item.commandName.toLowerCase().includes(needle) ||", "replacement": "", "kind": "behavior"},
+  {"id": "search-selected-entry-not-kept", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "const options = entry && !matches?.includes(entry) ? [entry, ...(matches ?? [])] : matches;", "replacement": "const options = matches;", "kind": "behavior"},
+  {"id": "search-no-match-notice-deleted", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "{matches?.length === 0 && <Notice>{t('noCommandsFound')}</Notice>}", "replacement": "", "kind": "behavior"},
+  {"id": "catalogue-unavailable-option-disabled", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "<option key={e.commandName} value={e.commandName}>{e.commandName} · {e.availability}</option>", "replacement": "<option key={e.commandName} value={e.commandName} disabled={e.availability!=='available'}>{e.commandName} · {e.availability}</option>", "kind": "behavior"},
+  {"id": "catalogue-search-focus-deleted", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "if (visible) searchInput.current?.focus();", "replacement": "", "kind": "behavior"},
+  {"id": "invoke-guard-deleted", "file": "apps/hub-web/src/features/remote/settings.tsx", "anchor": "if(!allowed||stale||action.isPending||!control.active||!entry||", "replacement": "if(!entry||", "kind": "behavior"},
+  {"id": "prepared-submit-guard-deleted", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if(draft.prepared)return;", "replacement": "", "kind": "behavior"},
+  {"id": "prepared-pin-ignores-opening", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if (!draft.prepared || record.state === \"opening\") return;", "replacement": "if (!draft.prepared) return;", "kind": "behavior"},
+  {"id": "stale-ignores-prepared", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "const stale = !!draft.text && !draft.prepared && (", "replacement": "const stale = !!draft.text && (", "kind": "behavior"},
+  {"id": "stale-ignores-empty-text", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "const stale = !!draft.text && !draft.prepared && (", "replacement": "const stale = !draft.prepared && (", "kind": "behavior"},
+  {"id": "edit-does-not-unprepare", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{})", "replacement": "", "kind": "behavior"},
+  {"id": "send-rejected-receipt-clears-draft", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if(receipt.status==='rejected')return;", "replacement": "", "kind": "behavior"},
+  {"id": "send-success-keeps-text", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if(current===submitted)store.put(draftKey,{...submitted,text:\"\",prepared:false});", "replacement": "", "kind": "behavior"},
+  {"id": "send-preserved-flag-off", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "setPreserved(current!==undefined&&current!==submitted);", "replacement": "setPreserved(false);", "kind": "behavior"},
+  {"id": "slash-opens-on-nonempty-message", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if (event.key !== \"/\" || draft.text ||", "replacement": "if (event.key !== \"/\" ||", "kind": "behavior"},
+  {"id": "slash-ignores-composition", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "event.nativeEvent.isComposing ||", "replacement": "", "kind": "behavior"},
+  {"id": "slash-ignores-modifiers", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "event.ctrlKey || event.metaKey || event.altKey || event.repeat", "replacement": "event.repeat", "kind": "behavior"},
+  {"id": "slash-ignores-key-repeat", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "event.ctrlKey || event.metaKey || event.altKey || event.repeat", "replacement": "event.ctrlKey || event.metaKey || event.altKey", "kind": "behavior"},
+  {"id": "slash-origin-not-recorded", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "slashOpened.current = event.currentTarget;", "replacement": "slashOpened.current = null;", "kind": "behavior"},
+  {"id": "slash-refocus-token-deleted", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "setFocusToken(token => token + 1);", "replacement": "", "kind": "behavior"},
+  {"id": "escape-other-keys-keep-slash", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if (event.key !== \"Escape\") { slashOpened.current = null; return; }", "replacement": "if (event.key !== \"Escape\") return;", "kind": "behavior"},
+  {"id": "escape-ignores-default-prevented", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if (event.defaultPrevented) return;", "replacement": "", "kind": "behavior"},
+  {"id": "escape-handback-onto-nonempty", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "if (field && !draft.text) { editText(\"/\"); field.focus(); }", "replacement": "if (field) { editText(\"/\"); field.focus(); }", "kind": "behavior"},
+  {"id": "pointer-does-not-cancel-handback", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "onPointerDownCapture={() => { slashOpened.current = null; }}", "replacement": "", "kind": "behavior"},
+  {"id": "change-does-not-cancel-handback", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "onChangeCapture={() => { slashOpened.current = null; }}", "replacement": "", "kind": "behavior"},
+  {"id": "close-does-not-return-focus", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "commandTrigger.current?.focus();", "replacement": "", "kind": "behavior"},
+  {"id": "catalogue-never-hidden", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "hidden={commands !== \"open\"}", "replacement": "hidden={false}", "kind": "behavior"},
+  {"id": "catalogue-mounted-eagerly", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "{commands !== \"unopened\" && (", "replacement": "{true && (", "kind": "behavior"},
+  {"id": "catalogue-aria-controls-dropped", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "aria-controls={commands === \"unopened\" ? undefined : commandsId}", "replacement": "aria-controls={undefined}", "kind": "presentation"},
+  {"id": "work-context-always-open", "file": "apps/hub-web/src/features/remote/work.tsx", "anchor": "<details open={!association()} className=\"composer-work-context\">", "replacement": "<details open className=\"composer-work-context\">", "kind": "presentation"},
+  {"id": "follow-never-stops", "file": "apps/hub-web/src/api/remote-hooks.ts", "anchor": "return !!initial?.operationId && !(latest && settled?.(latest));", "replacement": "return !!initial?.operationId;", "kind": "behavior"},
+  {"id": "follow-judges-initial-only", "file": "apps/hub-web/src/api/remote-hooks.ts", "anchor": "const latest = data ?? initial;", "replacement": "const latest = initial;", "kind": "behavior"},
+  {"id": "follow-enabled-blind-to-cache", "file": "apps/hub-web/src/api/remote-hooks.ts", "anchor": "(query) => !!projectId && enabled(query.state.data)", "replacement": "(query) => !!projectId && enabled(undefined)", "kind": "behavior"},
+  {"id": "header-status-ignores-rejection", "file": "apps/hub-web/src/features/remote/session-workspace.tsx", "anchor": "{openingRejected ? t(\"sessionOpeningFailed\") : t(\"states.\" + record.state, { defaultValue: record.state })}", "replacement": "{t(\"states.\" + record.state, { defaultValue: record.state })}", "kind": "behavior"},
+  {"id": "header-settings-tab-not-selected", "file": "apps/hub-web/src/features/remote/session-workspace.tsx", "anchor": "setTab(\"settings\");", "replacement": "", "kind": "behavior"},
+  {"id": "header-settings-focus-deleted", "file": "apps/hub-web/src/features/remote/session-workspace.tsx", "anchor": "document.getElementById(id + \"-settings\")?.focus({ preventScroll: true });", "replacement": "", "kind": "behavior"},
+  {"id": "header-settings-scroll-deleted", "file": "apps/hub-web/src/features/remote/session-workspace.tsx", "anchor": "document.getElementById(id + \"-inspector\")?.scrollIntoView({ block: \"start\" });", "replacement": "", "kind": "behavior"},
+  {"id": "nav-open-focus-lands-on-rail-toggle", "file": "apps/hub-web/src/app/App.tsx", "anchor": "\"button:not(.desktop-rail-toggle)\"", "replacement": "\"button\"", "kind": "behavior"},
+  {"id": "rail-collapsed-class-dropped", "file": "apps/hub-web/src/app/App.tsx", "anchor": "\"app-shell\" + (railCollapsed ? \" rail-collapsed\" : \"\")", "replacement": "\"app-shell\"", "kind": "behavior"},
+  {"id": "rail-toggle-inert", "file": "apps/hub-web/src/app/App.tsx", "anchor": "onClick={() => setRailCollapsed(!railCollapsed)}", "replacement": "onClick={() => undefined}", "kind": "behavior"},
+  {"id": "rail-toggle-aria-expanded-inverted", "file": "apps/hub-web/src/app/App.tsx", "anchor": "aria-expanded={!railCollapsed}", "replacement": "aria-expanded={railCollapsed}", "kind": "behavior"},
+  {"id": "project-button-aria-current-dropped", "file": "apps/hub-web/src/app/App.tsx", "anchor": "aria-current={projectId === p.id ? \"true\" : undefined}", "replacement": "", "kind": "behavior"},
+  {"id": "sign-out-title-dropped", "file": "apps/hub-web/src/app/App.tsx", "anchor": "title={t(\"signOut\")}", "replacement": "", "kind": "behavior"},
+  {"id": "nav-label-span-unwrapped", "file": "apps/hub-web/src/app/App.tsx", "anchor": "<span className=\"nav-label\">{label(tab)}</span>", "replacement": "{label(tab)}", "kind": "behavior"},
+  {"id": "select-class-dropped", "file": "apps/hub-web/src/components/ui.tsx", "anchor": "inputClass + \" hub-select \" + className", "replacement": "inputClass + \" \" + className", "kind": "behavior"},
+  {"id": "history-self-actor-substitution-dropped", "file": "apps/hub-web/src/features/context.tsx", "anchor": "event.actorId === principal.id ? principal.email ?? t('historyYou') : event.actorId", "replacement": "event.actorId", "kind": "behavior"},
+  {"id": "history-filter-ignored", "file": "apps/hub-web/src/features/context.tsx", "anchor": "!eventType || event.type === eventType", "replacement": "true", "kind": "behavior"},
+  {"id": "history-events-not-memoised", "file": "apps/hub-web/src/features/context.tsx", "anchor": "useMemo(() => mergeEvents(events.data?.pages.map(page => page.events) ?? []), [events.data])", "replacement": "mergeEvents(events.data?.pages.map(page => page.events) ?? [])", "kind": "behavior"},
+  {"id": "proposals-empty-button-always-opens-documents", "file": "apps/hub-web/src/features/context.tsx", "anchor": "proposals.data?.proposals.length ? setFilter('all') : navigate({tab:'documents',documentId:undefined})", "replacement": "navigate({tab:'documents',documentId:undefined})", "kind": "behavior"},
+  {"id": "proposals-empty-copy-always-none", "file": "apps/hub-web/src/features/context.tsx", "anchor": "t(proposals.data?.proposals.length ? 'noMatchingProposals' : 'noProposals')", "replacement": "t('noProposals')", "kind": "behavior"},
+  {"id": "delivery-recovery-wrong-target", "file": "apps/hub-web/src/features/context.tsx", "anchor": "navigate({tab:'code',revisionId:undefined})", "replacement": "navigate({tab:'documents',documentId:undefined})", "kind": "behavior"},
+  {"id": "history-flow-link-wrong-target", "file": "apps/hub-web/src/features/context.tsx", "anchor": "navigate({tab:'flows',flowId:event.entityId})", "replacement": "navigate({tab:'documents',documentId:event.entityId})", "kind": "behavior"},
+  {"id": "history-filtered-empty-copy-dropped", "file": "apps/hub-web/src/features/context.tsx", "anchor": "t(items.length ? 'historyNoMatchingEvents' : 'noHistory')", "replacement": "t('noHistory')", "kind": "behavior"},
+  {"id": "history-type-filter-hidden", "file": "apps/hub-web/src/features/context.tsx", "anchor": "{items.length > 0 && <div className=\"mb-4 max-w-sm\">", "replacement": "{false && <div className=\"mb-4 max-w-sm\">", "kind": "behavior"},
+  {"id": "gaps-guide-resolved-always", "file": "apps/hub-web/src/features/acceptance/presentation.tsx", "anchor": "guide?.status==='available'||guide?.status==='missing'", "replacement": "true", "kind": "behavior"},
+  {"id": "gaps-missing-evidence-zero", "file": "apps/hub-web/src/features/acceptance/presentation.tsx", "anchor": "criteria.filter(row => !row.reports.length && !row.waivers.length).length", "replacement": "0", "kind": "behavior"},
+  {"id": "gaps-shown-while-loading", "file": "apps/hub-web/src/features/acceptance/presentation.tsx", "anchor": "{!loading && (missingSteps > 0 || missingEvidence > 0) &&", "replacement": "{(missingSteps > 0 || missingEvidence > 0) &&", "kind": "behavior"},
+  {"id": "gaps-missing-steps-zero", "file": "apps/hub-web/src/features/acceptance/presentation.tsx", "anchor": "criteria.filter(row => !mappedCriteria.has(row.id)).length", "replacement": "0", "kind": "behavior"},
+  {"id": "flows-project-work-button-inert", "file": "apps/hub-web/src/features/workflow.tsx", "anchor": "hub.navigate({tab:'work',flowId:undefined,intentId:undefined,attemptId:undefined})", "replacement": "undefined", "kind": "behavior"},
+  {"id": "css-rail-unlayered", "file": "apps/hub-web/src/styles.css", "anchor": "@layer components {\n.nav-item.desktop-rail-toggle", "replacement": "@media screen {\n.nav-item.desktop-rail-toggle", "kind": "presentation"},
+  {"id": "css-rail-hide-list-loses-project-name", "file": "apps/hub-web/src/styles.css", "anchor": ",.nav-label,.sidebar-projects .truncate) { display:none; }", "replacement": ",.nav-label) { display:none; }", "kind": "presentation"},
+  {"id": "css-rail-hides-identity", "file": "apps/hub-web/src/styles.css", "anchor": ".identity > p,.nav-label,", "replacement": ".identity,.nav-label,", "kind": "presentation"},
+  {"id": "css-rail-hides-sign-out-by-element", "file": "apps/hub-web/src/styles.css", "anchor": ".identity > p,.nav-label,", "replacement": ".identity > p,.identity button,.nav-label,", "kind": "presentation"},
+  {"id": "css-rail-hides-project-list", "file": "apps/hub-web/src/styles.css", "anchor": ".sidebar-brand,.sidebar-projects > span,", "replacement": ".sidebar-brand,.sidebar-projects,", "kind": "presentation"},
+  {"id": "css-select-background-shorthand", "file": "apps/hub-web/src/styles.css", "anchor": "background-image: var(--hub-select-chevron);\n  background-repeat", "replacement": "background: var(--hub-select-chevron);\n  background-repeat", "kind": "presentation"},
+  {"id": "css-select-chevron-dark-colour", "file": "apps/hub-web/src/styles.css", "anchor": "stroke='%23a2b7aa'", "replacement": "stroke='%23a2b7ab'", "kind": "presentation"},
+  {"id": "css-select-chevron-light-colour", "file": "apps/hub-web/src/styles.css", "anchor": "stroke='%2361756b'", "replacement": "stroke='%2361756c'", "kind": "presentation"},
+  {"id": "css-select-no-chevron", "file": "apps/hub-web/src/styles.css", "anchor": "background-image: var(--hub-select-chevron);", "replacement": "background-image: none;", "kind": "presentation"},
+  {"id": "css-select-padding-deleted", "file": "apps/hub-web/src/styles.css", "anchor": "  padding-inline-end:2.5rem;\n", "replacement": "", "kind": "presentation"},
+  {"id": "css-select-forced-colors-fallback", "file": "apps/hub-web/src/styles.css", "anchor": "{ appearance:auto; background-image:none; }", "replacement": "{ appearance:none; background-image:none; }", "kind": "presentation"},
+  {"id": "css-rail-breakpoint", "file": "apps/hub-web/src/styles.css", "anchor": "@media (min-width:1024px) {\n  .nav-item.desktop-rail-toggle", "replacement": "@media (min-width:1px) {\n  .nav-item.desktop-rail-toggle", "kind": "presentation"},
+  {"id": "css-rail-toggle-visible-everywhere", "file": "apps/hub-web/src/styles.css", "anchor": ".nav-item.desktop-rail-toggle { display:none; }", "replacement": ".nav-item.desktop-rail-toggle { display:flex; }", "kind": "presentation"},
+  {"id": "css-rail-width", "file": "apps/hub-web/src/styles.css", "anchor": ".rail-collapsed .sidebar { width:60px;", "replacement": ".rail-collapsed .sidebar { width:600px;", "kind": "presentation"},
+  {"id": "css-rail-touch-target", "file": "apps/hub-web/src/styles.css", "anchor": ".rail-collapsed .nav-item { justify-content:center; min-height:44px;", "replacement": ".rail-collapsed .nav-item { justify-content:center; min-height:20px;", "kind": "presentation"},
+  {"id": "css-composer-header-selector-loosened", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": ".session-composer > .hub-panel > .hub-panel-header {", "replacement": ".session-composer .hub-panel-header {", "kind": "presentation"},
+  {"id": "css-header-toggle-selector-first-child-hide", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": ".session-header-actions > button[aria-expanded] {\n  display: none;", "replacement": ".session-header-actions > button:first-child {\n  display: none;", "kind": "presentation"},
+  {"id": "css-header-toggle-selector-first-child-show", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": "  .session-header-actions > button[aria-expanded] {\n    display: inline-flex;", "replacement": "  .session-header-actions > button:first-child {\n    display: inline-flex;", "kind": "presentation"},
+  {"id": "css-600-header-wrap-deleted", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": ".session-workbench-header { flex-wrap:wrap; }", "replacement": ".session-workbench-header { }", "kind": "presentation"},
+  {"id": "css-600-actions-shrink-deleted", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": "flex-wrap:wrap; flex-shrink:1; min-width:0; }", "replacement": "flex-wrap:wrap; min-width:0; }", "kind": "presentation"},
+  {"id": "css-600-actions-min-width-deleted", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": "flex-wrap:wrap; flex-shrink:1; min-width:0; }", "replacement": "flex-wrap:wrap; flex-shrink:1; }", "kind": "presentation"},
+  {"id": "css-600-breakpoint", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": "@media (max-width:600px) {\n  /* The wrap must", "replacement": "@media (max-width:700px) {\n  /* The wrap must", "kind": "presentation"},
+  {"id": "css-composer-font-size", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": ".session-composer :is(textarea, select) { font-size:16px; }", "replacement": ".session-composer :is(textarea, select) { font-size:12px; }", "kind": "presentation"},
+  {"id": "css-work-context-summary-margin", "file": "apps/hub-web/src/features/remote/session-workspace.css", "anchor": ".composer-work-context[open] > summary { margin-bottom:.5rem; }", "replacement": ".composer-work-context[open] > summary { }", "kind": "presentation"}
+ ]
+}
+```
+
+## Mutation pass and test practices, PR 1124 slice-02
+
+The tests this change adds are mostly well built where they could run: the clock-lead tests in client.test.ts kill every gate the diff added (13 of 15 mutants of that expression red, with the boundary pinned at 249/250/251), the session-timeline tests kill 7 of 8, and the CSS-reading tests kill the layering, hide-list and chevron mutants. What survives is narrower. Two older gates in the rewritten grant expression, the timeline sort, a blacklist-style rail guard that a different hiding selector slips past, and the `button[aria-expanded]` selector fix. The larger gap is behaviour with no test reference at all (F-005), which is a grep result, not a mutation result.
+
+No blocker or major: no surviving mutant here comes with a reachable input that makes today's code wrong.
+
+| mutation | file | result | command |
+|---|---|---|---|
+| lead allowance removed (`issued <= now`) | client.ts | red (1 fail) | A |
+| lead 250 -> 251 | client.ts | red | A |
+| lead 250 -> 249 | client.ts | red | A |
+| lead 250 -> 1000 | client.ts | red | A |
+| `issued <= now+LEAD` -> `<` | client.ts | red | A |
+| wrong side: `issued + LEAD <= now` | client.ts | red (3 fail) | A |
+| delete `expires > issued` | client.ts | red | A |
+| `expires > issued` -> `>=` | client.ts | red | A |
+| `expires > now` -> `>=` | client.ts | red | A |
+| delete `expires > now` | client.ts | red | A |
+| expiry also given the lead | client.ts | red | A |
+| `elapsed < grantMs` -> `<=` | client.ts | red (2 fail) | A |
+| `expires-issued <= grantMs` -> `<` | client.ts | red (2 fail) | A |
+| delete `elapsed >= 0` | client.ts | **green (3/3)** | A |
+| delete `expires-issued <= grantMs` | client.ts | **green (3/3)** | A |
+| anchor `<` -> `<=` | session-timeline.ts | red (3 fail) | B |
+| anchor `<` -> `< cursor-1` | session-timeline.ts | red (2 fail) | B |
+| delete the sort | session-timeline.ts | **green (5/5)** | B |
+| sort descending | session-timeline.ts | red | B |
+| delete trailing outcomes loop | session-timeline.ts | red (2 fail) | B |
+| latest cursor `>` -> `<` | session-timeline.ts | red | B |
+| latest initial 0 -> -1 | session-timeline.ts | red | B |
+| latest from first page only | session-timeline.ts | red | B |
+| rail rules out of `@layer components` | styles.css | red (R3) | C |
+| drop `.sidebar-projects .truncate` from hide list | styles.css | red (R3) | C |
+| hide `.identity` | styles.css | red (R1) | C |
+| hide `.sidebar-projects` whole | styles.css | red (R3) | C |
+| hide `.identity button` | styles.css | **green (6/6)** | C |
+| hide `.identity [type=button]` | styles.css | **green (6/6)** | C |
+| select `background-image` -> `background` | styles.css | red (R2, R4) | C |
+| dark chevron colour drift | styles.css | red (R4) | C |
+| light chevron colour drift | styles.css | red (R4) | C |
+| select `background-image: none` | styles.css | red (R4) | C |
+| delete select `padding-inline-end` | styles.css | **green** | C |
+| forced-colors fallback changed | styles.css | **green** | C |
+| rail breakpoint 1024 -> 1 | styles.css | **green** | C |
+| rail toggle visible everywhere | styles.css | **green** | C |
+| collapsed width 60 -> 600 | styles.css | **green** | C |
+| collapsed target 44 -> 20 | styles.css | **green** | C |
+| composer header selector -> descendant | session-workspace.css | red (R5) | C |
+| header toggle selector -> `:first-child` (desktop) | session-workspace.css | **green** | C |
+| header toggle selector -> `:first-child` (mobile) | session-workspace.css | **green** | C |
+| delete header `flex-wrap` (600px) | session-workspace.css | red (R6) | C |
+| delete actions `flex-shrink` | session-workspace.css | red (R6) | C |
+| delete actions `min-width` | session-workspace.css | red (R6) | C |
+| 600px -> 700px | session-workspace.css | red (R6) | C |
+| composer font-size 16 -> 12 | session-workspace.css | **green** | C |
+| work-context summary margin removed | session-workspace.css | **green** | C |
+| delete ru remote key `searchCommands` | remote.ru.ts | red (parity) | D |
+| ru `launchFlowGone` loses `{{title}}` | remote.ru.ts | red (parity) | D |
+| delete ru workflow key `openManagedWork` | workflow.ru.ts | red (parity) | D |
+| delete ru context key `historyYou` | context.ru.ts | red (parity) | D |
+| ru Flow term -> `потоки` | workflow.ru.ts | red (flow-term) | D |
+| en copy rewording | workflow.en.ts | red (flow-term) | D |
+| delete ru acceptance key `reviewGaps` | acceptance.ru.ts | **green (5/5)** | D |
+| ru acceptance `missingStepsCount` loses `{{count}}` | acceptance.ru.ts | **green (5/5)** | D |
+
+Commands (cwd = project root; each mutant applied by exact-text replacement, run, restored byte-identical; the git status after the pass equals the status before):
+- A: `bun test ./src/lib/hub-machine/client.test.ts -t "grant application" --timeout 30000` (baseline 3 pass)
+- B: `bun test ./apps/hub-web/tests/session-timeline.case.ts --timeout 30000` (baseline 5 pass)
+- C: `bun test <scratchpad>/css-replica.test.ts` (baseline 6 pass) - a REPLICA, see Limits
+- D: `bun test ./apps/hub-web/tests/localization.case.ts ./apps/hub-web/tests/flow-term.case.ts` (baseline 5 pass)
+
+Limits, stated plainly:
+- The hub-web component suites could not run. apps/hub-web has no node_modules; `bun test ./apps/hub-web/tests/breadcrumb.case.tsx` fails with `Cannot find module 'react/jsx-dev-runtime'`, and jsdom and @testing-library are absent. The package script is `bun run --cwd apps/hub-web test` (vitest). Installing is a network download outside this dispatch, so I did not do it. Nothing in this report predicts a component-suite mutation result; the 85 candidates that live in .tsx files are unrun and listed in mutant_candidates for the main session.
+- Group C is a replica. breadcrumb.case.tsx and session-workspace.case.tsx need React, so I copied the CSS-only assertion bodies (the parse-and-assert halves of the Sign out, hub-select, project switcher, chevron, composer-header and 600px tests) verbatim into a scratch file and ran those. The DOM halves were not run; they read no CSS (jsdom applies none), so a CSS-only mutant cannot turn them red, but a result here is a result for the replica, not for the suite.
+- Cap: 131 candidates proposed, 46 executed (client 14/14, session-timeline 8/8, CSS 24/24 of the CSS-bound ones), 85 not reached (every .tsx production gate), plus 10 executed mutants that are not in the list (the wrong-side lead check, one extra CSS variant, and the 8 catalog edits in group D).

@@ -1,0 +1,68 @@
+verify-LY-W2-001-2 — browser-engine evidence for the Select-chevron CSP finding
+Collected by the orchestrator (not by the reviewer that raised the finding) on 2026-11-04.
+
+## What was run
+
+1. A reproduction server, `/private/tmp/claude-502/-Users-tsaitler-aleksandr-goodea-keryx/1184c0fe-45fb-4dea-9ab6-5722c9f4fdaf/scratchpad/csp-repro.ts`,
+   serving on http://127.0.0.1:7782 with the Content-Security-Policy header copied verbatim
+   from `src/hub/server.ts:175`, the header the Hub puts on every web asset:
+
+   default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'
+
+   The stylesheet (/style.css) and the probe script (/probe.js) are served as separate
+   same-origin assets, the way the real hub-web build is served, so `style-src 'self'` and
+   `script-src 'self'` are satisfied and the data: image is the only thing under test.
+   The stylesheet carries the rule from `apps/hub-web/src/styles.css` at the reviewed head:
+   `--hub-select-chevron` as a `data:image/svg+xml,...` URI, and
+   `select.hub-select:not([multiple]):not([size])` with `appearance:none`,
+   `padding-inline-end:2.5rem` and `background-image: var(--hub-select-chevron)`.
+
+   The live header was captured with `keryx review verify-run` into
+   `verify-LY-W2-001-1.txt` (curl -D -).
+
+2. The page was loaded in the Claude desktop browser pane (Chromium) and read with
+   `javascript_tool` and `read_console_messages`.
+
+## First attempt — invalid, recorded so the result is not mistaken for the second
+
+The first reproduction put the CSS in an inline `<style>` and the probe in an inline
+`<script>`. Both were themselves blocked (`style-src 'self'` / `script-src 'self'`), so the
+rule never applied and the data: image was never requested: computed `appearance` came back
+`auto` and `background-image` `none`. That attempt proves nothing about the finding. The
+server was rewritten to serve external same-origin assets, which is attempt 2 below.
+
+## Second attempt — the measurement
+
+Computed style and probe result read from the page:
+
+  {
+    "probeText": "IMAGE_BLOCKED_OR_FAILED",
+    "selectBg": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' view…",
+    "appearance": "none",
+    "padEnd": "40px",
+    "probeBg": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' view…"
+  }
+
+Console (5 identical errors, one per element that requested the image):
+
+  [error] Loading the image 'data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
+  viewBox='0 0 16 16' fill='none' stroke='%2361756b' stroke-width='1.5'%3E%3Cpath
+  d='M4 6l4 4 4-4'/%3E%3C/svg%3E' violates the following Content Security Policy directive:
+  "default-src 'self'". Note that 'img-src' was not explicitly set, so 'default-src' is used
+  as a fallback. The action has been blocked.
+
+## What this establishes, and what it does not
+
+Established: under exactly the header `src/hub/server.ts:175` sends, a real Chromium refuses
+the chevron's data: URI, by the `default-src 'self'` fallback for a missing `img-src`. The
+select keeps `appearance: none` and the 40px (2.5rem) reserved inline-end padding, so the
+reserved space stays and nothing is painted in it. An `Image()` load of the same URI also
+fails, so the block is on the image request, not on the CSS parse.
+
+Not established here: that the production Hub serves `apps/hub-web`'s built stylesheet under
+that same header (the header is on the `webAssets` branch, which serves every non-`/hub/v1/`
+GET, including the HTML document — read at `src/hub/server.ts:173-176`), and that no later
+rule in the real stylesheet restores an arrow. Those are reads of the repository, not of this
+run. Also not established: what a user sees on a Vite dev server, which sends no CSP — the
+pull request's own verification note says Chrome at 1366 and 390 px without saying which
+origin it used.

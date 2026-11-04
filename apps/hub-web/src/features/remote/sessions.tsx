@@ -1,5 +1,9 @@
-import { useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { getJson } from '../../api/client';
+import type { HubFlow } from '../../api/types';
+import { digestCriteria } from './shared';
+import { Textarea } from '../../components/ui';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { remoteGet } from "../../api/remote";
 import { formatDate } from "../../i18n/format";
 import { Markdown } from "../../components/Markdown";
@@ -11,10 +15,11 @@ import { remoteProject } from "../../api/remote";
 import {
   sessionPath,
   useRemoteAction,
+  useAppliedReceipt,
   useRemoteQuery,
 } from "../../api/remote-hooks";
 import { useHub } from "../../app/hub-context";
-import { useDraft } from "../../state/drafts";
+import { useDraft, useDraftStore } from "../../state/drafts";
 import {
   Button,
   EmptyState,
@@ -32,22 +37,29 @@ import {
   useController,
   useOperator,
 } from "./shared";
-import { MessageComposer, QueueControls } from "./work";
+import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
 import { ForkSession } from "./fork";
-import { Settings, Commands } from "./settings";
+import { Settings } from "./settings";
+import { historyQueryKey, mergeTimeline, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
 export function SessionsView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
   const [create, setCreate] = useState(false);
+  // Set when the form is opened from the rejected-opening recovery, which unmounts the focused button.
+  const [focusForm, setFocusForm] = useState(false);
   const sessions = useRemoteQuery<Control["SessionPage"]>(
     ["sessions"],
     remoteProject(hub.projectId ?? "") + "/sessions",
+  );
+  const machines = useRemoteQuery<{ machines: MachineSummary[] }>(
+    ["machines"], "/machines?projectId=" + encodeURIComponent(hub.projectId ?? ""),
   );
   if (hub.location.sessionId)
     return (
       <SessionDetail
         key={hub.projectId + ":" + hub.location.sessionId}
         sessionId={hub.location.sessionId}
+        onNewSession={() => { setCreate(true); setFocusForm(true); hub.navigate({ tab: "sessions", sessionId: undefined }); }}
       />
     );
   return (
@@ -56,10 +68,10 @@ export function SessionsView() {
         title={t("sessions")}
         description={t("description")}
         action={
-          <Button onClick={() => setCreate(!create)}>{t("newSession")}</Button>
+          <Button onClick={() => { setFocusForm(false); setCreate(!create); }}>{t("newSession")}</Button>
         }
       />
-      {create && <CreateSession />}
+      {create && <CreateSession focusOnOpen={focusForm} />}
       <Feedback query={sessions} />
       {sessions.data?.sessions.length === 0 && (
         <EmptyState>{t("empty")}</EmptyState>
@@ -72,7 +84,9 @@ export function SessionsView() {
             description={t("states." + s.state, { defaultValue: s.state })}
           >
             <dl className="space-y-3">
-              <Definition label={t("machine")}>{s.machineId}</Definition>
+              <Definition label={t("machine")}>
+                {machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId}
+              </Definition>
               <Definition label={t("checkout")}>{s.checkoutId}</Definition>
               <Definition label={t("controller")}>
                 {s.controller?.actorId ?? "—"}
@@ -92,8 +106,22 @@ export function SessionsView() {
     </div>
   );
 }
-function CreateSession() {
+/** The first launch requirement that is not met, in the order the operator should fix them. */
+function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowsState, flowGone }: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowsState: "ready" | "loading" | "failed"; flowGone: boolean }) {
+  if (!operator) return "sessionLaunchOperatorOnly";
+  if (!targetReady) return "sessionLaunchRequirements";
+  if (!hasTitle) return "sessionLaunchEnterTitle";
+  if (flowsState === "loading") return "sessionLaunchFlowsLoading";
+  if (flowsState === "failed") return "sessionLaunchFlowsFailed";
+  if (flowGone) return "sessionLaunchFlowGone";
+  return null;
+}
+function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
   const hub = useHub();
+  const form = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusOnOpen) form.current?.querySelector("select")?.focus();
+  }, [focusOnOpen]);
   const { t } = useTranslation("remote");
   const operator = useOperator();
   const machines = useRemoteQuery<{ machines: MachineSummary[] }>(
@@ -101,9 +129,9 @@ function CreateSession() {
     "/machines?projectId=" + encodeURIComponent(hub.projectId ?? ""),
   );
   const action = useRemoteAction<Control["SessionOperationReceipt"]>();
-  const [draft, setDraft] = useDraft(
+  const [draft, setDraft, clearDraft] = useDraft(
     `remote-create:${hub.scopeKey}:${hub.projectId}`,
-    { machineId: "", checkoutId: "", profileId: "", title: "" },
+    { machineId: "", checkoutId: "", profileId: "", title: "", flowId: "", firstMessage: "" },
   );
   const m = machines.data?.machines.find(
     (m) => m.machineId === draft.machineId,
@@ -112,8 +140,13 @@ function CreateSession() {
     (c) => c.projectId === hub.projectId && c.checkoutId === draft.checkoutId,
   );
   const profile = c?.agentProfiles.find((p) => p.profileId === draft.profileId);
-  const ready =
-    operator &&
+  const flows = useQuery({
+    queryKey: [hub.scopeKey, hub.projectId, "flows"],
+    queryFn: ({ signal }) => getJson<{ flows: HubFlow[] }>(remoteProject(hub.projectId ?? "") + "/flows", signal),
+  });
+  const eligible = flows.data?.flows.filter(flow => flow.status === "in-progress") ?? [];
+  const selectedFlow = eligible.find(flow => flow.id === draft.flowId);
+  const targetReady =
     m?.connected &&
     !m.revoked &&
     !m.recoveryRequired &&
@@ -121,8 +154,12 @@ function CreateSession() {
     c.clean &&
     !c.busy &&
     profile?.adapter === "keryx-native-v1" &&
-    profile.readiness === "ready" &&
-    !!draft.title.trim();
+    profile.readiness === "ready";
+  // A chosen Flow cannot be checked until the Flows are known: name that instead of blaming the Flow.
+  const flowsState = !draft.flowId || flows.data ? "ready" : flows.isError ? "failed" : "loading";
+  const flowGone = !!draft.flowId && !!flows.data && !selectedFlow;
+  const blocker = firstUnmetLaunchCondition({ operator, targetReady: !!targetReady, hasTitle: !!draft.title.trim(), flowsState, flowGone });
+  const ready = blocker === null;
   function submit() {
     if (!ready || !m?.inventory || !c || !profile || !hub.projectId) return;
     action.mutate(
@@ -140,12 +177,23 @@ function CreateSession() {
         } satisfies Control["SessionCreate"],
       },
       {
-        onSuccess: (receipt) =>
-          hub.navigate({ tab: "sessions", sessionId: receipt.sessionId }),
+        onSuccess: async (receipt) => {
+          if (selectedFlow) {
+            const criteriaDigest = await digestCriteria(selectedFlow.criteria);
+            useDraftStore.getState().put(
+              messageDraftKey(hub.scopeKey, hub.projectId, receipt.sessionId),
+              prepareFlowMessageDraft(selectedFlow, criteriaDigest, draft.firstMessage),
+            );
+          }
+          // The next New session starts from a clean form, not from this session's Flow and first message.
+          clearDraft();
+          hub.navigate({ tab: "sessions", sessionId: receipt.sessionId });
+        },
       },
     );
   }
   return (
+    <div ref={form} className="contents">
     <Panel title={t("newSession")}>
       <Field label={t("machine")}>
         <Select
@@ -219,6 +267,18 @@ function CreateSession() {
           onChange={(e) => setDraft({ ...draft, title: e.target.value })}
         />
       </Field>
+      <Field label={t("launchFlow")}>
+        <Select value={draft.flowId} onChange={event => setDraft({ ...draft, flowId: event.target.value })}>
+          <option value="">{t("choose")}</option>
+          {draft.flowId && !selectedFlow && <option value={draft.flowId} disabled>{flows.data
+            ? t("launchFlowGone", { title: flows.data.flows.find(flow => flow.id === draft.flowId)?.title ?? draft.flowId })
+            : t("launchFlowUnchecked", { id: draft.flowId })}</option>}
+          {eligible.map(flow => <option key={flow.id} value={flow.id}>{flow.title} · v{flow.version}</option>)}
+        </Select>
+      </Field>
+      {selectedFlow && <Field label={t("launchMessage")}>
+        <Textarea value={draft.firstMessage} maxLength={32768} onChange={event => setDraft({ ...draft, firstMessage: event.target.value })}/>
+      </Field>}
       {c && (
         <dl className="space-y-2">
           <Definition label={t("head")}>{c.headSha}</Definition>
@@ -231,14 +291,17 @@ function CreateSession() {
         </dl>
       )}
       <Feedback query={machines} />
+      <Feedback query={flows} />
       <ActionFeedback action={action} />
+      {blocker && <p className="text-sm text-slate-500">{t(blocker)}</p>}
       <Button disabled={!ready || action.isPending} onClick={submit}>
         {t("createSession")}
       </Button>
     </Panel>
+    </div>
   );
 }
-export function SessionDetail({ sessionId }: { sessionId: string }) {
+export function SessionDetail({ sessionId, onNewSession }: { sessionId: string; onNewSession?: () => void }) {
   const hub = useHub();
   const { t } = useTranslation("remote");
   const query = useRemoteQuery<Control["SessionRecord"]>(
@@ -254,39 +317,58 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         ← {t("back")}
       </Button>
       <Feedback query={query} />
-      {query.data && <SessionSurface record={query.data} />}
+      {query.data && <SessionSurface key={query.data.sessionId} record={query.data} onNewSession={onNewSession} />}
     </div>
   );
 }
 export function SessionSurface({
   record,
+  onNewSession,
 }: {
   record: Control["SessionRecord"];
+  onNewSession?: () => void;
 }) {
   const { t } = useTranslation("remote");
   const control = useController(record);
   const action = useRemoteAction();
   const path = sessionPath(record.projectId, record.sessionId);
+  // Command outcomes are tab-local (the history endpoint carries only messages). Each keeps its
+  // invocation time for display and the history cursor at invocation for placement; the first report
+  // of an operation fixes both, later reports only refresh the outcome.
+  const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
+  const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
+    setOutcomes(previous => {
+      const index = previous.findIndex(item => item.outcome.operationId === outcome.operationId);
+      if (index < 0) return [...previous, { outcome, invokedAt, anchor: anchor ?? Number.POSITIVE_INFINITY }];
+      return previous.map((item, at) => at === index ? { ...item, outcome } : item);
+    });
+  }, []);
   const opening = useRemoteQuery<{ errorCode: string | null }>(
     ["opening-status",record.sessionId],path+"/opening-status",record.state==="opening",
   );
+  const openingError = record.state === "opening" ? opening.data?.errorCode : null;
   return (
     <>
-    {record.state === "opening" && opening.data?.errorCode && (
-      <Notice tone="error">{t("sessionOpeningRejected")} ({opening.data.errorCode})</Notice>
+    {openingError && (
+      <Notice tone="error">
+        {t("sessionOpeningRejected")} {t("sessionOpeningNextStep")}
+        {onNewSession && <Button variant="secondary" onClick={onNewSession}>{t("sessionOpeningCreateNew")}</Button>}
+        <details>
+          <summary>{t("sessionOpeningDetails")}</summary>
+          <code>{openingError}</code>
+        </details>
+      </Notice>
     )}
     <SessionWorkspace
+      openingRejected={!!openingError}
       record={record}
       control={control}
-      history={<History record={record} />}
-      composer={<MessageComposer record={record} control={control} />}
-      queue={<QueueControls record={record} control={control} />}
-      settings={
-        <>
-          <Settings record={record} control={control} />
-          <Commands record={record} control={control} />
-        </>
+      history={<History record={record} outcomes={outcomes} />}
+      composer={
+        <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
       }
+      queue={<QueueControls record={record} control={control} />}
+      settings={<Settings record={record} control={control} />}
       operations={
         <>
           {" "}
@@ -353,19 +435,11 @@ export function SessionSurface({
   );
 }
 
-function History({ record }: { record: Control["SessionRecord"] }) {
-  const { t, i18n } = useTranslation("remote");
+function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: CommandEntry[] }) {
+  const { t } = useTranslation("remote");
   const hub = useHub();
-  const words = useWorkspaceCopy();
   const query = useInfiniteQuery({
-    queryKey: [
-      hub.scopeKey,
-      record.projectId,
-      "remote",
-      "history",
-      record.sessionId,
-      "workspace",
-    ],
+    queryKey: historyQueryKey(hub.scopeKey, record.projectId, record.sessionId),
     initialPageParam: 0,
     queryFn: ({ signal, pageParam }) =>
       remoteGet<Control["HistoryPage"]>(
@@ -385,6 +459,7 @@ function History({ record }: { record: Control["SessionRecord"] }) {
   const ordered = [...messages.values()].sort(
     (a, b) => a.historyCursor - b.historyCursor,
   );
+  const timeline = mergeTimeline(ordered, outcomes);
   return (
     <section className="session-transcript" aria-label={t("history")}>
       <header className="session-transcript-header">
@@ -397,53 +472,11 @@ function History({ record }: { record: Control["SessionRecord"] }) {
           <Notice>{t("gap")}</Notice>
         )}
         <ol>
-          {ordered.map((message) => (
-            <li
-              key={message.messageId}
-              className={"session-message " + message.role}
-            >
-              <span className="session-avatar" aria-hidden="true">
-                {message.role === "human"
-                  ? "H"
-                  : message.role === "assistant"
-                    ? "K"
-                    : "↳"}
-              </span>
-              <div>
-                <div className="session-message-header">
-                  <strong>{words.role[message.role]}</strong>
-                  <time dateTime={message.createdAt}>
-                    {formatDate(message.createdAt, i18n.language)}
-                  </time>
-                </div>
-                <div className="session-message-content">
-                  {message.role === "assistant" ? (
-                    <Markdown content={message.text} />
-                  ) : (
-                    <pre>{message.text}</pre>
-                  )}
-                </div>
-                {message.role === "assistant" && message.runId && (
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      hub.navigate({
-                        tab: "runs",
-                        runId: message.runId ?? undefined,
-                        sessionId: undefined,
-                      })
-                    }
-                  >
-                    {i18n.language.startsWith("ru")
-                      ? "Открыть запуск"
-                      : "Open run"}
-                  </Button>
-                )}
-              </div>
-            </li>
-          ))}
+          {timeline.map((entry) => entry.kind === "outcome"
+            ? <OutcomeItem key={entry.item.outcome.operationId} record={record} item={entry.item} />
+            : <MessageItem key={entry.message.messageId} message={entry.message} />)}
         </ol>
-        {query.data && !ordered.length && <EmptyState>{t("empty")}</EmptyState>}
+        {query.data && !ordered.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
       </div>
       {query.hasNextPage && (
         <footer className="session-history-pages">
@@ -457,5 +490,63 @@ function History({ record }: { record: Control["SessionRecord"] }) {
         </footer>
       )}
     </section>
+  );
+}
+
+function formatResult(result: unknown) {
+  return typeof result === "string" ? result : JSON.stringify(result, null, 2);
+}
+const isSettled = (status: Control["CommandOutcome"]["status"]) => status === "applied" || status === "rejected";
+/** One command outcome, followed through its own operation so it moves from queued to applied or rejected. */
+function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item: CommandEntry }) {
+  const { t, i18n } = useTranslation("remote");
+  // Follow the operation only until it settles: an applied or rejected record cannot change, and a live
+  // query per outcome would be refetched on every invalidation for the tab's lifetime.
+  const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, item.outcome, receipt => isSettled(receipt.status));
+  const outcome = followed.data ?? item.outcome;
+  return (
+    <li className="session-message system">
+      <span className="session-avatar" aria-hidden="true">/</span>
+      <div>
+        <div className="session-message-header">
+          <strong>/{outcome.commandName}</strong>
+          <time dateTime={item.invokedAt}>{formatDate(item.invokedAt, i18n.language)}</time>
+        </div>
+        <div className="session-message-content">
+          <p>{t("receiptStatuses." + outcome.status, { defaultValue: outcome.status })}</p>
+          {outcome.errorCode && <p>{outcome.errorCode}</p>}
+          {outcome.result !== null && <pre className="whitespace-pre-wrap break-all">{formatResult(outcome.result)}</pre>}
+        </div>
+      </div>
+    </li>
+  );
+}
+function MessageItem({ message }: { message: Control["SessionMessage"] }) {
+  const { i18n } = useTranslation("remote");
+  const hub = useHub();
+  const words = useWorkspaceCopy();
+  return (
+    <li className={"session-message " + message.role}>
+      <span className="session-avatar" aria-hidden="true">
+        {message.role === "human" ? "H" : message.role === "assistant" ? "K" : "↳"}
+      </span>
+      <div>
+        <div className="session-message-header">
+          <strong>{words.role[message.role]}</strong>
+          <time dateTime={message.createdAt}>{formatDate(message.createdAt, i18n.language)}</time>
+        </div>
+        <div className="session-message-content">
+          {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
+        </div>
+        {message.role === "assistant" && message.runId && (
+          <Button
+            variant="ghost"
+            onClick={() => hub.navigate({ tab: "runs", runId: message.runId ?? undefined, sessionId: undefined })}
+          >
+            {i18n.language.startsWith("ru") ? "Открыть запуск" : "Open run"}
+          </Button>
+        )}
+      </div>
+    </li>
   );
 }

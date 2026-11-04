@@ -7,10 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import en from '../src/i18n/context.en';
 import { useDraftStore } from '../src/state/drafts';
 import ru from '../src/i18n/context.ru';
+import { mergeEvents } from '../src/features/context-model';
 import { DocumentsView, ProposalsView, RevisionsView, DeliveryView, HistoryView } from '../src/features/context';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), navigate: vi.fn(), location: { projectId: 'p', tab: 'documents', documentId: 'd' as string | undefined, revisionId: 'r' }, principal: { id: 'human:owner', kind: 'human', role: 'operator' } }));
 vi.mock('../src/app/hub-context', () => ({ useHub: () => ({ projectId: 'p', principal: mocks.principal, scopeKey: 1, location: mocks.location, navigate: mocks.navigate, refresh: vi.fn() }) }));
+vi.mock('../src/features/context-model', async importOriginal => { const actual = await importOriginal<typeof import('../src/features/context-model')>(); return { ...actual, mergeEvents: vi.fn(actual.mergeEvents) }; });
 vi.mock('../src/api/client', () => ({ getJson: mocks.get, postJson: mocks.post, errorMessage: (error: Error) => error.message }));
 
 const project = { id: 'p', name: 'Keryx', version: 2, contextRevision: 1, lineVersion: 0, lineRevisionId: null };
@@ -221,13 +223,55 @@ it('keeps complete matching Russian and English context catalogs', () => {
 
 it('loads cursor pages without duplicate events', async () => {
   const events = Array.from({ length: 500 }, (_, i) => ({ sequence: i + 1, projectId: 'p', type: 'flow-created', actorId: 'agent:connector', entityId: `flow-${i}`, createdAt: '2026-10-26T00:00:00Z' }));
-  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('after=0') ? { events, cursor: 500 } : { events: [{ ...events[499], sequence: 501, entityId: 'flow-501' }], cursor: 501 }));
+  mocks.get.mockImplementation((path: string) => {
+    if (path.endsWith('/flows')) return Promise.resolve({flows: [{id:'flow-501',title:'Follow-up flow'}]});
+    if (path.endsWith('/documents')) return Promise.resolve({documents: []});
+    return Promise.resolve(path.endsWith('after=0') ? { events, cursor: 500 } : { events: [{ ...events[499], sequence: 501, entityId: 'flow-501' }], cursor: 501 });
+  });
   await mount(<HistoryView />);
   fireEvent.click(await screen.findByRole('button', { name: en.loadMore }));
   await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/projects/p/events?after=500', expect.any(AbortSignal)));
-  expect(await screen.findByText('flow-501')).toBeVisible();
+  expect(await screen.findByRole('button', {name:'Follow-up flow'})).toBeVisible();
+  // The recorded actor stays visible outside the collapsed Identifiers block, even without an actorRole.
+  const actors = screen.getAllByText(/^Actor:/);
+  expect(actors.length).toBeGreaterThan(0);
+  for (const actor of actors) { expect(actor).toHaveTextContent('Actor: agent:connector'); expect(actor).not.toHaveTextContent(en.unknownRole); }
 });
 
+it('tells apart different actors who share a role in History', async () => {
+  const base = { projectId: 'p', type: 'flow-created', entityId: 'x', createdAt: '2026-10-26T00:00:00Z', actorRole: 'operator' };
+  const events = [{ ...base, sequence: 1, actorId: 'human:alice' }, { ...base, sequence: 2, actorId: 'human:bob' }];
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [] } : path.endsWith('/documents') ? { documents: [] } : { events, cursor: 2 }));
+  await mount(<HistoryView />);
+  expect(await screen.findByText('Actor: human:alice')).toBeVisible();
+  expect(screen.getByText('Actor: human:bob')).toBeVisible();
+});
+
+it('lets History flow titles and document paths break instead of widening the panel', async () => {
+  const longPath = 'docs/requirements/' + 'a-very-long-unbreakable-document-name-'.repeat(2) + 'end.md';
+  const base = { projectId: 'p', type: 'document-imported', actorId: 'human:alice', createdAt: '2026-10-26T00:00:00Z' };
+  const events = [{ ...base, sequence: 1, entityId: 'doc-1' }, { ...base, sequence: 2, entityId: 'flow-1' }];
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [{ id: 'flow-1', title: 'Flow-title-without-any-break-opportunity' }] } : path.endsWith('/documents') ? { documents: [{ id: 'doc-1', path: longPath }] } : { events, cursor: 2 }));
+  await mount(<HistoryView />);
+  for (const name of [longPath, 'Flow-title-without-any-break-opportunity']) {
+    const button = await screen.findByRole('button', { name });
+    expect(button.className).toContain('max-w-full');
+    expect(within(button).getByText(name).className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'break-all']));
+  }
+});
+
+it('does not re-derive History events when only the type filter changes', async () => {
+  const events = [{ sequence: 1, projectId: 'p', type: 'flow-created', actorId: 'a', entityId: 'x', createdAt: '2026-10-26T00:00:00Z' }, { sequence: 2, projectId: 'p', type: 'document-imported', actorId: 'a', entityId: 'y', createdAt: '2026-10-26T00:00:00Z' }];
+  mocks.get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/flows') ? { flows: [] } : path.endsWith('/documents') ? { documents: [] } : { events, cursor: 2 }));
+  await mount(<HistoryView />);
+  const select = await screen.findByLabelText(en.historyEventType);
+  await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const before = vi.mocked(mergeEvents).mock.calls.length;
+  fireEvent.change(select, { target: { value: 'flow-created' } });
+  await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1));
+  expect(vi.mocked(mergeEvents).mock.calls.length).toBe(before);
+});
 
 it('loads revision metadata without full trees and fetches only the selected immutable revision', async () => {
   mocks.location.revisionId = '';

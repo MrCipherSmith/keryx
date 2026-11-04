@@ -1,0 +1,72 @@
+verify-LY-W2-001-3 — the fix for F-001, measured under the Hub's own asset CSP
+Collected by the orchestrator on 2026-11-04, after the finding was confirmed.
+
+## The change
+
+`apps/hub-web/src/styles.css`:
+- `--hub-select-chevron` deleted from `:root` and from `:root[data-theme="dark"]`. It held a
+  `data:image/svg+xml` URI with the muted colour baked into it, once per theme.
+- `.hub-select:not([multiple]):not([size])` now draws the chevron as two `linear-gradient`
+  layers — a `\` stroke at `right 1.125rem` and a `/` stroke at `right .75rem`, each
+  `.375rem` square, each a 1.4px band of `var(--hub-muted)`. A gradient is not an image
+  request, so the CSP has nothing to refuse, and it reads the token directly, so the colour
+  needs no per-theme copy.
+- `appearance:none`, `padding-inline-end:2.5rem`, the longhand-only rule (no `background`
+  or `background-color`, so `.hub-input:disabled` keeps its fill) and the `forced-colors`
+  fallback are unchanged.
+
+`apps/hub-web/tests/breadcrumb.case.tsx`: the test that kept the two baked copies in sync is
+replaced by one that pins the mechanism — the chevron references `var(--hub-muted)`, contains
+no `url(`, and no rule anywhere in the stylesheet carries a `data:` URI in a background.
+
+## What was run
+
+`scratchpad/csp-verify-fix.ts` serves a page on http://127.0.0.1:7783 with the
+Content-Security-Policy copied verbatim from `src/hub/server.ts:175`:
+
+  default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'
+
+The stylesheet it serves is built by extracting the committed `.hub-select` rule and both
+`--hub-muted` values out of `apps/hub-web/src/styles.css` at request time, so the rule under
+test is the one in the file, not a retyped copy. Loaded in the Claude desktop browser pane
+(Chromium).
+
+## Measurement
+
+Computed style of `select.hub-select`:
+
+  backgroundImage:  linear-gradient(45deg, rgba(0, 0, 0, 0) calc(50% - 0.7px), rgb(97, 117, 107) calc(50% - 0.7px),
+                    rgb(97, 117, 107) calc(50% + 0.7px), rgba(0, 0, 0, 0) calc(50% + 0.7px)),
+                    linear-gradient(135deg, rgba(0, 0, 0, 0) calc(50% - 0.7px), rgb(97, 117, 107) calc(50% - 0.7px),
+                    rgb(97, 117, 107) calc(50% + 0.7px), rgba(0, 0, 0, 0) calc(50% + 0.7px))
+  backgroundPosition: calc(100% - 18px) 50%, calc(100% - 12px) 50%
+  backgroundSize:     6px 6px, 6px 6px
+  appearance:         none
+  paddingInlineEnd:   40px
+  requestsAnImage:    false
+
+  disabledBgColor:    rgb(255, 255, 255)   — the layered .hub-input:disabled fill survives
+  disabledHasChevron: true
+  multipleSpared:     true                 — a [multiple] select keeps the native arrow
+
+Theme: `rgb(97, 117, 107)` is `#61756b`, the light `--hub-muted`. Setting
+`data-theme="dark"` on the root changes it to `rgb(162, 183, 170)` = `#a2b7aa`, the dark
+`--hub-muted`, with no second declaration anywhere.
+
+Console: no image-related CSP violation. (Two unrelated errors come from the harness page
+itself — a `style="font-size:18px"` attribute on its heading, refused by `style-src 'self'`,
+and a syntax error in the harness's own probe script. Neither touches the rule under test;
+the numbers above were read with the browser's evaluation, not with that script.)
+
+Screenshot: the chevron is visible on both the enabled and the disabled select, and absent
+from the `multiple` one, which keeps the native control.
+
+## What this does and does not establish
+
+Establishes: under the exact header the Hub sends, the chevron now paints, it tracks the
+muted token in both themes, it makes no image request, and the disabled fill and the
+`[multiple]` exemption are unaffected.
+
+Does not establish: how it looks at the two widths the pull request's own note claims
+(1366 and 390 px) — this was measured at the browser pane's width only; and that the Vite
+build emits the gradient unchanged, which the hub-web test suite covers rather than this run.

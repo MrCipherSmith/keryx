@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
+import type { CommandOutcomeListener } from "./session-timeline";
 import {ApiError,getClientScope, getJson } from "../../api/client";
 import {NativeAttemptPicker,useNativeWorkSelection} from "../managed-work/native-selection";
 import { remoteProject } from "../../api/remote";
@@ -12,7 +13,7 @@ import {
 } from "../../api/remote-hooks";
 import { useQuery } from "@tanstack/react-query";
 import { useHub } from "../../app/hub-context";
-import { useDraft } from "../../state/drafts";
+import { useDraft, useDraftStore } from "../../state/drafts";
 import { pendingScope, usePending } from "../../state/pending";
 import { validNativeSubmission, type NativeSubmission } from "./work-pending";
 import {
@@ -24,6 +25,7 @@ import {
   Select,
   Textarea,
 } from "../../components/ui";
+import { Commands } from "./settings";
 import { AssociationPicker } from "./association";
 import {
   ActionFeedback,
@@ -32,13 +34,44 @@ import {
   Feedback,
   type Controller,
 } from "./shared";
+export type MessageDraft = {
+  text: string; prepared: boolean; mode: string; flowId: string; flowVersion: number; specDigest: string;
+  criteriaDigest: string; consent: boolean; consentVersion: number | null; busyPolicy: "reject" | "enqueue";
+  sessionVersion: number; configVersion: number;
+};
+/** The one key the composer reads its draft from; launch code writes through the same helper. */
+export function messageDraftKey(scopeKey: number, projectId: string | null, sessionId: string) {
+  return `remote-message:${scopeKey}:${projectId}:${sessionId}`;
+}
+/** A first message prepared for an exact Flow, seeded by session creation. */
+export function prepareFlowMessageDraft(flow: HubFlow, criteriaDigest: string, text: string): MessageDraft {
+  return {
+    text, prepared: true, mode: "flow", flowId: flow.id, flowVersion: flow.version,
+    specDigest: flow.specContentDigest, criteriaDigest, consent: false, consentVersion: null,
+    busyPolicy: "reject", sessionVersion: 0, configVersion: 0,
+  };
+}
 export function MessageComposer({
   record,
   control,
+  onCommandOutcome,
 }: {
   record: Control["SessionRecord"];
   control: Controller;
+  onCommandOutcome?: CommandOutcomeListener;
 }) {
+  const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
+  const [focusToken, setFocusToken] = useState(0);
+  const commandsId = useId();
+  const commandTrigger = useRef<HTMLButtonElement>(null);
+  // Set while the catalogue was opened by '/' and nothing has been done in it yet (no key other than Escape, no
+  // pointer press, no change inside it): Escape then hands the slash back.
+  const slashOpened = useRef<HTMLTextAreaElement | null>(null);
+  function closeCommands() {
+    slashOpened.current = null;
+    setCommands("closed");
+    commandTrigger.current?.focus();
+  }
   const hub = useHub();
   const { t } = useTranslation("remote");
   const {t:workT}=useTranslation("work");
@@ -49,18 +82,20 @@ export function MessageComposer({
   );
   const profileConsentVersion = consent.data?.profileConsentVersion;
   const hasProfileConsent = typeof profileConsentVersion === "number" && Number.isSafeInteger(profileConsentVersion) && profileConsentVersion > 0;
-  const [draft, setDraft, clearDraft] = useDraft(
-    `remote-message:${hub.scopeKey}:${record.projectId}:${record.sessionId}`,
+  const draftKey = messageDraftKey(hub.scopeKey, record.projectId, record.sessionId);
+  const [draft, setDraft, clearDraft] = useDraft<MessageDraft>(
+    draftKey,
     {
       text: "",
+      prepared: false,
       mode: "",
       flowId: hub.location.flowId ?? "",
       flowVersion: 0,
       specDigest: "",
       criteriaDigest: "",
       consent: false,
-      consentVersion: null as number | null,
-      busyPolicy: "reject" as "reject" | "enqueue",
+      consentVersion: null,
+      busyPolicy: "reject",
       sessionVersion: record.version,
       configVersion: record.config.configVersion,
     },
@@ -83,10 +118,21 @@ export function MessageComposer({
     flows.data?.flows.filter((f) => f.status === "in-progress") ?? [];
   const [validation, setValidation] = useState("");
   const [preserved, setPreserved] = useState(false);
-  const stale =
+  // A draft prepared at session creation carries no versions yet. Pin it to the versions the human first
+  // sees once the machine has opened the session, so later drift raises the same stale notice as any draft.
+  useEffect(() => {
+    if (!draft.prepared || record.state === "opening") return;
+    setDraft(old => old.prepared
+      ? { ...old, prepared: false, sessionVersion: record.version, configVersion: record.config.configVersion }
+      : old);
+  }, [draft.prepared, record.state, record.version, record.config.configVersion, setDraft]);
+  const stale = !!draft.text && !draft.prepared && (
     control.advanceVersion(draft.sessionVersion) !== record.version ||
-    draft.configVersion !== record.config.configVersion;
+    draft.configVersion !== record.config.configVersion);
   const selected = eligible.find((f) => f.id === draft.flowId);
+  function editText(text: string) {
+    setDraft({ ...draft, ...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{}), text });
+  }
   async function selectFlow(id: string) {
     const flow = eligible.find((f) => f.id === id);
     if (!flow) {
@@ -155,6 +201,7 @@ export function MessageComposer({
   function submit() {
     const assoc=association();
     if(nativeOperation||nativePending.error)return;
+    if(draft.prepared)return;
     if(!control.binding||!control.active||stale||!assoc||!draft.text.trim()) {setValidation(t('required'));return;}
     if(mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
     const submitted=draft;
@@ -163,7 +210,7 @@ export function MessageComposer({
       if(assoc.mode!=='ad-hoc'){setValidation(workT('nativeConsentRequired'));return;}
       const original:NativeSubmission={scope:nativeScope,operationId:crypto.randomUUID(),path:sessionPath(record.projectId,record.sessionId)+'/messages',body:structuredClone(body),hint:Object.freeze({...managed.hint}),phase:'sending'};
       sendNative(original,submitted);
-    }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:()=>setPreserved(!clearDraft(submitted))});
+    }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:receipt=>{if(receipt.status==='rejected')return;const store=useDraftStore.getState();const current=store.drafts[draftKey];if(current===submitted)store.put(draftKey,{...submitted,text:"",prepared:false});setPreserved(current!==undefined&&current!==submitted);}});
   }
 
   return (
@@ -173,15 +220,50 @@ export function MessageComposer({
       ) : control.claimPending ? <Notice>{t("controlApplying")}</Notice> : !control.active && !record.controller && (
         <Notice>{t("observer")} {control.operator && <a href="#session-controller" className="underline">{t("goToController")}</a>}</Notice>
       )}
-      <Field label={t("message")}>
+      <Field label={t("message")} hint={t("commandsHint")}>
         <Textarea
           value={draft.text}
           rows={3}
+          onKeyDown={(event) => {
+            if (event.key !== "/" || draft.text || event.nativeEvent.isComposing ||
+                event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+            event.preventDefault();
+            slashOpened.current = event.currentTarget;
+            setCommands("open");
+            // Already open: no state change re-runs the focus effect, so ask for it explicitly.
+            setFocusToken(token => token + 1);
+          }}
           maxLength={32768}
-          onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+          onChange={(e) => editText(e.target.value)}
         />
       </Field>
+      <Button
+        ref={commandTrigger}
+        variant="secondary"
+        aria-label={t("commands")}
+        aria-expanded={commands === "open"}
+        aria-controls={commands === "unopened" ? undefined : commandsId}
+        onClick={() => commands === "open" ? closeCommands() : setCommands("open")}
+      >
+        <span aria-hidden="true">/</span> {t("commands")}
+      </Button>
+      {commands !== "unopened" && (
+        <div id={commandsId} hidden={commands !== "open"}
+          onPointerDownCapture={() => { slashOpened.current = null; }}
+          onChangeCapture={() => { slashOpened.current = null; }}
+          onKeyDown={(event) => {
+          if (event.key !== "Escape") { slashOpened.current = null; return; }
+          if (event.defaultPrevented) return;
+          const field = slashOpened.current;
+          closeCommands();
+          if (field && !draft.text) { editText("/"); field.focus(); }
+        }}>
+          <Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === "open"} focusToken={focusToken} />
+        </div>
+      )}
       <p className="composer-hint">{t("secretWarning")}</p>
+      <details open={!association()} className="composer-work-context">
+        <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>
       <div className="composer-controls">
         <Field label={t("workMode")}>
           <Select
@@ -210,6 +292,7 @@ export function MessageComposer({
           </Field>
         ) : null}
       </div>
+      </details>
       {mode === "flow" ? (
         <>
           {selected && !draft.criteriaDigest && (

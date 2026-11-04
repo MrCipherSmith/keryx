@@ -1,0 +1,71 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice-01 is browser-side React code; no shared server state, queue, pool or retry loop is added. The load-relevant surface is the TanStack Query fan-out under the websocket invalidation stream. The new per-outcome receipt follow is bounded and stops at applied/rejected. Three minor observations: History now loads every document body to resolve names, the settle guard is defeated for the latest command by the panel's own observer, and the first-message pin is computed after the irreversible session create. No blocker or major.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/context.tsx",
+      "quote": "const documents = useResource<{documents: HubDocument[]}>('documents');",
+      "problem": "HistoryView now mounts a second project-wide query, 'documents', only to turn an entity id into a path (documentNames). The list endpoint returns every HubDocument including its full `content` body, unpaginated (src/hub/domain.ts:98 returns state.documents filtered by project). The same view also mounts the 'flows' list for flow titles. History itself does not wait on either (ReadState gates only on events), so the cost is payload and server serialisation, not a blocked render.",
+      "impact": "Trigger: opening History in a project with many or large wiki/spec documents. Each mount downloads the sum of all document bodies. The key [scopeKey, projectId, 'documents'] is also invalidated by useRemoteEvents on every 'context' frame (browser-invalidations.ts take(): kinds.has('context') returns true for all keys of the project), so with History open each coalesced batch (100 ms window) re-downloads all bodies again. Before this change History refetched only its event pages. I cannot name a document count or byte size at which this becomes user-visible; the code does not bound it.",
+      "suggested_fix": "Resolve names without bodies: have the server include a title/path in the event payload, or reuse a manifest-style endpoint (ContextResponse.manifest already returns id/path/kind/version without content). If the full list must stay, fetch it lazily only when a row with a document entity is expanded, or set a non-zero staleTime for these two lookup-only queries.",
+      "evidence": "Diff: HistoryView adds `const flows = useResource<{flows: HubFlow[]}>('flows')` and the documents query above. contracts.ts:9 HubDocument has `content: string`. domain.ts:98 `{ documents: state.documents.filter((d) => d.projectId === p.id) }`. browser-invalidations.ts take(): `if(kinds.has('context'))return true` after the scope/project key match. Other views (ProposalsView, DocumentsView) already share this key and body payload, which is why this is minor rather than major.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "pattern": "Database D3 - unbounded query / full-row fetch for one field"
+    },
+    {
+      "id": "HL-002",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "quote": "const receipt=observed.data??action.data;const queryClient=useQueryClient();",
+      "problem": "The change adds a `settled` argument to useAppliedReceipt so OutcomeItem stops following an operation once it is applied or rejected, and justifies it with the comment that a live query per outcome would be refetched on every invalidation for the tab's lifetime. Commands calls the same hook for the same operation (same query key [scope, project, 'remote', 'operation', sessionId, operationId]) with no `settled`, so its observer stays enabled. A query with one enabled observer stays active, so the guard is defeated for whichever command is the most recent action.data.",
+      "impact": "After the latest command is applied, every history, queue, config or command-catalogue invalidation for the session (the 'operation' key matches on session/config/queue/history/command-catalogue) still issues GET .../operations/<id> for as long as the session surface stays mounted. Bounded to one extra request per batch, since earlier commands lose their Commands observer when action.data advances. The comment overstates what the guard achieves; no wrong output results.",
+      "suggested_fix": "Pass the same predicate in Commands, e.g. useAppliedReceipt(record, action.data, r => r.status === 'applied' || r.status === 'rejected'), ideally from one exported isSettled helper shared with sessions.tsx so the two cannot drift. Settings (Settings uses the same call) can take the same treatment but is outside this diff's change.",
+      "evidence": "remote-hooks.ts useAppliedReceipt enabled callback returns `!!initial?.operationId && !(latest && settled?.(latest))`; with settled undefined it is always true. settings.tsx Commands: `useAppliedReceipt(record,action.data)`. sessions.tsx OutcomeItem passes `receipt => isSettled(receipt.status)`. Disabled observers do not count toward active, but the enabled Commands observer does.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "pattern": "Async E1/F3 - bounded follow-up of an operation",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "HL-003",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "const criteriaDigest = await digestCriteria(selectedFlow.criteria);",
+      "problem": "In CreateSession the Flow pin is computed inside the mutate-level onSuccess, after the server has already created the session. digestCriteria calls crypto.subtle.digest, which is undefined outside secure contexts (plain http on a non-loopback host). The per-call onSuccess is async and TanStack Query does not await or catch it, so a throw becomes an unhandled rejection and the code after the await (draft put, clearDraft, hub.navigate) never runs.",
+      "impact": "Trigger: Hub opened over http on a LAN or non-localhost address, a Flow selected, Create clicked. The session exists on the machine, the form stays open with Create enabled again (action.isPending is false), and a second click creates a duplicate session because the request carries no idempotency key. The same secure-context dependency already exists in work.tsx selectFlow, so such a deployment cannot use Flow pinning in the composer either; this change adds a place where the failure lands after an irreversible write instead of before it.",
+      "suggested_fix": "Compute the digest before action.mutate (it needs only selectedFlow.criteria, available at click time) and carry it in the closure, so a failure aborts before the session is created. Or wrap the post-create block in try/catch and navigate regardless, leaving the composer's own Pin button (selectFlow) to recompute the digest.",
+      "evidence": "shared.tsx:68 `export async function digestCriteria(criteria:string[]){const bytes=await crypto.subtle.digest(...)`. useRemoteAction sets retry:false and the create call passes no operationId. Not reproduced in a browser; the unawaited-callback behaviour is from TanStack Query v5 MutationObserver notify, which I did not re-read in node_modules.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "pattern": "Idempotency G1 - non-idempotent create followed by fallible work"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```
+
+## High-Load Review: slice-01 (hub-web source and i18n)
+
+**Verdict:** no blocker or major at any load I can name. Slice-01 adds no server-side shared state, queue, pool, retry loop or lock. The load surface is the number of queries a websocket invalidation burst fans out to.
+
+**Minor observations (3)**
+- **HL-001 History loads all document bodies for name lookup.** `context.tsx`. Each History mount, and each project `context` frame while it is open, re-downloads every document including content. History does not wait on it. No size at which it hurts could be named.
+- **HL-002 The settle guard is defeated for the latest command.** `settings.tsx`. `Commands` follows the same operation without `settled`, so the most recent command's receipt is still refetched on every session invalidation. Bounded to one request per batch; the new comment overstates the effect.
+- **HL-003 The Flow pin is computed after the irreversible session create.** `sessions.tsx`. It fails only without `crypto.subtle` (insecure context), and the failure leaves the form open for a duplicate create. Low confidence, not reproduced.
+
+**Checked and clean**
+- **Per-outcome receipt follow:** it stops at `applied`/`rejected`. The other statuses, `queued`, `confirmation-required` and `recovery-required`, keep following, and each such outcome costs one GET per batch. The count is user-driven and each batch is coalesced over 100 ms (`remote-hooks.ts`), so this is not an unbounded path.
+- **`outcomes` state:** it grows only by user-invoked commands. `recordOutcome` is dedup'd by `operationId` and has a stable identity, so the `Commands` effect does not loop.
+- **Message submit:** the `current===submitted` identity check on the shared draft store prevents a stale submit from clearing a newer edit. The `prepared` draft effect is guarded and self-terminating.
+- **`useRemoteQuery` function-valued `enabled`:** it reads the query's own cached data and makes no extra request.
+- **Not claimed:** the two failing `hub-machine` tests in `research-evidence/tests.txt` are outside this slice and I did not reproduce them.
+
+Routing audit: graph_used: payload layers only (not rebuilt); wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg`); raw_rg_used: no. Git history of the deliberate choices was not needed: the new comments in the diff state their reasons, and I checked the reasoning against the code (HL-002).

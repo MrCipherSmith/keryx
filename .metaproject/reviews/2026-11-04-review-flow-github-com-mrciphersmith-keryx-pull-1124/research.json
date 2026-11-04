@@ -1,0 +1,1106 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (CreateSession now repeats the Flow query (same key [scopeKey, projectId, \"flows\"], same endpoint) an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-002 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered F-001 -> F-002 for a unique display id across waves; premise judge upheld",
+      "finding": "F-002"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The mapping from a HubFlow to the draft's pin fields (flowId, flowVersion, specDigest, criteriaDiges) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-003 (minor, apps/hub-web/src/features/remote/work.tsx)",
+      "reason": "renumbered F-002 -> F-003 for a unique display id across waves; premise judge upheld",
+      "finding": "F-003"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (Commands is now a child of the message composer (work.tsx imports it from ./settings and mounts it i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-004 (minor, apps/hub-web/src/features/remote/settings.tsx)",
+      "reason": "renumbered F-003 -> F-004 for a unique display id across waves; premise judge upheld",
+      "finding": "F-004"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (OutcomeItem follows an operation only until it settles (`useAppliedReceipt(..., receipt => isSettled) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-005 (minor, apps/hub-web/src/features/remote/settings.tsx)",
+      "reason": "renumbered F-004 -> F-005 for a unique display id across waves; premise judge upheld",
+      "finding": "F-005"
+    },
+    {
+      "id": "review-architecture-w1:F-005",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-005 (The new `prepared` flag turns the message draft into an implicit state machine spread over five site) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-057 (info, apps/hub-web/src/features/remote/work.tsx)",
+      "reason": "renumbered F-005 -> F-057 for a unique display id across waves",
+      "finding": "F-057"
+    },
+    {
+      "id": "review-architecture-w1:F-006",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-006 (Feature CSS now depends on the exact markup of the shared Panel and on component nesting: the compos) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-006 (minor, apps/hub-web/src/features/remote/session-workspace.css)",
+      "reason": "renumbered F-006 -> F-006 for a unique display id across waves; premise judge upheld",
+      "finding": "F-006"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (Clock-skew tolerance for a Hub grant now exists in two places with unrelated bounds. MachineConnecti) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-007 (minor, src/lib/hub-machine/client.ts)",
+      "reason": "renumbered F-001 -> F-007 for a unique display id across waves; premise judge upheld",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (Four stylesheet-contract tests (collapsed-rail Sign out, Select chevron background-color, project sw) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-008 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+      "reason": "renumbered F-002 -> F-008 for a unique display id across waves; premise judge upheld",
+      "finding": "F-008"
+    },
+    {
+      "id": "review-architecture-w2:F-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-003 (The rail and Select rules are appended as a second, unindented `@layer components { ... }` block at ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-009 (minor, apps/hub-web/src/styles.css)",
+      "reason": "renumbered F-003 -> F-009 for a unique display id across waves; premise judge returned challenged, so it is held for the operator",
+      "finding": "F-009"
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (HistoryView now calls useResource('flows') and useResource('documents') only to turn entity ids into) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-010 (minor, apps/hub-web/src/features/context.tsx)",
+      "reason": "renumbered F-001 -> F-010 for a unique display id across waves; premise judge upheld",
+      "finding": "F-010"
+    },
+    {
+      "id": "review-degradation-w1:F-002",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-002 (After a successful plain (non-managed) send the head writes back `{...submitted, text:\"\", prepared:f) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-011 (minor, apps/hub-web/src/features/remote/work.tsx)",
+      "reason": "renumbered F-002 -> F-011 for a unique display id across waves; premise judge upheld",
+      "finding": "F-011"
+    },
+    {
+      "id": "review-degradation-w1:F-003",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-003 (ReviewPresentation now appends a 'What needs manual review' section that ends 'Open the result and v) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-012 (minor, apps/hub-web/src/features/acceptance/presentation.tsx)",
+      "reason": "renumbered F-003 -> F-012 for a unique display id across waves; premise judge upheld",
+      "finding": "F-012"
+    },
+    {
+      "id": "review-degradation-w1:F-004",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-004 (The description says 'select controls reserve space for the chevron'. The change adds the `hub-selec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-013 (minor, apps/hub-web/src/features/workflow.tsx)",
+      "reason": "renumbered F-004 -> F-013 for a unique display id across waves; premise judge upheld",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-degradation-w1:F-005",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-005 (Session creation with a Flow awaits digestCriteria (crypto.subtle.digest, available only in secure c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-020 (merged; info, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered F-005 -> F-058, then merged into F-020 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-degradation-w2:F-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-001 (The PR and the new constant present 250 ms as the bound on how far ahead of the machine a Hub grant ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-007 (merged; minor, src/lib/hub-machine/client.ts)",
+      "reason": "renumbered F-001 -> F-014, then merged into F-007 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-degradation-w2:F-002",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-002 (The English UI now has two names for one destination. The navigation tab and the page itself are \"Ma) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-015 (minor, apps/hub-web/src/i18n/workflow.en.ts)",
+      "reason": "renumbered F-002 -> F-015 for a unique display id across waves; premise judge upheld",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-degradation-w2:F-003",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-003 (The collapsed-rail tests parse styles.css and pin the layer and what is hidden, but nothing pins the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-016 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+      "reason": "renumbered F-003 -> F-016 for a unique display id across waves; premise judge upheld",
+      "finding": "F-016"
+    },
+    {
+      "id": "review-degradation-w2:F-004",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-004 (The chevron and padding work is attached to the Select component (hub-select class). Three raw <sele) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-013 (merged; minor, apps/hub-web/src/features/workflow.tsx)",
+      "reason": "renumbered F-004 -> F-017, then merged into F-013 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-degradation-w2:F-005",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-005 (openCommands() calls waitFor() on panel(page, L.commands), which is page.locator('section').filter({) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-059 (info, apps/hub-web/tests/browser-journeys.e2e.mjs)",
+      "reason": "renumbered F-005 -> F-059 for a unique display id across waves",
+      "finding": "F-059"
+    },
+    {
+      "id": "review-highload-w1:HL-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-001 (HistoryView now mounts a second project-wide query, 'documents', only to turn an entity id into a pa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-010 (merged; minor, apps/hub-web/src/features/context.tsx)",
+      "reason": "renumbered HL-001 -> F-018, then merged into F-010 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-010"
+    },
+    {
+      "id": "review-highload-w1:HL-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-002 (The change adds a `settled` argument to useAppliedReceipt so OutcomeItem stops following an operatio) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-005 (merged; minor, apps/hub-web/src/features/remote/settings.tsx)",
+      "reason": "renumbered HL-002 -> F-019, then merged into F-005 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-005"
+    },
+    {
+      "id": "review-highload-w1:HL-003",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding HL-003 (In CreateSession the Flow pin is computed inside the mutate-level onSuccess, after the server has al) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-020 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered HL-003 -> F-020 for a unique display id across waves; premise judge upheld",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-highload-w2:HL-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL-001 (A grant stamped in the future by the Hub is now handled by two mechanisms with different bounds. aut) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-007 (merged; minor, src/lib/hub-machine/client.ts)",
+      "reason": "renumbered HL-001 -> F-021, then merged into F-007 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-highload-w2:HL-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL-002 (The new boundary test pins verifyAuthorizationGrant at 250 and 251 ms with an injected `now`, which ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-060 (info, src/lib/hub-machine/client.test.ts)",
+      "reason": "renumbered HL-002 -> F-060 for a unique display id across waves",
+      "finding": "F-060"
+    },
+    {
+      "id": "review-layout-w1:LY-001",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-001 (CreateSession is rendered as a direct child of `<div className=\"space-y-5\">` in SessionsView. The di) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-061 (info, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered LY-001 -> F-061 for a unique display id across waves",
+      "finding": "F-061"
+    },
+    {
+      "id": "review-layout-w1:LY-002",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-002 (session-workspace.css is imported as plain, unlayered CSS (session-workspace.tsx line 23), while Tai) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-062 (info, apps/hub-web/src/features/remote/session-workspace.css)",
+      "reason": "renumbered LY-002 -> F-062 for a unique display id across waves",
+      "finding": "F-062"
+    },
+    {
+      "id": "review-layout-w1:LY-003",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-003 (The Select chevron reserves its space with the logical `padding-inline-end: 2.5rem` but is placed wi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-063 (info, apps/hub-web/src/styles.css)",
+      "reason": "renumbered LY-003 -> F-063 for a unique display id across waves",
+      "finding": "F-063"
+    },
+    {
+      "id": "review-layout-w1:LY-004",
+      "source": "raw/review-layout-w1.txt",
+      "question": "Is review-layout finding LY-004 (The chevron treatment is attached to the shared `Select` component (`hub-select` class), but `workfl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-013 (merged; info, apps/hub-web/src/features/workflow.tsx)",
+      "reason": "renumbered LY-004 -> F-064, then merged into F-013 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-layout-w2:LY-001",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is review-layout finding LY-001 (The chevron is drawn from a data:image/svg+xml URI held in --hub-select-chevron (declared at :root a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-001 (major, apps/hub-web/src/styles.css)",
+      "reason": "renumbered LY-001 -> F-001 for a unique display id across waves; premise judge upheld",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-layout-w2:LY-002",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is review-layout finding LY-002 (The guard that keeps the new rules in @layer components selects rules by containing .rail-collapsed ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-022 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+      "reason": "renumbered LY-002 -> F-022 for a unique display id across waves; premise judge upheld",
+      "finding": "F-022"
+    },
+    {
+      "id": "review-layout-w2:LY-003",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is review-layout finding LY-003 (The Select rule pairs a logical padding (`padding-inline-end:2.5rem`) with a physical chevron positi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-065 (info, apps/hub-web/src/styles.css)",
+      "reason": "renumbered LY-003 -> F-065 for a unique display id across waves",
+      "finding": "F-065"
+    },
+    {
+      "id": "review-layout-w2:LY-004",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is review-layout finding LY-004 (At 481-600px the new rule lets the header row wrap, but the right-aligning rules (`width:100%; justi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-066 (info, apps/hub-web/src/features/remote/session-workspace.css)",
+      "reason": "renumbered LY-004 -> F-066 for a unique display id across waves",
+      "finding": "F-066"
+    },
+    {
+      "id": "review-layout-w2:LY-005",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is review-layout finding LY-005 (parseCssRules clears its buffer only on `{` and `}`. A statement at-rule (`@import \"x\";` or `@layer ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-067 (info, apps/hub-web/tests/css-rules.ts)",
+      "reason": "renumbered LY-005 -> F-067 for a unique display id across waves",
+      "finding": "F-067"
+    },
+    {
+      "id": "review-layout-w2:fu1",
+      "source": "raw/review-layout-w2.txt",
+      "question": "Is the parent follow-up from review-layout done or ruled out, and where is that recorded? Settle LY-001 in an engine: load a Select-bearing page from a running Hub (not the Vite dev server), read the console for a CSP image violation and the computed background-image of a .hub-select. No m",
+      "status": "finding",
+      "evidence": "research-evidence/verify-LY-W2-001-1.txt (the Hub asset CSP as served) and research-evidence/verify-LY-W2-001-2-browser.txt (Chromium refuses the data: chevron under default-src self with no img-src; computed appearance none, padding-inline-end 40px), confirmed by raw/review-verifier-w1.txt",
+      "reason": "the follow-up asked for an engine measurement of the finding; the orchestrator ran one against a reproduction of the Hub header and review-verifier confirmed the finding on it, so the obligation is discharged and the finding is reported as F-001 (major)",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (The PR body says session launch pins a Flow for the first message and that 'subsequent messages reus) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-023 (minor, apps/hub-web/src/features/remote/work.tsx)",
+      "reason": "renumbered F-001 -> F-023 for a unique display id across waves; premise judge upheld",
+      "finding": "F-023"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (A command that needs human confirmation returns status 'confirmation-required'; its Confirmation car) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-024 (minor, apps/hub-web/src/features/remote/work.tsx)",
+      "reason": "renumbered F-002 -> F-024 for a unique display id across waves; premise judge upheld",
+      "finding": "F-024"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (onSuccess is async and runs after the session already exists. digestCriteria uses crypto.subtle.dige) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-020 (merged; info, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered F-003 -> F-068, then merged into F-020 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-020"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (The 250 ms lead tolerance in verifyAuthorizationGrant is almost unreachable from production callers,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-007 (merged; minor, src/lib/hub-machine/client.ts)",
+      "reason": "renumbered F-001 -> F-025, then merged into F-007 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-performance-w1:PERF-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding PERF-001 (HistoryView now reads the project's whole `documents` collection (and `flows`) only to turn an event) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-010 (merged; minor, apps/hub-web/src/features/context.tsx)",
+      "reason": "renumbered PERF-001 -> F-026, then merged into F-010 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-010"
+    },
+    {
+      "id": "review-performance-w1:PERF-002",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding PERF-002 (Commands is now a child of MessageComposer and stays mounted (hidden) after its first open. MessageC) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-027 (minor, apps/hub-web/src/features/remote/work.tsx)",
+      "reason": "renumbered PERF-002 -> F-027 for a unique display id across waves; premise judge upheld",
+      "finding": "F-027"
+    },
+    {
+      "id": "review-performance-w1:PERF-003",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding PERF-003 (OutcomeItem calls JSON.stringify(result, null, 2) on every render, and OutcomeItem is not memoised. ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-069 (info, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered PERF-003 -> F-069 for a unique display id across waves",
+      "finding": "F-069"
+    },
+    {
+      "id": "review-performance-w1:PERF-004",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding PERF-004 (The PR adds a `settled` stop to useAppliedReceipt and uses it in OutcomeItem, with a comment that a ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-005 (merged; info, apps/hub-web/src/features/remote/settings.tsx)",
+      "reason": "renumbered PERF-004 -> F-070, then merged into F-005 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-005"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (The PR template's row `Docs updated if behavior changed (README.md / docs/)` is absent from the body) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-028 (minor, docs/docs/guides/team-hub-remote-sessions.md)",
+      "reason": "renumbered PC-001 -> F-028 for a unique display id across waves; premise judge upheld",
+      "finding": "F-028"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (The template asks for a Conventional Commits title (`type(scope): summary`) and CONTRIBUTING.md:76 s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-029 (minor, .github/PULL_REQUEST_TEMPLATE.md)",
+      "reason": "renumbered PC-002 -> F-029 for a unique display id across waves; premise judge upheld",
+      "finding": "F-029"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-003",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-003 (The body describes the session, navigation, publication and proposal changes and then says 'Other Hu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-030 (minor, apps/hub-web/src/features/context.tsx)",
+      "reason": "renumbered PC-003 -> F-030 for a unique display id across waves; premise judge upheld",
+      "finding": "F-030"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-004",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-004 (The body says 'command outcomes appear in the conversation' and 'the applied help outcome appeared i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-031 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered PC-004 -> F-031 for a unique display id across waves; premise judge upheld",
+      "finding": "F-031"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-005",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-005 (Unverified. The body claims 'Verified in Chrome at 1366 and 390 px against the native two-machine fi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-071 (info, .github/PULL_REQUEST_TEMPLATE.md)",
+      "reason": "renumbered PC-005 -> F-071 for a unique display id across waves",
+      "finding": "F-071"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-006",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-006 (The body says 'select controls reserve space for the chevron'. The change adds `hub-select` (with pa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-013 (merged; info, apps/hub-web/src/features/workflow.tsx)",
+      "reason": "renumbered PC-006 -> F-072, then merged into F-013 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-001",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-001 (The body states a count of 44 machine client and bridge tests. Slice-02 adds 2 machine tests, both i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-073 (info, .metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md)",
+      "reason": "renumbered PC-001 -> F-073 for a unique display id across waves",
+      "finding": "F-073"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-002",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-002 (The body says 'The machine client accepts a bounded clock lead when checking the grant issue time.' ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-074 (info, src/lib/hub-machine/client.ts)",
+      "reason": "renumbered PC-002 -> F-074 for a unique display id across waves",
+      "finding": "F-074"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-003",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-003 (The Hub guide's 'Start a session from the web' section walks through Machine, Checkout, Agent profil) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-075 (info, docs/docs/guides/team-hub-remote-sessions.md)",
+      "reason": "renumbered PC-003 -> F-075 for a unique display id across waves",
+      "finding": "F-075"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-004",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-004 (This claim, and 'Subsequent messages reuse that Flow', are backed in the body only by a manual Chrom) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-076 (info, .metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md)",
+      "reason": "renumbered PC-004 -> F-076 for a unique display id across waves",
+      "finding": "F-076"
+    },
+    {
+      "id": "review-security-code-w1:SEC-1",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-1 (The launch onSuccess handler became async. After the receipt arrives it awaits a crypto.subtle diges) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-032 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered SEC-1 -> F-032 for a unique display id across waves; premise judge upheld",
+      "finding": "F-032"
+    },
+    {
+      "id": "review-security-code-w1:SEC-2",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-2 (The new first-message field in the New session form carries no `secretWarning` hint. Every other fre) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-077 (info, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered SEC-2 -> F-077 for a unique display id across waves",
+      "finding": "F-077"
+    },
+    {
+      "id": "review-security-code-w2:SEC-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding SEC-001 (The grant issue time may now be up to 250 ms ahead of the machine clock. Worst case the wall-clock c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-078 (info, src/lib/hub-machine/client.ts)",
+      "reason": "renumbered SEC-001 -> F-078 for a unique display id across waves",
+      "finding": "F-078"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (Two gates in the rewritten verifyAuthorizationGrant expression survive deletion with the suite green) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-033 (minor, src/lib/hub-machine/client.ts)",
+      "reason": "renumbered F-001 -> F-033 for a unique display id across waves; premise judge upheld",
+      "finding": "F-033"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (Deleting the anchor sort leaves session-timeline.case.ts green (5/5). Every test hands mergeTimeline) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-034 (minor, apps/hub-web/src/features/remote/session-timeline.ts)",
+      "reason": "renumbered F-002 -> F-034 for a unique display id across waves; premise judge upheld",
+      "finding": "F-034"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (The selector changed from `button:first-child` to `button[aria-expanded]` because the header now sta) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-035 (minor, apps/hub-web/src/features/remote/session-workspace.css)",
+      "reason": "renumbered F-003 -> F-035 for a unique display id across waves; premise judge upheld",
+      "finding": "F-035"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 ('collapsed rail keeps an icon-only Sign out reachable' guards reachability with a blacklist of two s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-036 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+      "reason": "renumbered F-004 -> F-036 for a unique display id across waves; premise judge upheld",
+      "finding": "F-036"
+    },
+    {
+      "id": "review-testing-practices-w1:F-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-005 (Behaviour the PR description names has no test reference anywhere in apps/hub-web/tests (negative gr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-037 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered F-005 -> F-037 for a unique display id across waves; premise judge upheld",
+      "finding": "F-037"
+    },
+    {
+      "id": "review-testing-practices-w1:F-006",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-006 (The negative assertion cannot fail. `actor` is the `<span>` that renders `Actor: <id>`; the role is ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-038 (minor, apps/hub-web/tests/context.case.tsx)",
+      "reason": "renumbered F-006 -> F-038 for a unique display id across waves; premise judge upheld",
+      "finding": "F-038"
+    },
+    {
+      "id": "review-testing-practices-w1:F-007",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-007 (Two fixed waits where the repository convention is an awaited condition: context.case.tsx (20 ms, be) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-039 (minor, apps/hub-web/tests/context.case.tsx)",
+      "reason": "renumbered F-007 -> F-039 for a unique display id across waves; premise judge upheld",
+      "finding": "F-039"
+    },
+    {
+      "id": "review-testing-practices-w1:F-008",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-008 (Fixtures are cast through `unknown`, which switches off the contract check. The generated CommandOut) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-040 (minor, apps/hub-web/tests/session-command-outcomes.case.tsx)",
+      "reason": "renumbered F-008 -> F-040 for a unique display id across waves; premise judge upheld",
+      "finding": "F-040"
+    },
+    {
+      "id": "review-testing-practices-w1:F-009",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-009 (The bilingual parity test covers four catalogs; `acceptance` is not among them, and the diff adds fo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-041 (minor, apps/hub-web/tests/localization.case.ts)",
+      "reason": "renumbered F-009 -> F-041 for a unique display id across waves; premise judge upheld",
+      "finding": "F-041"
+    },
+    {
+      "id": "review-testing-practices-w1:F-010",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-010 (Two tests share the same setup and the core assertion (an applied operation is not refetched after i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-079 (info, apps/hub-web/tests/session-command-outcomes.case.tsx)",
+      "reason": "renumbered F-010 -> F-079 for a unique display id across waves",
+      "finding": "F-079"
+    },
+    {
+      "id": "review-testing-practices-w1:F-011",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-011 (parseCssRules keeps a statement at-rule in the buffer, so it becomes the head of the next block and ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-080 (info, apps/hub-web/tests/css-rules.ts)",
+      "reason": "renumbered F-011 -> F-080 for a unique display id across waves",
+      "finding": "F-080"
+    },
+    {
+      "id": "review-testing-practices-w1:F-012",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-012 (The guard that the Russian copy keeps the term 'Flow' forbids one inflection of the rejected word. ') real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-081 (info, apps/hub-web/tests/flow-term.case.ts)",
+      "reason": "renumbered F-012 -> F-081 for a unique display id across waves",
+      "finding": "F-081"
+    },
+    {
+      "id": "review-testing-practices-w1:F-013",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-013 (CSS declarations the diff adds that no tier pins: select `padding-inline-end:2.5rem` (the point of t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-082 (info, apps/hub-web/src/styles.css)",
+      "reason": "renumbered F-013 -> F-082 for a unique display id across waves",
+      "finding": "F-082"
+    },
+    {
+      "id": "review-testing-practices-w1:F-014",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-014 (The PR claims two turns succeeded with identical Flow pins. Automated coverage stops at seeding and ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-083 (info, apps/hub-web/tests/remote.case.tsx)",
+      "reason": "renumbered F-014 -> F-083 for a unique display id across waves",
+      "finding": "F-083"
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run the 85 unreached mutants (the ids not listed in the mutation table, all in .tsx files) after `bun install --cwd apps/hub-web`; the nearest suite is `bun run --cwd apps/hub-web test` (vitest). I di",
+      "status": "narrowed",
+      "evidence": "raw/review-testing-practices-w1.txt mutation table: 56 mutants run, 39 red, 17 green, covering all 14 client.ts grant-gate candidates, all 8 session-timeline candidates, 24 CSS candidates and 8 catalog edits",
+      "reason": "the pass ran every candidate whose suite can run in this checkout; the rest need apps/hub-web node_modules (react, jsdom, @testing-library), which this checkout does not have, so they were not reached rather than skipped by choice",
+      "remains": "85 of 131 candidates, all in the hub-web jsdom component suites (remote, session-command-outcomes, breadcrumb DOM half, session-workspace DOM half, context, flow-acceptance, remote-owned-controls); run them after bun install in apps/hub-web, or read the CI typecheck-and-tests job, which is green at this head"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-001",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-001 (Session creation clears the launch draft on success, and the first message is moved into the new ses) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-042 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered UX-001 -> F-042 for a unique display id across waves; premise judge returned owner-decision, so it is held for the operator",
+      "finding": "F-042"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-002",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-002 (History rows now show the entity only when it resolves to a Flow or a document (flowNames/documentNa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-043 (minor, apps/hub-web/src/features/context.tsx)",
+      "reason": "renumbered UX-002 -> F-043 for a unique display id across waves; premise judge upheld",
+      "finding": "F-043"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-003",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-003 (The new English button and its explainer say 'Project work', but the destination is called 'Managed ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-015 (merged; minor, apps/hub-web/src/i18n/workflow.en.ts)",
+      "reason": "renumbered UX-003 -> F-044, then merged into F-015 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-004",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-004 (The recovery buttons added to the empty proposal view are labelled with bare nouns, 'All' and 'Docum) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-045 (minor, apps/hub-web/src/features/context.tsx)",
+      "reason": "renumbered UX-004 -> F-045 for a unique display id across waves; premise judge upheld",
+      "finding": "F-045"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-005",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-005 (Two state-communication gaps in the command catalogue the change moves into the composer. (a) Unavai) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-046 (minor, apps/hub-web/src/features/remote/settings.tsx)",
+      "reason": "renumbered UX-005 -> F-046 for a unique display id across waves; premise judge returned challenged, so it is held for the operator",
+      "finding": "F-046"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-006",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-006 (A command outcome in the conversation prints the machine's error code as a bare paragraph under the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-047 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered UX-006 -> F-047 for a unique display id across waves; premise judge upheld",
+      "finding": "F-047"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-007",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-007 (In the collapsed rail, each project is identified only by its first letter; the name is carried by `) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-048 (minor, apps/hub-web/src/app/App.tsx)",
+      "reason": "renumbered UX-007 -> F-048 for a unique display id across waves; premise judge upheld",
+      "finding": "F-048"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-008",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-008 (The work-context disclosure closes itself as soon as an association is valid (`open={!association()}) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-049 (minor, apps/hub-web/src/features/remote/work.tsx)",
+      "reason": "renumbered UX-008 -> F-049 for a unique display id across waves; premise judge upheld",
+      "finding": "F-049"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-009",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-009 (The optional launch Flow field has three small clarity gaps. The empty option is the shared 'Choose') real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-053 (merged; minor, apps/hub-web/src/features/remote/sessions.tsx)",
+      "reason": "renumbered UX-009 -> F-050, then merged into F-053 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-053"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-010",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-010 (The RU gap line calls evidence 'материалы', while the rest of the same file calls the same thing 'от) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-051 (minor, apps/hub-web/src/i18n/acceptance.ru.ts)",
+      "reason": "renumbered UX-010 -> F-051 for a unique display id across waves; premise judge upheld",
+      "finding": "F-051"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-011",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-011 (The rail toggle changes its accessible name between 'Collapse menu' and 'Expand menu' and also toggl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-084 (info, apps/hub-web/src/app/App.tsx)",
+      "reason": "renumbered UX-011 -> F-084 for a unique display id across waves",
+      "finding": "F-084"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-012",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-012 (A permanent info Notice with a button is added to the top of the project's Flows page on every visit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-085 (info, apps/hub-web/src/features/workflow.tsx)",
+      "reason": "renumbered UX-012 -> F-085 for a unique display id across waves",
+      "finding": "F-085"
+    },
+    {
+      "id": "review-ui-ux-w1:UX-013",
+      "source": "raw/review-ui-ux-w1.txt",
+      "question": "Is review-ui-ux finding UX-013 (The 'catalogue' is a search field plus a native select, so results are not visible as a list, Enter ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-086 (info, apps/hub-web/src/features/remote/settings.tsx)",
+      "reason": "renumbered UX-013 -> F-086 for a unique display id across waves",
+      "finding": "F-086"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-001",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-001 (In English the Flows page tells the user to \"Open Project work\" and labels its button \"Project work\") real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-015 (merged; minor, apps/hub-web/src/i18n/workflow.en.ts)",
+      "reason": "renumbered UX-001 -> F-052, then merged into F-015 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-015"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-002",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-002 (The new optional Flow select in the New session form reuses the generic empty option t(\"choose\"), wh) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-053 (minor, apps/hub-web/src/i18n/remote.en.ts)",
+      "reason": "renumbered UX-002 -> F-053 for a unique display id across waves; premise judge upheld",
+      "finding": "F-053"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-003",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-003 (A restored launch draft stores only flowId. When the Flow cannot be named, the disabled option falls) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-054 (minor, apps/hub-web/src/i18n/remote.en.ts)",
+      "reason": "renumbered UX-003 -> F-054 for a unique display id across waves; premise judge upheld",
+      "finding": "F-054"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-004",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-004 (In the collapsed rail the project switcher is reduced to a one-letter box (.project-initial, the fir) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-055 (minor, apps/hub-web/src/styles.css)",
+      "reason": "renumbered UX-004 -> F-055 for a unique display id across waves; premise judge upheld",
+      "finding": "F-055"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-005",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-005 (SessionSurface shows the same fixed sentence, \"The machine refused to open this session.\", plus the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-056 (minor, apps/hub-web/src/i18n/remote.en.ts)",
+      "reason": "renumbered UX-005 -> F-056 for a unique display id across waves; premise judge upheld",
+      "finding": "F-056"
+    },
+    {
+      "id": "review-ui-ux-w2:UX-006",
+      "source": "raw/review-ui-ux-w2.txt",
+      "question": "Is review-ui-ux finding UX-006 (The launch form field is labelled \"First message (draft)\" and sits above Create session, with no lin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md and findings.json as F-053 (merged; info, apps/hub-web/src/i18n/remote.en.ts)",
+      "reason": "renumbered UX-006 -> F-087, then merged into F-053 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+      "finding": "F-053"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-highload",
+      "review-layout",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices",
+      "review-ui-ux"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:2f4eefbcc34b",
+        "rawEvidence": "raw/review-architecture-w1.txt#sha256:2f4eefbcc34b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:20e83ce2df51",
+        "rawEvidence": "raw/review-degradation-w2.txt#sha256:20e83ce2df51",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:3bc305fc3848",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:3bc305fc3848",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-layout",
+        "executionId": "review-layout:36d277fee14c",
+        "rawEvidence": "raw/review-layout-w2.txt#sha256:36d277fee14c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-layout/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:4f39a7b446dc",
+        "rawEvidence": "raw/review-logic-w1.txt#sha256:4f39a7b446dc",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:fabf55cbda4d",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:fabf55cbda4d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:f135f4ee8412",
+        "rawEvidence": "raw/review-pr-contract-w1.txt#sha256:f135f4ee8412",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:7a8ee5655913",
+        "rawEvidence": "raw/chunk-004.txt#sha256:7a8ee5655913",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:0e4cc47e9fea",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:0e4cc47e9fea",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:24a93799030d",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:24a93799030d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-ui-ux",
+        "executionId": "review-ui-ux:235975fc2d94",
+        "rawEvidence": "raw/review-ui-ux-w1.txt#sha256:235975fc2d94",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "model": "claude-sonnet-5-5",
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-ui-ux/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 26,
+    "known": 0,
+    "unknown": 26,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-verifier-w1.txt"
+  ]
+}

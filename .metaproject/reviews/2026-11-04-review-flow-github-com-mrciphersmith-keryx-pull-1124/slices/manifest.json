@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 143568,
+      "contentHash": "c9bccb4be684eddeaf4cae95fe651445a8cd4a19baa88309afeebfcc15399ee0",
+      "files": [
+        "apps/hub-web/src/api/remote-hooks.ts",
+        "apps/hub-web/src/app/App.tsx",
+        "apps/hub-web/src/components/ui.tsx",
+        "apps/hub-web/src/features/acceptance/presentation.tsx",
+        "apps/hub-web/src/features/context.tsx",
+        "apps/hub-web/src/features/remote/session-timeline.ts",
+        "apps/hub-web/src/features/remote/session-workspace.css",
+        "apps/hub-web/src/features/remote/session-workspace.tsx",
+        "apps/hub-web/src/features/remote/sessions.tsx",
+        "apps/hub-web/src/features/remote/settings.tsx",
+        "apps/hub-web/src/features/remote/work.tsx",
+        "apps/hub-web/src/features/workflow.tsx",
+        "apps/hub-web/src/i18n/acceptance.en.ts",
+        "apps/hub-web/src/i18n/acceptance.ru.ts",
+        "apps/hub-web/src/i18n/context.en.ts",
+        "apps/hub-web/src/i18n/context.ru.ts"
+      ],
+      "domain": "apps",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class auth/permissions: apps/hub-web/src/features/remote/session-timeline.ts",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/session-workspace.css",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/session-workspace.css",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/session-workspace.css",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/session-workspace.css",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/session-workspace.tsx",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/session-workspace.tsx",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/sessions.tsx",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/sessions.tsx",
+          "risk class auth/permissions: apps/hub-web/src/features/remote/sessions.tsx",
+          "source code: apps/hub-web/src/api/remote-hooks.ts, apps/hub-web/src/app/App.tsx, apps/hub-web/src/components/ui.tsx (+12)"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 136334,
+      "contentHash": "0843f8ae030443ac09e9a14fb5c452a8ae728890afa68d9bfa10abc7117bed57",
+      "files": [
+        "apps/hub-web/src/i18n/remote.en.ts",
+        "apps/hub-web/src/i18n/remote.ru.ts",
+        "apps/hub-web/src/i18n/workflow.en.ts",
+        "apps/hub-web/src/i18n/workflow.ru.ts",
+        "apps/hub-web/src/styles.css",
+        "apps/hub-web/tests/breadcrumb.case.tsx",
+        "apps/hub-web/tests/browser-journeys.e2e.mjs",
+        "apps/hub-web/tests/context.case.tsx",
+        "apps/hub-web/tests/css-rules.ts",
+        "apps/hub-web/tests/flow-acceptance.case.tsx",
+        "apps/hub-web/tests/flow-term.case.ts",
+        "apps/hub-web/tests/remote-owned-controls.case.tsx",
+        "apps/hub-web/tests/remote.case.tsx",
+        "apps/hub-web/tests/session-command-outcomes.case.tsx",
+        "apps/hub-web/tests/session-timeline.case.ts",
+        "apps/hub-web/tests/session-workspace.case.tsx",
+        "src/lib/hub-machine/client.test.ts",
+        "src/lib/hub-machine/client.ts"
+      ],
+      "domain": "apps, apps [test], src/lib [test] +1 more",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-degradation",
+        "review-frontend",
+        "review-highload",
+        "review-layout",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: apps/hub-web/src/i18n/remote.en.ts, apps/hub-web/src/i18n/remote.ru.ts, apps/hub-web/src/i18n/workflow.en.ts (+2)"
+        ]
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "path": "src/hub/web-assets.generated.ts",
+      "reason": "generated",
+      "detail": "generated: filename ends with \".generated.ts\"",
+      "bytes": 0
+    }
+  ],
+  "totals": {
+    "slices": 2,
+    "bytes": 279902,
+    "files": 34,
+    "omittedFiles": 1,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

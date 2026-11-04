@@ -1,0 +1,12 @@
+{
+ "reviewer": "review-pr-contract",
+ "slices": [
+  "slice-01"
+ ],
+ "result": "raw/review-pr-contract-w1.txt",
+ "definition": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+ "payload": {
+  "skill_path": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+ },
+ "model": "claude-sonnet-5-5"
+}

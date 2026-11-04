@@ -1,0 +1,46 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable weakness in slice-02. The 250 ms clock lead in verifyAuthorizationGrant does not extend either deadline: the monotonic request age (elapsed < 5000 ms from the request start) and the absolute expiry (expires > now, expires - issued <= 5000, new expires > issued) still bound every grant. A party controlling the issuing clock gains nothing it did not already have. One info observation records the analysis. The rest of the slice (i18n strings, CSS, tests) holds no security-relevant code.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "info",
+      "file": "src/lib/hub-machine/client.ts",
+      "quote": "issued <= now + MAX_HUB_CLOCK_LEAD_MS && expires > now",
+      "problem": "The grant issue time may now be up to 250 ms ahead of the machine clock. Worst case the wall-clock check admits a grant that expires at now + 5250 ms (issued <= now + 250, expires <= issued + 5000), 250 ms beyond LIMITS.grantMs on the wall axis. Every consumer also applies the monotonic bound, so the extra 250 ms is never usable.",
+      "impact": "None established. Attack vector considered: a Hub (or a party that skews the Hub clock) issues authorizedAt = now + 250 ms and expiresAt = authorizedAt + 5000 ms to stretch the window. The grant is only reachable through MachineConnection.authorization(), whose startedAt is taken before the authorize request and re-checked by valid() on every apply(): elapsed < 5000 ms from that start caps total lifetime regardless of the issue time. The same Hub could already issue authorizedAt = now and expiresAt = now + 5000 ms with no lead, so a clock-controlling issuer gains no authority, and the lead does not let a grant be minted ahead of its request (still bounded by the in-flight request age and by 250 ms). Replay is untouched: a replayed grant has a past issue time, and the Hub-side replay path (remote_authorization_grant) is pre-existing and unchanged. The new expires > issued check closes the one inversion the lead would otherwise open (expires == issued or earlier while expires > now), and both boundaries are pinned by tests.",
+      "suggested_fix": "None required. Optional: note in the comment that the wall-clock expiry can be up to 250 ms later than grantMs and that the monotonic request age is the real upper bound, so the next editor does not tighten or loosen the wrong axis.",
+      "evidence": "client.ts:41-43 (verifyAuthorizationGrant), :199-211 (authorize: started = performance.now() before the request; pre-existing sleep for a lead of up to 500 ms from commit 565866111), :213-219 and :287-296 (authorization/createGrantApplication re-verify with startedAt and the wall clock on every apply, single-use via consumed). All consumers enumerated with keryx ctx rg over src, scripts and apps: verifyAuthorizationGrant is called only at client.ts:209 and :296; createGrantApplication only at :216; authorization() only from bridge.ts:661, 689, 740, 818, 886. Hub issuer at src/hub/remote-v2/index.ts:347-349 issues authorizedAt = iso(issuedAt), expiresAt = iso(issuedAt + LIMITS.grantMs) from one clock read. Choice history read: the original `issued <= now` came with the prototype checkpoint 5e6e33e7f; the comment on this change and the PR statement give the reason (Hub slightly ahead of the machine). Reachability of the 250 ms window: in authorize() the pre-existing wait/Bun.sleep consumes any lead up to 500 ms before verification, so the tolerance is reached by clock skew, a wall-clock step, or a sleep that wakes marginally early, and by no input an attacker can add beyond what the Hub already controls.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Security review, slice-02 (PR #1124, round 1)
+
+No blockers, majors or minors. One info observation, not published as a finding.
+
+**The 250 ms clock lead does not widen what a grant can do.** The lead moves only the lower bound on the issue time. Three bounds remain independent of it: the absolute expiry (`expires > now`), the grant length (`expires - issued <= 5000` plus the new `expires > issued`), and the monotonic request age (`elapsed < 5000` ms, measured from before the authorize request and re-checked on every `apply()`). The last one caps the total usable lifetime whatever issue time the Hub states, so the worst-case wall expiry of `now + 5250 ms` is never usable.
+
+**Attacker who controls the issuing clock.** The issuer is the Hub, which already writes the grant's whole content. Setting `authorizedAt` 250 ms ahead gains nothing over setting it to now. The lead cannot pre-mint a grant for a later request, because `startedAt` precedes the request and the grant is single-use. Replay of a stored grant is unchanged: its issue time is in the past, and the Hub-side replay path is pre-existing.
+
+**Is the window reachable other than by skew.** The lead is reached by Hub-ahead clock skew, a wall-clock step, or a sleep that wakes marginally early. `authorize()` already sleeps out a lead of up to 500 ms before verification (commit 565866111), so the 250 ms tolerance is the residual slack for that sleep, not a new input. Every consumer goes through `MachineConnection.authorization()`; the class has no other site.
+
+**The new `expires > issued` guard is needed and correct.** Without it, a grant with `expires <= issued` and `expires > now` would pass once the lead exists. The tests pin both the 250/251 ms edge and the inversion cases.
+
+**Checked and clean:** injection, XSS (no `dangerouslySetInnerHTML`/`innerHTML`/`eval` in the slice), secrets and credentials (the only `token`/`secret` hits are i18n strings and CSS token names), storage, open redirect. The slice's other 17 files are tests, i18n and CSS.
+
+**Local test failures.** The two failures in the supplied run (`R4.4` bridge timeout, `client.test.ts:134` connect error) are not claimed: neither touches the grant path, and CI is green at this head.
+
+Routing audit: graph_used: payload layers only; wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg`); raw_rg_used: no. Raw git was used only for `git blame`, a pickaxe `git log`, and one bounded two-file `git diff`, each with a stated reason.

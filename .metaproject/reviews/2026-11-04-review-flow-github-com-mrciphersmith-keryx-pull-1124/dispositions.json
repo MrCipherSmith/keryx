@@ -1,0 +1,629 @@
+[
+ {
+  "id": "review-layout-w2:LY-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-001 (major, apps/hub-web/src/styles.css)",
+  "reason": "renumbered LY-001 -> F-001 for a unique display id across waves; premise judge upheld",
+  "finding": "F-001"
+ },
+ {
+  "id": "review-architecture-w1:F-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-002 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered F-001 -> F-002 for a unique display id across waves; premise judge upheld",
+  "finding": "F-002"
+ },
+ {
+  "id": "review-architecture-w1:F-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-003 (minor, apps/hub-web/src/features/remote/work.tsx)",
+  "reason": "renumbered F-002 -> F-003 for a unique display id across waves; premise judge upheld",
+  "finding": "F-003"
+ },
+ {
+  "id": "review-architecture-w1:F-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-004 (minor, apps/hub-web/src/features/remote/settings.tsx)",
+  "reason": "renumbered F-003 -> F-004 for a unique display id across waves; premise judge upheld",
+  "finding": "F-004"
+ },
+ {
+  "id": "review-architecture-w1:F-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-005 (minor, apps/hub-web/src/features/remote/settings.tsx)",
+  "reason": "renumbered F-004 -> F-005 for a unique display id across waves; premise judge upheld",
+  "finding": "F-005"
+ },
+ {
+  "id": "review-architecture-w1:F-006",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-006 (minor, apps/hub-web/src/features/remote/session-workspace.css)",
+  "reason": "renumbered F-006 -> F-006 for a unique display id across waves; premise judge upheld",
+  "finding": "F-006"
+ },
+ {
+  "id": "review-architecture-w2:F-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-007 (minor, src/lib/hub-machine/client.ts)",
+  "reason": "renumbered F-001 -> F-007 for a unique display id across waves; premise judge upheld",
+  "finding": "F-007"
+ },
+ {
+  "id": "review-architecture-w2:F-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-008 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+  "reason": "renumbered F-002 -> F-008 for a unique display id across waves; premise judge upheld",
+  "finding": "F-008"
+ },
+ {
+  "id": "review-architecture-w2:F-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-009 (minor, apps/hub-web/src/styles.css)",
+  "reason": "renumbered F-003 -> F-009 for a unique display id across waves; premise judge returned challenged, so it is held for the operator",
+  "finding": "F-009"
+ },
+ {
+  "id": "review-degradation-w1:F-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-010 (minor, apps/hub-web/src/features/context.tsx)",
+  "reason": "renumbered F-001 -> F-010 for a unique display id across waves; premise judge upheld",
+  "finding": "F-010"
+ },
+ {
+  "id": "review-degradation-w1:F-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-011 (minor, apps/hub-web/src/features/remote/work.tsx)",
+  "reason": "renumbered F-002 -> F-011 for a unique display id across waves; premise judge upheld",
+  "finding": "F-011"
+ },
+ {
+  "id": "review-degradation-w1:F-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-012 (minor, apps/hub-web/src/features/acceptance/presentation.tsx)",
+  "reason": "renumbered F-003 -> F-012 for a unique display id across waves; premise judge upheld",
+  "finding": "F-012"
+ },
+ {
+  "id": "review-degradation-w1:F-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-013 (minor, apps/hub-web/src/features/workflow.tsx)",
+  "reason": "renumbered F-004 -> F-013 for a unique display id across waves; premise judge upheld",
+  "finding": "F-013"
+ },
+ {
+  "id": "review-degradation-w2:F-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-007 (merged; minor, src/lib/hub-machine/client.ts)",
+  "reason": "renumbered F-001 -> F-014, then merged into F-007 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-007"
+ },
+ {
+  "id": "review-degradation-w2:F-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-015 (minor, apps/hub-web/src/i18n/workflow.en.ts)",
+  "reason": "renumbered F-002 -> F-015 for a unique display id across waves; premise judge upheld",
+  "finding": "F-015"
+ },
+ {
+  "id": "review-degradation-w2:F-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-016 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+  "reason": "renumbered F-003 -> F-016 for a unique display id across waves; premise judge upheld",
+  "finding": "F-016"
+ },
+ {
+  "id": "review-degradation-w2:F-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-013 (merged; minor, apps/hub-web/src/features/workflow.tsx)",
+  "reason": "renumbered F-004 -> F-017, then merged into F-013 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-013"
+ },
+ {
+  "id": "review-highload-w1:HL-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-010 (merged; minor, apps/hub-web/src/features/context.tsx)",
+  "reason": "renumbered HL-001 -> F-018, then merged into F-010 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-010"
+ },
+ {
+  "id": "review-highload-w1:HL-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-005 (merged; minor, apps/hub-web/src/features/remote/settings.tsx)",
+  "reason": "renumbered HL-002 -> F-019, then merged into F-005 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-005"
+ },
+ {
+  "id": "review-highload-w1:HL-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-020 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered HL-003 -> F-020 for a unique display id across waves; premise judge upheld",
+  "finding": "F-020"
+ },
+ {
+  "id": "review-highload-w2:HL-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-007 (merged; minor, src/lib/hub-machine/client.ts)",
+  "reason": "renumbered HL-001 -> F-021, then merged into F-007 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-007"
+ },
+ {
+  "id": "review-layout-w2:LY-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-022 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+  "reason": "renumbered LY-002 -> F-022 for a unique display id across waves; premise judge upheld",
+  "finding": "F-022"
+ },
+ {
+  "id": "review-logic-w1:F-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-023 (minor, apps/hub-web/src/features/remote/work.tsx)",
+  "reason": "renumbered F-001 -> F-023 for a unique display id across waves; premise judge upheld",
+  "finding": "F-023"
+ },
+ {
+  "id": "review-logic-w1:F-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-024 (minor, apps/hub-web/src/features/remote/work.tsx)",
+  "reason": "renumbered F-002 -> F-024 for a unique display id across waves; premise judge upheld",
+  "finding": "F-024"
+ },
+ {
+  "id": "review-logic-w2:F-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-007 (merged; minor, src/lib/hub-machine/client.ts)",
+  "reason": "renumbered F-001 -> F-025, then merged into F-007 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-007"
+ },
+ {
+  "id": "review-performance-w1:PERF-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-010 (merged; minor, apps/hub-web/src/features/context.tsx)",
+  "reason": "renumbered PERF-001 -> F-026, then merged into F-010 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-010"
+ },
+ {
+  "id": "review-performance-w1:PERF-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-027 (minor, apps/hub-web/src/features/remote/work.tsx)",
+  "reason": "renumbered PERF-002 -> F-027 for a unique display id across waves; premise judge upheld",
+  "finding": "F-027"
+ },
+ {
+  "id": "review-pr-contract-w1:PC-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-028 (minor, docs/docs/guides/team-hub-remote-sessions.md)",
+  "reason": "renumbered PC-001 -> F-028 for a unique display id across waves; premise judge upheld",
+  "finding": "F-028"
+ },
+ {
+  "id": "review-pr-contract-w1:PC-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-029 (minor, .github/PULL_REQUEST_TEMPLATE.md)",
+  "reason": "renumbered PC-002 -> F-029 for a unique display id across waves; premise judge upheld",
+  "finding": "F-029"
+ },
+ {
+  "id": "review-pr-contract-w1:PC-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-030 (minor, apps/hub-web/src/features/context.tsx)",
+  "reason": "renumbered PC-003 -> F-030 for a unique display id across waves; premise judge upheld",
+  "finding": "F-030"
+ },
+ {
+  "id": "review-pr-contract-w1:PC-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-031 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered PC-004 -> F-031 for a unique display id across waves; premise judge upheld",
+  "finding": "F-031"
+ },
+ {
+  "id": "review-security-code-w1:SEC-1",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-032 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered SEC-1 -> F-032 for a unique display id across waves; premise judge upheld",
+  "finding": "F-032"
+ },
+ {
+  "id": "review-testing-practices-w1:F-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-033 (minor, src/lib/hub-machine/client.ts)",
+  "reason": "renumbered F-001 -> F-033 for a unique display id across waves; premise judge upheld",
+  "finding": "F-033"
+ },
+ {
+  "id": "review-testing-practices-w1:F-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-034 (minor, apps/hub-web/src/features/remote/session-timeline.ts)",
+  "reason": "renumbered F-002 -> F-034 for a unique display id across waves; premise judge upheld",
+  "finding": "F-034"
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-035 (minor, apps/hub-web/src/features/remote/session-workspace.css)",
+  "reason": "renumbered F-003 -> F-035 for a unique display id across waves; premise judge upheld",
+  "finding": "F-035"
+ },
+ {
+  "id": "review-testing-practices-w1:F-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-036 (minor, apps/hub-web/tests/breadcrumb.case.tsx)",
+  "reason": "renumbered F-004 -> F-036 for a unique display id across waves; premise judge upheld",
+  "finding": "F-036"
+ },
+ {
+  "id": "review-testing-practices-w1:F-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-037 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered F-005 -> F-037 for a unique display id across waves; premise judge upheld",
+  "finding": "F-037"
+ },
+ {
+  "id": "review-testing-practices-w1:F-006",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-038 (minor, apps/hub-web/tests/context.case.tsx)",
+  "reason": "renumbered F-006 -> F-038 for a unique display id across waves; premise judge upheld",
+  "finding": "F-038"
+ },
+ {
+  "id": "review-testing-practices-w1:F-007",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-039 (minor, apps/hub-web/tests/context.case.tsx)",
+  "reason": "renumbered F-007 -> F-039 for a unique display id across waves; premise judge upheld",
+  "finding": "F-039"
+ },
+ {
+  "id": "review-testing-practices-w1:F-008",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-040 (minor, apps/hub-web/tests/session-command-outcomes.case.tsx)",
+  "reason": "renumbered F-008 -> F-040 for a unique display id across waves; premise judge upheld",
+  "finding": "F-040"
+ },
+ {
+  "id": "review-testing-practices-w1:F-009",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-041 (minor, apps/hub-web/tests/localization.case.ts)",
+  "reason": "renumbered F-009 -> F-041 for a unique display id across waves; premise judge upheld",
+  "finding": "F-041"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-042 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered UX-001 -> F-042 for a unique display id across waves; premise judge returned owner-decision, so it is held for the operator",
+  "finding": "F-042"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-043 (minor, apps/hub-web/src/features/context.tsx)",
+  "reason": "renumbered UX-002 -> F-043 for a unique display id across waves; premise judge upheld",
+  "finding": "F-043"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-015 (merged; minor, apps/hub-web/src/i18n/workflow.en.ts)",
+  "reason": "renumbered UX-003 -> F-044, then merged into F-015 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-015"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-045 (minor, apps/hub-web/src/features/context.tsx)",
+  "reason": "renumbered UX-004 -> F-045 for a unique display id across waves; premise judge upheld",
+  "finding": "F-045"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-046 (minor, apps/hub-web/src/features/remote/settings.tsx)",
+  "reason": "renumbered UX-005 -> F-046 for a unique display id across waves; premise judge returned challenged, so it is held for the operator",
+  "finding": "F-046"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-006",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-047 (minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered UX-006 -> F-047 for a unique display id across waves; premise judge upheld",
+  "finding": "F-047"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-007",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-048 (minor, apps/hub-web/src/app/App.tsx)",
+  "reason": "renumbered UX-007 -> F-048 for a unique display id across waves; premise judge upheld",
+  "finding": "F-048"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-008",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-049 (minor, apps/hub-web/src/features/remote/work.tsx)",
+  "reason": "renumbered UX-008 -> F-049 for a unique display id across waves; premise judge upheld",
+  "finding": "F-049"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-009",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-053 (merged; minor, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered UX-009 -> F-050, then merged into F-053 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-053"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-010",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-051 (minor, apps/hub-web/src/i18n/acceptance.ru.ts)",
+  "reason": "renumbered UX-010 -> F-051 for a unique display id across waves; premise judge upheld",
+  "finding": "F-051"
+ },
+ {
+  "id": "review-ui-ux-w2:UX-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-015 (merged; minor, apps/hub-web/src/i18n/workflow.en.ts)",
+  "reason": "renumbered UX-001 -> F-052, then merged into F-015 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-015"
+ },
+ {
+  "id": "review-ui-ux-w2:UX-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-053 (minor, apps/hub-web/src/i18n/remote.en.ts)",
+  "reason": "renumbered UX-002 -> F-053 for a unique display id across waves; premise judge upheld",
+  "finding": "F-053"
+ },
+ {
+  "id": "review-ui-ux-w2:UX-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-054 (minor, apps/hub-web/src/i18n/remote.en.ts)",
+  "reason": "renumbered UX-003 -> F-054 for a unique display id across waves; premise judge upheld",
+  "finding": "F-054"
+ },
+ {
+  "id": "review-ui-ux-w2:UX-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-055 (minor, apps/hub-web/src/styles.css)",
+  "reason": "renumbered UX-004 -> F-055 for a unique display id across waves; premise judge upheld",
+  "finding": "F-055"
+ },
+ {
+  "id": "review-ui-ux-w2:UX-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-056 (minor, apps/hub-web/src/i18n/remote.en.ts)",
+  "reason": "renumbered UX-005 -> F-056 for a unique display id across waves; premise judge upheld",
+  "finding": "F-056"
+ },
+ {
+  "id": "review-architecture-w1:F-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-057 (info, apps/hub-web/src/features/remote/work.tsx)",
+  "reason": "renumbered F-005 -> F-057 for a unique display id across waves",
+  "finding": "F-057"
+ },
+ {
+  "id": "review-degradation-w1:F-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-020 (merged; info, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered F-005 -> F-058, then merged into F-020 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-020"
+ },
+ {
+  "id": "review-degradation-w2:F-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-059 (info, apps/hub-web/tests/browser-journeys.e2e.mjs)",
+  "reason": "renumbered F-005 -> F-059 for a unique display id across waves",
+  "finding": "F-059"
+ },
+ {
+  "id": "review-highload-w2:HL-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-060 (info, src/lib/hub-machine/client.test.ts)",
+  "reason": "renumbered HL-002 -> F-060 for a unique display id across waves",
+  "finding": "F-060"
+ },
+ {
+  "id": "review-layout-w1:LY-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-061 (info, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered LY-001 -> F-061 for a unique display id across waves",
+  "finding": "F-061"
+ },
+ {
+  "id": "review-layout-w1:LY-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-062 (info, apps/hub-web/src/features/remote/session-workspace.css)",
+  "reason": "renumbered LY-002 -> F-062 for a unique display id across waves",
+  "finding": "F-062"
+ },
+ {
+  "id": "review-layout-w1:LY-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-063 (info, apps/hub-web/src/styles.css)",
+  "reason": "renumbered LY-003 -> F-063 for a unique display id across waves",
+  "finding": "F-063"
+ },
+ {
+  "id": "review-layout-w1:LY-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-013 (merged; info, apps/hub-web/src/features/workflow.tsx)",
+  "reason": "renumbered LY-004 -> F-064, then merged into F-013 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-013"
+ },
+ {
+  "id": "review-layout-w2:LY-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-065 (info, apps/hub-web/src/styles.css)",
+  "reason": "renumbered LY-003 -> F-065 for a unique display id across waves",
+  "finding": "F-065"
+ },
+ {
+  "id": "review-layout-w2:LY-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-066 (info, apps/hub-web/src/features/remote/session-workspace.css)",
+  "reason": "renumbered LY-004 -> F-066 for a unique display id across waves",
+  "finding": "F-066"
+ },
+ {
+  "id": "review-layout-w2:LY-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-067 (info, apps/hub-web/tests/css-rules.ts)",
+  "reason": "renumbered LY-005 -> F-067 for a unique display id across waves",
+  "finding": "F-067"
+ },
+ {
+  "id": "review-logic-w1:F-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-020 (merged; info, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered F-003 -> F-068, then merged into F-020 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-020"
+ },
+ {
+  "id": "review-performance-w1:PERF-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-069 (info, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered PERF-003 -> F-069 for a unique display id across waves",
+  "finding": "F-069"
+ },
+ {
+  "id": "review-performance-w1:PERF-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-005 (merged; info, apps/hub-web/src/features/remote/settings.tsx)",
+  "reason": "renumbered PERF-004 -> F-070, then merged into F-005 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-005"
+ },
+ {
+  "id": "review-pr-contract-w1:PC-005",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-071 (info, .github/PULL_REQUEST_TEMPLATE.md)",
+  "reason": "renumbered PC-005 -> F-071 for a unique display id across waves",
+  "finding": "F-071"
+ },
+ {
+  "id": "review-pr-contract-w1:PC-006",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-013 (merged; info, apps/hub-web/src/features/workflow.tsx)",
+  "reason": "renumbered PC-006 -> F-072, then merged into F-013 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-013"
+ },
+ {
+  "id": "review-pr-contract-w2:PC-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-073 (info, .metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md)",
+  "reason": "renumbered PC-001 -> F-073 for a unique display id across waves",
+  "finding": "F-073"
+ },
+ {
+  "id": "review-pr-contract-w2:PC-002",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-074 (info, src/lib/hub-machine/client.ts)",
+  "reason": "renumbered PC-002 -> F-074 for a unique display id across waves",
+  "finding": "F-074"
+ },
+ {
+  "id": "review-pr-contract-w2:PC-003",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-075 (info, docs/docs/guides/team-hub-remote-sessions.md)",
+  "reason": "renumbered PC-003 -> F-075 for a unique display id across waves",
+  "finding": "F-075"
+ },
+ {
+  "id": "review-pr-contract-w2:PC-004",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-076 (info, .metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md)",
+  "reason": "renumbered PC-004 -> F-076 for a unique display id across waves",
+  "finding": "F-076"
+ },
+ {
+  "id": "review-security-code-w1:SEC-2",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-077 (info, apps/hub-web/src/features/remote/sessions.tsx)",
+  "reason": "renumbered SEC-2 -> F-077 for a unique display id across waves",
+  "finding": "F-077"
+ },
+ {
+  "id": "review-security-code-w2:SEC-001",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-078 (info, src/lib/hub-machine/client.ts)",
+  "reason": "renumbered SEC-001 -> F-078 for a unique display id across waves",
+  "finding": "F-078"
+ },
+ {
+  "id": "review-testing-practices-w1:F-010",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-079 (info, apps/hub-web/tests/session-command-outcomes.case.tsx)",
+  "reason": "renumbered F-010 -> F-079 for a unique display id across waves",
+  "finding": "F-079"
+ },
+ {
+  "id": "review-testing-practices-w1:F-011",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-080 (info, apps/hub-web/tests/css-rules.ts)",
+  "reason": "renumbered F-011 -> F-080 for a unique display id across waves",
+  "finding": "F-080"
+ },
+ {
+  "id": "review-testing-practices-w1:F-012",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-081 (info, apps/hub-web/tests/flow-term.case.ts)",
+  "reason": "renumbered F-012 -> F-081 for a unique display id across waves",
+  "finding": "F-081"
+ },
+ {
+  "id": "review-testing-practices-w1:F-013",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-082 (info, apps/hub-web/src/styles.css)",
+  "reason": "renumbered F-013 -> F-082 for a unique display id across waves",
+  "finding": "F-082"
+ },
+ {
+  "id": "review-testing-practices-w1:F-014",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-083 (info, apps/hub-web/tests/remote.case.tsx)",
+  "reason": "renumbered F-014 -> F-083 for a unique display id across waves",
+  "finding": "F-083"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-011",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-084 (info, apps/hub-web/src/app/App.tsx)",
+  "reason": "renumbered UX-011 -> F-084 for a unique display id across waves",
+  "finding": "F-084"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-012",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-085 (info, apps/hub-web/src/features/workflow.tsx)",
+  "reason": "renumbered UX-012 -> F-085 for a unique display id across waves",
+  "finding": "F-085"
+ },
+ {
+  "id": "review-ui-ux-w1:UX-013",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-086 (info, apps/hub-web/src/features/remote/settings.tsx)",
+  "reason": "renumbered UX-013 -> F-086 for a unique display id across waves",
+  "finding": "F-086"
+ },
+ {
+  "id": "review-ui-ux-w2:UX-006",
+  "status": "finding",
+  "evidence": "report.md and findings.json as F-053 (merged; info, apps/hub-web/src/i18n/remote.en.ts)",
+  "reason": "renumbered UX-006 -> F-087, then merged into F-053 as the same defect class reached by more than one reviewer; the merge removed a duplicate claim, it did not raise or drop a finding",
+  "finding": "F-053"
+ },
+ {
+  "id": "review-layout-w2:fu1",
+  "status": "finding",
+  "finding": "F-001",
+  "source": "raw/review-layout-w2.txt",
+  "question": "Was LY-001 settled in a real engine, and where is that recorded?",
+  "evidence": "research-evidence/verify-LY-W2-001-1.txt (the Hub asset CSP as served) and research-evidence/verify-LY-W2-001-2-browser.txt (Chromium refuses the data: chevron under default-src self with no img-src; computed appearance none, padding-inline-end 40px), confirmed by raw/review-verifier-w1.txt",
+  "reason": "the follow-up asked for an engine measurement of the finding; the orchestrator ran one against a reproduction of the Hub header and review-verifier confirmed the finding on it, so the obligation is discharged and the finding is reported as F-001 (major)"
+ },
+ {
+  "id": "review-testing-practices-w1:fu1",
+  "status": "narrowed",
+  "source": "raw/review-testing-practices-w1.txt",
+  "question": "Were the mutation candidates this change needs all run, and what is left?",
+  "evidence": "raw/review-testing-practices-w1.txt mutation table: 56 mutants run, 39 red, 17 green, covering all 14 client.ts grant-gate candidates, all 8 session-timeline candidates, 24 CSS candidates and 8 catalog edits",
+  "reason": "the pass ran every candidate whose suite can run in this checkout; the rest need apps/hub-web node_modules (react, jsdom, @testing-library), which this checkout does not have, so they were not reached rather than skipped by choice",
+  "remains": "85 of 131 candidates, all in the hub-web jsdom component suites (remote, session-command-outcomes, breadcrumb DOM half, session-workspace DOM half, context, flow-acceptance, remote-owned-controls); run them after bun install in apps/hub-web, or read the CI typecheck-and-tests job, which is green at this head"
+ }
+]

@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -14,6 +15,7 @@ import { useDraftStore } from "../src/state/drafts";
 import { resetClient } from "../src/api/client";
 import { navigate, useLocation } from "../src/app/navigation";
 import { sessionFixture, machineFixture } from "./remote-fixtures";
+import { messageDraftKey } from "../src/features/remote/work";
 const requests: { url: string; init?: RequestInit }[] = [];
 let role = "operator";
 let claimed = false;
@@ -274,4 +276,250 @@ test("a held receipt waits for machine application and explains a refused claim 
   expect(screen.queryByRole("button", {name: "Release control"})).not.toBeInTheDocument();
   expect(screen.getByRole("button", {name: "Send message"})).toBeDisabled();
   expect(screen.getByLabelText("Message")).toHaveValue("Keep this message");
+});
+
+const launchDraft = { machineId: "m", checkoutId: "c", profileId: "native", title: "My session", flowId: "", firstMessage: "" };
+test("a non-operator is told only operators can create sessions, not to choose what they already chose", async () => {
+  role = "reviewer";
+  useDraftStore.getState().put("remote-create:2:p", launchDraft);
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByLabelText("Machine")).toHaveValue("m"));
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+  expect(screen.getByText(/Only operators can create sessions/)).toBeVisible();
+  expect(screen.queryByText(/Choose an available machine/)).toBeNull();
+});
+test("a restored draft whose Flow left in-progress names the Flow as the blocker", async () => {
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "gone" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByLabelText("Checkout")).toHaveValue("c"));
+  expect(await screen.findByText(/selected Flow is no longer in progress/)).toBeVisible();
+  expect(screen.queryByText(/Choose an available machine/)).toBeNull();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+});
+test("a stale Flow can be cleared from the select, which re-enables Create session", async () => {
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "gone", firstMessage: "stale text" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await screen.findByText(/selected Flow is no longer in progress/);
+  const select = screen.getByLabelText("Session Flow (optional)");
+  expect(select).toHaveValue("gone");
+  expect(screen.getByRole("option", { name: "gone · no longer in progress" })).toBeDisabled();
+  expect(screen.queryByLabelText("First message (draft)")).toBeNull();
+  fireEvent.change(select, { target: { value: "" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  expect(screen.queryByText(/no longer in progress/)).toBeNull();
+});
+const flow = { id: "f1", title: "Ship it", version: 4, status: "in-progress", criteria: ["works"], specContentDigest: "d".repeat(64) };
+function serveCreate(flows: unknown[]) {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    const path = String(url);
+    if (path.endsWith("/flows")) return Response.json({ flows });
+    if (path.endsWith("/projects/p/sessions") && init?.method === "POST") {
+      requests.push({ url: path, init });
+      return Response.json({ sessionId: "s2", receiptId: "r2" });
+    }
+    return original(url, init);
+  });
+}
+test("a stale Flow that still exists is named by its title, not its id", async () => {
+  serveCreate([{ ...flow, id: "f9", title: "Ship it", status: "completed" }]);
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f9" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByRole("option", { name: "Ship it · no longer in progress" })).toBeDisabled();
+});
+test("creating a session with a Flow seeds the new session's composer with the prepared first message", async () => {
+  serveCreate([flow]);
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1", firstMessage: "Start with the parser" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByLabelText("Session Flow (optional)")).toHaveValue("f1"));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  const key = messageDraftKey(2, "p", "s2");
+  await waitFor(() => expect(useDraftStore.getState().drafts[key]).toBeDefined());
+  const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(flow.criteria)))), byte => byte.toString(16).padStart(2, "0")).join("");
+  expect(useDraftStore.getState().drafts[key]).toMatchObject({
+    text: "Start with the parser", prepared: true, mode: "flow", flowId: "f1", flowVersion: 4, specDigest: "d".repeat(64), criteriaDigest: digest,
+  });
+  await waitFor(() => expect(window.location.search).toContain("session=s2"));
+});
+test("creating a session without a Flow writes no message draft", async () => {
+  serveCreate([flow]);
+  useDraftStore.getState().put("remote-create:2:p", launchDraft);
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  await waitFor(() => expect(window.location.search).toContain("session=s2"));
+  expect(useDraftStore.getState().drafts[messageDraftKey(2, "p", "s2")]).toBeUndefined();
+});
+test("an empty title is named as the remaining requirement", async () => {
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, title: "" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByText(/Enter a session title/)).toBeVisible();
+});
+test("pressing / in the empty composer refocuses the command search when the catalogue is already open", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  fireEvent.click(screen.getByRole("button", { name: "Native command catalogue" }));
+  const search = await screen.findByLabelText("Search Keryx commands");
+  await waitFor(() => expect(search).toHaveFocus());
+  const message = screen.getByLabelText("Message");
+  message.focus();
+  expect(message).toHaveFocus();
+  fireEvent.keyDown(message, { key: "/" });
+  await waitFor(() => expect(search).toHaveFocus());
+});
+test("a created session clears the launch form so the next one does not inherit the Flow and first message", async () => {
+  serveCreate([flow]);
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1", firstMessage: "Start with the parser" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  await waitFor(() => expect(window.location.search).toContain("session=s2"));
+  expect(useDraftStore.getState().drafts["remote-create:2:p"]).toBeUndefined();
+});
+test("a rejected opening offers to create a new session and keeps the error code in details", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    const path = String(url);
+    if (path.endsWith("/sessions/s/opening-status")) return Response.json({ errorCode: "machine-refused" });
+    if (path.endsWith("/sessions/s")) return Response.json({ ...sessionFixture, state: "opening", controller: null });
+    return original(url, init);
+  });
+  show();
+  const create = await screen.findByRole("button", { name: "Create a new session" });
+  const notice = create.parentElement as HTMLElement;
+  expect(notice.querySelector("details")).toHaveTextContent("machine-refused");
+  expect(notice.textContent).not.toContain("(machine-refused)");
+  fireEvent.click(create);
+  await waitFor(() => expect(window.location.search).not.toContain("session=s"));
+  const machine = await screen.findByLabelText("Machine");
+  expect(machine).toBeVisible();
+  await waitFor(() => expect(machine).toHaveFocus());
+});
+test("a chosen Flow whose list is failing says so, offers a retry and keeps Create session disabled", async () => {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
+    String(url).endsWith("/flows")
+      ? Response.json({ error: { code: "unavailable", message: "Flows down" } }, { status: 503 })
+      : original(url, init));
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByText(/Flows could not be loaded/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+});
+test("a chosen Flow whose list is still loading names that as the blocker", async () => {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
+    String(url).endsWith("/flows") ? new Promise<Response>(() => undefined) : original(url, init));
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByText(/Loading the Flows to check/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+});
+const toggle = () => screen.getByRole("button", { name: "Native command catalogue" });
+test("Escape right after / closes the catalogue and types the slash; typing in it first keeps Escape a plain close", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  const message = screen.getByLabelText("Message");
+  expect(message).toHaveAccessibleDescription(/press Escape right after it/);
+  fireEvent.keyDown(message, { key: "/" });
+  const search = await screen.findByLabelText("Search Keryx commands");
+  expect(toggle()).toHaveAttribute("aria-expanded", "true");
+  expect(search).toBeVisible();
+  fireEvent.keyDown(search, { key: "Escape" });
+  await waitFor(() => expect(message).toHaveValue("/"));
+  expect(message).toHaveFocus();
+  expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
+  fireEvent.change(message, { target: { value: "" } });
+  fireEvent.keyDown(message, { key: "/" });
+  expect(toggle()).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByLabelText("Search Keryx commands")).toBeVisible();
+  fireEvent.keyDown(screen.getByLabelText("Search Keryx commands"), { key: "a" });
+  fireEvent.keyDown(screen.getByLabelText("Search Keryx commands"), { key: "Escape" });
+  expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
+  expect(message).toHaveValue("");
+});
+test("Escape in a catalogue opened from the toggle closes it, returns focus to the toggle and leaves the message empty", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  fireEvent.click(toggle());
+  const search = await screen.findByLabelText("Search Keryx commands");
+  expect(search).toBeVisible();
+  fireEvent.keyDown(search, { key: "Escape" });
+  expect(toggle()).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByLabelText("Search Keryx commands")).not.toBeVisible();
+  expect(toggle()).toHaveFocus();
+  expect(screen.getByLabelText("Message")).toHaveValue("");
+});
+test("pointer or change activity in a catalogue opened by / keeps Escape a plain close", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  const message = screen.getByLabelText("Message");
+  for (const act of ["pointer", "change"] as const) {
+    fireEvent.keyDown(message, { key: "/" });
+    const search = await screen.findByLabelText("Search Keryx commands");
+    if (act === "pointer") fireEvent.pointerDown(search);
+    else fireEvent.change(search, { target: { value: "re" } });
+    fireEvent.keyDown(search, { key: "Escape" });
+    expect(toggle()).toHaveAttribute("aria-expanded", "false");
+    expect(message).toHaveValue("");
+  }
+});
+test("a prepared first message is pinned to the versions first seen, so later config drift raises the stale notice", async () => {
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  const key = messageDraftKey(2, "p", "s");
+  useDraftStore.getState().put(key, {
+    text: "First words", prepared: true, mode: "flow", flowId: "", flowVersion: 0, specDigest: "", criteriaDigest: "",
+    consent: false, consentVersion: null, busyPolicy: "reject", sessionVersion: 0, configVersion: 0,
+  });
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  await waitFor(() => expect(useDraftStore.getState().drafts[key]).toMatchObject({ prepared: false, sessionVersion: 2, configVersion: 1 }));
+  expect(screen.queryByText(/Base versions changed/)).toBeNull();
+  cleanup();
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
+    String(url).endsWith("/sessions/s")
+      ? Response.json({ ...sessionFixture, config: { ...sessionFixture.config, configVersion: 2 } })
+      : original(url, init));
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  expect(await screen.findByText(/Base versions changed/)).toBeVisible();
+});
+
+test("a chosen Flow that cannot be checked stays visible in the select and can be cleared there", async () => {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) =>
+    String(url).endsWith("/flows")
+      ? Response.json({ error: { code: "unavailable", message: "Flows down" } }, { status: 503 })
+      : original(url, init));
+  useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1" });
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByText(/Flows could not be loaded/)).toBeVisible();
+  const select = screen.getByLabelText("Session Flow (optional)") as HTMLSelectElement;
+  expect(select).toHaveValue("f1");
+  expect(screen.getByRole("option", { name: "f1 · not checked yet" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+  fireEvent.change(select, { target: { value: "" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
+  expect(screen.queryByText(/Flows could not be loaded/)).toBeNull();
 });

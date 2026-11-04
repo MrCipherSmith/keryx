@@ -1,0 +1,12 @@
+{
+ "reviewer": "review-layout",
+ "slices": [
+  "slice-01"
+ ],
+ "result": "raw/review-layout-w1.txt",
+ "definition": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/skills/gdskills/review/review-layout/SKILL.md",
+ "payload": {
+  "skill_path": "/Users/tsaitler.aleksandr/goodea/keryx/.metaproject/skills/gdskills/review/review-layout/SKILL.md"
+ },
+ "model": "claude-sonnet-5-5"
+}

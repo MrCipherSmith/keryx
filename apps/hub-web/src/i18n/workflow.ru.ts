@@ -1,4 +1,7 @@
 export default {
+  flowWorkspaceDistinction: "Здесь находятся Flow на основе спецификаций. Для управления намерениями, попытками и результатами откройте «Работа над проектом».",
+  openManagedWork: "Работа над проектом",
+
   projectWorkspaceDescription:
     "Flows, решения и выполнение в контексте проекта.",
   projectDecisions: "Требует решения",

@@ -1,0 +1,94 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "The slice delivers the clock-lead claim: the lead is capped at 250 ms, absolute expiry and the monotonic request-age window are untouched, and two new tests pin the boundaries. The 44-test claim cannot be reproduced from this slice or the package evidence. No finding is above info.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "PC-001",
+      "severity": "info",
+      "file": ".metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md",
+      "quote": "Hub Web checks and 44 machine client and bridge tests passed.",
+      "problem": "The body states a count of 44 machine client and bridge tests. Slice-02 adds 2 machine tests, both in src/lib/hub-machine/client.test.ts (the clock-lead boundary test and the expires-before-issued test) and no bridge test. A static count at the reviewed head gives 15 tests in client.test.ts and 28 in bridge.network.test.ts, 43 together; the other bridge files add 4 (control), 9 (approvals), 10 (results) and so on, so no obvious set of files sums to 44. The package test run (research-evidence/tests.txt) is 181 pass, 2 fail, 184 tests over 27 files, with no per-file breakdown, and one of its two failures is client.test.ts:134. So the 44 is neither supported nor contradicted by what this slice holds.",
+      "impact": "A reader trusting the sentence cannot tell which tests were run or whether the two added grant tests are among the 44. Nothing runs differently. CI is green on all 20 checks, and the two local failures are environment observations per the dispatch note.",
+      "suggested_fix": "Name the command or file set behind the 44 (for example the bun test paths), or restate the count from CI. If the intended set was client.test.ts plus bridge.network.test.ts, the static count is 43 and the number needs a look.",
+      "evidence": "Settled by the exact command the author ran (file list), or by the CI log of the typecheck-and-tests job. Static counts: keryx ctx rg -c on src/lib/hub-machine/*.test.ts gives client.test.ts 15 and bridge.network.test.ts 28. Slice diff lines 1510 and 1525 are the only machine tests added.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "pr-body-test-count-44"
+    },
+    {
+      "id": "PC-002",
+      "severity": "info",
+      "file": "src/lib/hub-machine/client.ts",
+      "quote": "if (wait > 0 && wait <= 500)",
+      "problem": "The body says 'The machine client accepts a bounded clock lead when checking the grant issue time.' The diff does that: `issued <= now + MAX_HUB_CLOCK_LEAD_MS` with the constant at 250, while `expires > now` and `elapsed < LIMITS.grantMs` are unchanged, so both deadlines are as before. The claim holds. Two facts the body does not say: (1) authorize() already waited out a future issue time of up to 500 ms before calling the verifier (commit 565866111a, 2026-11-03, already on base). On that path, once the sleep ends `issued <= now` holds without the new tolerance, so the 250 ms lead matters only for a sub-millisecond early return of the sleep, for leads above 500 ms that are still refused, and for direct callers such as the apply-time re-check in createGrantApplication. (2) The change adds `expires > issued`, which the body does not mention. On base it was implied by `issued <= now && expires > now`; with the lead it is needed, and the second new test pins it.",
+      "impact": "None at runtime: expiry, request age and the 250 ms bound all behave as the body describes. The cost is a reader who takes 'accepts a bounded clock lead' as a new capability when the 0-500 ms case was already handled by waiting.",
+      "suggested_fix": "Optionally add one sentence to the body: the tolerance covers the residual race after the existing wait, and a grant that expires at or before its issue time is refused.",
+      "evidence": "git blame -L 196,212 src/lib/hub-machine/client.ts shows the wait block from 565866111a (2026-11-03). Slice-02 diff, client.ts hunk, and client.test.ts lines 1510-1537 for the boundary cases (75, 250 pass; 251 fails; expiry at now+5075 fails; elapsed 5000 fails; expires <= issued fails).",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "grant-clock-lead-claim"
+    },
+    {
+      "id": "PC-003",
+      "severity": "info",
+      "file": "docs/docs/guides/team-hub-remote-sessions.md",
+      "quote": "settings that apply at the next idle point, a native command catalogue, and",
+      "problem": "The Hub guide's 'Start a session from the web' section walks through Machine, Checkout, Agent profile and Title, then Message and Work mode, and mentions the command catalogue only as a feature in one sentence. Slice-02's i18n adds visible strings the guide never describes: an optional 'Session Flow (optional)' field and a 'First message (draft)' field at session creation (remote.en.ts launchFlow, launchMessage), and the composer hint 'Press / for commands. To type a literal slash instead, press Escape right after it.' (commandsHint). The guide is not contradicted. It is incomplete for these additions, and the PR touches no file under docs/.",
+      "impact": "A reader following the guide will not learn that a Flow can be chosen at creation or that / opens the catalogue. The documented steps still work.",
+      "suggested_fix": "Add a short note to step 2 about the optional Flow and first-message draft, and a line on the slash shortcut. This is a judgement call, since the body has no Documentation checkbox to disagree with.",
+      "evidence": "keryx ctx rg for 'native command catalogue|Press / |Session Flow|first message' over docs, README.md and apps/hub-web: the guide line above is the only user-guide hit, and no hit describes the new fields. The 35-file diff list has no docs/ path.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "hub-guide-session-launch-flow",
+      "publication": "question"
+    },
+    {
+      "id": "PC-004",
+      "severity": "info",
+      "file": ".metaproject/reviews/2026-11-04-review-flow-github-com-mrciphersmith-keryx-pull-1124/pr-context.md",
+      "quote": "Both turns succeeded with identical Flow pins, and the applied help outcome appeared in the transcript.",
+      "problem": "This claim, and 'Subsequent messages reuse that Flow', are backed in the body only by a manual Chrome run; no screenshot or recording is linked. Slice-02's tests cover seeding the new session's composer draft with the prepared first message (remote.case.tsx 'creating a session with a Flow seeds the new session's composer...') and outcome placement, but no test in this slice sends a second message and asserts its Flow pins equal the first's. The body has no checkbox, so no box is contradicted. An existing test outside this slice may cover the reuse, and I did not read work.tsx or its tests (slice-01).",
+      "impact": "None shown. It records which part of the claim rests on manual evidence.",
+      "suggested_fix": "Link the Chrome evidence, or point to the test that asserts two sends carry identical pins. The slice-01 reviewer can confirm whether work.tsx tests do.",
+      "evidence": "Slice-02 diff lines 965-980 (seed test) and the full list of tests added in this slice; no test sending two messages with a pinned Flow appears.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "location_class": "pr-process",
+      "dedupe_key": "flow-pin-reuse-evidence",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 4 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Summary (review-pr-contract, slice-02)
+
+The PR body has no checklist boxes, so the rows below are its stated claims.
+
+| Claim (quoted) | State | What slice-02 shows | Expectation |
+|---|---|---|---|
+| "accepts a bounded clock lead when checking the grant issue time" | delivered | `issued <= now + MAX_HUB_CLOCK_LEAD_MS` with `MAX_HUB_CLOCK_LEAD_MS = 250` | matches |
+| "Absolute expiration and the monotonic grant window remain enforced" | delivered | `expires > now` and `elapsed < LIMITS.grantMs` unchanged; new `expires > issued`; tests at now+5075 and elapsed 5000 both refuse | matches |
+| "44 machine client and bridge tests passed" | not reproducible | slice adds 2 client tests and 0 bridge tests; static count client 15 + bridge.network 28 = 43 | PC-001 |
+| "select controls reserve space for the chevron", "navigation collapses to icons" | delivered | styles.css `.hub-select ... padding-inline-end:2.5rem` and `.rail-collapsed` rules, with css-rules tests | matches |
+| "Press / ... Escape right after it" | delivered | commandsHint copy, with Escape and slash tests in remote.case.tsx | matches |
+| "Both turns succeeded with identical Flow pins" | manual evidence only | no two-send pin test in this slice | PC-004 |
+
+Concerns, all info:
+- **PC-001:** the 44 cannot be derived from the slice or the package evidence. Locally, client.test.ts:134 fails (an environment observation per the dispatch note; CI is green).
+- **PC-002:** the clock-lead claim holds. The 0-500 ms case was already handled by the existing wait in `authorize()`, and the body does not mention the new `expires > issued` guard.
+- **PC-003:** `docs/docs/guides/team-hub-remote-sessions.md` is not contradicted, but it omits the new optional Flow and first-message fields and the `/` shortcut. This is a judgement call.
+- **PC-004:** Flow-pin reuse is supported by the manual Chrome run only, as far as slice-02 shows.
+
+No blocker, major or minor findings.

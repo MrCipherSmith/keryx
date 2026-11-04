@@ -1,0 +1,109 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": ["slice-02"],
+  "summary": "slice-02 (18 files) read in full against base 85fe58fa. No blocker or major: the grant-time change in client.ts is real but bounded and, on the production path, almost inert. Four minors (one stale/misleading bound, one naming split, one unpinned CSS gate, one half-migrated select surface) and one e2e suspicion.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/lib/hub-machine/client.ts",
+      "quote": "issued <= now + MAX_HUB_CLOCK_LEAD_MS && expires > now",
+      "problem": "The PR and the new constant present 250 ms as the bound on how far ahead of the machine a Hub grant may be issued. On the only production path that bound does not govern. MachineConnection.authorize() (same file, unchanged from base) already sleeps up to 500 ms until authorizedAt before it calls verifyAuthorizationGrant, and createGrantApplication.valid() runs later still on the same wall clock. So the end-to-end accept set is unchanged: a lead of 0-500 ms was accepted on base (by waiting) and is accepted on head; a lead above 500 ms is rejected on both (no sleep, and issued > now + 250). The new tolerance changes the outcome only when the wall clock reads earlier than authorizedAt after the sleep (sleep jitter, or a backwards clock step before apply). The comment above authorize()'s sleep (\"Wait for its actual start time\") and the new comment (\"The Hub can be slightly ahead\") now describe two overlapping mechanisms with two different numbers (500 and 250). The safety trade is small and bounded: the check still requires expires > now, expires - issued <= LIMITS.grantMs and elapsed < LIMITS.grantMs, so neither deadline is extended; the only loosening is that valid() can pass up to 250 ms before authorizedAt.",
+      "impact": "A reader of MAX_HUB_CLOCK_LEAD_MS or of the PR text will believe the machine refuses grants more than 250 ms ahead; authorize() accepts up to 500 ms. The next edit to either number can move one bound and leave the other, with no test that ties them together. The cost lands on the next editor of client.ts; no user-visible behaviour change was found.",
+      "suggested_fix": "Either say in the constant's comment that it only absorbs sleep/clock jitter after authorize()'s wait (and keep it far below 500), or drop the sleep window to the same constant, and add one authorize()-level test for a lead between 250 and 500 ms asserting the intended outcome.",
+      "evidence": "consumer-trace: followed verifyAuthorizationGrant to its two callers, MachineConnection.authorize (client.ts, sleep when 0 < wait <= 500, then verify with Date.now()) and createGrantApplication.valid (wall clock at apply time), and createGrantApplication to its callers (MachineConnection.authorization, called from bridge.ts at 5 sites, and applyStartingCommand in admission.ts, which only calls application.apply). base-diff: the sleep block is present on base (git show 85fe58fa:src/lib/hub-machine/client.ts) and is not in the diff. refute: the Hub sets authorizedAt from a single Date.now() read (src/hub/remote-v2/index.ts, issuedAt) and expiry = issuedAt + LIMITS.grantMs, so no path produces a lead that bypasses the sleep; the existing test at client.test.ts 'fresh authorization waits for a slightly future server timestamp' (skew 150 ms) passes on base and head alike, so the real path is not exercised by the new lead tests, which call the pure function directly. Other consumers of client.ts (bridge.test-support.ts, trial.test-support.ts, src/commands/hub-machine.ts, scripts/verify-native-coverage.ts) import MachineConnection or other exports and never call verifyAuthorizationGrant (search of src and scripts: only client.ts, client.test.ts, admission.test.ts reference it or createGrantApplication). I could not run Bun here, so Bun.sleep early-wake as the trigger for the original flake is inferred, not shown.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/hub-web/src/i18n/workflow.en.ts",
+      "quote": "openManagedWork: \"Project work\",",
+      "problem": "The English UI now has two names for one destination. The navigation tab and the page itself are \"Managed work\" (App.tsx label() returns \"Managed work\" for the work tab; work.en.ts title: \"Managed work\"), while the new Flow-view button and sentence say \"Project work\" (\"Open Project work to manage intents, attempts and results\"). Russian is consistent (\"Работа над проектом\" in both). The new flow-term test pins that Flow is not translated but does not compare the button label with the nav label.",
+      "impact": "An English user told to \"open Project work\" scans the sidebar for that label and finds \"Managed work\"; the button works, the sentence just points at a name that exists nowhere else in the EN navigation.",
+      "suggested_fix": "Use the nav label in English (\"Managed work\"), or rename the nav and page to \"Project work\" in one change; add the label equality to flow-term.case.ts so the two cannot drift.",
+      "evidence": "consumer-trace: workflow.en.ts openManagedWork and flowWorkspaceDistinction -> workflow.tsx 103-104 (the Flow view button that navigates to tab 'work') -> App.tsx 316-318 nav label \"Managed work\" -> work.en.ts title \"Managed work\". Search for 'Project work|Managed work' across apps/hub-web/src and tests: the only 'Project work' strings are these two plus acceptance.en.ts workContext ('Project work context'). refute: no comment or commit gives a reason for the second name.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "degradation_class": "debt",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "quote": "// Unlayered author rules beat Tailwind utilities; rail and Select rules stay in @layer components.",
+      "problem": "The collapsed-rail tests parse styles.css and pin the layer and what is hidden, but nothing pins the one condition that keeps the rail usable: the .rail-collapsed rules sit inside @media (min-width:1024px) and the toggle is display:none below it. CssRule.media is recorded by parseCssRules and used only by the 600 px header test in session-workspace.case.tsx; breadcrumb.case.tsx never reads it. The Escape-focus test comment (\"The rail toggle is display:none below 1024px\") is likewise unverified under jsdom.",
+      "impact": "If a later edit moves the .rail-collapsed .nav-label rule out of the min-width block, a user who collapsed the rail on desktop and then opens the mobile drawer gets icon-only items and no visible toggle to restore them (the toggle is display:none there); every current test would still pass.",
+      "suggested_fix": "Assert that every rule whose selector contains .rail-collapsed has a media entry equal to (min-width:1024px), and that .nav-item.desktop-rail-toggle has a base display:none rule outside it.",
+      "evidence": "consumer-trace: styles.css lines 634-657 (new @layer block: .nav-item.desktop-rail-toggle {display:none} base, flex only in min-width:1024px, .rail-collapsed rules in the same block) -> App.tsx 333/358 (railCollapsed is plain useState, class kept on .app-shell at any width) -> tests: search for 'media|1024' in breadcrumb.case.tsx, session-workspace.case.tsx and css-rules.ts returns only the 600 px test and the comment. refute: the gate is present at head, so this is a missing guard, not a present bug.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "blind-test",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/workflow.tsx",
+      "quote": "<Field label={t('specification')}><select className={inputClass}",
+      "problem": "The chevron and padding work is attached to the Select component (hub-select class). Three raw <select className={inputClass}> sites in workflow.tsx do not go through it and keep the native arrow and the original padding, so after this change the app has two select looks, in the same forms as Select-based controls.",
+      "impact": "Visual inconsistency only: no clipping or overlap (appearance stays native there). The PR text says select controls now reserve space for the chevron; these three do not need it, but they are not migrated and nothing records that choice.",
+      "suggested_fix": "Render those three through Select, or add a comment at the raw sites that they are deliberately native.",
+      "evidence": "consumer-trace: styles.css .hub-select rule -> ui.tsx Select (adds hub-select) -> search for '<select' in features, components and app: 4 hits, ui.tsx:99 (Select) and workflow.tsx 108, 165, 175 (raw). 13 files use <Select; none passes a Tailwind padding utility or an unlayered padding rule that would defeat the layered padding-inline-end (checked session-workspace.css .composer-controls select / .composer-footer select: font-size only). refute: no comment says the raw selects are intentional.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "degradation_class": "debt",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "apps/hub-web/tests/browser-journeys.e2e.mjs",
+      "quote": "await commands.waitFor();return commands;",
+      "problem": "openCommands() calls waitFor() on panel(page, L.commands), which is page.locator('section').filter({has: heading 'Native command catalogue'}). The Commands panel is now rendered inside the composer's own Panel (work.tsx 250-262), so the same heading is a descendant of at least two <section> elements (the Commands panel and the composer Message panel). Playwright's waitFor is strict and fails on a locator that resolves to more than one element. The old code only chained getByLabel/locator off this locator, which de-duplicates, so it never hit strict mode. If true: minor, journey 3 (typed help and settings/status inspection) fails at its first step in the e2e run; the shipped app is unaffected.",
+      "impact": "Outside the unit and CI suites listed for this PR; found only by reading. Settles on one run.",
+      "suggested_fix": "Check: run the journeys (or in a Playwright REPL against the fixture count panel(page, L.commands)); if it is above 1, scope the locator to the innermost section or use .last().",
+      "evidence": "consumer-trace: e2e helper -> Panel renders <section class=hub-panel> (ui.tsx 41) -> Commands is a Panel (settings.tsx 34) mounted inside the composer Panel (work.tsx 217, 250-261); session-workspace.case.tsx 'composer header rule' asserts the nesting. Not run: no Playwright here, and the e2e file is not among the CI checks listed in pr-context.md. refute: if the composer Message panel were not a <section> ancestor the count would be 1; work.tsx 217 shows it is a Panel.",
+      "confidence": "low",
+      "reviewer": "review-degradation",
+      "degradation_class": "blind-test",
+      "evidence_kind": "consumer-trace",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 }
+}
+```
+
+## Summary
+
+**Verdict on the `client.ts` grant check.** Weaker, but only by a margin that production does not reach. `verifyAuthorizationGrant` now lets `authorizedAt` lead the local clock by up to 250 ms. It still requires `expires > now`, `expires - issued <= LIMITS.grantMs` and the monotonic `elapsed < LIMITS.grantMs`, so neither deadline is extended (the PR's claim holds). `authorize()` already sleeps up to 500 ms for a future `authorizedAt` before verifying, and `valid()` runs later on the same wall clock. So the set of grants a machine accepts is the same on base and head, apart from sleep jitter or a backwards clock step. The 250 ms constant is therefore not the real bound (500 ms is); that mismatch is F-001. The new tests call the pure function and are red on base. The one test that goes through `authorize()` uses a 150 ms skew and passes on both, so the production path is untested for this change.
+
+**Other slice-02 areas traced without a degradation:**
+- Select chevron CSS. The new block sits in `@layer components`, in the same layer as `.hub-input`. `.hub-select:not([multiple]):not([size])` has higher specificity, so `padding-inline-end` and `background-image` win, and `.hub-input:disabled` still supplies the fill. No unlayered or utility rule on a `Select` consumer overrides the padding. `forced-colors` restores the native arrow.
+- Rail collapse CSS. Rules are `min-width:1024px`-gated. The unlayered `max-width:1023px` and `767px` sidebar rules do not collide with them. `.identity`, its button and the nav buttons stay reachable. The accessible name now comes from `aria-label` and `title`, which match the old text.
+- `css-rules.ts` parser. Comments are stripped, nested at-rules are tracked, and the data-URI chevron has no `;` or braces to confuse it.
+- i18n. The 17 new `remote` keys and the 2 `workflow` keys exist in both locales. `launchHint` is still used through `remote:launchHint` in `workflow.tsx`.
+- `session-timeline.ts` and its test. Placement is by history cursor, stable, and ignores clocks, and the tests would fail if clocks were compared.
+- Composer header selector. It narrows from `.session-composer .hub-panel-header` to a child combinator, which is the intended change. A test pins it.
+- Command search in `settings.tsx`. It keeps the selected entry in the options when the filter excludes it.
+
+**Not traced / limits:**
+- The consumer list was the graph's 40 of 59; the 19 dropped (listed in `degradation-consumers.txt`, mostly test files plus `fork.tsx`, `revision-code-viewer.tsx`, `main.tsx`, `native-lifecycle-parity.ts`) were not traced by me.
+- I traced the `client.ts` consumers fully (`bridge.ts`, `admission.ts`, plus the test-support files, `hub-machine.ts` and `verify-native-coverage.ts`, which never call the changed function).
+- For `ui.tsx` I traced only the `Select`/`hub-select` effect. The `ui.tsx`, `App.tsx`, `work.tsx` and `sessions.tsx` logic belongs to slice-01 and was read only where slice-02 CSS or tests depend on it.
+- I ran nothing. The two local test failures (R4.4 timeout, `client.test.ts:134` connect error) were not examined, and I make no claim about them.
+- No cross-PR check was possible from the files given.

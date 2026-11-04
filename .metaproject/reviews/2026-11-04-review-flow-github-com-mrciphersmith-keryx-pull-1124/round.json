@@ -1,0 +1,788 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and 85fe58fad18461213e860768056d5cbc4c744019 (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "85fe58fad18461213e860768056d5cbc4c744019",
+    "head": "0be1e717365d980df900ded496ca90886fed09cf"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": "apps/hub-web/src/api/remote-hooks.ts",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": "apps/hub-web/src/api/remote-hooks.ts",
+      "startLine": 20,
+      "endLine": 23
+    },
+    {
+      "file": "apps/hub-web/src/api/remote-hooks.ts",
+      "startLine": 156,
+      "endLine": 159
+    },
+    {
+      "file": "apps/hub-web/src/api/remote-hooks.ts",
+      "startLine": 163,
+      "endLine": 163
+    },
+    {
+      "file": "apps/hub-web/src/api/remote-hooks.ts",
+      "startLine": 170,
+      "endLine": 173
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 260,
+      "endLine": 260
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 307,
+      "endLine": 309
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 333,
+      "endLine": 333
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 358,
+      "endLine": 358
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 378,
+      "endLine": 379
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 386,
+      "endLine": 386
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 397,
+      "endLine": 399
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 428,
+      "endLine": 429
+    },
+    {
+      "file": "apps/hub-web/src/app/App.tsx",
+      "startLine": 433,
+      "endLine": 433
+    },
+    {
+      "file": "apps/hub-web/src/components/ui.tsx",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "apps/hub-web/src/components/ui.tsx",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "apps/hub-web/src/components/ui.tsx",
+      "startLine": 92,
+      "endLine": 92
+    },
+    {
+      "file": "apps/hub-web/src/components/ui.tsx",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": "apps/hub-web/src/features/acceptance/presentation.tsx",
+      "startLine": 13,
+      "endLine": 17
+    },
+    {
+      "file": "apps/hub-web/src/features/acceptance/presentation.tsx",
+      "startLine": 25,
+      "endLine": 30
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 156,
+      "endLine": 156
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 164,
+      "endLine": 169
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 280,
+      "endLine": 280
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 288,
+      "endLine": 293
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 329,
+      "endLine": 332
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 339,
+      "endLine": 344
+    },
+    {
+      "file": "apps/hub-web/src/features/context.tsx",
+      "startLine": 347,
+      "endLine": 353
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-timeline.ts",
+      "startLine": 1,
+      "endLine": 48
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.css",
+      "startLine": 42,
+      "endLine": 42
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.css",
+      "startLine": 270,
+      "endLine": 270
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.css",
+      "startLine": 343,
+      "endLine": 343
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.css",
+      "startLine": 412,
+      "endLine": 421
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.tsx",
+      "startLine": 87,
+      "endLine": 87
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.tsx",
+      "startLine": 96,
+      "endLine": 96
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.tsx",
+      "startLine": 157,
+      "endLine": 157
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/session-workspace.tsx",
+      "startLine": 165,
+      "endLine": 169
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 1,
+      "endLine": 6
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 40,
+      "endLine": 40
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 42,
+      "endLine": 43
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 48,
+      "endLine": 49
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 54,
+      "endLine": 56
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 62,
+      "endLine": 62
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 71,
+      "endLine": 71
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 74,
+      "endLine": 74
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 87,
+      "endLine": 89
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 109,
+      "endLine": 119
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 121,
+      "endLine": 124
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 132,
+      "endLine": 132
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 134,
+      "endLine": 134
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 143,
+      "endLine": 149
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 157,
+      "endLine": 162
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 180,
+      "endLine": 191
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 196,
+      "endLine": 196
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 270,
+      "endLine": 281
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 294,
+      "endLine": 294
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 296,
+      "endLine": 296
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 301,
+      "endLine": 301
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 304,
+      "endLine": 304
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 320,
+      "endLine": 320
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 326,
+      "endLine": 326
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 329,
+      "endLine": 329
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 335,
+      "endLine": 345
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 349,
+      "endLine": 349
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 352,
+      "endLine": 360
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 363,
+      "endLine": 363
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 366,
+      "endLine": 368
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 370,
+      "endLine": 371
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 438,
+      "endLine": 439
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 440,
+      "endLine": 440
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 442,
+      "endLine": 442
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 462,
+      "endLine": 462
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 475,
+      "endLine": 477
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 479,
+      "endLine": 479
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "startLine": 495,
+      "endLine": 552
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "startLine": 1,
+      "endLine": 2
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "startLine": 22,
+      "endLine": 37
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 16,
+      "endLine": 16
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 28,
+      "endLine": 28
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 37,
+      "endLine": 53
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 57,
+      "endLine": 57
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 61,
+      "endLine": 61
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 63,
+      "endLine": 74
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 85,
+      "endLine": 87
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 90,
+      "endLine": 90
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 97,
+      "endLine": 98
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 121,
+      "endLine": 129
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 131,
+      "endLine": 131
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 133,
+      "endLine": 135
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 204,
+      "endLine": 204
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 213,
+      "endLine": 213
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 223,
+      "endLine": 223
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 227,
+      "endLine": 235
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 237,
+      "endLine": 237
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 240,
+      "endLine": 263
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 265,
+      "endLine": 266
+    },
+    {
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "startLine": 295,
+      "endLine": 295
+    },
+    {
+      "file": "apps/hub-web/src/features/workflow.tsx",
+      "startLine": 102,
+      "endLine": 105
+    },
+    {
+      "file": "apps/hub-web/src/i18n/acceptance.en.ts",
+      "startLine": 2,
+      "endLine": 6
+    },
+    {
+      "file": "apps/hub-web/src/i18n/acceptance.ru.ts",
+      "startLine": 2,
+      "endLine": 6
+    },
+    {
+      "file": "apps/hub-web/src/i18n/context.en.ts",
+      "startLine": 2,
+      "endLine": 7
+    },
+    {
+      "file": "apps/hub-web/src/i18n/context.ru.ts",
+      "startLine": 2,
+      "endLine": 7
+    },
+    {
+      "file": "apps/hub-web/src/i18n/remote.en.ts",
+      "startLine": 2,
+      "endLine": 5
+    },
+    {
+      "file": "apps/hub-web/src/i18n/remote.ru.ts",
+      "startLine": 2,
+      "endLine": 5
+    },
+    {
+      "file": "apps/hub-web/src/i18n/workflow.en.ts",
+      "startLine": 2,
+      "endLine": 4
+    },
+    {
+      "file": "apps/hub-web/src/i18n/workflow.ru.ts",
+      "startLine": 2,
+      "endLine": 4
+    },
+    {
+      "file": "apps/hub-web/src/styles.css",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "apps/hub-web/src/styles.css",
+      "startLine": 42,
+      "endLine": 42
+    },
+    {
+      "file": "apps/hub-web/src/styles.css",
+      "startLine": 631,
+      "endLine": 658
+    },
+    {
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "startLine": 56,
+      "endLine": 57
+    },
+    {
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "startLine": 97,
+      "endLine": 100
+    },
+    {
+      "file": "apps/hub-web/tests/breadcrumb.case.tsx",
+      "startLine": 105,
+      "endLine": 174
+    },
+    {
+      "file": "apps/hub-web/tests/browser-journeys.e2e.mjs",
+      "startLine": 92,
+      "endLine": 93
+    },
+    {
+      "file": "apps/hub-web/tests/browser-journeys.e2e.mjs",
+      "startLine": 151,
+      "endLine": 151
+    },
+    {
+      "file": "apps/hub-web/tests/browser-journeys.e2e.mjs",
+      "startLine": 247,
+      "endLine": 247
+    },
+    {
+      "file": "apps/hub-web/tests/context.case.tsx",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "apps/hub-web/tests/context.case.tsx",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "apps/hub-web/tests/context.case.tsx",
+      "startLine": 226,
+      "endLine": 230
+    },
+    {
+      "file": "apps/hub-web/tests/context.case.tsx",
+      "startLine": 234,
+      "endLine": 247
+    },
+    {
+      "file": "apps/hub-web/tests/context.case.tsx",
+      "startLine": 250,
+      "endLine": 274
+    },
+    {
+      "file": "apps/hub-web/tests/css-rules.ts",
+      "startLine": 1,
+      "endLine": 47
+    },
+    {
+      "file": "apps/hub-web/tests/flow-acceptance.case.tsx",
+      "startLine": 43,
+      "endLine": 44
+    },
+    {
+      "file": "apps/hub-web/tests/flow-acceptance.case.tsx",
+      "startLine": 49,
+      "endLine": 54
+    },
+    {
+      "file": "apps/hub-web/tests/flow-acceptance.case.tsx",
+      "startLine": 182,
+      "endLine": 182
+    },
+    {
+      "file": "apps/hub-web/tests/flow-term.case.ts",
+      "startLine": 1,
+      "endLine": 3
+    },
+    {
+      "file": "apps/hub-web/tests/remote-owned-controls.case.tsx",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "apps/hub-web/tests/remote-owned-controls.case.tsx",
+      "startLine": 14,
+      "endLine": 16
+    },
+    {
+      "file": "apps/hub-web/tests/remote.case.tsx",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "apps/hub-web/tests/remote.case.tsx",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "apps/hub-web/tests/remote.case.tsx",
+      "startLine": 280,
+      "endLine": 525
+    },
+    {
+      "file": "apps/hub-web/tests/session-command-outcomes.case.tsx",
+      "startLine": 1,
+      "endLine": 189
+    },
+    {
+      "file": "apps/hub-web/tests/session-timeline.case.ts",
+      "startLine": 1,
+      "endLine": 28
+    },
+    {
+      "file": "apps/hub-web/tests/session-workspace.case.tsx",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "apps/hub-web/tests/session-workspace.case.tsx",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "apps/hub-web/tests/session-workspace.case.tsx",
+      "startLine": 181,
+      "endLine": 231
+    },
+    {
+      "file": "src/hub/web-assets.generated.ts",
+      "startLine": 2,
+      "endLine": 4
+    },
+    {
+      "file": "src/lib/hub-machine/client.test.ts",
+      "startLine": 13,
+      "endLine": 40
+    },
+    {
+      "file": "src/lib/hub-machine/client.ts",
+      "startLine": 29,
+      "endLine": 30
+    },
+    {
+      "file": "src/lib/hub-machine/client.ts",
+      "startLine": 40,
+      "endLine": 48
+    }
+  ],
+  "carried": [],
+  "mergeBase": "85fe58fad18461213e860768056d5cbc4c744019"
+}

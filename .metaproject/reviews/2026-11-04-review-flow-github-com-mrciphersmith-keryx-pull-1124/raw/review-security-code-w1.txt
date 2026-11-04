@@ -1,0 +1,59 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable vulnerability in slice-01. The command catalogue, session launch and settings surfaces keep their authorization gates; two low-severity observations are recorded.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "SEC-1",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "const criteriaDigest = await digestCriteria(selectedFlow.criteria);",
+      "problem": "The launch onSuccess handler became async. After the receipt arrives it awaits a crypto.subtle digest and then writes the first-message draft into the draft store and navigates, using the hub closure captured at render. It does not compare getClientScope() before and after the await. The session-recovery paths in the same feature do take that snapshot: work.tsx sendNative (`const generation=getClientScope()` ... `if(generation!==getClientScope())return;`), managed-work/operation.tsx and acceptance/use-legacy-decision.ts. The previous handler was a single synchronous navigate, so there was no gap to guard.",
+      "impact": "Attack vector: none that an attacker controls. The trigger is a 401 (or 403 access-denied) arriving from any concurrent request while the digest is pending. App.clear() then runs resetClient, queryClient.clear and useDraftStore.clearAll, and the stale handler still calls put() with the old scopeKey in the key and navigate() to the old session. Outcome: the typed first message stays in the in-memory draft store after sign-out until the page reloads, and the logged-out navigation state points at the previous identity's session id. The key embeds the old scopeKey, so the next principal never reads it. The window is one subtle-crypto call, which makes this a hardening gap, not an exploitable path.",
+      "suggested_fix": "Take `const generation = getClientScope();` before the await and `if (generation !== getClientScope()) return;` after it, ahead of put() and navigate(), as sendNative does.",
+      "evidence": "sessions.tsx CreateSession.submit onSuccess (async, await digestCriteria, then useDraftStore.getState().put and hub.navigate). App.tsx clear() calls useDraftStore.getState().clearAll() and setScope(s=>s+1) on auth loss. drafts.ts is an in-memory zustand store with no persistence, so the only retention is until reload. Siblings with the guard: work.tsx:185-195.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC-2",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "<Textarea value={draft.firstMessage} maxLength={32768} onChange={event => setDraft({ ...draft, firstMessage: event.target.value })}/>",
+      "problem": "The new first-message field in the New session form carries no `secretWarning` hint. Every other free-text field that ends up in a model prompt or a machine command has one: the chat composer (`<p className=\"composer-hint\">{t(\"secretWarning\")}</p>`) and the command arguments field (`hint={t('secretWarning')}`).",
+      "impact": "Attack vector: none. A user can paste a credential into a field that, once the session opens, becomes the first model message, without the reminder the other two fields give. This is a consistency gap in user guidance and no harm path is shown in the code, so it is recorded at info.",
+      "suggested_fix": "Pass `hint={t(\"secretWarning\")}` to the `Field label={t(\"launchMessage\")}`.",
+      "evidence": "Field is `<Field label={t(\"launchMessage\")}>` with no hint prop in sessions.tsx; secretWarning is used in work.tsx (composer-hint) and settings.tsx Commands (arguments Field hint).",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Security review: round 1, slice-01
+
+Reviewed `slice-01` (16 files, hub-web source and i18n) at head `0be1e717`. No blocker or major. One minor and one info observation.
+
+**Findings**
+- **SEC-1 (minor)** The session launch `onSuccess` now awaits a digest and then writes the draft and navigates without the `getClientScope()` generation check its siblings use. The only trigger is an auth loss landing inside that one-call window. The outcome is a draft kept in memory until reload under a dead scope key. The next principal cannot read it.
+- **SEC-2 (info)** The first-message textarea in the New session form lacks the `secretWarning` hint that the composer and the command arguments field carry.
+
+**Checked and clean**
+- **Command catalogue and invoke.** The catalogue now lists unavailable commands as selectable. `invoke()` and the button are both gated by `allowed`, `stale`, `control.active`, `control.binding`, the association requirement for workspace commands, and the `local-only` / `sensitive-setup` exclusions. The new early-return in `invoke()` is strictly tighter than before. Confirmation cards keep their lease, version and expiry checks. No path invokes a command from the `/` shortcut or from Escape, which only toggles UI and restores the typed slash.
+- **Observer access.** Moving `Commands` into the composer exposes the catalogue read to the same audience as before, since it sat in the settings tab. Invocation still requires `control.active`.
+- **Injection and XSS.** The diff adds no `dangerouslySetInnerHTML`, `eval` or `Function`. Command `result`, `errorCode`, `inputSchema`, machine `displayName`, flow titles and event ids are rendered as React text or inside `<pre>` and `<code>`. The `Markdown` rendering of assistant messages was moved into `MessageItem` unchanged, and the acceptance review keeps `safeLinksOnly`.
+- **Path and URL construction.** The operation follow-up uses `encodeURIComponent(operationId)`. The new History links navigate only to ids found in the loaded flow and document maps. The remaining navigation and external-link code is untouched (`safeExternalUrl` with `noopener noreferrer`).
+- **Access to the machines list.** `SessionsView` now fetches `/machines?projectId=` for every viewer. The server handler (`src/hub/remote-v2/read-model.ts`) scopes it by `scoped(auth, projectId)` and filters inventory by the actor's project ids, the same authorization as the sessions list it sits beside.
+- **Flow pin integrity.** The prepared first-message draft only seeds text and pins. `submit()` returns early while `draft.prepared`, and `association()` re-checks the draft's flow version, spec digest and criteria digest against the currently loaded Flow before it returns an association, so a Flow changed after launch fails closed.
+- **Draft storage.** Drafts live in an in-memory zustand store, not localStorage or sessionStorage, and `clearAll()` runs on sign-out. The launch form calls `clearDraft()` after success, so the first message does not survive into the next New session.
+- **Secrets and cryptography.** No tokens or credentials are logged or put in URLs. The only crypto use is the existing `digestCriteria`.
+- **CSRF and redirects.** The diff adds no new state-changing request shapes beyond the existing `remoteMutate` calls, and no redirects.
+- **Not in scope.** `src/lib/hub-machine/client.ts` and its clock-lead change sit in slice-02.
+
+**Routing audit.** `graph_used`: payload layers block only (no extra queries). `wiki_used`: not-relevant. `ctx_used`: yes (`keryx ctx rg`). `raw_rg_used`: no. History of the unguarded launch handler was not needed: the previous handler was synchronous, as the diff shows.

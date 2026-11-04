@@ -1,4 +1,8 @@
 export default {
+  searchCommands: "Поиск команд Keryx", noCommandsFound: "Подходящих команд нет.",
+ sessionOpeningFailed: "Не открылась", sessionOpeningNextStep: "Проверьте доступность машины и создайте новую сессию.", sessionLaunchRequirements: "Выберите доступную машину, чистую рабочую копию и готовый профиль, затем введите название.", sessionLaunchOperatorOnly: "Создавать сессии могут только операторы. Обратитесь к оператору или войдите под учётной записью оператора.", sessionLaunchEnterTitle: "Введите название сессии, чтобы продолжить.", sessionLaunchFlowGone: "Выбранный Flow больше не в работе. Выберите другой Flow или сбросьте выбор.",
+ sessionLaunchFlowsLoading: "Загружаем Flow, чтобы проверить выбранный…", sessionLaunchFlowsFailed: "Не удалось загрузить Flow, поэтому выбранный Flow нельзя проверить. Повторите или сбросьте выбор.", sessionOpeningCreateNew: "Создать новую сессию", sessionOpeningDetails: "Технические подробности", commandsHint: "Нажмите /, чтобы открыть команды. Чтобы ввести саму косую черту, сразу нажмите Escape.",
+ launchFlow: "Flow для сессии (необязательно)", launchFlowGone: "{{title}} · больше не в работе", launchFlowUnchecked: "{{id}} · ещё не проверен", launchMessage: "Первое сообщение (черновик)",
   goToController: "Перейти к управлению сессией",
   sessionOpeningRejected: "Машина отклонила открытие этой сессии.",
 

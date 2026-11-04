@@ -1,4 +1,9 @@
 export default {
+  reviewGaps: "Что нужно проверить вручную",
+  missingStepsCount: "Критериев без шагов проверки: {{count}}",
+  missingEvidenceCount: "Критериев без привязанных материалов или исключений: {{count}}",
+  manualReviewNext: "Перед решением откройте результат работы и проверьте эти критерии вручную.",
+
  rejectFlowEffect:'Представленный состав Flow будет окончательно отклонён. Принятые задачи не меняются.',flowRejected:'Результат Flow отклонён',
  evidenceLoading:'Загружаются отчёты…',evidenceUnavailable:'Отчёты недоступны. Загрузите их перед решением.',evidenceRetry:'Повторить загрузку отчётов',
  historyTitle:'История решений по проверке',historyLoading:'Загружается история проверки…',historyUnavailable:'История проверки недоступна',historyRetry:'Повторить загрузку истории',historyEmpty:'Решения о возврате не записаны',historyResult:'Проверенный результат',historyDecision:'Решение о возврате',historyCriterion:'Критерий {{position}}',historyMore:'Загрузить предыдущие решения',

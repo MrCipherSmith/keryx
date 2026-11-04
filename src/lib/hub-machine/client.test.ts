@@ -10,6 +10,34 @@ test('grant application checks exact binding, server deadline and monotonic requ
     expect(verifyAuthorizationGrant(grant, { ...authorization, commandId: 'different', authorizedBy: 'human' }, now, 10)).toBe(false);
     expect(verifyAuthorizationGrant(grant, { ...authorization, commandId: 'c', authorizedBy: 'human' }, now, 5000)).toBe(false);
 });
+test('grant application tolerates small Hub clock lead without extending either deadline', () => {
+    const now = Date.now();
+    const expected = { ...authorization, commandId: 'c', authorizedBy: 'human' };
+    const grant = (lead: number) => ({
+        ...expected,
+        grantId: 'g',
+        authorizedAt: new Date(now + lead).toISOString(),
+        expiresAt: new Date(now + lead + 5000).toISOString(),
+    });
+    expect(verifyAuthorizationGrant(grant(75), expected, now, 10)).toBe(true);
+    expect(verifyAuthorizationGrant(grant(250), expected, now, 10)).toBe(true);
+    expect(verifyAuthorizationGrant(grant(251), expected, now, 10)).toBe(false);
+    expect(verifyAuthorizationGrant(grant(75), expected, now + 5075, 10)).toBe(false);
+    expect(verifyAuthorizationGrant(grant(75), expected, now, 5000)).toBe(false);
+});
+test('grant application rejects a grant that expires at or before it was issued', () => {
+    const now = Date.now();
+    const expected = { ...authorization, commandId: 'c', authorizedBy: 'human' };
+    const grant = (issuedOffset: number, expiresOffset: number) => ({
+        ...expected,
+        grantId: 'g',
+        authorizedAt: new Date(now + issuedOffset).toISOString(),
+        expiresAt: new Date(now + expiresOffset).toISOString(),
+    });
+    expect(verifyAuthorizationGrant(grant(200, 100), expected, now, 10)).toBe(false);
+    expect(verifyAuthorizationGrant(grant(100, 100), expected, now, 10)).toBe(false);
+    expect(verifyAuthorizationGrant(grant(0, 100), expected, now, 10)).toBe(true);
+});
 test('real HTTP enrollment uses exact v2 path and one-use body without bearer inheritance', async () => {
     let seen: unknown;
     const server = Bun.serve({ port: 0, fetch: async (r) => { seen = { url: new URL(r.url).pathname, auth: r.headers.get('authorization'), body: await r.json() }; return Response.json({ machineId: 'machine-a', secret: 's'.repeat(43) }); } });

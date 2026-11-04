@@ -1,0 +1,105 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-01 (hub-web source and i18n) keeps the existing layering: no import cycles inside features/remote, no new cross-feature reach into private modules, and the launch-to-composer draft hand-off goes through exported helpers. No blocker or major structural violation found. Five minor and one info observations: duplicated Flow-selection logic, the relocated Commands component's API, an observer that defeats the new settled-gate, a flag-driven draft state machine, and TSX/CSS structural coupling.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "const eligible = flows.data?.flows.filter(flow => flow.status === \"in-progress\") ?? [];",
+      "problem": "CreateSession now repeats the Flow query (same key [scopeKey, projectId, \"flows\"], same endpoint) and the rule that only an \"in-progress\" Flow can be attached to a session message. The rule already lived in MessageComposer and in the association picker; this change adds a third copy instead of lifting it.",
+      "impact": "No wrong behaviour today. The cost lands on whoever changes what makes a Flow eligible for a session message: three sites must change together, and two of them (sessions.tsx, work.tsx) also own a query with the same key and must keep an identical queryFn. A divergence would let the launch form offer a Flow the composer then refuses, or the reverse.",
+      "suggested_fix": "Add one hook next to the other remote helpers (for example useEligibleFlows(projectId) in features/remote/shared.tsx) that owns the query and the status filter, and call it from CreateSession and MessageComposer; association.tsx can adopt it later.",
+      "evidence": "keryx ctx rg 'in-progress' over apps/hub-web/src: work.tsx:118 (`flows.data?.flows.filter((f) => f.status === \"in-progress\")`), sessions.tsx:147, and association.tsx:13 (`f.status==='in-progress'`, pre-existing). Query: work.tsx:109-116 and sessions.tsx:149-152 use the identical key and `remoteProject(...) + \"/flows\"` path.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "quote": "specDigest: flow.specContentDigest, criteriaDigest, consent: false, consentVersion: null,",
+      "problem": "The mapping from a HubFlow to the draft's pin fields (flowId, flowVersion, specDigest, criteriaDigest) is now written twice in the same file: prepareFlowMessageDraft (new, used by launch) and the setDraft call inside selectFlow (existing). They are kept equal by hand.",
+      "impact": "No wrong behaviour today. If the pin gains a field or one of the digests changes derivation, a first message seeded at launch and a Flow picked later in the composer can carry different pins, and association() would then accept one and reject the other.",
+      "suggested_fix": "Extract the pin fields into one function, for example flowPin(flow, criteriaDigest), spread by both prepareFlowMessageDraft and selectFlow.",
+      "evidence": "work.tsx lines 47-53 (prepareFlowMessageDraft) against lines 136-156 (selectFlow, `flowVersion: flow.version, specDigest: flow.specContentDigest, criteriaDigest: digest`).",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "quote": "export function Commands({record,control,onOutcome,visible=true,focusToken=0}",
+      "problem": "Commands is now a child of the message composer (work.tsx imports it from ./settings and mounts it inside MessageComposer), but it still lives in settings.tsx, and its props now carry presentation protocol: `visible` plus a `focusToken` counter that the parent bumps to make the child run a focus effect.",
+      "impact": "No wrong behaviour today. A reader looking for the command catalogue goes to the settings module; the composer to settings dependency (work.tsx:28) runs against the module's name; and any new caller must learn that focus is requested by incrementing a number.",
+      "suggested_fix": "Move Commands (and its catalogue search) into its own module such as features/remote/commands.tsx next to work.tsx, and expose focus through a forwarded ref or an imperative handle instead of a counter prop. Keeping Confirmation in settings.tsx is fine.",
+      "evidence": "work.tsx:28 `import { Commands } from \"./settings\"`, work.tsx:261 passes visible and focusToken; settings.tsx:22 effect `if (visible) searchInput.current?.focus()` keyed on [visible, focusToken]. No cycle: settings.tsx imports neither work.tsx nor sessions.tsx (checked with an import grep over features/remote).",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "quote": "useEffect(()=>{if(receipt)onOutcome?.(receipt,invokedAt.current||new Date().toISOString(),anchor.current);},[receipt,onOutcome]);",
+      "problem": "OutcomeItem follows an operation only until it settles (`useAppliedReceipt(..., receipt => isSettled(receipt.status))`), with a comment saying a live query per outcome would refetch on every invalidation. Commands calls `useAppliedReceipt(record, action.data)` with no settled gate, on the same query key [\"operation\", sessionId, operationId], so the newest command's query keeps an enabled observer for as long as the composer stays mounted and the gate is moot for it. The same outcome is also held in three places: the mutation data, the parent `outcomes` state fed by this effect, and OutcomeItem's own follower.",
+      "impact": "Small: one operation query refetches on each invalidation after it has settled, which is the cost the settled gate was written to avoid. The larger cost is for the next editor: the effect carries a hidden contract (invoke() must write the invokedAt and anchor refs before the receipt arrives) and three copies of the outcome can disagree in what they show.",
+      "suggested_fix": "Pass the same `isSettled` predicate in Commands, or move isSettled next to useAppliedReceipt so every caller uses it. Longer term, let Commands only report the invocation (operationId, invokedAt, anchor) and let OutcomeItem own the following of the operation.",
+      "evidence": "settings.tsx:22 (Commands: `const observed=useAppliedReceipt(record,action.data)`; refs `invokedAt`/`anchor` written in invoke()) against sessions.tsx OutcomeItem (`useAppliedReceipt<Control[\"CommandOutcome\"]>(record, item.outcome, receipt => isSettled(receipt.status))`). remote-hooks.ts useAppliedReceipt builds the key from `initial?.operationId`, so both resolve to the same query.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "quote": "...(!draft.text||draft.prepared?{prepared:false,sessionVersion:record.version,configVersion:record.config.configVersion}:{})",
+      "problem": "The new `prepared` flag turns the message draft into an implicit state machine spread over five sites (seeded by prepareFlowMessageDraft, cleared by the pinning effect, by editText, by the post-send reset, and checked in `stale` and `submit`). One path looks odd: for a prepared draft with an empty first message, the first keystroke while the session is still \"opening\" clears `prepared` and pins sessionVersion/configVersion to the opening record, which skips the pinning effect meant for the opened session.",
+      "impact": "Possible only if the record's version or config version changes when the session leaves \"opening\" (sessions are created at version 1 and the open event replaces the record, so it may). In that case the composer would show the stale notice and ask for a rebase on a draft the user only just typed. This is not confirmed, so it is info.",
+      "suggested_fix": "A test that opens a Flow-seeded session with an empty first message, types during \"opening\", then moves the record to idle with a higher version and asserts that no stale notice appears would settle it. If it does show the notice, have editText keep `prepared` until the record has left \"opening\", or represent the draft phase as one field (`phase: \"seeded\" | \"pinned\"`) instead of a boolean plus two zeroed versions.",
+      "evidence": "work.tsx effect on [draft.prepared, record.state, ...] returns early while `record.state === \"opening\"`; editText clears `prepared` on the first character regardless of state; hub sessions.ts:44 creates the record with `version: 1` in the opening state. Existing tests mentioning opening/prepared: remote.case.tsx (8 mentions); I did not find a case for the typing-during-opening path.",
+      "confidence": "low",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/session-workspace.css",
+      "quote": ".session-composer > .hub-panel > .hub-panel-header {",
+      "problem": "Feature CSS now depends on the exact markup of the shared Panel and on component nesting: the composer's Panel header is hidden by a child-combinator chain because Commands renders its own titled Panel inside the composer's Panel (a descendant selector would hide both). Elsewhere the same change couples TSX to CSS class names: App.tsx focuses `button:not(.desktop-rail-toggle)`, and the header Navigation button is now found by `.session-header-actions > button[aria-expanded]` instead of `:first-child`.",
+      "impact": "No wrong behaviour today. If Panel wraps its header, or Commands is placed anywhere else in the composer, the composer title silently reappears or the Commands title disappears; the selector `[aria-expanded]` would also hide any later button in the header actions that gains that attribute.",
+      "suggested_fix": "Give Panel an explicit prop (for example `hideHeader` or `variant=\"bare\"`) and let MessageComposer and Commands choose, rather than styling by position; give the Navigation button and the rail toggle a named class or data attribute and select on that.",
+      "evidence": "ui.tsx Panel renders `<section class=\"hub-panel\"><header class=\"hub-panel-header\">`; work.tsx:217 Panel title=message with Commands (its own Panel title=commands) mounted at work.tsx:261; App.tsx effect `querySelector(\"button:not(.desktop-rail-toggle)\")`; session-workspace.css rules at lines ~736 and ~826 of the diff.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Architecture summary, slice-01
+
+No blocker or major. The change keeps the layering it found: no new import cycle in `features/remote` (checked: `sessions.tsx` imports `work`, `settings`, `session-timeline`; `work.tsx` imports `settings` and `session-timeline`; `settings.tsx` imports only `session-timeline`), `useRemoteQuery` gains a data-aware `enabled` without changing existing callers, the launch form seeds the composer through exported `messageDraftKey` and `prepareFlowMessageDraft`, and the launch gating is a pure function (`firstUnmetLaunchCondition`). Component-level data fetching is the established convention here (siblings do the same), so it is not flagged.
+
+What I would tidy, none of it blocking:
+
+- **F-001** The "eligible Flow" rule and its query now exist in three places (`sessions.tsx`, `work.tsx`, `association.tsx`).
+- **F-002** The Flow-to-pin field mapping is written twice in `work.tsx`.
+- **F-003** `Commands` is now a composer child but still lives in `settings.tsx` and takes a `focusToken` counter prop.
+- **F-004** `Commands` follows its operation without the settled gate that `OutcomeItem` introduced, on the same query key, so the gate does not hold for the newest command.
+- **F-005 (info)** The `prepared` draft flag is a hidden state machine; the typing-during-opening path with an empty first message may raise a stale notice. Unconfirmed; a test would settle it.
+- **F-006** Feature CSS depends on `Panel` markup and on nesting, and TSX depends on a class name for focus.
+
+Not covered: slice-02 (tests, machine client). Local test failures noted in the dispatch were not examined, as they are outside this slice. No git history was needed; the one deliberate-looking choice read in full was the `settled` gate (comment and code in `OutcomeItem`), which I did not dispute, only its missing counterpart in `Commands`.
+
+Routing audit: graph_used: payload `layers` block only (affected files, callers); wiki_used: not-relevant (no wiki pages for these files); ctx_used: yes (`keryx ctx rg`, `keryx ctx read`); raw_rg_used: no.

@@ -1,0 +1,82 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "slices": ["slice-01"],
+  "summary": "No blocker or major performance finding in slice-01. Two minor findings (labels fetched through whole-collection reads; the command panel now re-renders on every composer keystroke) and two info observations. The PR's own cost-control work (settled-operation stop, memoised History derivations, lazy catalogue mount) holds up against the code.",
+  "findings": [
+    {
+      "id": "PERF-001",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/context.tsx",
+      "quote": "const documents = useResource<{documents: HubDocument[]}>('documents');",
+      "problem": "HistoryView now reads the project's whole `documents` collection (and `flows`) only to turn an event's entityId into a path or title label. The documents list route returns full HubDocument rows including `content` (src/hub/domain.ts: `{ documents: state.documents.filter((d) => d.projectId === p.id) }`, no projection), so the History tab downloads every wiki and spec body to print a file path. The same shape appears in SessionsView, which now observes the `machines` query (inventory with checkouts and agent profiles) on the sessions list only to show `displayName`; that observer also stays mounted while a session detail is open because SessionsView returns SessionDetail from the same component.",
+      "impact": "Opening History in a project with many or large documents adds a payload proportional to total document text, on top of the 500-event page it already loads. The queries share the 15 s staleTime cache with the Documents and Proposals tabs, so a user who visited those first pays nothing; a user who goes straight to History pays it. A `context` invalidation frame (`kinds.has('context')` returns true for every project query in browser-invalidations.ts) refetches the full list again while History is open, and `machine` frames refetch the machines inventory while a sessions page is open. Rendering is not blocked (ReadState gates only on events.isPending), so the cost is bandwidth and background refetch, not a wrong screen. Size of a real project's /documents response is not in the diff; measuring it would settle whether this matters.",
+      "suggested_fix": "Resolve labels from a manifest-shaped read (id, path, kind, version, contentDigest; the context route already builds this shape in domain.ts) or add a projection to the list route, rather than reusing the full-content collection. For machines, derive the display name from the session payload or accept the extra observer knowingly; at minimum scope it to when the list is on screen.",
+      "evidence": "context.tsx HistoryView: `useResource('flows')` and `useResource('documents')` feed only `flowNames`/`documentNames` Maps used for button labels. domain.ts line 98 returns unprojected documents. sessions.tsx SessionsView line 55 `useRemoteQuery(['machines'], ...)` feeds a single `.find(...)?.displayName`. No before/after payload measurement is in the PR.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PERF-002",
+      "severity": "minor",
+      "file": "apps/hub-web/src/features/remote/work.tsx",
+      "quote": "<Commands record={record} control={control} onOutcome={onCommandOutcome} visible={commands === \"open\"} focusToken={focusToken} />",
+      "problem": "Commands is now a child of MessageComposer and stays mounted (hidden) after its first open. MessageComposer re-renders on every keystroke because its draft lives in the zustand store, so the whole Commands body re-renders per keystroke too: the catalogue `.filter(...)` for search, the `<option>` list for every entry, and, when a command is selected, `JSON.stringify(entry.inputSchema, null, 2)` for the schema `<pre>`. Before this change Commands sat in the settings slot, a sibling of the composer under SessionSurface, so typing a message did not re-render it. Commands is not wrapped in React.memo.",
+      "impact": "Hot path is every keypress in a message field of up to 32768 chars, in any session where the command panel was opened once. Catalogue size is not in the diff but is a native command list (tens of entries), so the per-keystroke cost is small and no user-visible lag is claimed; it is wasted work that grows with catalogue size and schema size and lands on whoever next adds weight to this panel.",
+      "suggested_fix": "Wrap Commands in React.memo and keep its props referentially stable (`onOutcome` is already a useCallback; `control` would need to be memoised in useController or only the fields Commands reads passed down), or compute the schema string with useMemo keyed on `entry`. Unmounting the panel on close and keeping its state in the existing draft store is the other option.",
+      "evidence": "work.tsx lines 258-262 mount Commands inside MessageComposer; settings.tsx Commands body filters `query.data.entries` and calls JSON.stringify(entry.inputSchema) in render with no memoisation. session-workspace.tsx lines 319-325 show the old placement: `{settings}` in its own panel, not under the composer.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PERF-003",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/sessions.tsx",
+      "quote": "{outcome.result !== null && <pre className=\"whitespace-pre-wrap break-all\">{formatResult(outcome.result)}</pre>}",
+      "problem": "OutcomeItem calls JSON.stringify(result, null, 2) on every render, and OutcomeItem is not memoised. History re-renders whenever SessionSurface re-renders (each session, history or queue refetch), so every outcome in the tab-local list is re-stringified each time.",
+      "impact": "Result is a BoundedJson (a command's output, a few KB for help-style commands) and outcomes are user-invoked, so tens at most. Cost is sub-millisecond per render; no trigger that makes it user-visible is reachable from the diff. Recorded so the next person who raises the result bound or makes outcomes persistent knows the stringify is unmemoised.",
+      "suggested_fix": "useMemo(() => formatResult(outcome.result), [outcome.result]) inside OutcomeItem.",
+      "evidence": "sessions.tsx OutcomeItem and formatResult; `outcomes` is an unbounded tab-local array in SessionSurface state, appended per invoked command.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "PERF-004",
+      "severity": "info",
+      "file": "apps/hub-web/src/features/remote/settings.tsx",
+      "quote": "const observed=useAppliedReceipt(record,action.data);const receipt=observed.data??action.data;const queryClient=useQueryClient();",
+      "problem": "The PR adds a `settled` stop to useAppliedReceipt and uses it in OutcomeItem, with a comment that a live query per outcome would refetch on every invalidation for the tab's lifetime. Commands calls useAppliedReceipt without `settled`, and it observes the same query key (`['operation', sessionId, operationId]`) for the latest invoked command, so that one operation keeps refetching on every `session`, `history`, `queue`, `config` or `command-catalogue` frame (browser-invalidations.ts `kind==='operation'`) even after it is applied or rejected.",
+      "impact": "Bounded to one operation at a time (the observer moves when action.data changes), one extra GET per coalesced frame after a command has settled. This is not a regression: Commands was already mounted in the always-mounted settings slot and followed the operation the same way before. Recorded because it makes the OutcomeItem comment true only for older outcomes, not the newest.",
+      "suggested_fix": "Pass the same settled predicate (`status === 'applied' || status === 'rejected'`) from Commands, sharing the `isSettled` helper from sessions.tsx.",
+      "evidence": "remote-hooks.ts useAppliedReceipt `enabled` function; browser-invalidations.ts line 26; settings.tsx Commands vs sessions.tsx OutcomeItem call sites.",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+## Performance review, PR 1124, slice-01
+
+Scope: slice-01 (16 files, hub-web source and i18n half), read in full; working-tree files and the invalidation, draft-store and Hub documents route code read to settle the questions below. No tests run (read-only dispatch).
+
+**No blocker or major.** Nothing in this slice takes a request, tab or process down, and no named load level produces a user-visible regression.
+
+**Minor.** PERF-001: History fetches the whole documents collection (full bodies) and flows to print labels, and the sessions list now holds a machines observer for a display name. PERF-002: the command panel, now mounted under the composer, re-renders on every keystroke in the message field; small cost today.
+
+**Info.** PERF-003: unmemoised JSON.stringify of command results per render. PERF-004: Commands does not use the new `settled` stop, so the newest operation keeps being followed after it settles (not a regression).
+
+**Checked and clean.**
+- `useRemoteQuery`/`useAppliedReceipt` function-form `enabled`: valid on the pinned @tanstack/react-query 5.105.0; a settled, unobserved operation drops out of invalidation refetches.
+- HistoryView derivations (`items`, `visible`, `eventTypes`, name maps) are memoised on `events.data` and filter state.
+- Catalogue fetch moved from always-on (settings slot is mounted but hidden) to lazy on first open; a net reduction.
+- CreateSession and the composer share the `[scope, project, 'flows']` query key, so the new Flow select adds no second fetch.
+- `latestHistoryCursor` walks loaded pages once at invoke time, not per render.
+- Event listeners and timers added in this slice: none without cleanup. Nav collapse and CSS changes carry no render cost.
+- Message transcript re-render and per-render Map/sort in History predate this change; `mergeTimeline` adds one linear pass.
+
+Routing audit: graph_used: layers block in payload (symbols, callers); wiki_used: not-relevant; ctx_used: yes; raw_rg_used: no.

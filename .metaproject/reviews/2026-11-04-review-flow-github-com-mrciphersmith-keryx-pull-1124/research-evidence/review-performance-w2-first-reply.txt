@@ -1,0 +1,39 @@
+STATUS: DONE
+
+```json
+{
+  "reviewer": "review-performance",
+  "slices": ["slice-02"],
+  "findings": []
+}
+```
+
+## Performance review, slice-02
+
+Covered `slice-02` in full: 18 files, the remaining i18n catalogues, `styles.css`, the hub-web test suite, and `src/lib/hub-machine/client.ts` with its test. No finding reaches `minor` or above.
+
+**Clean areas, with the hot path checked for each**
+
+- `client.ts` `verifyAuthorizationGrant`: the change adds `MAX_HUB_CLOCK_LEAD_MS` and an `expires > issued` comparison to an existing boolean expression. There are no new allocations, loops or I/O. It runs once per authorization grant, so there is no frequency at which it becomes a cost.
+- `styles.css`:
+  - The select chevron is an inline `data:` SVG held in a custom property (`--hub-select-chevron`), declared twice (light and dark). Every `.hub-select` resolves the same URL, so the browser decodes and caches it once. About 400 bytes per theme.
+  - The collapsed-rail rules use shallow descendant selectors inside `:is(...)`, under a single class gate (`.rail-collapsed`). Selector matching cost is negligible.
+  - `@layer components` wrapping is a cascade-order change, not a rendering cost. `appearance:none` on the select drops no layout work.
+  - The whole stylesheet is 14.7 KB and `session-workspace.css` is 8.5 KB, so neither is a bundle concern.
+- i18n catalogues: `remote.en.ts`, `remote.ru.ts`, `workflow.en.ts` and `workflow.ru.ts` only add string keys to static objects that are already loaded eagerly. Nothing is added per render.
+- `apps/hub-web/tests/css-rules.ts`: `parseCssRules` walks the stylesheet once per call with `buffer += ch` over about 15 KB to 24 KB. That is trivial, and it runs only inside the test process. `breadcrumb.case.tsx` parses once at module scope. `session-workspace.case.tsx` parses once or twice per test.
+- Tests that cover performance-relevant production behaviour assert the right thing:
+  - `context.case.tsx` ("does not re-derive History events when only the type filter changes") pins `mergeEvents` call count across a filter change.
+  - `session-command-outcomes.case.tsx` ("a settled outcome stops being fetched") pins that a settled operation is no longer polled while a queued one keeps following.
+  - I did not review the production code those tests cover. It sits in slice-01 files (`work.tsx`, `settings.tsx`, `session-timeline.ts`).
+  - The existing 1000 ms `refetchInterval` in `features/remote/shared.tsx` (line 33) is outside the diff and already stops on error or `applied`.
+- `browser-journeys.e2e.mjs`: the `fit()` helper walks ancestors with `getComputedStyle` per element. The `openCommands` helper adds one attribute read and at most one click per call. This is a manual e2e harness that runs a handful of times per journey, so it is not a hot path.
+- Memory leaks, unbounded collections, N+1, bundle imports, synchronous blocking and pagination: no site in this slice's diff. The test files add `readFileSync` only in test setup.
+
+**Not settled, for the record**
+
+- The two local failures named in DISPATCH (`R4.4` bridge observation timeout and `client.test.ts:134`) are outside this slice's performance scope, and CI is green at this head. I make no performance claim about either.
+
+Checks run: `keryx ctx rg` for polling and interval sites under `apps/hub-web/src/features/remote`, and `wc -c` on both stylesheets. Graph, wiki and memory layers were empty for these files, as the payload stated.
+
+routing audit: graph_used: no (payload layers block read; not relevant to a diff of tests, CSS and strings), wiki_used: no (not-relevant), ctx_used: yes, raw_rg_used: no

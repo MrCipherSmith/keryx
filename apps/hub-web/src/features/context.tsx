@@ -1,8 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { getJson, postJson, errorMessage } from '../api/client';
-import type { CodeRevision, CodeRevisionSummary, Delivery, HubDocument, HubEvent, ImportResponse, Project, Proposal } from '../api/types';
+import type { CodeRevision, CodeRevisionSummary, Delivery, HubDocument, HubEvent, HubFlow, ImportResponse, Project, Proposal } from '../api/types';
 import { useHub } from '../app/hub-context';
 import { useDraft } from '../state/drafts';
 import { Button, EmptyState, Field, Input, Notice, PageHeading, Panel, Select, StatusBadge, Textarea } from '../components/ui';
@@ -153,6 +153,7 @@ function ProposalForm({ document: doc }: { document: HubDocument }) {
 
 export function ProposalsView() {
   const { t } = useTranslation('context');
+  const { navigate } = useHub();
   const proposals = useResource<{ proposals: Proposal[] }>('proposals');
   const documents = useResource<{ documents: HubDocument[] }>('documents');
   const [filter, setFilter] = useState('pending');
@@ -160,7 +161,12 @@ export function ProposalsView() {
   return <><PageHeading title={t('proposals')} description={t('proposalsDescription')} />
     <div className="mb-5 max-w-xs"><Field label={t('proposals')}><Select value={filter} onChange={event => setFilter(event.target.value)}>{['all', 'pending', 'accepted', 'rejected'].map(value => <option key={value} value={value}>{t(value)}</option>)}</Select></Field></div>
     <ReadState pending={proposals.isPending || documents.isPending} error={proposals.error || documents.error} retry={() => { void proposals.refetch(); void documents.refetch(); }}>
-      <div className="space-y-5">{filtered.length ? filtered.map(proposal => <ProposalCard key={`${proposal.id}:${proposal.version}:${proposal.contentDigest}`} proposal={proposal} document={documents.data?.documents.find(doc => doc.id === proposal.documentId)} />) : <EmptyState>{t('noProposals')}</EmptyState>}</div>
+      <div className="space-y-5">{filtered.length ? filtered.map(proposal => <ProposalCard key={`${proposal.id}:${proposal.version}:${proposal.contentDigest}`} proposal={proposal} document={documents.data?.documents.find(doc => doc.id === proposal.documentId)} />) : <EmptyState>
+        <p>{t(proposals.data?.proposals.length ? 'noMatchingProposals' : 'noProposals')}</p>
+        <Button variant="secondary" className="mt-3" onClick={() => proposals.data?.proposals.length ? setFilter('all') : navigate({tab:'documents',documentId:undefined})}>
+          {proposals.data?.proposals.length ? t('all') : t('documents')}
+        </Button>
+      </EmptyState>}</div>
     </ReadState></>;
 }
 
@@ -271,7 +277,7 @@ function RevisionFiles({ revision, project }: { revision: CodeRevision; project:
 
 export function DeliveryView() {
   const { t, i18n } = useTranslation('context');
-  const { principal } = useHub();
+  const { principal, navigate } = useHub();
   const project = useResource<Project>('project');
   const deliveries = useResource<{ deliveries: Delivery[] }>('deliveries');
   const revisions = useRevisionSummary(project.data?.lineRevisionId);
@@ -279,7 +285,12 @@ export function DeliveryView() {
   return <><PageHeading title={t('delivery')} description={t('deliveryDescription')} />
     <ReadState pending={project.isPending || (!!project.data?.lineRevisionId && revisions.isPending) || deliveries.isPending} error={project.error || revisions.error || deliveries.error} retry={() => { void project.refetch(); void revisions.refetch(); void deliveries.refetch(); }}>
       {project.data ? <Panel title={t('selectedLine')}><p className="break-all font-mono text-sm text-slate-700">{project.data.lineRevisionId ?? t('noLine')}</p><p className="text-xs text-slate-500">{t('lineVersion')}: {project.data.lineVersion}</p></Panel> : null}
-      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>{t('deliveryUnavailable')}</Notice>}</div>
+      <div className="my-5">{principal.kind !== 'human' ? <Notice>{t('humanRequired')}</Notice> : project.data && selected && selected.purpose !== 'review-bundle' ? <DeliveryForm project={project.data} /> : <Notice>
+        <p>{t('deliveryUnavailable')}</p>
+        <Button variant="secondary" className="mt-3" onClick={() => navigate({tab:'code',revisionId:undefined})}>
+          {t('chooseDeliveryRevision')}
+        </Button>
+      </Notice>}</div>
       <div className="space-y-4">{deliveries.data?.deliveries.length ? [...deliveries.data.deliveries].reverse().map(delivery => <Panel key={delivery.id} title={<span className="break-all">{delivery.baseBranch} · {delivery.revisionId.slice(0, 12)}</span>}>
         <StatusBadge status={delivery.status} /><p className="break-all text-sm text-slate-600">{delivery.remoteUrl}</p>
         {delivery.error ? <Notice tone="error"><code>{delivery.error}</code></Notice> : null}
@@ -315,17 +326,31 @@ function DeliveryForm({ project }: { project: Project }) {
 
 export function HistoryView() {
   const { t, i18n } = useTranslation('context');
-  const { projectId, scopeKey } = useHub();
+  const { projectId, scopeKey, navigate, principal } = useHub();
+  const [eventType, setEventType] = useState('');
+  const flows = useResource<{flows: HubFlow[]}>('flows');
+  const documents = useResource<{documents: HubDocument[]}>('documents');
   const events = useInfiniteQuery({
     queryKey: [scopeKey, projectId, 'events'], initialPageParam: 0,
     queryFn: ({ pageParam, signal }) => getJson<{ events: HubEvent[]; cursor: number }>(`${projectPath(projectId)}/events?after=${pageParam}`, signal),
     getNextPageParam: (last, _pages, previousCursor) => last.events.length === 500 && last.cursor > previousCursor ? last.cursor : undefined,
     enabled: Boolean(projectId),
   });
-  const items = mergeEvents(events.data?.pages.map(page => page.events) ?? []);
+  // History grows by up to 500 events per page; derive once per data change, not per render.
+  const items = useMemo(() => mergeEvents(events.data?.pages.map(page => page.events) ?? []), [events.data]);
+  const visible = useMemo(() => items.filter(event => !eventType || event.type === eventType), [items, eventType]);
+  const eventTypes = useMemo(() => [...new Set(items.map(event => event.type))].sort(), [items]);
+  const flowNames = useMemo(() => new Map(flows.data?.flows?.map(flow => [flow.id, flow.title])), [flows.data]);
+  const documentNames = useMemo(() => new Map(documents.data?.documents?.map(doc => [doc.id, doc.path])), [documents.data]);
   return <><PageHeading title={t('history')} description={t('historyDescription')} />
     <ReadState pending={events.isPending} error={events.error} retry={events.refetch}>
-      {items.length ? <Panel><ol className="space-y-0">{items.map(event => <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div><p className="mt-2 break-all font-mono text-xs text-slate-600">{event.entityId}</p></li>)}</ol></Panel> : <EmptyState>{t('noHistory')}</EmptyState>}
+      {items.length > 0 && <div className="mb-4 max-w-sm"><Field label={t('historyEventType')}><Select value={eventType} onChange={event => setEventType(event.target.value)}>
+        <option value="">{t('all')}</option>
+        {eventTypes.map(type => <option key={type} value={type}>{t(`event.${type}`, {defaultValue:type})}</option>)}
+      </Select></Field></div>}
+      {visible.length ? <Panel><ol className="space-y-0">{visible.map(event => <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId === principal.id ? principal.email ?? t('historyYou') : event.actorId}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div>{flowNames.has(event.entityId) && <Button variant="ghost" className="max-w-full" onClick={() => navigate({tab:'flows',flowId:event.entityId})}><span className="min-w-0 break-all text-left">{flowNames.get(event.entityId)}</span></Button>}
+        {documentNames.has(event.entityId) && <Button variant="ghost" className="max-w-full" onClick={() => navigate({tab:'documents',documentId:event.entityId})}><span className="min-w-0 break-all text-left">{documentNames.get(event.entityId)}</span></Button>}
+        <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">{t('historyIdentifiers')}</summary><p className="break-all font-mono">{event.entityId} · {event.actorId}</p></details></li>)}</ol></Panel> : <EmptyState>{t(items.length ? 'historyNoMatchingEvents' : 'noHistory')}</EmptyState>}
       <div className="mt-5">{events.hasNextPage ? <Button variant="secondary" disabled={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>{t('loadMore')}</Button> : items.length ? <p className="text-center text-xs text-slate-500">{t('endOfHistory')}</p> : null}</div>
     </ReadState></>;
 }

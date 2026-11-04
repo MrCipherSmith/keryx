@@ -99,6 +99,10 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
   if (selected) return <FlowDetail key={`${projectId}:${selected}`} projectId={projectId} flowId={selected} documents={documents.data?.documents ?? []} />;
   const filtered = flows.data?.flows.filter(flow => `${flow.title} ${flow.specContentDigest}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
   return <div className="space-y-6"><PageHeading title={title} description={t('boardDescription')} action={<Button variant={creating ? 'secondary' : 'primary'} onClick={() => setCreating(!creating)}>{creating ? t('cancel') : t('createFlow')}</Button>} />
+    <Notice>
+      <p>{t('flowWorkspaceDistinction')}</p>
+      <Button variant="secondary" className="mt-2" onClick={() => hub.navigate({tab:'work',flowId:undefined,intentId:undefined,attemptId:undefined})}>{t('openManagedWork')}</Button>
+    </Notice>
     {creating && <Panel title={t('createFlow')}><form noValidate onSubmit={submit} className="grid gap-5 lg:grid-cols-2">
       <Field label={t('flowTitle')}><input className={inputClass} value={draft.title} onChange={event => setDraft(old => ({ ...old, title: event.target.value }))} placeholder={t('flowTitlePlaceholder')} maxLength={500} required /></Field>
       <Field label={t('specification')}><select className={inputClass} value={draft.specDocumentId} onChange={event => setDraft(old => ({ ...old, specDocumentId: event.target.value }))} required><option value="">{t('chooseSpecification')}</option>{specs.map(spec => <option key={spec.id} value={spec.id}>{spec.path}</option>)}</select></Field>

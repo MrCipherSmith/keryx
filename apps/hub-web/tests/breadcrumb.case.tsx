@@ -5,12 +5,14 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, test, vi } from "vitest";
 import i18n from "../src/i18n";
 import { App, queryClient } from "../src/app/App";
 import { resetClient, setAuthLossHandler } from "../src/api/client";
 import { navigate } from "../src/app/navigation";
 import { useDraftStore } from "../src/state/drafts";
+import { parseCssRules, selectorAlternatives } from "./css-rules";
 const principal = {
   id: "operator",
   kind: "human",
@@ -51,7 +53,8 @@ for (const [language, label] of [
     await act(() => i18n.changeLanguage(language));
     navigate({ projectId: project.id, tab: "machines" }, true);
     render(<App />);
-    const name = await screen.findByTitle(project.name);
+    // The sidebar project button carries the same title (its collapsed-rail name); the header crumb is the truncating one.
+    const name = (await screen.findAllByTitle(project.name)).find((el) => el.classList.contains("truncate"))!;
     const breadcrumb = screen.getByRole("button", { name: label });
     expect(breadcrumb.tagName).toBe("BUTTON");
     expect(breadcrumb).toHaveAttribute("type", "button");
@@ -91,7 +94,83 @@ test("mobile navigation Escape returns focus to the opening button", async () =>
   fireEvent.click(opener);
   const nav = screen.getByRole("navigation");
   await waitFor(() => expect(nav.contains(document.activeElement)).toBe(true));
+  // The rail toggle is display:none below 1024px; focus must not land on it.
+  expect(document.activeElement!.classList).not.toContain(
+    "desktop-rail-toggle",
+  );
   fireEvent.keyDown(document.activeElement!, { key: "Escape" });
   expect(opener).toHaveAttribute("aria-expanded", "false");
   expect(opener).toHaveFocus();
+});
+
+const css = parseCssRules(readFileSync("src/styles.css", "utf8"));
+
+test("collapsed rail keeps an icon-only Sign out reachable", async () => {
+  await act(() => i18n.changeLanguage("en"));
+  navigate({ projectId: null, tab: "overview" }, true);
+  render(<App />);
+  await screen.findByText(principal.email);
+  const signOut = screen.getByRole("button", { name: "Sign out" });
+  expect(signOut.querySelector(".nav-label")).not.toBeNull();
+  expect(signOut).toHaveAttribute("title", "Sign out");
+  // No collapsed-rail rule may hide the identity block or its button; only the
+  // text children (.nav-label, .identity > p) are hidden.
+  const hidden = css
+    .filter((rule) => rule.selector.includes(".rail-collapsed"))
+    .filter(
+      (rule) =>
+        /^none(\s*!important)?$/i.test(rule.decls.get("display") ?? "") ||
+        /^hidden(\s*!important)?$/i.test(rule.decls.get("visibility") ?? ""),
+    )
+    .flatMap((rule) => selectorAlternatives(rule.selector));
+  expect(hidden.length).toBeGreaterThan(0);
+  for (const alternative of hidden) {
+    expect(alternative).not.toMatch(/\.identity(\s*>\s*\*)?$/);
+    expect(alternative).not.toMatch(/\.hub-button$/);
+  }
+});
+
+test("hub-select chevron rule leaves background-color to the layered disabled fill", () => {
+  const selectRules = css.filter(
+    (rule) => /\.hub-select\b/.test(rule.selector),
+  );
+  expect(selectRules.length).toBeGreaterThan(0);
+  for (const rule of selectRules) {
+    expect(rule.decls.has("background")).toBe(false);
+    expect(rule.decls.has("background-color")).toBe(false);
+  }
+  expect(selectRules.some((rule) => rule.decls.has("background-image"))).toBe(true);
+});
+
+test("collapsed rail keeps the project switcher as initials and layers its rules", async () => {
+  // The collapsed rail hides only the project name text and heading, never the buttons.
+  const hiddenRules = css.filter((rule) => rule.selector.includes(".rail-collapsed") && /^none/i.test(rule.decls.get("display") ?? ""));
+  const alternatives = hiddenRules.flatMap((rule) => selectorAlternatives(rule.selector));
+  expect(alternatives.some((a) => /\.sidebar-projects\s+\.truncate$/.test(a))).toBe(true);
+  for (const a of alternatives) expect(a).not.toMatch(/\.sidebar-projects$/);
+  // Unlayered author rules beat Tailwind utilities; rail and Select rules stay in @layer components.
+  for (const rule of css.filter((r) => r.selector.includes(".rail-collapsed") || /\.hub-select\b/.test(r.selector)))
+    expect(rule.layered, rule.selector).toBe(true);
+
+  await act(() => i18n.changeLanguage("en"));
+  navigate({ projectId: project.id, tab: "machines" }, true);
+  render(<App />);
+  const initial = (await screen.findAllByText(project.name.slice(0, 1))).find((el) => el.classList.contains("project-initial"))!;
+  const button = initial.closest("button")!;
+  expect(button).toHaveAttribute("aria-label", project.name);
+  expect(button).toHaveAttribute("title", project.name);
+});
+
+test("select chevron reads the muted token and makes no image request", () => {
+  // The Hub serves every web asset with `default-src 'self'` and no `img-src`
+  // (src/hub/server.ts), so an image request for the chevron is refused and the
+  // control shows its reserved space with no arrow. A gradient is not an image
+  // request and reads the token directly, so it needs no per-theme copy.
+  const select = css.find((r) => /^\.hub-select:not/.test(r.selector) && r.decls.has("background-image"))!;
+  const chevron = select.decls.get("background-image")!;
+  expect(chevron).toContain("var(--hub-muted)");
+  expect(chevron).not.toMatch(/url\(/);
+  for (const rule of css)
+    for (const property of ["background", "background-image"])
+      expect(rule.decls.get(property) ?? "", `${rule.selector} { ${property} }`).not.toMatch(/url\(\s*["']?data:/);
 });

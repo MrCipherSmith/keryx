@@ -1,0 +1,19 @@
+serving http://127.0.0.1:7783
+rule under test:
+.hub-select:not([multiple]):not([size]) {
+  appearance:none;
+  padding-inline-end:2.5rem;
+  /* Longhands only: the rule must not reset background-color, or it
+     overrides the .hub-input:disabled fill. The chevron is two gradient
+     strokes, not an image: the Hub serves this app with `default-src 'self'`
+     and no `img-src` (src/hub/server.ts), so a data: URI is refused and the
+     control would show reserved space and no arrow. A gradient is not an
+     image request, and it reads --hub-muted directly, so the colour needs no
+     per-theme copy. The two halves meet to form the chevron: `\` then `/`. */
+  background-image:
+    linear-gradient(45deg, transparent calc(50% - .7px), var(--hub-muted) calc(50% - .7px), var(--hub-muted) calc(50% + .7px), transparent calc(50% + .7px)),
+    linear-gradient(135deg, transparent calc(50% - .7px), var(--hub-muted) calc(50% - .7px), var(--hub-muted) calc(50% + .7px), transparent calc(50% + .7px));
+  background-repeat: no-repeat, no-repeat;
+  background-position: right 1.125rem center, right .75rem center;
+  background-size: .375rem .375rem;
+}
