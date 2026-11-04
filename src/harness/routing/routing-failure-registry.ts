@@ -19,7 +19,15 @@ export class RoutingFailureRegistry {
 
   recordRateLimit(target: ModelRef, catalogRevision: string, retryAfterMs: number | undefined, now: Date): void {
     if (retryAfterMs === undefined || !Number.isFinite(retryAfterMs) || retryAfterMs <= 0) return;
-    this.#models.set(this.#key(target, catalogRevision), { target, catalogRevision, kind: "cooldown", expiresAtMs: now.getTime() + retryAfterMs });
+    const key = this.#key(target, catalogRevision);
+    const existing = this.#models.get(key);
+    if (existing?.kind === "model-unavailable") return;
+    this.#models.set(key, {
+      target,
+      catalogRevision,
+      kind: "cooldown",
+      expiresAtMs: Math.max(existing?.expiresAtMs ?? 0, now.getTime() + retryAfterMs),
+    });
   }
 
   recordAuthFailure(providerId: string): void {

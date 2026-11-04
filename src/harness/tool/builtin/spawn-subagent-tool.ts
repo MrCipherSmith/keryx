@@ -80,9 +80,14 @@ import {
 } from "../../../lib/external-providers";
 import { loadActiveRoutingV2 } from "../../routing/active-v2";
 import { MODEL_CLASSES, isModelClass, modelRefKey, type ModelRef } from "../../routing/model-class";
-import { loadModelProfiles, profileKey, type ModelProfile } from "../../routing/model-profile";
+import { loadModelProfiles, profileKey } from "../../routing/model-profile";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../../routing/routing-runtime";
-import { buildCatalogRoutingSnapshot, catalogRoutingRevision, estimateModelCostUsd } from "../../routing/snapshot-adapter";
+import {
+  buildCatalogRoutingSnapshot,
+  catalogRoutingRevision,
+  estimateModelCostUsd,
+  freshModelProfileAvailability,
+} from "../../routing/snapshot-adapter";
 import type { RoutingRequest } from "../../routing/routing-request";
 import { inspectProviderRoutingFacts, routingPolicyRevision } from "../../routing/provider-facts-v2";
 import { RoutingBudgetLedger } from "../../routing/routing-budget";
@@ -91,6 +96,7 @@ import { DEFAULT_JEV_ROUTING_TARGET } from "../../routing/classifier-adapters-v2
 import { createMeteredRoutingProvider } from "../../routing/routing-provider-v2";
 import type { RoutingReason } from "../../routing/decision";
 import { envWithSavedApiKeys } from "../../../lib/shell-config";
+import { hasCredential } from "../../provider/single-turn";
 
 export type SubagentMode = "read_only" | "general";
 
@@ -1526,14 +1532,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       let routingV2Receipt: RoutingDecisionReceipt | undefined;
       let routingV2ExecutionBudget: {
         readonly ledger: RoutingBudgetLedger;
-        readonly profile?: ModelProfile;
         readonly target: ModelRef;
         readonly receipt: RoutingDecisionReceipt;
         readonly selectionTimeoutMs: number;
         readonly beforeIo: (
           target: ModelRef,
           decisionId: string,
-          context: { readonly signal: AbortSignal },
+          context: { readonly signal: AbortSignal; readonly request: NormalizedRequest },
         ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: RoutingReason }>;
       } | undefined;
       let routingV2ExecutionDenied: RoutingReason | undefined;
@@ -1645,7 +1650,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             credentialsAvailable,
             policyAllowed,
             parentAllowed,
-            availability: (target) => parentConnected(target.providerId, target.modelId) ? "available" : undefined,
+            availability: (target) => modelRefKey(target) === modelRefKey(session) && credentialsAvailable(target)
+              ? "available"
+              : undefined,
             capabilities: providerFacts.capabilities,
             cooldown: () => false,
             observedLatencyMs: () => null,
@@ -1681,17 +1688,47 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           providerId: decision.selection.providerId,
           modelId: decision.selection.modelId,
         };
-        const selectedProfile = profiles[profileKey(decision.selection.providerId, decision.selection.modelId)];
         routingV2ExecutionBudget = {
           ledger: routingBudget,
-          ...(selectedProfile === undefined ? {} : { profile: selectedProfile }),
           target: decision.selection,
           receipt: routingV2Receipt,
           selectionTimeoutMs: activeRoutingV2.execution.selectionTimeoutMs,
-          beforeIo: async (target) => {
-            if (!credentialsAvailable(target)) return { ok: false, reason: "credentials-missing" };
-            if (!policyAllowed(target) || !parentAllowed(target)) return { ok: false, reason: "policy-denied" };
-            if (!parentConnected(target.providerId, target.modelId)) return { ok: false, reason: "model-unavailable" };
+          beforeIo: async (target, _decisionId, context) => {
+            const currentDetected = deps.getDetectedProviders();
+            const currentCredentialedProviders = new Set(currentDetected.map((entry) => entry.name));
+            const currentEnv = envWithSavedApiKeys(process.env, deps.routingConfigDir);
+            if (!currentCredentialedProviders.has(target.providerId)
+              && !hasCredential(target.providerId, currentEnv, deps.routingConfigDir)) {
+              return { ok: false, reason: "credentials-missing" };
+            }
+            currentCredentialedProviders.add(target.providerId);
+
+            const currentExternal = await resolveExternalSetting({
+              cwd: deps.cwd,
+              ...(deps.routingConfigDir === undefined ? {} : { dir: deps.routingConfigDir }),
+            });
+            const { config: currentExternalConfig } = loadExternalProvidersConfig(deps.routingConfigDir);
+            if (currentExternal.value !== "on"
+              && (isProviderIdExternal(target.providerId, currentExternalConfig) || isModelIdExternal(target.modelId, currentExternalConfig))) {
+              return { ok: false, reason: "policy-denied" };
+            }
+            const currentChildAuthorized = resolveChildModel(
+              session,
+              { kind: "explicit", providerId: target.providerId, modelId: target.modelId },
+              { allowedProviders: currentCredentialedProviders, policy: childReadOnlyPolicy(), providerClass },
+            ).ok;
+            if (!currentChildAuthorized) return { ok: false, reason: "policy-denied" };
+
+            const currentProfile = loadModelProfiles(deps.routingConfigDir)[profileKey(target.providerId, target.modelId)];
+            const authenticatedSession = modelRefKey(target) === modelRefKey(session);
+            if (!authenticatedSession && freshModelProfileAvailability(currentProfile, clock()) !== "available") {
+              return { ok: false, reason: "model-unavailable" };
+            }
+            const contextLength = currentProfile?.contextLength.value;
+            if (typeof contextLength === "number") {
+              const requiredTokens = estimateNormalizedInputTokens(context.request) + context.request.budget.maxOutputTokens;
+              if (requiredTokens > contextLength) return { ok: false, reason: "context-insufficient" };
+            }
             return { ok: true };
           },
         };
@@ -2163,7 +2200,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider = deps.makeProvider(runModel.provider, runModel.model, parent.baseUrl);
         if (routingV2ExecutionBudget !== undefined) {
           const decisionId = routingV2ExecutionBudget.receipt.decision.decisionId;
-          const profile = routingV2ExecutionBudget.profile;
+          const currentProfile = () => loadModelProfiles(deps.routingConfigDir)[
+            profileKey(routingV2ExecutionBudget!.target.providerId, routingV2ExecutionBudget!.target.modelId)
+          ];
           provider = createMeteredRoutingProvider({
             provider,
             target: routingV2ExecutionBudget.target,
@@ -2172,13 +2211,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             selectionTimeoutMs: routingV2ExecutionBudget.selectionTimeoutMs,
             beforeIo: routingV2ExecutionBudget.beforeIo,
             estimatedCostUsd: (request) => estimateModelCostUsd(
-              profile,
+              currentProfile(),
               estimateNormalizedInputTokens(request),
               request.budget.maxOutputTokens,
             ),
             actualCostUsd: ({ usage, estimatedCostUsd }) => usage?.inputTokens === undefined || usage.outputTokens === undefined
               ? estimatedCostUsd ?? 0
-              : estimateModelCostUsd(profile, usage.inputTokens, usage.outputTokens) ?? estimatedCostUsd ?? 0,
+              : estimateModelCostUsd(currentProfile(), usage.inputTokens, usage.outputTokens) ?? estimatedCostUsd ?? 0,
             journal: {
               cwd: deps.cwd,
               ...(deps.routingConfigDir === undefined ? {} : { configDir: deps.routingConfigDir }),
@@ -2685,10 +2724,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         if (routingV2ExecutionDenied !== undefined) {
           const reason = routingV2ExecutionDenied;
           const decisionId = routingV2Receipt?.decision.decisionId ?? "unknown";
-          await failChild(`routing-${reason}`, "Denied", { withModel: true });
+          const status = reason === "cancelled" ? "Interrupted" : "Denied";
+          await failChild(`routing-${reason}`, status, { withModel: true });
           return {
-            status: "Denied",
-            output: `spawn_subagent denied by routing v2 execution budget: ${reason} (decision ${decisionId})`,
+            status,
+            output: `spawn_subagent routing v2 execution stopped: ${reason} (decision ${decisionId})`,
             isError: true,
           };
         }
@@ -2813,10 +2853,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         if (routingV2ExecutionDenied !== undefined) {
           const reason = routingV2ExecutionDenied;
           const decisionId = routingV2Receipt?.decision.decisionId ?? "unknown";
-          await failChild(`routing-${reason}`, "Denied", { withModel: true });
+          const status = reason === "cancelled" ? "Interrupted" : "Denied";
+          await failChild(`routing-${reason}`, status, { withModel: true });
           return {
-            status: "Denied",
-            output: `spawn_subagent denied by routing v2 execution budget: ${reason} (decision ${decisionId})`,
+            status,
+            output: `spawn_subagent routing v2 execution stopped: ${reason} (decision ${decisionId})`,
             isError: true,
           };
         }

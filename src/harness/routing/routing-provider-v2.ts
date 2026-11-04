@@ -19,7 +19,7 @@ export interface RoutingExecutionProviderOptions {
   readonly beforeIo: (target: ModelRef, decisionId: string, context: { readonly signal: AbortSignal }) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: RoutingReason }>;
   readonly actualCostUsd?: (input: { readonly target: ModelRef; readonly usage?: NormalizedUsage; readonly estimatedCostUsd: number | null }) => number;
   readonly onReceipt?: (receipt: RoutingDecisionReceipt) => void | Promise<void>;
-  readonly journal?: RoutingJournalLocation;
+  readonly journal?: RoutingJournalLocation & { readonly kind?: "dispatch" | "preview" };
   readonly now?: () => Date;
   readonly failureRegistry?: RoutingFailureRegistry;
 }
@@ -30,10 +30,14 @@ export interface MeteredRoutingProviderOptions {
   readonly receipt: RoutingDecisionReceipt;
   readonly budget: RoutingBudgetLedger;
   readonly selectionTimeoutMs: number;
-  readonly beforeIo: (target: ModelRef, decisionId: string, context: { readonly signal: AbortSignal }) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: RoutingReason }>;
+  readonly beforeIo: (
+    target: ModelRef,
+    decisionId: string,
+    context: { readonly signal: AbortSignal; readonly request: NormalizedRequest },
+  ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: RoutingReason }>;
   readonly estimatedCostUsd: (request: NormalizedRequest) => number | null;
   readonly actualCostUsd?: (input: { readonly request: NormalizedRequest; readonly usage?: NormalizedUsage; readonly estimatedCostUsd: number | null }) => number;
-  readonly journal?: RoutingJournalLocation;
+  readonly journal?: RoutingJournalLocation & { readonly kind?: "dispatch" | "preview" };
   readonly onDenied?: (reason: RoutingReason, request: NormalizedRequest) => void | Promise<void>;
 }
 
@@ -151,7 +155,7 @@ export function createMeteredRoutingProvider(options: MeteredRoutingProviderOpti
       const selection = selectionAbort(signal, options.selectionTimeoutMs);
       try {
         const authorization = await Promise.race([
-          options.beforeIo(options.target, options.receipt.decision.decisionId, { signal: selection.signal }),
+          options.beforeIo(options.target, options.receipt.decision.decisionId, { signal: selection.signal, request: selectedRequest }),
           abortWait(selection.signal),
         ]);
         if (signal?.aborted) throw signal.reason;

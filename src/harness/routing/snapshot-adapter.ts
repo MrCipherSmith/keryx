@@ -33,6 +33,21 @@ export interface BuildCatalogRoutingSnapshotOptions {
 }
 
 export const ROUTING_AVAILABILITY_TTL_MS = 5 * 60 * 1_000;
+
+export function freshModelProfileAvailability(
+  profile: ModelProfile | undefined,
+  observedAt: string,
+  ttlMs = ROUTING_AVAILABILITY_TTL_MS,
+): RoutingModelFacts["availability"] {
+  if (profile === undefined) return "unknown";
+  const nowMs = Date.parse(observedAt);
+  const profileObservedAt = Date.parse(profile.available ? profile.lastSeenAt : profile.refreshedAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(profileObservedAt) || profileObservedAt > nowMs || nowMs - profileObservedAt > ttlMs) {
+    return "unknown";
+  }
+  return profile.available ? "available" : "unavailable";
+}
+
 export function catalogRoutingRevision(
   providers: readonly FlatPickerProvider[],
   profiles: Readonly<Record<string, ModelProfile>>,
@@ -71,10 +86,8 @@ function observedAvailability(
   nowMs: number,
   ttlMs: number,
 ): RoutingModelFacts["availability"] {
-  if (provider.offline === true || profile === undefined) return "unknown";
-  const observedAt = Date.parse(profile.available ? profile.lastSeenAt : profile.refreshedAt);
-  if (!Number.isFinite(observedAt) || observedAt > nowMs || nowMs - observedAt > ttlMs) return "unknown";
-  return profile.available ? "available" : "unavailable";
+  if (provider.offline === true || !Number.isFinite(nowMs)) return "unknown";
+  return freshModelProfileAvailability(profile, new Date(nowMs).toISOString(), ttlMs);
 }
 
 /**

@@ -1671,7 +1671,9 @@ async function resolveReviewRoutingV2(
       credentialsAvailable,
       policyAllowed,
       parentAllowed,
-      availability: (target) => parentConnected(target.providerId, target.modelId) ? "available" : undefined,
+      availability: (target) => modelRefKey(target) === modelRefKey(baseline) && credentialsAvailable(target)
+        ? "available"
+        : undefined,
       capabilities: providerFacts.capabilities,
       cooldown: () => false,
       observedLatencyMs: () => null,

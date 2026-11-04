@@ -44,6 +44,7 @@ async function activeTool(
   user: RoutingV2ConfigLayer,
   detected: readonly { name: string; models?: readonly string[] }[] = [{ name: "ollama", models: ["medium", "max"] }],
   providerText = "done",
+  profileObservedAt = "2026-11-04T00:00:00.000Z",
 ) {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-project-"));
   const configDir = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-config-"));
@@ -51,7 +52,13 @@ async function activeTool(
   await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
   for (const provider of detected) {
     for (const modelId of provider.models ?? []) {
-      await setModelProfileField(provider.name, modelId, { field: "contextLength", value: 100_000 }, configDir);
+      await setModelProfileField(
+        provider.name,
+        modelId,
+        { field: "contextLength", value: 100_000 },
+        configDir,
+        () => Date.parse(profileObservedAt),
+      );
     }
   }
   const plan = await createRoutingV2MigrationPlan({ cwd, configDir, user });
@@ -170,6 +177,18 @@ test("routing v2 blocks an unverified subagent target before provider constructi
   expect(built).toEqual([]);
 });
 
+test("routing v2 does not treat stale picker membership as availability proof", async () => {
+  const { tool, built } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "ollama", modelId: "max" } } },
+  }, undefined, "done", "2026-11-03T23:54:59.000Z");
+  const result = await tool.invoke({ task: "must have fresh availability", mode: "read_only" });
+
+  expect(result).toMatchObject({ status: "Denied", isError: true });
+  expect(result.output).toContain("candidate-unverified");
+  expect(built).toEqual([]);
+});
+
 test("routing v2 finite execution budget blocks unknown child cost before provider I/O", async () => {
   const { tool, built, streamed, events } = await activeTool({
     schemaVersion: 2,
@@ -185,7 +204,7 @@ test("routing v2 finite execution budget blocks unknown child cost before provid
   const result = await tool.invoke({ task: "must be budgeted", mode: "read_only" });
 
   expect(result).toMatchObject({ status: "Denied", isError: true });
-  expect(result.output).toContain("execution budget: cost-unknown");
+  expect(result.output).toContain("execution stopped: cost-unknown");
   expect(built).toEqual([{ providerId: "ollama", modelId: "medium" }]);
   expect(streamed).toEqual([]);
   expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
