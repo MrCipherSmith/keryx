@@ -51,3 +51,5 @@
 - 2026-11-04T10:08:04.959Z - task-added: T8: Round-2 review fixes: second abort site, test precision, constants and naming, runMutation helpers, one guide section, flow plan text
 - 2026-11-04T10:08:14.913Z - task-attempt: T8: started (attempt 1) — worker dispatched with fix-spec-r2 (14 round-2 minors, TP-003/TP-004/TP-007 partials, cheap infos)
 - 2026-11-04T10:58:19.375Z - task-done: T8: Round-2 review fixes: second abort site, test precision, constants and naming, runMutation helpers, one guide section, flow plan text
+- 2026-11-04T12:00:05.281Z - task-added: T9: Answer round 3 of PR #1126: rename the grace constant, share the test helpers, test the .gitmodules cap and per-line parse, narrow the stale title wording
+- 2026-11-04T12:03:29.686Z - task-done: T9: Answer round 3 of PR #1126: rename the grace constant, share the test helpers, test the .gitmodules cap and per-line parse, narrow the stale title wording

@@ -11,7 +11,7 @@
   "title": "Review stop gate never hangs on a large tree; mutation pass copies no nested checkouts and sweeps stale scratch",
   "status": "in-progress",
   "createdAt": "2026-11-04T07:17:01.660Z",
-  "updatedAt": "2026-11-04T10:58:19.375Z",
+  "updatedAt": "2026-11-04T12:03:29.686Z",
   "source": {
     "type": "description",
     "ref": null
@@ -176,6 +176,22 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Answer round 3 of PR #1126: rename the grace constant, share the test helpers, test the .gitmodules cap and per-line parse, narrow the stale title wording",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Committed in 5374c3144; CI on PR #1126 verifies"
     }
   ],
   "history": [
@@ -276,6 +292,16 @@
       "at": "2026-11-04T10:58:19.375Z",
       "event": "task-done",
       "detail": "T8: Round-2 review fixes: second abort site, test precision, constants and naming, runMutation helpers, one guide section, flow plan text"
+    },
+    {
+      "at": "2026-11-04T12:00:05.281Z",
+      "event": "task-added",
+      "detail": "T9: Answer round 3 of PR #1126: rename the grace constant, share the test helpers, test the .gitmodules cap and per-line parse, narrow the stale title wording"
+    },
+    {
+      "at": "2026-11-04T12:03:29.686Z",
+      "event": "task-done",
+      "detail": "T9: Answer round 3 of PR #1126: rename the grace constant, share the test helpers, test the .gitmodules cap and per-line parse, narrow the stale title wording"
     }
   ],
   "acKinds": {
