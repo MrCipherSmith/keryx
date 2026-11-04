@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstatSync, readFileSync, rmSync } from "node:fs";
-import { chmod, lstat, mkdir, readFile, rm } from "node:fs/promises";
+import { lstatSync, rmSync } from "node:fs";
+import { chmod, lstat, rm } from "node:fs/promises";
 import path from "node:path";
 import { ensureKeryxSubdir, keryxConfigDir, readConfigFile, type ConfigReadResult } from "../../lib/config-dir";
 import { updateConfigFile } from "../../lib/config-update";
@@ -363,11 +363,17 @@ function parseRoot(bytes: string, file: string): JsonObject {
   return parsed;
 }
 
+function readRequiredConfigText(file: string): string {
+  const result = readConfigFile(file);
+  if (!result.ok) throw new Error(`Could not read routing configuration at ${file}: ${result.reason}`);
+  return result.text;
+}
+
 async function readRoot(file: string): Promise<RootSnapshot> {
   try {
     const stats = await lstat(file);
     if (stats.isSymbolicLink() || !stats.isFile()) throw new Error(`${file} must be a regular non-symlink file`);
-    const bytes = await readFile(file, "utf8");
+    const bytes = readRequiredConfigText(file);
     return { file, existed: true, bytes, value: parseRoot(bytes, file) };
   } catch (error) {
     if (isNotFound(error)) return { file, existed: false, bytes: "", value: {} };
@@ -379,7 +385,7 @@ function readRootSync(file: string): RootSnapshot {
   try {
     const stats = lstatSync(file);
     if (stats.isSymbolicLink() || !stats.isFile()) throw new Error(`${file} must be a regular non-symlink file`);
-    const bytes = readFileSync(file, "utf8");
+    const bytes = readRequiredConfigText(file);
     return { file, existed: true, bytes, value: parseRoot(bytes, file) };
   } catch (error) {
     if (isNotFound(error)) return { file, existed: false, bytes: "", value: {} };
@@ -629,7 +635,7 @@ function readMarker(file: string): RoutingV2ActivationMarker | undefined {
   if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 activation marker permissions are not owner-only");
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(file, "utf8"));
+    raw = JSON.parse(readRequiredConfigText(file));
   } catch {
     throw new Error("malformed routing v2 activation marker JSON");
   }
@@ -847,7 +853,7 @@ function readRollbackReadJournalSync(activationFile: string): RoutingV2RollbackR
   if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 rollback read journal must be a regular non-symlink file");
   if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 rollback read journal permissions are not owner-only");
   try {
-    return parseRollbackReadJournal(JSON.parse(readFileSync(file, "utf8")), activationFile);
+    return parseRollbackReadJournal(JSON.parse(readRequiredConfigText(file)), activationFile);
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error("malformed routing v2 rollback read journal JSON", { cause: error });
     throw error;
@@ -865,7 +871,7 @@ function readRollbackReadBackupSync(target: RoutingV2RollbackReadTarget): RootSn
   }
   if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 rollback read backup must be a regular non-symlink file");
   if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 rollback read backup permissions are not owner-only");
-  const bytes = readFileSync(target.backupFile, "utf8");
+  const bytes = readRequiredConfigText(target.backupFile);
   if (sha256(bytes) !== target.digest) throw new Error("routing v2 rollback read backup digest mismatch");
   return { file: target.path, existed: true, bytes, value: parseRoot(bytes, target.path) };
 }
@@ -882,7 +888,7 @@ function readEditJournalSync(activationFile: string): ActiveRoutingV2EditJournal
   if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 edit journal must be a regular non-symlink file");
   if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 edit journal permissions are not owner-only");
   try {
-    return parseEditJournal(JSON.parse(readFileSync(file, "utf8")));
+    return parseEditJournal(JSON.parse(readRequiredConfigText(file)));
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error("malformed routing v2 edit journal JSON", { cause: error });
     throw error;
@@ -900,7 +906,7 @@ function readEditBackupSync(journal: ActiveRoutingV2EditJournal): RootSnapshot {
   }
   if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 edit backup must be a regular non-symlink file");
   if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 edit backup permissions are not owner-only");
-  const bytes = readFileSync(journal.backupFile, "utf8");
+  const bytes = readRequiredConfigText(journal.backupFile);
   if (sha256(bytes) !== journal.beforeDigest) throw new Error("routing v2 edit backup digest mismatch");
   return { file: journal.targetPath, existed: true, bytes, value: parseRoot(bytes, journal.targetPath) };
 }
@@ -937,7 +943,7 @@ async function readEditJournal(activationFile: string): Promise<ActiveRoutingV2E
     const stats = await lstat(file);
     if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 edit journal must be a regular non-symlink file");
     if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 edit journal permissions are not owner-only");
-    return parseEditJournal(JSON.parse(await readFile(file, "utf8")));
+    return parseEditJournal(JSON.parse(readRequiredConfigText(file)));
   } catch (error) {
     if (isNotFound(error)) return undefined;
     throw error;
@@ -1173,7 +1179,6 @@ async function createBackup(plan: RoutingV2MigrationPlan, project: RootSnapshot,
     targets: plan.rollback.targets,
   };
   ensureKeryxSubdir(["routing-v2", "backups", path.basename(plan.locations.backupDir)], plan.locations.configRoot);
-  await mkdir(plan.locations.backupDir, { recursive: true, mode: 0o700 });
   if (process.platform !== "win32") await chmod(plan.locations.backupDir, 0o700);
   if (project.existed) await writeFileAtomic(manifest.targets.project.backupFile, project.bytes, { mode: 0o600 });
   if (user.existed) await writeFileAtomic(manifest.targets.user.backupFile, user.bytes, { mode: 0o600 });
@@ -1195,7 +1200,10 @@ function validateBackupManifest(raw: unknown, plan: RoutingV2MigrationPlan): Bac
 
 async function readBackupManifest(plan: RoutingV2MigrationPlan): Promise<BackupManifest | undefined> {
   try {
-    const raw = JSON.parse(await readFile(backupManifestPath(plan), "utf8"));
+    const file = backupManifestPath(plan);
+    const stats = await lstat(file);
+    if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 backup manifest must be a regular non-symlink file");
+    const raw = JSON.parse(readRequiredConfigText(file));
     return validateBackupManifest(raw, plan);
   } catch (error) {
     if (isNotFound(error)) return undefined;
@@ -1214,9 +1222,8 @@ async function ensureBackup(plan: RoutingV2MigrationPlan, project: RootSnapshot,
 }
 
 async function originalRoot(target: BackupTarget): Promise<RootSnapshot> {
-  if (!target.existed) return { file: target.path, existed: false, bytes: "", value: {} };
-  const bytes = await readFile(target.backupFile, "utf8");
-  if (sha256(bytes) !== target.digest) throw new Error(`routing v2 backup digest mismatch for ${target.path}`);
+  const bytes = await backupBytes(target);
+  if (bytes === undefined) return { file: target.path, existed: false, bytes: "", value: {} };
   return { file: target.path, existed: true, bytes, value: parseRoot(bytes, target.path) };
 }
 
@@ -1412,7 +1419,10 @@ async function backupBytes(target: BackupTarget): Promise<string | undefined> {
   if (!target.existed) {
     return undefined;
   }
-  const bytes = await readFile(target.backupFile, "utf8");
+  const stats = await lstat(target.backupFile);
+  if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 backup must be a regular non-symlink file");
+  if (process.platform !== "win32" && (stats.mode & 0o077) !== 0) throw new Error("routing v2 backup permissions are not owner-only");
+  const bytes = readRequiredConfigText(target.backupFile);
   if (sha256(bytes) !== target.digest) throw new Error(`routing v2 backup digest mismatch for ${target.path}`);
   return bytes;
 }
