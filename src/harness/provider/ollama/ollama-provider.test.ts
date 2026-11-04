@@ -447,7 +447,7 @@ describe("AC3 — provider negatives map to the correct ProviderErrorKind, fail-
   test("HTTP 404 (model not found) -> invalid_request (non-retryable)", async () => {
     const { fetch: fetchMock, calls } = makeFetchMock(
       () =>
-        new Response(JSON.stringify({ error: { message: "model 'ghost:latest' not found" } }), {
+        new Response(JSON.stringify({ error: { code: "model_not_found", message: "model 'ghost:latest' not found" } }), {
           status: 404,
           headers: { "content-type": "application/json" },
         }),

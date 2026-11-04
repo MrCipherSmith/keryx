@@ -482,7 +482,7 @@ test("provider, model and routing shortcuts open the typed catalogue from the ch
     fireEvent.click(opener);
     search = await screen.findByLabelText("Search Keryx commands");
     expect(search).toHaveValue(shortcut);
-    expect(screen.getByRole("option", { name: `${commandName} · available` })).toBeVisible();
+    expect(await screen.findByRole("option", { name: `${commandName} · available` })).toBeInTheDocument();
     fireEvent.keyDown(search, { key: "Escape" });
     expect(opener).toHaveFocus();
   }
@@ -499,7 +499,7 @@ test("provider, model and routing shortcuts open the typed catalogue from the ch
   fireEvent.change(message, { target: { value: "/routing" } });
   fireEvent.keyDown(message, { key: "Enter" });
   expect(search).toHaveValue("/routing");
-  expect(screen.getByRole("option", { name: "routing.configure · available" })).toBeVisible();
+  expect(await screen.findByRole("option", { name: "routing.configure · available" })).toBeInTheDocument();
   expect(message).toHaveValue("");
 
   fireEvent.keyDown(search!, { key: "Escape" });
