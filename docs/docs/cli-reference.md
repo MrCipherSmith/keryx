@@ -1719,6 +1719,28 @@ confirmed pick writes immediately to the per-user layer. `t` on the list side
 shows the project file's entries and arms an approval; `y` confirms, any
 other key cancels.
 
+### Routing v2
+
+Routing v2 is opt-in through `keryx routing migrate`. With v2 active,
+the class pools can contain models from multiple providers. Use the revision
+returned by the settings read when writing a layer or class pool. An intervening
+edit invalidates that revision and requires a fresh read.
+
+```sh
+keryx routing settings list
+keryx routing settings set <user|project> <file.json> --revision <revision>
+keryx routing classes list
+keryx routing classes set <class> <file.json> --revision <revision>
+keryx routing explain --request <file.json> --json
+keryx routing pilot <observations.json|journal.jsonl>
+```
+
+`routing settings` reads or replaces an active v2 layer. `routing classes`
+lists the effective pools or replaces one user pool. `routing explain`
+returns the decision and evidence for an explicit request without executing
+the task. `routing pilot` summarizes recorded preview parity and fallback
+trace coverage.
+
 ### Model profiles and the derived default table (flow 327)
 
 Keryx records what it honestly knows about each connected model — strength

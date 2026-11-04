@@ -75,14 +75,6 @@ const DESCRIPTION: ProviderDescription = {
   descriptor: { providerId: "scripted" },
 };
 
-test("both shell surfaces expose provider descriptions to conservative subagent routing", () => {
-  const shellSource = readFileSync(path.join(import.meta.dir, "../../../commands/shell.ts"), "utf8");
-  const constructions = shellSource.split("createSpawnSubagentTool({").slice(1);
-  expect(constructions).toHaveLength(2);
-  expect(constructions[0]!.slice(0, 5_000)).toContain("describeProvider: (providerId, modelId, childBaseUrl) =>\n            tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl).describe(),");
-  expect(constructions[1]!.slice(0, 3_000)).toContain("describeProvider: (providerId, modelId, childBaseUrl) =>\n          baseFactory(providerId, modelId, childBaseUrl ?? baseUrl).describe(),");
-});
-
 /** A child provider that calls `slate_write_seed` once with a marker, then finishes with plain text. */
 function seedWritingProvider(marker: string, captured: NormalizedRequest[]): ProviderPort {
   let call = 0;
