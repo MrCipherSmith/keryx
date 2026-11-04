@@ -7,7 +7,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAgentTurn } from "./agent";
-import type { AgentDeps, AgentIO } from "./agent";
+import type { AgentDeps, AgentIO, RunAgentTurnOptions } from "./agent";
+import { ReviewGateAbortedError, type findReviewGateState } from "../review/completion-gate";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription, ProviderPort } from "../harness/provider/types";
 
@@ -96,7 +97,10 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-async function run(over: Partial<AgentDeps>): Promise<{ history: NormalizedMessage[]; system: string[]; finishReason: string | undefined }> {
+async function run(
+  over: Partial<AgentDeps>,
+  options: RunAgentTurnOptions = {},
+): Promise<{ history: NormalizedMessage[]; system: string[]; finishReason: string | undefined }> {
   const system: string[] = [];
   const io: AgentIO = { write: () => undefined, onSystem: (t) => system.push(t) };
   const history = reviewHistory();
@@ -116,6 +120,7 @@ async function run(over: Partial<AgentDeps>): Promise<{ history: NormalizedMessa
     },
     history,
     "continue the review",
+    options,
   );
   return { history, system, finishReason: result.finishReason };
 }
@@ -126,6 +131,27 @@ test("a no-progress stop in a main session with an incomplete managed review is 
   expect(nudge).toBeDefined();
   expect(nudge?.content).toContain("not a reason to ask the operator to resend the request");
   expect(system.join("")).toContain("[review-gate]");
+});
+
+test("AC4: the turn's abort signal reaches the gate scan, and an aborted turn is not nudged", async () => {
+  const controller = new AbortController();
+  let seenSignal: AbortSignal | undefined;
+  // Deterministic stand-in for a scan that is still walking when the operator presses Ctrl+C: it settles only when the
+  // signal it was handed aborts. A scan that was never handed the turn's signal reports an open review at once, which
+  // is the nudge this test forbids.
+  const reviewGateState: typeof findReviewGateState = async (_cwd, _since, _named, signal) => {
+    seenSignal = signal;
+    if (signal === undefined) {
+      return { reviewId: "pr-1-all", packageDir: path.join(root, ".metaproject", "reviews", "pr-1-all"), blockers: ["missing artifacts: report.md"], signature: "never-aborted" };
+    }
+    queueMicrotask(() => controller.abort());
+    await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+    throw new ReviewGateAbortedError();
+  };
+  const { history, system } = await run({ reviewGateState }, { signal: controller.signal });
+  expect(seenSignal).toBe(controller.signal);
+  expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
+  expect(system.join("")).not.toContain("[review-gate]");
 });
 
 test("an unattended run is not held: there is no one to re-prompt", async () => {

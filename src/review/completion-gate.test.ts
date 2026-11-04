@@ -13,6 +13,7 @@ import {
   fileHash,
   findReviewGateState,
   hashedFileCount,
+  MAX_SIGNATURE_FILES,
   keryxArgs,
   keryxReviewInvocations,
   MAX_REVIEW_GATE_CONTINUES,
@@ -28,6 +29,7 @@ import {
   shellCommands,
 } from "./completion-gate";
 import { writeActiveReview } from "./active-review";
+import { SCRATCH_DIR } from "./mutate";
 
 let root: string;
 
@@ -719,5 +721,61 @@ describe("fileHash: a file unchanged since the last stop is not read again, a ch
     expect(hashedFileCount()).toBe(count);
     // A file that cannot be read is reported, not remembered.
     expect(await fileHash(path.join(root, "missing.txt"), aged)).toBe("unreadable");
+  });
+});
+
+describe("the signature walk is bounded and cancellable (flow 482)", () => {
+  // The hash cache reuses a file only once its timestamps are older than the racy window, and utimes moves ctime to now,
+  // so a test that needs files "remembered" has to let them age for real.
+  const ageFiles = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 2_200));
+
+  test("AC1: files under the mutation scratch never reach the signature or the hash cache", async () => {
+    await writePackage("live", { mode: "review-flow", status: "draft" });
+    const data = path.join(root, ".metaproject", "data", "review");
+    await mkdir(data, { recursive: true });
+    await writeFile(path.join(data, "note.json"), "{}");
+    const scratch = path.join(root, SCRATCH_DIR, "run-1");
+    await mkdir(scratch, { recursive: true });
+    await writeFile(path.join(scratch, "a.txt"), "aaaa");
+    await writeFile(path.join(scratch, "b.txt"), "bbbb");
+    await ageFiles();
+    const before = hashedFileCount();
+    const withScratch = await findReviewGateState(root, 0);
+    const grown = hashedFileCount() - before;
+    await rm(path.join(root, SCRATCH_DIR), { recursive: true, force: true });
+    const withoutScratch = await findReviewGateState(root, 0);
+    expect(withScratch?.signature).toBe(withoutScratch?.signature as string);
+    // note.json and manifest.json are the only aged files outside the scratch.
+    expect(grown).toBeLessThanOrEqual(2);
+  });
+
+  test("AC2: a tree larger than the budget stops at it, marks the signature, and is served from the cache on the next call", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const total = MAX_SIGNATURE_FILES + 60;
+    for (let i = 0; i < total; i += 1) await writeFile(path.join(dir, `f${String(i).padStart(5, "0")}.txt`), String(i));
+    await ageFiles();
+    const before = hashedFileCount();
+    const first = await findReviewGateState(root, 0);
+    const grown = hashedFileCount() - before;
+    expect(first?.signature).toContain("truncated");
+    expect(grown).toBeLessThanOrEqual(MAX_SIGNATURE_FILES);
+    const afterFirst = hashedFileCount();
+    const second = await findReviewGateState(root, 0);
+    expect(second?.signature).toBe(first?.signature as string);
+    // Every file the walk reached is remembered, so the second call hashed none again.
+    expect(hashedFileCount()).toBe(afterFirst);
+  });
+
+  test("AC3: an already-aborted signal rejects with AbortError and hashes no file", async () => {
+    await writePackage("live", { mode: "review-flow", status: "draft" });
+    const data = path.join(root, ".metaproject", "data", "review");
+    await mkdir(data, { recursive: true });
+    await writeFile(path.join(data, "note.json"), "{}");
+    await ageFiles();
+    const before = hashedFileCount();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(findReviewGateState(root, 0, {}, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(hashedFileCount()).toBe(before);
   });
 });

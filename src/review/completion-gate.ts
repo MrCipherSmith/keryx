@@ -9,6 +9,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { resolveActiveReview } from "./active-review";
 import { reviewCompletionBlockers, reviewsRoot } from "./managed";
+import { SCRATCH_DIR } from "./mutate";
 import { readManifestHead } from "./package-location";
 import { SHELL_TOOL_NAMES } from "../lib/shell-tool-names";
 import { mapBounded } from "../lib/map-bounded";
@@ -26,6 +27,12 @@ export type OpenManagedReview = {
 
 /** At most this many file hashes are remembered between stops; the oldest goes first. */
 const MAX_HASHED_FILES = 4096;
+/**
+ * Entries (files and directories) one {@link dirSignature} walk visits before it stops and marks the signature
+ * truncated. The gate walks two trees per stop (data/review and the package), so two budgets together stay within
+ * {@link MAX_HASHED_FILES}: an unchanged tree is then served entirely from the hash cache on the next stop.
+ */
+export const MAX_SIGNATURE_FILES = 2048;
 /**
  * A remembered hash is reused only for a file whose timestamps were already this much older than the moment it was
  * hashed. Inside a filesystem's timestamp granularity a same-size rewrite can leave size and times unchanged (git's
@@ -54,19 +61,52 @@ export async function fileHash(file: string, now: number = Date.now()): Promise<
   return hash;
 }
 
+/** Thrown when the turn's signal aborts a gate scan; `name` is `AbortError` so callers can tell it from a failed read. */
+export class ReviewGateAbortedError extends Error {
+  override readonly name = "AbortError";
+  constructor() {
+    super("review gate scan aborted");
+  }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) throw new ReviewGateAbortedError();
+}
+
+/** Appended where a walk ran out of budget; fixed text keeps an unchanged tree's signature stable. */
+const TRUNCATION_MARKER = "…truncated";
+
+type SignatureOptions = {
+  /** Absolute paths never walked or hashed. */
+  skip?: ReadonlySet<string> | undefined;
+  /** Entries this walk may still visit; shared by the recursion so one tree has one budget. */
+  budget?: { remaining: number };
+  signal?: AbortSignal | undefined;
+};
+
 /** A signature of every file under `dir` (by content; a file unchanged since the last stop is not read again). */
-async function dirSignature(dir: string): Promise<string> {
+async function dirSignature(dir: string, options: SignatureOptions = {}): Promise<string> {
+  const { skip, signal } = options;
+  const budget = options.budget ?? { remaining: MAX_SIGNATURE_FILES };
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     const parts: string[] = [];
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      throwIfAborted(signal);
       const file = path.join(dir, entry.name);
-      if (entry.isSymbolicLink()) continue;
-      const content = entry.isDirectory() ? await dirSignature(file) : await fileHash(file);
+      if (entry.isSymbolicLink() || skip?.has(file) === true) continue;
+      if (budget.remaining <= 0) {
+        parts.push(TRUNCATION_MARKER);
+        break;
+      }
+      budget.remaining -= 1;
+      const content = entry.isDirectory() ? await dirSignature(file, { skip, budget, signal }) : await fileHash(file);
       parts.push(`${entry.name}:${content}`);
     }
     return parts.join(",");
-  } catch {
+  } catch (error) {
+    // A cancelled scan must reach the caller; every other failure keeps the old meaning of "nothing readable here".
+    if (error instanceof ReviewGateAbortedError) throw error;
     return "";
   }
 }
@@ -705,10 +745,13 @@ export async function findReviewGateState(
   cwd: string,
   since: number,
   named: Partial<SessionReviewNames> = {},
+  signal?: AbortSignal,
 ): Promise<OpenManagedReview | null> {
+  throwIfAborted(signal);
   const roots = [...new Set([cwd, ...(named.roots ?? [])].map((r) => path.resolve(r)))];
   // The roots are independent: read them together.
   const scanned = await Promise.all(roots.map(async (root) => ({ root, ...(await scanRoot(root, since, named)) })));
+  throwIfAborted(signal);
   const candidates = scanned.flatMap((entry) => entry.open);
   const best = await pickPackage(roots, candidates, since, named);
   // Only a package this session opened or named, closed under the root of the package it is on (any root while it is on
@@ -717,7 +760,13 @@ export async function findReviewGateState(
   const closedAt = Math.max(0, ...ours.map((closed) => closed.mtime));
   if (closedAt > 0 && (best === null || best.mtime < closedAt)) return null;
   const workingRoot = best?.root ?? cwd;
-  const working = await dirSignature(path.join(workingRoot, ".metaproject", "data", "review"));
+  // The mutation pass's scratch holds full worktree copies (hundreds of thousands of files after an interrupted run) and
+  // is not review evidence, so the walk never enters it.
+  const working = await dirSignature(path.join(workingRoot, ".metaproject", "data", "review"), {
+    skip: new Set([path.join(workingRoot, SCRATCH_DIR)]),
+    budget: { remaining: MAX_SIGNATURE_FILES },
+    signal,
+  });
   if (best === null) {
     return {
       reviewId: "(no package yet)",
@@ -726,12 +775,15 @@ export async function findReviewGateState(
       signature: `none#${working}`,
     };
   }
+  throwIfAborted(signal);
   const blockers = await reviewCompletionBlockers(best.dir);
+  throwIfAborted(signal);
+  const packageSignature = await dirSignature(best.dir, { budget: { remaining: MAX_SIGNATURE_FILES }, signal });
   return {
     reviewId: displayId(best.id, best.dir),
     packageDir: best.dir,
     blockers,
-    signature: [blockers.join("|"), await dirSignature(best.dir), working].join("#"),
+    signature: [blockers.join("|"), packageSignature, working].join("#"),
   };
 }
 

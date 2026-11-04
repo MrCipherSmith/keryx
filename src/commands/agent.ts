@@ -521,6 +521,8 @@ export interface AgentDeps {
    * turn; absent, each `runAgentTurn` call generates its own.
    */
   controlNonce?: string;
+  /** Test seam for the managed-review gate's scan; the real {@link findReviewGateState} when absent. */
+  reviewGateState?: typeof findReviewGateState;
   idSeq: () => string;
   /**
    * Inclusive maximum model round-trips per user turn (loop-safety guard).
@@ -3531,9 +3533,13 @@ async function runAgentTurnCore(
     // It keeps both, and the session's start, across a compaction that rewrites the history in place.
     const named = sessionReviewNames(history, deps.cwd ?? process.cwd());
     const runSeen = named.runSeen === true;
+    // An interrupted turn gets no nudge: the operator has already taken the turn back.
+    if (isAborted()) return false;
+    const scan = deps.reviewGateState ?? findReviewGateState;
     const open = runSeen
-      ? await findReviewGateState(deps.cwd ?? process.cwd(), named.startedAt ?? sessionStartedAt(history), named).catch(() => null)
+      ? await scan(deps.cwd ?? process.cwd(), named.startedAt ?? sessionStartedAt(history), named, signal).catch(() => null)
       : null;
+    if (isAborted()) return false;
     const gate = decideReviewGate({
       open,
       runSeen,
