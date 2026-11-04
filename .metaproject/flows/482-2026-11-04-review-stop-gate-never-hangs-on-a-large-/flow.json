@@ -11,7 +11,7 @@
   "title": "Review stop gate never hangs on a large tree; mutation pass copies no nested checkouts and sweeps stale scratch",
   "status": "in-progress",
   "createdAt": "2026-11-04T07:17:01.660Z",
-  "updatedAt": "2026-11-04T09:20:42.943Z",
+  "updatedAt": "2026-11-04T10:58:19.375Z",
   "source": {
     "type": "description",
     "ref": null
@@ -155,6 +155,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Round-2 review fixes: second abort site, test precision, constants and naming, runMutation helpers, one guide section, flow plan text",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-04T10:08:14.913Z",
+            "outcome": "started",
+            "detail": "worker dispatched with fix-spec-r2 (14 round-2 minors, TP-003/TP-004/TP-007 partials, cheap infos)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -240,6 +261,21 @@
       "at": "2026-11-04T09:20:42.943Z",
       "event": "task-done",
       "detail": "T7: Round-1 review fixes: linked-worktree-only skip, owned and heartbeat-aged sweep, repo scratch excluded in tmp mode, gate test and doc gaps"
+    },
+    {
+      "at": "2026-11-04T10:08:04.959Z",
+      "event": "task-added",
+      "detail": "T8: Round-2 review fixes: second abort site, test precision, constants and naming, runMutation helpers, one guide section, flow plan text"
+    },
+    {
+      "at": "2026-11-04T10:08:14.913Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — worker dispatched with fix-spec-r2 (14 round-2 minors, TP-003/TP-004/TP-007 partials, cheap infos)"
+    },
+    {
+      "at": "2026-11-04T10:58:19.375Z",
+      "event": "task-done",
+      "detail": "T8: Round-2 review fixes: second abort site, test precision, constants and naming, runMutation helpers, one guide section, flow plan text"
     }
   ],
   "acKinds": {
