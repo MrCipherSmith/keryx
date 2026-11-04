@@ -57,19 +57,16 @@ test("turnCategory is captured unconditionally from routingOutcome?.category, ou
 
   const routedBranchAt = SOURCE.indexOf("if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {", routingOutcomeDeclAt);
   expect(routedBranchAt).toBeGreaterThan(routingOutcomeDeclAt);
-  // The routed-only branch's own fail-closed catch — the last thing inside it.
-  const routedBranchFailClosedAt = SOURCE.indexOf(
-    "// fail-closed: a routed-deps build failure runs on the session's own model instead.",
-    routedBranchAt,
-  );
-  expect(routedBranchFailClosedAt).toBeGreaterThan(routedBranchAt);
+  // Metering begins after routed dependency preparation and its catch.
+  const meteringAt = SOURCE.indexOf("const routingV2 = routingOutcome?.routingV2;", routedBranchAt);
+  expect(meteringAt).toBeGreaterThan(routedBranchAt);
 
   const turnCategoryAt = SOURCE.indexOf(
     "const turnCategory: RoutingCategory | undefined = routingOutcome?.category;",
     FN_START,
   );
   // Declared AFTER the routed-only branch closes — unconditional, not nested inside it.
-  expect(turnCategoryAt).toBeGreaterThan(routedBranchFailClosedAt);
+  expect(turnCategoryAt).toBeGreaterThan(meteringAt);
 
   const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {", FN_START);
   expect(dispatchAt).toBeGreaterThan(turnCategoryAt);

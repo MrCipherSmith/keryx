@@ -7,6 +7,7 @@ import { scriptedProvider } from "../commands/agent.test-helpers";
 import { saveRoutingConfig } from "../harness/routing/config";
 import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../harness/routing/migration-v2";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "../harness/routing/classifier-production-v2";
 import type { RoutingV2ConfigLayer } from "../harness/routing/config-v2";
 import type { Control } from "../remote-control/protocol";
 const digest = "a".repeat(64);
@@ -21,8 +22,9 @@ async function activateV2(cwd: string, override?: RoutingV2ConfigLayer) {
   const project: RoutingV2ConfigLayer = override ?? { schemaVersion: 2 as const,
     categories: { review: { mode: "class" as const, modelClass: "expert" as const } },
     classes: { expert: { selection: "priority" as const, fallbackClasses: [], candidates: [{ target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 }] } } };
-  const plan = await createRoutingV2MigrationPlan({ cwd, configDir: cwd, project });
-  await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir: cwd });
+  const normalization = { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY };
+  const plan = await createRoutingV2MigrationPlan({ cwd, configDir: cwd, project, normalization });
+  await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir: cwd, normalization });
   return plan;
 }
 

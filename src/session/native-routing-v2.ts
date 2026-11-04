@@ -43,6 +43,17 @@ function bindingKey(providerId: string, modelId: string): string {
   return JSON.stringify([providerId, modelId]);
 }
 
+function nativeCatalogRevision(availability: Control["RoutingAvailability"]): string {
+  return canonicalDigest({
+    ...availability,
+    profileIds: [...availability.profileIds].sort(),
+    candidates: availability.candidates
+      .map((candidate) => ({ ...candidate, reasoningEfforts: [...candidate.reasoningEfforts].sort() }))
+      .sort((left, right) => bindingKey(left.providerId, left.modelId).localeCompare(bindingKey(right.providerId, right.modelId))
+        || left.candidateId.localeCompare(right.candidateId)),
+  });
+}
+
 /**
  * Builds the native resolver snapshot from one frozen protocol availability and
  * one frozen binding list. Actual provider/model identities are facts only;
@@ -98,7 +109,7 @@ export function buildNativeRoutingV2Snapshot(options: BuildNativeRoutingV2Snapsh
   const snapshot = createRoutingSnapshot({
     configDigest: options.routingConfig.configDigest,
     observedAt: options.observedAt ?? new Date().toISOString(),
-    catalogRevision: canonicalDigest(options.availability),
+    catalogRevision: nativeCatalogRevision(options.availability),
     policyRevision: options.availability.policyDigest,
     capabilityRevision: options.availability.capabilityDigest,
     authFailedProviderIds: options.authFailedProviderIds ?? [],

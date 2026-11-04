@@ -1137,7 +1137,7 @@ describe("routing v2: unattended flow dispatch", () => {
     await run(provider, {
       loadActiveRoutingV2: () => activeRoutingConfig(),
       routingConfigDir,
-      routingSnapshot: (input) => {
+      routingSnapshot: (input: Parameters<typeof currentRoutingSnapshot>[0]) => {
         routedRequest = input.request;
         return currentRoutingSnapshot(input);
       },
@@ -1198,7 +1198,7 @@ describe("routing v2: unattended flow dispatch", () => {
     await run(provider, {
       loadActiveRoutingV2: () => activeRoutingConfig(),
       routingConfigDir: path.join(root, "routing-test-config"),
-      routingSnapshot: (input) => currentRoutingSnapshot(input, facts),
+      routingSnapshot: (input: Parameters<typeof currentRoutingSnapshot>[0]) => currentRoutingSnapshot(input, facts),
       makeProvider: () => provider,
     });
 

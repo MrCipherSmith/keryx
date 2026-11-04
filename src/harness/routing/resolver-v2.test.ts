@@ -116,7 +116,6 @@ test("hard gates reject unavailable, unauthorized, incapable, and over-budget mo
     [{ contextLength: 1_500 }, "context-insufficient"],
     [{ estimatedCostUsd: 3 }, "budget-exceeded"],
     [{ estimatedCostUsd: null }, "cost-unknown"],
-    [{ estimatedCostUsd: Number.NaN }, "cost-unknown"],
   ];
   for (const [patch, reason] of cases) {
     const req = request({ requirements: { capabilities: ["tools"], inputTokensRequired: 1_000, outputTokensReserved: 1_000 } });
@@ -215,7 +214,7 @@ test("normalization replaces classes atomically and rejects duplicate or self fa
   expect(validateRoutingV2ConfigLayer(classifierLayer).ok).toBeFalse();
   expect(validateRoutingV2ConfigLayer(classifierLayer, { classifierAdapters: new Set(["jev"]) }).ok).toBeTrue();
   expect(() => normalizeRoutingV2Config({ user: classifierLayer })).toThrow(/registry/);
-  expect(() => normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["model"]) })).toThrow(/unregistered/);
+  expect(() => normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["model"]) })).toThrow(/not registered/);
   expect(normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["jev"]) }).classifier.chain).toHaveLength(1);
   const untargetedModel = { ...classifierLayer, classifier: { ...classifierLayer.classifier!, chain: [{ adapterId: "model" }] } };
   expect(() => normalizeRoutingV2Config({ user: untargetedModel }, { classifierAdapters: new Set(["model"]) })).toThrow(/explicit target/);
@@ -300,7 +299,8 @@ test("normalization takes immutable copies and decisions include request semanti
 test("invalid or duplicate snapshot facts fail closed", () => {
   const expert = ref("alpha", "expert");
   const configured = setup(expertLayer([expert]), [facts(expert)], request({ requirements: { capabilities: [], inputTokensRequired: 0, outputTokensReserved: 0 } }));
-  expect(() => createRoutingSnapshot({ ...configured.snapshot, models: [facts(expert, { contextLength: Number.NaN })] })).toThrow();
+  expect(() => createRoutingSnapshot({ ...configured.snapshot, models: [facts(expert, { contextLength: Number.NaN })] })).toThrow(/context length/);
+  expect(() => createRoutingSnapshot({ ...configured.snapshot, models: [facts(expert, { estimatedCostUsd: Number.NaN })] })).toThrow(/estimated cost/);
   const duplicate = { ...configured.snapshot, models: [facts(expert), facts(expert)] };
   const decision = resolveRoutingDecision(configured.req, duplicate, configured.config);
   expect(decision.status).toBe("blocked");

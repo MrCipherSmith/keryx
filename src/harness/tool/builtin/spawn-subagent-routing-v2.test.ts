@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
 import type { RoutingV2ConfigLayer } from "../../routing/config-v2";
+import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "../../routing/classifier-production-v2";
 import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../../routing/migration-v2";
 import { setModelProfileField } from "../../routing/model-profile";
 import { createSpawnSubagentTool, type SpawnSubagentFleetEvent } from "./spawn-subagent-tool";
@@ -62,8 +63,9 @@ async function activeTool(
       );
     }
   }
-  const plan = await createRoutingV2MigrationPlan({ cwd, configDir, user });
-  await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir });
+  const normalization = { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY };
+  const plan = await createRoutingV2MigrationPlan({ cwd, configDir, user, normalization });
+  await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir, normalization });
 
   const built: Array<{ providerId: string; modelId: string }> = [];
   const streamed: Array<{ providerId: string; modelId: string }> = [];
@@ -192,7 +194,7 @@ test("routing v2 does not treat stale picker membership as availability proof", 
   expect(built).toEqual([]);
 });
 
-test("routing v2 finite execution budget blocks unknown child cost before provider I/O", async () => {
+test("routing v2 finite budget blocks unknown child cost before provider I/O", async () => {
   const { tool, built, streamed, events } = await activeTool({
     schemaVersion: 2,
     classes: classConfig,
@@ -207,11 +209,11 @@ test("routing v2 finite execution budget blocks unknown child cost before provid
   const result = await tool.invoke({ task: "must be budgeted", mode: "read_only" });
 
   expect(result).toMatchObject({ status: "Denied", isError: true });
-  expect(result.output).toContain("execution stopped: cost-unknown");
-  expect(built).toEqual([{ providerId: "ollama", modelId: "medium" }]);
+  expect(result.output).toContain("denied by routing v2: cost-unknown");
+  expect(built).toEqual([]);
   expect(streamed).toEqual([]);
   expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
-    .toContain("execution denied before provider I/O (cost-unknown)");
+    .toContain("blocked (cost-unknown)");
 });
 
 test("routing v2 rechecks current credentials before child provider I/O", async () => {

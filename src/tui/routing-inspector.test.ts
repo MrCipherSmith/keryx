@@ -909,7 +909,7 @@ test("flow 468 AC1: loadRoutingProviders serves a fresh non-empty cache as is an
     { dir: catalogDir, fetch: NO_NETWORK, env: {} },
   );
 
-  expect(withRedetect).toEqual([{ name: "alpha", models: ["a1"] }]);
+  expect(withRedetect).toEqual([{ name: "alpha", models: ["a1"], observedAt: now }]);
   expect(detections).toBe(0);
 });
 

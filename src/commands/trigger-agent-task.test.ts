@@ -626,7 +626,7 @@ describe("routing v2: scheduled agent task", () => {
     await run(provider, "check-github", {
       loadActiveRoutingV2: () => activeRoutingConfig(),
       routingConfigDir,
-      routingSnapshot: (input) => {
+      routingSnapshot: (input: Parameters<typeof currentRoutingSnapshot>[0]) => {
         routedRequest = input.request;
         return currentRoutingSnapshot(input);
       },

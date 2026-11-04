@@ -849,7 +849,7 @@ function readRollbackReadJournalSync(activationFile: string): RoutingV2RollbackR
   try {
     return parseRollbackReadJournal(JSON.parse(readFileSync(file, "utf8")), activationFile);
   } catch (error) {
-    if (error instanceof SyntaxError) throw new Error("malformed routing v2 rollback read journal JSON");
+    if (error instanceof SyntaxError) throw new Error("malformed routing v2 rollback read journal JSON", { cause: error });
     throw error;
   }
 }
@@ -860,7 +860,7 @@ function readRollbackReadBackupSync(target: RoutingV2RollbackReadTarget): RootSn
   try {
     stats = lstatSync(target.backupFile);
   } catch (error) {
-    if (isNotFound(error)) throw new Error("routing v2 rollback read backup is missing");
+    if (isNotFound(error)) throw new Error("routing v2 rollback read backup is missing", { cause: error });
     throw error;
   }
   if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 rollback read backup must be a regular non-symlink file");
@@ -884,7 +884,7 @@ function readEditJournalSync(activationFile: string): ActiveRoutingV2EditJournal
   try {
     return parseEditJournal(JSON.parse(readFileSync(file, "utf8")));
   } catch (error) {
-    if (error instanceof SyntaxError) throw new Error("malformed routing v2 edit journal JSON");
+    if (error instanceof SyntaxError) throw new Error("malformed routing v2 edit journal JSON", { cause: error });
     throw error;
   }
 }
@@ -895,7 +895,7 @@ function readEditBackupSync(journal: ActiveRoutingV2EditJournal): RootSnapshot {
   try {
     stats = lstatSync(journal.backupFile);
   } catch (error) {
-    if (isNotFound(error)) throw new Error("routing v2 edit backup is missing");
+    if (isNotFound(error)) throw new Error("routing v2 edit backup is missing", { cause: error });
     throw error;
   }
   if (stats.isSymbolicLink() || !stats.isFile()) throw new Error("routing v2 edit backup must be a regular non-symlink file");

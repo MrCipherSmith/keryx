@@ -10977,7 +10977,7 @@ export async function launchTuiAgentShell(opts: {
               requirements: {
                 capabilities: [],
                 inputTokensRequired: estimateRequestTokens(
-                  [...history, { role: "user", content: line }],
+                  [...history, { content: line }],
                   sessionDeps.systemInstruction,
                   sessionDeps.tools.map((tool) => tool.definition),
                 ),

@@ -63,7 +63,6 @@ export function buildRoutingClassifierAdapters(
         ...(input.userConfigDir === undefined ? {} : { dir: input.userConfigDir }),
         model: target.modelId,
         ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
-        model: target.modelId,
       });
     }
 

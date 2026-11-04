@@ -506,20 +506,21 @@ export function routedUnattendedProvider(
         : { ok: true };
     },
     actualCostUsd: ({ usage, estimatedCostUsd }) => {
-      if (usage === undefined) {
+      if (usage?.inputTokens === undefined || usage.outputTokens === undefined) {
         if (estimatedCostUsd === null) throw new Error("unattended routing cost is unknown");
         return estimatedCostUsd;
       }
       return spendFromTokens({
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          inputUsdPerMTok: dispatch.rates.inputUsdPerMTok,
-          outputUsdPerMTok: dispatch.rates.outputUsdPerMTok,
-        });
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        inputRatePerMillion: dispatch.rates.inputUsdPerMTok,
+        outputRatePerMillion: dispatch.rates.outputUsdPerMTok,
+      });
     },
     ...(onAttemptUsage === undefined
       ? {}
-      : { onAttemptSettled: ({ usage }: { readonly usage?: NormalizedUsage }) => onAttemptUsage(usage) }),
+      : { onAttemptSettled: ({ usage }: { readonly usage?: NormalizedUsage }) =>
+          onAttemptUsage(usage?.inputTokens === undefined || usage.outputTokens === undefined ? undefined : usage) }),
     journal: { cwd: projectRoot, ...(configDir === undefined ? {} : { configDir }) },
   });
 }
@@ -993,8 +994,9 @@ async function dispatchLocked(
     };
   }
 
+  const baselineProvider: ProviderPort = built;
   const routingTools = [...buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox)), ...(deps.extraTools ?? [])];
-  const providerFor = cachedRoutingProviders(dispatch, built, deps.makeProvider ?? defaultMakeProvider);
+  const providerFor = cachedRoutingProviders(dispatch, baselineProvider, deps.makeProvider ?? defaultMakeProvider);
   const flowDir = (await service.list({ cwd: projectRoot })).find((candidate) => candidate.id === state.id)?.dir;
   const taskPrompt = buildTaskPrompt(state.id, state.title, flowDir, task);
   const currentBudget = await evaluateTriggerBudget(projectRoot, "flow-next", {}, { name: triggerName, ceilingUsd: dispatch.ceilingUsd });
@@ -1128,7 +1130,7 @@ async function dispatchLocked(
         deps.routingConfigDir,
         dispatch,
         reservedUsd,
-        built,
+        baselineProvider,
         providerFor,
         routing,
         (usage) => usage === undefined ? meter.markUsageMissing() : meter.onUsage(usage),
