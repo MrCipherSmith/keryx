@@ -150,3 +150,28 @@ test("availability expires after five minutes without changing connection identi
   expect(stale.models).toEqual(fresh.models.map((entry) => ({ ...entry, availability: "unknown" })));
   expect(stale.models.every((entry) => entry.connected)).toBe(true);
 });
+
+test("fresh live listings establish availability independently of profile refresh", () => {
+  const observedAt = "2026-11-04T00:10:00.000Z";
+  const listedAt = "2026-11-04T00:09:00.000Z";
+  const input = {
+    ...SNAPSHOT_META,
+    observedAt,
+    configDigest: "config",
+    baseline: request.baseline,
+    profiles: {
+      [profileKey("alpha", "stale")]: profile("alpha", "stale"),
+      [profileKey("alpha", "removed")]: { ...profile("alpha", "removed", false), refreshedAt: observedAt },
+    },
+    request,
+    policy,
+  };
+  const models = ["stale", "no-profile", "removed"];
+  const provider = { name: "alpha", models, observedAt: listedAt };
+  const availability = (entry: typeof provider & { offline?: boolean }) =>
+    buildCatalogRoutingSnapshot({ ...input, providers: [entry] }).models.map((model) => model.availability);
+  expect(availability(provider)).toEqual(["available", "available", "unavailable"]);
+  expect(availability({ ...provider, offline: true })).toEqual(["unknown", "unknown", "unknown"]);
+  expect(availability({ ...provider, observedAt: "2026-11-04T00:04:00.000Z" }))
+    .toEqual(["unknown", "unknown", "unavailable"]);
+});

@@ -1,7 +1,7 @@
 # Проверка пакета и docpack-review
 Version: 0.1.0
 
-Status: verification PASS; docpack-review PASS; runtime v2 не реализован.
+Status: verification PASS. Docpack-review PASS. Runtime v2 доступен после явной активации. Пилот и включение по умолчанию остаются открытыми.
 
 ## Область проверки
 

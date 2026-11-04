@@ -561,6 +561,13 @@ const HTTP_NEGATIVE_CASES: HttpNegativeCase[] = [
     expectedModelNotFound: true,
   },
   {
+    name: "generic HTTP 404 -> invalid_request without model fallback",
+    status: 404,
+    body: { type: "error", error: { type: "invalid_request_error", message: "route not found" } },
+    expectedKind: "invalid_request",
+    expectedRetryable: false,
+  },
+  {
     name: "429 rate_limit_error (+retry-after) -> rate_limit (retryable, retryAfterMs from header)",
     status: 429,
     body: { type: "error", error: { type: "rate_limit_error", message: "Number of requests has exceeded your rate limit" } },
@@ -612,6 +619,7 @@ describe("AC4 — non-2xx HTTP responses map to the correct ProviderErrorKind", 
         expect(error.retryAfterMs).toBe(testCase.expectedRetryAfterMs);
       }
       if (testCase.expectedModelNotFound === true) expect(error.detail?.modelNotFound).toBe(true);
+      else expect(error.detail?.modelNotFound).not.toBe(true);
       // No negative yields a partial-but-"complete" attempt.
       expect(events.some((e) => e.kind === "model_end")).toBe(false);
     });

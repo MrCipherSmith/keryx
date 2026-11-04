@@ -30,7 +30,7 @@ export function createSessionRouting(options: SessionRoutingOptions) {
         try {
           const classified = await options.classify?.(text, pinned, signal);
           const selected = typeof classified === "string" ? classified : classified?.candidateId;
-          if (selected !== undefined && pinned.routing.candidateIds.includes(selected) && available(selected, pinned) !== undefined) {
+          if (selected !== undefined && (selected === pinned.baselineCandidateId || pinned.routing.candidateIds.includes(selected)) && available(selected, pinned) !== undefined) {
             effectiveCandidateId = selected; routingDecision = "classified";
             selectionReceiptId = typeof classified === "object" ? classified.selectionReceiptId : undefined;
           } else { routingDecision = "classifier-fallback"; fallbackReason = selected === undefined ? "classifier-failed" : "candidate-unavailable"; }

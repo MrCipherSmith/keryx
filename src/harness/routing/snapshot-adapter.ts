@@ -87,7 +87,15 @@ function observedAvailability(
   ttlMs: number,
 ): RoutingModelFacts["availability"] {
   if (provider.offline === true || !Number.isFinite(nowMs)) return "unknown";
-  return freshModelProfileAvailability(profile, new Date(nowMs).toISOString(), ttlMs);
+  const profileAvailability = freshModelProfileAvailability(profile, new Date(nowMs).toISOString(), ttlMs);
+  const catalogObservedAt = provider.observedAt === undefined ? NaN : Date.parse(provider.observedAt);
+  const freshCatalog = Number.isFinite(catalogObservedAt)
+    && catalogObservedAt <= nowMs && nowMs - catalogObservedAt <= ttlMs;
+  if (!freshCatalog) return profileAvailability;
+  // A newer explicit negative observation supersedes a successful listing.
+  if (profileAvailability === "unavailable" && profile !== undefined
+    && Date.parse(profile.refreshedAt) >= catalogObservedAt) return "unavailable";
+  return "available";
 }
 
 /**

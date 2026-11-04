@@ -65,8 +65,12 @@ test("turnCategory is captured unconditionally from routingOutcome?.category, ou
     "const turnCategory: RoutingCategory | undefined = routingOutcome?.category;",
     FN_START,
   );
-  // Declared AFTER the routed-only branch closes — unconditional, not nested inside it.
-  expect(turnCategoryAt).toBeGreaterThan(routedBranchAt);
+  // This marker is after the complete routing conditional, including v2,
+  // legacy-routed, and fallback branches. Comparing with the opening `if`
+  // alone would not prove that the declaration is outside the branch.
+  const routingBranchEndAt = SOURCE.indexOf("// Flow 341 (AC3, wired to PR #737's classifier): captured", routedBranchAt);
+  expect(routingBranchEndAt).toBeGreaterThan(routedBranchAt);
+  expect(turnCategoryAt).toBeGreaterThan(routingBranchEndAt);
 
   const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {", FN_START);
   expect(dispatchAt).toBeGreaterThan(turnCategoryAt);

@@ -32,3 +32,24 @@ test("canonical classifier service builds a bound recommendation once", async ()
   expect(result.request.recommendation).toEqual({ modelClass: "expert", source: "classifier", receiptId: result.classification.receiptId });
   expect(result.request.requirements.capabilities).toEqual(["tools"]);
 });
+
+test("caller remaining time caps the classifier deadline", async () => {
+  const config = normalizeRoutingV2Config({ user: {
+    schemaVersion: 2,
+    classifier: { chain: [{ adapterId: "model", target: { providerId: "provider", modelId: "classifier" } }], timeoutMs: 3_000, minConfidence: 0.7, onFailure: { mode: "baseline" } },
+  } }, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
+  const result = await runRoutingClassification({
+    task: "implement it",
+    request,
+    config,
+    adapters: [{ id: "model", classify: async () => await new Promise<never>(() => {}) }],
+    budget: new RoutingBudgetLedger({ unknownCost: "allow" }),
+    estimatedCostUsd: () => 0,
+    timeoutMs: 1,
+  });
+  expect(result.status).toBe("ready");
+  expect(result.classification).toMatchObject({
+    status: "fallback",
+    trace: [{ adapterId: "model", outcome: "timeout" }],
+  });
+});

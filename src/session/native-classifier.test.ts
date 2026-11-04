@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createNativeRoutingClassifier } from "./native-classifier";
+import { createNativeRoutingClassifier, type NativeRoutingSelection } from "./native-classifier";
 import { scriptedProvider } from "../commands/agent.test-helpers";
 import { saveRoutingConfig } from "../harness/routing/config";
 import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../harness/routing/migration-v2";
@@ -42,7 +42,7 @@ test("production classifier composition uses the actual shared service with owne
 
 test("active v2 classifies once and preserves the classifier receipt in the journaled decision", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-auto-"));
-  const response = JSON.stringify({ category: "coding", modelClass: "expert", confidence: 0.95, reasonCode: "implementation", requiredCapabilities: ["tools"] });
+  const response = "coding|expert|0.95|tools";
   const script = scriptedProvider([[{ kind: "text_delta", text: response }, { kind: "model_end" }]]);
   try {
     await activateV2(cwd, { schemaVersion: 2,
@@ -54,13 +54,56 @@ test("active v2 classifies once and preserves the classifier receipt in the jour
       providerFactory: () => script.provider, outputTokensReserved: 100,
       modelFacts: () => ({ connected: true, credentialsAvailable: true, capabilities: ["tools"], contextLength: 200_000, cooldown: false, estimatedCostUsd: 0, observedLatencyMs: null }) });
     const result = await classifier("Implement a difficult change", config, { signal: new AbortController().signal, beforeIo: async () => { authorizations++; }, onUsage() {} });
-    expect(result).toEqual({ candidateId: deep, selectionReceiptId: expect.any(String) });
+    expect(result).toEqual({ candidateId: deep, selectionReceiptId: expect.any(String), classifierReceiptId: expect.any(String) });
     expect(authorizations).toBe(1);
     expect(script.requests).toHaveLength(1);
+    expect(script.requests[0]?.budget.maxOutputTokens).toBe(16);
     const journalDir = join(cwd, "routing-v2", "journal");
     const entries = (await Promise.all((await readdir(journalDir)).map((file) => readFile(join(journalDir, file), "utf8")))).flatMap((body) => body.trim().split("\n"));
     expect(entries).toHaveLength(1);
-    expect(JSON.parse(entries[0]!)).toMatchObject({ kind: "dispatch", recommendationSource: "classifier", classifierReceiptId: expect.any(String) });
+    const selection = result as NativeRoutingSelection;
+    expect(JSON.parse(entries[0]!)).toMatchObject({ kind: "dispatch", recommendationSource: "classifier",
+      classifierReceiptId: selection.classifierReceiptId, decisionId: selection.selectionReceiptId });
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
+test.each([
+  ["zero cost cap", { maxAttempts: 3, selectionTimeoutMs: 3_000, maxEstimatedCostUsd: 0, unknownCost: "allow" as const }, 0.01, "routing-v2-budget-exceeded"],
+  ["unknown-cost denial", { maxAttempts: 3, selectionTimeoutMs: 3_000, maxEstimatedCostUsd: null, unknownCost: "deny" as const }, null, "routing-v2-cost-unknown"],
+])("active v2 refuses classifier I/O under %s", async (_label, execution, estimatedCostUsd, expectedCode) => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-budget-"));
+  const response = "coding|expert|0.95|tools";
+  const script = scriptedProvider([[{ kind: "text_delta", text: response }, { kind: "model_end" }]]);
+  try {
+    await activateV2(cwd, { schemaVersion: 2,
+      categories: { default: { mode: "auto" }, coding: { mode: "auto" } },
+      classes: { expert: { selection: "priority", fallbackClasses: [], candidates: [{ target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 }] } },
+      classifier: { chain: [{ adapterId: "model", target: { providerId: "anthropic", modelId: standard } }], timeoutMs: 2500, minConfidence: 0.7, onFailure: { mode: "baseline" } },
+      execution });
+    const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: { ANTHROPIC_API_KEY: "fixture" }, availability: () => availability, bindings,
+      providerFactory: () => script.provider, outputTokensReserved: 100,
+      modelFacts: () => ({ connected: true, credentialsAvailable: true, capabilities: ["tools"], contextLength: 200_000, cooldown: false, estimatedCostUsd, observedLatencyMs: null }) });
+    await expect(classifier("Implement a difficult change", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} }))
+      .rejects.toMatchObject({ code: expectedCode, fatal: true });
+    expect(script.requests).toHaveLength(0);
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("active v2 charges classifier spend before admitting the selected model", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-native-classifier-v2-combined-budget-"));
+  const script = scriptedProvider([[{ kind: "text_delta", text: "coding|expert|0.95|tools" }, { kind: "model_end" }]]);
+  try {
+    await activateV2(cwd, { schemaVersion: 2,
+      categories: { default: { mode: "auto" }, coding: { mode: "auto" } },
+      classes: { expert: { selection: "priority", fallbackClasses: [], candidates: [{ target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 }] } },
+      classifier: { chain: [{ adapterId: "model", target: { providerId: "anthropic", modelId: standard } }], timeoutMs: 2500, minConfidence: 0.7, onFailure: { mode: "baseline" } },
+      execution: { maxAttempts: 3, selectionTimeoutMs: 3_000, maxEstimatedCostUsd: 0.15, unknownCost: "allow" } });
+    const classifier = createNativeRoutingClassifier({ cwd, configDir: cwd, env: { ANTHROPIC_API_KEY: "fixture" }, availability: () => availability, bindings,
+      providerFactory: () => script.provider, outputTokensReserved: 100,
+      modelFacts: () => ({ connected: true, credentialsAvailable: true, capabilities: ["tools"], contextLength: 200_000, cooldown: false, estimatedCostUsd: 0.1, observedLatencyMs: null }) });
+    await expect(classifier("Implement a difficult change", config, { signal: new AbortController().signal, beforeIo: async () => {}, onUsage() {} }))
+      .rejects.toMatchObject({ code: "routing-v2-budget-exceeded", fatal: true });
+    expect(script.requests).toHaveLength(1);
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
 

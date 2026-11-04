@@ -328,7 +328,7 @@ function classifyHttpError(status: number, _headers: Headers, code?: string): No
   if (status >= 500) {
     return { kind: "unavailable", retryable: retryableFor("unavailable", true), message: "" };
   }
-  if (status === 404) {
+  if (status === 404 && code === "model_not_found") {
     return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "", detail: { modelNotFound: true } };
   }
   // Other 4xx are non-retryable invalid requests.

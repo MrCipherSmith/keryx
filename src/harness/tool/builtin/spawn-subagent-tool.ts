@@ -69,7 +69,7 @@ import {
 import { providerClass, resolveChildModel, type ChildModelRequest } from "../../child/model";
 import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
 import { loadRoutingConfig } from "../../routing/config";
-import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../../routing/table";
+import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed, type FlatPickerProvider } from "../../routing/table";
 import { canonicalExternalAgentId } from "../../external/registry";
 import { resolveExternalSetting } from "../../../lib/external-switch";
 import {
@@ -80,13 +80,12 @@ import {
 } from "../../../lib/external-providers";
 import { loadActiveRoutingV2 } from "../../routing/active-v2";
 import { MODEL_CLASSES, isModelClass, modelRefKey, type ModelRef } from "../../routing/model-class";
-import { loadModelProfiles, profileKey } from "../../routing/model-profile";
+import { loadModelProfiles, profileKey, type ModelProfile } from "../../routing/model-profile";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../../routing/routing-runtime";
 import {
   buildCatalogRoutingSnapshot,
   catalogRoutingRevision,
   estimateModelCostUsd,
-  freshModelProfileAvailability,
 } from "../../routing/snapshot-adapter";
 import type { RoutingRequest } from "../../routing/routing-request";
 import { inspectProviderRoutingFacts, routingPolicyRevision } from "../../routing/provider-facts-v2";
@@ -715,7 +714,7 @@ export interface SpawnSubagentToolDeps {
    * one, so a caller holding a `detectProviders()` result must pass its `models`
    * through rather than mapping it down to bare names.
    */
-  getDetectedProviders: () => readonly { name: string; models?: readonly string[] }[];
+  getDetectedProviders: () => readonly FlatPickerProvider[];
   /**
    * Rank hints for tier resolution on the session's provider; the host supplies
    * the operator's `routing profile set --tier` pins here. Absent, the built-in
@@ -1127,9 +1126,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "lack shell/test execution and nested spawn; summaries are capped at 16000 chars. " +
         "Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
-        "trivial questions (answer yourself). Legacy routing optionally accepts a 'model_tier' " +
-        "(light|standard|deep); active routing v2 instead accepts a 'model_class' recommendation " +
-        "(light|standard|expert|frontier), below the configured subagents category. A 'runtime' " +
+        "trivial questions (answer yourself). Legacy routing optionally uses a 'model_tier' " +
+        "(light|standard|deep); active routing v2 accepts it only as ignored migration input and " +
+        "instead uses a 'model_class' recommendation (light|standard|expert|frontier), below the " +
+        "configured subagents category. A 'runtime' " +
         "block to delegate the child to an external vendor coding CLI instead of running it " +
         "in-process. Optional 'cwd' runs the child's tools against a different directory than " +
         "yours (e.g. a review worktree checked out at a PR head) — accepted only when it is your " +
@@ -1231,7 +1231,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
               "Size the child's model against your own: 'light' for mechanical, verifiable work, " +
               "'standard' for ordinary work (same as omitting it), 'deep' for genuinely hard " +
               "reasoning. Resolved against the models this session's provider actually reports; " +
-              "when they cannot be ranked the child keeps your model.",
+              "when they cannot be ranked the child keeps your model. With active routing v2 this " +
+              "legacy field is accepted for migration compatibility but ignored.",
           },
           model_class: {
             type: "string",
@@ -1492,11 +1493,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // reported, passed through verbatim. No table of model ids exists on this
       // path — a provider that reported no models simply contributes none, and
       // its tiers resolve to the session model.
-      const catalog: readonly DiscoveredProvider[] = detected.map((p) => ({
-        name: p.name,
+      const catalog: readonly (DiscoveredProvider & FlatPickerProvider)[] = detected.map((p) => ({
+        ...p,
         models: p.models ?? [],
       }));
       const activeRoutingV2 = loadActiveRoutingV2(deps.cwd, deps.routingConfigDir);
+      const legacyTierMigrationNotice = activeRoutingV2 !== undefined && input.model_tier !== undefined
+        ? `ignored legacy model_tier ${String(input.model_tier)} because routing v2 is authoritative; migrate the caller to model_class`
+        : undefined;
       if (input.model_class !== undefined && !isModelClass(input.model_class)) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
         return { status: "Error", output: "spawn_subagent model_class must be light, standard, expert, or frontier", isError: true };
@@ -1505,13 +1509,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-legacy", task });
         return { status: "Error", output: "spawn_subagent model_class requires active routing v2", isError: true };
       }
-      if (activeRoutingV2 !== undefined && input.model_tier !== undefined) {
-        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-v2", task });
-        return {
-          status: "Error",
-          output: "spawn_subagent model_tier is legacy-only while routing v2 is active; use model_class",
-          isError: true,
-        };
+      if (legacyTierMigrationNotice !== undefined) {
+        emitFleetEvent({
+          kind: "log",
+          id: workerId,
+          entry: {
+            kind: "system",
+            text: `spawn_subagent ${legacyTierMigrationNotice}`,
+          },
+        });
       }
       if (activeRoutingV2 !== undefined && isExternalRuntimeRequest && input.model_class !== undefined) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-unmanaged", task });
@@ -1533,6 +1539,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       let routingV2ExecutionBudget: {
         readonly ledger: RoutingBudgetLedger;
         readonly target: ModelRef;
+        readonly profile: ModelProfile | undefined;
         readonly receipt: RoutingDecisionReceipt;
         readonly selectionTimeoutMs: number;
         readonly beforeIo: (
@@ -1688,17 +1695,26 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           providerId: decision.selection.providerId,
           modelId: decision.selection.modelId,
         };
+        const selectedAvailability = snapshot.models.find(
+          (facts) => modelRefKey(facts.target) === modelRefKey(decision.selection),
+        )?.availability;
         routingV2ExecutionBudget = {
           ledger: routingBudget,
           target: decision.selection,
+          // One immutable snapshot per child dispatch. The before-I/O and
+          // metering callbacks share it instead of synchronously reparsing the
+          // complete profile catalogue on every model round.
+          profile: profiles[profileKey(decision.selection.providerId, decision.selection.modelId)],
           receipt: routingV2Receipt,
           selectionTimeoutMs: activeRoutingV2.execution.selectionTimeoutMs,
           beforeIo: async (target, _decisionId, context) => {
             const currentDetected = deps.getDetectedProviders();
             const currentCredentialedProviders = new Set(currentDetected.map((entry) => entry.name));
+            const currentProvider = currentDetected.find((entry) => entry.name === target.providerId);
             const currentEnv = envWithSavedApiKeys(process.env, deps.routingConfigDir);
-            if (!currentCredentialedProviders.has(target.providerId)
-              && !hasCredential(target.providerId, currentEnv, deps.routingConfigDir)) {
+            if (currentProvider?.authFailed === true
+              || (!currentCredentialedProviders.has(target.providerId)
+                && !hasCredential(target.providerId, currentEnv, deps.routingConfigDir))) {
               return { ok: false, reason: "credentials-missing" };
             }
             currentCredentialedProviders.add(target.providerId);
@@ -1719,12 +1735,17 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             ).ok;
             if (!currentChildAuthorized) return { ok: false, reason: "policy-denied" };
 
-            const currentProfile = loadModelProfiles(deps.routingConfigDir)[profileKey(target.providerId, target.modelId)];
             const authenticatedSession = modelRefKey(target) === modelRefKey(session);
-            if (!authenticatedSession && freshModelProfileAvailability(currentProfile, clock()) !== "available") {
-              return { ok: false, reason: "model-unavailable" };
+            const dispatchProfile = profiles[profileKey(target.providerId, target.modelId)];
+            if (!authenticatedSession) {
+              const explicitlyUnavailable = currentProvider?.offline === true
+                || currentProvider?.listUnavailable !== undefined
+                || (currentProvider?.models !== undefined && !currentProvider.models.includes(target.modelId));
+              if (explicitlyUnavailable || selectedAvailability !== "available") {
+                return { ok: false, reason: "model-unavailable" };
+              }
             }
-            const contextLength = currentProfile?.contextLength.value;
+            const contextLength = dispatchProfile?.contextLength.value;
             if (typeof contextLength === "number") {
               const requiredTokens = estimateNormalizedInputTokens(context.request) + context.request.budget.maxOutputTokens;
               if (requiredTokens > contextLength) return { ok: false, reason: "context-insufficient" };
@@ -2197,13 +2218,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
 
       let provider: ProviderPort;
       try {
-        provider = deps.makeProvider(runModel.provider, runModel.model, parent.baseUrl);
+        const providerBaseUrl = runModel.provider === parent.providerId ? parent.baseUrl : undefined;
+        provider = deps.makeProvider(runModel.provider, runModel.model, providerBaseUrl);
         if (routingV2ExecutionBudget !== undefined) {
           const decisionId = routingV2ExecutionBudget.receipt.decision.decisionId;
           const routingTarget = routingV2ExecutionBudget.target;
-          const currentProfile = () => loadModelProfiles(deps.routingConfigDir)[
-            profileKey(routingTarget.providerId, routingTarget.modelId)
-          ];
+          const dispatchProfile = routingV2ExecutionBudget.profile;
           provider = createMeteredRoutingProvider({
             provider,
             target: routingTarget,
@@ -2212,13 +2232,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             selectionTimeoutMs: routingV2ExecutionBudget.selectionTimeoutMs,
             beforeIo: routingV2ExecutionBudget.beforeIo,
             estimatedCostUsd: (request) => estimateModelCostUsd(
-              currentProfile(),
+              dispatchProfile,
               estimateNormalizedInputTokens(request),
               request.budget.maxOutputTokens,
             ),
             actualCostUsd: ({ usage, estimatedCostUsd }) => usage?.inputTokens === undefined || usage.outputTokens === undefined
               ? estimatedCostUsd ?? 0
-              : estimateModelCostUsd(currentProfile(), usage.inputTokens, usage.outputTokens) ?? estimatedCostUsd ?? 0,
+              : estimateModelCostUsd(dispatchProfile, usage.inputTokens, usage.outputTokens) ?? estimatedCostUsd ?? 0,
             journal: {
               cwd: deps.cwd,
               ...(deps.routingConfigDir === undefined ? {} : { configDir: deps.routingConfigDir }),
@@ -2815,7 +2835,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           (advisoryToolCalls === undefined ? "" : `calls~${advisoryToolCalls}(advisory) `) +
           `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
           (tierRecord === undefined ? "" : `${tierRecord}\n`) +
-          (routingRecord === undefined ? "" : `${routingRecord}\n`);
+          (routingRecord === undefined ? "" : `${routingRecord}\n`) +
+          (legacyTierMigrationNotice === undefined ? "" : `migration: ${legacyTierMigrationNotice}\n`);
         // Only a completed child with text is final: a stopped one, or one with no text, never replaces a complete result.
         const saveNote = recordSaveNote(await saveRecord(producedNoText ? "" : childText, { final: status === "Completed" && !producedNoText }), "full result", String(input.save_result_to));
         if (status === "Completed") {

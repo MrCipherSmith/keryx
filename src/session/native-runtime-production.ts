@@ -22,6 +22,7 @@ import { createNativeProviderServices } from "./native-provider-bindings";
 import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
 import { DEFAULT_MAX_OUTPUT_TOKENS } from "../commands/agent";
 import type { ProviderDescription } from "../harness/provider/types";
+import { NativeRoutingBudgetStore } from "./native-routing-budget";
 
 export interface ProductionNativeRuntimeOptions {
   cwd: string;
@@ -155,9 +156,10 @@ export async function assembleNativeSessionRuntime(options: ProductionNativeRunt
     };
     const modelParams = resolveProviderModelParamsByName(options.providerId, saved, options.configDir);
     const outputTokensReserved = modelParams.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+    const routingBudgetStore = new NativeRoutingBudgetStore();
     const classifier = createNativeRoutingClassifier({ cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }), env,
       availability: (config) => runtime.routing(config).availability(), bindings: () => runtime.modelBindings(), providerFactory: resolveProvider,
-      outputTokensReserved,
+      outputTokensReserved, routingBudgetStore,
       modelFactsFactory: () => {
         const profiles = loadModelProfiles(options.configDir);
         return (target, candidate, requirements) => {
@@ -184,7 +186,7 @@ export async function assembleNativeSessionRuntime(options: ProductionNativeRunt
         };
       } });
     const runtime: NativeSessionRuntime = createNativeSessionRuntime({ cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }), provider, providerId: options.providerId, modelId: options.modelId,
-      nativeClassifier: classifier, spawnOwnedGit, ...(options.modelBindings === undefined ? {} : { modelBindings: options.modelBindings }),
+      nativeClassifier: classifier, routingBudgetStore, spawnOwnedGit, ...(options.modelBindings === undefined ? {} : { modelBindings: options.modelBindings }),
       // Configured provider list/test over the same local credentials and endpoints as the coding provider; selection stays the native owner's.
       servicesFactory: (context) => productionSessionServices(options, { ...context, providers: createNativeProviderServices({ ...(options.configDir === undefined ? {} : { configDir: options.configDir }),
         env, fetch: globalThis.fetch, candidates: context.routingAvailability().candidates, bindings: runtime.modelBindings(),

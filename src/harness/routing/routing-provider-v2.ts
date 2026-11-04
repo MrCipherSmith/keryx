@@ -43,29 +43,47 @@ export interface MeteredRoutingProviderOptions {
 }
 
 class EventQueue {
-  readonly #events: NormalizedEvent[] = [];
+  readonly #events: Array<{
+    readonly event: NormalizedEvent;
+    readonly acknowledge: () => void;
+    readonly reject: (reason: Error) => void;
+  }> = [];
   readonly #waiters: Array<(value: IteratorResult<NormalizedEvent>) => void> = [];
   #closed = false;
 
-  push(event: NormalizedEvent): void {
-    if (this.#closed) return;
+  push(event: NormalizedEvent): Promise<void> {
+    if (this.#closed) return Promise.reject(new Error("routing event queue is closed"));
     const waiter = this.#waiters.shift();
-    if (waiter === undefined) this.#events.push(event);
-    else waiter({ done: false, value: event });
+    if (waiter !== undefined) {
+      waiter({ done: false, value: event });
+      return Promise.resolve();
+    }
+    if (this.#events.length > 0) return Promise.reject(new Error("routing event queue capacity exceeded"));
+    return new Promise<void>((acknowledge, reject) => {
+      this.#events.push({ event, acknowledge, reject });
+    });
   }
 
   close(): void {
+    if (this.#closed) return;
     this.#closed = true;
+    const error = new Error("routing event queue is closed");
+    for (const queued of this.#events.splice(0)) queued.reject(error);
     for (const waiter of this.#waiters.splice(0)) waiter({ done: true, value: undefined });
   }
 
   next(): Promise<IteratorResult<NormalizedEvent>> {
-    const event = this.#events.shift();
-    if (event !== undefined) return Promise.resolve({ done: false, value: event });
+    const queued = this.#events.shift();
+    if (queued !== undefined) {
+      queued.acknowledge();
+      return Promise.resolve({ done: false, value: queued.event });
+    }
     if (this.#closed) return Promise.resolve({ done: true, value: undefined });
     return new Promise((resolve) => this.#waiters.push(resolve));
   }
 }
+
+const MAX_PRECOMMIT_EVENTS = 32;
 
 function normalizedError(reason: RoutingReason): NormalizedError {
   const kind: NormalizedError["kind"] = reason === "cancelled" ? "cancelled"
@@ -153,6 +171,14 @@ export function createMeteredRoutingProvider(options: MeteredRoutingProviderOpti
         try { await options.onDenied?.(reason, selectedRequest); } catch { /* Denial remains fail-closed if audit notification fails. */ }
         return { kind: "provider_error", sequence: 1, attemptId: streamOptions.attemptId, error: normalizedError(reason) };
       };
+      if (signal?.aborted) {
+        yield await deny("cancelled");
+        return;
+      }
+      if (!Number.isFinite(options.selectionTimeoutMs) || options.selectionTimeoutMs <= 0) {
+        yield await deny("uncertain-outcome");
+        return;
+      }
       const selection = selectionAbort(signal, options.selectionTimeoutMs);
       try {
         const authorization = await Promise.race([
@@ -224,72 +250,102 @@ async function* executeProviderRoute(
   selectionRemainingMs: number,
 ): AsyncIterable<NormalizedEvent> {
   const queue = new EventQueue();
+  const streamController = new AbortController();
+  const executionSignal = outerSignal === undefined
+    ? streamController.signal
+    : AbortSignal.any([outerSignal, streamController.signal]);
   let sequence = 0;
   let terminalErrorEmitted = false;
   let currentDecisionId: string | undefined;
   let buffered: NormalizedEvent[] = [];
-  const emit = (event: NormalizedEvent): void => {
-    queue.push({ ...event, sequence: ++sequence, attemptId: streamOptions.attemptId });
+  const emit = async (event: NormalizedEvent): Promise<void> => {
+    await queue.push({ ...event, sequence: ++sequence, attemptId: streamOptions.attemptId });
   };
-  const flush = (): void => {
-    for (const event of buffered) emit(event);
+  const flush = async (): Promise<void> => {
+    const pending = buffered;
     buffered = [];
+    for (const event of pending) await emit(event);
   };
 
-  const execution = executeRoutingWithFallback({
-    request: routed.request,
-    snapshot: routed.snapshot,
-    config: options.config,
-    budget: options.budget,
-    providerFor: options.providerFor,
-    beforeIo: options.beforeIo,
-    buildRequest: (target) => ({ ...normalizedRequest, providerId: target.providerId, modelId: target.modelId }),
-    ...(outerSignal === undefined ? {} : { signal: outerSignal }),
-    ...(streamOptions.timeoutMs === undefined ? {} : { streamTimeoutMs: streamOptions.timeoutMs }),
-    selectionTimeoutMs: selectionRemainingMs,
-    ...(options.actualCostUsd === undefined ? {} : { actualCostUsd: options.actualCostUsd }),
-    ...(options.onAttemptSettled === undefined ? {} : { onAttemptSettled: options.onAttemptSettled }),
-    ...(options.journal === undefined ? {} : { journal: options.journal }),
-    ...(options.now === undefined ? {} : { now: options.now }),
-    failureRegistry,
-    onEvent: (event, attempt) => {
-      if (currentDecisionId !== attempt.decisionId) {
-        currentDecisionId = attempt.decisionId;
+  const execution = (async (): Promise<void> => {
+    try {
+      const result = await executeRoutingWithFallback({
+        request: routed.request,
+        snapshot: routed.snapshot,
+        config: options.config,
+        budget: options.budget,
+        providerFor: options.providerFor,
+        beforeIo: options.beforeIo,
+        buildRequest: (target) => ({ ...normalizedRequest, providerId: target.providerId, modelId: target.modelId }),
+        signal: executionSignal,
+        ...(streamOptions.timeoutMs === undefined ? {} : { streamTimeoutMs: streamOptions.timeoutMs }),
+        selectionTimeoutMs: selectionRemainingMs,
+        ...(options.actualCostUsd === undefined ? {} : { actualCostUsd: options.actualCostUsd }),
+        ...(options.onAttemptSettled === undefined ? {} : { onAttemptSettled: options.onAttemptSettled }),
+        ...(options.journal === undefined ? {} : { journal: options.journal }),
+        ...(options.now === undefined ? {} : { now: options.now }),
+        failureRegistry,
+        onEvent: async (event, attempt) => {
+          if (currentDecisionId !== attempt.decisionId) {
+            currentDecisionId = attempt.decisionId;
+            buffered = [];
+          }
+          if (event.kind === "provider_error") {
+            buffered = [];
+            terminalErrorEmitted = true;
+            await emit(event);
+            return;
+          }
+          const commitsAttempt = event.kind === "model_end"
+            || event.kind === "tool_call_start" || event.kind === "tool_call_delta" || event.kind === "tool_call_end"
+            || ((event.kind === "text_delta" || event.kind === "reasoning_delta") && (event.text?.length ?? 0) > 0);
+          if (!commitsAttempt) {
+            if (buffered.length >= MAX_PRECOMMIT_EVENTS) throw new Error("routing precommit event buffer capacity exceeded");
+            buffered.push(event);
+            return;
+          }
+          await flush();
+          await emit(event);
+        },
+      });
+      for (const receipt of result.receipts) {
+        try {
+          await options.onReceipt?.(receipt);
+        } catch {
+          // Receipt observation is non-authoritative and cannot change a completed provider outcome.
+        }
+      }
+      if (result.status !== "completed" && !terminalErrorEmitted) {
         buffered = [];
+        await emit({ kind: "provider_error", sequence: 0, attemptId: streamOptions.attemptId, error: normalizedError(result.reason) });
       }
-      if (event.kind === "provider_error") {
+    } catch {
+      if (!streamController.signal.aborted && !terminalErrorEmitted) {
         buffered = [];
-        terminalErrorEmitted = true;
-        emit(event);
-        return;
+        try {
+          await emit({ kind: "provider_error", sequence: 0, attemptId: streamOptions.attemptId, error: normalizedError("uncertain-outcome") });
+        } catch {
+          // A closed consumer-owned queue cannot receive a terminal event.
+        }
       }
-      const commitsAttempt = event.kind === "model_end"
-        || event.kind === "tool_call_start" || event.kind === "tool_call_delta" || event.kind === "tool_call_end"
-        || ((event.kind === "text_delta" || event.kind === "reasoning_delta") && (event.text?.length ?? 0) > 0);
-      if (!commitsAttempt) {
-        buffered.push(event);
-        return;
-      }
-      flush();
-      emit(event);
-    },
-  }).then(async (result) => {
-    for (const receipt of result.receipts) await options.onReceipt?.(receipt);
-    if (result.status !== "completed" && !terminalErrorEmitted) {
-      buffered = [];
-      emit({ kind: "provider_error", sequence: 0, attemptId: streamOptions.attemptId, error: normalizedError(result.reason) });
+    } finally {
+      queue.close();
     }
-  }).catch(() => {
-    if (!terminalErrorEmitted) {
-      buffered = [];
-      emit({ kind: "provider_error", sequence: 0, attemptId: streamOptions.attemptId, error: normalizedError("uncertain-outcome") });
-    }
-  }).finally(() => queue.close());
+  })();
 
-  while (true) {
-    const item = await queue.next();
-    if (item.done) break;
-    yield item.value;
+  let consumedToEnd = false;
+  try {
+    while (true) {
+      const item = await queue.next();
+      if (item.done) {
+        consumedToEnd = true;
+        break;
+      }
+      yield item.value;
+    }
+  } finally {
+    if (!consumedToEnd) streamController.abort(new Error("routing stream consumer closed"));
+    queue.close();
+    await execution;
   }
-  await execution;
 }

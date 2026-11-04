@@ -73,7 +73,7 @@ import { spawnSync } from "node:child_process";
 import { join as joinPath } from "node:path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
-import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+import type { NormalizedMessage, NormalizedUsage, ProviderDescription } from "../harness/provider/types";
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
@@ -4412,6 +4412,32 @@ export function describeModePickerOption(mode: PermissionMode): string {
   return `${MODE_PICKER_DESCRIPTIONS[mode]} · ${describeRoundLimit(mode)}`;
 }
 
+/** User-facing recovery copy for routing denials; never expose internal reason tokens alone. */
+export function renderRoutingBlockedMessage(reason: string): string {
+  const guidance: Readonly<Record<string, string>> = {
+    "config-invalid": "the routed provider/model configuration changed; reopen /routing or reconnect the provider",
+    "model-unavailable": "the selected model is unavailable; check /connect or choose another model in /routing",
+    "attempts-exhausted": "all eligible models failed; check provider connections, then retry",
+    "credentials-missing": "the selected provider is not connected; run /connect and retry",
+    "policy-denied": "the selected provider is blocked by current policy; review /external and routing settings",
+    "provider-scope-conflict": "the selected provider is outside the configured routing scope; review /routing settings",
+    "auth-failed": "provider authentication failed; reconnect it with /connect",
+    "candidate-unverified": "model availability could not be verified; refresh provider detection or choose another model",
+    "capability-missing": "no connected model supports the capabilities this turn needs; connect or choose a compatible model",
+    "context-insufficient": "no eligible model has enough context for this turn; shorten the conversation or choose a larger-context model",
+    cooldown: "eligible models are temporarily cooling down; wait briefly and retry",
+    "cost-unknown": "model cost is unknown under the current budget policy; add pricing data or allow unknown cost",
+    "budget-exceeded": "the routing budget is too low for an eligible model; raise the limit or choose a lower-cost class",
+    "minimum-class-unproven": "no connected model is proven to meet the requested class; update model profiles or choose explicitly",
+    "class-below-minimum": "connected candidates are below the minimum class for this task; connect a stronger model",
+    "empty-class": "the requested model class has no enabled candidates; configure candidates in /routing",
+    "classifier-failed": "automatic task classification failed; check classifier access or configure an explicit category",
+    "uncertain-outcome": "the previous model attempt may have produced output; inspect the provider before retrying",
+    "cancelled": "routing was cancelled before provider I/O; retry the turn",
+  };
+  return `[route blocked: ${guidance[reason] ?? "no eligible model; check /routing and /connect"}]`;
+}
+
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
  * NO concurrent readline (that leaked terminal query responses, flows 065/066).
@@ -4453,6 +4479,8 @@ export async function launchTuiAgentShell(opts: {
     getSlateSession: () => SlateSessionRef | undefined,
     bus?: { client: () => BusClient | undefined },
   ) => Promise<AgentDeps>;
+  /** Static, trusted provider capability facts used by routing before model I/O. */
+  describeProvider?: (providerId: string, modelId: string) => ProviderDescription;
   /**
    * Flow 268 T16 (AC11): update the CALLER's `/reasoning` session-override
    * state (`commands/shell.ts`'s `reasoningSessionOverride`) so the NEXT
@@ -10976,7 +11004,7 @@ export async function launchTuiAgentShell(opts: {
               sessionModel: currentSel.model,
               requestId: sessionDeps.idSeq(),
               requirements: {
-                capabilities: [],
+                capabilities: sessionDeps.tools.length > 0 ? ["tools"] : [],
                 inputTokensRequired: estimateRequestTokens(
                   [...history, { content: line }],
                   sessionDeps.systemInstruction,
@@ -10985,12 +11013,13 @@ export async function launchTuiAgentShell(opts: {
                 outputTokensReserved: sessionDeps.maxOutputTokens ?? resolveAgentMaxOutputTokens(),
               },
               baselineCapabilities,
+              ...(opts.describeProvider === undefined ? {} : { describeProvider: opts.describeProvider }),
             });
           } catch {
             // fail-closed: classification must never block or fail the turn.
           }
           if (!turnSignal.aborted && routingOutcome?.blockTurn === true) {
-            io.onSystem?.(`[route blocked: ${routingOutcome.fallbackReason ?? "no eligible model"}]\n`);
+            io.onSystem?.(`${renderRoutingBlockedMessage(routingOutcome.fallbackReason ?? "no-eligible-model")}\n`);
             foregroundOperation.settle(operation);
             if (!foregroundOperation.isDisposed) stopBusy();
             return;
@@ -10999,6 +11028,7 @@ export async function launchTuiAgentShell(opts: {
             const prepared = await prepareRoutingCandidate<AgentDeps>({
               ...routingV2,
               signal: turnSignal,
+              selectionTimeoutMs: Math.max(0, routingV2.selectionDeadline - performance.now()),
               prepare: async (target, decisionId, signal) => {
                 const allowed = await routingV2.beforeIo(target, decisionId, { signal });
                 if (!allowed.ok) return allowed;
@@ -11017,7 +11047,7 @@ export async function launchTuiAgentShell(opts: {
               },
             });
             if (!prepared.ok || turnSignal.aborted) {
-              if (!turnSignal.aborted && !prepared.ok) io.onSystem?.(`[route blocked: ${prepared.reason}]\n`);
+              if (!turnSignal.aborted && !prepared.ok) io.onSystem?.(`${renderRoutingBlockedMessage(prepared.reason)}\n`);
               foregroundOperation.settle(operation);
               if (!foregroundOperation.isDisposed) stopBusy();
               return;
@@ -11032,9 +11062,15 @@ export async function launchTuiAgentShell(opts: {
                 target: prepared.target,
                 receipt: prepared.receipt,
                 budget: routingV2.budget,
-                selectionTimeoutMs: routingV2.config.execution.selectionTimeoutMs,
+                selectionTimeoutMs: Math.max(0, routingV2.selectionDeadline - performance.now()),
                 beforeIo: routingV2.beforeIo,
                 estimatedCostUsd: (request) => routingV2.estimatedCostUsd(request, prepared.target),
+                actualCostUsd: ({ request, usage, estimatedCostUsd }) => routingV2.actualCostUsd(
+                  request,
+                  prepared.target,
+                  usage,
+                  estimatedCostUsd,
+                ),
                 journal: routingV2.journal,
               }),
             };

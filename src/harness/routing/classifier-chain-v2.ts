@@ -1,9 +1,12 @@
-import type { ModelClass } from "./model-class";
+import { MODEL_CLASSES, type ModelClass } from "./model-class";
 import type { RoutingBudgetLedger } from "./routing-budget";
 import { routingV2Digest } from "./config-v2";
+import { ROUTING_CAPABILITIES, type RoutingCapability } from "./routing-request";
+import { ROUTING_CATEGORIES, type RoutingCategory } from "./table";
+import type { NormalizedUsage } from "../provider/types";
 
-export type RoutingCategory = "default" | "review" | "subagents" | "quick" | "coding" | "planning" | "docs" | "unattended";
-export type RoutingCapability = "tools" | "vision" | "structured-output";
+export type { RoutingCapability } from "./routing-request";
+export type { RoutingCategory } from "./table";
 
 export interface RoutingClassification {
   readonly category: RoutingCategory;
@@ -16,6 +19,8 @@ export interface RoutingClassification {
 export interface RoutingClassifierAdapter<Input = unknown> {
   readonly id: string;
   classify(input: Input, context: { readonly signal: AbortSignal }): Promise<unknown>;
+  /** Usage from the most recent classify call, when the adapter's provider reported it. */
+  lastUsage?(): NormalizedUsage | undefined;
 }
 
 export type ClassifierFallbackAssignment =
@@ -53,20 +58,20 @@ export interface RunRoutingClassifierChainOptions<Input> {
   };
 }
 
-const CATEGORIES = new Set<RoutingCategory>(["default", "review", "subagents", "quick", "coding", "planning", "docs", "unattended"]);
-const MODEL_CLASSES = new Set<ModelClass>(["light", "standard", "expert", "frontier"]);
-const CAPABILITIES = new Set<RoutingCapability>(["tools", "vision", "structured-output"]);
+const CATEGORY_SET = new Set<RoutingCategory>(ROUTING_CATEGORIES);
+const MODEL_CLASS_SET = new Set<ModelClass>(MODEL_CLASSES);
+const CAPABILITY_SET = new Set<RoutingCapability>(ROUTING_CAPABILITIES);
 const CLASSIFICATION_KEYS = new Set(["category", "modelClass", "confidence", "reasonCode", "requiredCapabilities"]);
 
 export function parseRoutingClassification(value: unknown): RoutingClassification | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
   if (Object.keys(record).some((key) => !CLASSIFICATION_KEYS.has(key))) return undefined;
-  if (!CATEGORIES.has(record.category as RoutingCategory) || !MODEL_CLASSES.has(record.modelClass as ModelClass)) return undefined;
+  if (!CATEGORY_SET.has(record.category as RoutingCategory) || !MODEL_CLASS_SET.has(record.modelClass as ModelClass)) return undefined;
   if (typeof record.confidence !== "number" || !Number.isFinite(record.confidence) || record.confidence < 0 || record.confidence > 1) return undefined;
   if (typeof record.reasonCode !== "string" || record.reasonCode.length < 1 || record.reasonCode.length > 240) return undefined;
   if (!Array.isArray(record.requiredCapabilities)) return undefined;
-  if (record.requiredCapabilities.some((capability) => !CAPABILITIES.has(capability as RoutingCapability))) return undefined;
+  if (record.requiredCapabilities.some((capability) => !CAPABILITY_SET.has(capability as RoutingCapability))) return undefined;
   if (new Set(record.requiredCapabilities).size !== record.requiredCapabilities.length) return undefined;
   return {
     category: record.category as RoutingCategory,

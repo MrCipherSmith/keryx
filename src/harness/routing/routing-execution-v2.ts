@@ -116,6 +116,8 @@ export async function prepareRoutingCandidate<T>(
   input: Pick<ExecuteRoutingWithFallbackInput, "request" | "snapshot" | "config" | "journal"> & {
     readonly receipt: RoutingDecisionReceipt;
     readonly signal: AbortSignal;
+    /** Remaining selection budget supplied by an outer classifier/resolver. */
+    readonly selectionTimeoutMs?: number;
     readonly prepare: (target: ModelRef, decisionId: string, signal: AbortSignal) => Promise<
       { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: RoutingReason }
     >;
@@ -125,7 +127,15 @@ export async function prepareRoutingCandidate<T>(
   | { readonly ok: false; readonly reason: RoutingReason }
 > {
   const state: RuntimeSnapshotState = { snapshot: input.snapshot, excluded: new Set() };
-  const signal = AbortSignal.any([input.signal, AbortSignal.timeout(input.config.execution.selectionTimeoutMs)]);
+  const requestedSelectionTimeoutMs = input.selectionTimeoutMs;
+  const selectionTimeoutMs = requestedSelectionTimeoutMs === undefined
+    ? input.config.execution.selectionTimeoutMs
+    : Number.isFinite(requestedSelectionTimeoutMs)
+      ? Math.max(0, Math.ceil(Math.min(input.config.execution.selectionTimeoutMs, requestedSelectionTimeoutMs)))
+      : 0;
+  if (input.signal.aborted) return { ok: false, reason: "cancelled" };
+  if (selectionTimeoutMs <= 0) return { ok: false, reason: "uncertain-outcome" };
+  const signal = AbortSignal.any([input.signal, AbortSignal.timeout(selectionTimeoutMs)]);
   let receipt = input.receipt;
   for (let attempt = 0; attempt < input.config.execution.maxAttempts; attempt += 1) {
     if (signal.aborted) return { ok: false, reason: input.signal.aborted ? "cancelled" : "uncertain-outcome" };
@@ -268,7 +278,10 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) throw new Error("routing maxAttempts must be an integer from 1 to 10");
   const budget = input.budget;
   const monotonicNow = input.monotonicNow ?? (() => performance.now());
-  let selectionRemainingMs = input.selectionTimeoutMs ?? input.config.execution.selectionTimeoutMs;
+  const selectionTimeoutMs = input.selectionTimeoutMs ?? input.config.execution.selectionTimeoutMs;
+  let selectionDeadlineMs = monotonicNow() + Math.max(0, selectionTimeoutMs);
+  const selectionRemainingMs = (): number => Math.max(0, selectionDeadlineMs - monotonicNow());
+  const selectionExpired = (): boolean => selectionRemainingMs() <= 0;
   const state: RuntimeSnapshotState = { snapshot: input.snapshot, excluded: new Set() };
   const attempts: RoutingExecutionAttempt[] = [];
   const receipts: RoutingDecisionReceipt[] = [];
@@ -279,6 +292,7 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
     ...(input.journal === undefined ? {} : { journal: { ...input.journal, kind: "dispatch" as const } }),
   });
   receipts.push(receipt);
+  if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
 
   while (true) {
     if (input.signal?.aborted) return terminal("cancelled", "cancelled", receipt, receipts, attempts);
@@ -291,31 +305,37 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
     const target = receipt.decision.selection;
     const key = modelRefKey(target);
     if (state.excluded.has(key)) return terminal("blocked", "attempts-exhausted", receipt, receipts, attempts);
-    const selectionStartedAt = monotonicNow();
-    const selectionAllowanceMs = selectionRemainingMs;
+    const selectionAllowanceMs = selectionRemainingMs();
     let revalidation = await revalidateBeforeIo(input, target, receipt.decision.decisionId, selectionAllowanceMs);
-    const selectionElapsedMs = Math.max(0, monotonicNow() - selectionStartedAt);
-    selectionRemainingMs = Math.max(0, selectionRemainingMs - selectionElapsedMs);
-    if (selectionElapsedMs >= selectionAllowanceMs && revalidation.status !== "cancelled") revalidation = { status: "timeout" };
+    if (selectionExpired() && revalidation.status !== "cancelled") revalidation = { status: "timeout" };
     if (revalidation.status === "cancelled") return terminal("cancelled", "cancelled", receipt, receipts, attempts);
     if (revalidation.status === "timeout") return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
     if (revalidation.status === "error") return terminal("blocked", "config-invalid", receipt, receipts, attempts);
     if (revalidation.status === "rejected") {
       const previousDecisionId = receipt.decision.decisionId;
       updateRuntimeSnapshot(state, target, revalidation.reason, (input.now?.() ?? new Date()).toISOString());
+      if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
       receipt = resolveRoutingForRuntime({ request: input.request, snapshot: state.snapshot, config: input.config, previousDecisionId, fallbackReason: revalidation.reason, ...(input.journal === undefined ? {} : { journal: { ...input.journal, kind: "dispatch" as const } }) });
       receipts.push(receipt);
+      if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
       continue;
     }
 
     const facts = factsFor(state.snapshot, target);
+    if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
     const estimate = facts?.estimatedCostUsd ?? null;
     const reserved = budget.reserve({ estimatedCostUsd: estimate, purpose: "execution" });
+    if (selectionExpired()) {
+      if (reserved.ok) budget.release(reserved.reservation.id);
+      return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
+    }
     if (!reserved.ok) {
       const previousDecisionId = receipt.decision.decisionId;
       updateRuntimeSnapshot(state, target, reserved.reason, (input.now?.() ?? new Date()).toISOString());
+      if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
       receipt = resolveRoutingForRuntime({ request: input.request, snapshot: state.snapshot, config: input.config, previousDecisionId, fallbackReason: reserved.reason, ...(input.journal === undefined ? {} : { journal: { ...input.journal, kind: "dispatch" as const } }) });
       receipts.push(receipt);
+      if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
       continue;
     }
     const reservationId = reserved.reservation.id;
@@ -330,6 +350,10 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
       budget.release(reservationId);
       return terminal("blocked", "config-invalid", receipt, receipts, attempts);
     }
+    if (selectionExpired()) {
+      budget.release(reservationId);
+      return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
+    }
     if (input.signal?.aborted) {
       budget.release(reservationId);
       return terminal("cancelled", "cancelled", receipt, receipts, attempts);
@@ -340,6 +364,10 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
       budget.release(reservationId);
       return terminal("blocked", "config-invalid", receipt, receipts, attempts);
     }
+    if (selectionExpired()) {
+      budget.release(reservationId);
+      return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
+    }
 
     let visible = false;
     let toolCall = false;
@@ -348,7 +376,11 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
     let completed = false;
     const settleAttempt = (attempt: RoutingExecutionAttempt): void => {
       attempts.push(attempt);
-      input.onAttemptSettled?.({ ...attempt, ...(usage !== undefined ? { usage } : {}) });
+      try {
+        input.onAttemptSettled?.({ ...attempt, ...(usage !== undefined ? { usage } : {}) });
+      } catch {
+        // Attempt observation is non-authoritative and cannot alter execution outcome.
+      }
     };
     let iterator: AsyncIterator<NormalizedEvent>;
     try {
@@ -363,7 +395,23 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
       journalAttempt(input, receipt.decision.decisionId, attemptNumber, "interrupted", usage);
       return terminal("interrupted", "uncertain-outcome", receipt, receipts, attempts);
     }
+    if (selectionExpired()) {
+      budget.release(reservationId);
+      try {
+        await iterator.return?.();
+      } catch {
+        // The iterator has not started; cleanup failure cannot authorize provider I/O.
+      }
+      return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
+    }
     const cancellation = input.signal === undefined ? undefined : abortPromise(input.signal);
+    const providerIoStartedAt = monotonicNow();
+    let providerIoFinished = false;
+    const finishProviderIo = (): void => {
+      if (providerIoFinished) return;
+      providerIoFinished = true;
+      selectionDeadlineMs += Math.max(0, monotonicNow() - providerIoStartedAt);
+    };
     try {
       while (true) {
         const item = cancellation === undefined ? await iterator.next() : await Promise.race([iterator.next(), cancellation]);
@@ -383,6 +431,7 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
         }
       }
     } catch {
+      finishProviderIo();
       try {
         await iterator.return?.();
       } catch {
@@ -399,6 +448,7 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
       return terminal("interrupted", "uncertain-outcome", receipt, receipts, attempts);
     }
 
+    finishProviderIo();
     reconcileBudget(input, budget, reservationId, target, usage, estimate);
     if (completed) {
       settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "complete", emittedVisibleOutput: visible, emittedToolCall: toolCall });
@@ -448,13 +498,16 @@ export async function executeRoutingWithFallback(input: ExecuteRoutingWithFallba
 
     settleAttempt({ attemptId, decisionId: receipt.decision.decisionId, target, outcome: "failed", reason, emittedVisibleOutput: false, emittedToolCall: false });
     journalAttempt(input, receipt.decision.decisionId, attemptNumber, "rejected", usage);
+    if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
     const previousDecisionId = receipt.decision.decisionId;
     const failureObservedAt = input.now?.() ?? new Date();
     if (providerError.error?.detail?.modelNotFound === true) input.failureRegistry?.recordModelNotFound(target, state.snapshot.catalogRevision);
     else if (providerError.error?.kind === "rate_limit") input.failureRegistry?.recordRateLimit(target, state.snapshot.catalogRevision, providerError.error.retryAfterMs, failureObservedAt);
     else if (providerError.error?.kind === "authentication") input.failureRegistry?.recordAuthFailure(target.providerId);
     updateRuntimeSnapshot(state, target, reason, failureObservedAt.toISOString());
+    if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
     receipt = resolveRoutingForRuntime({ request: input.request, snapshot: state.snapshot, config: input.config, previousDecisionId, fallbackReason: reason, ...(input.journal === undefined ? {} : { journal: { ...input.journal, kind: "dispatch" as const } }) });
     receipts.push(receipt);
+    if (selectionExpired()) return terminal("blocked", "uncertain-outcome", receipt, receipts, attempts);
   }
 }

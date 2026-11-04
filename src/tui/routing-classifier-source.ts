@@ -39,18 +39,18 @@ import { availablePredicateFromProfiles, loadModelProfiles, profileKey } from ".
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
 import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
 import { routingV2Digest } from "../harness/routing/config-v2";
-import { buildCatalogRoutingSnapshot, estimateModelCostUsd } from "../harness/routing/snapshot-adapter";
-import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
+import { estimateModelCostUsd } from "../harness/routing/snapshot-adapter";
 import type { RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
 import type { RoutingAssignmentV2 } from "../harness/routing/config-v2";
 import type { RoutingRequirements } from "../harness/routing/routing-request";
 import type { RoutingCapability } from "../harness/routing/routing-request";
-import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
-import { runProductionRoutingClassification } from "../harness/routing/routing-classifier-service";
+import type { RoutingBudgetLedger } from "../harness/routing/routing-budget";
+import { routeTurnV2 } from "../harness/routing/routing-turn-service-v2";
 import type { RoutingSnapshot } from "../harness/routing/snapshot";
 import type { RoutingRequest } from "../harness/routing/routing-request";
-import type { NormalizedRequest } from "../harness/provider/types";
+import type { NormalizedRequest, NormalizedUsage, ProviderDescription } from "../harness/provider/types";
 import { estimateRequestTokens } from "../harness/provider/context-guard";
+import { DEFAULT_JEV_ROUTING_TARGET } from "../harness/routing/classifier-adapters-v2";
 import { randomUUID } from "node:crypto";
 
 /**
@@ -83,6 +83,8 @@ export interface RoutingClassifierTurnOptions {
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
   readonly providerFactory?: ProviderFactory;
+  /** Trusted static capability description for any catalog target. */
+  readonly describeProvider?: (providerId: string, modelId: string) => ProviderDescription;
   /** Stable trusted task identity, shared by classification and execution. */
   readonly requestId?: string;
   /** Frozen trusted task envelope; omitted only by legacy/headless callers. */
@@ -120,6 +122,14 @@ export interface RoutingClassifierTurnResult {
       context: { readonly signal: AbortSignal },
     ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: "cancelled" | "policy-denied" | "credentials-missing" }>;
     readonly estimatedCostUsd: (request: NormalizedRequest, target: { readonly providerId: string; readonly modelId: string }) => number | null;
+    readonly actualCostUsd: (
+      request: NormalizedRequest,
+      target: { readonly providerId: string; readonly modelId: string },
+      usage: NormalizedUsage | undefined,
+      estimatedCostUsd: number | null,
+    ) => number;
+    /** Absolute monotonic deadline shared by preparation and provider admission. */
+    readonly selectionDeadline: number;
     readonly journal: { readonly cwd: string; readonly configDir?: string };
   };
 }
@@ -169,6 +179,45 @@ function legacyAssignment(assignment: RoutingAssignmentV2): CategoryAssignment {
   return { kind: "session-default" };
 }
 
+function capabilitiesFromDescription(description: ProviderDescription): readonly RoutingCapability[] {
+  return [
+    ...(description.capabilities.toolCalls ? ["tools" as const] : []),
+    ...(description.capabilities.vision ? ["vision" as const] : []),
+    ...(description.capabilities.structuredOutput ? ["structured-output" as const] : []),
+  ];
+}
+
+function catalogCapabilityFacts(
+  providers: readonly FlatPickerProvider[],
+  baseline: { readonly providerId: string; readonly modelId: string },
+  opts: RoutingClassifierTurnOptions,
+  config: NormalizedRoutingV2Config | undefined,
+): ReadonlyMap<string, readonly RoutingCapability[]> {
+  const facts = new Map<string, readonly RoutingCapability[]>();
+  facts.set(profileKey(baseline.providerId, baseline.modelId), [...(opts.baselineCapabilities ?? [])].sort());
+  if (opts.describeProvider === undefined || config === undefined) return facts;
+  const candidates = [
+    ...Object.values(config.classes).flatMap((modelClass) => modelClass.candidates.map((candidate) => candidate.target)),
+    ...Object.values(config.categories).flatMap((assignment) => assignment.mode === "model" ? [assignment.target] : []),
+  ];
+  for (const target of candidates) {
+    const key = profileKey(target.providerId, target.modelId);
+    if (facts.has(key)) continue;
+    const catalogHasTarget = providers.some((provider) => provider.name === target.providerId
+      && provider.models?.includes(target.modelId));
+    if (!catalogHasTarget) continue;
+    try {
+      const description = opts.describeProvider(target.providerId, target.modelId);
+      if (description.descriptor.providerId !== target.providerId) throw new Error("provider description identity mismatch");
+      facts.set(key, [...capabilitiesFromDescription(description)].sort());
+    } catch {
+      // Missing or invalid provider metadata proves no capability.
+      facts.set(key, []);
+    }
+  }
+  return facts;
+}
+
 async function runRoutingClassifierForTurnV2(
   line: string,
   opts: RoutingClassifierTurnOptions,
@@ -179,6 +228,8 @@ async function runRoutingClassifierForTurnV2(
   externalAllowed: (providerId: string, modelId?: string) => boolean,
   fallbackModel: { readonly providerId: string; readonly modelId: string } | undefined,
   snapshotMeta: { readonly observedAt: string; readonly policyRevision: string; readonly capabilityRevision: string },
+  capabilityFacts: ReadonlyMap<string, readonly RoutingCapability[]>,
+  deadline: number,
 ): Promise<RoutingClassifierTurnResult | undefined> {
   const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
   const baseRequest: RoutingRequest = {
@@ -192,21 +243,49 @@ async function runRoutingClassifierForTurnV2(
       outputTokensReserved: 4_096,
     },
   };
-  const budget = new RoutingBudgetLedger({
-    ...(baseRequest.requirements.maxEstimatedCostUsd === undefined ? {} : { taskUsd: baseRequest.requirements.maxEstimatedCostUsd }),
-    configUsd: config.execution.maxEstimatedCostUsd,
-    unknownCost: config.execution.unknownCost,
-  });
-  let request = baseRequest;
-  let classified: Awaited<ReturnType<typeof runProductionRoutingClassification>>["classification"] | undefined;
-  if (config.categories.default.mode === "auto") {
-    const classification = await runProductionRoutingClassification({
-      task: line,
-      request: baseRequest,
-      config,
-      budget,
-      estimatedCostUsd: () => null,
-      ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+  const targetForClassifier = (adapterId: string): { readonly providerId: string; readonly modelId: string } | undefined => {
+    const entry = config.classifier.chain.find((candidate) => candidate.adapterId === adapterId);
+    return entry?.target ?? (adapterId === "jev" ? DEFAULT_JEV_ROUTING_TARGET : undefined);
+  };
+  const classifierCost = (adapterId: string): number | null => {
+    const target = targetForClassifier(adapterId);
+    return target === undefined ? null : estimateModelCostUsd(
+      profiles[profileKey(target.providerId, target.modelId)],
+      Math.max(1, Math.ceil(Math.min(line.length, 4_000) / 4)),
+      180,
+    );
+  };
+  const classifierActualCost = (adapter: { readonly id: string; lastUsage?: () => NormalizedUsage | undefined }): number | undefined => {
+    const target = targetForClassifier(adapter.id);
+    if (target === undefined) return undefined;
+    const estimated = classifierCost(adapter.id);
+    const usage = adapter.lastUsage?.();
+    if (usage?.inputTokens === undefined || usage.outputTokens === undefined) return estimated ?? undefined;
+    return estimateModelCostUsd(
+      profiles[profileKey(target.providerId, target.modelId)],
+      usage.inputTokens,
+      usage.outputTokens,
+    ) ?? estimated ?? undefined;
+  };
+  const routed = await routeTurnV2({
+    task: line,
+    request: baseRequest,
+    config,
+    providers,
+    profiles,
+    snapshotMeta,
+    snapshotPolicy: {
+      credentialsAvailable: (target) => target.providerId === baseline.providerId || hasCredential(target.providerId, env),
+      policyAllowed: (target) => externalAllowed(target.providerId, target.modelId) && (opts.executorAllowed?.(target.providerId, target.modelId) ?? true),
+      parentAllowed: () => true,
+      capabilities: (target) => capabilityFacts.get(profileKey(target.providerId, target.modelId)) ?? [],
+      cooldown: () => false,
+      observedLatencyMs: () => null,
+      availability: (target) => target.providerId === baseline.providerId && target.modelId === baseline.modelId ? "available" : undefined,
+    },
+    classifier: {
+      estimatedCostUsd: (adapter) => classifierCost(adapter.id),
+      actualCostUsd: classifierActualCost,
       adapterInput: {
         sessionProvider: opts.sessionProvider,
         ...(fallbackModel === undefined ? {} : { fallbackModel }),
@@ -219,37 +298,15 @@ async function runRoutingClassifierForTurnV2(
         ...(opts.providerFactory === undefined ? {} : { providerFactory: opts.providerFactory }),
         ...(opts.userConfigDir === undefined ? {} : { userConfigDir: opts.userConfigDir }),
       },
-    });
-    if (classification.status === "cancelled" || opts.signal?.aborted) return undefined;
-    classified = classification.classification;
-    request = classification.request;
-  }
-  const category = request.category;
-  const snapshot = buildCatalogRoutingSnapshot({
-    configDigest: config.configDigest,
-    ...snapshotMeta,
-    baseline,
-    providers,
-    profiles,
-    request,
-    policy: {
-      credentialsAvailable: (target) => target.providerId === baseline.providerId || hasCredential(target.providerId, env),
-      policyAllowed: (target) => externalAllowed(target.providerId, target.modelId) && (opts.executorAllowed?.(target.providerId, target.modelId) ?? true),
-      parentAllowed: () => true,
-      capabilities: (target) => target.providerId === baseline.providerId && target.modelId === baseline.modelId
-        ? opts.baselineCapabilities ?? [] : [],
-      cooldown: () => false,
-      observedLatencyMs: () => null,
-      availability: (target) => target.providerId === baseline.providerId && target.modelId === baseline.modelId ? "available" : undefined,
     },
-  });
-  const receipt = resolveRoutingForRuntime({
-    request,
-    snapshot,
-    config,
-    ...(classified?.status === "fallback" ? { fallbackReason: "classifier-failed" as const } : {}),
     journal: { cwd: opts.cwd, ...(opts.userConfigDir === undefined ? {} : { configDir: opts.userConfigDir }), kind: "dispatch" },
+    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+    timeoutMs: Math.max(0, deadline - performance.now()),
   });
+  if (routed.status === "cancelled") return undefined;
+  const { request, snapshot, budget, receipt } = routed;
+  const classified = routed.classification;
+  const category = request.category;
   const decision = receipt.decision;
   const source = classified?.status === "classified" && classified.adapterId.toLowerCase() === "jev" ? "jev" as const : "main-model" as const;
   const classification: ClassifyTurnResult = classified?.status === "classified"
@@ -304,6 +361,14 @@ async function runRoutingClassifierForTurnV2(
         estimateRequestTokens(normalized.messages, normalized.systemInstruction, normalized.tools ?? []),
         normalized.budget.maxOutputTokens,
       ),
+      actualCostUsd: (normalized, target, usage, estimated) => usage?.inputTokens === undefined || usage.outputTokens === undefined
+        ? estimated ?? 0
+        : estimateModelCostUsd(
+          profiles[profileKey(target.providerId, target.modelId)],
+          usage.inputTokens,
+          usage.outputTokens,
+        ) ?? estimated ?? 0,
+      selectionDeadline: Math.min(deadline, performance.now() + config.execution.selectionTimeoutMs),
       journal: { cwd: opts.cwd, ...(opts.userConfigDir === undefined ? {} : { configDir: opts.userConfigDir }) },
     } }),
   };
@@ -372,6 +437,8 @@ export async function runRoutingClassifierForTurn(
       blockTurn: true,
     };
   }
+  const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
+  const capabilityFacts = catalogCapabilityFacts(providers, baseline, opts, activeV2);
   const snapshotMeta = {
     observedAt: new Date().toISOString(),
     policyRevision: routingV2Digest({
@@ -381,15 +448,14 @@ export async function runRoutingClassifierForTurn(
       executorCallerPolicy: opts.executorAllowed === undefined ? "none" : "caller-supplied",
     }),
     capabilityRevision: routingV2Digest({
-      baseline: { providerId: opts.sessionProvider, modelId: opts.sessionModel },
-      baselineCapabilities: [...(opts.baselineCapabilities ?? [])].sort(),
-      catalogCapabilities: "unproven",
+      capabilities: [...capabilityFacts.entries()]
+        .map(([target, capabilities]) => ({ target, capabilities }))
+        .sort((left, right) => left.target.localeCompare(right.target)),
     }),
   };
   const shadowV2 = env.KERYX_ROUTING_V2_SHADOW === "1";
   if (activeV2 !== undefined && shadowV2) {
     try {
-      const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
       const request: RoutingRequest = {
         requestId: opts.requestId ?? randomUUID(),
         category: "default",
@@ -397,27 +463,32 @@ export async function runRoutingClassifierForTurn(
         baseline,
         requirements: opts.requirements ?? { capabilities: [], inputTokensRequired: Math.max(1, Math.ceil(line.length / 4)), outputTokensReserved: 4_096 },
       };
-      const snapshot = buildCatalogRoutingSnapshot({
-        configDigest: activeV2.configDigest,
-        ...snapshotMeta,
-        baseline,
+      await routeTurnV2({
+        task: line,
+        request,
+        config: activeV2,
         providers,
         profiles,
-        request,
-        policy: {
+        snapshotMeta,
+        snapshotPolicy: {
           credentialsAvailable: (target) => target.providerId === baseline.providerId || hasCredential(target.providerId, env),
           policyAllowed: (target) => externalAllowed(target.providerId, target.modelId) && (opts.executorAllowed?.(target.providerId, target.modelId) ?? true),
           parentAllowed: () => true,
-          capabilities: (target) => target.providerId === baseline.providerId && target.modelId === baseline.modelId ? opts.baselineCapabilities ?? [] : [],
+          capabilities: (target) => capabilityFacts.get(profileKey(target.providerId, target.modelId)) ?? [],
           cooldown: () => false,
           observedLatencyMs: () => null,
           availability: (target) => target.providerId === baseline.providerId && target.modelId === baseline.modelId ? "available" : undefined,
         },
-      });
-      resolveRoutingForRuntime({
-        request,
-        snapshot,
-        config: activeV2,
+        classifier: {
+          estimatedCostUsd: () => null,
+          adapterInput: {
+            sessionProvider: opts.sessionProvider,
+            env,
+            jevEnabled: false,
+            externalAllowed: (providerId, modelId) => externalAllowed(providerId, modelId),
+          },
+        },
+        classify: false,
         journal: { cwd: opts.cwd, ...(opts.userConfigDir === undefined ? {} : { configDir: opts.userConfigDir }), kind: "preview" },
       });
     } catch {
@@ -427,7 +498,7 @@ export async function runRoutingClassifierForTurn(
   if (activeV2 !== undefined && !shadowV2) {
     try {
       return await runRoutingClassifierForTurnV2(line, opts, activeV2, providers, profiles, env, externalAllowed, fallbackModel,
-        snapshotMeta);
+        snapshotMeta, capabilityFacts, deadline);
     } catch (error) {
       return {
         classification: { result: { ok: false, reason: "routing v2 resolution failed" }, trace: [] },
@@ -450,7 +521,6 @@ export async function runRoutingClassifierForTurn(
   });
   if (opts.signal?.aborted) return undefined;
   if (classification === undefined) return undefined;
-  const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
   const skippedJev = opts.jevEnabled && opts.jevAllowed === false ? "jev: caller policy denied"
     : opts.jevEnabled && external.value !== "on" ? "jev: external policy denied"
     : opts.jevEnabled && resolveJevClassifierCredential(opts.env).key === undefined ? "jev: credentials unavailable" : undefined;

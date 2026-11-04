@@ -270,6 +270,14 @@ test("OpenAI HTTP 404 is marked as model-not-found for safe routing fallback", a
   expect(events[0]?.error).toMatchObject({ kind: "invalid_request", retryable: false, detail: { modelNotFound: true } });
 });
 
+test("OpenAI generic HTTP 404 does not authorize model fallback", async () => {
+  const { fetch: fetchMock } = makeFetchMock(() => new Response(JSON.stringify({ error: { message: "route not found" } }), { status: 404 }));
+  const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+  const events = await collectEvents(provider.stream(buildRequest("missing-route"), { attemptId: "missing-route" }));
+  expect(events[0]?.error).toMatchObject({ kind: "invalid_request", retryable: false });
+  expect(events[0]?.error?.detail?.modelNotFound).not.toBe(true);
+});
+
 describe("AC1 — the documented empty-message context-overflow bug never surfaces an empty string", () => {
   test("terminal error event with empty message + context_length_exceeded code -> classified, non-empty message", async () => {
     const { fetch: fetchMock } = makeFixtureFetchMock(ERROR_FIXTURE_PATH);

@@ -582,7 +582,10 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       const deadline = setTimeout(() => abort.abort(new SessionHostError("selection-window-expired")), Math.max(0, expiresAt - now())); deadline.unref();
       try {
         if (cached !== undefined && cached.subject === capturedSubject) {
-          snapshot = { ...structuredClone(cached.snapshot), selectionReceiptId: randomUUID() };
+          // Re-delivery reuses the same completed routing decision. Preserve its
+          // local decision id so the classifier/execution budget handoff remains
+          // bound to that exact decision; the outer admission receipt is fresh.
+          snapshot = structuredClone(cached.snapshot);
           observe({ kind: "progress", text: `Reusing completed routing decision from ${cached.runId}; no classifier request or usage charged for this delivery.`, toolName: "routing-classifier" });
         } else {
         if (cached !== undefined) { authorityFailure = "stale-subject"; throw new SessionHostError("selection-subject-changed"); }

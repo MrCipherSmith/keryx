@@ -131,6 +131,89 @@ test("ProviderPort wrapper never performs I/O when attempt authorization refuses
   expect(events.at(-1)?.kind).toBe("provider_error");
 });
 
+test("ProviderPort wrapper applies backpressure and closes the active provider iterator when the consumer stops", async () => {
+  const { config, routingRequest, snapshot } = setup();
+  let produced = 0;
+  let providerClosed = false;
+  const streamingProvider: ProviderPort = {
+    describe: () => description,
+    async *stream(_request, options) {
+      try {
+        produced += 1;
+        yield { kind: "model_start", sequence: 1, attemptId: options.attemptId };
+        produced += 1;
+        yield { kind: "text_delta", sequence: 2, attemptId: options.attemptId, text: "first" };
+        produced += 1;
+        yield { kind: "text_delta", sequence: 3, attemptId: options.attemptId, text: "second" };
+        produced += 1;
+        yield { kind: "model_end", sequence: 4, attemptId: options.attemptId };
+      } finally {
+        providerClosed = true;
+      }
+    },
+  };
+  const port = createRoutingExecutionProvider({
+    description,
+    config,
+    budget: new RoutingBudgetLedger({ unknownCost: "allow" }),
+    routeFor: async () => ({ request: routingRequest, snapshot }),
+    beforeIo: async () => ({ ok: true }),
+    providerFor: () => streamingProvider,
+  });
+
+  const iterator = port.stream(normalizedRequest(), { attemptId: "outer" })[Symbol.asyncIterator]();
+  expect((await iterator.next()).value?.kind).toBe("model_start");
+  await Promise.resolve();
+  expect(produced).toBe(2);
+
+  await iterator.return?.();
+  expect(providerClosed).toBe(true);
+  expect(produced).toBe(2);
+});
+
+test("observer failures do not append provider_error after a successful model_end", async () => {
+  const { config, routingRequest, snapshot } = setup();
+  const port = createRoutingExecutionProvider({
+    description,
+    config,
+    budget: new RoutingBudgetLedger({ unknownCost: "allow" }),
+    routeFor: async () => ({ request: routingRequest, snapshot }),
+    beforeIo: async () => ({ ok: true }),
+    providerFor: () => provider((attemptId) => [{ kind: "model_end", sequence: 1, attemptId }]),
+    onAttemptSettled: () => { throw new Error("attempt observer failed"); },
+    onReceipt: () => { throw new Error("receipt observer failed"); },
+  });
+
+  const events = await collect(port);
+  expect(events.map((event) => event.kind)).toEqual(["model_end"]);
+});
+
+test("precommit buffering fails closed at its fixed capacity", async () => {
+  const { config, routingRequest, snapshot } = setup();
+  const port = createRoutingExecutionProvider({
+    description,
+    config,
+    budget: new RoutingBudgetLedger({ unknownCost: "allow" }),
+    routeFor: async () => ({ request: routingRequest, snapshot }),
+    beforeIo: async () => ({ ok: true }),
+    providerFor: () => provider((attemptId) => [
+      ...Array.from({ length: 33 }, (_, index): NormalizedEvent => ({
+        kind: "usage_update",
+        sequence: index + 1,
+        attemptId,
+        usage: { exact: true, outputTokens: index + 1 },
+      })),
+      { kind: "text_delta", sequence: 34, attemptId, text: "must not commit" },
+      { kind: "model_end", sequence: 35, attemptId },
+    ]),
+  });
+
+  const events = await collect(port);
+  expect(events).toHaveLength(1);
+  expect(events[0]?.kind).toBe("provider_error");
+  expect(events[0]?.error?.kind).toBe("unknown");
+});
+
 test("fixed-target wrapper meters all rounds against the classifier ledger", async () => {
   const { config, routingRequest, snapshot } = setup();
   const receipt = resolveRoutingForRuntime({ request: routingRequest, snapshot, config });
@@ -150,6 +233,36 @@ test("fixed-target wrapper meters all rounds against the classifier ledger", asy
   expect((await collect(metered)).at(-1)?.kind).toBe("model_end");
   expect((await collect(metered)).at(-1)?.kind).toBe("provider_error");
   expect(providerCalls).toBe(1);
+});
+
+test("fixed-target wrapper denies an exhausted selection deadline before authorization or provider I/O", async () => {
+  const { config, routingRequest, snapshot } = setup();
+  const receipt = resolveRoutingForRuntime({ request: routingRequest, snapshot, config });
+  let authorizationCalls = 0;
+  let providerCalls = 0;
+  const denials: string[] = [];
+  const metered = createMeteredRoutingProvider({
+    provider: provider(() => {
+      providerCalls += 1;
+      return [];
+    }),
+    target: first,
+    receipt,
+    budget: new RoutingBudgetLedger({ unknownCost: "allow" }),
+    selectionTimeoutMs: 0,
+    beforeIo: async () => {
+      authorizationCalls += 1;
+      return { ok: true };
+    },
+    onDenied: (reason) => { denials.push(reason); },
+    estimatedCostUsd: () => 0.1,
+  });
+
+  const events = await collect(metered);
+  expect(events[0]?.error?.kind).toBe("unknown");
+  expect(authorizationCalls).toBe(0);
+  expect(providerCalls).toBe(0);
+  expect(denials).toEqual(["uncertain-outcome"]);
 });
 
 test("fixed-target wrapper reauthorizes every stream before provider I/O", async () => {

@@ -103,6 +103,38 @@ test("preparation never widens an explicit model pin", async () => {
   expect(prepared).toEqual([first]);
 });
 
+test("preparation honors a caller-provided remaining selection budget", async () => {
+  const input = setup(100);
+  const receipt = resolveRoutingForRuntime(input);
+  const result = await prepareRoutingCandidate({
+    ...input,
+    receipt,
+    selectionTimeoutMs: 5,
+    signal: new AbortController().signal,
+    prepare: async (_target, _decisionId, signal) => new Promise((resolve) => {
+      signal.addEventListener("abort", () => resolve({ ok: false, reason: "model-unavailable" }), { once: true });
+    }),
+  });
+  expect(result).toEqual({ ok: false, reason: "uncertain-outcome" });
+});
+
+test("preparation performs no work with zero remaining budget or an already-cancelled caller", async () => {
+  const input = setup(100);
+  const receipt = resolveRoutingForRuntime(input);
+  let prepareCalls = 0;
+  const prepare = async () => {
+    prepareCalls += 1;
+    return { ok: true as const, value: "prepared" };
+  };
+  const timedOut = await prepareRoutingCandidate({ ...input, receipt, selectionTimeoutMs: 0, signal: new AbortController().signal, prepare });
+  const controller = new AbortController();
+  controller.abort("stop");
+  const cancelled = await prepareRoutingCandidate({ ...input, receipt, selectionTimeoutMs: 100, signal: controller.signal, prepare });
+  expect(timedOut).toEqual({ ok: false, reason: "uncertain-outcome" });
+  expect(cancelled).toEqual({ ok: false, reason: "cancelled" });
+  expect(prepareCalls).toBe(0);
+});
+
 test("confirmed 429 before output selects the next model and links receipts", async () => {
   const input = setup();
   const delivered: NormalizedEvent[] = [];
@@ -256,6 +288,25 @@ test("selection timeout aborts pre-I/O revalidation before provider invocation",
   expect(providerCalls).toBe(0);
 });
 
+test("selection deadline includes initial resolution before revalidation", async () => {
+  const input = setup(10);
+  let clockReads = 0;
+  let checks = 0;
+  const result = await executeRoutingWithFallback({
+    ...input,
+    monotonicNow: () => clockReads++ === 0 ? 0 : 11,
+    beforeIo: async () => {
+      checks += 1;
+      return { ok: true };
+    },
+    buildRequest: requestFor,
+    providerFor: () => provider(() => []),
+  });
+  expect(result.status).toBe("blocked");
+  if (result.status === "blocked") expect(result.reason).toBe("uncertain-outcome");
+  expect(checks).toBe(0);
+});
+
 test("selection timeout is one aggregate budget across fallback candidates", async () => {
   const input = setup(10);
   let clock = 0;
@@ -279,4 +330,25 @@ test("selection timeout is one aggregate budget across fallback candidates", asy
   if (result.status === "blocked") expect(result.reason).toBe("uncertain-outcome");
   expect(checks).toBe(2);
   expect(providerCalls).toBe(0);
+});
+
+test("provider I/O time does not consume the selection-only deadline", async () => {
+  const input = setup(10);
+  let clock = 0;
+  let providerCalls = 0;
+  const result = await executeRoutingWithFallback({
+    ...input,
+    monotonicNow: () => clock,
+    buildRequest: requestFor,
+    providerFor: (target) => provider((attemptId) => {
+      providerCalls += 1;
+      if (target.providerId === "alpha") {
+        clock += 1_000;
+        return [errorEvent(attemptId, "rate_limit")];
+      }
+      return [{ kind: "model_end", sequence: 1, attemptId }];
+    }),
+  });
+  expect(result.status).toBe("completed");
+  expect(providerCalls).toBe(2);
 });

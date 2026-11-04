@@ -1033,16 +1033,26 @@ test("routing v2 review category is the canonical selection, not the legacy rela
   });
 });
 
-test("routing v2 review refuses an unauthorized catalog target without falling back to the legacy tier", async () => {
+test("routing v2 review reports an unauthorized target without dispatching or failing the total tier query", async () => {
   await activateRoutingV2({
     schemaVersion: 2,
     categories: { review: { mode: "model", target: { providerId: "other", modelId: "unlisted" } } },
   });
   await tierV2("--findings", "2", "--diff-lines", "20", "--json");
 
-  expect(process.exitCode).toBe(1);
-  expect(logs).toEqual([]);
-  expect(errors.join("\n")).toContain("routing v2 refused review selection: candidate-unverified");
+  expect(process.exitCode).toBe(0);
+  expect(errors).toEqual([]);
+  const parsed = JSON.parse(logs.join("\n")) as {
+    model: Record<string, unknown>;
+    routing_v2: { decision: { status: string; reason: string } };
+    notices: string[];
+  };
+  expect(parsed.routing_v2.decision).toMatchObject({ status: "blocked", reason: "candidate-unverified" });
+  expect(parsed.model).toMatchObject({ routed: false, dispatchable: false });
+  expect(parsed.model).not.toHaveProperty("provider");
+  expect(parsed.model).not.toHaveProperty("model");
+  expect(parsed.model).not.toHaveProperty("inherit");
+  expect(parsed.notices.join("\n")).toContain("no dispatch target was selected");
 });
 
 test("`review tier` never runs a security finding below standard, even when verified by execution", async () => {

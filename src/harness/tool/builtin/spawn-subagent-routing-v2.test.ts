@@ -7,6 +7,7 @@ import type { RoutingV2ConfigLayer } from "../../routing/config-v2";
 import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "../../routing/classifier-production-v2";
 import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../../routing/migration-v2";
 import { setModelProfileField } from "../../routing/model-profile";
+import type { FlatPickerProvider } from "../../routing/table";
 import { createSpawnSubagentTool, type SpawnSubagentFleetEvent } from "./spawn-subagent-tool";
 
 const roots: string[] = [];
@@ -43,10 +44,14 @@ function stubProvider(text = "done", onStream?: () => void): ProviderPort {
 
 async function activeTool(
   user: RoutingV2ConfigLayer,
-  detected: readonly { name: string; models?: readonly string[] }[] = [{ name: "ollama", models: ["medium", "max"] }],
+  detected: readonly FlatPickerProvider[] = [{ name: "ollama", models: ["medium", "max"] }],
   providerText = "done",
   profileObservedAt = "2026-11-04T00:00:00.000Z",
-  clearDetectedOnProviderBuild = false,
+  options: {
+    readonly clearDetectedOnProviderBuild?: boolean;
+    readonly detectedOnProviderBuild?: readonly FlatPickerProvider[];
+    readonly parentBaseUrl?: string;
+  } = {},
 ) {
   const cwd = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-project-"));
   const configDir = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-config-"));
@@ -68,20 +73,31 @@ async function activeTool(
   await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir, normalization });
 
   const built: Array<{ providerId: string; modelId: string }> = [];
+  const providerBaseUrls: Array<string | undefined> = [];
+  const described: Array<{ providerId: string; modelId: string; baseUrl: string | undefined }> = [];
   const streamed: Array<{ providerId: string; modelId: string }> = [];
   const events: SpawnSubagentFleetEvent[] = [];
   let currentDetected = detected;
   const tool = createSpawnSubagentTool({
     cwd,
     routingConfigDir: configDir,
-    getParentModel: () => ({ providerId: "ollama", modelId: "medium" }),
+    getParentModel: () => ({
+      providerId: "ollama",
+      modelId: "medium",
+      ...(options.parentBaseUrl === undefined ? {} : { baseUrl: options.parentBaseUrl }),
+    }),
     getDetectedProviders: () => currentDetected,
-    makeProvider: (providerId, modelId) => {
+    makeProvider: (providerId, modelId, baseUrl) => {
       built.push({ providerId, modelId });
-      if (clearDetectedOnProviderBuild) currentDetected = [];
+      providerBaseUrls.push(baseUrl);
+      if (options.clearDetectedOnProviderBuild === true) currentDetected = [];
+      else if (options.detectedOnProviderBuild !== undefined) currentDetected = options.detectedOnProviderBuild;
       return stubProvider(providerText, () => streamed.push({ providerId, modelId }));
     },
-    describeProvider: () => stubProvider().describe(),
+    describeProvider: (providerId, modelId, baseUrl) => {
+      described.push({ providerId, modelId, baseUrl });
+      return stubProvider().describe();
+    },
     idSeq: (() => {
       let value = 0;
       return () => `v2-${value++}`;
@@ -89,7 +105,7 @@ async function activeTool(
     clock: () => "2026-11-04T00:00:00.000Z",
     onFleetEvent: (event) => events.push(event),
   });
-  return { tool, built, streamed, events };
+  return { tool, built, providerBaseUrls, described, streamed, events };
 }
 
 const classConfig = {
@@ -194,6 +210,21 @@ test("routing v2 does not treat stale picker membership as availability proof", 
   expect(built).toEqual([]);
 });
 
+test("routing v2 preserves fresh catalogue availability through the pre-I/O guard", async () => {
+  const { tool, built, streamed } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
+  }, [
+    { name: "ollama", models: ["medium"], observedAt: "2026-11-04T00:00:00.000Z" },
+    { name: "anthropic", models: ["reviewer"], observedAt: "2026-11-04T00:00:00.000Z" },
+  ], "done", "2026-11-03T23:54:59.000Z");
+  const result = await tool.invoke({ task: "use fresh catalogue evidence", mode: "read_only" });
+
+  expect(result.isError).toBe(false);
+  expect(built).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
+  expect(streamed).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
+});
+
 test("routing v2 finite budget blocks unknown child cost before provider I/O", async () => {
   const { tool, built, streamed, events } = await activeTool({
     schemaVersion: 2,
@@ -223,11 +254,32 @@ test("routing v2 rechecks current credentials before child provider I/O", async 
   }, [
     { name: "ollama", models: ["medium"] },
     { name: "anthropic", models: ["reviewer"] },
-  ], "done", "2026-11-04T00:00:00.000Z", true);
+  ], "done", "2026-11-04T00:00:00.000Z", { clearDetectedOnProviderBuild: true });
   const result = await tool.invoke({ task: "credentials can change", mode: "read_only" });
 
   expect(result).toMatchObject({ status: "Denied", isError: true });
   expect(result.output).toContain("credentials-missing");
+  expect(built).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
+  expect(streamed).toEqual([]);
+});
+
+test("routing v2 refuses a child removed by the current provider catalogue before I/O", async () => {
+  const { tool, built, streamed } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
+  }, [
+    { name: "ollama", models: ["medium"] },
+    { name: "anthropic", models: ["reviewer"] },
+  ], "done", "2026-11-04T00:00:00.000Z", {
+    detectedOnProviderBuild: [
+      { name: "ollama", models: ["medium"] },
+      { name: "anthropic", models: [] },
+    ],
+  });
+  const result = await tool.invoke({ task: "model disappeared", mode: "read_only" });
+
+  expect(result).toMatchObject({ status: "Denied", isError: true });
+  expect(result.output).toContain("model-unavailable");
   expect(built).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
   expect(streamed).toEqual([]);
 });
@@ -247,11 +299,37 @@ test("routing v2 snapshot preserves the child provider authorization gate", asyn
   expect(built).toEqual([]);
 });
 
-test("routing v2 never translates legacy model_tier into an absolute class", async () => {
-  const { tool, built } = await activeTool({ schemaVersion: 2 });
-  const result = await tool.invoke({ task: "legacy input", mode: "read_only", model_tier: "deep" });
+test("routing v2 ignores legacy model_tier without letting it override operator routing", async () => {
+  const { tool, built, events } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "ollama", modelId: "max" } } },
+  });
+  const result = await tool.invoke({ task: "legacy input", mode: "read_only", model_tier: "light" });
 
-  expect(result).toMatchObject({ status: "Error", isError: true });
-  expect(result.output).toContain("model_tier is legacy-only");
-  expect(built).toEqual([]);
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("migration: ignored legacy model_tier light because routing v2 is authoritative");
+  expect(built).toEqual([{ providerId: "ollama", modelId: "max" }]);
+  expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
+    .toContain("ignored legacy model_tier light because routing v2 is authoritative");
+});
+
+test("routing v2 does not forward a custom parent endpoint to a cross-provider child", async () => {
+  const { tool, built, providerBaseUrls, described } = await activeTool({
+    schemaVersion: 2,
+    categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
+  }, [
+    { name: "ollama", models: ["medium"] },
+    { name: "anthropic", models: ["reviewer"] },
+  ], "done", "2026-11-04T00:00:00.000Z", { parentBaseUrl: "https://parent.example/v1" });
+  const result = await tool.invoke({ task: "cross-provider", mode: "read_only" });
+
+  expect(result.isError).toBe(false);
+  expect(built).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
+  expect(providerBaseUrls).toEqual([undefined]);
+  expect(described).toContainEqual({
+    providerId: "ollama",
+    modelId: "medium",
+    baseUrl: "https://parent.example/v1",
+  });
+  expect(described).toContainEqual({ providerId: "anthropic", modelId: "reviewer", baseUrl: undefined });
 });

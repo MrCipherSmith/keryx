@@ -21,6 +21,7 @@ test("model-not-found remains excluded only for the observed catalog revision", 
   registry.recordModelNotFound(target, "catalog-a");
   expect(registry.apply(snapshot("catalog-a"), new Date("2026-11-04T00:00:01.000Z")).models[0]?.availability).toBe("unavailable");
   expect(registry.apply(snapshot("catalog-b"), new Date("2026-11-04T00:00:01.000Z")).models[0]?.availability).toBe("available");
+  expect(registry.apply(snapshot("catalog-a"), new Date("2026-11-04T00:00:02.000Z")).models[0]?.availability).toBe("available");
 });
 
 test("rate-limit cooldown honors retry-after and expires", () => {
@@ -28,6 +29,15 @@ test("rate-limit cooldown honors retry-after and expires", () => {
   registry.recordRateLimit(target, "catalog", 5_000, new Date("2026-11-04T00:00:00.000Z"));
   expect(registry.apply(snapshot("catalog"), new Date("2026-11-04T00:00:04.000Z")).models[0]?.cooldown).toBe(true);
   expect(registry.apply(snapshot("catalog"), new Date("2026-11-04T00:00:06.000Z")).models[0]?.cooldown).toBe(false);
+});
+
+test("model failure storage evicts the oldest entry at its hard cap", () => {
+  const registry = new RoutingFailureRegistry();
+  registry.recordModelNotFound(target, "catalog");
+  for (let index = 0; index < 1_024; index += 1) {
+    registry.recordModelNotFound({ providerId: "provider", modelId: `model-${index}` }, "catalog");
+  }
+  expect(registry.apply(snapshot("catalog"), new Date("2026-11-04T00:00:01.000Z")).models[0]?.availability).toBe("available");
 });
 
 test("authentication failures persist until explicitly cleared", () => {

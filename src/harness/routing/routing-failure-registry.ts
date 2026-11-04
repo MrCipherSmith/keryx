@@ -8,6 +8,8 @@ interface FailureEntry {
   readonly expiresAtMs?: number;
 }
 
+const MAX_MODEL_FAILURE_ENTRIES = 1_024;
+
 /** Shared runtime failures, scoped so a catalog refresh makes model failures stale. */
 export class RoutingFailureRegistry {
   readonly #models = new Map<string, FailureEntry>();
@@ -15,6 +17,7 @@ export class RoutingFailureRegistry {
 
   recordModelNotFound(target: ModelRef, catalogRevision: string): void {
     this.#models.set(this.#key(target, catalogRevision), { target, catalogRevision, kind: "model-unavailable" });
+    this.#enforceEntryLimit();
   }
 
   recordRateLimit(target: ModelRef, catalogRevision: string, retryAfterMs: number | undefined, now: Date): void {
@@ -28,6 +31,7 @@ export class RoutingFailureRegistry {
       kind: "cooldown",
       expiresAtMs: Math.max(existing?.expiresAtMs ?? 0, now.getTime() + retryAfterMs),
     });
+    this.#enforceEntryLimit();
   }
 
   recordAuthFailure(providerId: string): void {
@@ -39,6 +43,11 @@ export class RoutingFailureRegistry {
   }
 
   apply(snapshot: RoutingSnapshot, now: Date): RoutingSnapshot {
+    for (const [key, entry] of this.#models) {
+      if (entry.catalogRevision !== snapshot.catalogRevision || (entry.expiresAtMs !== undefined && entry.expiresAtMs <= now.getTime())) {
+        this.#models.delete(key);
+      }
+    }
     let changed = false;
     const authFailedProviderIds = [...new Set([...snapshot.authFailedProviderIds, ...this.#authFailedProviders])];
     if (authFailedProviderIds.length !== snapshot.authFailedProviderIds.length) changed = true;
@@ -73,5 +82,13 @@ export class RoutingFailureRegistry {
 
   #key(target: ModelRef, catalogRevision: string): string {
     return `${catalogRevision}\u0000${modelRefKey(target)}`;
+  }
+
+  #enforceEntryLimit(): void {
+    while (this.#models.size > MAX_MODEL_FAILURE_ENTRIES) {
+      const oldest = this.#models.keys().next().value;
+      if (oldest === undefined) return;
+      this.#models.delete(oldest);
+    }
   }
 }

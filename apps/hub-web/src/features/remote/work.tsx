@@ -68,13 +68,16 @@ export function MessageComposer({
   const [commandShortcut, setCommandShortcut] = useState<ChatCommandShortcut>();
   const commandsId = useId();
   const commandTrigger = useRef<HTMLButtonElement>(null);
+  const commandOpener = useRef<HTMLButtonElement | null>(null);
   // Set while the catalogue was opened by '/' and nothing has been done in it yet (no key other than Escape, no
   // pointer press, no change inside it): Escape then hands the slash back.
   const slashOpened = useRef<HTMLTextAreaElement | null>(null);
   function closeCommands() {
+    const opener = commandOpener.current ?? commandTrigger.current;
     slashOpened.current = null;
+    commandOpener.current = null;
     setCommands("closed");
-    commandTrigger.current?.focus();
+    opener?.focus();
   }
   const hub = useHub();
   const { t } = useTranslation("remote");
@@ -202,11 +205,16 @@ export function MessageComposer({
       }
     });
   }
-  function openCommandShortcut(shortcut: ChatCommandShortcut) {
-    slashOpened.current = null;
-    setCommandShortcut(shortcut);
+  function openCommands(search?: ChatCommandShortcut, opener?: HTMLButtonElement | null) {
+    setCommandShortcut(search);
+    commandOpener.current = opener ?? null;
     setCommands("open");
     setFocusToken(token => token + 1);
+  }
+
+  function openCommandShortcut(shortcut: ChatCommandShortcut, opener?: HTMLButtonElement | null) {
+    slashOpened.current = null;
+    openCommands(shortcut, opener);
   }
 
   function openDraftCommand(): boolean {
@@ -253,30 +261,29 @@ export function MessageComposer({
                 event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
             event.preventDefault();
             slashOpened.current = event.currentTarget;
-            setCommandShortcut(undefined);
-            setCommands("open");
-            // Already open: no state change re-runs the focus effect, so ask for it explicitly.
-            setFocusToken(token => token + 1);
+            openCommands();
           }}
           maxLength={32768}
           onChange={(e) => editText(e.target.value)}
         />
       </Field>
-      <Button
-        ref={commandTrigger}
-        variant="secondary"
-        aria-label={t("commands")}
-        aria-expanded={commands === "open"}
-        aria-controls={commands === "unopened" ? undefined : commandsId}
-        onClick={() => commands === "open" ? closeCommands() : setCommands("open")}
-      >
-        <span aria-hidden="true">/</span> {t("commands")}
-      </Button>
-      {chatCommandShortcuts.map(shortcut => (
-        <Button key={shortcut} variant="secondary" onClick={() => openCommandShortcut(shortcut)}>
-          {shortcut}
+      <div className="composer-command-actions">
+        <Button
+          ref={commandTrigger}
+          variant="secondary"
+          aria-label={t("commands")}
+          aria-expanded={commands === "open"}
+          aria-controls={commands === "unopened" ? undefined : commandsId}
+          onClick={(event) => commands === "open" ? closeCommands() : openCommands(undefined, event.currentTarget)}
+        >
+          <span aria-hidden="true">/</span> {t("commands")}
         </Button>
-      ))}
+        {chatCommandShortcuts.map(shortcut => (
+          <Button key={shortcut} variant="secondary" onClick={(event) => openCommandShortcut(shortcut, event.currentTarget)}>
+            {shortcut}
+          </Button>
+        ))}
+      </div>
       {commands !== "unopened" && (
         <div id={commandsId} hidden={commands !== "open"}
           onPointerDownCapture={() => { slashOpened.current = null; }}

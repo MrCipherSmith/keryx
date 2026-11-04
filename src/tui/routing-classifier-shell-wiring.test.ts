@@ -123,8 +123,10 @@ test("active v2 routing receives the frozen real turn envelope and proven baseli
   expect(body).toContain("requestId: sessionDeps.idSeq()");
   expect(body).toContain("inputTokensRequired: estimateRequestTokens(");
   expect(body).toContain("sessionDeps.tools.map((tool) => tool.definition)");
+  expect(body).toContain('capabilities: sessionDeps.tools.length > 0 ? ["tools"] : []');
   expect(body).toContain("outputTokensReserved: sessionDeps.maxOutputTokens ?? resolveAgentMaxOutputTokens()");
   expect(body).toContain("baselineCapabilities");
+  expect(body).toContain("describeProvider: opts.describeProvider");
 });
 
 test("routing v2 shadow journals a no-I/O preview and then preserves legacy execution", () => {
@@ -137,7 +139,8 @@ test("routing v2 shadow journals a no-I/O preview and then preserves legacy exec
   expect(activeAt).toBeGreaterThan(shadowAt);
   expect(legacyAt).toBeGreaterThan(activeAt);
   const shadow = ROUTING_SOURCE.slice(shadowAt, activeAt);
-  expect(shadow).toContain("resolveRoutingForRuntime({");
+  expect(shadow).toContain("routeTurnV2({");
+  expect(shadow).toContain("classify: false");
   expect(shadow).toContain('kind: "preview"');
   expect(shadow).not.toContain("runProductionRoutingClassification");
 });
@@ -151,7 +154,20 @@ test("TUI v2 wraps the authorized fixed target with the classifier's shared budg
   expect(body).toContain("receipt: prepared.receipt");
   expect(body).toContain("budget: routingV2.budget");
   expect(body).toContain("beforeIo: routingV2.beforeIo");
+  expect(body.match(/selectionTimeoutMs: Math\.max\(0, routingV2\.selectionDeadline - performance\.now\(\)\)/g)).toHaveLength(2);
   expect(body).toContain("routingV2.estimatedCostUsd(request, prepared.target)");
+  expect(body).toContain("routingV2.actualCostUsd(");
   expect(body).toContain("value.providerId !== target.providerId");
   expect(ROUTING_SOURCE).not.toContain("finite routing budget cannot be enforced by the TUI agent-loop boundary");
+});
+
+test("TUI consumes the neutral v2 turn service and supplies trusted capability and cost ports", () => {
+  const start = ROUTING_SOURCE.indexOf("async function runRoutingClassifierForTurnV2(");
+  const end = ROUTING_SOURCE.indexOf("export async function runRoutingClassifierForTurn(", start);
+  const active = ROUTING_SOURCE.slice(start, end);
+  expect(active).toContain("routeTurnV2({");
+  expect(active).toContain("capabilityFacts.get(profileKey(target.providerId, target.modelId)) ?? []");
+  expect(active).toContain("estimatedCostUsd: (adapter) => classifierCost(adapter.id)");
+  expect(active).toContain("actualCostUsd: classifierActualCost");
+  expect(active).not.toContain("estimatedCostUsd: () => null");
 });

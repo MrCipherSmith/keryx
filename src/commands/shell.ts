@@ -4181,9 +4181,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
           }),
           makeProvider: (providerId, modelId, childBaseUrl) =>
-            tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl),
+            tuiProviderFactory(providerId, modelId, childBaseUrl ?? (providerId === sel.provider ? sel.baseUrl : undefined)),
           describeProvider: (providerId, modelId, childBaseUrl) =>
-            tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl).describe(),
+            tuiProviderFactory(providerId, modelId, childBaseUrl ?? (providerId === sel.provider ? sel.baseUrl : undefined)).describe(),
           // The allowlist AND the candidate set for tier resolution. `models` is
           // carried through rather than mapped away: `buildTierMap`
           // (src/gdskills/model-tier.ts) ranks exactly these ids to place a
@@ -4459,6 +4459,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       await (runtime.launchAgent ?? launchTuiAgentShell)({
         detected: tuiDetected,
         makeAgentDeps,
+        describeProvider: (providerId, modelId) =>
+          tuiProviderFactory(providerId, modelId).describe(),
         // Flow 268 T16 (AC11): the TUI's `/reasoning` command updates THIS
         // session's override through here, so a later `/model`/`/connect`
         // rebuild (a fresh `makeAgentDeps` call) resolves the same level.
@@ -4767,9 +4769,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           ...(baseUrl !== undefined ? { baseUrl } : {}),
         }),
         makeProvider: (providerId, modelId, childBaseUrl) =>
-          baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
+          baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)),
         describeProvider: (providerId, modelId, childBaseUrl) =>
-          baseFactory(providerId, modelId, childBaseUrl ?? baseUrl).describe(),
+          baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)).describe(),
         getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models()),
         getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read

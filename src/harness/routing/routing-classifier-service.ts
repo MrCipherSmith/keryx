@@ -23,6 +23,8 @@ export interface RunRoutingClassificationInput {
   readonly estimatedCostUsd: (adapter: RoutingClassifierAdapter<string>) => number | null;
   readonly actualCostUsd?: (adapter: RoutingClassifierAdapter<string>) => number | undefined;
   readonly signal?: AbortSignal;
+  /** Caller-owned remaining time from a larger monotonic routing deadline. */
+  readonly timeoutMs?: number;
 }
 
 /** Canonical classify-once path used by every v2 consumer. */
@@ -32,9 +34,10 @@ export async function runRoutingClassification(input: RunRoutingClassificationIn
   if (expectedAdapterIds.length !== actualAdapterIds.length || expectedAdapterIds.some((id, index) => id !== actualAdapterIds[index])) {
     throw new Error("routing classifier adapters do not match the normalized config chain");
   }
+  const timeoutMs = Math.max(1, Math.floor(Math.min(input.config.classifier.timeoutMs, input.timeoutMs ?? Number.POSITIVE_INFINITY)));
   const classification = await runRoutingClassifierChain(input.task, {
     adapters: input.adapters,
-    deadlineMs: input.config.classifier.timeoutMs,
+    deadlineMs: timeoutMs,
     minConfidence: input.config.classifier.minConfidence,
     onFailure: input.config.classifier.onFailure,
     budget: input.budget,
@@ -62,10 +65,11 @@ export interface RunProductionRoutingClassificationInput
 export async function runProductionRoutingClassification(
   input: RunProductionRoutingClassificationInput,
 ): Promise<RoutingClassificationServiceResult> {
+  const timeoutMs = Math.max(1, Math.floor(Math.min(input.config.classifier.timeoutMs, input.timeoutMs ?? Number.POSITIVE_INFINITY)));
   const adapters = buildRoutingClassifierAdapters({
     ...input.adapterInput,
     config: input.config,
-    timeoutMs: input.config.classifier.timeoutMs,
+    timeoutMs,
   });
   return runRoutingClassification({
     task: input.task,
@@ -76,5 +80,6 @@ export async function runProductionRoutingClassification(
     estimatedCostUsd: input.estimatedCostUsd,
     ...(input.actualCostUsd === undefined ? {} : { actualCostUsd: input.actualCostUsd }),
     ...(input.signal === undefined ? {} : { signal: input.signal }),
+    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
   });
 }

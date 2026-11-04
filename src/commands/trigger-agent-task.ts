@@ -3,8 +3,8 @@
 //
 // It is an ADAPTER (`src/commands/**`). The decisions that need no I/O (the
 // entry's shape, the content hash, the granted-tool catalogue and the floor)
-// live in `../trigger/*` (core). The containment and spend steps are shared with the
-// `flow-next` dispatch (`./trigger-dispatch.ts`, flow 295 C4). What differs is what
+// live in `../trigger/*` (core). Unattended model routing is shared with the
+// `flow-next` dispatch through `../harness/routing/unattended-adapter.ts`. What differs is what
 // surrounds the model: there is no flow, no task, no git worktree, no commit and no
 // health gate.
 //
@@ -38,7 +38,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildAgentSystemInstruction, generateControlNonce, resolveAgentMaxOutputTokens, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { resolveAgentMaxRounds } from "./round-limit";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { ensureScratchParent } from "./unattended-scratch";
@@ -78,18 +78,22 @@ import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
 export { verifyGrantedBinaries } from "../trigger/schedule-verify";
 import { ensureTriggerDataIgnored, triggerReportsDir } from "../trigger/store";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
+import { resolveProviderModelParamsByName } from "./providers";
+import { loadShellConfig } from "../lib/shell-config";
+import {
+  cachedRoutingProviders,
+  resolveUnattendedRoutingV2,
+  routedUnattendedProvider,
+  type UnattendedRoutingV2Deps,
+} from "../harness/routing/unattended-adapter";
 import {
   createSpendMeter,
-  cachedRoutingProviders,
   deniedUnattendedApproval,
   defaultMakeProvider,
   dispatchLockPath,
   guardUsage,
   keryxInvocation,
   NETWORK_ON_WARNING,
-  resolveUnattendedRoutingV2,
-  routedUnattendedProvider,
-  type UnattendedRoutingV2Deps,
 } from "./trigger-dispatch";
 
 /** What `./trigger.ts` records and prints for one agent-task run. */
@@ -570,6 +574,21 @@ async function runLocked(
         exitCode: 0,
       };
     }
+    const routingShellConfig = loadShellConfig(deps.routingConfigDir);
+    const routingModelParams = resolveProviderModelParamsByName(dispatch.provider, routingShellConfig, deps.routingConfigDir);
+    const routingRuntime = {
+      maxOutputTokens: resolveAgentMaxOutputTokens({
+        env: process.env,
+        providerMaxOutputTokens: routingModelParams.maxOutputTokens,
+        globalMaxOutputTokens: routingShellConfig.maxOutputTokens,
+      }),
+      modelParams: routingModelParams,
+      systemInstruction: buildAgentSystemInstruction(undefined, {
+        providerId: dispatch.provider,
+        modelId: dispatch.model,
+        toolNames: tools.map((tool) => tool.definition.name),
+      }),
+    };
     const routing = await resolveUnattendedRoutingV2(
       projectRoot,
       dispatch,
@@ -578,6 +597,7 @@ async function runLocked(
       taskPrompt,
       tools.map((tool) => tool.definition),
       currentBudget.remainingUsd,
+      routingRuntime,
       deps,
     );
     const routingDecision = routing.receipt?.decision;
@@ -656,11 +676,7 @@ async function runLocked(
         modelId: dispatch.model,
         tools,
         controlNonce: generateControlNonce(),
-        systemInstruction: buildAgentSystemInstruction(undefined, {
-          providerId: dispatch.provider,
-          modelId: dispatch.model,
-          toolNames: tools.map((t) => t.definition.name),
-        }),
+        systemInstruction: routingRuntime.systemInstruction,
         idSeq: () => randomUUID(),
         unattended: true,
         maxOutputTokens: routing.maxOutputTokens,

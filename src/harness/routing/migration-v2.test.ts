@@ -213,9 +213,16 @@ describe("routing v2 migration", () => {
     const plan = await createRoutingV2MigrationPlan({ cwd: f.cwd, configDir: f.configDir, project: f.project, user: f.user });
     await applyRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir });
     const current = JSON.parse(await readFile(f.userFile, "utf8"));
-    await writeFile(f.userFile, `${JSON.stringify({ ...current, refreshedCredential: true }, null, 2)}\n`, { mode: 0o600 });
+    const concurrentBytes = `${JSON.stringify({ ...current, refreshedCredential: true }, null, 2)}\n`;
+    await writeFile(f.userFile, concurrentBytes, { mode: 0o600 });
+    const marker = routingV2ActivationPath(f.cwd, f.configDir);
+    const [projectBefore, markerBefore] = await Promise.all([readFile(f.projectFile, "utf8"), readFile(marker, "utf8")]);
     expect(readActiveRoutingV2Layers(f.cwd, f.configDir)).toEqual({ project: f.project, user: f.user });
     await expect(rollbackRoutingV2Migration(plan, { confirmed: true, cwd: f.cwd, configDir: f.configDir })).rejects.toThrow("changed after activation");
+    expect(await readFile(f.userFile, "utf8")).toBe(concurrentBytes);
+    expect(await readFile(f.projectFile, "utf8")).toBe(projectBefore);
+    expect(await readFile(marker, "utf8")).toBe(markerBefore);
+    expect(readActiveRoutingV2Layers(f.cwd, f.configDir)).toEqual({ project: f.project, user: f.user });
   });
 
   test("rollback resumes after a crash between restores", async () => {
@@ -294,13 +301,17 @@ describe("routing v2 migration", () => {
       cwd: f.cwd,
       configDir: f.configDir,
     })).rejects.toThrow("edited after migration");
+    const files = [f.projectFile, f.userFile, routingV2ActivationPath(f.cwd, f.configDir)];
+    const bytesBefore = await Promise.all(files.map((file) => readFile(file, "utf8")));
     await expect(updateActiveRoutingV2Layer({
       cwd: f.cwd,
       configDir: f.configDir,
       layer: "project",
       expectedRevision: before.revision,
-      next: f.project,
+      next,
     })).rejects.toThrow("revision conflict");
+    expect(await Promise.all(files.map((file) => readFile(file, "utf8")))).toEqual(bytesBefore);
+    expect(readActiveRoutingV2Settings(f.cwd, f.configDir)?.revision).toBe(restored.revision);
   });
 
   test("active user edits merge against refreshed credentials", async () => {
