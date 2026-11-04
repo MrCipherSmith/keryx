@@ -2,8 +2,9 @@
 // package is open and `keryx review complete` would still refuse.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { constants, readFileSync } from "node:fs";
+import { appendFile, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { REPEATABLE_TOOL_NAMES } from "../commands/agent";
@@ -13,6 +14,13 @@ import {
   fileHash,
   findReviewGateState,
   hashedFileCount,
+  hashReadCount,
+  MAX_CONTENT_HASH_BYTES,
+  MAX_HASHED_FILES,
+  MAX_REVIEW_GATE_STALLS,
+  MAX_SIGNATURE_FILES,
+  SIGNATURE_WALKS_PER_STOP,
+  TRUNCATION_MARKER,
   keryxArgs,
   keryxReviewInvocations,
   MAX_REVIEW_GATE_CONTINUES,
@@ -28,6 +36,7 @@ import {
   shellCommands,
 } from "./completion-gate";
 import { writeActiveReview } from "./active-review";
+import { SCRATCH_DIR } from "./mutate";
 
 let root: string;
 
@@ -719,5 +728,275 @@ describe("fileHash: a file unchanged since the last stop is not read again, a ch
     expect(hashedFileCount()).toBe(count);
     // A file that cannot be read is reported, not remembered.
     expect(await fileHash(path.join(root, "missing.txt"), aged)).toBe("unreadable");
+  });
+});
+
+describe("the signature walk is bounded and cancellable (flow 482)", () => {
+  // The hash cache reuses a file only once its timestamps are older than the racy window. `now` moves the clock past it,
+  // so no test sleeps for the files to age.
+  const aged = (): number => Date.now() + 60_000;
+
+  test("AC1: files under the mutation scratch never reach the signature or the hash cache", async () => {
+    await writePackage("live", { mode: "review-flow", status: "draft" });
+    const data = path.join(root, ".metaproject", "data", "review");
+    await mkdir(data, { recursive: true });
+    await writeFile(path.join(data, "note.json"), "{}");
+    const scratch = path.join(root, SCRATCH_DIR, "run-1");
+    await mkdir(scratch, { recursive: true });
+    await writeFile(path.join(scratch, "a.txt"), "aaaa");
+    await writeFile(path.join(scratch, "b.txt"), "bbbb");
+    const now = aged();
+    const before = hashedFileCount();
+    const withScratch = await findReviewGateState(root, 0, {}, { now });
+    const grown = hashedFileCount() - before;
+    await rm(path.join(root, SCRATCH_DIR), { recursive: true, force: true });
+    const withoutScratch = await findReviewGateState(root, 0, {}, { now });
+    expect(withScratch?.signature).toBe(withoutScratch?.signature as string);
+    // note.json and manifest.json are the only aged files outside the scratch.
+    expect(grown).toBeLessThanOrEqual(2);
+  });
+
+  test("AC2: a flat tree larger than the budget stops at it, ends in the marker once, and is served from the cache on the next call", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const total = MAX_SIGNATURE_FILES + 60;
+    for (let i = 0; i < total; i += 1) await writeFile(path.join(dir, `f${String(i).padStart(5, "0")}.txt`), String(i));
+    const now = aged();
+    const before = hashedFileCount();
+    const first = await findReviewGateState(root, 0, {}, { now });
+    const grown = hashedFileCount() - before;
+    expect(grown).toBeLessThanOrEqual(MAX_SIGNATURE_FILES);
+    // TP-M07: the walk stops at the first entry past the budget, so the marker is written once, as the last thing in the
+    // package part (the working part after the `#` is empty here).
+    expect(first?.signature.split(TRUNCATION_MARKER).length).toBe(2);
+    expect(first?.signature.endsWith(`${TRUNCATION_MARKER}#`)).toBe(true);
+    const afterFirst = hashedFileCount();
+    const reads = hashReadCount();
+    const second = await findReviewGateState(root, 0, {}, { now });
+    expect(second?.signature).toBe(first?.signature as string);
+    // Every file the walk reached is remembered, so the second call hashed none again.
+    expect(hashedFileCount()).toBe(afterFirst);
+    expect(hashReadCount()).toBe(reads);
+  }, 30_000);
+
+  test("one budget covers a nested tree, so only the shared budget stops a walk whose every directory is small (TP-005)", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const dirs = 40;
+    const perDir = 60;
+    for (let d = 0; d < dirs; d += 1) {
+      const sub = path.join(dir, `d${String(d).padStart(2, "0")}`);
+      await mkdir(sub);
+      for (let f = 0; f < perDir; f += 1) await writeFile(path.join(sub, `f${String(f).padStart(2, "0")}.txt`), `${d}-${f}`);
+    }
+    // 40 x 60 = 2400 files is over MAX_SIGNATURE_FILES, yet no directory is. Directories spend budget too: each fully read
+    // directory costs 1 + perDir entries, and `manifest.json`, written first, is the oldest and comes last. The walk fits
+    // floor(MAX / 61) = 33 of them, then the 34th directory entry itself (1), then the files that are left.
+    const cost = 1 + perDir;
+    const whole = Math.floor(MAX_SIGNATURE_FILES / cost);
+    const left = MAX_SIGNATURE_FILES - whole * cost - 1;
+    const expected = whole * perDir + left;
+    expect(expected).toBe(33 * 60 + 34);
+    const reads = hashReadCount();
+    const state = await findReviewGateState(root, 0, {}, { now: aged() });
+    // A budget that restarted in each directory would read all 2400.
+    expect(hashReadCount() - reads).toBe(expected);
+    expect(state?.signature).toContain(TRUNCATION_MARKER);
+  }, 30_000);
+
+  test("both walks over budget fit the hash cache, so an unchanged second stop reads nothing (TP-006 / DEG-001)", async () => {
+    expect(SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES).toBeLessThanOrEqual(MAX_HASHED_FILES);
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const data = path.join(root, ".metaproject", "data", "review");
+    await mkdir(data, { recursive: true });
+    const total = MAX_SIGNATURE_FILES + 60;
+    for (let i = 0; i < total; i += 1) {
+      await writeFile(path.join(dir, `f${String(i).padStart(5, "0")}.txt`), String(i));
+      await writeFile(path.join(data, `n${String(i).padStart(5, "0")}.txt`), String(i));
+    }
+    const now = aged();
+    const reads = hashReadCount();
+    const first = await findReviewGateState(root, 0, {}, { now });
+    expect(hashReadCount() - reads).toBe(SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES);
+    const afterFirst = hashReadCount();
+    const second = await findReviewGateState(root, 0, {}, { now });
+    expect(second?.signature).toBe(first?.signature as string);
+    expect(hashReadCount()).toBe(afterFirst);
+  }, 30_000);
+
+  test("the walk spends its budget newest first, so old history past the budget cannot hide a fresh file (HL-002)", async () => {
+    const data = path.join(root, ".metaproject", "data", "review");
+    // Old history that sorts first by name and alone is over the budget.
+    const history = path.join(data, "autonomous", "run-1");
+    await mkdir(history, { recursive: true });
+    for (let i = 0; i < MAX_SIGNATURE_FILES + 10; i += 1) await writeFile(path.join(history, `n${String(i).padStart(5, "0")}.json`), String(i));
+    const old = new Date(Date.now() - 3_600_000);
+    await utimes(path.join(data, "autonomous"), old, old);
+    const scope = path.join(data, "scope.json");
+    await writeFile(scope, "one");
+    const first = await findReviewGateState(root, 0, {}, { now: aged() });
+    expect(first?.signature).toContain(TRUNCATION_MARKER);
+    // A different size, so the change shows even if both writes land in the same mtime tick.
+    await writeFile(scope, "three");
+    const second = await findReviewGateState(root, 0, {}, { now: aged() });
+    // In name order `autonomous/` would spend the whole budget and `scope.json` would never be read.
+    expect(second?.signature).not.toBe(first?.signature as string);
+  }, 30_000);
+
+  test("a file over MAX_CONTENT_HASH_BYTES is signed by its metadata and never read, and a change to it still shows (HL-003)", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const log = path.join(dir, "trace.log");
+    await writeFile(log, "x".repeat(MAX_CONTENT_HASH_BYTES + 1));
+    const reads = hashReadCount();
+    expect(await fileHash(log)).toStartWith("meta:");
+    expect(hashReadCount()).toBe(reads);
+    // At the cap the file is still hashed by content.
+    const atCap = path.join(dir, "at-cap.log");
+    await writeFile(atCap, "x".repeat(MAX_CONTENT_HASH_BYTES));
+    expect(await fileHash(atCap)).toMatch(/^[0-9a-f]{64}$/);
+    const first = await findReviewGateState(root, 0, {}, { now: aged() });
+    await appendFile(log, "y");
+    const second = await findReviewGateState(root, 0, {}, { now: aged() });
+    expect(second?.signature).not.toBe(first?.signature as string);
+  });
+
+  test("AC3: an already-aborted signal rejects with AbortError and hashes no file", async () => {
+    await writePackage("live", { mode: "review-flow", status: "draft" });
+    const data = path.join(root, ".metaproject", "data", "review");
+    await mkdir(data, { recursive: true });
+    await writeFile(path.join(data, "note.json"), "{}");
+    const reads = hashReadCount();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(findReviewGateState(root, 0, {}, { signal: controller.signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
+    expect(hashReadCount()).toBe(reads);
+  });
+
+  /** A signal whose `aborted` flag turns true once it has been read more than `after` times. */
+  const abortsAfterReads = (after: number): { signal: AbortSignal; reads: () => number } => {
+    let count = 0;
+    const signal = {
+      get aborted(): boolean {
+        count += 1;
+        return count > after;
+      },
+    } as AbortSignal;
+    return { signal, reads: () => count };
+  };
+
+  async function writeWorkingTree(): Promise<number> {
+    const data = path.join(root, ".metaproject", "data", "review");
+    let files = 0;
+    for (let d = 0; d < 5; d += 1) {
+      const sub = path.join(data, `sub${d}`);
+      await mkdir(sub, { recursive: true });
+      for (let f = 0; f < 10; f += 1) {
+        await writeFile(path.join(sub, `n${f}.json`), `${d}${f}`);
+        files += 1;
+      }
+    }
+    return files;
+  }
+
+  test("an abort during the walk of the working data stops it part-way, with an open package (TP-003)", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    for (let f = 0; f < 20; f += 1) await writeFile(path.join(dir, `p${f}.txt`), String(f));
+    const workingFiles = await writeWorkingTree();
+    const reads = hashReadCount();
+    // 20 reads of the signal: two before the walk, then one per entry; the working data is the first tree walked.
+    const { signal } = abortsAfterReads(20);
+    await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
+    const hashed = hashReadCount() - reads;
+    expect(hashed).toBeGreaterThan(0);
+    // Without the signal in the working-data walk, all its files are read before the package walk notices the abort.
+    expect(hashed).toBeLessThan(workingFiles);
+  });
+
+  test("an abort during the walk of the working data stops it part-way, with no package (TP-003)", async () => {
+    const workingFiles = await writeWorkingTree();
+    const reads = hashReadCount();
+    const { signal } = abortsAfterReads(20);
+    await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
+    const hashed = hashReadCount() - reads;
+    expect(hashed).toBeGreaterThan(0);
+    expect(hashed).toBeLessThan(workingFiles);
+  });
+
+  // With a package that holds only its manifest and no working data, the gate reads the signal in this order: on entry
+  // (k = 0), after the root scan (1), before the completion blockers are computed (2), after them (3), and then once for
+  // the one entry of the package walk. Aborting on the (k + 1)-th read stops at check k + 1, before anything is hashed.
+  for (const k of [0, 1, 2, 3]) {
+    test(`an abort that lands on straight-line check ${k + 1} of 4 stops there (TP-R2-001)`, async () => {
+      await writePackage("live", { mode: "review-flow", status: "draft" });
+      const reads = hashReadCount();
+      const { signal, reads: signalReads } = abortsAfterReads(k);
+      await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
+      expect(signalReads()).toBe(k + 1);
+      expect(hashReadCount()).toBe(reads);
+    });
+  }
+
+  // Pins the order the tests above count by: four straight-line checks, then one read per entry walked. A deleted check
+  // makes the count three plus one, so this fails where the loop above alone would not.
+  test("the gate makes exactly four straight-line checks, then one per entry it walks (TP-R2-001)", async () => {
+    await writePackage("live", { mode: "review-flow", status: "draft" });
+    const { signal, reads: signalReads } = abortsAfterReads(Number.POSITIVE_INFINITY);
+    const state = await findReviewGateState(root, 0, {}, { signal, now: aged() });
+    expect(state).not.toBeNull();
+    expect(signalReads()).toBe(4 + 1);
+  });
+
+  test("an abort inside the package walk stops it part-way (TP-R2-001)", async () => {
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const files = 300;
+    for (let f = 0; f < files; f += 1) await writeFile(path.join(dir, `f${String(f).padStart(3, "0")}.txt`), String(f));
+    const reads = hashReadCount();
+    // Four straight-line checks, then one read per package entry: the abort lands on the 100th entry of the walk.
+    const { signal } = abortsAfterReads(4 + 99);
+    await expect(findReviewGateState(root, 0, {}, { signal, now: aged() })).rejects.toMatchObject({ name: "AbortError" });
+    const hashed = hashReadCount() - reads;
+    expect(hashed).toBeGreaterThan(0);
+    expect(hashed).toBeLessThan(files);
+  });
+
+  test("a FIFO in the package does not block the evaluation (SEC-002)", async () => {
+    if (process.platform === "win32") return;
+    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+    const made = spawnSync("mkfifo", [path.join(dir, "pipe")]);
+    expect(made.status).toBe(0);
+    const outcome = await Promise.race([
+      findReviewGateState(root, 0, {}, { now: aged() }).then((state) => state),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 5_000)),
+    ]);
+    expect(outcome).not.toBe("blocked");
+    // A FIFO is hashed as `special:` and its file-type bits in octal (S_IFIFO), never read.
+    const special = `special:${constants.S_IFIFO.toString(8)}`;
+    expect(typeof outcome === "object" && outcome !== null ? outcome.signature : "").toContain(`pipe:${special}`);
+    expect(await fileHash(path.join(dir, "pipe"))).toBe(special);
+  });
+});
+
+describe("a stall stop on a truncated signature says what the gate could see", () => {
+  const stalled = (signature: string) =>
+    decideReviewGate({
+      open: open({ signature }),
+      runSeen: true,
+      continues: 1,
+      stalls: MAX_REVIEW_GATE_STALLS - 1,
+      lastSignature: signature,
+    });
+
+  test("the reason names the entries the gate reads instead of claiming no new artifact (UX-003)", () => {
+    const decision = stalled(`a:1,${TRUNCATION_MARKER}#`);
+    expect(decision.action).toBe("stop");
+    if (decision.action !== "stop") return;
+    expect(decision.report).toContain(`no change in the first ${MAX_SIGNATURE_FILES} entries of each tree the gate reads in the last ${MAX_REVIEW_GATE_STALLS} continues`);
+    expect(decision.report).not.toContain("no new artifact");
+  });
+
+  test("an untruncated signature keeps the plain reason", () => {
+    const decision = stalled("a:1#");
+    expect(decision.action).toBe("stop");
+    if (decision.action !== "stop") return;
+    expect(decision.report).toContain(`no new artifact in the last ${MAX_REVIEW_GATE_STALLS} continues`);
+    expect(decision.report).not.toContain("entries of each tree");
   });
 });

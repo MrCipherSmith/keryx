@@ -5084,7 +5084,13 @@ Usage:
                         copy of the worktree; the worktree is never written. The
                         copy lives under .metaproject/data/review/mutate-scratch
                         (--scratch repo, default, so ancestor node_modules still
-                        resolve) or in the OS temp dir (--scratch tmp). The
+                        resolve) or in the OS temp dir (--scratch tmp). Linked
+                        worktrees are left out of the copy (submodules and embedded
+                        clones are copied), and the repository's own mutate-scratch
+                        never is. Before copying, a pass removes your own
+                        keryx-mutate-* directories whose owner died (no heartbeat
+                        for two minutes) or stopped refreshing its marker for ten
+                        minutes, and unmarked ones older than six hours. The
                         baseline must pass first; a red one exits non-zero and
                         prints the command, its cwd and the last 60 output lines.
                         A plain "bun test <paths>" command runs each mutant with

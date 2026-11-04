@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { constants, existsSync, writeFileSync } from "node:fs";
+import { cp, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { loadavg, tmpdir } from "node:os";
 import path from "node:path";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
+import { terminalSafe } from "../lib/terminal-safe";
 import { worktreeProvenance } from "./worktree-provenance";
 
 /**
@@ -71,6 +72,10 @@ export type MutationRecord = {
   copyMs?: number | undefined;
   /** Sum of the mutant rows' `ms`. */
   mutantsMs?: number | undefined;
+  /** Scratch directories of dead or abandoned earlier passes removed before this one; absent when none were. */
+  sweptScratch?: number | undefined;
+  /** Time spent sweeping them; present exactly when `sweptScratch` is. */
+  sweepMs?: number | undefined;
 };
 
 export const MUTANTS_SPEC = "mutants.json";
@@ -82,6 +87,25 @@ const SKIP_COPY = new Set([".git", "node_modules"]);
 export const SCRATCH_DIR = path.join(".metaproject", "data", "review", "mutate-scratch");
 export type ScratchMode = "repo" | "tmp";
 export const SCRATCH_MODES: readonly ScratchMode[] = ["repo", "tmp"];
+/** How long a scratch directory with no readable owner marker may sit before a later pass treats it as abandoned. */
+export const STALE_SCRATCH_MS = 6 * 60 * 60 * 1000;
+/** How often a running pass touches its owner marker, so a sweep can tell a live pass from a dead one without trusting a pid. */
+export const HEARTBEAT_MS = 60_000;
+/** A marker nobody has touched for this long is abandoned whatever its pid says (a reused pid, or another PID namespace). */
+export const STALE_HEARTBEAT_MS = 10 * 60_000;
+/** A marker whose pid is dead is abandoned once it has missed this many heartbeats. */
+export const DEAD_PID_GRACE_HEARTBEATS = 2;
+const OWNER_FILE = "owner.json";
+/** The prefix of every scratch directory a pass makes (`mkdtemp(<base>/<prefix>)`). */
+const SCRATCH_PREFIX = "keryx-mutate-";
+/** What `mkdtemp` makes from {@link SCRATCH_PREFIX}; any other name in the scratch base is not ours to remove. */
+const SCRATCH_NAME = new RegExp(`^${SCRATCH_PREFIX}[A-Za-z0-9]{6}$`);
+/** An owner marker is a few dozen bytes; a larger file is not ours. */
+const OWNER_MAX_BYTES = 4096;
+/** The largest `.gitmodules` the copy reads. */
+const GITMODULES_MAX_BYTES = 64 * 1024;
+/** A gitfile is one `gitdir: <path>` line; a larger `.git` file is not read and is not a linked worktree's. */
+const GITFILE_MAX_BYTES = 8 * 1024;
 const BASELINE_TAIL_LINES = 60;
 const OUTPUT_KEEP_CHARS = 256 * 1024;
 
@@ -210,23 +234,202 @@ function lineOf(text: string, index: number): number {
 }
 
 /**
+ * True when `dir` is a linked git worktree (`git worktree add`): the one kind of nested checkout the copy leaves out.
+ * It is a second working copy of a repository, often with hundreds of thousands of files, and not part of the tree
+ * under review. Everything else is copied as the base copy did, because the tests may load it: a submodule (listed in
+ * `submodules`, or a `.git` file pointing under `.git/modules`), an embedded clone (a `.git` directory), a `.git`
+ * link, and a `.git` that cannot be read, is larger than {@link GITFILE_MAX_BYTES} or has no `gitdir:` line.
+ * A `.git` file is a linked worktree's when the admin directory it names holds a `commondir` file (git's own marker,
+ * the one `harness/process/sandbox/git-protect.ts` uses), or when the path it names ends in `.git/worktrees/<name>`;
+ * a `modules` segment before that decides nothing.
+ */
+async function isLinkedWorktree(dir: string, submodules: ReadonlySet<string>): Promise<boolean> {
+  if (submodules.has(dir)) return false;
+  const dotGit = path.join(dir, ".git");
+  let value: string;
+  try {
+    const info = await lstat(dotGit);
+    if (!info.isFile() || info.size > GITFILE_MAX_BYTES) return false;
+    const match = /^gitdir:\s*(.+)$/m.exec(await readFile(dotGit, "utf8"));
+    if (match === null) return false;
+    value = match[1]!.trim();
+  } catch {
+    return false;
+  }
+  try {
+    if ((await lstat(path.join(path.resolve(dir, value), "commondir"))).isFile()) return true;
+  } catch {
+    /* no such marker: fall back to the shape of the path */
+  }
+  // A worktree's admin directory is exactly `<…>/.git/worktrees/<name>`; a submodule of a linked worktree lives deeper,
+  // at `<…>/.git/worktrees/<name>/modules/<sub>`, and is copied.
+  const segments = value.split(/[\\/]+/).filter((segment) => segment !== "");
+  const at = segments.lastIndexOf(".git");
+  return at >= 0 && segments.length === at + 3 && segments[at + 1] === "worktrees";
+}
+
+/** Every `path = <value>` of a `.gitmodules` file, with one pair of surrounding double quotes removed. */
+function submodulePaths(gitmodules: string): string[] {
+  const found: string[] = [];
+  for (const line of gitmodules.split("\n")) {
+    // Matched on the trimmed line: no trailing `\s*` for a lazy value to backtrack against, so a long run of spaces
+    // inside a line costs linear time.
+    const match = /^path\s*=\s*(.+)$/.exec(line.trim());
+    if (match !== null) found.push(match[1]!.replace(/^"(.*)"$/, "$1"));
+  }
+  return found;
+}
+
+/**
  * Copies the tree entry by entry instead of with one `cp`: the scratch directory can sit inside the
  * tree being copied, and `cp` refuses a destination under its own source. `skip` holds absolute paths
- * (the scratch directory) that are left out.
+ * (the scratch directories) that are left out. Linked worktrees (`.claude/worktrees/*`, `.worktrees/*`) are left out
+ * too, see {@link isLinkedWorktree}; a directory a `.gitmodules` file of the walk names is a submodule and is copied.
+ * Returns the linked worktrees it left out, relative to `source`, in walk order.
  */
-async function copyTree(source: string, target: string, skip: ReadonlySet<string>): Promise<void> {
+async function copyTree(source: string, target: string, skip: ReadonlySet<string>): Promise<string[]> {
+  const leftOut: string[] = [];
+  const submodules = new Set<string>();
   const walk = async (from: string, to: string): Promise<void> => {
     await mkdir(to, { recursive: true });
-    for (const entry of await readdir(from, { withFileTypes: true })) {
+    const entries = await readdir(from, { withFileTypes: true });
+    if (entries.some((entry) => entry.name === ".gitmodules" && entry.isFile())) {
+      try {
+        const file = path.join(from, ".gitmodules");
+        // A real .gitmodules is a few hundred bytes; a larger file names nothing.
+        if ((await stat(file)).size <= GITMODULES_MAX_BYTES) for (const value of submodulePaths(await readFile(file, "utf8"))) submodules.add(path.resolve(from, value));
+      } catch {
+        /* an unreadable .gitmodules names nothing */
+      }
+    }
+    for (const entry of entries) {
       const entryPath = path.join(from, entry.name);
       if (SKIP_COPY.has(entry.name) || skip.has(entryPath)) continue;
-      if (entry.isDirectory()) await walk(entryPath, path.join(to, entry.name));
+      if (entry.isDirectory()) {
+        if (await isLinkedWorktree(entryPath, submodules)) {
+          leftOut.push(path.relative(source, entryPath));
+          continue;
+        }
+        await walk(entryPath, path.join(to, entry.name));
+      }
       else await cp(entryPath, path.join(to, entry.name));
     }
   };
   await walk(source, target);
   const modules = path.join(source, "node_modules");
   if (existsSync(modules)) await symlink(modules, path.join(target, "node_modules"), "dir");
+  return leftOut;
+}
+
+/**
+ * Whether `pid` is a live process. Not `processIsAlive` from `lib/fs.ts`: this one is for a decision to delete, the
+ * irreversible direction, so any error but ESRCH keeps the directory (EPERM means the process exists under another user).
+ */
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+/**
+ * The owner marker of a scratch directory: its pid and when it was last touched. Opened without following a link and
+ * without blocking (a FIFO named `owner.json` must not stall a sweep), read only when it is a small regular file. Any
+ * failure, a bad shape or a pid that is not a positive integer means the directory has no marker.
+ */
+async function readOwner(dir: string): Promise<{ pid: number; mtimeMs: number } | undefined> {
+  let handle;
+  try {
+    handle = await open(path.join(dir, OWNER_FILE), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    const info = await handle.stat();
+    if (!info.isFile() || info.size > OWNER_MAX_BYTES) return undefined;
+    const owner = JSON.parse(await handle.readFile("utf8")) as { pid?: unknown };
+    return typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0 ? { pid: owner.pid, mtimeMs: info.mtimeMs } : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+/**
+ * Removes scratch directories that earlier passes left behind: a pass killed with SIGKILL or a crash never reaches its
+ * cleanup. Only the operator's own `keryx-mutate-XXXXXX` directories are looked at (a real directory, owned by `uid`
+ * when the platform has one). A running pass touches its owner marker every {@link HEARTBEAT_MS}. A directory with a
+ * marker goes when the marker is older than `staleHeartbeatMs` ({@link STALE_HEARTBEAT_MS}) whatever its pid says, or
+ * when its pid is not alive and the marker is older than {@link DEAD_PID_GRACE_HEARTBEATS} heartbeats (a sweep in
+ * another PID namespace cannot see a live pass's pid, but it does see that pass's fresh marker). A directory with no
+ * usable marker goes when it is older than `staleMs`. Best effort: it returns how many it removed and never throws.
+ */
+export async function sweepStaleScratch(
+  scratchBase: string,
+  options: {
+    now?: (() => number) | undefined;
+    staleMs?: number | undefined;
+    isAlive?: ((pid: number) => boolean) | undefined;
+    uid?: number | undefined;
+    heartbeatMs?: number | undefined;
+    staleHeartbeatMs?: number | undefined;
+  } = {},
+): Promise<number> {
+  const now = options.now ?? Date.now;
+  const staleMs = options.staleMs ?? STALE_SCRATCH_MS;
+  const isAlive = options.isAlive ?? pidAlive;
+  const uid = options.uid ?? process.getuid?.();
+  const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS;
+  const staleHeartbeatMs = options.staleHeartbeatMs ?? STALE_HEARTBEAT_MS;
+  let removed = 0;
+  try {
+    for (const entry of await readdir(scratchBase, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !SCRATCH_NAME.test(entry.name)) continue;
+      const dir = path.join(scratchBase, entry.name);
+      try {
+        const info = await lstat(dir);
+        if (!info.isDirectory() || (uid !== undefined && info.uid !== uid)) continue;
+        const owner = await readOwner(dir);
+        const abandoned =
+          owner === undefined
+            ? now() - info.mtimeMs > staleMs
+            : now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > DEAD_PID_GRACE_HEARTBEATS * heartbeatMs);
+        if (!abandoned) continue;
+        await rm(dir, { recursive: true, force: true });
+        removed += 1;
+      } catch {
+        /* one unreadable entry must not stop the sweep */
+      }
+    }
+  } catch {
+    /* no scratch base yet, or it is unreadable: nothing to sweep */
+  }
+  return removed;
+}
+
+/** Sweeps the pass's scratch base and, when the copy goes elsewhere, the repository's own scratch; how many went and how long it took. */
+async function sweepLeftovers(scratchBase: string, repoScratch: string): Promise<{ sweptScratch: number; sweepMs: number }> {
+  const started = Date.now();
+  let sweptScratch = await sweepStaleScratch(scratchBase);
+  if (scratchBase !== repoScratch) sweptScratch += await sweepStaleScratch(repoScratch);
+  return { sweptScratch, sweepMs: Date.now() - started };
+}
+
+/**
+ * Writes the owner marker beside the copy, never inside it, so a later pass can tell a live owner from a dead one, and
+ * touches it every `heartbeatMs` while the pass runs: a sweep reads a marker that stopped being touched as abandoned.
+ * `stop` ends the heartbeat and may be called twice.
+ * The write is synchronous, so no SIGINT or SIGTERM handler can run while it is in flight: a cleanup that ran then
+ * would race the file's creation, and `rm` would fail on a directory that gained `owner.json` under it.
+ */
+function startOwnerMarker(scratch: string, startedAt: string, heartbeatMs: number): { stop(): void } {
+  const ownerFile = path.join(scratch, OWNER_FILE);
+  writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, startedAt }));
+  const heartbeat = setInterval(() => {
+    const at = new Date();
+    void utimes(ownerFile, at, at).catch(() => {});
+  }, heartbeatMs);
+  heartbeat.unref();
+  return { stop: () => clearInterval(heartbeat) };
 }
 
 const SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
@@ -262,6 +465,8 @@ export async function runMutation(options: {
   cap?: number | undefined;
   /** Run each mutant with `--bail` when the command allows it (default true); the baseline always runs in full. */
   bail?: boolean | undefined;
+  /** How often the pass touches its owner marker; defaults to {@link HEARTBEAT_MS}. */
+  heartbeatMs?: number | undefined;
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
   const startedAt = new Date().toISOString();
@@ -274,15 +479,24 @@ export async function runMutation(options: {
   const passFields = { startedAt, ...provenance, loadavg: load, provenanceMs };
   const timeoutMs = options.timeoutMs ?? 300_000;
   const scratchBase = options.scratchRoot !== undefined ? path.resolve(options.scratchRoot) : options.scratch === "tmp" ? tmpdir() : path.join(worktree, SCRATCH_DIR);
+  // The repository's own scratch is never copied (a pass with `--scratch tmp` would otherwise copy the dead passes' trees
+  // it holds) and is swept too when the copy goes elsewhere.
+  const repoScratch = path.join(worktree, SCRATCH_DIR);
   await mkdir(scratchBase, { recursive: true });
-  const scratch = await mkdtemp(path.join(scratchBase, "keryx-mutate-"));
+  const { sweptScratch, sweepMs } = await sweepLeftovers(scratchBase, repoScratch);
+  const sweepFields = sweptScratch > 0 ? { sweptScratch, sweepMs } : {};
+  const scratch = await mkdtemp(path.join(scratchBase, SCRATCH_PREFIX));
   // The copy has no .git; without a ceiling a git command run by the tests would walk up into the real repository.
   const env = runEnv(scratchBase);
-  return withScratchSignalCleanup(async () => { killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
+  let marker: { stop(): void } | undefined;
+  // The marker is written inside this scope, so a failed write still removes the directory it was made in. The body runs
+  // synchronously up to its first await, so the marker exists before any signal handler can run.
+  return withScratchSignalCleanup(async () => { marker?.stop(); killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
   try {
+    marker = startOwnerMarker(scratch, startedAt, options.heartbeatMs ?? HEARTBEAT_MS);
     const copy = path.join(scratch, "tree");
     const copyStarted = Date.now();
-    await copyTree(worktree, copy, new Set([scratchBase, scratch]));
+    const leftOut = await copyTree(worktree, copy, new Set([scratchBase, repoScratch, scratch]));
     const copyMs = Date.now() - copyStarted;
     const baseline = await runCommand(options.command, copy, timeoutMs, env);
     if (baseline.exitCode !== 0 || baseline.timedOut) {
@@ -294,6 +508,10 @@ export async function runMutation(options: {
         `baseline cwd: ${copy}`,
         `last ${BASELINE_TAIL_LINES} lines of output:`,
         tail === "" ? "(no output)" : tail,
+        // The name comes from the reviewed tree: escaped, so it cannot act on the operator's terminal.
+        ...(leftOut.length === 0 ? [] : [`the copy left out ${leftOut.length} linked worktree(s) (first: ${terminalSafe(leftOut[0]!).text})`]),
+        // On a red baseline the terminal shows this message, not the table that carries the Swept line.
+        ...sweptLines(sweepFields),
       ].join("\n");
       throw new BaselineError(message, {
         schemaVersion: 1,
@@ -304,6 +522,7 @@ export async function runMutation(options: {
         totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
         ...passFields,
         copyMs,
+        ...sweepFields,
       });
     }
 
@@ -355,11 +574,19 @@ export async function runMutation(options: {
       ...passFields,
       copyMs,
       mutantsMs: results.reduce((sum, r) => sum + r.ms, 0),
+      ...sweepFields,
     };
   } finally {
+    marker?.stop();
     await rm(scratch, { recursive: true, force: true });
   }
   });
+}
+
+/** The one Swept sentence for a pass that removed earlier passes' scratch, or none. */
+function sweptLines({ sweptScratch, sweepMs }: Pick<MutationRecord, "sweptScratch" | "sweepMs">): string[] {
+  if (sweptScratch === undefined || sweptScratch <= 0) return [];
+  return [`Swept: ${sweptScratch} scratch ${sweptScratch === 1 ? "copy" : "copies"} left by dead passes${sweepMs === undefined ? "" : ` (${sweepMs} ms)`}.`];
 }
 
 function costLine(record: MutationRecord): string[] {
@@ -400,6 +627,7 @@ export function renderMutationTable(record: MutationRecord): string {
     `Command: \`${record.command}\` (baseline exit ${record.baseline.exitCode}, ${record.baseline.ms} ms). Run in a scratch copy; the worktree was not written.`,
     "",
     ...(record.bail === true ? ["Bail: applied (mutants ran with --bail; baseline in full).", ""] : []),
+    ...sweptLines(record).flatMap((line) => [line, ""]),
     ...costLine(record),
     ...provenanceLine(record),
     ...(record.baseline.tail === undefined

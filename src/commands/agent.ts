@@ -151,6 +151,9 @@ import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type 
 // exempted from the untrusted-content floor.
 const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed", "slate_note"]);
 
+/** What the shell prints when the operator interrupts a model turn. */
+const TURN_INTERRUPTED_LINE = "\n[stopped] Model turn interrupted by user.\n";
+
 /**
  * Flow 387 T7: the last provider-reported input-token usage per history array,
  * plus the provider/model it came from. Keyed by the `history` reference the
@@ -521,6 +524,8 @@ export interface AgentDeps {
    * turn; absent, each `runAgentTurn` call generates its own.
    */
   controlNonce?: string;
+  /** Test seam for the managed-review gate's scan; the real {@link findReviewGateState} when absent. */
+  reviewGateState?: typeof findReviewGateState;
   idSeq: () => string;
   /**
    * Inclusive maximum model round-trips per user turn (loop-safety guard).
@@ -1063,9 +1068,10 @@ export interface CaughtToolError {
 
 /**
  * Why the loop itself cut a turn short (see {@link RunAgentTurnResult.finishReason}).
- * `"interrupted"` is set only when an abort lands during a subagent's
- * `submit_result` wrap-up (flow 347 review R2-4): that turn was already stopping
- * for a budget reason and must never read as a clean finish.
+ * `"interrupted"` is set when an abort lands while the turn was already stopping
+ * for a budget or no-progress reason (a subagent's `submit_result` wrap-up, flow
+ * 347 review R2-4; the main turn's wrap-up; the review gate on the no-progress
+ * stop): such a turn must never read as a clean finish.
  */
 export type AgentFinishReason = "budget" | "tool-call-budget" | "no-progress" | "interrupted";
 
@@ -3221,7 +3227,7 @@ async function runAgentTurnCore(
   const recovery = deps.unattended === true || deps.subagentBudget !== undefined ? undefined : options.recovery;
 
   if (isAborted()) {
-    io.onSystem?.("\n[stopped] Model turn interrupted by user.\n");
+    io.onSystem?.(TURN_INTERRUPTED_LINE);
     return {};
   }
 
@@ -3483,7 +3489,7 @@ async function runAgentTurnCore(
     // budget outcome. Review R2-4: it is not a clean finish either — the turn
     // was already stopping on a limit — so it reports `interrupted`.
     if (isAborted()) {
-      system("\n[stopped] Model turn interrupted by user.\n");
+      system(TURN_INTERRUPTED_LINE);
       return { finishReason: "interrupted" };
     }
     const why =
@@ -3505,7 +3511,7 @@ async function runAgentTurnCore(
       buildPromptCacheKey(options, history),
     );
     if (outcome.aborted === true) {
-      system("\n[stopped] Model turn interrupted by user.\n");
+      system(TURN_INTERRUPTED_LINE);
       return { finishReason: "interrupted" };
     }
     return {
@@ -3531,9 +3537,13 @@ async function runAgentTurnCore(
     // It keeps both, and the session's start, across a compaction that rewrites the history in place.
     const named = sessionReviewNames(history, deps.cwd ?? process.cwd());
     const runSeen = named.runSeen === true;
+    // An interrupted turn gets no nudge: the operator has already taken the turn back.
+    if (isAborted()) return false;
+    const scan = deps.reviewGateState ?? findReviewGateState;
     const open = runSeen
-      ? await findReviewGateState(deps.cwd ?? process.cwd(), named.startedAt ?? sessionStartedAt(history), named).catch(() => null)
+      ? await scan(deps.cwd ?? process.cwd(), named.startedAt ?? sessionStartedAt(history), named, { signal }).catch(() => null)
       : null;
+    if (isAborted()) return false;
     const gate = decideReviewGate({
       open,
       runSeen,
@@ -3758,7 +3768,7 @@ async function runAgentTurnCore(
     for (;;) {
       if (isAborted()) {
         io.onAttemptInterrupted?.();
-        system("\n[stopped] Model turn interrupted by user.\n");
+        system(TURN_INTERRUPTED_LINE);
         return recovery === undefined ? {} : { finishReason: "interrupted" };
       }
       if (recovery?.canRequest?.() === false) {
@@ -3806,7 +3816,7 @@ async function runAgentTurnCore(
                 system("\n[interrupted output] Incomplete model output discarded.\n");
               }
             }
-            system("\n[stopped] Model turn interrupted by user.\n");
+            system(TURN_INTERRUPTED_LINE);
             return recovery === undefined ? {} : { finishReason: "interrupted" };
           }
           if (
@@ -3887,7 +3897,7 @@ async function runAgentTurnCore(
               system("\n[interrupted output] Incomplete model output discarded.\n");
             }
           }
-          system("\n[stopped] Model turn interrupted by user.\n");
+          system(TURN_INTERRUPTED_LINE);
           return recovery === undefined ? {} : { finishReason: "interrupted" };
         }
         transportCause = cause;
@@ -3915,7 +3925,7 @@ async function runAgentTurnCore(
           reasoningRedacted = false;
           calls.length = 0;
           if (isAborted()) {
-            system("\n[stopped] Model turn interrupted by user.\n");
+            system(TURN_INTERRUPTED_LINE);
             return { finishReason: "interrupted" };
           }
           if (!attemptUsageKnown) system("\n[recovery usage] Failed-attempt usage unknown; provider may have billed it.\n");
@@ -4005,7 +4015,7 @@ async function runAgentTurnCore(
     }
 
     if (isAborted()) {
-      system("\n[stopped] Model turn interrupted by user.\n");
+      system(TURN_INTERRUPTED_LINE);
       return {};
     }
     if (errored) {
@@ -4187,7 +4197,7 @@ async function runAgentTurnCore(
         if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
 
         if (outcome === "aborted") {
-          system("\n[stopped] Model turn interrupted by user.\n");
+          system(TURN_INTERRUPTED_LINE);
           return {};
         }
         if (outcome === "timeout") {
@@ -4272,6 +4282,11 @@ async function runAgentTurnCore(
       // accepts the package, not when the model stops. Independent of the plan
       // (a blocked plan item must not end it); unattended children are excluded.
       if (await holdReviewGate()) continue;
+      // The gate returns false for an aborted turn too: the operator took the turn back, so it ends like the other abort sites.
+      if (isAborted()) {
+        system(TURN_INTERRUPTED_LINE);
+        return {};
+      }
 
       if (hasActionableExecutionPlanItems(currentPlan)) {
         const actionable = currentPlan?.items.filter(
@@ -4304,7 +4319,7 @@ async function runAgentTurnCore(
     }
 
     if (isAborted()) {
-      system("\n[stopped] Model turn interrupted by user.\n");
+      system(TURN_INTERRUPTED_LINE);
       return {};
     }
 
@@ -4434,7 +4449,7 @@ async function runAgentTurnCore(
 
     for (const call of calls) {
       if (isAborted()) {
-        system("\n[stopped] Model turn interrupted by user.\n");
+        system(TURN_INTERRUPTED_LINE);
         // Parallel spawn results already settled must still answer their
         // `tool_calls` — dropping them leaves an orphaned assistant batch and
         // the next provider round never starts.
@@ -4835,6 +4850,12 @@ async function runAgentTurnCore(
       // Run 10: the repeated-signature guard ended the turn here and skipped the
       // text-only gate, so an incomplete managed review stopped with "resend the request".
       if (roundState.round < roundState.maxRounds && (await holdReviewGate())) continue;
+      // The gate returns false for an aborted turn too: the operator took the turn back, so no wrap-up runs. The turn was
+      // already stopping on no progress, so it reports `interrupted`, as an abort during the wrap-up below does.
+      if (isAborted()) {
+        system(TURN_INTERRUPTED_LINE);
+        return { finishReason: "interrupted" };
+      }
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
         const wrapUp = await finishWithBudgetSummary(
@@ -4848,7 +4869,7 @@ async function runAgentTurnCore(
         buildPromptCacheKey(options, history),
       );
         if (wrapUp.aborted) {
-          system("\n[stopped] Model turn interrupted by user.\n");
+          system(TURN_INTERRUPTED_LINE);
           return { finishReason: "interrupted" };
         }
       } else {
