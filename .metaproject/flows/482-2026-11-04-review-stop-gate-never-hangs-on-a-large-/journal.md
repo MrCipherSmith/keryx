@@ -53,3 +53,5 @@
 - 2026-11-04T10:58:19.375Z - task-done: T8: Round-2 review fixes: second abort site, test precision, constants and naming, runMutation helpers, one guide section, flow plan text
 - 2026-11-04T12:00:05.281Z - task-added: T9: Answer round 3 of PR #1126: rename the grace constant, share the test helpers, test the .gitmodules cap and per-line parse, narrow the stale title wording
 - 2026-11-04T12:03:29.686Z - task-done: T9: Answer round 3 of PR #1126: rename the grace constant, share the test helpers, test the .gitmodules cap and per-line parse, narrow the stale title wording
+- 2026-11-04T12:40:14.829Z - task-added: T10: Close the info findings rounds 1-3 left open: newest-first bounded gate walk, metadata hash for large files, gitfile cap, sync owner marker, escaped and swept baseline message, test names, flow title
+- 2026-11-04T12:56:21.382Z - task-done: T10: Close the info findings rounds 1-3 left open: newest-first bounded gate walk, metadata hash for large files, gitfile cap, sync owner marker, escaped and swept baseline message, test names, flow title
