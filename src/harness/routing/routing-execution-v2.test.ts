@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { normalizeRoutingV2Config, type RoutingV2ConfigLayer } from "./config-v2";
 import type { ModelRef } from "./model-class";
-import { executeRoutingWithFallback } from "./routing-execution-v2";
+import { executeRoutingWithFallback, prepareRoutingCandidate } from "./routing-execution-v2";
+import { resolveRoutingForRuntime } from "./routing-runtime";
 import type { RoutingRequest } from "./routing-request";
 import { createRoutingSnapshot, type RoutingModelFacts } from "./snapshot";
 import { RoutingBudgetLedger } from "./routing-budget";
@@ -62,6 +63,44 @@ const errorEvent = (attemptId: string, kind: "rate_limit" | "overloaded" | "unav
   sequence: 1,
   attemptId,
   error: { kind, retryable, message: kind },
+});
+
+test("preparation falls back before dispatch and returns the replacement dependencies and receipt", async () => {
+  const input = setup();
+  const receipt = resolveRoutingForRuntime(input);
+  const result = await prepareRoutingCandidate({
+    ...input,
+    receipt,
+    signal: new AbortController().signal,
+    prepare: async (target) => target.providerId === first.providerId
+      ? { ok: false, reason: "credentials-missing" }
+      : { ok: true, value: target.modelId },
+  });
+  expect(result).toMatchObject({
+    ok: true,
+    value: second.modelId,
+    target: second,
+    receipt: { previousDecisionId: receipt.decision.decisionId, fallbackReason: "credentials-missing" },
+  });
+});
+
+test("preparation never widens an explicit model pin", async () => {
+  const input = setup();
+  const request: RoutingRequest = { ...input.request, userOverride: { mode: "model", target: first } };
+  const receipt = resolveRoutingForRuntime({ ...input, request });
+  const prepared: ModelRef[] = [];
+  const result = await prepareRoutingCandidate({
+    ...input,
+    request,
+    receipt,
+    signal: new AbortController().signal,
+    prepare: async (target) => {
+      prepared.push(target);
+      return { ok: false, reason: "model-unavailable" };
+    },
+  });
+  expect(result.ok).toBe(false);
+  expect(prepared).toEqual([first]);
 });
 
 test("confirmed 429 before output selects the next model and links receipts", async () => {

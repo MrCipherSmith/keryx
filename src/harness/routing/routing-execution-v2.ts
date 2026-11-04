@@ -111,6 +111,55 @@ function updateRuntimeSnapshot(state: RuntimeSnapshotState, target: ModelRef, re
   });
 }
 
+/** Select a candidate whose model-specific dependencies can be built before a turn starts. */
+export async function prepareRoutingCandidate<T>(
+  input: Pick<ExecuteRoutingWithFallbackInput, "request" | "snapshot" | "config" | "journal"> & {
+    readonly receipt: RoutingDecisionReceipt;
+    readonly signal: AbortSignal;
+    readonly prepare: (target: ModelRef, decisionId: string, signal: AbortSignal) => Promise<
+      { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: RoutingReason }
+    >;
+  },
+): Promise<
+  { readonly ok: true; readonly value: T; readonly target: ModelRef; readonly receipt: RoutingDecisionReceipt }
+  | { readonly ok: false; readonly reason: RoutingReason }
+> {
+  const state: RuntimeSnapshotState = { snapshot: input.snapshot, excluded: new Set() };
+  const signal = AbortSignal.any([input.signal, AbortSignal.timeout(input.config.execution.selectionTimeoutMs)]);
+  let receipt = input.receipt;
+  for (let attempt = 0; attempt < input.config.execution.maxAttempts; attempt += 1) {
+    if (signal.aborted) return { ok: false, reason: input.signal.aborted ? "cancelled" : "uncertain-outcome" };
+    if (receipt.decision.status !== "selected") {
+      return { ok: false, reason: receipt.decision.status === "blocked" ? receipt.decision.reason : "classifier-failed" };
+    }
+    const { selection: target, decisionId } = receipt.decision;
+    let prepared;
+    try {
+      prepared = await Promise.race([input.prepare(target, decisionId, signal), abortPromise(signal)]);
+    } catch {
+      return { ok: false, reason: input.signal.aborted ? "cancelled" : signal.aborted ? "uncertain-outcome" : "config-invalid" };
+    }
+    if (signal.aborted) return { ok: false, reason: input.signal.aborted ? "cancelled" : "uncertain-outcome" };
+    if (prepared.ok) return { ...prepared, target, receipt };
+    if (prepared.reason === "cancelled" || prepared.reason === "config-invalid") return prepared;
+    if (attempt + 1 >= input.config.execution.maxAttempts) return { ok: false, reason: "attempts-exhausted" };
+    updateRuntimeSnapshot(state, target, prepared.reason, state.snapshot.observedAt);
+    try {
+      receipt = resolveRoutingForRuntime({
+        request: input.request,
+        snapshot: state.snapshot,
+        config: input.config,
+        previousDecisionId: decisionId,
+        fallbackReason: prepared.reason,
+        ...(input.journal === undefined ? {} : { journal: { ...input.journal, kind: "dispatch" } }),
+      });
+    } catch {
+      return { ok: false, reason: "config-invalid" };
+    }
+  }
+  return { ok: false, reason: "attempts-exhausted" };
+}
+
 function abortPromise(signal: AbortSignal): Promise<never> {
   return new Promise((_, reject) => {
     if (signal.aborted) return reject(signal.reason);

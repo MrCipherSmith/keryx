@@ -203,6 +203,7 @@ import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
 import type { RoutingCategory } from "../harness/routing/table";
 import type { RoutingCapability } from "../harness/routing/routing-request";
 import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
+import { prepareRoutingCandidate } from "../harness/routing/routing-execution-v2";
 // Flow 346: the EXTERNAL switch's `/external on|off` command + status line —
 // no modal (see the flow's own AC8 scope note); the sidebar row and bare
 // status text are rendered from `external-command.ts`.
@@ -10993,6 +10994,62 @@ export async function launchTuiAgentShell(opts: {
             foregroundOperation.settle(operation);
             if (!foregroundOperation.isDisposed) stopBusy();
             return;
+          } else if (!turnSignal.aborted && routingOutcome?.routingV2 !== undefined) {
+            const routingV2 = routingOutcome.routingV2;
+            const prepared = await prepareRoutingCandidate<AgentDeps>({
+              ...routingV2,
+              signal: turnSignal,
+              prepare: async (target, decisionId, signal) => {
+                const allowed = await routingV2.beforeIo(target, decisionId, { signal });
+                if (!allowed.ok) return allowed;
+                if (signal.aborted) return { ok: false, reason: "cancelled" };
+                try {
+                  const value = target.providerId === sessionDeps.providerId && target.modelId === sessionDeps.modelId
+                    ? sessionDeps
+                    : await opts.makeAgentDeps({ provider: target.providerId, model: target.modelId }, liveSlateSession, busClientRef);
+                  if (value.providerId !== target.providerId || value.modelId !== target.modelId) {
+                    return { ok: false, reason: "config-invalid" };
+                  }
+                  return { ok: true, value };
+                } catch {
+                  return { ok: false, reason: "model-unavailable" };
+                }
+              },
+            });
+            if (!prepared.ok || turnSignal.aborted) {
+              if (!turnSignal.aborted && !prepared.ok) io.onSystem?.(`[route blocked: ${prepared.reason}]\n`);
+              foregroundOperation.settle(operation);
+              if (!foregroundOperation.isDisposed) stopBusy();
+              return;
+            }
+            deps = {
+              ...prepared.value,
+              ...(sessionDeps.busInbox !== undefined ? { busInbox: sessionDeps.busInbox } : {}),
+              ...(sessionDeps.busAck !== undefined ? { busAck: sessionDeps.busAck } : {}),
+              ...(sessionDeps.busLeases !== undefined ? { busLeases: sessionDeps.busLeases } : {}),
+              provider: createMeteredRoutingProvider({
+                provider: prepared.value.provider,
+                target: prepared.target,
+                receipt: prepared.receipt,
+                budget: routingV2.budget,
+                selectionTimeoutMs: routingV2.config.execution.selectionTimeoutMs,
+                beforeIo: routingV2.beforeIo,
+                estimatedCostUsd: (request) => routingV2.estimatedCostUsd(request, prepared.target),
+                journal: routingV2.journal,
+              }),
+            };
+            if (prepared.receipt.previousDecisionId !== undefined) {
+              io.onSystem?.(`[route fallback: ${prepared.target.providerId}/${prepared.target.modelId} (${prepared.receipt.fallbackReason})]\n`);
+            }
+            if (prepared.value !== sessionDeps) {
+              routingRoutedCount += 1;
+              routingLastCategory = routingOutcome.category;
+              refreshRoutingSidebar();
+              if (prepared.receipt.previousDecisionId === undefined) {
+                const tag = renderRoutingTagLine(routingOutcome);
+                if (tag !== undefined) io.onSystem?.(`${tag}\n`);
+              }
+            }
           } else if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {
             try {
               deps = {
@@ -11013,12 +11070,6 @@ export async function launchTuiAgentShell(opts: {
               }
             } catch {
               deps = sessionDeps;
-              if (!turnSignal.aborted && routingOutcome?.routingV2 !== undefined) {
-                io.onSystem?.("[route blocked: selected model could not be prepared; check availability and external policy]\n");
-                foregroundOperation.settle(operation);
-                if (!foregroundOperation.isDisposed) stopBusy();
-                return;
-              }
               // Legacy routing keeps its established session-model fallback.
               if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
             }
@@ -11026,28 +11077,6 @@ export async function launchTuiAgentShell(opts: {
             if (routingOutcome?.routingV2 === undefined) {
               io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
             }
-          }
-          const routingV2 = routingOutcome?.routingV2;
-          if (!turnSignal.aborted && routingV2 !== undefined) {
-            if (deps.providerId !== routingV2.target.providerId || deps.modelId !== routingV2.target.modelId) {
-              io.onSystem?.("[route blocked: prepared provider identity does not match the routing decision]\n");
-              foregroundOperation.settle(operation);
-              if (!foregroundOperation.isDisposed) stopBusy();
-              return;
-            }
-            deps = {
-              ...deps,
-              provider: createMeteredRoutingProvider({
-                provider: deps.provider,
-                target: routingV2.target,
-                receipt: routingV2.receipt,
-                budget: routingV2.budget,
-                selectionTimeoutMs: routingV2.config.execution.selectionTimeoutMs,
-                beforeIo: routingV2.beforeIo,
-                estimatedCostUsd: routingV2.estimatedCostUsd,
-                journal: routingV2.journal,
-              }),
-            };
           }
         }
         // Flow 341 (AC3, wired to PR #737's classifier): captured

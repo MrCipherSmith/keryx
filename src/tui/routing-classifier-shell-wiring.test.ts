@@ -143,15 +143,15 @@ test("routing v2 shadow journals a no-I/O preview and then preserves legacy exec
 });
 
 test("TUI v2 wraps the authorized fixed target with the classifier's shared budget and receipt", () => {
-  const start = SOURCE.indexOf("const routingV2 = routingOutcome?.routingV2;", FN_START);
+  const start = SOURCE.indexOf("const routingV2 = routingOutcome.routingV2;", FN_START);
   const end = SOURCE.indexOf("// Flow 341", start);
   const body = SOURCE.slice(start, end);
   expect(start).toBeGreaterThan(FN_START);
   expect(body).toContain("createMeteredRoutingProvider({");
-  expect(body).toContain("receipt: routingV2.receipt");
+  expect(body).toContain("receipt: prepared.receipt");
   expect(body).toContain("budget: routingV2.budget");
   expect(body).toContain("beforeIo: routingV2.beforeIo");
-  expect(body).toContain("estimatedCostUsd: routingV2.estimatedCostUsd");
-  expect(body).toContain("deps.providerId !== routingV2.target.providerId");
+  expect(body).toContain("routingV2.estimatedCostUsd(request, prepared.target)");
+  expect(body).toContain("value.providerId !== target.providerId");
   expect(ROUTING_SOURCE).not.toContain("finite routing budget cannot be enforced by the TUI agent-loop boundary");
 });

@@ -119,7 +119,7 @@ export interface RoutingClassifierTurnResult {
       decisionId: string,
       context: { readonly signal: AbortSignal },
     ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: "cancelled" | "policy-denied" | "credentials-missing" }>;
-    readonly estimatedCostUsd: (request: NormalizedRequest) => number | null;
+    readonly estimatedCostUsd: (request: NormalizedRequest, target: { readonly providerId: string; readonly modelId: string }) => number | null;
     readonly journal: { readonly cwd: string; readonly configDir?: string };
   };
 }
@@ -299,8 +299,8 @@ async function runRoutingClassifierForTurnV2(
         }
         return { ok: true as const };
       },
-      estimatedCostUsd: (normalized) => estimateModelCostUsd(
-        profiles[profileKey(decision.selection.providerId, decision.selection.modelId)],
+      estimatedCostUsd: (normalized, target) => estimateModelCostUsd(
+        profiles[profileKey(target.providerId, target.modelId)],
         estimateRequestTokens(normalized.messages, normalized.systemInstruction, normalized.tools ?? []),
         normalized.budget.maxOutputTokens,
       ),
