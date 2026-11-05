@@ -398,6 +398,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // that category's model (`keryx routing set`). Opt-in, default off.
     // TUI-only: the per-turn tag and `sb-route` sidebar row are OpenTUI
     // surfaces, same reasoning as `/guard`.
+    // Routing v2 activation without the terminal migrate/apply steps.
+    name: "/route-v2",
+    description: "Routing v2 (model classes): show the mode or switch it — /route-v2 [on|off]",
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/route",
     description: "Opt-in routing classifier: sorts the request into a category and routes it to that model — /route [on|off]",
     modes: AGENT_ONLY,

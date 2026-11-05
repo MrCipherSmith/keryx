@@ -51,6 +51,8 @@ export type SessionInfoSource = {
   } | undefined;
   selection?: { provider?: string; model?: string } | undefined;
   version?: string | undefined;
+  /** Routing mode: "v2" when model classes are active, else "legacy". */
+  routingMode?: string | undefined;
   usage?: Pick<NormalizedUsage, "inputTokens" | "outputTokens" | "totalTokens"> | undefined;
   estimateTokens?: number | undefined;
   /** Live provider limits (window / rate-limit / balance). Absent fields stay unknown. */
@@ -160,6 +162,7 @@ export function buildSessionInfoSnapshot(source: SessionInfoSource): SessionInfo
     { label: "Project", value: displayOrMissing(source.summary?.projectPath) },
     { label: "Provider", value: displayOrMissing(provider) },
     { label: "Model", value: displayOrMissing(model) },
+    { label: "Routing", value: source.routingMode ?? "legacy" },
   ];
   if (source.summary?.parentSessionId !== undefined && source.summary.parentSessionId.length > 0) {
     sessionRows.push({ label: "Parent", value: source.summary.parentSessionId });
