@@ -50,6 +50,8 @@ export function summarizeConfirmations(flow: FlowState): FlowConfirmations {
             acChecksum: completionSignature.acChecksum,
             headCommit: completionSignature.headCommit,
             ...(completionSignature.confirmation ? { confirmation: completionSignature.confirmation } : {}),
+            ...(completionSignature.cleanCompletion !== undefined ? { cleanCompletion: completionSignature.cleanCompletion } : {}),
+            ...(completionSignature.exceptions !== undefined ? { exceptions: completionSignature.exceptions } : {}),
           },
   };
 }

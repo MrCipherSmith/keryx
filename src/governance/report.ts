@@ -6,12 +6,39 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
+import { formatCompletionException } from "../flow/completion-exceptions";
+import type { CompletionException } from "../flow/types";
 import { listProjects } from "../lib/project-registry";
 import { collectProjectGovernance } from "./aggregate";
 import { renderEffectLine, renderSummaryLine } from "./flow-narrative";
 import type { FlowAcceptance, FlowDispatch, GovernanceFilters, GovernanceReport, GovernanceReportRead, ProjectGovernance } from "./types";
 
 export const GOVERNANCE_SCHEMA_VERSION = 1 as const;
+
+type CompletionMode = { cleanCompletion?: boolean; exceptions?: CompletionException[] };
+
+/** Missing legacy metadata is unknown, not evidence of a clean completion. */
+function completionMode(record: CompletionMode): string {
+  if (record.cleanCompletion === false || record.exceptions?.length) return "completed with exceptions";
+  return record.cleanCompletion === true ? "clean completion" : "not recorded";
+}
+
+function renderCompletionExceptions(record: CompletionMode): string[] {
+  return (record.exceptions ?? []).map((exception) => {
+    const question = exception.hostQuestion;
+    return `    exception: ${formatCompletionException(exception)}; confirmed via ${exception.confirmedVia}` +
+      ` at ${exception.at}; operator words: ${exception.operatorWords}` +
+      (question ? `; host question: ${question.source}:${question.ref} at ${question.time}` +
+        `; question: ${question.questionText}; answer: ${question.answerText}` : "");
+  });
+}
+
+function attemptResult(attempt: CompletionMode & { passed: boolean }): string {
+  if (!attempt.passed) return "failed";
+  const mode = completionMode(attempt);
+  if (mode === "completed with exceptions") return "passed with exceptions";
+  return mode === "clean completion" ? "passed (clean completion)" : "passed (completion mode: not recorded)";
+}
 
 export function governanceDataRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "data", "governance");
@@ -210,6 +237,11 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
                 }`
           }`,
         );
+        const signature = flow.confirmations.completionSignature;
+        if (signature !== undefined) {
+          lines.push(`completion mode: ${completionMode(signature)}`);
+          lines.push(...renderCompletionExceptions(signature));
+        }
       }
 
       if (!flow.gateOutcomes.recorded) {
@@ -218,9 +250,10 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
         lines.push(`gate outcomes: ${flow.gateOutcomes.attempts.length} attempt(s) recorded`);
         flow.gateOutcomes.attempts.forEach((attempt, index) => {
           lines.push(
-            `  attempt ${index + 1} (${attempt.at}): ${attempt.passed ? "passed" : "failed"} — ` +
+            `  attempt ${index + 1} (${attempt.at}): ${attemptResult(attempt)} — ` +
               attempt.gates.map((gate) => `${gate.name}=${gate.status}`).join(", "),
           );
+          lines.push(...renderCompletionExceptions(attempt));
         });
       }
       lines.push(...renderFlowDispatchLines(flow.dispatch));
