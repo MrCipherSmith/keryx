@@ -64,7 +64,7 @@ export async function runKeryxExternalWorkerEntry(
   const parsed = parseArgs(args);
   const abort = new AbortController();
   const onTerm = (): void => abort.abort(new Error("external general process stopped"));
-  process.once("SIGTERM", onTerm);
+  process.on("SIGTERM", onTerm);
   try {
     const request = parseRequest(await readFile(parsed.requestFile, "utf8"), abort.signal);
     const saved = loadShellConfig(parsed.configDir);

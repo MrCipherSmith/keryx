@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { lstat, mkdtemp, readdir, realpath, rename, rm, unlink } from "node:fs/promises";
+import { lstat, mkdtemp, readdir, realpath, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { loadAgentCatalog, type AgentCatalog } from "../../agents/catalog";
 import type { AgentDefinition } from "../../agents/types";
