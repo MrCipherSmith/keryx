@@ -60,8 +60,8 @@ import { printImportHelp, runImportReviewers } from "../review/import-reviewers"
 import { runJevRules } from "./review-jev-rules";
 import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { RUN_HELP, runReviewRun } from "./review-run";
-import { runReviewV3, type ReviewV3CliFactory } from "./review-v3";
-import { runReviewV3ServeCommand } from "./review-v3-serve";
+import { runReviewV3, type ReviewV3CliFactory } from "./review-agents";
+import { runReviewV3ServeCommand } from "./review-agents-serve";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";

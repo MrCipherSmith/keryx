@@ -5,7 +5,7 @@ import path from "node:path";
 import type { ProviderPort } from "../harness/provider/types";
 import type { ReviewV3Host, ReviewV3HostRuntime } from "../review/v3-host";
 import type { ReviewV3TerminalHost } from "../review/v3-terminal-host";
-import { runReviewV3ServeCommand } from "./review-v3-serve";
+import { runReviewV3ServeCommand } from "./review-agents-serve";
 
 describe("review v3 serve", () => {
   test("requires explicit operator trust and cost posture", async () => {

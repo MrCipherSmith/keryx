@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ReviewV3Controller, createLargeReviewConfig } from "../review/v3";
 import { startExternalBridgeSocketServer } from "../review/v3-external-transport";
-import { createReviewV3CliFactory, reviewV3CliFactoryFromEnv, runReviewV3Command, type ReviewV3CliController, type ReviewV3CliFactory } from "./review-v3";
+import { createReviewV3CliFactory, reviewV3CliFactoryFromEnv, runReviewV3Command, type ReviewV3CliController, type ReviewV3CliFactory } from "./review-agents";
 
 function controller(): ReviewV3CliController & { calls: Array<[string, unknown]> } {
   const calls: Array<[string, unknown]> = [];

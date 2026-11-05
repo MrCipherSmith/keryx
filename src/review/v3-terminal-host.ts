@@ -8,7 +8,7 @@ import type {
   ReviewV3CliController,
   ReviewV3CliFactory,
   ReviewV3CliPlanInput,
-} from "../commands/review-v3";
+} from "../commands/review-agents";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { ReviewV3Admission, ReviewV3SpawnInput } from "./v3/types";
 import {
