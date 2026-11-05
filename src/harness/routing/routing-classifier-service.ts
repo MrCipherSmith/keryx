@@ -27,16 +27,23 @@ export interface RunRoutingClassificationInput {
   readonly timeoutMs?: number;
 }
 
+function classifierTimeoutMs(input: Pick<RunRoutingClassificationInput, "config" | "timeoutMs">): number {
+  const remainingMs = Math.min(input.config.classifier.timeoutMs, input.timeoutMs ?? Number.POSITIVE_INFINITY);
+  return remainingMs <= 0 ? 0 : Math.max(1, Math.floor(remainingMs));
+}
+
 /** Canonical classify-once path used by every v2 consumer. */
 export async function runRoutingClassification(input: RunRoutingClassificationInput): Promise<RoutingClassificationServiceResult> {
-  const expectedAdapterIds = input.config.classifier.chain.map((entry) => entry.adapterId);
-  const actualAdapterIds = input.adapters.map((adapter) => adapter.id);
-  if (expectedAdapterIds.length !== actualAdapterIds.length || expectedAdapterIds.some((id, index) => id !== actualAdapterIds[index])) {
-    throw new Error("routing classifier adapters do not match the normalized config chain");
+  const timeoutMs = classifierTimeoutMs(input);
+  const adapters = timeoutMs === 0 ? [] : input.adapters;
+  if (timeoutMs > 0) {
+    const expectedAdapterIds = input.config.classifier.chain.map((entry) => entry.adapterId);
+    if (expectedAdapterIds.length !== adapters.length || expectedAdapterIds.some((id, index) => id !== adapters[index]?.id)) {
+      throw new Error("routing classifier adapters do not match the normalized config chain");
+    }
   }
-  const timeoutMs = Math.max(1, Math.floor(Math.min(input.config.classifier.timeoutMs, input.timeoutMs ?? Number.POSITIVE_INFINITY)));
   const classification = await runRoutingClassifierChain(input.task, {
-    adapters: input.adapters,
+    adapters,
     deadlineMs: timeoutMs,
     minConfidence: input.config.classifier.minConfidence,
     onFailure: input.config.classifier.onFailure,
@@ -65,8 +72,8 @@ export interface RunProductionRoutingClassificationInput
 export async function runProductionRoutingClassification(
   input: RunProductionRoutingClassificationInput,
 ): Promise<RoutingClassificationServiceResult> {
-  const timeoutMs = Math.max(1, Math.floor(Math.min(input.config.classifier.timeoutMs, input.timeoutMs ?? Number.POSITIVE_INFINITY)));
-  const adapters = buildRoutingClassifierAdapters({
+  const timeoutMs = classifierTimeoutMs(input);
+  const adapters = timeoutMs === 0 ? [] : buildRoutingClassifierAdapters({
     ...input.adapterInput,
     config: input.config,
     timeoutMs,
@@ -80,6 +87,6 @@ export async function runProductionRoutingClassification(
     estimatedCostUsd: input.estimatedCostUsd,
     ...(input.actualCostUsd === undefined ? {} : { actualCostUsd: input.actualCostUsd }),
     ...(input.signal === undefined ? {} : { signal: input.signal }),
-    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+    timeoutMs,
   });
 }

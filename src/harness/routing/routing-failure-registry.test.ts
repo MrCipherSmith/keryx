@@ -3,7 +3,7 @@ import { RoutingFailureRegistry } from "./routing-failure-registry";
 import { createRoutingSnapshot } from "./snapshot";
 
 const target = { providerId: "provider", modelId: "model" };
-function snapshot(catalogRevision: string) {
+function snapshot(catalogRevision: string, model = target) {
   return createRoutingSnapshot({
     configDigest: "config",
     observedAt: "2026-11-04T00:00:00.000Z",
@@ -11,8 +11,8 @@ function snapshot(catalogRevision: string) {
     policyRevision: "policy",
     capabilityRevision: "capability",
     authFailedProviderIds: [],
-    baseline: target,
-    models: [{ target, connected: true, credentialsAvailable: true, policyAllowed: true, parentAllowed: true, availability: "available", capabilities: [], contextLength: 10, cooldown: false, estimatedCostUsd: 0.1, observedLatencyMs: 1 }],
+    baseline: model,
+    models: [{ target: model, connected: true, credentialsAvailable: true, policyAllowed: true, parentAllowed: true, availability: "available", capabilities: [], contextLength: 10, cooldown: false, estimatedCostUsd: 0.1, observedLatencyMs: 1 }],
   });
 }
 
@@ -34,10 +34,16 @@ test("rate-limit cooldown honors retry-after and expires", () => {
 test("model failure storage evicts the oldest entry at its hard cap", () => {
   const registry = new RoutingFailureRegistry();
   registry.recordModelNotFound(target, "catalog");
-  for (let index = 0; index < 1_024; index += 1) {
+  for (let index = 0; index < 1_023; index += 1) {
     registry.recordModelNotFound({ providerId: "provider", modelId: `model-${index}` }, "catalog");
   }
-  expect(registry.apply(snapshot("catalog"), new Date("2026-11-04T00:00:01.000Z")).models[0]?.availability).toBe("available");
+  const now = new Date("2026-11-04T00:00:01.000Z");
+  expect(registry.apply(snapshot("catalog"), now).models[0]?.availability).toBe("unavailable");
+
+  const newest = { providerId: "provider", modelId: "newest" };
+  registry.recordModelNotFound(newest, "catalog");
+  expect(registry.apply(snapshot("catalog"), now).models[0]?.availability).toBe("available");
+  expect(registry.apply(snapshot("catalog", newest), now).models[0]?.availability).toBe("unavailable");
 });
 
 test("authentication failures persist until explicitly cleared", () => {

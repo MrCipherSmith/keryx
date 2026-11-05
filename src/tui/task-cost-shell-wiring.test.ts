@@ -11,6 +11,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 
 const SOURCE = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 const FN_START = SOURCE.indexOf("export async function launchTuiAgentShell(opts: {");
@@ -65,12 +66,20 @@ test("turnCategory is captured unconditionally from routingOutcome?.category, ou
     "const turnCategory: RoutingCategory | undefined = routingOutcome?.category;",
     FN_START,
   );
-  // This marker is after the complete routing conditional, including v2,
-  // legacy-routed, and fallback branches. Comparing with the opening `if`
-  // alone would not prove that the declaration is outside the branch.
-  const routingBranchEndAt = SOURCE.indexOf("// Flow 341 (AC3, wired to PR #737's classifier): captured", routedBranchAt);
-  expect(routingBranchEndAt).toBeGreaterThan(routedBranchAt);
-  expect(turnCategoryAt).toBeGreaterThan(routingBranchEndAt);
+  const sourceFile = ts.createSourceFile("shell-source.ts", SOURCE, ts.ScriptTarget.Latest, true);
+  function findTurnBlock(node: ts.Node): ts.Block | undefined {
+    if (ts.isBlock(node) && node.statements.some((statement) => statement.getStart(sourceFile) === routingOutcomeDeclAt)) {
+      return node;
+    }
+    return ts.forEachChild(node, findTurnBlock);
+  }
+  const statements = findTurnBlock(sourceFile)?.statements ?? [];
+  const routingBranch = statements.find((statement) =>
+    ts.isIfStatement(statement) && statement.getStart(sourceFile) < routedBranchAt && routedBranchAt < statement.end);
+  const turnCategory = statements.find((statement) => statement.getStart(sourceFile) === turnCategoryAt);
+  expect(routingBranch).toBeDefined();
+  expect(turnCategory).toBeDefined();
+  expect(turnCategoryAt).toBeGreaterThanOrEqual(routingBranch?.end ?? SOURCE.length);
 
   const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {", FN_START);
   expect(dispatchAt).toBeGreaterThan(turnCategoryAt);

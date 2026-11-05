@@ -99,7 +99,7 @@ function abortPromise(signal: AbortSignal): Promise<never> {
 /** Runs at most three classifiers once each under one aggregate deadline. */
 export async function runRoutingClassifierChain<Input>(input: Input, options: RunRoutingClassifierChainOptions<Input>): Promise<RoutingClassifierResult> {
   const deadlineMs = options.deadlineMs ?? 3_000;
-  if (!Number.isInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > 30_000) throw new Error("classifier deadlineMs must be an integer from 1 to 30000");
+  if (!Number.isInteger(deadlineMs) || deadlineMs < 0 || deadlineMs > 30_000) throw new Error("classifier deadlineMs must be an integer from 0 to 30000");
   if (!Number.isFinite(options.minConfidence) || options.minConfidence < 0 || options.minConfidence > 1) throw new Error("classifier minConfidence must be from 0 to 1");
   if (options.adapters.length > 3) throw new Error("classifier chain supports at most three adapters");
   const adapterIds = options.adapters.map((adapter) => adapter.id);
@@ -115,6 +115,14 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
     ...(options.receiptContext === undefined ? {} : { context: options.receiptContext }),
   };
   if (options.signal?.aborted) return cancelled(trace);
+  const fallback = (): RoutingClassifierResult => ({
+    status: "fallback",
+    assignment: options.onFailure,
+    reason: "classifier-failed",
+    receiptId: routingV2Digest({ ...receiptBinding, assignment: options.onFailure, reason: "classifier-failed", trace }),
+    trace,
+  });
+  if (deadlineMs === 0) return fallback();
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener("abort", abortFromCaller, { once: true });
@@ -185,13 +193,7 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
         }
       }
     }
-    return {
-      status: "fallback",
-      assignment: options.onFailure,
-      reason: "classifier-failed",
-      receiptId: routingV2Digest({ ...receiptBinding, assignment: options.onFailure, reason: "classifier-failed", trace }),
-      trace,
-    };
+    return fallback();
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", abortFromCaller);
