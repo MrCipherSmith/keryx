@@ -11,6 +11,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 
 const SOURCE = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 const FN_START = SOURCE.indexOf("export async function launchTuiAgentShell(opts: {");
@@ -57,19 +58,28 @@ test("turnCategory is captured unconditionally from routingOutcome?.category, ou
 
   const routedBranchAt = SOURCE.indexOf("if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {", routingOutcomeDeclAt);
   expect(routedBranchAt).toBeGreaterThan(routingOutcomeDeclAt);
-  // The routed-only branch's own fail-closed catch — the last thing inside it.
-  const routedBranchFailClosedAt = SOURCE.indexOf(
-    "// fail-closed: a routed-deps build failure runs on the session's own model instead.",
-    routedBranchAt,
-  );
-  expect(routedBranchFailClosedAt).toBeGreaterThan(routedBranchAt);
+  const meteringAt = SOURCE.indexOf("createMeteredRoutingProvider({", routingOutcomeDeclAt);
+  expect(meteringAt).toBeGreaterThan(routingOutcomeDeclAt);
+  expect(meteringAt).toBeLessThan(routedBranchAt);
 
   const turnCategoryAt = SOURCE.indexOf(
     "const turnCategory: RoutingCategory | undefined = routingOutcome?.category;",
     FN_START,
   );
-  // Declared AFTER the routed-only branch closes — unconditional, not nested inside it.
-  expect(turnCategoryAt).toBeGreaterThan(routedBranchFailClosedAt);
+  const sourceFile = ts.createSourceFile("shell-source.ts", SOURCE, ts.ScriptTarget.Latest, true);
+  function findTurnBlock(node: ts.Node): ts.Block | undefined {
+    if (ts.isBlock(node) && node.statements.some((statement) => statement.getStart(sourceFile) === routingOutcomeDeclAt)) {
+      return node;
+    }
+    return ts.forEachChild(node, findTurnBlock);
+  }
+  const statements = findTurnBlock(sourceFile)?.statements ?? [];
+  const routingBranch = statements.find((statement) =>
+    ts.isIfStatement(statement) && statement.getStart(sourceFile) < routedBranchAt && routedBranchAt < statement.end);
+  const turnCategory = statements.find((statement) => statement.getStart(sourceFile) === turnCategoryAt);
+  expect(routingBranch).toBeDefined();
+  expect(turnCategory).toBeDefined();
+  expect(turnCategoryAt).toBeGreaterThanOrEqual(routingBranch?.end ?? SOURCE.length);
 
   const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {", FN_START);
   expect(dispatchAt).toBeGreaterThan(turnCategoryAt);

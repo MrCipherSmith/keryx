@@ -3,8 +3,8 @@
 //
 // It is an ADAPTER (`src/commands/**`). The decisions that need no I/O (the
 // entry's shape, the content hash, the granted-tool catalogue and the floor)
-// live in `../trigger/*` (core). The containment and spend steps are shared with the
-// `flow-next` dispatch (`./trigger-dispatch.ts`, flow 295 C4). What differs is what
+// live in `../trigger/*` (core). Unattended model routing is shared with the
+// `flow-next` dispatch through `../harness/routing/unattended-adapter.ts`. What differs is what
 // surrounds the model: there is no flow, no task, no git worktree, no commit and no
 // health gate.
 //
@@ -38,7 +38,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildAgentSystemInstruction, generateControlNonce, resolveAgentMaxOutputTokens, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { resolveAgentMaxRounds } from "./round-limit";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { ensureScratchParent } from "./unattended-scratch";
@@ -74,10 +74,18 @@ import type {
   TriggerRunOutcomeKind,
   UnattendedDenial,
 } from "../trigger/record";
-import { reserveTriggerSpend } from "../trigger/run";
+import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
 export { verifyGrantedBinaries } from "../trigger/schedule-verify";
 import { ensureTriggerDataIgnored, triggerReportsDir } from "../trigger/store";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
+import { resolveProviderModelParamsByName } from "./providers";
+import { loadShellConfig } from "../lib/shell-config";
+import {
+  cachedRoutingProviders,
+  resolveUnattendedRoutingV2,
+  routedUnattendedProvider,
+  type UnattendedRoutingV2Deps,
+} from "../harness/routing/unattended-adapter";
 import {
   createSpendMeter,
   deniedUnattendedApproval,
@@ -98,7 +106,7 @@ export interface AgentTaskResult {
 }
 
 /** Injectable seams. Production passes none. */
-export interface AgentTaskDeps {
+export interface AgentTaskDeps extends UnattendedRoutingV2Deps {
   readonly makeProvider?: (dispatch: TriggerDispatch) => ProviderPort | { readonly error: string; readonly code?: DispatchRefusalCode };
   readonly planSandbox?: (input: UnattendedSandboxInput) => UnattendedSandboxPlan;
   readonly armTimeout?: (ms: number, fire: () => void) => () => void;
@@ -411,7 +419,6 @@ async function runLocked(
   if (changed !== undefined) return refusal(runId, changed.code, changed.reason, action);
   const binaries = await verifyGrantedBinaries(projectRoot, action, (deps.grantedEnv ?? process.env)["PATH"]);
   if (!binaries.ok) return refusal(runId, "grants-changed", `refusing to run: ${binaries.reason}`, action);
-
   // --- 3. containment -------------------------------------------------------
   // Every run's scratch lives under one 0700 parent, and that parent is hidden inside
   // the sandbox (only this run's own directories are bound back), so one run cannot
@@ -539,6 +546,70 @@ async function runLocked(
         exitCode: 1,
       };
     }
+    const env = deps.grantedEnv ?? process.env;
+    const providerFor = cachedRoutingProviders(dispatch, built, deps.makeProvider ?? defaultMakeProvider);
+    // Resolve the exact roster before routing so capability and context gates inspect the request that will run.
+    const extraSecrets = await ghAuthToken(binaries.realpaths["gh"], grantedCwd, env);
+    const grantedCalls: GrantedCallRecord[] = [];
+    const granted = action.grants.tools
+      .map((id) => grantedToolSpec(id))
+      .filter((spec): spec is GrantedToolSpec => spec !== undefined)
+      .map((spec) => grantedTool(spec, action, grantedCwd, env, grantedCalls, binaries.realpaths, extraSecrets, binaries.stats));
+    const tools = [
+      ...builtinReadOnlyTools(projectRoot),
+      shellExecTool(workdir, sandboxedRunner(workdir, sandbox)),
+      ...granted,
+      ...(deps.extraTools ?? []),
+    ];
+    const offending = tools.filter((tool) => isUnattendedExcludedTool(tool.definition.name));
+    if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((tool) => tool.definition.name).join(", ")}`);
+    const taskPrompt = buildAgentTaskPrompt(entry, action);
+    const currentBudget = await evaluateTriggerBudget(projectRoot, "agent-task", {}, { name: entry.name, ceilingUsd: dispatch.ceilingUsd });
+    if (!currentBudget.allowed) {
+      return {
+        outcome: "budget-refused",
+        detail: currentBudget.reason,
+        cost: { recorded: false, reason: "run was refused on the spend ceiling before any model call" },
+        agentTask: { runId, permissionMode: dispatch.permissionMode, network: action.grants.network },
+        exitCode: 0,
+      };
+    }
+    const routingShellConfig = loadShellConfig(deps.routingConfigDir);
+    const routingModelParams = resolveProviderModelParamsByName(dispatch.provider, routingShellConfig, deps.routingConfigDir);
+    const routingRuntime = {
+      maxOutputTokens: resolveAgentMaxOutputTokens({
+        env: process.env,
+        providerMaxOutputTokens: routingModelParams.maxOutputTokens,
+        globalMaxOutputTokens: routingShellConfig.maxOutputTokens,
+      }),
+      modelParams: routingModelParams,
+      systemInstruction: buildAgentSystemInstruction(undefined, {
+        providerId: dispatch.provider,
+        modelId: dispatch.model,
+        toolNames: tools.map((tool) => tool.definition.name),
+      }),
+    };
+    const routing = await resolveUnattendedRoutingV2(
+      projectRoot,
+      dispatch,
+      `unattended:${runId}:agent-task`,
+      providerFor,
+      taskPrompt,
+      tools.map((tool) => tool.definition),
+      currentBudget.remainingUsd,
+      routingRuntime,
+      deps,
+    );
+    const routingDecision = routing.receipt?.decision;
+    if (routingDecision !== undefined && routingDecision.status !== "selected") {
+      const reason = routingDecision.status === "blocked" ? routingDecision.reason : routingDecision.status;
+      return refusal(
+        runId,
+        "routing-blocked",
+        `routing v2 refused the explicit unattended provider/model pin: ${reason} (decision ${routingDecision.decisionId})`,
+        action,
+      );
+    }
     const reservation = await reserveTriggerSpend(projectRoot, {
       runId,
       trigger: entry.name,
@@ -562,7 +633,6 @@ async function runLocked(
     const controller = new AbortController();
     const meter = createSpendMeter(dispatch, reservation.usd, () => controller.abort());
     const denials: UnattendedDenial[] = [];
-    const grantedCalls: GrantedCallRecord[] = [];
     let timedOut = false;
     let providerError: string | undefined;
     let terminal: string | undefined;
@@ -574,23 +644,19 @@ async function runLocked(
       controller.abort();
     });
     try {
-      const env = deps.grantedEnv ?? process.env;
-      // F5: gh's own token, fetched once, outside the sandbox. It is never logged or
-      // shown, and it is scrubbed by exact value from every granted-tool output.
-      const extraSecrets = await ghAuthToken(binaries.realpaths["gh"], grantedCwd, env);
-      const granted = action.grants.tools
-        .map((id) => grantedToolSpec(id))
-        .filter((spec): spec is GrantedToolSpec => spec !== undefined)
-        .map((spec) => grantedTool(spec, action, grantedCwd, env, grantedCalls, binaries.realpaths, extraSecrets, binaries.stats));
-      const tools = [
-        ...builtinReadOnlyTools(projectRoot),
-        shellExecTool(workdir, sandboxedRunner(workdir, sandbox)),
-        ...granted,
-        ...(deps.extraTools ?? []),
-      ];
-      const offending = tools.filter((t) => isUnattendedExcludedTool(t.definition.name));
-      if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((t) => t.definition.name).join(", ")}`);
-      const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
+      const provider = guardUsage(
+        routedUnattendedProvider(
+          projectRoot,
+          deps.routingConfigDir,
+          dispatch,
+          reservation.usd,
+          built,
+          providerFor,
+          routing,
+          (usage) => usage === undefined ? meter.markUsageMissing() : meter.onUsage(usage),
+        ),
+        () => meter.markUsageMissing(),
+      );
       // Flow 306 (W6 T9, AC9): same unattended-untrusted, non-interactive
       // hook wiring as `trigger-dispatch.ts` — see that call site's comment.
       const shellHooks = buildShellHookRuntime({
@@ -610,13 +676,11 @@ async function runLocked(
         modelId: dispatch.model,
         tools,
         controlNonce: generateControlNonce(),
-        systemInstruction: buildAgentSystemInstruction(undefined, {
-          providerId: dispatch.provider,
-          modelId: dispatch.model,
-          toolNames: tools.map((t) => t.definition.name),
-        }),
+        systemInstruction: routingRuntime.systemInstruction,
         idSeq: () => randomUUID(),
         unattended: true,
+        maxOutputTokens: routing.maxOutputTokens,
+        modelParams: routing.modelParams,
         // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
         maxRounds: resolveAgentMaxRounds(process.env, "ask"),
         // Nor does it get trust mode's plan follow-through nudges: nobody is there to stop them.
@@ -629,7 +693,9 @@ async function runLocked(
         onSystem: (text) => {
           if (/\[error\]/.test(text)) providerError ??= text.replace(/\s+/g, " ").trim().slice(0, 400);
         },
-        onUsage: (usage) => meter.onUsage(usage),
+        onUsage: (usage) => {
+          if (routing.execution === undefined) meter.onUsage(usage);
+        },
         // The ONLY permission mode is the entry's — never the project default, never a saved allowlist.
         permissionMode: () => dispatch.permissionMode,
         readOnly: () => false,
@@ -642,7 +708,7 @@ async function runLocked(
           terminal = state.reason;
         },
       };
-      const result = await runAgentTurn(io, agentDeps, history, buildAgentTaskPrompt(entry, action), { signal: controller.signal, automaticReview: false });
+      const result = await runAgentTurn(io, agentDeps, history, taskPrompt, { signal: controller.signal, automaticReview: false });
       finishReason = result.finishReason;
       if (result.caughtToolErrors !== undefined && result.caughtToolErrors.length > 0) {
         // Review r1 (item 1, MAJOR regression): before AC4 (flow 354, L-12)

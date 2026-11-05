@@ -442,7 +442,7 @@ function mergeUsage(
 }
 
 /** Classify a non-2xx HTTP response into the neutral error taxonomy. */
-function classifyHttpError(status: number, _headers: Headers): NormalizedError {
+function classifyHttpError(status: number, _headers: Headers, errorType?: string): NormalizedError {
   if (status === 401) {
     return { kind: "authentication", retryable: retryableFor("authentication", false), message: "" };
   }
@@ -455,6 +455,9 @@ function classifyHttpError(status: number, _headers: Headers): NormalizedError {
   }
   if (status >= 500) {
     return { kind: "unavailable", retryable: retryableFor("unavailable", true), message: "" };
+  }
+  if (status === 404 && errorType === "not_found_error") {
+    return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "", detail: { modelNotFound: true } };
   }
   if (status >= 400) {
     return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "" };
@@ -698,21 +701,22 @@ export class AnthropicProvider implements ProviderPort {
 
     // AC4 provider negatives: non-2xx -> typed, fail-closed error, no model_end.
     if (!response.ok) {
-      const error = withRetryAfter(classifyHttpError(response.status, response.headers), response.headers, this.deps.clock);
+      let parsed: Record<string, unknown> = {};
       let providerMessage = `Anthropic API returned HTTP ${response.status}`;
+      let requestId: string | undefined;
       try {
-        const parsed = asRecord(JSON.parse(await response.text()));
+        parsed = asRecord(JSON.parse(await response.text()));
         const detail = asString(asRecord(parsed.error).message);
         if (detail !== undefined && detail.length > 0) {
           providerMessage = detail;
         }
-        const requestId = asString(parsed.request_id);
-        if (requestId !== undefined) {
-          error.providerRequestId = requestId;
-        }
+        requestId = asString(parsed.request_id);
       } catch {
         // Non-JSON error body: keep the generic status message.
       }
+      const errorType = asString(asRecord(parsed.error).type);
+      const error = withRetryAfter(classifyHttpError(response.status, response.headers, errorType), response.headers, this.deps.clock);
+      if (requestId !== undefined) error.providerRequestId = requestId;
       error.message = redact(providerMessage);
       yield stamp({ kind: "provider_error", error });
       return;
@@ -976,6 +980,7 @@ export class AnthropicProvider implements ProviderPort {
               kind,
               retryable: retryableFor(kind, false),
               message: redact(message !== undefined && message.length > 0 ? message : "Anthropic API returned a stream error with no message"),
+              ...(asString(errorObj.type) === "not_found_error" ? { detail: { modelNotFound: true } } : {}),
             };
             break;
           }

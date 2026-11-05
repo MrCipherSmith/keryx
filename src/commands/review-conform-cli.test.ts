@@ -6,10 +6,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { explainConformVerdicts, reviewCommand } from "./review";
+import { explainConformVerdicts, reviewCommand, type ConformExplainRoute } from "./review";
 import { aggregateConformVerdicts, type ConformVerdict } from "../review/conform-jev";
 import type { ModelTurnInput, ModelTurnResult } from "../harness/provider/single-turn";
 import { CONFORM_RECENTS_PATH } from "../review/conform-report";
+import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures", "conform");
 const REF_PATH = path.join(FIXTURES_DIR, "invented-ref.md");
@@ -20,6 +21,7 @@ const MANY_HUNKS_DIR = path.join(FIXTURES_DIR, "many-hunks");
 const MANY_HUNKS_REF = path.join(MANY_HUNKS_DIR, "invented-ref.md");
 const ORIGINAL_CWD = process.cwd();
 const ORIGINAL_KEY = process.env.OPENROUTER_API_KEY;
+const ORIGINAL_XDG = process.env.XDG_DATA_HOME;
 const realLog = console.log;
 const realError = console.error;
 
@@ -56,6 +58,11 @@ afterEach(async () => {
     delete process.env.OPENROUTER_API_KEY;
   } else {
     process.env.OPENROUTER_API_KEY = ORIGINAL_KEY;
+  }
+  if (ORIGINAL_XDG === undefined) {
+    delete process.env.XDG_DATA_HOME;
+  } else {
+    process.env.XDG_DATA_HOME = ORIGINAL_XDG;
   }
   if (ROOT) {
     await rm(ROOT, { recursive: true, force: true });
@@ -444,6 +451,88 @@ describe("Flow 326, AC1: --explain sends one prompt per violated clause, not one
 
     expect(prompts).toHaveLength(1);
     expect(explanations["hunks-1"]).toBe("explanation text");
+  });
+
+  test("routing v2 reserves the complete multi-clause explanation fan-out before provider I/O", async () => {
+    ROOT = await projectRoot(true);
+    process.env.XDG_DATA_HOME = path.join(ROOT, "xdg");
+    const verdicts: ConformVerdict[] = ["clause-1", "clause-2"].map((clause_id) => ({
+      clause_id,
+      state_kind: "pr",
+      status: "likely-violated",
+      probability: 0.1,
+      factLines: ["a deterministic fact"],
+      tag_source: "jev",
+    }));
+    const prompts: string[] = [];
+    const fakeRunTurn = async (input: ModelTurnInput): Promise<ModelTurnResult> => {
+      prompts.push(input.user);
+      return { provider: "fixture", model: "fixture", credentialAvailable: true, text: "unexpected" };
+    };
+    const route: ConformExplainRoute = {
+      provider: "fixture",
+      model: "fixture",
+      routingV2: {
+        decisionId: "decision-budget-test",
+        budget: new RoutingBudgetLedger({ configUsd: 0.015, unknownCost: "deny" }),
+        estimatedCostUsd: () => 0.01,
+      },
+    };
+
+    await expect(explainConformVerdicts(
+      ROOT,
+      "invented-ref.md",
+      verdicts,
+      0.5,
+      undefined,
+      fakeRunTurn,
+      async () => route,
+    )).rejects.toThrow("budget-exceeded before provider I/O");
+    expect(prompts).toEqual([]);
+  });
+
+  test("routing v2 stops before the next explanation when reported usage exhausts the shared budget", async () => {
+    ROOT = await projectRoot(true);
+    process.env.XDG_DATA_HOME = path.join(ROOT, "xdg");
+    const verdicts: ConformVerdict[] = ["clause-1", "clause-2"].map((clause_id) => ({
+      clause_id,
+      state_kind: "pr",
+      status: "likely-violated",
+      probability: 0.1,
+      factLines: ["a deterministic fact"],
+      tag_source: "jev",
+    }));
+    let calls = 0;
+    const fakeRunTurn = async (): Promise<ModelTurnResult> => {
+      calls += 1;
+      return {
+        provider: "fixture",
+        model: "fixture",
+        credentialAvailable: true,
+        text: "first explanation",
+        usage: { inputTokens: 100, outputTokens: 600, exact: true },
+      };
+    };
+    const route: ConformExplainRoute = {
+      provider: "fixture",
+      model: "fixture",
+      routingV2: {
+        decisionId: "decision-actual-budget-test",
+        budget: new RoutingBudgetLedger({ configUsd: 0.025, unknownCost: "deny" }),
+        estimatedCostUsd: (_inputTokens, outputTokens) => outputTokens > 512 ? 0.02 : 0.01,
+      },
+    };
+
+    await expect(explainConformVerdicts(
+      ROOT,
+      "invented-ref.md",
+      verdicts,
+      0.5,
+      undefined,
+      fakeRunTurn,
+      async () => route,
+    )).rejects.toThrow("actual task cost exhausted the budget");
+    expect(calls).toBe(1);
   });
 });
 

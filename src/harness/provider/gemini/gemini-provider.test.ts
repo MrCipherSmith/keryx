@@ -293,6 +293,20 @@ describe("AC2 — opts.signal cancels the in-flight attempt", () => {
 // --- AC2: HTTP error taxonomy -------------------------------------------------
 
 describe("AC2 — non-2xx HTTP responses classify per Google's {code,message,status} envelope", () => {
+  test("404 NOT_FOUND is marked as model-not-found for safe routing fallback", async () => {
+    const body = JSON.stringify({ error: { code: 404, message: "model not found", status: "NOT_FOUND" } });
+    const { fetch: fetchMock } = makeFetchMock(() => new Response(body, { status: 404 }));
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    const events = await collectEvents(provider.stream(buildRequest("request-404"), { attemptId: "attempt-404" }));
+    expect(events[0]?.error).toMatchObject({ kind: "invalid_request", retryable: false, detail: { modelNotFound: true } });
+  });
+  test("generic HTTP 404 does not authorize model fallback", async () => {
+    const { fetch: fetchMock } = makeFetchMock(() => new Response(JSON.stringify({ error: { code: 404, message: "route not found" } }), { status: 404 }));
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    const events = await collectEvents(provider.stream(buildRequest("request-generic-404"), { attemptId: "attempt-generic-404" }));
+    expect(events[0]?.error).toMatchObject({ kind: "invalid_request", retryable: false });
+    expect(events[0]?.error?.detail?.modelNotFound).not.toBe(true);
+  });
   test("400 INVALID_ARGUMENT -> invalid_request, not retryable", async () => {
     const { fetch: fetchMock } = makeFetchMock(
       () => new Response(loadFixtureText(ERROR_FIXTURE_PATH), { status: 400, headers: { "content-type": "application/json" } }),

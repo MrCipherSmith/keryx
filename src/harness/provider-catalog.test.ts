@@ -222,7 +222,7 @@ test("catalogToFlatPickerProviders: ok providers pass their live models through 
     fetchedAt: "now",
     providers: { deepseek: { name: "deepseek", status: "ok", models: ["deepseek-chat"], fallbackModels: ["deepseek-chat"], fetchedAt: "now" } },
   });
-  expect(flat).toEqual([{ name: "deepseek", models: ["deepseek-chat"] }]);
+  expect(flat).toEqual([{ name: "deepseek", models: ["deepseek-chat"], observedAt: "now" }]);
 });
 
 test("catalogToFlatPickerProviders: auth-failed is EXCLUDED entirely — never pretends curated models are available", () => {
@@ -242,8 +242,8 @@ test("catalogToFlatPickerProviders: unreachable/timeout/not-supported fall back 
     },
   });
   expect(flat).toEqual([
-    { name: "groq", models: ["llama-3.3-70b-versatile"], offline: true },
-    { name: "anthropic", models: ["claude-sonnet-5"], offline: true },
+    { name: "groq", models: ["llama-3.3-70b-versatile"], offline: true, observedAt: "now" },
+    { name: "anthropic", models: ["claude-sonnet-5"], offline: true, observedAt: "now" },
   ]);
 });
 
@@ -530,7 +530,7 @@ test("flow 468 AC4: withStatusRows returns an auth-failed provider as a display-
     fetchedAt: "now",
     providers: { deepseek: { name: "deepseek", status: "auth-failed" as const, models: [], fallbackModels: ["deepseek-chat"], fetchedAt: "now" } },
   };
-  expect(catalogToFlatPickerProviders(catalog, { withStatusRows: true })).toEqual([{ name: "deepseek", models: [], authFailed: true }]);
+  expect(catalogToFlatPickerProviders(catalog, { withStatusRows: true })).toEqual([{ name: "deepseek", models: [], authFailed: true, observedAt: "now" }]);
   expect(catalogToFlatPickerProviders(catalog)).toEqual([]);
 });
 
@@ -545,12 +545,12 @@ test("flow 468 AC4: withStatusRows keeps an unreachable, timed-out or unsupporte
     },
   };
   expect(catalogToFlatPickerProviders(catalog, { withStatusRows: true })).toEqual([
-    { name: "rapid-mlx", models: [], listUnavailable: "unreachable" },
-    { name: "slow", models: [], listUnavailable: "timed out" },
-    { name: "custom", models: [], listUnavailable: "no live listing" },
+    { name: "rapid-mlx", models: [], listUnavailable: "unreachable", observedAt: "now" },
+    { name: "slow", models: [], listUnavailable: "timed out", observedAt: "now" },
+    { name: "custom", models: [], listUnavailable: "no live listing", observedAt: "now" },
     // A curated fallback list still wins: shown as the offline list, not as a status row.
-    { name: "groq", models: ["llama-fake"], offline: true },
+    { name: "groq", models: ["llama-fake"], offline: true, observedAt: "now" },
   ]);
   // Without the opt-in the old behaviour holds: nothing to show, nothing returned.
-  expect(catalogToFlatPickerProviders(catalog)).toEqual([{ name: "groq", models: ["llama-fake"], offline: true }]);
+  expect(catalogToFlatPickerProviders(catalog)).toEqual([{ name: "groq", models: ["llama-fake"], offline: true, observedAt: "now" }]);
 });

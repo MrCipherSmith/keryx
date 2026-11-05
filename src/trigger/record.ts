@@ -130,6 +130,7 @@ export const DISPATCH_REFUSAL_CODES = [
   "dispatch-locked",
   "sandbox-unavailable",
   "provider-usage-unknown",
+  "routing-blocked",
   "worktree-conflict",
   // Flow 295 (AC5): an agent-task whose stored content no longer matches the
   // hash the operator confirmed — an edit behind an installed timer never runs.

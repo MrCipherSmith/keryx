@@ -1,0 +1,236 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:keryx:routing:v2:routing-decision",
+  "title": "routing-decision v2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "decisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parentDecisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "configDigest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshotDigest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assignmentSource": {
+      "enum": [
+        "user-override",
+        "project",
+        "user",
+        "builtin"
+      ]
+    },
+    "recommendationSource": {
+      "enum": [
+        "none",
+        "task-signals",
+        "agent",
+        "classifier",
+        "classifier-fallback"
+      ]
+    },
+    "status": {
+      "enum": [
+        "selected",
+        "blocked",
+        "unmanaged",
+        "needs-classification"
+      ]
+    },
+    "requestedClass": {
+      "enum": [
+        "light",
+        "standard",
+        "expert",
+        "frontier"
+      ]
+    },
+    "selectedClass": {
+      "enum": [
+        "light",
+        "standard",
+        "expert",
+        "frontier"
+      ]
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "providerId",
+        "modelId"
+      ]
+    },
+    "reason": {
+      "enum": [
+        "policy-denied",
+        "provider-scope-conflict",
+        "credentials-missing",
+        "auth-failed",
+        "model-unavailable",
+        "candidate-unverified",
+        "capability-missing",
+        "context-insufficient",
+        "cooldown",
+        "budget-exceeded",
+        "cost-unknown",
+        "minimum-class-unproven",
+        "class-below-minimum",
+        "empty-class",
+        "classifier-failed",
+        "config-invalid",
+        "attempts-exhausted",
+        "cancelled",
+        "uncertain-outcome"
+      ]
+    },
+    "fallbackReason": {
+      "enum": [
+        "candidate-fallback",
+        "class-escalated",
+        "class-downgraded",
+        "pin-fallback",
+        "classifier-fallback"
+      ]
+    },
+    "classifierReceiptId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "providerId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "modelId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "providerId",
+              "modelId"
+            ]
+          },
+          "modelClass": {
+            "enum": [
+              "light",
+              "standard",
+              "expert",
+              "frontier"
+            ]
+          },
+          "reason": {
+            "enum": [
+              "policy-denied",
+              "provider-scope-conflict",
+              "credentials-missing",
+              "auth-failed",
+              "model-unavailable",
+              "candidate-unverified",
+              "capability-missing",
+              "context-insufficient",
+              "cooldown",
+              "budget-exceeded",
+              "cost-unknown",
+              "minimum-class-unproven",
+              "class-below-minimum",
+              "empty-class",
+              "classifier-failed",
+              "config-invalid",
+              "attempts-exhausted",
+              "cancelled",
+              "uncertain-outcome"
+            ]
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "requestId",
+    "configDigest",
+    "snapshotDigest",
+    "assignmentSource",
+    "recommendationSource",
+    "status",
+    "exclusions"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "selected"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "selection"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "selection"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "blocked"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reason"
+        ]
+      }
+    }
+  ]
+}

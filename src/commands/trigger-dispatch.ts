@@ -48,7 +48,7 @@ import { mkdir, rm, symlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildAgentSystemInstruction, generateControlNonce, resolveAgentMaxOutputTokens, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { resolveAgentMaxRounds } from "./round-limit";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
@@ -59,11 +59,17 @@ import { FakeProvider } from "../harness/provider/fake-provider";
 import type { NormalizedEvent, NormalizedMessage, NormalizedUsage, ProviderPort } from "../harness/provider/types";
 import { planUnattendedSandbox, type UnattendedSandboxInput, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
 import { ensureScratchParent } from "./unattended-scratch";
-import { providerByName } from "./providers";
+import { providerByName, resolveProviderModelParamsByName } from "./providers";
+import {
+  cachedRoutingProviders,
+  resolveUnattendedRoutingV2,
+  routedUnattendedProvider,
+  type UnattendedRoutingV2Deps,
+} from "../harness/routing/unattended-adapter";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
-import { envWithSavedApiKeys } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { spendFromTokens } from "../review/caps";
 import type { FlowService, FlowTask } from "../flow/types";
 import type { TriggerDispatch, TriggerEntry } from "../trigger/config";
@@ -75,8 +81,9 @@ import type {
   UnattendedDenial,
 } from "../trigger/record";
 import { NETWORK_ON_WARNING } from "../trigger/describe";
-import { reserveTriggerSpend } from "../trigger/run";
+import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
+import type { RoutingDecision } from "../harness/routing/decision";
 
 const execFileAsync = promisify(execFile);
 
@@ -95,8 +102,7 @@ export interface HealthGateResult {
   readonly detail: string;
 }
 
-/** Injectable seams. Production passes only `service`; tests replace the model, the gate and the clock. */
-export interface DispatchDeps {
+export interface DispatchDeps extends UnattendedRoutingV2Deps {
   readonly service: FlowService;
   /** Build the provider for the entry. Default: `makeProvider` with saved API keys; a missing credential or unknown usage reporting is refused. */
   readonly makeProvider?: (dispatch: TriggerDispatch) => ProviderPort | { readonly error: string; readonly code?: DispatchRefusalCode };
@@ -235,6 +241,11 @@ export function providerHasUsableCredential(
   });
   const reason = credentialProblem(dispatch.provider, provider);
   return reason === undefined ? { ok: true } : { ok: false, reason };
+}
+
+function routingDecisionFailure(decision: Exclude<RoutingDecision, { readonly status: "selected" }>): string {
+  const reason = decision.status === "blocked" ? decision.reason : decision.status;
+  return `routing v2 refused the explicit unattended provider/model pin: ${reason} (decision ${decision.decisionId})`;
 }
 
 /** Default provider construction: fails closed on a missing credential and on unknown usage reporting. */
@@ -706,6 +717,52 @@ async function dispatchLocked(
     };
   }
 
+  const baselineProvider: ProviderPort = built;
+  const routingTools = [...buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox)), ...(deps.extraTools ?? [])];
+  const providerFor = cachedRoutingProviders(dispatch, baselineProvider, deps.makeProvider ?? defaultMakeProvider);
+  const flowDir = (await service.list({ cwd: projectRoot })).find((candidate) => candidate.id === state.id)?.dir;
+  const taskPrompt = buildTaskPrompt(state.id, state.title, flowDir, task);
+  const currentBudget = await evaluateTriggerBudget(projectRoot, "flow-next", {}, { name: triggerName, ceilingUsd: dispatch.ceilingUsd });
+  if (!currentBudget.allowed) {
+    return {
+      outcome: "budget-refused",
+      detail: currentBudget.reason,
+      cost: { recorded: false, reason: "run was refused on the spend ceiling before any model call" },
+      dispatch: { runId, flow, task: task.id },
+      exitCode: 0,
+    };
+  }
+  const routingShellConfig = loadShellConfig(deps.routingConfigDir);
+  const routingModelParams = resolveProviderModelParamsByName(dispatch.provider, routingShellConfig, deps.routingConfigDir);
+  const routingRuntime = {
+    maxOutputTokens: resolveAgentMaxOutputTokens({
+      env: process.env,
+      providerMaxOutputTokens: routingModelParams.maxOutputTokens,
+      globalMaxOutputTokens: routingShellConfig.maxOutputTokens,
+    }),
+    modelParams: routingModelParams,
+    systemInstruction: buildAgentSystemInstruction(undefined, {
+      providerId: dispatch.provider,
+      modelId: dispatch.model,
+      toolNames: routingTools.map((tool) => tool.definition.name),
+    }),
+  };
+  const routing = await resolveUnattendedRoutingV2(
+    projectRoot,
+    dispatch,
+    `unattended:${runId}:flow-next`,
+    providerFor,
+    taskPrompt,
+    routingTools.map((tool) => tool.definition),
+    currentBudget.remainingUsd,
+    routingRuntime,
+    deps,
+  );
+  const routingDecision = routing.receipt?.decision;
+  if (routingDecision !== undefined && routingDecision.status !== "selected") {
+    return refusal(runId, flow, "routing-blocked", routingDecisionFailure(routingDecision), task);
+  }
+
   // --- 5. spend reservation (AC14) — the last refusal point ---------------------
   const reservation = await reserveTriggerSpend(projectRoot, {
     runId,
@@ -806,11 +863,22 @@ async function dispatchLocked(
       timedOut = true;
       controller.abort();
     });
-    const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
+    const provider = guardUsage(
+      routedUnattendedProvider(
+        projectRoot,
+        deps.routingConfigDir,
+        dispatch,
+        reservedUsd,
+        baselineProvider,
+        providerFor,
+        routing,
+        (usage) => usage === undefined ? meter.markUsageMissing() : meter.onUsage(usage),
+      ),
+      () => meter.markUsageMissing(),
+    );
 
     try {
-      const tools = [...buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox)), ...(deps.extraTools ?? [])];
-      const toolNames = tools.map((t) => t.definition.name);
+      const tools = routingTools;
       // Flow 306 (W6 T9, AC9): every unattended entry point builds its hook
       // runtime with `interactive: false` and the `unattended-untrusted`
       // profile — no mode/approver can lift a hook `ask` here; it fails
@@ -835,13 +903,11 @@ async function dispatchLocked(
         modelId: dispatch.model,
         tools,
         controlNonce: generateControlNonce(),
-        systemInstruction: buildAgentSystemInstruction(undefined, {
-          providerId: dispatch.provider,
-          modelId: dispatch.model,
-          toolNames,
-        }),
+        systemInstruction: routingRuntime.systemInstruction,
         idSeq: () => randomUUID(),
         unattended: true,
+        maxOutputTokens: routing.maxOutputTokens,
+        modelParams: routing.modelParams,
         // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
         maxRounds: resolveAgentMaxRounds(process.env, "ask"),
         // Nor does it get trust mode's plan follow-through nudges: nobody is there to stop them.
@@ -854,7 +920,9 @@ async function dispatchLocked(
         onSystem: (text) => {
           if (/\[error\]/.test(text)) providerError ??= text.replace(/\s+/g, " ").trim().slice(0, 400);
         },
-        onUsage: (usage) => meter.onUsage(usage),
+        onUsage: (usage) => {
+          if (routing.execution === undefined) meter.onUsage(usage);
+        },
         // AC4: the ONLY permission mode is the entry's. Never the project's
         // stored default, never a saved shell allowlist — this io consults neither.
         permissionMode: () => dispatch.permissionMode,
@@ -871,9 +939,8 @@ async function dispatchLocked(
           }
         },
       };
-      const flowDir = (await service.list({ cwd: projectRoot })).find((f) => f.id === state.id)?.dir;
       const history: NormalizedMessage[] = [];
-      const result = await runAgentTurn(io, agentDeps, history, buildTaskPrompt(state.id, state.title, flowDir, task), {
+      const result = await runAgentTurn(io, agentDeps, history, taskPrompt, {
         signal: controller.signal,
         automaticReview: false,
       });

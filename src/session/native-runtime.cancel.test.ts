@@ -78,13 +78,16 @@ test("local native policy denial cannot be lifted by an approving transport call
 
 test("native runtime distinguishes a provider failure from a clean text turn", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-runtime-failure-"));
-  const provider = scriptedProvider([[{ kind: "provider_error", error: { kind: "authentication", message: "denied", retryable: false } }]]);
+  const provider = scriptedProvider([[{ kind: "provider_error", error: { kind: "unavailable", message: "temporarily unavailable", retryable: true } }]]);
   const runtime = createNativeSessionRuntime({ cwd, provider: provider.provider, providerId: "scripted", modelId: "m" });
   const config = { configVersion: 1, baselineCandidateId: "scripted:m", reasoningEffort: "none" as const, routing: { enabled: false, profileId: "local", candidateIds: ["scripted:m"], fallbackCandidateId: "scripted:m" }, policyDigest: "a".repeat(64), capabilityDigest: "a".repeat(64) };
   try {
     const result = await runtime.run({ write: () => {} }, [], "hello", await runtime.routing(config).select("hello", config), {});
     expect(result.outcome).toBe("failed");
     expect(result.reason).toBe("provider-error");
+    // Native has no fresh per-attempt remote authorization contract yet: a
+    // retryable provider failure must not silently execute another candidate.
+    expect(provider.requests).toHaveLength(1);
   } finally { await runtime.stop(); await rm(cwd, { recursive: true, force: true }); }
 });
 

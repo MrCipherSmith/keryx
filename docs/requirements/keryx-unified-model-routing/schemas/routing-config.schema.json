@@ -1,0 +1,396 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:keryx:routing:v2:routing-config",
+  "title": "routing-config v2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "classes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "light": {
+          "$ref": "#/$defs/classConfig"
+        },
+        "standard": {
+          "$ref": "#/$defs/classConfig"
+        },
+        "expert": {
+          "$ref": "#/$defs/classConfig"
+        },
+        "frontier": {
+          "$ref": "#/$defs/classConfig"
+        }
+      }
+    },
+    "categories": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/assignment"
+        },
+        "review": {
+          "$ref": "#/$defs/assignment"
+        },
+        "subagents": {
+          "$ref": "#/$defs/assignment"
+        },
+        "quick": {
+          "$ref": "#/$defs/assignment"
+        },
+        "coding": {
+          "$ref": "#/$defs/assignment"
+        },
+        "planning": {
+          "$ref": "#/$defs/assignment"
+        },
+        "docs": {
+          "$ref": "#/$defs/assignment"
+        },
+        "unattended": {
+          "$ref": "#/$defs/assignment"
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "all-connected",
+            "session-only",
+            "allowlist"
+          ]
+        },
+        "allowlist": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "preferSessionProvider": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scope",
+        "allowlist",
+        "preferSessionProvider"
+      ]
+    },
+    "classifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "adapterId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "$ref": "#/$defs/model"
+              }
+            },
+            "required": [
+              "adapterId"
+            ]
+          },
+          "maxItems": 3
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30000
+        },
+        "minConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "onFailure": {
+          "$ref": "#/$defs/nonAutoAssignment"
+        }
+      },
+      "required": [
+        "chain",
+        "timeoutMs",
+        "minConfidence",
+        "onFailure"
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "selectionTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30000
+        },
+        "maxEstimatedCostUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unknownCost": {
+          "enum": [
+            "allow",
+            "deny"
+          ]
+        }
+      },
+      "required": [
+        "maxAttempts",
+        "selectionTimeoutMs",
+        "maxEstimatedCostUsd",
+        "unknownCost"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion"
+  ],
+  "$defs": {
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "providerId",
+        "modelId"
+      ]
+    },
+    "assignment": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "auto"
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "baseline"
+            },
+            "fallbackClass": {
+              "enum": [
+                "light",
+                "standard",
+                "expert",
+                "frontier"
+              ]
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "class"
+            },
+            "modelClass": {
+              "enum": [
+                "light",
+                "standard",
+                "expert",
+                "frontier"
+              ]
+            }
+          },
+          "required": [
+            "mode",
+            "modelClass"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "model"
+            },
+            "target": {
+              "$ref": "#/$defs/model"
+            },
+            "fallbackClass": {
+              "enum": [
+                "light",
+                "standard",
+                "expert",
+                "frontier"
+              ]
+            }
+          },
+          "required": [
+            "mode",
+            "target"
+          ]
+        }
+      ]
+    },
+    "nonAutoAssignment": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "baseline"
+            },
+            "fallbackClass": {
+              "enum": [
+                "light",
+                "standard",
+                "expert",
+                "frontier"
+              ]
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "class"
+            },
+            "modelClass": {
+              "enum": [
+                "light",
+                "standard",
+                "expert",
+                "frontier"
+              ]
+            }
+          },
+          "required": [
+            "mode",
+            "modelClass"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "model"
+            },
+            "target": {
+              "$ref": "#/$defs/model"
+            },
+            "fallbackClass": {
+              "enum": [
+                "light",
+                "standard",
+                "expert",
+                "frontier"
+              ]
+            }
+          },
+          "required": [
+            "mode",
+            "target"
+          ]
+        }
+      ]
+    },
+    "classConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/model"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "priority": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "target",
+              "enabled",
+              "priority"
+            ]
+          }
+        },
+        "selection": {
+          "enum": [
+            "priority",
+            "cost",
+            "latency"
+          ]
+        },
+        "fallbackClasses": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "light",
+              "standard",
+              "expert",
+              "frontier"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "candidates",
+        "selection",
+        "fallbackClasses"
+      ]
+    }
+  }
+}

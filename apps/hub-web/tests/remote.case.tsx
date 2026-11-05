@@ -16,9 +16,24 @@ import { resetClient } from "../src/api/client";
 import { navigate, useLocation } from "../src/app/navigation";
 import { sessionFixture, machineFixture } from "./remote-fixtures";
 import { messageDraftKey } from "../src/features/remote/work";
+import type { Control } from "../src/api/remote";
 const requests: { url: string; init?: RequestInit }[] = [];
 let role = "operator";
 let claimed = false;
+const commandEntry = (commandName: string): Control["CommandCatalogueEntry"] => ({
+  commandName,
+  summary: commandName,
+  handlerId: commandName,
+  inputSchema: { type: "object", additionalProperties: false, properties: {}, required: [] },
+  resultSchema: { type: "object", additionalProperties: false, properties: {}, required: [] },
+  mutationClass: "read",
+  states: ["idle", "busy", "paused"],
+  busyPolicy: "read-only",
+  confirmation: "none",
+  availability: "available",
+  reason: "none",
+});
+let commandEntries: Control["CommandCatalogueEntry"][] = [];
 function Harness() {
   const location = useLocation();
   const ctx = {
@@ -57,6 +72,7 @@ beforeEach(async () => {
   useDraftStore.getState().clearAll();
   role = "operator";
   requests.length = 0;
+  commandEntries = [];
   await i18n.changeLanguage("en");
   navigate({ projectId: "p", tab: "sessions", sessionId: undefined }, true);
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
@@ -96,8 +112,24 @@ beforeEach(async () => {
         catalogueVersion: 1,
         catalogueDigest: "a".repeat(64),
         capabilityDigest: "a".repeat(64),
-        entries: [],
+        entries: commandEntries,
       });
+    if (path.endsWith("/sessions/s/commands/invoke") && init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as Control["CommandInvoke"];
+      return Response.json({
+        operationId: "shortcut-command",
+        sessionId: "s",
+        commandName: body.commandName,
+        status: "applied",
+        sessionVersion: 3,
+        result: {},
+        confirmationId: null,
+        errorCode: null,
+        confirmation: null,
+        runId: null,
+        turnId: null,
+      } satisfies Control["CommandOutcome"]);
+    }
     if (path.endsWith("/sessions/s/routing"))
       return Response.json({
         version: 1,
@@ -430,6 +462,51 @@ test("a chosen Flow whose list is still loading names that as the blocker", asyn
   expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
 });
 const toggle = () => screen.getByRole("button", { name: "Native command catalogue" });
+test("provider, model and routing shortcuts open the typed catalogue from the chat composer", async () => {
+  commandEntries = [commandEntry("connect.select"), commandEntry("model"), commandEntry("routing.configure")];
+  navigate({ tab: "sessions", sessionId: "s" }, true);
+  show();
+  await screen.findByRole("heading", { name: "Test session" });
+  fireEvent.click(screen.getByRole("button", { name: "Claim control" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Release control" })).toBeEnabled());
+  const message = screen.getByLabelText("Message");
+
+  const shortcuts = [
+    ["/connect", "connect.select"],
+    ["/model", "model"],
+    ["/routing", "routing.configure"],
+  ] as const;
+  let search: HTMLElement | undefined;
+  for (const [shortcut, commandName] of shortcuts) {
+    const opener = screen.getByRole("button", { name: shortcut });
+    fireEvent.click(opener);
+    search = await screen.findByLabelText("Search Keryx commands");
+    expect(search).toHaveValue(shortcut);
+    expect(await screen.findByRole("option", { name: `${commandName} · available` })).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: "Escape" });
+    expect(opener).toHaveFocus();
+  }
+
+  fireEvent.click(screen.getByRole("button", { name: "/connect" }));
+  fireEvent.change(screen.getByLabelText("Command"), { target: { value: "connect.select" } });
+  const invoke = screen.getByRole("button", { name: "Invoke command" });
+  await waitFor(() => expect(invoke).toBeEnabled());
+  fireEvent.click(invoke);
+  await waitFor(() => expect(requests.some(request => request.url.endsWith("/sessions/s/commands/invoke"))).toBe(true));
+  const invocation = requests.find(request => request.url.endsWith("/sessions/s/commands/invoke"));
+  expect(JSON.parse(String(invocation?.init?.body))).toMatchObject({ commandName: "connect.select", arguments: {} });
+
+  fireEvent.change(message, { target: { value: "/routing" } });
+  fireEvent.keyDown(message, { key: "Enter" });
+  expect(search).toHaveValue("/routing");
+  expect(await screen.findByRole("option", { name: "routing.configure · available" })).toBeInTheDocument();
+  expect(message).toHaveValue("");
+
+  fireEvent.keyDown(search!, { key: "Escape" });
+  fireEvent.click(toggle());
+  await waitFor(() => expect(search).toHaveValue(""));
+});
+
 test("Escape right after / closes the catalogue and types the slash; typing in it first keeps Escape a plain close", async () => {
   navigate({ tab: "sessions", sessionId: "s" }, true);
   show();

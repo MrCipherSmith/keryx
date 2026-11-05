@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.28
+Version: 0.29.29
 
 ## Status
 
@@ -12,6 +12,8 @@ carrying the measurement that found it and the reason it was not done then.
 
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
+>
+> - **0.29.29**: [Unified model routing](keryx-unified-model-routing/README.md) — **spec ready, runtime v2 not implemented**. Four absolute model classes, cross-provider pools, one resolver, explicit fallback and reversible migration from category/tier mechanisms.
 >
 > - **0.29.27**: [Human Flow supersession](hub-flow-supersession/README.md) — **future Flow, not implemented**. Human-only retirement of obsolete non-running drafts with reason/replacement/audit and mandatory real validation closing the original16criterion draft after implementation.
 >

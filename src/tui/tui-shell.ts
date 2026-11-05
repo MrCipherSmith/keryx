@@ -54,6 +54,7 @@ import {
   describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
+  resolveAgentMaxOutputTokens,
   resolveMaxAutoWake,
   runAgentTurn,
 } from "../commands/agent";
@@ -72,7 +73,7 @@ import { spawnSync } from "node:child_process";
 import { join as joinPath } from "node:path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
-import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+import type { NormalizedMessage, NormalizedUsage, ProviderDescription } from "../harness/provider/types";
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
@@ -200,6 +201,9 @@ import {
 } from "./routing-classifier-source";
 import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
 import type { RoutingCategory } from "../harness/routing/table";
+import type { RoutingCapability } from "../harness/routing/routing-request";
+import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
+import { prepareRoutingCandidate } from "../harness/routing/routing-execution-v2";
 // Flow 346: the EXTERNAL switch's `/external on|off` command + status line —
 // no modal (see the flow's own AC8 scope note); the sidebar row and bare
 // status text are rendered from `external-command.ts`.
@@ -4408,6 +4412,32 @@ export function describeModePickerOption(mode: PermissionMode): string {
   return `${MODE_PICKER_DESCRIPTIONS[mode]} · ${describeRoundLimit(mode)}`;
 }
 
+/** User-facing recovery copy for routing denials; never expose internal reason tokens alone. */
+export function renderRoutingBlockedMessage(reason: string): string {
+  const guidance: Readonly<Record<string, string>> = {
+    "config-invalid": "the routed provider/model configuration changed; reopen /routing or reconnect the provider",
+    "model-unavailable": "the selected model is unavailable; check /connect or choose another model in /routing",
+    "attempts-exhausted": "all eligible models failed; check provider connections, then retry",
+    "credentials-missing": "the selected provider is not connected; run /connect and retry",
+    "policy-denied": "the selected provider is blocked by current policy; review /external and routing settings",
+    "provider-scope-conflict": "the selected provider is outside the configured routing scope; review /routing settings",
+    "auth-failed": "provider authentication failed; reconnect it with /connect",
+    "candidate-unverified": "model availability could not be verified; refresh provider detection or choose another model",
+    "capability-missing": "no connected model supports the capabilities this turn needs; connect or choose a compatible model",
+    "context-insufficient": "no eligible model has enough context for this turn; shorten the conversation or choose a larger-context model",
+    cooldown: "eligible models are temporarily cooling down; wait briefly and retry",
+    "cost-unknown": "model cost is unknown under the current budget policy; add pricing data or allow unknown cost",
+    "budget-exceeded": "the routing budget is too low for an eligible model; raise the limit or choose a lower-cost class",
+    "minimum-class-unproven": "no connected model is proven to meet the requested class; update model profiles or choose explicitly",
+    "class-below-minimum": "connected candidates are below the minimum class for this task; connect a stronger model",
+    "empty-class": "the requested model class has no enabled candidates; configure candidates in /routing",
+    "classifier-failed": "automatic task classification failed; check classifier access or configure an explicit category",
+    "uncertain-outcome": "the previous model attempt may have produced output; inspect the provider before retrying",
+    "cancelled": "routing was cancelled before provider I/O; retry the turn",
+  };
+  return `[route blocked: ${guidance[reason] ?? "no eligible model; check /routing and /connect"}]`;
+}
+
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
  * NO concurrent readline (that leaked terminal query responses, flows 065/066).
@@ -4449,6 +4479,8 @@ export async function launchTuiAgentShell(opts: {
     getSlateSession: () => SlateSessionRef | undefined,
     bus?: { client: () => BusClient | undefined },
   ) => Promise<AgentDeps>;
+  /** Static, trusted provider capability facts used by routing before model I/O. */
+  describeProvider?: (providerId: string, modelId: string) => ProviderDescription;
   /**
    * Flow 268 T16 (AC11): update the CALLER's `/reasoning` session-override
    * state (`commands/shell.ts`'s `reasoningSessionOverride`) so the NEXT
@@ -10945,6 +10977,17 @@ export async function launchTuiAgentShell(opts: {
         let routingOutcome: RoutingClassifierTurnResult | undefined;
         if (routingEnabled && origin === "operator" && !agentShaped && line.trim().length > 0) {
           try {
+            let baselineCapabilities: RoutingCapability[] = [];
+            try {
+              const capabilities = sessionDeps.provider.describe().capabilities;
+              baselineCapabilities = [
+                ...(capabilities.toolCalls ? ["tools" as const] : []),
+                ...(capabilities.vision ? ["vision" as const] : []),
+                ...(capabilities.structuredOutput ? ["structured-output" as const] : []),
+              ];
+            } catch {
+              // Missing provider metadata proves no capability; the resolver remains conservative.
+            }
             routingOutcome = await runRoutingClassifierForTurn(line, {
               enabled: routingEnabled,
               signal: turnSignal,
@@ -10959,11 +11002,91 @@ export async function launchTuiAgentShell(opts: {
               providers: () => loadRoutingProviders(opts.redetect),
               sessionProvider: currentSel.provider,
               sessionModel: currentSel.model,
+              requestId: sessionDeps.idSeq(),
+              requirements: {
+                capabilities: sessionDeps.tools.length > 0 ? ["tools"] : [],
+                inputTokensRequired: estimateRequestTokens(
+                  [...history, { content: line }],
+                  sessionDeps.systemInstruction,
+                  sessionDeps.tools.map((tool) => tool.definition),
+                ),
+                outputTokensReserved: sessionDeps.maxOutputTokens ?? resolveAgentMaxOutputTokens(),
+              },
+              baselineCapabilities,
+              ...(opts.describeProvider === undefined ? {} : { describeProvider: opts.describeProvider }),
             });
           } catch {
             // fail-closed: classification must never block or fail the turn.
           }
-          if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {
+          if (!turnSignal.aborted && routingOutcome?.blockTurn === true) {
+            io.onSystem?.(`${renderRoutingBlockedMessage(routingOutcome.fallbackReason ?? "no-eligible-model")}\n`);
+            foregroundOperation.settle(operation);
+            if (!foregroundOperation.isDisposed) stopBusy();
+            return;
+          } else if (!turnSignal.aborted && routingOutcome?.routingV2 !== undefined) {
+            const routingV2 = routingOutcome.routingV2;
+            const prepared = await prepareRoutingCandidate<AgentDeps>({
+              ...routingV2,
+              signal: turnSignal,
+              selectionTimeoutMs: Math.max(0, routingV2.selectionDeadline - performance.now()),
+              prepare: async (target, decisionId, signal) => {
+                const allowed = await routingV2.beforeIo(target, decisionId, { signal });
+                if (!allowed.ok) return allowed;
+                if (signal.aborted) return { ok: false, reason: "cancelled" };
+                try {
+                  const value = target.providerId === sessionDeps.providerId && target.modelId === sessionDeps.modelId
+                    ? sessionDeps
+                    : await opts.makeAgentDeps({ provider: target.providerId, model: target.modelId }, liveSlateSession, busClientRef);
+                  if (value.providerId !== target.providerId || value.modelId !== target.modelId) {
+                    return { ok: false, reason: "config-invalid" };
+                  }
+                  return { ok: true, value };
+                } catch {
+                  return { ok: false, reason: "model-unavailable" };
+                }
+              },
+            });
+            if (!prepared.ok || turnSignal.aborted) {
+              if (!turnSignal.aborted && !prepared.ok) io.onSystem?.(`${renderRoutingBlockedMessage(prepared.reason)}\n`);
+              foregroundOperation.settle(operation);
+              if (!foregroundOperation.isDisposed) stopBusy();
+              return;
+            }
+            deps = {
+              ...prepared.value,
+              ...(sessionDeps.busInbox !== undefined ? { busInbox: sessionDeps.busInbox } : {}),
+              ...(sessionDeps.busAck !== undefined ? { busAck: sessionDeps.busAck } : {}),
+              ...(sessionDeps.busLeases !== undefined ? { busLeases: sessionDeps.busLeases } : {}),
+              provider: createMeteredRoutingProvider({
+                provider: prepared.value.provider,
+                target: prepared.target,
+                receipt: prepared.receipt,
+                budget: routingV2.budget,
+                selectionTimeoutMs: Math.max(0, routingV2.selectionDeadline - performance.now()),
+                beforeIo: routingV2.beforeIo,
+                estimatedCostUsd: (request) => routingV2.estimatedCostUsd(request, prepared.target),
+                actualCostUsd: ({ request, usage, estimatedCostUsd }) => routingV2.actualCostUsd(
+                  request,
+                  prepared.target,
+                  usage,
+                  estimatedCostUsd,
+                ),
+                journal: routingV2.journal,
+              }),
+            };
+            if (prepared.receipt.previousDecisionId !== undefined) {
+              io.onSystem?.(`[route fallback: ${prepared.target.providerId}/${prepared.target.modelId} (${prepared.receipt.fallbackReason})]\n`);
+            }
+            if (prepared.value !== sessionDeps) {
+              routingRoutedCount += 1;
+              routingLastCategory = routingOutcome.category;
+              refreshRoutingSidebar();
+              if (prepared.receipt.previousDecisionId === undefined) {
+                const tag = renderRoutingTagLine(routingOutcome);
+                if (tag !== undefined) io.onSystem?.(`${tag}\n`);
+              }
+            }
+          } else if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {
             try {
               deps = {
                 ...(await opts.makeAgentDeps({ provider: routingOutcome.routed.providerId, model: routingOutcome.routed.modelId }, liveSlateSession, busClientRef)),
@@ -10982,12 +11105,14 @@ export async function launchTuiAgentShell(opts: {
                 if (tag !== undefined) io.onSystem?.(`${tag}\n`);
               }
             } catch {
-              // fail-closed: a routed-deps build failure runs on the session's own model instead.
               deps = sessionDeps;
+              // Legacy routing keeps its established session-model fallback.
               if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
             }
           } else if (!turnSignal.aborted) {
-            io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
+            if (routingOutcome?.routingV2 === undefined) {
+              io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
+            }
           }
         }
         // Flow 341 (AC3, wired to PR #737's classifier): captured

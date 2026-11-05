@@ -43,13 +43,18 @@
 import {
   appendFileSync,
   chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   type Stats,
   statSync,
   unlinkSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
@@ -350,6 +355,21 @@ export function appendOwnerOnlyLine(file: string, line: string): void {
   } catch {
     // Unreported, exactly as in `writeOwnerOnlyFile` and for the same reason:
     // this helper sits under callers with different error contracts.
+  }
+}
+
+/** Append one record to a private regular file, refusing links and unsafe permissions. */
+export function appendPrivateRecord(file: string, line: string): void {
+  const fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile() || (process.platform !== "win32" && (info.mode & 0o077) !== 0) || info.nlink !== 1) {
+      throw new Error("Private journal requires an owner-only regular file.");
+    }
+    const bytes = Buffer.from(`${line}\n`);
+    if (writeSync(fd, bytes) !== bytes.length) throw new Error("Incomplete private journal write.");
+  } finally {
+    closeSync(fd);
   }
 }
 

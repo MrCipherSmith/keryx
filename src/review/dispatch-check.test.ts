@@ -64,6 +64,23 @@ describe("checkDispatch model block", () => {
     expect((await checkDispatch([payload(plain)])).ok).toBe(true);
   });
 
+  test("a report-only tier result from a routing v2 refusal cannot be dispatched as an implicit fallback", async () => {
+    const refused = {
+      tier: "standard",
+      tier_reasons: ["base"],
+      tier_resolution: "session-fallback",
+      model_discovery: {},
+      routed: false,
+      dispatchable: false,
+    };
+    const result = await checkDispatch([payload(refused)]);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({
+      code: "REVIEWER_INPUT_ROUTING_REFUSED",
+      path: "$.model.dispatchable",
+    }));
+  });
+
   test("routed must be a boolean and unknown model keys are still refused", async () => {
     const wrongType = await checkDispatch([payload({ ...ROUTED_MODEL, routed: "yes" })]);
     expect(wrongType.errors.some((error) => error.code === "REVIEWER_INPUT_INVALID")).toBe(true);
@@ -71,7 +88,7 @@ describe("checkDispatch model block", () => {
     expect(unknown.errors.some((error) => error.code === "REVIEWER_INPUT_INVALID")).toBe(true);
   });
 
-  test("every shipped copy of the model block declares routed", async () => {
+  test("every shipped review model block declares routed and dispatchable", async () => {
     const files = [
       "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
       ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json",
@@ -80,10 +97,15 @@ describe("checkDispatch model block", () => {
     ];
     for (const file of files) {
       const schema = JSON.parse(readFileSync(path.resolve(import.meta.dir, "..", "..", file), "utf8")) as { properties: { model: { properties: Record<string, { type?: string }> } } };
-      expect({ file, routed: schema.properties.model.properties.routed?.type }).toEqual({ file, routed: "boolean" });
+      const properties = schema.properties.model.properties;
+      expect({ file, routed: properties.routed?.type }).toEqual({ file, routed: "boolean" });
+      if (file.includes("review-orchestrator")) {
+        expect({ file, dispatchable: properties.dispatchable?.type }).toEqual({ file, dispatchable: "boolean" });
+      }
     }
     const loaded = (await loadReviewerInputSchema()) as unknown as { properties: { model: { properties: Record<string, unknown> } } };
     expect(Object.keys(loaded.properties.model.properties)).toContain("routed");
+    expect(Object.keys(loaded.properties.model.properties)).toContain("dispatchable");
   });
 });
 

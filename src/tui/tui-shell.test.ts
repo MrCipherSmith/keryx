@@ -2820,9 +2820,10 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   // turn-scoped rebuild (`runRoutingClassifierForTurn`'s routed
   // provider/model, inside the per-turn dispatch IIFE) — same live getters,
   // so it shares `busClientRef` too.
-  test("exactly four real call sites share busClientRef — not fewer, not more", () => {
+  test("both routing engines and the three session rebuilds share the live slate and bus", () => {
     const occurrences = fnBody.split(", liveSlateSession, busClientRef)").length - 1;
-    expect(occurrences).toBe(4);
+    expect(occurrences).toBe(5);
+    expect(fnBody).toContain("opts.makeAgentDeps({ provider: target.providerId, model: target.modelId }, liveSlateSession, busClientRef)");
     expect(fnBody).not.toContain("() => slateSession)");
   });
 });

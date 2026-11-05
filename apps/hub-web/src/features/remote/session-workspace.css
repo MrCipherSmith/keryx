@@ -279,6 +279,12 @@
 .session-composer textarea {
   min-height: 90px;
 }
+.composer-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 .composer-hint {
   font-size: 10px;
   line-height: 1.5;

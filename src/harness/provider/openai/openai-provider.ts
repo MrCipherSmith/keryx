@@ -332,6 +332,9 @@ function classifyHttpError(status: number, _headers: Headers, code: string | und
   if (status >= 500) {
     return { kind: "unavailable", retryable: retryableFor("unavailable", true), message: "" };
   }
+  if (status === 404 && code === "model_not_found") {
+    return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "", detail: { modelNotFound: true } };
+  }
   if (status >= 400) {
     return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "" };
   }

@@ -2,7 +2,7 @@
 // `keryx providers`'s subcommand dispatch shape.
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadRoutingConfig, loadRoutingConfigRaw } from "../harness/routing/config";
@@ -402,3 +402,72 @@ test("keryx routing stats --json: valid JSON, one row per (provider, model, cate
   expect(parsed.stats).toHaveLength(1);
   expect(parsed.stats[0]).toMatchObject({ providerId: "anthropic", modelId: "claude-x", category: "subagents", n: 1, medianCostUsd: 0.01 });
 });
+
+test("routing CLI previews a confirmed v2 migration and restores legacy on rollback", async () => {
+  const baseline = { providerId: "anthropic", modelId: "claude-x" };
+  const d = await deps({ session: () => baseline });
+  await capture(() => routingCommand(["set", "coding", "anthropic/claude-y"], d));
+  await capture(() => routingCommand(["set", "quick", "anthropic/claude-x", "--project"], d));
+  const proposed = path.join(d.cwd, "proposed.json");
+  await writeFile(proposed, JSON.stringify({
+    project: { schemaVersion: 2, categories: { quick: { mode: "baseline" } } },
+    user: {
+      schemaVersion: 2,
+      categories: { review: { mode: "class", modelClass: "expert" } },
+      classes: { expert: { candidates: [], selection: "priority", fallbackClasses: [] } },
+    },
+  }));
+  const dryRun = await capture(() => routingCommand(["migrate", "--dry-run", proposed], d));
+  const plan = path.join(d.cwd, "migration.json");
+  await writeFile(plan, dryRun.stdout.join(""));
+  const { locations } = JSON.parse(dryRun.stdout.join("")) as { locations: { projectFile: string; userFile: string } };
+  const configFiles = [locations.projectFile, locations.userFile];
+  const originals = await Promise.all(configFiles.map((file) => readFile(file, "utf8")));
+  const before = await capture(() => routingCommand(["list", "--json"], d));
+  expect(JSON.parse(before.stdout.join("")).engineVersion).toBeUndefined();
+  await capture(() => routingCommand(["migrate", "--apply", plan, "--confirm"], d));
+  const active = await capture(() => routingCommand(["list", "--json"], d));
+  expect(JSON.parse(active.stdout.join(""))).toMatchObject({
+    engineVersion: 2,
+    decisions: expect.arrayContaining([
+      expect.objectContaining({ category: "review", decision: expect.objectContaining({ status: "blocked", reason: "empty-class" }) }),
+    ]),
+  });
+  const request = path.join(d.cwd, "request.json");
+  await writeFile(request, JSON.stringify({
+    requestId: "review-request",
+    category: "review",
+    requirements: { capabilities: ["tools"], inputTokensRequired: 1500, outputTokensReserved: 200 },
+  }));
+  const explanation = await capture(() => routingCommand(["explain", "--request", request, "--json"], d));
+  expect(JSON.parse(explanation.stdout.join(""))).toMatchObject({
+    decisions: [{ category: "review", decision: { requestId: "review-request", status: "blocked", reason: "empty-class" } }],
+  });
+  await capture(() => routingCommand(["migrate", "--rollback", plan, "--confirm"], d));
+  const rolledBack = await capture(() => routingCommand(["list", "--json"], d));
+  expect(JSON.parse(rolledBack.stdout.join(""))).toEqual(JSON.parse(before.stdout.join("")));
+  expect(await Promise.all(configFiles.map((file) => readFile(file, "utf8")))).toEqual(originals);
+}, 30_000);
+
+test("routing settings rejects a stale revision and exposes the new class pool", async () => {
+  const d = await deps();
+  const plan = path.join(d.cwd, "settings-migration.json");
+  const dryRun = await capture(() => routingCommand(["migrate", "--dry-run"], d));
+  await writeFile(plan, dryRun.stdout.join(""));
+  await capture(() => routingCommand(["migrate", "--apply", plan, "--confirm"], d));
+  const settings = await capture(() => routingCommand(["settings", "list"], d));
+  const { revision } = JSON.parse(settings.stdout.join("")) as { revision: string };
+  const file = path.join(d.cwd, "expert.json");
+  const candidate = { target: { providerId: "anthropic", modelId: "claude-x" }, priority: 1, enabled: true };
+  await writeFile(file, JSON.stringify({ candidates: [candidate], selection: "priority", fallbackClasses: [] }));
+  await capture(() => routingCommand(["classes", "set", "expert", file, "--revision", revision], d));
+  const pools = await capture(() => routingCommand(["classes", "list"], d));
+  expect(JSON.parse(pools.stdout.join(""))).toMatchObject({ expert: { candidates: [candidate] } });
+  const updatedSettings = await capture(() => routingCommand(["settings", "list"], d));
+  await writeFile(file, JSON.stringify({ candidates: [], selection: "priority", fallbackClasses: [] }));
+  await expect(routingCommand(["classes", "set", "expert", file, "--revision", revision], d)).rejects.toThrow(/revision/i);
+  const afterRefusal = await capture(() => routingCommand(["settings", "list"], d));
+  const poolsAfterRefusal = await capture(() => routingCommand(["classes", "list"], d));
+  expect(JSON.parse(afterRefusal.stdout.join(""))).toEqual(JSON.parse(updatedSettings.stdout.join("")));
+  expect(JSON.parse(poolsAfterRefusal.stdout.join(""))).toEqual(JSON.parse(pools.stdout.join("")));
+}, 30_000);

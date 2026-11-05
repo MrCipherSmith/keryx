@@ -7,7 +7,7 @@ import type { ShadowGitRequest } from "../rewind/shadow";
 import type { BackgroundProcessHandle } from "../harness/tool/builtin/background-job-registry";
 import { randomUUID } from "node:crypto";
 import { buildAgentSystemInstruction, runAgentTurn, toolCallHash, type AgentDeps, type AgentIO, type RunAgentTurnOptions, type RunAgentTurnResult } from "../commands/agent";
-import type { NativeClassifierContext, NativeRoutingClassifier } from "./native-classifier";
+import { NativeClassifierError, type NativeClassifierContext, type NativeRoutingClassifier } from "./native-classifier";
 import { applyRuntimeSwitchToSlate } from "./runtime-switch";
 import { runGoalCommand } from "../commands/goal-command";
 import { goalCommands } from "./commands/goal";
@@ -32,6 +32,9 @@ import { createAnalysisReadPorts } from "./commands/analysis-read-ports";
 import { createOwnedReadCapture } from "./native-owned-read";
 import { tasksIntegrationsCommands, type TasksIntegrationsPort } from "./commands/tasks-integrations";
 import { isNormalizedWireIdentity, wireCandidateId, wireModelIdentity, type NativeModelBinding } from "./model-identity";
+import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
+import type { NativeRoutingBudgetStore } from "./native-routing-budget";
+import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
 
 export type NativeSessionServices = ReturnType<typeof createNativeSessionServices>;
 export type NativeServicesFactoryContext = Pick<NativeSessionServicesOptions, "cwd" | "configDir" | "jobs" | "identity" | "sessionState" | "routingAvailability" | "searchController">;
@@ -57,6 +60,8 @@ export interface NativeRuntimeOptions {
   resolveProvider?: (providerId: string, modelId: string) => ProviderPort;
   availability?: Control["RoutingAvailability"];
   nativeClassifier?: NativeRoutingClassifier;
+  /** Local-only classifier-to-execution budget handoff; never sourced from Hub data. */
+  routingBudgetStore?: NativeRoutingBudgetStore;
   classify?: Parameters<typeof createSessionRouting>[0]["classify"];
   deps?: Pick<AgentDeps, "hardDeny" | "hooks" | "maxRounds" | "maxToolCalls" | "maxOutputTokens">;
   allowSubagents?: boolean;
@@ -177,7 +182,8 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
     onNativeTurn: (turn) => { children.set(turn, jobOwners.getStore()); void turn.then(() => children.delete(turn), () => children.delete(turn)); },
     configuredMaxToolCalls: options.deps?.maxToolCalls ?? 100,
     getParentModel: () => selected,
-    makeProvider: providerFor, getDetectedProviders: () => [{ name: selected.providerId, models: [selected.modelId] }], getSlateSession: () => slateSession,
+    makeProvider: providerFor, describeProvider: (providerId, modelId) => providerFor(providerId, modelId).describe(),
+    getDetectedProviders: () => [{ name: selected.providerId, models: [selected.modelId] }], getSlateSession: () => slateSession,
     ...(options.deps?.hooks === undefined ? {} : { hooks: options.deps.hooks.runtime }),
   });
   const wrapTool = (tool: InteractiveTool): InteractiveTool => ({ ...tool,
@@ -294,7 +300,10 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
         return binding === undefined ? { ...candidate, available: false, reason: "local-policy" } : { ...candidate, providerId: binding.providerId, modelId: binding.modelId }; });
       const serviceCandidate = this.analysisCandidate();
       if (serviceCandidate !== undefined) { const index = availability.candidates.findIndex((candidate) => candidate.candidateId === serviceCandidate.candidateId); if (index < 0) availability.candidates.push(serviceCandidate); else availability.candidates[index] = serviceCandidate; }
-      return createSessionRouting({ config, availability, ...(options.nativeClassifier !== undefined ? { classify: (text: string, value: Control["SessionConfig"]) => context === undefined ? Promise.resolve(undefined) : options.nativeClassifier!(text, value, context).catch((cause: unknown) => { context.onRefusal?.(cause instanceof Error && "code" in cause && typeof cause.code === "string" ? cause.code : "native-classifier-refused"); throw cause; }) } : options.classify === undefined ? {} : { classify: options.classify }) });
+      return createSessionRouting({ config, availability, ...(options.nativeClassifier !== undefined ? {
+        classify: (text: string, value: Control["SessionConfig"]) => context === undefined ? Promise.resolve(undefined) : options.nativeClassifier!(text, value, context).catch((cause: unknown) => { context.onRefusal?.(cause instanceof Error && "code" in cause && typeof cause.code === "string" ? cause.code : "native-classifier-refused"); throw cause; }),
+        fatalClassificationError: (cause: unknown) => cause instanceof NativeClassifierError && cause.fatal,
+      } : options.classify === undefined ? {} : { classify: options.classify }) });
     },
     async run(io: AgentIO, history: NormalizedMessage[], text: string, snapshot: Control["ConfigSnapshot"], turnOptions: RunAgentTurnOptions & { nativeGoal?: { text: string; workspaceId?: string; autoRounds?: number; canonicalFlowId?: string } }): Promise<NativeRuntimeTurnResult> {
       let modelActions = 0; let toolActions = 0;
@@ -309,15 +318,45 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
       if (candidate === undefined || !candidate.available) throw new NativeRuntimeError("candidate-unavailable");
       const binding = bindings.get(bindingKey(candidate.providerId, candidate.modelId)); if (binding === undefined) throw new NativeRuntimeError("candidate-unavailable");
       selected = { providerId: binding.actualProviderId, modelId: binding.actualModelId };
+      // Remote admission authorizes exactly this candidate. The admission
+      // grant is closed before this asynchronous run starts, while the live
+      // current-role check does not authorize an alternate model. Keep native
+      // execution single-attempt until the protocol supplies a fresh,
+      // candidate- and decision-bound execution-attempt receipt.
       const selectedProvider = providerFor(candidate.providerId, candidate.modelId);
+      const routingExecution = options.routingBudgetStore?.take(snapshot.selectionReceiptId);
+      let activeRoutingV2: boolean;
+      try { activeRoutingV2 = loadActiveRoutingV2(options.cwd, options.configDir) !== undefined; }
+      catch { throw new NativeRuntimeError("routing-v2-config-invalid"); }
+      if (activeRoutingV2 && snapshot.config.routing.enabled && snapshot.routingDecision === "classified" && routingExecution === undefined) {
+        throw new NativeRuntimeError("routing-budget-context-missing");
+      }
+      if (routingExecution !== undefined && (routingExecution.target.providerId !== binding.actualProviderId
+        || routingExecution.target.modelId !== binding.actualModelId)) throw new NativeRuntimeError("routing-budget-candidate-mismatch");
+      const executionProvider = routingExecution === undefined ? selectedProvider : createMeteredRoutingProvider({
+        provider: selectedProvider,
+        target: routingExecution.target,
+        receipt: routingExecution.receipt,
+        budget: routingExecution.budget,
+        selectionTimeoutMs: routingExecution.config.execution.selectionTimeoutMs,
+        beforeIo: async (target, decisionId) => routingExecution.receipt.decision.status === "selected"
+          && routingExecution.receipt.decision.decisionId === decisionId
+          && target.providerId === binding.actualProviderId
+          && target.modelId === binding.actualModelId
+          ? { ok: true }
+          : { ok: false, reason: "policy-denied" },
+        estimatedCostUsd: routingExecution.estimatedCostUsd,
+        ...(routingExecution.actualCostUsd === undefined ? {} : { actualCostUsd: routingExecution.actualCostUsd }),
+        journal: routingExecution.journal,
+      });
       let providerOutcome: "incomplete" | "complete" | "error" = "incomplete"; let providerFailed = false;
       const observedProvider: ProviderPort = {
-        ...selectedProvider, describe: () => selectedProvider.describe(),
+        ...executionProvider, describe: () => executionProvider.describe(),
         stream: (request, streamOptions) => (async function* () {
           providerOutcome = "incomplete"; let failed = false;
           try {
             if (workspaceConflict) throw new NativeRuntimeError("workspace-conflict");
-            for await (const event of selectedProvider.stream(request, streamOptions)) {
+            for await (const event of executionProvider.stream(request, streamOptions)) {
               if (event.kind === "provider_error") { failed = true; providerOutcome = "error"; providerFailed = true; }
               else if (event.kind === "model_end" && !failed) providerOutcome = "complete";
               yield event;

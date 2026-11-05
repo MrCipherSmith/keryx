@@ -534,6 +534,7 @@ interface HttpNegativeCase {
   expectedKind: NormalizedError["kind"];
   expectedRetryable: boolean;
   expectedRetryAfterMs?: number;
+  expectedModelNotFound?: boolean;
 }
 
 const HTTP_NEGATIVE_CASES: HttpNegativeCase[] = [
@@ -548,6 +549,21 @@ const HTTP_NEGATIVE_CASES: HttpNegativeCase[] = [
     name: "400 invalid_request_error -> invalid_request (non-retryable)",
     status: 400,
     body: { type: "error", error: { type: "invalid_request_error", message: "messages: at least one message is required" } },
+    expectedKind: "invalid_request",
+    expectedRetryable: false,
+  },
+  {
+    name: "404 not_found_error -> model-not-found invalid_request (non-retryable)",
+    status: 404,
+    body: { type: "error", error: { type: "not_found_error", message: "model not found" } },
+    expectedKind: "invalid_request",
+    expectedRetryable: false,
+    expectedModelNotFound: true,
+  },
+  {
+    name: "generic HTTP 404 -> invalid_request without model fallback",
+    status: 404,
+    body: { type: "error", error: { type: "invalid_request_error", message: "route not found" } },
     expectedKind: "invalid_request",
     expectedRetryable: false,
   },
@@ -602,6 +618,8 @@ describe("AC4 — non-2xx HTTP responses map to the correct ProviderErrorKind", 
       if (testCase.expectedRetryAfterMs !== undefined) {
         expect(error.retryAfterMs).toBe(testCase.expectedRetryAfterMs);
       }
+      if (testCase.expectedModelNotFound === true) expect(error.detail?.modelNotFound).toBe(true);
+      else expect(error.detail?.modelNotFound).not.toBe(true);
       // No negative yields a partial-but-"complete" attempt.
       expect(events.some((e) => e.kind === "model_end")).toBe(false);
     });

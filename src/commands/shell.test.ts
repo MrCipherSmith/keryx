@@ -1410,31 +1410,11 @@ describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (
 describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wiring (source-text audit; NOT runAgentRepl — out of reach via repl())", () => {
   const shellSourceAc7 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStartAc7 = shellSourceAc7.indexOf("if (agentMode) {");
-  // Widened from 4200 (flow 173) to 4600 to fit T23's `maxOutputTokens`
-  // resolution, then to 5300 to fit T16's `reasoningEffort` resolution, then
-  // to 5450 for the flow 268 merge's `resolvedModelParams.maxOutputTokens`
-  // routing comment on the same `maxOutputTokens` field, then to 6000 for
-  // flow 274 T7's `bus: { client: () => busBox.current }` wiring + doc
-  // comment inside `buildInteractiveAgentTools({...})` — all added ahead of
-  // `sweepBackgroundJobs` in the same `agentDepsBase` object — still just
-  // past that field, well short of the next declaration.
-  // Widened to 6800 for the metaproject-incomplete operator notice (K-009
-  // follow-up), inserted between agentCwd and this same agentDepsBase object.
-  // Widened to 7200 for R700-01's `configDir` wiring + startup-notice print
-  // loop, inserted just after `buildShellHookRuntime({...})` in this same
-  // branch, ahead of `sweepBackgroundJobs`. Widened to 7600 for flow 319's
-  // fix (the readline branch now reuses the shared `getShellHooks()` built
-  // before the TUI/readline split, instead of its own `buildShellHookRuntime`
-  // call, and reads notices via `takeNotices()` — see `shell.ts`'s own
-  // comment there) — the replacement text is about as long as what it
-  // replaced, but the doc comment explaining it pushed the target past 7200.
-  // Widened to 7800 for AC7 (flow 352 audit): `jobRegistryBox.current =
-  // jobRegistry;` plus its doc comment, inserted right after `jobRegistry`'s
-  // own declaration so the SIGINT/SIGTERM handler (`closeAndExit`, declared
-  // before this branch runs) can reach it too — see `shell.ts`'s own comment
-  // there and this file's dedicated "closeAndExit sweeps tracked background
-  // jobs" describe block below.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 7800);
+  // Bound the audit by the next semantic declaration instead of a byte count:
+  // comments and new provider wiring may grow `agentDepsBase`, but every field
+  // asserted below must still appear before the final `AgentDeps` composition.
+  const agentModeBranchEndAc7 = shellSourceAc7.indexOf("const agentDeps: AgentDeps = {", agentModeBranchStartAc7);
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchEndAc7);
 
   test("imports createJobRegistry from the background-job-registry module", () => {
     expect(shellSourceAc7).toContain(
@@ -1443,6 +1423,7 @@ describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wir
   });
 
   test("a session-scoped jobRegistry is declared in the readline agent-mode branch before buildInteractiveAgentTools is called", () => {
+    expect(agentModeBranchEndAc7).toBeGreaterThan(agentModeBranchStartAc7);
     const jobRegistryIndex = agentModeBranchAc7.indexOf("const jobRegistry = createJobRegistry({ cwd: agentCwd });");
     const toolsCallIndex = agentModeBranchAc7.indexOf("tools: buildInteractiveAgentTools({");
     expect(jobRegistryIndex).toBeGreaterThanOrEqual(0);

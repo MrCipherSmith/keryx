@@ -19,6 +19,10 @@ import { configureNativeSessionServices, createNativeSessionServices, NativeServ
 import { loadMcpServers } from "../mcp-servers/config";
 import { loadTrustStore, requiresApproval } from "../mcp-servers/trust";
 import { createNativeProviderServices } from "./native-provider-bindings";
+import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
+import { DEFAULT_MAX_OUTPUT_TOKENS } from "../commands/agent";
+import type { ProviderDescription } from "../harness/provider/types";
+import { NativeRoutingBudgetStore } from "./native-routing-budget";
 
 export interface ProductionNativeRuntimeOptions {
   cwd: string;
@@ -150,10 +154,39 @@ export async function assembleNativeSessionRuntime(options: ProductionNativeRunt
       const child = Bun.spawn(command, { cwd: options.cwd, env: privateEnv, stdin: request.stdin === undefined ? "ignore" : new Blob([request.stdin]), stdout: "pipe", stderr: "pipe", detached: true });
       return superviseSpawnedProcess(child, { kill(signal) { try { process.kill(-child.pid, signal); } catch (cause) { if (!(cause instanceof Error && "code" in cause && cause.code === "ESRCH")) throw cause; } } });
     };
+    const modelParams = resolveProviderModelParamsByName(options.providerId, saved, options.configDir);
+    const outputTokensReserved = modelParams.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+    const routingBudgetStore = new NativeRoutingBudgetStore();
     const classifier = createNativeRoutingClassifier({ cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }), env,
-      availability: (config) => runtime.routing(config).availability(), bindings: () => runtime.modelBindings(), providerFactory: resolveProvider });
+      availability: (config) => runtime.routing(config).availability(), bindings: () => runtime.modelBindings(), providerFactory: resolveProvider,
+      outputTokensReserved, routingBudgetStore,
+      modelFactsFactory: () => {
+        const profiles = loadModelProfiles(options.configDir);
+        return (target, candidate, requirements) => {
+          if (!candidate.available || candidate.reason !== "none") return {
+            connected: candidate.reason !== "not-connected",
+            credentialsAvailable: candidate.reason !== "not-connected",
+          };
+          let description: ProviderDescription;
+          try { description = resolveProvider(target.providerId, target.modelId).describe(); }
+          catch { return { connected: false, credentialsAvailable: false }; }
+          const profile = profiles[profileKey(target.providerId, target.modelId)];
+          const inputPrice = profile?.priceInputPerMillion.value;
+          const outputPrice = profile?.priceOutputPerMillion.value;
+          const estimatedCostUsd = requirements !== undefined && typeof inputPrice === "number" && typeof outputPrice === "number"
+            ? (requirements.inputTokensRequired * inputPrice + requirements.outputTokensReserved * outputPrice) / 1_000_000 : null;
+          const capabilities = [
+            ...(description.capabilities.toolCalls ? ["tools" as const] : []),
+            ...(description.capabilities.vision ? ["vision" as const] : []),
+            ...(description.capabilities.structuredOutput ? ["structured-output" as const] : []),
+          ];
+          return { connected: true, credentialsAvailable: true, capabilities,
+            contextLength: typeof profile?.contextLength.value === "number" ? profile.contextLength.value : null,
+            cooldown: false, estimatedCostUsd, observedLatencyMs: null };
+        };
+      } });
     const runtime: NativeSessionRuntime = createNativeSessionRuntime({ cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }), provider, providerId: options.providerId, modelId: options.modelId,
-      nativeClassifier: classifier, spawnOwnedGit, ...(options.modelBindings === undefined ? {} : { modelBindings: options.modelBindings }),
+      nativeClassifier: classifier, routingBudgetStore, spawnOwnedGit, ...(options.modelBindings === undefined ? {} : { modelBindings: options.modelBindings }),
       // Configured provider list/test over the same local credentials and endpoints as the coding provider; selection stays the native owner's.
       servicesFactory: (context) => productionSessionServices(options, { ...context, providers: createNativeProviderServices({ ...(options.configDir === undefined ? {} : { configDir: options.configDir }),
         env, fetch: globalThis.fetch, candidates: context.routingAvailability().candidates, bindings: runtime.modelBindings(),
@@ -163,7 +196,7 @@ export async function assembleNativeSessionRuntime(options: ProductionNativeRunt
       ...(options.approve === undefined ? {} : { approve: options.approve }), ...(options.askUser === undefined ? {} : { askUser: options.askUser }),
       ...(options.availability === undefined ? {} : { availability: options.availability }),
       deps: { maxRounds: options.maxRounds, maxToolCalls: options.maxToolCalls,
-        ...(() => { const params = resolveProviderModelParamsByName(options.providerId, saved, options.configDir); return params.maxOutputTokens === undefined ? {} : { maxOutputTokens: params.maxOutputTokens }; })(),
+        ...(modelParams.maxOutputTokens === undefined ? {} : { maxOutputTokens: modelParams.maxOutputTokens }),
         ...(hook === undefined ? {} : { hooks: hook }),
       },
     }); return { ok: true, value: runtime };

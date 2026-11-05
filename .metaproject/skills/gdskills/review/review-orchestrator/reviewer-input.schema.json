@@ -52,7 +52,7 @@
       ]
     },
     "model": {
-      "description": "The `model` block `keryx review tier` printed for this dispatch (Step 6) — pasted verbatim, never composed by hand. `tier` is the mechanical vocabulary the command emits (`light`/`standard`/`deep`), never a model name. `provider`/`model` are present when the command resolved a concrete model; `inherit: true` replaces them when it could not, meaning the dispatch runs on the caller's own model. Field naming matches `model` in `contracts/subagent-dispatch.schema.json` and the object `keryx review tier --json` prints under its own `model` key.",
+      "description": "The `model` block `keryx review tier` printed for this dispatch (Step 6) — pasted verbatim, never composed by hand. `tier` is the mechanical vocabulary the command emits (`light`/`standard`/`deep`), never a model name. `provider`/`model` are present when the command resolved a concrete model; legacy unresolved tiers use `inherit: true`. A routing-v2 refusal instead emits `dispatchable: false` and dispatch-check rejects it, so it can never become an implicit session fallback. Field naming otherwise matches `model` in `contracts/subagent-dispatch.schema.json` and the object `keryx review tier --json` prints under its own `model` key.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -92,6 +92,10 @@
         "routed": {
           "type": "boolean",
           "description": "True when the provider/model were set by the routing table's `review` category (`keryx review tier` emits it on a routed pick) rather than tier-ranked discovery. Additive to `tier_resolution`, which still records how the tier resolved a model; the two questions are independent."
+        },
+        "dispatchable": {
+          "type": "boolean",
+          "description": "False only when routing v2 refused selection. This tier result is report-only and dispatch-check rejects it; it must not be reinterpreted as inherit/session fallback."
         },
         "tier_resolution": {
           "type": "string",

@@ -15,6 +15,7 @@ export type DispatchCheckCode =
   | "REVIEWER_INPUT_PATH_MISSING"
   | "REVIEWER_INPUT_MANIFEST_UNSIZED"
   | "REVIEWER_INPUT_PLAN_UNCONFIRMED"
+  | "REVIEWER_INPUT_ROUTING_REFUSED"
   | "REVIEWER_INPUT_ID_FORM";
 
 export type DispatchCheckError = {
@@ -113,6 +114,15 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
       errors.push({ code: "REVIEWER_INPUT_INVALID", reviewer, path: problem.path, message: problem.message });
     }
     if (isRecord(payload)) {
+      const model = isRecord(payload.model) ? payload.model : undefined;
+      if (model?.dispatchable === false) {
+        errors.push({
+          code: "REVIEWER_INPUT_ROUTING_REFUSED",
+          reviewer,
+          path: "$.model.dispatchable",
+          message: "routing v2 did not authorize a model target; obtain an operator-approved routing decision before dispatch",
+        });
+      }
       for (const field of PATH_FIELDS) {
         const value = payload[field];
         if (typeof value === "string" && value !== "" && !pathExists(value)) {
