@@ -29,7 +29,7 @@ import {
   type ProfileRefreshSummary,
 } from "../harness/routing/model-profile";
 import { fetchOpenAiCodexModels, OPENAI_CODEX_PICKER } from "./subscription-models";
-import { OPENAI_MODELS } from "./curated-model-lists";
+import { ANTHROPIC_MODELS, OPENAI_MODELS } from "./curated-model-lists";
 import { envWithOAuthAccess, loadOAuthGrant, oauthEnvKeyFor } from "../lib/oauth/grants";
 import { logoutProvider } from "../lib/oauth/login";
 import { resolveCallerSession } from "../lib/caller-session";
@@ -470,7 +470,10 @@ export function providerByName(name: string, dir?: string): OpenAiCompatProvider
 
 /** Metadata for connection management; subscription transport is never registered as Chat Completions. */
 export function connectionProviderByName(name: string, dir?: string): OpenAiCompatProvider | undefined {
-  return name === "openai-codex" ? OPENAI_CODEX_PICKER : providerByName(name, dir);
+  if (name === "openai-codex") return OPENAI_CODEX_PICKER;
+  const registered = providerByName(name, dir);
+  if (registered === undefined && name === "anthropic") return ANTHROPIC_PICKER;
+  return registered;
 }
 
 /**
@@ -812,6 +815,68 @@ export async function fetchOpenAiCompatModelsDetailed(
 }
 
 /**
+ * Connection/picker metadata for the NATIVE Anthropic adapter. It is deliberately
+ * NOT in `OPENAI_COMPAT_PROVIDERS` (that registry is Chat-Completions-only and feeds
+ * `detectProviders`, which already lists anthropic itself); `[Test]`, `keryx providers
+ * test|remove` and the model picker reach it through `connectionProviderByName` /
+ * `fetchAnthropicModels`, which speak Anthropic's own auth (x-api-key), not Bearer.
+ */
+export const ANTHROPIC_PICKER: OpenAiCompatProvider = {
+  name: "anthropic",
+  label: "Anthropic",
+  baseUrl: "https://api.anthropic.com",
+  envKey: "ANTHROPIC_API_KEY",
+  models: [...ANTHROPIC_MODELS],
+  note: "Claude · API key",
+};
+
+/** `anthropic-version` header Anthropic's REST API requires on every request. */
+export const ANTHROPIC_API_VERSION = "2023-06-01";
+
+/**
+ * Fetch the LIVE model list of the native Anthropic API (`GET /v1/models`).
+ * Anthropic is not OpenAI-compatible: it authenticates with `x-api-key` (never
+ * `Authorization: Bearer`) and requires `anthropic-version`. The API returns models
+ * newest first and that order is kept — it is the picker's order too. A page of 1000
+ * is the API's maximum, so one request lists the whole catalogue. Never throws.
+ */
+export async function fetchAnthropicModels(
+  fetchFn: typeof fetch,
+  apiKey: string | undefined,
+  opts?: { timeoutMs?: number; baseUrl?: string },
+): Promise<ModelsResolveResult> {
+  const timeoutMs = opts?.timeoutMs ?? MODELS_FETCH_TIMEOUT_MS;
+  const fallback = (failure: ModelsFailure): ModelsResolveResult => ({ models: [], source: "fallback", failure });
+  const url = `${(opts?.baseUrl ?? ANTHROPIC_PICKER.baseUrl).replace(/\/+$/, "")}/v1/models?limit=1000`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const headers: Record<string, string> = { "anthropic-version": ANTHROPIC_API_VERSION };
+    if (apiKey !== undefined && apiKey.length > 0) headers["x-api-key"] = apiKey;
+    const res = await fetchFn(url, { headers, signal: controller.signal, redirect: "error" });
+    if (!res.ok) {
+      const detail = modelsErrorDetail(await res.text().catch(() => ""));
+      const kind = res.status === 401 || res.status === 403 ? "rejected" : "http";
+      return fallback({ kind, status: res.status, ...(detail === undefined ? {} : { detail }) });
+    }
+    const bounded = await boundedJsonBody(res, MODELS_RESPONSE_BODY_LIMIT_BYTES);
+    if (!bounded.ok) {
+      return fallback({ kind: "http", status: res.status, detail: "response too large or malformed" });
+    }
+    const data = (bounded.value as { data?: Array<{ id?: unknown }> } | null)?.data;
+    const ids = Array.isArray(data)
+      ? data.flatMap((m) => (typeof m?.id === "string" && m.id.length > 0 ? [m.id] : []))
+      : [];
+    return ids.length === 0 ? fallback({ kind: "empty" }) : { models: Array.from(new Set(ids)), source: "live" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return fallback({ kind: "unreachable", detail: controller.signal.aborted ? `timed out after ${timeoutMs}ms` : message });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Resolve the model list for a picker entry: registry OpenAI-compat providers
  * ALWAYS hit live `/models` when the network is available (Bearer key from
  * `env` when required); ollama/anthropic/fake keep their already-detected list.
@@ -825,6 +890,13 @@ export async function resolveModelsForPicker(
 ): Promise<ModelsResolveResult> {
   if (provider.name === "openai-codex") return fetchOpenAiCodexModels(fetchFn, opts);
   const compat = providerByName(provider.name, opts?.configDir);
+  if (compat === undefined && provider.name === "anthropic") {
+    // Native Anthropic: its own /v1/models with x-api-key. No key -> keep the curated list
+    // (the same answer as before); a key -> the live list, never the stale curated one.
+    const raw = envWithSavedApiKeys(env, opts?.configDir)[provider.envKey ?? "ANTHROPIC_API_KEY"];
+    if (typeof raw !== "string" || raw.length === 0) return { models: [...provider.models], source: "fallback" };
+    return fetchAnthropicModels(fetchFn, raw, opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {});
+  }
   if (compat === undefined) {
     return { models: [...provider.models], source: "fallback" };
   }
@@ -1070,6 +1142,9 @@ export async function testProviderConnection(
     refreshCatalogVersion: true,
     ...(profiles?.dir !== undefined ? { configDir: profiles.dir } : {}),
   });
+  if (provider === ANTHROPIC_PICKER) {
+    return fetchAnthropicModels(fetchFn, envWithSavedApiKeys(env, profiles?.dir)[ANTHROPIC_PICKER.envKey ?? "ANTHROPIC_API_KEY"], { timeoutMs: MODELS_FETCH_TIMEOUT_MS });
+  }
   const apiKey = providerApiKey(provider, envWithSavedApiKeys(env, profiles?.dir)) ?? provider.apiKey;
   return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, {
     timeoutMs: MODELS_FETCH_TIMEOUT_MS,
@@ -1159,7 +1234,7 @@ export function classifyProviderConnection(
     return { kind: "oauth-grant", ...(envKey !== undefined ? { envKey } : {}), sharedWith };
   }
   const registry = providerByName(name, dir);
-  const envKey = registry?.envKey;
+  const envKey = registry?.envKey ?? (name === "anthropic" ? "ANTHROPIC_API_KEY" : undefined);
   if (envKey === undefined) {
     return { kind: "no-credential", sharedWith: [] };
   }

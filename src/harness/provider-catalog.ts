@@ -121,6 +121,10 @@ async function buildCatalogEntry(
     // a provider with no live listing endpoint — `describe().modelListing`
     // is false for these providers, see `select.ts`), so `detected.models` here IS
     // the curated fallback a caller should show.
+    if (detected.name === "anthropic") {
+      const key = envWithSavedApiKeys(deps.env, deps.dir)[detected.envKey ?? "ANTHROPIC_API_KEY"];
+      if (key === undefined || key.length === 0) return undefined;
+    }
     return {
       name: detected.name,
       status: "not-supported",

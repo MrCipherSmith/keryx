@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.4.11] - 2026-11-05
+
+### Fixed
+- **Anthropic in `/connect`.** `[Test]` no longer answers "unknown provider — cannot test": it checks the key against Anthropic's `GET /v1/models` using the native `x-api-key` and `anthropic-version` headers. When a key is set, the model picker now shows the live model list from Anthropic instead of the built-in one; without a key it falls back to the built-in list and makes no network call.
+
+## [0.4.10] - 2026-11-05
+
+### Added
+- **Anthropic in `/connect`.** The Add provider tab always lists Anthropic and accepts `ANTHROPIC_API_KEY` through the same key form as other providers. Anthropic appears in model pickers and status only after a key is set in the environment or saved configuration.
+
 ## [0.4.9] - 2026-11-03
 
 ### Added
