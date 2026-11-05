@@ -659,6 +659,7 @@ export async function setRoutingV2Active(on: boolean, location: RoutingConfigLoc
     const result = await deactivateRoutingV2({ ...context, confirmed: true });
     return result.status === "already-deactivated" ? "Routing v2 is already off (legacy mode)." : "Routing v2 off — legacy routing is active.";
   }
+  if (routingV2Mode(location) === "v2") return "Routing v2 is already on.";
   const override = process.env.KERYX_SUBAGENT_MODEL?.trim();
   if (override && override !== "inherit") {
     throw new Error("Resolve and clear KERYX_SUBAGENT_MODEL before activating routing v2.");
