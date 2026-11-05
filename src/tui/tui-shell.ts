@@ -10344,33 +10344,31 @@ export async function launchTuiAgentShell(opts: {
           showJevProfile();
           return;
         }
-        if (command.name === "/route-v2") {
-          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
-          if (arg === "on" || arg === "off") {
-            void setRoutingV2Active(arg === "on", { cwd: process.cwd() }).then(
-              (message) => io.onSystem?.(`${message}\n`),
-              (error: unknown) => io.onSystem?.(`/route-v2 ${arg} failed: ${error instanceof Error ? error.message : String(error)}\n`),
-            );
-            return;
-          }
-          if (arg.length > 0) {
-            io.onSystem?.(`Unknown /route-v2 argument '${arg}'. Usage: /route-v2 [on|off]\n`);
-            return;
-          }
-          io.onSystem?.(`Routing mode: ${routingV2Mode({ cwd: process.cwd() })}. Switch with /route-v2 on|off.\n`);
-          return;
-        }
         if (isRouteCommand(command.name)) {
           // flow 338 (AC7): `/route on|off` toggles + persists; bare `/route`
           // prints the current state (no modal — see `route-command.ts`'s
           // header for why).
           const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+          if (arg === "v2" || arg === "v2 on" || arg === "v2 off") {
+            // `/route v2 [on|off]`: routing v2 activation without the terminal
+            // migrate/apply steps (shown in /status as Routing: v2|legacy).
+            if (arg === "v2") {
+              io.onSystem?.(`Routing mode: ${routingV2Mode({ cwd: process.cwd() })}. Switch with ${ROUTE_COMMAND} v2 on|off.\n`);
+              return;
+            }
+            const on = arg === "v2 on";
+            void setRoutingV2Active(on, { cwd: process.cwd() }).then(
+              (message) => io.onSystem?.(`${message}\n`),
+              (error: unknown) => io.onSystem?.(`${arg} failed: ${error instanceof Error ? error.message : String(error)}\n`),
+            );
+            return;
+          }
           if (arg === "on" || arg === "off") {
             setRoutingEnabled(arg === "on");
             return;
           }
           if (arg.length > 0) {
-            io.onSystem?.(`Unknown /route argument '${arg}'. Usage: ${ROUTE_COMMAND} [on|off]\n`);
+            io.onSystem?.(`Unknown /route argument '${arg}'. Usage: ${ROUTE_COMMAND} [on|off|v2 [on|off]]\n`);
             return;
           }
           io.onSystem?.(`Route: ${renderRoutingSidebarValue(routingEnabled, routingRoutedCount, routingLastCategory)}\n`);

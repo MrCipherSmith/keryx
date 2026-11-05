@@ -25,7 +25,7 @@ export const sharedCommandIds = new Set(["help", "status", "models", "routing", 
 const presentation = new Set(["theme", "copy", "expand", "rendering", "game", "think"]);
 /** specification.md 3.1: "unimplemented vendor adapters are explicit capability boundaries" and external-vendor execution "[is] not admitted by this Flow". */
 const externalVendor = new Set(["delegate", "external-diff"]);
-const localSetup = new Set(["connect", "search-connect", "setup", "permissions", "mode", "remote-policy", "remote-control", "route-v2"]);
+const localSetup = new Set(["connect", "search-connect", "setup", "permissions", "mode", "remote-policy", "remote-control"]);
 const empty: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: {}, required: [] };
 /** `/history [N]` (src/remote/history.ts): no number reads the whole ordered history, N (1-20) its last N messages. */
 export const historyInputSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { count: { type: "integer", minimum: 1, maximum: 20 } }, required: [] };

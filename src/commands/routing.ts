@@ -648,7 +648,7 @@ export function routingV2Mode(location: RoutingConfigLocation): RoutingV2Mode {
 }
 
 /**
- * `/route-v2 on|off` from the TUI: the same steps as `routing migrate
+ * `/route v2 on|off` from the TUI: the same steps as `routing migrate
  * --dry-run` + `--apply <plan> --confirm` (on) or `--deactivate --confirm`
  * (off), without a plan file. Returns a one-line status; throws with the
  * migration's own message when it cannot proceed.
