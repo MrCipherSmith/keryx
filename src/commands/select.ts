@@ -181,11 +181,14 @@ export async function detectProviders(deps: DetectProvidersDeps): Promise<Detect
   }
 
   const anthropicKey = deps.env.ANTHROPIC_API_KEY;
-  if (typeof anthropicKey === "string" && anthropicKey.length > 0) {
-    // The credential is read from `env` only — never placed on the returned
-    // shape (which has no field for it) and never logged.
-    detected.push({ name: "anthropic", models: [...ANTHROPIC_MODELS] });
-  }
+  void anthropicKey;
+  detected.push({
+    name: "anthropic",
+    label: "Anthropic",
+    envKey: "ANTHROPIC_API_KEY",
+    note: "Claude · API key",
+    models: [...ANTHROPIC_MODELS],
+  });
 
   detected.push({ name: OPENAI_CODEX_PICKER.name, label: OPENAI_CODEX_PICKER.label, models: [...OPENAI_CODEX_PICKER.models], note: "ChatGPT subscription · browser device login" });
 

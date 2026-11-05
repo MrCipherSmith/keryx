@@ -161,10 +161,12 @@ describe("AC1 — detectProviders: ollama /api/tags, env-gated anthropic, always
     expect(anthropic.models.every((m) => m.startsWith("claude-"))).toBe(true);
   });
 
-  test("anthropic is absent when ANTHROPIC_API_KEY is unset", async () => {
+  test("anthropic is always offered with envKey, even when ANTHROPIC_API_KEY is unset", async () => {
     const deps: DetectProvidersDeps = { fetch: fixedFetch("", 500), env: {} };
     const detected = await detectProviders(deps);
-    expect(detected.find((d) => d.name === "anthropic")).toBeUndefined();
+    const anthropic = detected.find((d) => d.name === "anthropic");
+    expect(anthropic?.envKey).toBe("ANTHROPIC_API_KEY");
+    expect(anthropic?.models.length).toBeGreaterThan(0);
   });
 
   test("anthropic detection makes NO network call — static list only, credential never leaves env", async () => {
