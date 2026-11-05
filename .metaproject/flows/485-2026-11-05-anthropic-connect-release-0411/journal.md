@@ -10,3 +10,4 @@
 - 2026-11-05T16:52:04.006Z - task-done: T2: Implement per plan
 - 2026-11-05T16:52:04.326Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-11-05T16:52:12.592Z - ac-confirmed: AC1: bun test src/commands/providers.anthropic.test.ts: зелёный на main d5de38e78 (signed: MrCipherSmith [stated])
+- 2026-11-05T21:29:29.664Z - ac-updated: AC1: "connectionProviderByName("anthropic") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec bun test src/commands/providers.anthropic.test.ts]" -> "connectionProviderByName("anthropic") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]" (Repair malformed exec marker responsible for PR1134 corpus CI failure; command and criterion meaning unchanged)
