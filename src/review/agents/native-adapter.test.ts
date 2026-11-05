@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { callRound, okReply, scriptedProvider } from "../../commands/agent.test-helpers";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import type { ReviewAgentAdapterContext, ReviewAgentAdapterRequest, ReviewAgentTerminalResult } from "./types";
-import { createReviewAgentNativeAdapter, ReviewAgentNativeAdapterError } from "./native-adapter";
+import { createReviewAgentNativeAdapter, ReviewAgentNativeAdapterError } from "../../commands/review-agents-runtime/native-adapter";
 
 const limits = {
   elapsedMs: 1_000,

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import type { ProviderPort } from "../../harness/provider/types";
-import type { ReviewAgentHost } from "./host";
+import type { ReviewAgentHost } from "../../commands/review-agents-runtime/host";
 import { createReviewPlan, createReviewRuntimePlanRegistration, type ReviewPlanInput } from "./planning";
 import {
   createReviewAgentTerminalCliFactory,

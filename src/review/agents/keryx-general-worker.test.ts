@@ -9,8 +9,8 @@ import {
   createKeryxExternalBridgeTools,
   KERYX_EXTERNAL_BRIDGE_TOOL_NAMES,
   runKeryxExternalWorker,
-} from "./keryx-general-worker";
-import { scopedProviderCredentials } from "./keryx-general-worker-entry";
+} from "../../commands/review-agents-runtime/keryx-general-worker";
+import { scopedProviderCredentials } from "../../commands/review-agents-runtime/keryx-general-worker-entry";
 
 function request(signal: AbortSignal): ReviewAgentAdapterRequest {
   return {

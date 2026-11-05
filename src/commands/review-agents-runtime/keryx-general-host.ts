@@ -1,12 +1,12 @@
-import type { ReviewAgentAdapter, ReviewAgentAdapterRequest } from "./types";
+import type { ReviewAgentAdapter, ReviewAgentAdapterRequest } from "../../review/agents/types";
 import {
   createExternalGeneralAdapter,
   createExternalGeneralBridge,
   type ExternalBridgeAuthorityRequest,
   type ExternalBridgeControllerPort,
   type ExternalBridgeGrantStore,
-} from "./external-adapter";
-import { startExternalBridgeSocketServer } from "./external-transport";
+} from "../../review/agents/external-adapter";
+import { startExternalBridgeSocketServer } from "../../review/agents/external-transport";
 import { createKeryxExternalGeneralRunner } from "./keryx-general-runner";
 
 export interface KeryxExternalGeneralHost {

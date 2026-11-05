@@ -1,28 +1,25 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, unlink } from "node:fs/promises";
+import { lstat, mkdtemp, readdir, realpath, rename, rm, unlink } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 import { loadAgentCatalog, type AgentCatalog } from "../../agents/catalog";
 import type { AgentDefinition } from "../../agents/types";
-import type { AgentIO } from "../../commands/agent";
-import { buildProjectTools } from "../../commands/project-tools";
+import type { AgentIO } from "../agent";
+import { buildProjectTools } from "../project-tools";
 import { builtinReadOnlyTools, type InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import { createMetaprojectAdapter } from "../../harness/tool/metaproject-adapter";
 import type { ProviderPort } from "../../harness/provider/types";
-import { bundledSkillMarkdownPath } from "../../gdskills/catalog";
 import { keryxConfigDir, readConfigFile, readTurnFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
 import { loadOAuthGrant } from "../../lib/oauth/grants";
 import { ensureOpenAiCodexGrant, refreshOpenAiCodexGrant } from "../../lib/oauth/openai-subscription";
-import { providerByName } from "../../commands/providers";
+import { providerByName } from "../providers";
 import { loadShellConfig } from "../../lib/shell-config";
 import type {
   ExternalBridgeAuthorityRequest,
   ExternalBridgeControllerPort,
   ExternalBridgeGrantSnapshot,
   ExternalBridgeGrantStore,
-} from "./external-adapter";
+} from "../../review/agents/external-adapter";
 import {
   createKeryxExternalGeneralHost,
   type KeryxExternalGeneralHost,
@@ -30,15 +27,15 @@ import {
 } from "./keryx-general-host";
 import { scopedProviderCredentials } from "./keryx-general-worker-entry";
 import { createReviewAgentNativeAdapter } from "./native-adapter";
-import { createReviewAgentEntityPolicyResolver } from "./entity-admission";
+import { createReviewAgentEntityPolicyResolver } from "../../review/agents/entity-admission";
 import {
   createReviewPlan,
   createReviewRuntimePlanRegistration,
   type ReviewPlanInput,
   type ReviewRuntimePlanWaveInput,
-} from "./planning";
-import { createLargeReviewConfig } from "./config";
-import { ReviewAgentController } from "./controller";
+} from "../../review/agents/planning";
+import { createLargeReviewConfig } from "../../review/agents/config";
+import { ReviewAgentController } from "../../review/agents/controller";
 import type {
   ReviewAgentAuthority,
   ReviewAgentAdapterRequest,
@@ -46,9 +43,9 @@ import type {
   ReviewAgentRole,
   ReviewAgentRunState,
   ReviewAgentSpawnInput,
-} from "./types";
+} from "../../review/agents/types";
 
-const execFileAsync = promisify(execFile);
+import { ensureRunsRoot, snapshotGitRevision, reviewSkillInstructions } from "./project-files";
 const RUN_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const ENTITY_ROLES: Readonly<Record<string, ReviewAgentRole>> = {
   "review-coordinator": "coordinator",
@@ -271,7 +268,7 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
           const runId = requiredString(input.run_id, "run_id");
           const revision = requiredString(input.revision, "revision");
           const destination = runDir(runId);
-          await mkdir(runsRoot, { recursive: true });
+          await ensureRunsRoot(runsRoot);
           await verifyRunsRoot();
           const temporary = await mkdtemp(path.join(runsRoot, `.${runId}.`));
           let resolvedRevision: string;
@@ -604,32 +601,6 @@ function catalogOrThrow(projectRoot: string): AgentCatalog {
 function hostConfig(catalog: readonly AgentDefinition[]): ReviewAgentConfig {
   const entities = catalog.filter((entry) => ENTITY_ROLES[entry.name] !== undefined);
   return createLargeReviewConfig({ allowedAdapters: ["native", EXTERNAL_ADAPTER_ID], allowedEntities: entities.map((entry) => entry.name), allowedSkills: [...new Set(entities.flatMap((entry) => entry.skills))].sort() });
-}
-
-async function snapshotGitRevision(projectRoot: string, revision: string, destination: string): Promise<string> {
-  const { stdout } = await execFileAsync("git", ["rev-parse", "--verify", `${revision}^{commit}`], { cwd: projectRoot, encoding: "utf8" });
-  const resolved = stdout.trim();
-  if (!/^[0-9a-f]{40,64}$/i.test(resolved)) throw new Error("revision did not resolve to a commit");
-  await mkdir(path.join(destination, "source"), { recursive: true });
-  const archive = path.join(destination, "source.tar");
-  await execFileAsync("git", ["archive", "--format=tar", `--output=${archive}`, resolved, "--", ".", ":(exclude).metaproject"], { cwd: projectRoot });
-  try { await execFileAsync("tar", ["-xf", archive, "-C", path.join(destination, "source")]); }
-  finally { await unlink(archive).catch(() => undefined); }
-  return resolved;
-}
-
-async function reviewSkillInstructions(projectRoot: string, skillRef: string): Promise<string> {
-  if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(skillRef)) throw new Error(`Invalid Review agents skill reference ${skillRef}`);
-  const candidates = [
-    path.join(projectRoot, ".metaproject", "project-skills", "review", skillRef, "SKILL.md"),
-    path.join(projectRoot, ".metaproject", "skills", "gdskills", "review", skillRef, "SKILL.md"),
-    bundledSkillMarkdownPath("review", skillRef),
-  ].filter((candidate): candidate is string => candidate !== undefined);
-  for (const candidate of candidates) {
-    try { return await readFile(candidate, "utf8"); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-  }
-  throw new Error(`Review agents skill ${skillRef} is not installed`);
 }
 
 function reviewPlanToolSchema(): Record<string, unknown> {

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createKeryxExternalGeneralHost } from "./keryx-general-host";
+import { createKeryxExternalGeneralHost } from "../../commands/review-agents-runtime/keryx-general-host";
 
 test("production host rejects mismatched provider preflight before advertising an adapter", async () => {
   let controllerReads = 0;

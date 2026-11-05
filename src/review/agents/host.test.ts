@@ -6,7 +6,7 @@ import { buildInteractiveAgentTools } from "../../commands/interactive-agent-too
 import { createDefaultSearchProviderController } from "../../harness/search";
 import { createMetaprojectAdapter } from "../../harness/tool/metaproject-adapter";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
-import { createReviewAgentHost, type ReviewAgentHostOptions } from "./host";
+import { createReviewAgentHost, type ReviewAgentHostOptions } from "../../commands/review-agents-runtime/host";
 
 const fakeExternalGeneralHostFactory: NonNullable<ReviewAgentHostOptions["externalGeneralHostFactory"]> = async (options) => ({
   adapter: {

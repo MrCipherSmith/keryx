@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { runAgentTurn, type AgentIO } from "../../commands/agent";
+import { runAgentTurn, type AgentIO } from "../agent";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../../harness/provider/types";
-import type { ReviewAgentAdapterRequest, ReviewAgentSpawnInput } from "./types";
-import type { ExternalBridgeRequest, ExternalBridgeResponse } from "./external-adapter";
+import type { ReviewAgentAdapterRequest, ReviewAgentSpawnInput } from "../../review/agents/types";
+import type { ExternalBridgeRequest, ExternalBridgeResponse } from "../../review/agents/external-adapter";
 
 export const KERYX_EXTERNAL_BRIDGE_TOOL_NAMES = [
   "review_agents_bridge_spawn",

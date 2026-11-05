@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { makeProvider } from "../../harness/provider/make-provider";
 import { loadShellConfig } from "../../lib/shell-config";
-import { providerByName } from "../../commands/providers";
+import { providerByName } from "../providers";
 import { oauthEnvKeyFor } from "../../lib/oauth/grants";
-import type { ReviewAgentAdapterRequest } from "./types";
-import { createExternalBridgeClientFromEnv } from "./external-transport";
+import type { ReviewAgentAdapterRequest } from "../../review/agents/types";
+import { createExternalBridgeClientFromEnv } from "../../review/agents/external-transport";
 import { runKeryxExternalWorker } from "./keryx-general-worker";
 
 interface WorkerArgs { requestFile: string; configDir: string; provider: string; model: string }

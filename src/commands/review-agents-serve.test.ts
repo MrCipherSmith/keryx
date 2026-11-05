@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ProviderPort } from "../harness/provider/types";
-import type { ReviewAgentHost, ReviewAgentHostRuntime } from "../review/agents/host";
+import type { ReviewAgentHost, ReviewAgentHostRuntime } from "./review-agents-runtime/host";
 import type { ReviewAgentTerminalHost } from "../review/agents/terminal-host";
 import { runReviewAgentsServeCommand } from "./review-agents-serve";
 

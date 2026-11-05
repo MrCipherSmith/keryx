@@ -3,8 +3,8 @@ import type { AgentIO } from "./agent";
 import { makeProvider } from "../harness/provider/make-provider";
 import type { ProviderPort } from "../harness/provider/types";
 import { loadShellConfig } from "../lib/shell-config";
-import { createReviewAgentHost, type ReviewAgentHost, type ReviewAgentHostOptions } from "../review/agents/host";
-import { scopedProviderCredentials } from "../review/agents/keryx-general-worker-entry";
+import { createReviewAgentHost, type ReviewAgentHost, type ReviewAgentHostOptions } from "./review-agents-runtime/host";
+import { scopedProviderCredentials } from "./review-agents-runtime/keryx-general-worker-entry";
 import {
   startReviewAgentTerminalHost,
   type ReviewAgentTerminalHost,
@@ -52,15 +52,17 @@ function required(values: ReadonlyMap<string, string>, key: string): string {
   return value;
 }
 
-function waitForTermination(): Promise<void> {
+function waitForTermination(registerCleanup: (cleanup: () => void) => void): Promise<void> {
   return new Promise((resolve) => {
     const stop = (): void => {
-      process.off("SIGINT", stop);
-      process.off("SIGTERM", stop);
       resolve();
     };
-    process.once("SIGINT", stop);
-    process.once("SIGTERM", stop);
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+    registerCleanup(() => {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+    });
   });
 }
 
@@ -88,6 +90,7 @@ export async function runReviewAgentsServeCommand(
   let terminal: ReviewAgentTerminalHost | undefined;
   let reviewSessionOpen = false;
   let exitCode = 0;
+  let cleanupSignals: (() => void) | undefined;
   try {
     const values = parseArgs(args);
     const projectRoot = path.resolve(required(values, "--project"));
@@ -146,7 +149,8 @@ export async function runReviewAgentsServeCommand(
       costMode,
       permissionMode,
     }));
-    await (deps.waitForStop ?? waitForTermination)();
+    if (deps.waitForStop !== undefined) await deps.waitForStop();
+    else await waitForTermination((cleanup) => { cleanupSignals = cleanup; });
   } catch (cause) {
     error(cause instanceof Error ? cause.message : String(cause));
     exitCode = 1;
@@ -165,5 +169,6 @@ export async function runReviewAgentsServeCommand(
       }
     }
   }
+  cleanupSignals?.();
   return exitCode;
 }

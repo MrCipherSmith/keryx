@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectSandboxLauncher, wrapWithSandbox, type SandboxLauncherInfo, type SandboxProfile } from "../../harness/process/sandbox";
-import type { ExternalBridgeSocketServer } from "./external-transport";
-import type { ExternalGeneralRunner, ExternalGeneralStopEvidence } from "./external-adapter";
-import type { ReviewAgentAdapterRequest } from "./types";
+import type { ExternalBridgeSocketServer } from "../../review/agents/external-transport";
+import type { ExternalGeneralRunner, ExternalGeneralStopEvidence } from "../../review/agents/external-adapter";
+import type { ReviewAgentAdapterRequest } from "../../review/agents/types";
 
 const SAFE_INHERITED_ENV = [
   "PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "COLORTERM", "NO_COLOR",

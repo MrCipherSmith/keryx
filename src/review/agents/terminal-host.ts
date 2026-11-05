@@ -16,7 +16,7 @@ import {
   createReviewRuntimePlanRegistration,
   type ReviewRuntimePlanRegistration,
 } from "./planning";
-import type { ReviewAgentHost, ReviewAgentHostRuntime } from "./host";
+import type { ReviewAgentHost, ReviewAgentHostRuntime } from "../../commands/review-agents-runtime/host";
 
 export const REVIEW_AGENTS_ROOT_SOCKET_ENV = "KERYX_REVIEW_AGENTS_ROOT_SOCKET";
 export const REVIEW_AGENTS_ROOT_TOKEN_ENV = "KERYX_REVIEW_AGENTS_ROOT_TOKEN";

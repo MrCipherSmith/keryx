@@ -6,7 +6,7 @@ import {
   type AgentIO,
   type ApprovalMeta,
   type ApprovalResponse,
-} from "../../commands/agent";
+} from "../agent";
 import { bundledSkillMarkdownPath } from "../../gdskills/catalog";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../../harness/provider/types";
@@ -17,7 +17,7 @@ import type {
   ReviewAgentAdapterResult,
   ReviewAgentRole,
   ReviewAgentSpawnInput,
-} from "./types";
+} from "../../review/agents/types";
 
 export interface ReviewAgentNativeProviderBinding {
   readonly provider: ProviderPort;

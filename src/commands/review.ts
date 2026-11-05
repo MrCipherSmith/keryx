@@ -78,7 +78,7 @@ import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layer
 import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
 import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
 import { detectTestCommand, writeTestsToRun } from "../review/tests-to-run";
-import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
+import { createGdgraphService, gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
@@ -184,7 +184,6 @@ import {
   changedExportsOf,
   renderDegradationPayloadBrief,
 } from "../review/degradation-payload";
-import { loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
 import { withLiveCodexModels } from "./live-codex-models";
 import { detectProviders } from "./select";
@@ -4462,7 +4461,7 @@ async function runBlastRadius(args: string[]): Promise<void> {
   const packageOption = optionValue(args, "--package");
   let graph: GraphData;
   if (packageOption === undefined) {
-    graph = await loadGraph(cwd);
+    graph = await createGdgraphService().loadGraph(cwd);
   } else {
     const packageDir = resolvePackageDir(args, cwd);
     const layers = await ensurePackageLayers(packageDir);

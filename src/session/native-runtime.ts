@@ -35,7 +35,7 @@ import { isNormalizedWireIdentity, wireCandidateId, wireModelIdentity, type Nati
 import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
 import type { NativeRoutingBudgetStore } from "./native-routing-budget";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
-import { createReviewAgentHost } from "../review/agents/host";
+import { createReviewAgentHost } from "../commands/review-agents-runtime/host";
 import { keryxConfigDir } from "../lib/config-dir";
 
 export type NativeSessionServices = ReturnType<typeof createNativeSessionServices>;
