@@ -63,6 +63,34 @@ class FakeTransport implements SandboxedWebTransport {
         text: JSON.stringify({ results: [{ title: "Tavily result", url: "https://example.test/tavily", content: "Tavily snippet", published_date: "2026-01-03" }] }),
       };
     }
+    if (request.providerId === "deepseek") {
+      if (request.url.endsWith("/tools/fetch")) {
+        return {
+          ok: true,
+          status: 200,
+          url: request.url,
+          contentType: "application/json",
+          text: JSON.stringify({ title: "Fetched page", content: "# Fetched page\n\nThe body." }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        url: request.url,
+        contentType: "application/json",
+        text: JSON.stringify({
+          results: [{
+            rerank_score: 2.4,
+            title: "DeepSeek result",
+            url: "https://example.test/deepseek",
+            snippet: "UI-length snippet",
+            summary: "DeepSeek summary",
+            date: "2026-06-01T00:00:00+00:00",
+            authority: 3,
+          }],
+        }),
+      };
+    }
     return {
       ok: true,
       status: 200,
@@ -79,10 +107,10 @@ describe("search provider registry", () => {
   // set their own (zero-length) rungs below.
   beforeEach(() => setDuckDuckGoTimingForTests({ minGapMs: 0, maxGapMs: 0, backoffMs: [] }));
 
-  test("describes DuckDuckGo first, then SearXNG, Brave, Tavily and Exa", () => {
+  test("describes DuckDuckGo first, then SearXNG, Brave, Tavily, Exa and DeepSeek", () => {
     const registry = createSearchProviderRegistry(new FakeTransport());
 
-    expect(registry.descriptors.map((descriptor) => descriptor.id)).toEqual(["duckduckgo", "searxng", "brave", "tavily", "exa"]);
+    expect(registry.descriptors.map((descriptor) => descriptor.id)).toEqual(["duckduckgo", "searxng", "brave", "tavily", "exa", "deepseek"]);
     const duckduckgo = registry.get("duckduckgo");
     expect(duckduckgo?.kind).toBe("remote");
     expect(duckduckgo?.fields).toEqual([]);
@@ -168,6 +196,194 @@ describe("search provider registry", () => {
     expect(transport.requests[0]?.credential).toEqual({ injection: "header", name: "X-Subscription-Token", value: "brave-secret" });
   });
 
+  test("searches DeepSeek with a POST body and a Bearer header, and gives the model the summary", async () => {
+    const transport = new FakeTransport();
+    const registry = createSearchProviderRegistry(transport, (providerId) => providerId === "deepseek" ? "ds-secret" : undefined);
+
+    const result = await registry.get("deepseek")!.search({}, "keryx sandbox");
+
+    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests[0]).toMatchObject({
+      providerId: "deepseek",
+      capability: "public-search",
+      url: "https://api.deepseek.com/v1/tools/search",
+      method: "POST",
+      body: { query: "keryx sandbox", count: 10 },
+      // The worker sends a header credential verbatim, so the scheme is part
+      // of the value; a bare key would be rejected with HTTP 401.
+      credential: { injection: "header", name: "Authorization", value: "Bearer ds-secret" },
+    });
+    expect(transport.requests[0]?.url).not.toContain("ds-secret");
+    expect(result.results[0]).toMatchObject({
+      title: "DeepSeek result",
+      canonicalUrl: "https://example.test/deepseek",
+      // `summary` (600-800 chars, "intended to be read by a model"), not the
+      // UI-length `snippet`.
+      snippet: "DeepSeek summary",
+      publicationDate: "2026-06-01T00:00:00+00:00",
+      providerId: "deepseek",
+    });
+    const deepseek = registry.get("deepseek");
+    expect(deepseek?.credentialSchema).toEqual({ required: true, label: "DeepSeek API key", secret: true });
+    expect(deepseek?.capabilities.supportsPublicationDate).toBe(true);
+    expect(deepseek?.documentationUrl).toContain("api-docs.deepseek.com/guides/search");
+  });
+
+  test("DeepSeek fetches a known URL through its Fetch API and returns Markdown", async () => {
+    const transport = new FakeTransport();
+    const registry = createSearchProviderRegistry(transport, (providerId) => providerId === "deepseek" ? "ds-secret" : undefined);
+
+    const deepseek = registry.get("deepseek")!;
+    const fetchPage = deepseek.fetchPage;
+    if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
+    const result = await fetchPage.call(deepseek, "https://example.com/article");
+
+    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests[0]).toMatchObject({
+      providerId: "deepseek",
+      url: "https://api.deepseek.com/v1/tools/fetch",
+      method: "POST",
+      body: { url: "https://example.com/article" },
+      credential: { injection: "header", name: "Authorization", value: "Bearer ds-secret" },
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: { providerId: "deepseek", url: "https://example.com/article", title: "Fetched page", text: "# Fetched page\n\nThe body." },
+    });
+  });
+
+  test("DeepSeek fetch validates the TARGET before spending a request on it", async () => {
+    // On this path the transport connects to api.deepseek.com, so nothing else
+    // validates the page URL: `web_fetch`'s public-HTTPS promise must hold here.
+    const transport = new FakeTransport();
+    const registry = createSearchProviderRegistry(transport, () => "key");
+    const deepseek = registry.get("deepseek")!;
+    const fetchPage = deepseek.fetchPage;
+    if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
+
+    for (const url of ["http://example.com", "https://user:pass@example.com/a", "https://127.0.0.1/admin"]) {
+      expect(await fetchPage.call(deepseek, url)).toMatchObject({ ok: false, reason: "fetch-failed" });
+    }
+    expect(transport.requests).toHaveLength(0);
+  });
+
+  test("a DeepSeek fetch refusal says which one it was", async () => {
+    const staged = [404, 403, 402];
+    const transport: SandboxedWebTransport = {
+      async request(request) {
+        const status = staged.shift() ?? 200;
+        return { ok: false, status, url: request.url, contentType: "application/json", text: JSON.stringify({ error: { message: "refused" } }) };
+      },
+    };
+    const deepseek = createSearchProviderRegistry(transport, () => "key").get("deepseek")!;
+    const fetchPage = deepseek.fetchPage;
+    if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
+    const detail = async (url: string): Promise<string> => {
+      const result = await fetchPage.call(deepseek, url);
+      return !result.ok && result.reason === "fetch-failed" ? (result.detail ?? "") : "";
+    };
+
+    expect(await detail("https://example.com/a")).toContain("usable page content");
+    expect(await detail("https://example.com/b")).toContain("security policy");
+    expect(await detail("https://example.com/c")).toContain("insufficient balance");
+  });
+
+  test("web_fetch uses the active provider only when it retrieves pages itself", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-fetch-controller-"));
+    try {
+      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key"), dir);
+      // Default engine: no page retrieval, so the call reports "keep using the
+      // sandbox transport" rather than an error.
+      expect(await controller.fetchPage("https://example.com/article")).toEqual({ ok: false, reason: "no-fetch-provider" });
+
+      controller.configure("deepseek", {});
+      expect(await controller.test("deepseek")).toEqual({ ok: true });
+      expect(await controller.select("deepseek")).toEqual({ ok: true });
+      expect(await controller.fetchPage("https://example.com/article")).toMatchObject({ ok: true, value: { providerId: "deepseek" } });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("DeepSeek names the fix for a rejected key, an empty balance and a rate limit", async () => {
+    // Every status DeepSeek documents as recoverable in a DIFFERENT way: a
+    // generic "connection validation failed" would send the operator to retry
+    // a dead account, or to top up a rate-limited one.
+    const staged: { status: number; body: string }[] = [];
+    const transport: SandboxedWebTransport = {
+      async request(request) {
+        const next = staged.shift() ?? { status: 200, body: JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] }) };
+        return { ok: next.status >= 200 && next.status < 300, status: next.status, url: request.url, contentType: "application/json", text: next.body };
+      },
+    };
+    const registry = createSearchProviderRegistry(transport, () => "key");
+    const deepseek = registry.get("deepseek")!;
+    const error = (status: number): { status: number; body: string } => ({ status, body: JSON.stringify({ error: { message: "refused", param: null, code: "invalid_request_error" } }) });
+
+    staged.push(error(401), error(402), error(429));
+    expect(await deepseek.testConnection({})).toEqual({ ok: false, reason: "missing-credential" });
+    expect(await deepseek.testConnection({})).toEqual({ ok: false, reason: "insufficient-balance" });
+    expect(await deepseek.testConnection({})).toEqual({ ok: false, reason: "rate-limited" });
+    expect(await deepseek.testConnection({})).toEqual({ ok: true });
+  });
+
+  test("a refused DeepSeek search reaches the caller as a refusal, never as zero results", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-deepseek-refused-"));
+    try {
+      let calls = 0;
+      const transport: SandboxedWebTransport = {
+        async request(request) {
+          calls += 1;
+          // First call is the connection test; every later one is the search.
+          const status = calls === 1 ? 200 : 402;
+          return {
+            ok: status === 200,
+            status,
+            url: request.url,
+            contentType: "application/json",
+            text: status === 200
+              ? JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] })
+              : JSON.stringify({ error: { message: "insufficient balance", param: null, code: "invalid_request_error" } }),
+          };
+        },
+      };
+      const controller = new SearchProviderController(createSearchProviderRegistry(transport, () => "key"), dir);
+      controller.configure("deepseek", {});
+      expect(await controller.test("deepseek")).toEqual({ ok: true });
+      expect(await controller.select("deepseek")).toEqual({ ok: true });
+
+      const result = await controller.search("keryx sandbox");
+      expect(result).toMatchObject({ ok: false, reason: "search-failed" });
+      expect(result.ok ? "" : result.detail).toContain("insufficient balance");
+      expect(result.ok ? "" : result.detail).toContain("402");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("DeepSeek borrows the saved chat-model key, and a search credential overrides it", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-deepseek-key-"));
+    try {
+      const { searchCredentialResolver } = await import("./default-controller");
+      const { saveApiKey } = await import("../../lib/shell-config");
+      const { saveSearchCredential } = await import("../../lib/search-config");
+      // An explicit empty env keeps a developer's own DEEPSEEK_API_KEY out of
+      // the assertion about "nothing saved yet".
+      const resolver = searchCredentialResolver(dir, {});
+
+      expect(resolver("deepseek")).toBeUndefined();
+      saveApiKey("DEEPSEEK_API_KEY", "chat-key", dir);
+      expect(resolver("deepseek")).toBe("chat-key");
+      // Borrowing is DeepSeek-only: a chat key never becomes another
+      // provider's search credential.
+      expect(resolver("brave")).toBeUndefined();
+      saveSearchCredential("deepseek", "search-key", dir);
+      expect(resolver("deepseek")).toBe("search-key");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("reports only successfully tested providers as connected/selectable", async () => {
     const transport = new FakeTransport();
     const registry = createSearchProviderRegistry(transport, (id) => id === "brave" ? "key" : undefined);
@@ -188,7 +404,7 @@ describe("search provider registry", () => {
       controller.configure("searxng", { baseUrl: "http://localhost", port: "8080" });
       controller.configure("tavily", {});
 
-      expect(controller.configurable().map((provider) => provider.id)).toEqual(["duckduckgo", "searxng", "brave", "tavily", "exa"]);
+      expect(controller.configurable().map((provider) => provider.id)).toEqual(["duckduckgo", "searxng", "brave", "tavily", "exa", "deepseek"]);
       expect(await controller.select("searxng")).toEqual({ ok: false, reason: "not-connected" });
       expect(await controller.test("searxng")).toEqual({ ok: true });
       expect(controller.selectable().map((provider) => provider.id)).toEqual(["duckduckgo", "searxng"]);

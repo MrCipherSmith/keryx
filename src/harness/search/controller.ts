@@ -1,5 +1,5 @@
 import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig, type StoredSearchProvider } from "../../lib/search-config";
-import { DEFAULT_SEARCH_PROVIDER_ID, type SearchConnectionResult, type SearchProviderDescriptor, type SearchProviderId, type SearchResponse } from "./types";
+import { DEFAULT_SEARCH_PROVIDER_ID, type ProviderPageResult, type SearchConnectionResult, type SearchProviderDescriptor, type SearchProviderId, type SearchResponse } from "./types";
 import { SearchProviderRegistry } from "./registry";
 
 export type SearchSelectionResult = { ok: true } | { ok: false; reason: "not-configured" | "not-connected" };
@@ -117,6 +117,32 @@ export class SearchProviderController {
       return {
         ok: false,
         reason: "search-failed",
+        ...(error instanceof Error && error.message.length > 0 ? { detail: error.message } : {}),
+      };
+    }
+  }
+
+  /**
+   * `web_fetch` through the active provider, when that provider retrieves pages
+   * itself (DeepSeek's Fetch API returns Markdown, which beats scraping HTML).
+   *
+   * `no-fetch-provider` is not a failure: it means "keep using the sandbox
+   * transport", so DuckDuckGo or any other keyless/search-only selection leaves
+   * `web_fetch` byte-identical to what it was before this capability existed.
+   * A provider that IS active and DOES support fetching never falls back — its
+   * refusal (a 402, a 404) is reported, for the same reason search never
+   * silently switches engines.
+   */
+  async fetchPage(url: string, signal?: AbortSignal): Promise<ProviderPageResult> {
+    const descriptor = this.active();
+    const fetchPage = descriptor?.fetchPage;
+    if (descriptor === undefined || fetchPage === undefined) return { ok: false, reason: "no-fetch-provider" };
+    try {
+      return await fetchPage.call(descriptor, url, signal);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "fetch-failed",
         ...(error instanceof Error && error.message.length > 0 ? { detail: error.message } : {}),
       };
     }

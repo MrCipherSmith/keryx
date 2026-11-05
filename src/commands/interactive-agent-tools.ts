@@ -225,7 +225,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd, { getSessionDir }),
     ...metaprojectTools,
-    webFetchTool({ cwd: input.cwd }),
+    webFetchTool({ cwd: input.cwd, pageFetcher: input.searchController }),
     webSearchTool(input.searchController, { cwd: input.cwd }),
     withOrchestratorLog(shellExecTool(input.cwd, undefined, jobRegistry), { cwd: input.cwd, caller: CALLER_ORCHESTRATOR }),
     // Flow 266: the task tools proper, plus the two old names kept as

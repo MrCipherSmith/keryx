@@ -7,6 +7,7 @@ import {
   waitDuckDuckGoBackoff,
 } from "./duckduckgo";
 import { RATE_LIMITED_SEARCH_ERROR } from "./connection-message";
+import { parsePublicHttpsUrl } from "../web/web-policy";
 import type {
   CredentialInjection,
   NormalizedSearchResult,
@@ -22,6 +23,9 @@ import type {
 } from "./types";
 
 const SEARXNG_DOCS_URL = "https://docs.searxng.org/admin/installation.html";
+const DEEPSEEK_DOCS_URL = "https://api-docs.deepseek.com/guides/search/";
+const DEEPSEEK_SEARCH_URL = "https://api.deepseek.com/v1/tools/search";
+const DEEPSEEK_FETCH_URL = "https://api.deepseek.com/v1/tools/fetch";
 const MAX_RESULTS = 10;
 
 function nonEmpty(value: unknown): string | undefined {
@@ -96,6 +100,81 @@ function searxngUrl(fields: Record<string, string>, query: string): string {
 
 function requestFailure(response: SandboxedWebResponse): SearchConnectionResult {
   return { ok: false, reason: response.error === "malformed-response" ? "incompatible-response" : "transport-failed" };
+}
+
+/**
+ * DeepSeek answers with OpenAI-compatible statuses, so the status names the
+ * fix. 402 is the one the generic `requestFailure` cannot express: a paid
+ * search API with an empty balance accepts the key and refuses every request,
+ * and reporting that as a transport fault sends the operator to retry a dead
+ * account instead of topping it up. `search` throws the message, so the
+ * provider's own words reach the agent as the `search-failed` detail.
+ */
+function deepseekFailure(response: SandboxedWebResponse): { reason: NonNullable<SearchConnectionResult["reason"]>; message: string } | undefined {
+  if (response.ok && response.status >= 200 && response.status < 300) return undefined;
+  const status = response.status;
+  if (status === 401) return { reason: "missing-credential", message: "DeepSeek rejected the API key (HTTP 401)" };
+  if (status === 402) return { reason: "insufficient-balance", message: "DeepSeek refused the search for insufficient balance (HTTP 402): top up the account, then retry" };
+  if (status === 429) return { reason: "rate-limited", message: "rate limited by DeepSeek (HTTP 429): wait a few minutes before retrying" };
+  if (status === 0) return { reason: "transport-failed", message: `DeepSeek request failed before a response (${response.error ?? "transport-failed"})` };
+  return { reason: "transport-failed", message: `DeepSeek request failed (HTTP ${status})` };
+}
+
+/**
+ * DeepSeek authenticates with `Authorization: Bearer <key>`, and the worker
+ * sends a header credential verbatim — so the scheme is added here, at the one
+ * place that knows this provider's header format.
+ */
+function bearer(key: CredentialInjection | undefined): CredentialInjection | undefined {
+  return key === undefined ? undefined : { ...key, value: `Bearer ${key.value}` };
+}
+
+function deepseekSearchRequest(query: string, key: CredentialInjection): SandboxedWebRequest {
+  return {
+    providerId: "deepseek",
+    capability: "public-search",
+    url: DEEPSEEK_SEARCH_URL,
+    method: "POST",
+    query,
+    body: { query, count: MAX_RESULTS },
+    credential: key,
+  };
+}
+
+/**
+ * The Fetch API's own failures, worded for an agent that must not retry a
+ * permanent one: 403 is the provider's security policy, 404 is "no usable page
+ * content" (deepseek.com documents both as the target's fault, not the key's).
+ */
+function deepseekFetchFailure(response: SandboxedWebResponse): string | undefined {
+  if (response.ok && response.status >= 200 && response.status < 300) return undefined;
+  switch (response.status) {
+    case 401:
+      return "DeepSeek rejected the API key (HTTP 401)";
+    case 402:
+      return "DeepSeek refused the fetch for insufficient balance (HTTP 402): top up the account, then retry";
+    case 403:
+      return "the provider's security policy rejected this URL (HTTP 403)";
+    case 404:
+      return "the provider could not retrieve usable page content (HTTP 404)";
+    case 429:
+      return "rate limited by DeepSeek (HTTP 429): wait a few minutes before retrying";
+    case 0:
+      return `DeepSeek request failed before a response (${response.error ?? "transport-failed"})`;
+    default:
+      return `DeepSeek fetch failed (HTTP ${response.status})`;
+  }
+}
+
+function deepseekFetchRequest(url: string, key: CredentialInjection): SandboxedWebRequest {
+  return {
+    providerId: "deepseek",
+    capability: "public-search",
+    url: DEEPSEEK_FETCH_URL,
+    method: "POST",
+    body: { url },
+    credential: key,
+  };
 }
 
 export class SearchProviderRegistry {
@@ -212,7 +291,7 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
   const apiKeyLabel = (displayName: string): string =>
     /\bAPI$/.test(displayName) ? `${displayName} key` : `${displayName} API key`;
 
-  const remote = (id: Exclude<SearchProviderId, "searxng" | "duckduckgo">, displayName: string, endpoint: string, injection: CredentialInjection["injection"], name: string, mapping: { title: string; url: string; snippet: string; date?: string }): SearchProviderDescriptor => ({
+  const remote = (id: Exclude<SearchProviderId, "searxng" | "duckduckgo" | "deepseek">, displayName: string, endpoint: string, injection: CredentialInjection["injection"], name: string, mapping: { title: string; url: string; snippet: string; date?: string }): SearchProviderDescriptor => ({
     id,
     displayName,
     kind: "remote",
@@ -240,16 +319,83 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
     },
   });
 
+  // DeepSeek is hand-written rather than a `remote(...)` call: three things
+  // differ. The credential crosses as a Bearer header, a non-2xx status has to
+  // name the fix (402 = top up), and the model gets `summary` — the 600-800
+  // character field documented "for a model" — rather than `snippet`, which
+  // DeepSeek defines as 100-200 characters "for display in a UI".
+  const deepseek: SearchProviderDescriptor = {
+    id: "deepseek",
+    displayName: "DeepSeek Search",
+    kind: "remote",
+    fields: [],
+    defaults: {},
+    credentialSchema: { required: true, label: "DeepSeek API key", secret: true },
+    documentationUrl: DEEPSEEK_DOCS_URL,
+    capabilities: { localLoopback: false, supportsPublicationDate: true },
+    async testConnection(_fields) {
+      const key = bearer(credential("deepseek", resolveCredential, "header", "Authorization"));
+      if (key === undefined) return { ok: false, reason: "missing-credential" };
+      const response = await transport.request(deepseekSearchRequest("keryx healthcheck", key));
+      const failed = deepseekFailure(response);
+      if (failed !== undefined) return { ok: false, reason: failed.reason };
+      const parsed = parseResponse(response);
+      return parsed !== undefined && isUsableConnectionPayload("deepseek", parsed)
+        ? { ok: true }
+        : { ok: false, reason: "incompatible-response" };
+    },
+    async search(_fields, query, signal) {
+      const key = bearer(credential("deepseek", resolveCredential, "header", "Authorization"));
+      if (key === undefined) return { query, providerId: "deepseek", results: [] };
+      const response = await transport.request({ ...deepseekSearchRequest(query, key), ...(signal ? { signal } : {}) });
+      // A refusal is not an empty SERP: thrown, the provider's own words reach
+      // the caller as the `search-failed` detail, so 402 and 429 stop reading
+      // like "nothing found".
+      const failed = deepseekFailure(response);
+      if (failed !== undefined) throw new Error(failed.message);
+      const parsed = parseResponse(response);
+      return normalize("deepseek", query, parsed === undefined ? [] : resultsFrom(parsed), { title: "title", url: "url", snippet: "summary", date: "date" });
+    },
+    async fetchPage(url, signal) {
+      // The sandbox transport validates the host it actually connects to; on
+      // this path that host is DeepSeek's, so the TARGET is validated here —
+      // same promise `web_fetch` always made: absolute public HTTPS, no
+      // credentials, no loopback or private host.
+      const target = parsePublicHttpsUrl(url);
+      if (!target.ok) return { ok: false, reason: "fetch-failed", detail: target.reason };
+      const key = bearer(credential("deepseek", resolveCredential, "header", "Authorization"));
+      if (key === undefined) return { ok: false, reason: "fetch-failed", detail: "missing DeepSeek API key" };
+      const response = await transport.request({ ...deepseekFetchRequest(target.value.toString(), key), ...(signal ? { signal } : {}) });
+      const failure = deepseekFetchFailure(response);
+      if (failure !== undefined) return { ok: false, reason: "fetch-failed", detail: failure };
+      const parsed = parseResponse(response);
+      const record = typeof parsed === "object" && parsed !== null ? parsed as { title?: unknown; content?: unknown } : undefined;
+      if (typeof record?.content !== "string" || record.content.length === 0) {
+        return { ok: false, reason: "fetch-failed", detail: "the provider returned no page content" };
+      }
+      return {
+        ok: true,
+        value: {
+          providerId: "deepseek",
+          url: target.value.toString(),
+          title: typeof record.title === "string" ? record.title : "",
+          text: record.content,
+        },
+      };
+    },
+  };
+
   return new SearchProviderRegistry([
     duckduckgo,
     searxng,
     remote("brave", "Brave Search API", "https://api.search.brave.com/res/v1/web/search", "header", "X-Subscription-Token", { title: "title", url: "url", snippet: "description" }),
     remote("tavily", "Tavily", "https://api.tavily.com/search", "json-body", "api_key", { title: "title", url: "url", snippet: "content", date: "published_date" }),
     remote("exa", "Exa", "https://api.exa.ai/search", "header", "x-api-key", { title: "title", url: "url", snippet: "text", date: "publishedDate" }),
+    deepseek,
   ]);
 }
 
-function remoteRequest(providerId: Exclude<SearchProviderId, "searxng" | "duckduckgo">, endpoint: string, query: string, key: CredentialInjection): SandboxedWebRequest {
+function remoteRequest(providerId: Exclude<SearchProviderId, "searxng" | "duckduckgo" | "deepseek">, endpoint: string, query: string, key: CredentialInjection): SandboxedWebRequest {
   if (providerId === "brave") {
     return { providerId, capability: "public-search", url: `${endpoint}?q=${encodeURIComponent(query)}`, method: "GET", query, credential: key };
   }

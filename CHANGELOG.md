@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- **DeepSeek Search as a search provider.** `/search-provider deepseek` connects DeepSeek's Search API to `web_search`, reusing the API key already saved for the `deepseek` chat-model provider when no separate search key is stored. Results use DeepSeek's model-facing `summary` and publication date. A paid account out of credit now reports `insufficient balance` (HTTP 402) instead of a generic connection failure, and a refused search carries the provider's own words rather than an empty result set.
+- **`web_fetch` through DeepSeek's Fetch API.** While DeepSeek is the active provider, `web_fetch` retrieves the page as Markdown from `/v1/tools/fetch` instead of scraping HTML; the content still goes through the injection scan, secret redaction and the untrusted banner. Every other provider leaves `web_fetch` on the sandbox transport, and a provider that refuses a page is reported rather than silently replaced.
+
+### Changed
+- **`/search-provider <id>` connects in one step.** A successful connection test now also makes that provider active, so `web_search` (and `web_fetch`, for providers that retrieve pages) uses it immediately. `/search-connect` still switches between connected providers.
+
 ## [0.4.11] - 2026-11-05
 
 ### Fixed
@@ -11,6 +18,7 @@
 
 ### Added
 - **Anthropic in `/connect`.** The Add provider tab always lists Anthropic and accepts `ANTHROPIC_API_KEY` through the same key form as other providers. Anthropic appears in model pickers and status only after a key is set in the environment or saved configuration.
+
 
 ## [0.4.9] - 2026-11-03
 

@@ -35,7 +35,7 @@ export interface SandboxedWebResponse {
   error?: "cancelled" | "timeout" | "policy-denied" | "transport-failed" | "malformed-response";
 }
 
-export type SearchProviderId = "duckduckgo" | "searxng" | "brave" | "tavily" | "exa";
+export type SearchProviderId = "duckduckgo" | "searxng" | "brave" | "tavily" | "exa" | "deepseek";
 export const DEFAULT_SEARCH_PROVIDER_ID: SearchProviderId = "duckduckgo";
 export type SearchProviderKind = "local" | "remote";
 
@@ -86,7 +86,12 @@ export interface SearchResponse {
 
 export interface SearchConnectionResult {
   ok: boolean;
-  reason?: "missing-credential" | "transport-failed" | "incompatible-response" | "rate-limited";
+  /**
+   * `insufficient-balance` exists because a paid search API can accept the key
+   * and still refuse every request (DeepSeek answers HTTP 402). Reported as a
+   * transport fault it sends the operator to retry a dead account.
+   */
+  reason?: "missing-credential" | "transport-failed" | "incompatible-response" | "rate-limited" | "insufficient-balance";
 }
 
 export interface SearchProviderConnectionState {
@@ -106,6 +111,26 @@ export interface SearchProviderDescriptor {
   capabilities: SearchProviderCapabilities;
   testConnection(fields: Record<string, string>): Promise<SearchConnectionResult>;
   search(fields: Record<string, string>, query: string, signal?: AbortSignal): Promise<SearchResponse>;
+  /**
+   * Optional: a provider that retrieves a page itself, as Markdown (DeepSeek's
+   * Fetch API). Absent — every provider but DeepSeek — `web_fetch` keeps using
+   * the sandbox transport, which is what it did before this capability existed.
+   */
+  fetchPage?(url: string, signal?: AbortSignal): Promise<ProviderPageResult>;
 }
+
+/** A page a provider retrieved for `web_fetch`, before the caller sanitizes it. */
+export interface ProviderPage {
+  providerId: SearchProviderId;
+  url: string;
+  title: string;
+  text: string;
+}
+
+export type ProviderPageResult =
+  | { ok: true; value: ProviderPage }
+  /** The active provider does not retrieve pages: the caller falls back to the sandbox transport. */
+  | { ok: false; reason: "no-fetch-provider" }
+  | { ok: false; reason: "fetch-failed"; detail?: string };
 
 export type SearchCredentialResolver = (providerId: SearchProviderId) => string | undefined;

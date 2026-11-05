@@ -18,6 +18,8 @@ export function describeConnectionFailure(reason: SearchConnectionResult["reason
       return "rate limited — the provider served its bot page to this machine; retrying will not help";
     case "incompatible-response":
       return "the endpoint answered, but not with search results";
+    case "insufficient-balance":
+      return "insufficient balance — the key works, but the account has no credit for a paid search; top up and retest";
     case "transport-failed":
     default:
       return "connection validation failed";

@@ -10,6 +10,9 @@ describe("search connection failure wording", () => {
     expect(describeConnectionFailure(undefined)).toBe("connection validation failed");
     expect(describeConnectionFailure("incompatible-response")).toContain("not with search results");
     expect(describeConnectionFailure("rate-limited")).toContain("rate limited");
+    // A paid provider can accept the key and still refuse every request; that
+    // must not read like a network fault an operator can retry away.
+    expect(describeConnectionFailure("insufficient-balance")).toContain("insufficient balance");
   });
 
   test("a rate limit never reads as a generic connection failure", () => {

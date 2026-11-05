@@ -10039,8 +10039,18 @@ export async function launchTuiAgentShell(opts: {
               );
               return;
             }
+            // A successful test IS the connect gesture: making the operator
+            // type a second command to actually use the provider they just
+            // connected was the part of "connect" nobody expected.
+            // `/search-connect` still switches back at any time.
+            const selected = await searchProviderController.select(providerId);
+            // A provider that retrieves pages itself also takes over
+            // `web_fetch`; saying so is the only warning the operator gets.
+            const scope = descriptor.fetchPage === undefined ? "" : " (web_search and web_fetch)";
             io.onSystem?.(
-              `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
+              selected.ok
+                ? `Connected '${providerId}' and made it the active search provider${scope}. /search-connect duckduckgo switches back.\n`
+                : `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
             );
           })());
           return;
