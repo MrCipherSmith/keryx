@@ -340,6 +340,16 @@ test("the core entry is built by the release, with the same flags the CLI ships 
   expect(coreFlags).toEqual(cliFlags);
 });
 
+test("the release builds the review worker beside the CLI", async () => {
+  const entry = "src/commands/review-agents-runtime/keryx-general-worker-entry.ts";
+  const outDir = path.join(root, "review-worker");
+  const build = releaseBuildFor(entry, outDir);
+  const graph = await shippedGraph(build.tokens, outDir);
+  expect(build.flags).toEqual(cliFlags);
+  expect(graph).toContain(entry);
+  expect(await Bun.file(path.join(outDir, "keryx-general-worker-entry.js")).exists()).toBe(true);
+}, 30_000);
+
 test("the core entry's shipped graph was really read (sentinel against an empty measurement)", () => {
   expect(coreGraph.length).toBeGreaterThan(100);
   // Proven by its DEPENDENCIES, not by its own name: whether an entry module
