@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ReviewV3Controller, createLargeReviewConfig } from "../review/v3";
-import { startExternalBridgeSocketServer } from "../review/v3-external-transport";
-import { createReviewV3CliFactory, reviewV3CliFactoryFromEnv, runReviewV3Command, type ReviewV3CliController, type ReviewV3CliFactory } from "./review-agents";
+import { ReviewAgentController, createLargeReviewConfig } from "../review/agents";
+import { startExternalBridgeSocketServer } from "../review/agents/external-transport";
+import { createReviewAgentCliFactory, reviewAgentsCliFactoryFromEnv, runReviewAgentsCommand, type ReviewAgentCliController, type ReviewAgentCliFactory } from "./review-agents";
 
-function controller(): ReviewV3CliController & { calls: Array<[string, unknown]> } {
+function controller(): ReviewAgentCliController & { calls: Array<[string, unknown]> } {
   const calls: Array<[string, unknown]> = [];
   return {
     calls,
@@ -19,21 +19,21 @@ function controller(): ReviewV3CliController & { calls: Array<[string, unknown]>
   };
 }
 
-function harness(c: ReviewV3CliController = controller()) {
+function harness(c: ReviewAgentCliController = controller()) {
   const opened: string[] = [];
   const out: string[] = [];
   const err: string[] = [];
-  const factory: ReviewV3CliFactory = {
+  const factory: ReviewAgentCliFactory = {
     open: async (runDir) => {
       opened.push(runDir);
       return c;
     },
   };
-  const run = (args: string[]) => runReviewV3Command(args, { factory, log: (line) => out.push(line), error: (line) => err.push(line) });
+  const run = (args: string[]) => runReviewAgentsCommand(args, { factory, log: (line) => out.push(line), error: (line) => err.push(line) });
   return { run, opened, out, err, controller: c };
 }
 
-describe("review v3 CLI", () => {
+describe("review agents CLI", () => {
   test("requires an explicit contained run directory for every operation", async () => {
     const h = harness();
     expect(await h.run(["status"])).toBe(1);
@@ -42,26 +42,26 @@ describe("review v3 CLI", () => {
   });
 
   test("start requires explicit config, allowlists and cost mode, then delegates creation to the host", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "review-v3-cli-start-"));
+    const root = mkdtempSync(path.join(tmpdir(), "review-agents-cli-start-"));
     try {
       const configFile = path.join(root, "config.json");
       const config = createLargeReviewConfig({ allowedAdapters: ["native"], allowedEntities: ["review-worker"], allowedSkills: ["review-logic"], costMode: "cost-unknown" });
       writeFileSync(configFile, JSON.stringify(config));
       const created: unknown[] = [];
       const c = controller();
-      const factory: ReviewV3CliFactory = {
+      const factory: ReviewAgentCliFactory = {
         open: async () => c,
         create: async (runDir, input) => (created.push({ runDir, input }), c),
       };
       const out: string[] = [];
-      expect(await runReviewV3Command(["start", "--run-dir", path.join(root, "run"), "--run-id", "r-1", "--revision", "abc", "--config", configFile], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
+      expect(await runReviewAgentsCommand(["start", "--run-dir", path.join(root, "run"), "--run-id", "r-1", "--revision", "abc", "--config", configFile], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
       expect(created).toEqual([{ runDir: path.join(root, "run"), input: { runId: "r-1", revision: "abc", config } }]);
       expect(JSON.parse(out[0]!)).toEqual({ state: "running" });
 
       const unsafeFile = path.join(root, "unsafe.json");
       writeFileSync(unsafeFile, JSON.stringify({ ...config, authority: "admin" }));
       created.length = 0;
-      expect(await runReviewV3Command(["start", "--run-dir", path.join(root, "unsafe"), "--run-id", "r-2", "--revision", "abc", "--config", unsafeFile], { factory, log: () => {}, error: () => {} })).toBe(1);
+      expect(await runReviewAgentsCommand(["start", "--run-dir", path.join(root, "unsafe"), "--run-id", "r-2", "--revision", "abc", "--config", unsafeFile], { factory, log: () => {}, error: () => {} })).toBe(1);
       expect(created).toEqual([]);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -69,7 +69,7 @@ describe("review v3 CLI", () => {
   });
 
   test("plan registers raw responsibility and waves through the host-owned factory", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "review-v3-cli-plan-"));
+    const root = mkdtempSync(path.join(tmpdir(), "review-agents-cli-plan-"));
     try {
       const runDir = path.join(root, "run");
       const config = createLargeReviewConfig({
@@ -77,7 +77,7 @@ describe("review v3 CLI", () => {
         allowedEntities: ["review-coordinator", "review-worker"],
         allowedSkills: ["review-logic"],
       });
-      const factory = createReviewV3CliFactory({
+      const factory = createReviewAgentCliFactory({
         adapters: [],
         authority: { authorize: () => true },
         ownerId: "cli-plan-owner",
@@ -100,7 +100,7 @@ describe("review v3 CLI", () => {
         waves: [{ waveId: "wave-1", reviewRound: 1, assignmentIds: ["general-1"] }],
       }));
       const out: string[] = [];
-      expect(await runReviewV3Command(["plan", "--run-dir", runDir, "--payload", payload], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
+      expect(await runReviewAgentsCommand(["plan", "--run-dir", runDir, "--payload", payload], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
       const registration = JSON.parse(out[0]!);
       expect(registration).toMatchObject({ planVersion: 1, revision: "a".repeat(40), waves: [{ waveId: "wave-1", reviewRound: 1 }] });
       expect(registration.planHash).toMatch(/^[a-f0-9]{64}$/);
@@ -111,7 +111,7 @@ describe("review v3 CLI", () => {
       const unsafePayload = path.join(runDir, "unsafe-plan.json");
       const decoded = JSON.parse(readFileSync(payload, "utf8"));
       writeFileSync(unsafePayload, JSON.stringify({ ...decoded, planHash: "caller-controlled" }));
-      expect(await runReviewV3Command(["plan", "--run-dir", runDir, "--payload", unsafePayload], { factory, log: () => {}, error: () => {} })).toBe(1);
+      expect(await runReviewAgentsCommand(["plan", "--run-dir", runDir, "--payload", unsafePayload], { factory, log: () => {}, error: () => {} })).toBe(1);
       await liveController.close?.();
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -119,20 +119,20 @@ describe("review v3 CLI", () => {
   });
 
   test("status-only and scoped descendant factories cannot register a root plan", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "review-v3-cli-plan-refusal-"));
+    const root = mkdtempSync(path.join(tmpdir(), "review-agents-cli-plan-refusal-"));
     try {
       const payload = path.join(root, "plan.json");
       writeFileSync(payload, JSON.stringify({ version: 1, plan: { revision: "a".repeat(40), planVersion: 1, areas: [], boundaries: [], assignments: [] }, waves: [] }));
       for (const factory of [
-        reviewV3CliFactoryFromEnv({}),
-        reviewV3CliFactoryFromEnv({
-          KERYX_REVIEW_V3_BRIDGE_SOCKET: "/tmp/not-used.sock",
-          KERYX_REVIEW_V3_BRIDGE_TOKEN: "scoped-review-v3-token-0123456789abcdef",
-          KERYX_REVIEW_V3_BRIDGE_RUN_DIR: root,
+        reviewAgentsCliFactoryFromEnv({}),
+        reviewAgentsCliFactoryFromEnv({
+          KERYX_REVIEW_AGENTS_BRIDGE_SOCKET: "/tmp/not-used.sock",
+          KERYX_REVIEW_AGENTS_BRIDGE_TOKEN: "scoped-review-agents-token-0123456789abcdef",
+          KERYX_REVIEW_AGENTS_BRIDGE_RUN_DIR: root,
         }),
       ]) {
         const errors: string[] = [];
-        expect(await runReviewV3Command(["plan", "--run-dir", root, "--payload", payload], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
+        expect(await runReviewAgentsCommand(["plan", "--run-dir", root, "--payload", payload], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
         expect(errors.join("\n")).toContain("host has no plan-registration binding");
       }
     } finally {
@@ -142,20 +142,20 @@ describe("review v3 CLI", () => {
 
   test("opens the durable run and prints one JSON value", async () => {
     const h = harness();
-    expect(await h.run(["capabilities", "--run-dir", "/tmp/review-v3", "--adapter", "native"])).toBe(0);
-    expect(h.opened).toEqual(["/tmp/review-v3"]);
+    expect(await h.run(["capabilities", "--run-dir", "/tmp/review-agents", "--adapter", "native"])).toBe(0);
+    expect(h.opened).toEqual(["/tmp/review-agents"]);
     expect(JSON.parse(h.out[0]!)).toEqual({ adapters: ["native"] });
     expect((h.controller as ReturnType<typeof controller>).calls).toEqual([["capabilities", "native"]]);
   });
 
   test("status accepts an optional dispatch id", async () => {
     const h = harness();
-    expect(await h.run(["status", "--run-dir=/tmp/review-v3", "--dispatch", "d-7"])).toBe(0);
+    expect(await h.run(["status", "--run-dir=/tmp/review-agents", "--dispatch", "d-7"])).toBe(0);
     expect((h.controller as ReturnType<typeof controller>).calls).toEqual([["status", "d-7"]]);
   });
 
   test("spawn reads a versioned payload and rejects unknown or authority fields before opening", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "review-v3-cli-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "review-agents-cli-"));
     try {
       const good = path.join(dir, "good.json");
       writeFileSync(good, JSON.stringify({ version: 1, taskId: "t-1", task: "Review scope s-1", attempt: 1, entity: "review-worker", role: "worker", skillRef: "review-logic", adapterId: "native", scopeIds: ["s-1"] }));
@@ -194,16 +194,16 @@ describe("review v3 CLI", () => {
     expect(await h.run(["launch", "--run-dir", "/tmp/r"])).toBe(1);
     expect(await h.run(["status", "--run-dir", "/tmp/r", "--surprise"])).toBe(1);
 
-    const unavailable: ReviewV3CliFactory = { open: async () => { throw new Error("V3 runtime adapter unavailable"); } };
+    const unavailable: ReviewAgentCliFactory = { open: async () => { throw new Error("Review agent runtime adapter unavailable"); } };
     const errors: string[] = [];
-    expect(await runReviewV3Command(["status", "--run-dir", "/tmp/r"], { factory: unavailable, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
+    expect(await runReviewAgentsCommand(["status", "--run-dir", "/tmp/r"], { factory: unavailable, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
     expect(errors.join("\n")).toContain("runtime adapter unavailable");
   });
 
   test("the production factory opens durable state with explicit host authority", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "review-v3-cli-controller-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "review-agents-cli-controller-"));
     try {
-      await ReviewV3Controller.create({
+      await ReviewAgentController.create({
         storageDir: dir,
         runId: "cli-run",
         revision: "abc123",
@@ -213,17 +213,17 @@ describe("review v3 CLI", () => {
         ownerId: "creator",
       });
       const out: string[] = [];
-      const factory = createReviewV3CliFactory({ adapters: [], authority: { authorize: () => false } });
+      const factory = createReviewAgentCliFactory({ adapters: [], authority: { authorize: () => false } });
       const liveController = await factory.open(dir);
       expect(liveController).toBe(await factory.open(dir));
-      expect(await runReviewV3Command(["status", "--run-dir", dir], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
+      expect(await runReviewAgentsCommand(["status", "--run-dir", dir], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
       expect(JSON.parse(out[0]!).runId).toBe("cli-run");
 
       const payload = path.join(dir, "spawn.json");
       writeFileSync(payload, JSON.stringify({ version: 1, taskId: "t", attempt: 1, entity: "review-worker", role: "worker", adapterId: "native", scopeIds: [] }));
       const errors: string[] = [];
       const spawnOut: string[] = [];
-      expect(await runReviewV3Command(["spawn", "--run-dir", dir, "--payload", payload], { factory, log: (line) => spawnOut.push(line), error: (line) => errors.push(line) })).toBe(1);
+      expect(await runReviewAgentsCommand(["spawn", "--run-dir", dir, "--payload", payload], { factory, log: (line) => spawnOut.push(line), error: (line) => errors.push(line) })).toBe(1);
       // Admission refusals retain their structured result and fail the shell command.
       expect(errors).toEqual([]);
       expect(JSON.parse(spawnOut[0]!)).toMatchObject({ ok: false, code: "run_closed" });
@@ -234,15 +234,15 @@ describe("review v3 CLI", () => {
   });
 
   test("start cannot exceed the config ceiling injected by the host", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "review-v3-cli-ceiling-"));
+    const root = mkdtempSync(path.join(tmpdir(), "review-agents-cli-ceiling-"));
     try {
       const ceiling = createLargeReviewConfig({ allowedAdapters: ["native"], allowedEntities: ["review-worker"], allowedSkills: ["review-logic"], fallbackPolicy: "refuse", costMode: "cost-unknown" });
       const requested = { ...ceiling, runCeilings: { ...ceiling.runCeilings, maxLaunches: ceiling.runCeilings.maxLaunches + 1 } };
       const configFile = path.join(root, "config.json");
       writeFileSync(configFile, JSON.stringify(requested));
-      const factory = createReviewV3CliFactory({ adapters: [], authority: { authorize: () => false }, configCeiling: ceiling, ownerId: "cli-test" });
+      const factory = createReviewAgentCliFactory({ adapters: [], authority: { authorize: () => false }, configCeiling: ceiling, ownerId: "cli-test" });
       const errors: string[] = [];
-      expect(await runReviewV3Command(["start", "--run-dir", path.join(root, "run"), "--run-id", "r", "--revision", "abc", "--config", configFile], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
+      expect(await runReviewAgentsCommand(["start", "--run-dir", path.join(root, "run"), "--run-id", "r", "--revision", "abc", "--config", configFile], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
       expect(errors.join("\n")).toContain("maxLaunches exceeds host ceiling");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -250,10 +250,10 @@ describe("review v3 CLI", () => {
   });
 
   test("an external CLI uses only its scoped host bridge and cannot switch run directories", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "review-v3-cli-bridge-"));
-    const other = mkdtempSync(path.join(tmpdir(), "review-v3-cli-other-"));
+    const root = mkdtempSync(path.join(tmpdir(), "review-agents-cli-bridge-"));
+    const other = mkdtempSync(path.join(tmpdir(), "review-agents-cli-other-"));
     const requests: unknown[] = [];
-    const token = "scoped-review-v3-token-0123456789abcdef";
+    const token = "scoped-review-agents-token-0123456789abcdef";
     const server = await startExternalBridgeSocketServer({
       runDir: root,
       bridge: {
@@ -266,9 +266,9 @@ describe("review v3 CLI", () => {
     try {
       const payload = path.join(root, "spawn.json");
       writeFileSync(payload, JSON.stringify({ version: 1, taskId: "child-task", attempt: 1, entity: "review-worker", role: "worker", adapterId: "native", scopeIds: ["scope-1"] }));
-      const factory = reviewV3CliFactoryFromEnv(server.envFor(token));
+      const factory = reviewAgentsCliFactoryFromEnv(server.envFor(token));
       const out: string[] = [];
-      expect(await runReviewV3Command(["spawn", "--run-dir", root, "--payload", payload], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
+      expect(await runReviewAgentsCommand(["spawn", "--run-dir", root, "--payload", payload], { factory, log: (line) => out.push(line), error: () => {} })).toBe(0);
       expect(JSON.parse(out[0]!)).toEqual({ ok: true, dispatchId: "child-1", reused: false });
       expect(requests).toEqual([{
         receivedToken: token,
@@ -279,8 +279,8 @@ describe("review v3 CLI", () => {
       }]);
 
       const errors: string[] = [];
-      expect(await runReviewV3Command(["capabilities", "--run-dir", other], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
-      expect(errors.join("\n")).toContain("does not match the scoped review V3 bridge grant");
+      expect(await runReviewAgentsCommand(["capabilities", "--run-dir", other], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
+      expect(errors.join("\n")).toContain("does not match the scoped review agents bridge grant");
       expect(requests).toHaveLength(1);
     } finally {
       await server.close();
@@ -290,30 +290,30 @@ describe("review v3 CLI", () => {
   });
 
   test("a partial bridge environment fails closed", async () => {
-    const factory = reviewV3CliFactoryFromEnv({ KERYX_REVIEW_V3_BRIDGE_SOCKET: "/tmp/missing.sock" });
+    const factory = reviewAgentsCliFactoryFromEnv({ KERYX_REVIEW_AGENTS_BRIDGE_SOCKET: "/tmp/missing.sock" });
     const errors: string[] = [];
-    expect(await runReviewV3Command(["status", "--run-dir", "/tmp/review-v3"], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
+    expect(await runReviewAgentsCommand(["status", "--run-dir", "/tmp/review-agents"], { factory, log: () => {}, error: (line) => errors.push(line) })).toBe(1);
     expect(errors.join("\n")).toContain("bridge environment is incomplete");
   });
 
   test("a root terminal environment selects the full host factory and cannot mix with a descendant grant", () => {
-    const runsRoot = mkdtempSync(path.join(tmpdir(), "review-v3-root-runs-"));
+    const runsRoot = mkdtempSync(path.join(tmpdir(), "review-agents-root-runs-"));
     const rootEnvironment = {
-      KERYX_REVIEW_V3_ROOT_SOCKET: "/tmp/review-v3-root.sock",
-      KERYX_REVIEW_V3_ROOT_TOKEN: "root-review-v3-token-0123456789abcdef",
-      KERYX_REVIEW_V3_ROOT_RUNS_ROOT: runsRoot,
+      KERYX_REVIEW_AGENTS_ROOT_SOCKET: "/tmp/review-agents-root.sock",
+      KERYX_REVIEW_AGENTS_ROOT_TOKEN: "root-review-agents-token-0123456789abcdef",
+      KERYX_REVIEW_AGENTS_ROOT_RUNS_ROOT: runsRoot,
     };
     try {
-      const factory = reviewV3CliFactoryFromEnv(rootEnvironment);
+      const factory = reviewAgentsCliFactoryFromEnv(rootEnvironment);
       expect(factory.create).toBeFunction();
       expect(factory.registerPlan).toBeFunction();
-      expect(() => reviewV3CliFactoryFromEnv({ KERYX_REVIEW_V3_ROOT_SOCKET: "/tmp/review-v3-root.sock" })).toThrow("root environment is incomplete");
-      expect(() => reviewV3CliFactoryFromEnv({ KERYX_REVIEW_V3_ROOT_RUNS_ROOT: runsRoot })).toThrow("root environment is incomplete");
-      expect(() => reviewV3CliFactoryFromEnv({
+      expect(() => reviewAgentsCliFactoryFromEnv({ KERYX_REVIEW_AGENTS_ROOT_SOCKET: "/tmp/review-agents-root.sock" })).toThrow("root environment is incomplete");
+      expect(() => reviewAgentsCliFactoryFromEnv({ KERYX_REVIEW_AGENTS_ROOT_RUNS_ROOT: runsRoot })).toThrow("root environment is incomplete");
+      expect(() => reviewAgentsCliFactoryFromEnv({
         ...rootEnvironment,
-        KERYX_REVIEW_V3_BRIDGE_SOCKET: "/tmp/review-v3-child.sock",
-        KERYX_REVIEW_V3_BRIDGE_TOKEN: "child-review-v3-token-0123456789abcdef",
-        KERYX_REVIEW_V3_BRIDGE_RUN_DIR: "/tmp/review-v3-run",
+        KERYX_REVIEW_AGENTS_BRIDGE_SOCKET: "/tmp/review-agents-child.sock",
+        KERYX_REVIEW_AGENTS_BRIDGE_TOKEN: "child-review-agents-token-0123456789abcdef",
+        KERYX_REVIEW_AGENTS_BRIDGE_RUN_DIR: "/tmp/review-agents-run",
       })).toThrow("cannot be combined");
     } finally {
       rmSync(runsRoot, { recursive: true, force: true });

@@ -42,12 +42,12 @@ test("native run-scope stop leaves another run's and an unowned job running", as
   } finally { await runtime.stop(); await rm(cwd, { recursive: true, force: true }); }
 });
 
-test("native run-scope stop does not close unrelated session-owned Review V3 runs", async () => {
+test("native run-scope stop does not close unrelated session-owned Review agents runs", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-runtime-v3-scope-"));
   let closes = 0;
   const runtime = createNativeSessionRuntime({
     cwd, provider: scriptedProvider([okReply]).provider, providerId: "scripted", modelId: "m",
-    reviewV3HostFactory: () => ({
+    reviewAgentsHostFactory: () => ({
       tools: () => [],
       controller: async () => { throw new Error("not used"); },
       close: async () => { closes += 1; return { stopped: true, activeRunIds: [] }; },

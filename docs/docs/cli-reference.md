@@ -4965,16 +4965,16 @@ review's own commands without a prompt — see
 [Automatic review](guides/permission-modes.md#automatic-review).
 
 ```text
-keryx review v3 serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
                       --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
-keryx review v3 start --run-dir <dir> --run-id <id> --revision <git-revision> --config <json>
-keryx review v3 plan --run-dir <dir> --payload <json>
-keryx review v3 capabilities --run-dir <dir> [--adapter <id>]
-keryx review v3 status --run-dir <dir> [--dispatch <id>]
-keryx review v3 spawn --run-dir <dir> --payload <json>
-keryx review v3 wait --run-dir <dir> --dispatch <id>
-keryx review v3 cancel --run-dir <dir> [--dispatch <id>] --reason <text>
-keryx review v3 result --run-dir <dir> --dispatch <id>
+keryx review agents start --run-dir <dir> --run-id <id> --revision <git-revision> --config <json>
+keryx review agents plan --run-dir <dir> --payload <json>
+keryx review agents capabilities --run-dir <dir> [--adapter <id>]
+keryx review agents status --run-dir <dir> [--dispatch <id>]
+keryx review agents spawn --run-dir <dir> --payload <json>
+keryx review agents wait --run-dir <dir> --dispatch <id>
+keryx review agents cancel --run-dir <dir> [--dispatch <id>] --reason <text>
+keryx review agents result --run-dir <dir> --dispatch <id>
 keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                     [--reviewers a,b] [--report <path>] [--automatic]
 keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--style] [--with-role <role>]
@@ -5069,8 +5069,8 @@ keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROV
 ```
 
 Review V3 uses one foreground owner process for ordinary terminals and external harnesses. `serve` prints an explicit
-Unix-socket handshake containing `KERYX_REVIEW_V3_ROOT_SOCKET`, `KERYX_REVIEW_V3_ROOT_TOKEN`, and
-`KERYX_REVIEW_V3_ROOT_RUNS_ROOT`; export all three only into the controlling Codex CLI, Claude Code, or other harness.
+Unix-socket handshake containing `KERYX_REVIEW_AGENTS_ROOT_SOCKET`, `KERYX_REVIEW_AGENTS_ROOT_TOKEN`, and
+`KERYX_REVIEW_AGENTS_ROOT_RUNS_ROOT`; export all three only into the controlling Codex CLI, Claude Code, or other harness.
 The bearer grants the fixed host ceiling selected at `serve` startup, so do not persist it in configuration, logs, or
 child-agent environments. Root commands fail closed on a partial environment. Descendant agents receive a different,
 run-scoped bridge grant and cannot combine it with the root environment.

@@ -1,5 +1,5 @@
 # Review V3: отчёт реализации
-Version: 0.1.0
+Version: 0.1.1
 
 Статус: реализация и финальная проверка в процессе. Этот отчёт не является подтверждением выпуска или live benchmark.
 
@@ -8,10 +8,10 @@ Version: 0.1.0
 - Каталог agent schema v2 с чтением v1, четыре сущности и явные unsupported constraints при экспорте.
 - Persistent controller: общий ledger, роли/глубина/лимиты, fencing lease, idempotency, cancellation/unresolved, deadlines, recovery, validation priority.
 - Immutable coverage plan и runtime registration: hash/version/revision, зарегистрированные waves/rounds, scope attenuation и plan-bound results/coverage.
-- Native adapter на runAgentTurn и Shell TUI/readline/Hub host с семью review_v3 tools.
+- Native adapter на runAgentTurn и Shell TUI/readline/Hub host с семью review_agents tools.
 - External Keryx adapter: dedicated worker, scoped Unix bridge, OS source/config containment, host-side provider preflight и process-group stop proof.
 - CLI start/plan/spawn/status/wait/result/cancel, authenticated foreground terminal-host для внешнего управляющего harness (финальная интеграционная проверка в процессе).
-- Review-orchestrator explicit opt-in --v3; legacy путь сохраняется default.
+- Review-orchestrator explicit opt-in --hierarchical; legacy путь сохраняется default.
 
 ## Ограничения
 
@@ -21,4 +21,4 @@ OAuth-refresh внутри external worker не разрешён; до стар�
 
 ## Проверки
 
-Детальные команды, финальный verdict и remaining gaps фиксируются в verification.md и job implement-keryx-review-v3. Изолированные и промежуточные зелёные прогоны не заменяют итоговый общий прогон. Реальные провайдеры/платные agents не запускались, auth stores этой работой не менялись. Commit/push/PR/deploy не выполнены.
+Детальные команды, финальный verdict и remaining gaps фиксируются в verification.md и job implement-keryx-review-agents. Изолированные и промежуточные зелёные прогоны не заменяют итоговый общий прогон. Реальные провайдеры/платные agents не запускались, auth stores этой работой не менялись. Commit/push/PR/deploy не выполнены.

@@ -1,5 +1,5 @@
 # Спецификация Keryx Review V3
-Version: 0.3.0
+Version: 0.3.1
 
 Статус: spec ready, D1–D7 приняты; всё целевое поведение ниже planned, кроме явно названного baseline в evidence-and-decisions.md.
 
@@ -97,4 +97,4 @@ Cost-unknown — допустимый operational mode, но он не удов�
 
 ## Реализация и машинные контракты
 
-Фактическая реализация/ограничения описаны в [отчёте реализации](implementation-report.md). Схемы: [config](schemas/review-v3-config.schema.json), [plan](schemas/review-v3-plan.schema.json), [state](schemas/review-v3-state.schema.json). Runtime hand validator дополнительно проверяет семантические связи/authority/fencing; JSON Schema сама по себе не доказывает эти гарантии. Исходные accepted requirements выше сохраняются как целевой контракт, а не blanket claim о паритете всех adapters.
+Фактическая реализация/ограничения описаны в [отчёте реализации](implementation-report.md). Схемы: [config](schemas/review-agents-config.schema.json), [plan](schemas/review-agents-plan.schema.json), [state](schemas/review-agents-state.schema.json). Runtime hand validator дополнительно проверяет семантические связи/authority/fencing; JSON Schema сама по себе не доказывает эти гарантии. Исходные accepted requirements выше сохраняются как целевой контракт, а не blanket claim о паритете всех adapters.

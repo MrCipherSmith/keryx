@@ -58,9 +58,9 @@ test("`keryx shell` is dispatched via shellCommand, and bare `keryx` is not", ()
   expect(cliSource).toMatch(/printHelp\(\)/);
 });
 
-test("`keryx review v3 serve` reaches the public command instead of the unknown-subcommand guard", async () => {
+test("`keryx review agents serve` reaches the public command instead of the unknown-subcommand guard", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
-  const result = await runBunCapture([cliPath, "review", "v3", "serve"]);
+  const result = await runBunCapture([cliPath, "review", "agents", "serve"]);
 
   expect(result.code).toBe(1);
   expect(result.stdout).toBe("");

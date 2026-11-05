@@ -1,5 +1,5 @@
 # Keryx Review V3
-Version: 0.3.0
+Version: 0.3.1
 
 Статус: **spec ready — решения D1–D7 приняты пользователем; реализация запущена отдельным запросом пользователя; финальная проверка в процессе**.
 Дата: 2026-11-05. Идентификатор пакета `keryx-revview-v3` сохраняет написание из запроса пользователя.
@@ -11,7 +11,7 @@ Version: 0.3.0
 ## Документы
 
 - [Отчёт реализации](implementation-report.md): готовые контуры, ограничения и статус проверки.
-- [Config schema](schemas/review-v3-config.schema.json), [Plan schema](schemas/review-v3-plan.schema.json), [State schema](schemas/review-v3-state.schema.json): машинные контракты.
+- [Config schema](schemas/review-agents-config.schema.json), [Plan schema](schemas/review-agents-plan.schema.json), [State schema](schemas/review-agents-state.schema.json): машинные контракты.
 - [PRD](prd.md): требования, пользователи, критерии выпуска и результата.
 - [Спецификация](specification.md): архитектура, сущности, интеграции и приёмка.
 - [Протокол агентов](agent-protocol.md): подготовка, зоны ответственности, выполнение, отмена, восстановление.

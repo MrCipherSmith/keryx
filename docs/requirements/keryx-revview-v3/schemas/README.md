@@ -1,6 +1,6 @@
 # Review V3 wire schemas
 
-The JSON Schemas in this directory define the stable structural contracts for Review V3 config, host-approved runtime plans, and durable run state. Runtime validation in `src/review/v3/config.ts` and `src/review/v3/store.ts` is authoritative for semantic relationships that JSON Schema cannot express safely.
+The JSON Schemas in this directory define the stable structural contracts for Review V3 config, host-approved runtime plans, and durable run state. Runtime validation in `src/review/agents/config.ts` and `src/review/agents/store.ts` is authoritative for semantic relationships that JSON Schema cannot express safely.
 
 Semantic validation additionally enforces:
 

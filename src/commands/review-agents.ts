@@ -1,7 +1,7 @@
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { ReviewV3Controller } from "../review/v3/controller";
-import { validateReviewV3Config } from "../review/v3/config";
+import { ReviewAgentController } from "../review/agents/controller";
+import { validateReviewAgentConfig } from "../review/agents/config";
 import {
   createReviewPlan,
   createReviewRuntimePlanRegistration,
@@ -9,34 +9,34 @@ import {
   type ReviewPlanInput,
   type ReviewRuntimePlanRegistration,
   type ReviewRuntimePlanWaveInput,
-} from "../review/v3-planning";
+} from "../review/agents/planning";
 import {
-  REVIEW_V3_BRIDGE_RUN_DIR_ENV,
-  REVIEW_V3_BRIDGE_SOCKET_ENV,
-  REVIEW_V3_BRIDGE_TOKEN_ENV,
+  REVIEW_AGENTS_BRIDGE_RUN_DIR_ENV,
+  REVIEW_AGENTS_BRIDGE_SOCKET_ENV,
+  REVIEW_AGENTS_BRIDGE_TOKEN_ENV,
   createExternalBridgeCliController,
   createExternalBridgeClientFromEnv,
-} from "../review/v3-external-transport";
+} from "../review/agents/external-transport";
 import {
-  REVIEW_V3_ROOT_RUNS_ROOT_ENV,
-  REVIEW_V3_ROOT_SOCKET_ENV,
-  REVIEW_V3_ROOT_TOKEN_ENV,
-  createReviewV3TerminalCliFactoryFromEnv,
-} from "../review/v3-terminal-host";
+  REVIEW_AGENTS_ROOT_RUNS_ROOT_ENV,
+  REVIEW_AGENTS_ROOT_SOCKET_ENV,
+  REVIEW_AGENTS_ROOT_TOKEN_ENV,
+  createReviewAgentTerminalCliFactoryFromEnv,
+} from "../review/agents/terminal-host";
 import type {
-  ReviewV3Admission,
-  ReviewV3Config,
-  ReviewV3ControllerDependencies,
-  ReviewV3Role,
-  ReviewV3RoleCeiling,
-  ReviewV3RunCeilings,
-  ReviewV3SpawnInput,
-} from "../review/v3/types";
+  ReviewAgentAdmission,
+  ReviewAgentConfig,
+  ReviewAgentControllerDependencies,
+  ReviewAgentRole,
+  ReviewAgentRoleCeiling,
+  ReviewAgentRunCeilings,
+  ReviewAgentSpawnInput,
+} from "../review/agents/types";
 
 const COMMANDS = ["start", "plan", "capabilities", "status", "spawn", "wait", "cancel", "result"] as const;
-type ReviewV3CliCommand = (typeof COMMANDS)[number];
+type ReviewAgentCliCommand = (typeof COMMANDS)[number];
 
-const OPTIONS: Readonly<Record<ReviewV3CliCommand, readonly string[]>> = {
+const OPTIONS: Readonly<Record<ReviewAgentCliCommand, readonly string[]>> = {
   start: ["--run-dir", "--run-id", "--revision", "--config"],
   plan: ["--run-dir", "--payload"],
   capabilities: ["--run-dir", "--adapter"],
@@ -47,44 +47,44 @@ const OPTIONS: Readonly<Record<ReviewV3CliCommand, readonly string[]>> = {
   result: ["--run-dir", "--dispatch"],
 };
 
-export interface ReviewV3CliController {
+export interface ReviewAgentCliController {
   capabilities(adapterId?: string): unknown | Promise<unknown>;
   status(dispatchId?: string): unknown | Promise<unknown>;
-  spawn(input: ReviewV3SpawnInput): ReviewV3Admission | Promise<ReviewV3Admission>;
+  spawn(input: ReviewAgentSpawnInput): ReviewAgentAdmission | Promise<ReviewAgentAdmission>;
   wait(dispatchId: string): unknown | Promise<unknown>;
   cancel(dispatchId: string | undefined, reason: string): unknown | Promise<unknown>;
   result(dispatchId: string): unknown | Promise<unknown>;
   close?(): unknown | Promise<unknown>;
 }
 
-export interface ReviewV3CliFactory {
-  open(runDir: string): ReviewV3CliController | Promise<ReviewV3CliController>;
-  create?(runDir: string, input: ReviewV3CliCreateInput): ReviewV3CliController | Promise<ReviewV3CliController>;
-  registerPlan?(runDir: string, input: ReviewV3CliPlanInput): ReviewRuntimePlanRegistration | Promise<ReviewRuntimePlanRegistration>;
+export interface ReviewAgentCliFactory {
+  open(runDir: string): ReviewAgentCliController | Promise<ReviewAgentCliController>;
+  create?(runDir: string, input: ReviewAgentCliCreateInput): ReviewAgentCliController | Promise<ReviewAgentCliController>;
+  registerPlan?(runDir: string, input: ReviewAgentCliPlanInput): ReviewRuntimePlanRegistration | Promise<ReviewRuntimePlanRegistration>;
 }
 
-export interface ReviewV3CliCreateInput {
+export interface ReviewAgentCliCreateInput {
   readonly runId: string;
   readonly revision: string;
-  readonly config: ReviewV3Config;
+  readonly config: ReviewAgentConfig;
 }
 
-export interface ReviewV3CliPlanInput {
+export interface ReviewAgentCliPlanInput {
   readonly plan: ReviewPlanInput;
   readonly waves: readonly ReviewRuntimePlanWaveInput[];
 }
 
-export interface ReviewV3CliDeps {
-  readonly factory: ReviewV3CliFactory;
+export interface ReviewAgentCliDeps {
+  readonly factory: ReviewAgentCliFactory;
   readonly log?: (line: string) => void;
   readonly error?: (line: string) => void;
 }
 
-interface SpawnPayloadV1 extends ReviewV3SpawnInput {
+interface SpawnPayloadV1 extends ReviewAgentSpawnInput {
   readonly version: 1;
 }
 
-interface PlanPayloadV1 extends ReviewV3CliPlanInput {
+interface PlanPayloadV1 extends ReviewAgentCliPlanInput {
   readonly version: 1;
 }
 
@@ -110,8 +110,8 @@ const ASSIGNMENT_FIELDS = new Set(["id", "agentInstanceId", "kind", "entity", "p
 const COVERAGE_FIELDS = new Set(["areaId", "scopeId", "aspect"]);
 const WAVE_FIELDS = new Set(["waveId", "reviewRound", "assignmentIds"]);
 const ASSIGNMENT_KINDS = new Set<ReviewAssignmentKind>(["scout", "coordinator", "worker", "validator"]);
-const ROLES = new Set<ReviewV3Role>(["coordinator", "worker", "scout", "validator"]);
-const ADMISSION_FAILURE_CODES = new Set<Extract<ReviewV3Admission, { ok: false }>["code"]>([
+const ROLES = new Set<ReviewAgentRole>(["coordinator", "worker", "scout", "validator"]);
+const ADMISSION_FAILURE_CODES = new Set<Extract<ReviewAgentAdmission, { ok: false }>["code"]>([
   "authority_denied",
   "run_closed",
   "adapter_missing",
@@ -128,8 +128,8 @@ const ADMISSION_FAILURE_CODES = new Set<Extract<ReviewV3Admission, { ok: false }
   "invalid_input",
 ]);
 const CONFIG_FIELDS = new Set(["configVersion", "profile", "runCeilings", "roleCeilings", "allowedAdapters", "allowedEntities", "allowedSkills", "fallbackPolicy", "costMode", "spendingCeiling"]);
-const RUN_CEILING_FIELDS = ["maxActiveDescendants", "initialConcurrency", "maxIncompleteGenerals", "maxActiveChildrenPerGeneral", "maxLaunches", "maxLaunchesPerWave", "maxLaunchesOutsideWaves", "maxWaves", "maxAgentTimeMs", "elapsedDeadlineMs", "reserveFraction", "maxReviewRounds", "maxDepth"] as const satisfies readonly (keyof ReviewV3RunCeilings)[];
-const ROLE_CEILING_FIELDS = ["elapsedMs", "modelRoundsDefault", "modelRoundsMax", "toolCallsMax", "maxChildLaunches"] as const satisfies readonly (keyof ReviewV3RoleCeiling)[];
+const RUN_CEILING_FIELDS = ["maxActiveDescendants", "initialConcurrency", "maxIncompleteGenerals", "maxActiveChildrenPerGeneral", "maxLaunches", "maxLaunchesPerWave", "maxLaunchesOutsideWaves", "maxWaves", "maxAgentTimeMs", "elapsedDeadlineMs", "reserveFraction", "maxReviewRounds", "maxDepth"] as const satisfies readonly (keyof ReviewAgentRunCeilings)[];
+const ROLE_CEILING_FIELDS = ["elapsedMs", "modelRoundsDefault", "modelRoundsMax", "toolCallsMax", "maxChildLaunches"] as const satisfies readonly (keyof ReviewAgentRoleCeiling)[];
 const RUN_CEILING_FIELD_SET: ReadonlySet<string> = new Set(RUN_CEILING_FIELDS);
 const ROLE_CEILING_FIELD_SET: ReadonlySet<string> = new Set(ROLE_CEILING_FIELDS);
 const CONFIG_ROLES = ["root", "coordinator", "worker", "scout", "validator"] as const;
@@ -139,7 +139,7 @@ function nonEmptyString(value: unknown, field: string): string {
   return value;
 }
 
-function parseArgs(command: ReviewV3CliCommand, args: readonly string[]): Map<string, string> {
+function parseArgs(command: ReviewAgentCliCommand, args: readonly string[]): Map<string, string> {
   const accepted = new Set(OPTIONS[command]);
   const values = new Map<string, string>();
   for (let index = 0; index < args.length; index += 1) {
@@ -147,7 +147,7 @@ function parseArgs(command: ReviewV3CliCommand, args: readonly string[]): Map<st
     if (!token.startsWith("--")) throw new Error(`Unexpected argument "${token}"`);
     const equals = token.indexOf("=");
     const name = equals === -1 ? token : token.slice(0, equals);
-    if (!accepted.has(name)) throw new Error(`Unknown option for review v3 ${command}: ${name}`);
+    if (!accepted.has(name)) throw new Error(`Unknown option for review agents ${command}: ${name}`);
     if (values.has(name)) throw new Error(`Option ${name} may only be supplied once`);
     const value = equals === -1 ? args[index + 1] : token.slice(equals + 1);
     if (value === undefined || value.startsWith("--") || value === "") throw new Error(`${name} needs a value`);
@@ -167,12 +167,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseAdmission(value: unknown): ReviewV3Admission {
+function parseAdmission(value: unknown): ReviewAgentAdmission {
   if (!isRecord(value) || typeof value.ok !== "boolean") {
-    throw new Error("review V3 bridge returned an invalid spawn admission");
+    throw new Error("review agents bridge returned an invalid spawn admission");
   }
   if (value.ok) {
-    if (typeof value.reused !== "boolean") throw new Error("review V3 bridge returned an invalid spawn admission");
+    if (typeof value.reused !== "boolean") throw new Error("review agents bridge returned an invalid spawn admission");
     return {
       ok: true,
       dispatchId: nonEmptyString(value.dispatchId, "bridge admission dispatchId"),
@@ -180,12 +180,12 @@ function parseAdmission(value: unknown): ReviewV3Admission {
     };
   }
   const code = value.code;
-  if (typeof code !== "string" || !ADMISSION_FAILURE_CODES.has(code as Extract<ReviewV3Admission, { ok: false }>["code"])) {
-    throw new Error("review V3 bridge returned an invalid spawn refusal code");
+  if (typeof code !== "string" || !ADMISSION_FAILURE_CODES.has(code as Extract<ReviewAgentAdmission, { ok: false }>["code"])) {
+    throw new Error("review agents bridge returned an invalid spawn refusal code");
   }
   return {
     ok: false,
-    code: code as Extract<ReviewV3Admission, { ok: false }>["code"],
+    code: code as Extract<ReviewAgentAdmission, { ok: false }>["code"],
     message: nonEmptyString(value.message, "bridge admission message"),
   };
 }
@@ -210,7 +210,7 @@ function positiveInteger(value: unknown, field: string, allowZero = false): numb
   return value as number;
 }
 
-function parseRunCeilings(value: unknown): ReviewV3RunCeilings {
+function parseRunCeilings(value: unknown): ReviewAgentRunCeilings {
   if (!isRecord(value)) throw new Error("runCeilings must be an object");
   exactFields(value, RUN_CEILING_FIELD_SET, "runCeilings");
   const reserveFraction = value.reserveFraction;
@@ -234,7 +234,7 @@ function parseRunCeilings(value: unknown): ReviewV3RunCeilings {
   };
 }
 
-function parseRoleCeiling(value: unknown, role: (typeof CONFIG_ROLES)[number]): ReviewV3RoleCeiling {
+function parseRoleCeiling(value: unknown, role: (typeof CONFIG_ROLES)[number]): ReviewAgentRoleCeiling {
   if (!isRecord(value)) throw new Error(`roleCeilings.${role} must be an object`);
   exactFields(value, ROLE_CEILING_FIELD_SET, `roleCeilings.${role}`);
   return {
@@ -246,15 +246,15 @@ function parseRoleCeiling(value: unknown, role: (typeof CONFIG_ROLES)[number]): 
   };
 }
 
-function parseConfigPayload(value: unknown): ReviewV3Config {
-  if (!isRecord(value)) throw new Error("review V3 config must be a JSON object");
-  exactFields(value, CONFIG_FIELDS, "review V3 config");
+function parseConfigPayload(value: unknown): ReviewAgentConfig {
+  if (!isRecord(value)) throw new Error("review agents config must be a JSON object");
+  exactFields(value, CONFIG_FIELDS, "review agents config");
   if (value.configVersion !== 1) throw new Error("configVersion must be 1");
   const profile = nonEmptyString(value.profile, "profile");
   const runCeilings = parseRunCeilings(value.runCeilings);
   if (!isRecord(value.roleCeilings)) throw new Error("roleCeilings must be an object");
   exactFields(value.roleCeilings, new Set(CONFIG_ROLES), "roleCeilings");
-  const roleCeilings: ReviewV3Config["roleCeilings"] = {
+  const roleCeilings: ReviewAgentConfig["roleCeilings"] = {
     root: parseRoleCeiling(value.roleCeilings.root, "root"),
     coordinator: parseRoleCeiling(value.roleCeilings.coordinator, "coordinator"),
     worker: parseRoleCeiling(value.roleCeilings.worker, "worker"),
@@ -265,14 +265,14 @@ function parseConfigPayload(value: unknown): ReviewV3Config {
   if (fallbackPolicy !== "refuse" && fallbackPolicy !== "ask" && fallbackPolicy !== "preapproved") throw new Error("fallbackPolicy is invalid");
   const costMode = value.costMode;
   if (costMode !== "measured-cost" && costMode !== "cost-unknown") throw new Error("costMode must be measured-cost or cost-unknown");
-  let spendingCeiling: ReviewV3Config["spendingCeiling"];
+  let spendingCeiling: ReviewAgentConfig["spendingCeiling"];
   if (value.spendingCeiling !== undefined) {
     if (!isRecord(value.spendingCeiling)) throw new Error("spendingCeiling must be an object");
     exactFields(value.spendingCeiling, new Set(["amount", "currency"]), "spendingCeiling");
     if (typeof value.spendingCeiling.amount !== "number" || !Number.isFinite(value.spendingCeiling.amount) || value.spendingCeiling.amount <= 0) throw new Error("spendingCeiling.amount must be positive");
     spendingCeiling = { amount: value.spendingCeiling.amount, currency: nonEmptyString(value.spendingCeiling.currency, "spendingCeiling.currency") };
   }
-  return validateReviewV3Config({
+  return validateReviewAgentConfig({
     configVersion: 1,
     profile,
     runCeilings,
@@ -373,7 +373,7 @@ function parseSpawnPayload(value: unknown): SpawnPayloadV1 {
   if (unknown.length > 0) throw new Error(`spawn payload has unknown field(s): ${unknown.join(", ")}`);
   if (value.version !== 1) throw new Error(`spawn payload version must be 1, got ${String(value.version)}`);
   if (!Number.isSafeInteger(value.attempt) || (value.attempt as number) < 1) throw new Error("attempt must be a positive integer");
-  const role = nonEmptyString(value.role, "role") as ReviewV3Role;
+  const role = nonEmptyString(value.role, "role") as ReviewAgentRole;
   if (!ROLES.has(role)) throw new Error(`role must be one of: ${[...ROLES].join(", ")}`);
   if (!Array.isArray(value.scopeIds) || value.scopeIds.some((item) => typeof item !== "string" || item.trim() === "")) {
     throw new Error("scopeIds must be an array of non-empty strings");
@@ -418,12 +418,12 @@ async function readContainedPlanPayload(runDir: string, payloadFile: string): Pr
   return parsePlanPayload(await readContainedJson(runDir, payloadFile, "plan"));
 }
 
-async function readConfigFile(configFile: string): Promise<ReviewV3Config> {
+async function readConfigFile(configFile: string): Promise<ReviewAgentConfig> {
   let decoded: unknown;
   try {
     decoded = JSON.parse(await readFile(path.resolve(configFile), "utf8"));
   } catch (error) {
-    throw new Error(`Cannot read review V3 config: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    throw new Error(`Cannot read review agents config: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
   return parseConfigPayload(decoded);
 }
@@ -434,7 +434,7 @@ function assertSubset(requested: readonly string[] | undefined, ceiling: readonl
   if (over.length > 0) throw new Error(`${field} exceeds host ceiling: ${over.join(", ")}`);
 }
 
-function assertWithinHostCeiling(requested: ReviewV3Config, ceiling: ReviewV3Config): void {
+function assertWithinHostCeiling(requested: ReviewAgentConfig, ceiling: ReviewAgentConfig): void {
   if (requested.profile !== ceiling.profile) throw new Error(`profile exceeds host ceiling: ${requested.profile}`);
   for (const field of RUN_CEILING_FIELDS) {
     if (requested.runCeilings[field] > ceiling.runCeilings[field]) throw new Error(`runCeilings.${field} exceeds host ceiling`);
@@ -463,17 +463,17 @@ function assertWithinHostCeiling(requested: ReviewV3Config, ceiling: ReviewV3Con
  * live adapters and authority. Opening persisted state alone must never mint
  * authority or silently turn a status-only CLI into an execution runtime.
  */
-export function createReviewV3CliFactory(
-  host: Pick<ReviewV3ControllerDependencies, "adapters" | "authority" | "entityPolicies" | "clock" | "id" | "ownerId" | "leaseMs"> & {
-    readonly configCeiling?: ReviewV3Config;
+export function createReviewAgentCliFactory(
+  host: Pick<ReviewAgentControllerDependencies, "adapters" | "authority" | "entityPolicies" | "clock" | "id" | "ownerId" | "leaseMs"> & {
+    readonly configCeiling?: ReviewAgentConfig;
   },
-): ReviewV3CliFactory {
-  const controllers = new Map<string, Promise<ReviewV3Controller>>();
-  const open = (storageDir: string): Promise<ReviewV3Controller> => {
+): ReviewAgentCliFactory {
+  const controllers = new Map<string, Promise<ReviewAgentController>>();
+  const open = (storageDir: string): Promise<ReviewAgentController> => {
     const key = path.resolve(storageDir);
     const existing = controllers.get(key);
     if (existing !== undefined) return existing;
-    const pending = ReviewV3Controller.open({
+    const pending = ReviewAgentController.open({
       storageDir: key,
       adapters: host.adapters,
       authority: host.authority,
@@ -490,14 +490,14 @@ export function createReviewV3CliFactory(
   return {
     open,
     create: host.configCeiling === undefined
-      ? async () => { throw new Error("review v3 start unavailable: host config ceiling is not bound"); }
+      ? async () => { throw new Error("review agents start unavailable: host config ceiling is not bound"); }
       : async (storageDir, input) => {
           const ownerId = host.ownerId;
-          if (ownerId === undefined || ownerId.trim() === "") throw new Error("review v3 start unavailable: host ownerId is not bound");
+          if (ownerId === undefined || ownerId.trim() === "") throw new Error("review agents start unavailable: host ownerId is not bound");
           assertWithinHostCeiling(input.config, host.configCeiling!);
           const key = path.resolve(storageDir);
-          if (controllers.has(key)) throw new Error(`review v3 run is already open: ${key}`);
-          const pending = ReviewV3Controller.create({
+          if (controllers.has(key)) throw new Error(`review agents run is already open: ${key}`);
+          const pending = ReviewAgentController.create({
             storageDir: key,
             runId: input.runId,
             revision: input.revision,
@@ -517,7 +517,7 @@ export function createReviewV3CliFactory(
     ...(host.ownerId === undefined || host.ownerId.trim() === ""
       ? {}
       : {
-          registerPlan: async (storageDir: string, input: ReviewV3CliPlanInput) => {
+          registerPlan: async (storageDir: string, input: ReviewAgentCliPlanInput) => {
             const plan = createReviewPlan(input.plan);
             const registration = createReviewRuntimePlanRegistration(plan, input.waves);
             const controller = await open(storageDir);
@@ -533,26 +533,26 @@ export function createReviewV3CliFactory(
  * but cannot spawn, cancel or read results until a shell/session host binds
  * live authority. This binding grants nothing implicitly.
  */
-export const statusOnlyReviewV3CliFactory = createReviewV3CliFactory({
+export const statusOnlyReviewAgentCliFactory = createReviewAgentCliFactory({
   adapters: [],
   authority: { authorize: () => false },
 });
 
-export function reviewV3CliFactoryFromEnv(
+export function reviewAgentsCliFactoryFromEnv(
   env: Readonly<Record<string, string | undefined>> = process.env,
-): ReviewV3CliFactory {
-  const rootKeys = [REVIEW_V3_ROOT_SOCKET_ENV, REVIEW_V3_ROOT_TOKEN_ENV, REVIEW_V3_ROOT_RUNS_ROOT_ENV];
-  const bridgeKeys = [REVIEW_V3_BRIDGE_SOCKET_ENV, REVIEW_V3_BRIDGE_TOKEN_ENV, REVIEW_V3_BRIDGE_RUN_DIR_ENV];
+): ReviewAgentCliFactory {
+  const rootKeys = [REVIEW_AGENTS_ROOT_SOCKET_ENV, REVIEW_AGENTS_ROOT_TOKEN_ENV, REVIEW_AGENTS_ROOT_RUNS_ROOT_ENV];
+  const bridgeKeys = [REVIEW_AGENTS_BRIDGE_SOCKET_ENV, REVIEW_AGENTS_BRIDGE_TOKEN_ENV, REVIEW_AGENTS_BRIDGE_RUN_DIR_ENV];
   const hasRootEnvironment = rootKeys.some((key) => env[key] !== undefined);
   const hasBridgeEnvironment = bridgeKeys.some((key) => env[key] !== undefined);
-  if (hasRootEnvironment && hasBridgeEnvironment) throw new Error("review V3 root and descendant bridge environments cannot be combined");
-  if (hasRootEnvironment) return createReviewV3TerminalCliFactoryFromEnv(env);
-  if (!hasBridgeEnvironment) return statusOnlyReviewV3CliFactory;
+  if (hasRootEnvironment && hasBridgeEnvironment) throw new Error("review agents root and descendant bridge environments cannot be combined");
+  if (hasRootEnvironment) return createReviewAgentTerminalCliFactoryFromEnv(env);
+  if (!hasBridgeEnvironment) return statusOnlyReviewAgentCliFactory;
   return {
     async open(requestedRunDir) {
       const { client, runDir } = createExternalBridgeClientFromEnv(env);
       const [requested, granted] = await Promise.all([realpath(requestedRunDir), realpath(runDir)]);
-      if (requested !== granted) throw new Error("--run-dir does not match the scoped review V3 bridge grant");
+      if (requested !== granted) throw new Error("--run-dir does not match the scoped review agents bridge grant");
       const bridge = createExternalBridgeCliController(client);
       return {
         capabilities: bridge.capabilities,
@@ -566,15 +566,15 @@ export function reviewV3CliFactoryFromEnv(
   };
 }
 
-export async function runReviewV3Command(args: readonly string[], deps: ReviewV3CliDeps): Promise<number> {
+export async function runReviewAgentsCommand(args: readonly string[], deps: ReviewAgentCliDeps): Promise<number> {
   const log = deps.log ?? console.log;
   const error = deps.error ?? console.error;
   try {
     const command = args[0];
     if (command === undefined || !(COMMANDS as readonly string[]).includes(command)) {
-      throw new Error(`review v3 command must be one of: ${COMMANDS.join(", ")}`);
+      throw new Error(`review agents command must be one of: ${COMMANDS.join(", ")}`);
     }
-    const typedCommand = command as ReviewV3CliCommand;
+    const typedCommand = command as ReviewAgentCliCommand;
     const values = parseArgs(typedCommand, args.slice(1));
     const runDir = path.resolve(required(values, "--run-dir"));
 
@@ -598,7 +598,7 @@ export async function runReviewV3Command(args: readonly string[], deps: ReviewV3
     }
 
     if (typedCommand === "plan") {
-      if (deps.factory.registerPlan === undefined) throw new Error("review v3 plan unavailable: host has no plan-registration binding");
+      if (deps.factory.registerPlan === undefined) throw new Error("review agents plan unavailable: host has no plan-registration binding");
       const { version: _version, ...input } = planPayload!;
       log(JSON.stringify(await deps.factory.registerPlan(runDir, input)));
       return 0;
@@ -606,7 +606,7 @@ export async function runReviewV3Command(args: readonly string[], deps: ReviewV3
 
     const controller = typedCommand === "start"
       ? await (() => {
-          if (deps.factory.create === undefined) throw new Error("review v3 start unavailable: host has no create binding");
+          if (deps.factory.create === undefined) throw new Error("review agents start unavailable: host has no create binding");
           return deps.factory.create(runDir, createInput!);
         })()
       : await deps.factory.open(runDir);
@@ -647,10 +647,10 @@ export async function runReviewV3Command(args: readonly string[], deps: ReviewV3
   }
 }
 
-export async function runReviewV3(
+export async function runReviewAgents(
   args: readonly string[],
-  factory?: ReviewV3CliFactory,
+  factory?: ReviewAgentCliFactory,
 ): Promise<void> {
-  const code = await runReviewV3Command(args, { factory: factory ?? reviewV3CliFactoryFromEnv() });
+  const code = await runReviewAgentsCommand(args, { factory: factory ?? reviewAgentsCliFactoryFromEnv() });
   if (code !== 0) process.exitCode = code;
 }

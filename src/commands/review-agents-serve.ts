@@ -3,12 +3,12 @@ import type { AgentIO } from "./agent";
 import { makeProvider } from "../harness/provider/make-provider";
 import type { ProviderPort } from "../harness/provider/types";
 import { loadShellConfig } from "../lib/shell-config";
-import { createReviewV3Host, type ReviewV3Host, type ReviewV3HostOptions } from "../review/v3-host";
-import { scopedProviderCredentials } from "../review/v3-keryx-external-worker-entry";
+import { createReviewAgentHost, type ReviewAgentHost, type ReviewAgentHostOptions } from "../review/agents/host";
+import { scopedProviderCredentials } from "../review/agents/keryx-general-worker-entry";
 import {
-  startReviewV3TerminalHost,
-  type ReviewV3TerminalHost,
-} from "../review/v3-terminal-host";
+  startReviewAgentTerminalHost,
+  type ReviewAgentTerminalHost,
+} from "../review/agents/terminal-host";
 
 const OPTIONS = new Set([
   "--project",
@@ -20,10 +20,10 @@ const OPTIONS = new Set([
   "--permission-mode",
 ]);
 
-export interface ReviewV3ServeDeps {
+export interface ReviewAgentServeDeps {
   readonly makeProvider?: (name: string, model: string, options: Parameters<typeof makeProvider>[2]) => ProviderPort;
-  readonly createHost?: (options: ReviewV3HostOptions) => ReviewV3Host;
-  readonly startHost?: typeof startReviewV3TerminalHost;
+  readonly createHost?: (options: ReviewAgentHostOptions) => ReviewAgentHost;
+  readonly startHost?: typeof startReviewAgentTerminalHost;
   readonly waitForStop?: () => Promise<void>;
   readonly log?: (line: string) => void;
   readonly error?: (line: string) => void;
@@ -36,7 +36,7 @@ function parseArgs(args: readonly string[]): ReadonlyMap<string, string> {
     if (!token.startsWith("--")) throw new Error(`Unexpected argument "${token}"`);
     const equals = token.indexOf("=");
     const key = equals === -1 ? token : token.slice(0, equals);
-    if (!OPTIONS.has(key)) throw new Error(`Unknown option for review v3 serve: ${key}`);
+    if (!OPTIONS.has(key)) throw new Error(`Unknown option for review agents serve: ${key}`);
     if (values.has(key)) throw new Error(`Option ${key} may only be supplied once`);
     const value = equals === -1 ? args[index + 1] : token.slice(equals + 1);
     if (value === undefined || value === "" || (equals === -1 && value.startsWith("--"))) throw new Error(`${key} needs a value`);
@@ -67,7 +67,7 @@ function waitForTermination(): Promise<void> {
 function explicitTrustIo(): Pick<AgentIO, "beforeAction" | "requestApproval" | "permissionMode"> {
   return {
     async beforeAction(action) {
-      if (action.signal?.aborted) throw action.signal.reason ?? new Error("review V3 host action aborted");
+      if (action.signal?.aborted) throw action.signal.reason ?? new Error("review agents host action aborted");
     },
     async requestApproval() { return true; },
     permissionMode: () => "trust",
@@ -75,17 +75,17 @@ function explicitTrustIo(): Pick<AgentIO, "beforeAction" | "requestApproval" | "
 }
 
 /**
- * Run the ordinary-terminal Review V3 controller host in the foreground.
+ * Run the ordinary-terminal Review agents controller host in the foreground.
  * Authority is selected only by the explicit startup flags below; request JSON
  * can operate inside that ceiling but can never widen it.
  */
-export async function runReviewV3ServeCommand(
+export async function runReviewAgentsServeCommand(
   args: readonly string[],
-  deps: ReviewV3ServeDeps = {},
+  deps: ReviewAgentServeDeps = {},
 ): Promise<number> {
   const log = deps.log ?? console.log;
   const error = deps.error ?? console.error;
-  let terminal: ReviewV3TerminalHost | undefined;
+  let terminal: ReviewAgentTerminalHost | undefined;
   let reviewSessionOpen = false;
   let exitCode = 0;
   try {
@@ -94,14 +94,14 @@ export async function runReviewV3ServeCommand(
     const configDir = path.resolve(required(values, "--config-dir"));
     const providerName = required(values, "--provider");
     const modelId = required(values, "--model");
-    const runsRoot = path.resolve(values.get("--runs-root") ?? path.join(projectRoot, ".metaproject", "reviews", "v3"));
+    const runsRoot = path.resolve(values.get("--runs-root") ?? path.join(projectRoot, ".metaproject", "reviews", "agents"));
     const costMode = required(values, "--cost-mode");
     const permissionMode = required(values, "--permission-mode");
     if (costMode !== "cost-unknown") {
-      throw new Error("review v3 serve currently requires --cost-mode cost-unknown; measured cost accounting is unavailable");
+      throw new Error("review agents serve currently requires --cost-mode cost-unknown; measured cost accounting is unavailable");
     }
     if (permissionMode !== "trust") {
-      throw new Error("review v3 serve requires explicit --permission-mode trust; no authority is granted by default or by request JSON");
+      throw new Error("review agents serve requires explicit --permission-mode trust; no authority is granted by default or by request JSON");
     }
 
     const saved = loadShellConfig(configDir);
@@ -116,14 +116,14 @@ export async function runReviewV3ServeCommand(
       throw new Error(`configured provider ${providerName} is not authorized`);
     }
 
-    const host = (deps.createHost ?? createReviewV3Host)({
+    const host = (deps.createHost ?? createReviewAgentHost)({
       projectRoot,
       configDir,
       runsRoot,
     });
     const trustIo = explicitTrustIo();
     reviewSessionOpen = true;
-    terminal = await (deps.startHost ?? startReviewV3TerminalHost)({
+    terminal = await (deps.startHost ?? startReviewAgentTerminalHost)({
       host,
       runsRoot,
       runtime: {
@@ -131,7 +131,7 @@ export async function runReviewV3ServeCommand(
         providerId: providerName,
         modelId,
         io: () => trustIo,
-        authorizeReviewV3Action: ({ signal }) => reviewSessionOpen && signal?.aborted !== true,
+        authorizeReviewAgentAction: ({ signal }) => reviewSessionOpen && signal?.aborted !== true,
       },
     });
     log(JSON.stringify({
@@ -157,11 +157,11 @@ export async function runReviewV3ServeCommand(
         const result = await terminal.close();
         if (!result.stopped) {
           exitCode = 1;
-          error(`review v3 serve shutdown incomplete; active runs: ${result.activeRunIds.join(", ") || "unknown"}; durable evidence and the local endpoint directory were preserved for shutdown retry`);
+          error(`review agents serve shutdown incomplete; active runs: ${result.activeRunIds.join(", ") || "unknown"}; durable evidence and the local endpoint directory were preserved for shutdown retry`);
         }
       } catch (cause) {
         exitCode = 1;
-        error(`review v3 serve shutdown failed: ${cause instanceof Error ? cause.message : String(cause)}; durable evidence and the local endpoint directory were preserved for shutdown retry`);
+        error(`review agents serve shutdown failed: ${cause instanceof Error ? cause.message : String(cause)}; durable evidence and the local endpoint directory were preserved for shutdown retry`);
       }
     }
   }

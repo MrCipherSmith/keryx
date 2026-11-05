@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://keryx.dev/schemas/review-agents-plan.schema.json",
+  "title": "Keryx Review V3 Runtime Plan Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["planHash", "planVersion", "revision", "waves", "assignments"],
+  "properties": {
+    "planHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "planVersion": { "type": "integer", "minimum": 1 },
+    "revision": { "type": "string", "minLength": 1 },
+    "waves": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/wave" } },
+    "assignments": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/assignment" } }
+  },
+  "definitions": {
+    "wave": {
+      "type": "object", "additionalProperties": false, "required": ["waveId", "reviewRound"],
+      "properties": { "waveId": { "type": "string", "minLength": 1 }, "reviewRound": { "type": "integer", "minimum": 1 } }
+    },
+    "cell": {
+      "type": "object", "additionalProperties": false, "required": ["scopeId", "aspect"],
+      "properties": { "scopeId": { "type": "string", "minLength": 1 }, "aspect": { "type": "string", "minLength": 1 } }
+    },
+    "assignment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["taskId", "entity", "role", "scopeIds", "waveId", "coverage"],
+      "properties": {
+        "taskId": { "type": "string", "minLength": 1 },
+        "parentTaskId": { "type": "string", "minLength": 1 },
+        "entity": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["coordinator", "worker", "scout", "validator"] },
+        "scopeIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "waveId": { "type": "string", "minLength": 1 },
+        "coverage": { "type": "array", "items": { "$ref": "#/definitions/cell" } },
+        "delegatedCoverage": { "type": "array", "items": { "$ref": "#/definitions/cell" } },
+        "allowDynamicChildren": { "type": "boolean" }
+      }
+    }
+  }
+}
