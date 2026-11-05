@@ -1159,7 +1159,7 @@ export function classifyProviderConnection(
     return { kind: "oauth-grant", ...(envKey !== undefined ? { envKey } : {}), sharedWith };
   }
   const registry = providerByName(name, dir);
-  const envKey = registry?.envKey;
+  const envKey = registry?.envKey ?? (name === "anthropic" ? "ANTHROPIC_API_KEY" : undefined);
   if (envKey === undefined) {
     return { kind: "no-credential", sharedWith: [] };
   }

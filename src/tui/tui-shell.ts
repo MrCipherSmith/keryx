@@ -770,6 +770,12 @@ export async function filterConnectedDetectedProviders(
     }
     const registry = providerByName(prov.name, options.configDir);
     if (registry === undefined) {
+      if (prov.name === "anthropic") {
+        const key = prov.envKey ?? "ANTHROPIC_API_KEY";
+        const have = env[key] ?? loadShellConfig(options.configDir).apiKeys?.[key];
+        if (have !== undefined && have.length > 0) connected.push(prov);
+        continue;
+      }
       connected.push(prov);
       continue;
     }
