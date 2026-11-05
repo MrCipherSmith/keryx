@@ -423,6 +423,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/route-v2",
+    group: "Managed work",
+    summary: "Routing v2 mode: show it, or switch it on/off without the terminal migrate commands — /route-v2 [on|off].",
+  },
+  {
+    kind: "slash",
     name: "/route",
     group: "Managed work",
     summary: "Opt-in routing classifier: each request runs on its routing category's model — /route [on|off].",
