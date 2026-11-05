@@ -74,4 +74,34 @@ describe("parseAgentFrontmatter", () => {
     expect(result.result.data.name).toBe("x");
     expect(result.result.data.role).toBe("y");
   });
+
+  test("parses the v2 delegation mapping with a nested entity list and integer bounds", () => {
+    const result = parseAgentFrontmatter(`---
+schema_version: 2
+name: review-coordinator
+delegation:
+  allowed_entities: [review-worker, review-validator]
+  max_depth: 1
+  max_children: 48
+---
+body
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.result.data.delegation).toEqual({
+      allowed_entities: ["review-worker", "review-validator"],
+      max_depth: 1,
+      max_children: 48,
+    });
+  });
+
+  test("keeps hostile nested keys as own data for schema rejection without prototype mutation", () => {
+    const result = parseAgentFrontmatter("---\nname: review-coordinator\ndelegation:\n  __proto__: polluted\n---\nbody\n");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const delegation = result.result.data.delegation as Record<string, unknown>;
+    expect(Object.hasOwn(delegation, "__proto__")).toBe(true);
+    expect(delegation.__proto__).toBe("polluted");
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
 });

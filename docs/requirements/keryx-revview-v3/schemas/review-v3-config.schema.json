@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://keryx.dev/schemas/review-v3-config.schema.json",
+  "title": "Keryx Review V3 Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["configVersion", "profile", "runCeilings", "roleCeilings", "allowedAdapters", "allowedEntities", "allowedSkills", "fallbackPolicy", "costMode"],
+  "properties": {
+    "configVersion": { "const": 1 },
+    "profile": { "type": "string", "minLength": 1 },
+    "runCeilings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxActiveDescendants", "initialConcurrency", "maxIncompleteGenerals", "maxActiveChildrenPerGeneral", "maxLaunches", "maxLaunchesPerWave", "maxLaunchesOutsideWaves", "maxWaves", "maxAgentTimeMs", "elapsedDeadlineMs", "reserveFraction", "maxReviewRounds", "maxDepth"],
+      "properties": {
+        "maxActiveDescendants": { "$ref": "#/definitions/positiveInteger" },
+        "initialConcurrency": { "$ref": "#/definitions/positiveInteger" },
+        "maxIncompleteGenerals": { "$ref": "#/definitions/positiveInteger" },
+        "maxActiveChildrenPerGeneral": { "$ref": "#/definitions/positiveInteger" },
+        "maxLaunches": { "$ref": "#/definitions/positiveInteger" },
+        "maxLaunchesPerWave": { "$ref": "#/definitions/positiveInteger" },
+        "maxLaunchesOutsideWaves": { "$ref": "#/definitions/positiveInteger" },
+        "maxWaves": { "$ref": "#/definitions/positiveInteger" },
+        "maxAgentTimeMs": { "$ref": "#/definitions/positiveInteger" },
+        "elapsedDeadlineMs": { "$ref": "#/definitions/positiveInteger" },
+        "reserveFraction": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+        "maxReviewRounds": { "$ref": "#/definitions/positiveInteger" },
+        "maxDepth": { "$ref": "#/definitions/positiveInteger" }
+      }
+    },
+    "roleCeilings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "coordinator", "worker", "scout", "validator"],
+      "properties": {
+        "root": { "$ref": "#/definitions/roleCeiling" },
+        "coordinator": { "$ref": "#/definitions/roleCeiling" },
+        "worker": { "$ref": "#/definitions/roleCeiling" },
+        "scout": { "$ref": "#/definitions/roleCeiling" },
+        "validator": { "$ref": "#/definitions/roleCeiling" }
+      }
+    },
+    "allowedAdapters": { "$ref": "#/definitions/uniqueStrings" },
+    "allowedEntities": { "$ref": "#/definitions/uniqueStrings" },
+    "allowedSkills": { "$ref": "#/definitions/uniqueStrings" },
+    "fallbackPolicy": { "enum": ["refuse", "ask", "preapproved"] },
+    "costMode": { "enum": ["measured-cost", "cost-unknown"] },
+    "spendingCeiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": { "amount": { "type": "number", "exclusiveMinimum": 0 }, "currency": { "type": "string", "pattern": "^[A-Z]{3}$" } }
+    }
+  },
+  "allOf": [{ "if": { "properties": { "costMode": { "const": "measured-cost" } } }, "then": { "required": ["spendingCeiling"] } }],
+  "definitions": {
+    "positiveInteger": { "type": "integer", "minimum": 1 },
+    "uniqueStrings": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "roleCeiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elapsedMs", "modelRoundsDefault", "modelRoundsMax", "toolCallsMax", "maxChildLaunches"],
+      "properties": {
+        "elapsedMs": { "$ref": "#/definitions/positiveInteger" },
+        "modelRoundsDefault": { "$ref": "#/definitions/positiveInteger" },
+        "modelRoundsMax": { "$ref": "#/definitions/positiveInteger" },
+        "toolCallsMax": { "$ref": "#/definitions/positiveInteger" },
+        "maxChildLaunches": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

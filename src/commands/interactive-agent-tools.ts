@@ -147,6 +147,8 @@ export type InteractiveAgentToolsInput = {
    * side workers and unattended runs never get these tools.
    */
   operatorConfirm?: OperatorConfirmBinding;
+  /** Session-owned Review V3 tools. Omitted for side workers and hosts without live authority. */
+  reviewV3?: { readonly tools: readonly InteractiveTool[] };
 };
 
 /**
@@ -262,6 +264,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     ...executionPlanTools(getSessionDir),
     ...(input.schedules === undefined ? [] : scheduleTools(input.schedules)),
     ...(input.operatorConfirm === undefined ? [] : operatorConfirmTools(input.operatorConfirm)),
+    ...(input.reviewV3?.tools ?? []),
     // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never
     // reached by a subagent or external child — neither tool-build path calls
     // this factory (see `spawn-subagent-tool.ts`, which builds its own child

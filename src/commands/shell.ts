@@ -99,6 +99,15 @@ function reportMcpProblems(runtime: McpRuntime): void {
     console.error(`keryx mcp: ${problem.file} ${problem.message}`);
   }
 }
+export function formatReviewV3ShutdownWarning(result: Awaited<ReturnType<ReturnType<typeof createReviewV3Host>["close"]>>, surface: "tui" | "readline"): string | undefined {
+  if (result.stopped) return undefined;
+  const runs = result.activeRunIds.length === 0 ? "unknown runs" : result.activeRunIds.join(", ");
+  return `keryx: Review V3 ${surface} shutdown is unconfirmed; external work may still be running (${runs}). Durable run evidence was preserved.`;
+}
+function reportReviewV3Shutdown(result: Awaited<ReturnType<ReturnType<typeof createReviewV3Host>["close"]>>, surface: "tui" | "readline"): void {
+  const warning = formatReviewV3ShutdownWarning(result, surface);
+  if (warning !== undefined) console.error(warning);
+}
 import { emitBackgroundJob } from "../tui/job-bridge";
 import { emitSubagentFleet } from "../tui/subagent-bridge";
 import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
@@ -123,6 +132,8 @@ import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
 import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { createReviewV3Host } from "../review/v3-host";
+import { keryxConfigDir } from "../lib/config-dir";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
@@ -1778,6 +1789,7 @@ export async function runAgentRepl(
    * for any caller (tests) that omits it.
    */
   orient?: string,
+  bindReviewV3Io?: (io: AgentIO) => void,
 ): Promise<void> {
   const out =
     rich.write ??
@@ -2222,6 +2234,7 @@ export async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
+  bindReviewV3Io?.(agentIo);
   agentIo.trustedMcpTools = new Map<string, string>();
   // The live catalog's current definition fingerprint, read fresh on every
   // call: a grant holds only while the tool's definition still matches it.
@@ -4081,6 +4094,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // `makeAgentDeps` for the same reason as the registry above — a `/model`
     // rebuild must not change the marker nudges already in history carry.
     const controlNonce = generateControlNonce();
+    let reviewV3Host: ReturnType<typeof createReviewV3Host> | undefined;
+    let reviewV3SessionOpen = true;
+    try { reviewV3Host = createReviewV3Host({ projectRoot: cwd, configDir: keryxConfigDir(runtime.cacheDir) }); }
+    catch { /* Plain/incomplete projects do not advertise Review V3 tools. */ }
     // Session-scoped, and LAZY.
     //
     // Session-scoped for the reason spelled out above for the registry:
@@ -4138,6 +4155,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // Rebuilt on launch and on every `/model` switch, so this is the live session.
         exportCallerSession(sel.provider, sel.model);
         const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
+        const getReviewV3Io = (bus as ({ reviewV3Io?: () => AgentIO | undefined }) | undefined)?.reviewV3Io;
+        const reviewV3Tools = reviewV3Host === undefined || getReviewV3Io === undefined ? [] : reviewV3Host.tools({
+          provider: agentProvider, providerId: sel.provider, modelId: sel.model, io: getReviewV3Io,
+          authorizeReviewV3Action: ({ signal }) => reviewV3SessionOpen && signal?.aborted !== true && bus?.client()?.leaseView().held() !== true,
+        });
         // flow 268: resolved fresh on every `makeAgentDeps` call (launch,
         // `/model`, `/connect`) — same lifecycle as `agentProvider` above. `{}`
         // for a native adapter with no OpenAI-compatible registry entry.
@@ -4289,6 +4311,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
                 return loaded.ok ? loaded.value.allowedUserIds : undefined;
               },
             },
+            ...(reviewV3Tools.length === 0 ? {} : { reviewV3: { tools: reviewV3Tools } }),
           }),
           // The EXISTING runtime, never a new one. `/mcp` is a read-only
           // view; opening it must not be the thing that spawns every
@@ -4492,6 +4515,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     }
     // else: optional dep absent / init failed → fall through to the readline shell.
     } finally {
+      reviewV3SessionOpen = false;
+      const reviewV3Stop = await reviewV3Host?.close();
+      if (reviewV3Stop !== undefined) reportReviewV3Shutdown(reviewV3Stop, "tui");
       // The chat TUI's bus client and lease (flow 273 T6, flow 271, AC7).
       // Idempotent: `runShell` usually released both already on its own
       // return. Bus first, so a peer never sees presence outlive the lease.
@@ -4757,6 +4783,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // every `slateSession` reassignment (see its own body below); the
       // getter here reads the box BY REFERENCE, never a snapshot.
       const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };
+      let readlineReviewIo: AgentIO | undefined;
+      let readlineReviewV3Host: ReturnType<typeof createReviewV3Host> | undefined;
+      let readlineReviewV3Open = true;
+      try { readlineReviewV3Host = createReviewV3Host({ projectRoot: agentCwd, configDir: keryxConfigDir(runtime.cacheDir) }); }
+      catch { /* Plain/incomplete projects do not advertise Review V3 tools. */ }
       // Same reset-per-turn wiring as the TUI's makeAgentDeps (own spawn_subagent instance).
       let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
@@ -4799,6 +4830,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
           mcp: mcpRuntime,
+          ...(readlineReviewV3Host === undefined ? {} : { reviewV3: { tools: readlineReviewV3Host.tools({
+            provider: agentProvider, providerId: provider, modelId: model, io: () => readlineReviewIo,
+            authorizeReviewV3Action: ({ signal }) => readlineReviewV3Open && signal?.aborted !== true && busBox.current?.leaseView().held() !== true,
+          }) } }),
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
           // review r1 F2 (AC9): NO `bus` option here. `busBox` (declared
           // above) is always still empty at THIS point — the join itself
@@ -4905,7 +4940,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }
         let endReason = "normal";
         try {
-          await runAgentRepl(replLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal, ...(readlineInitialPrompt !== undefined ? { initialPrompt: readlineInitialPrompt } : {}) }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+          await runAgentRepl(replLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal, ...(readlineInitialPrompt !== undefined ? { initialPrompt: readlineInitialPrompt } : {}) }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient, (agentIo) => { readlineReviewIo = agentIo; });
         } catch (cause) {
           endReason = "error";
           throw cause;
@@ -4917,6 +4952,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
                 // Best-effort; a SessionEnd hook failure must never mask the real outcome.
               });
           }
+          readlineReviewV3Open = false;
+          const reviewV3Stop = await readlineReviewV3Host?.close();
+          if (reviewV3Stop !== undefined) reportReviewV3Shutdown(reviewV3Stop, "readline");
         }
       };
       try {

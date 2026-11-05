@@ -35,6 +35,8 @@ import { isNormalizedWireIdentity, wireCandidateId, wireModelIdentity, type Nati
 import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
 import type { NativeRoutingBudgetStore } from "./native-routing-budget";
 import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import { createReviewV3Host } from "../review/v3-host";
+import { keryxConfigDir } from "../lib/config-dir";
 
 export type NativeSessionServices = ReturnType<typeof createNativeSessionServices>;
 export type NativeServicesFactoryContext = Pick<NativeSessionServicesOptions, "cwd" | "configDir" | "jobs" | "identity" | "sessionState" | "routingAvailability" | "searchController">;
@@ -50,6 +52,8 @@ const processGroupAlive = (pid: number): boolean => { try { process.kill(-pid, 0
 export interface NativeRuntimeOptions {
   cwd: string;
   configDir?: string;
+  /** Test seam for verifying Review V3 session ownership and shutdown. */
+  reviewV3HostFactory?: typeof createReviewV3Host;
   servicesFactory?: (context: NativeServicesFactoryContext) => NativeSessionServices | Promise<NativeSessionServices>;
   provider: ProviderPort;
   providerId: string;
@@ -229,9 +233,28 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
       return result;
     },
   });
+  let reviewV3Tools: readonly InteractiveTool[] = [];
+  let reviewV3Host: ReturnType<typeof createReviewV3Host> | undefined;
+  let reviewV3SessionOpen = true;
+  try {
+    reviewV3Host = (options.reviewV3HostFactory ?? createReviewV3Host)({ projectRoot: options.cwd, configDir: keryxConfigDir(options.configDir) });
+    reviewV3Tools = reviewV3Host.tools({
+      get provider() { return providerFor(selected.providerId, selected.modelId); },
+      get providerId() { return selected.providerId; },
+      get modelId() { return selected.modelId; },
+      io: () => ({
+        requestApproval: approve,
+        permissionMode: () => "ask",
+      }),
+      authorizeReviewV3Action: ({ signal }) => reviewV3SessionOpen && signal?.aborted !== true,
+    });
+  } catch {
+    // A plain repository or incomplete agent catalog does not advertise V3.
+  }
   const tools = [...buildInteractiveAgentTools({ cwd: options.cwd, metaprojectPort: createMetaprojectAdapter(options.cwd),
     searchController, spawnTool: spawn, jobRegistry: jobs,
     getSessionDir: () => sessionDir, askUser: (request) => (sessionAskUser ?? options.askUser ?? (async () => ASK_USER_NO_HOST))(request),
+    ...(reviewV3Tools.length === 0 ? {} : { reviewV3: { tools: reviewV3Tools } }),
     ...(options.allowSubagents === true ? {} : { denyTools: ["spawn_subagent"] }),
   }), ...canonicalProjectTools(() => projectContext)].filter((tool) => options.allowedTools === undefined || options.allowedTools.includes(tool.definition.name)).map(wrapTool);
   return {
@@ -424,6 +447,9 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
         await Promise.race([Promise.allSettled(ownedChildren), new Promise<void>(resolve => { timeout = setTimeout(resolve, 1000); })]); if (timeout !== undefined) clearTimeout(timeout);
       }
       const childRemainder = [...children].filter(([,owner]) => matches(owner) || owner === undefined).map((_,index) => `native-child-${index}`);
+      if (wholeSession) reviewV3SessionOpen = false;
+      const reviewV3Stop = wholeSession ? await reviewV3Host?.close() : undefined;
+      if (reviewV3Stop !== undefined && !reviewV3Stop.stopped) childRemainder.push("review-v3-controller");
       return { status: remainingTaskIds.length === 0 && childRemainder.length === 0 ? "stopped" : "unknown", remainingTaskIds: [...remainingTaskIds,...childRemainder] };
     },
   };

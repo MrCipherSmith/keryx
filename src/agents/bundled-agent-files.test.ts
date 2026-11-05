@@ -8,6 +8,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
+import { loadAgentCatalog } from "./catalog";
 
 const BUNDLED_AGENTS_DIR = path.join(import.meta.dir, "..", "gdskills", "bundled", "agents");
 
@@ -29,5 +30,23 @@ describe("bundled agent files contain no stray pseudo-XML closing tags", () => {
       const match = content.match(PSEUDO_XML_CLOSING_TAG);
       expect(match).toBeNull();
     });
+  }
+});
+
+test("the bundled catalogue includes the four v2 review entities with one delegating coordinator", () => {
+  const catalog = loadAgentCatalog(process.cwd());
+  expect(catalog.errors).toEqual([]);
+  const names = catalog.agents.map((agent) => agent.definition.name);
+  for (const name of ["review-scout", "review-coordinator", "review-worker", "review-validator"]) {
+    expect(names).toContain(name);
+  }
+  const coordinator = catalog.agents.find((agent) => agent.definition.name === "review-coordinator")?.definition;
+  expect(coordinator?.execution_kind).toBe("orchestrator");
+  expect(coordinator?.tool_scope).toBe("parent");
+  expect(coordinator?.delegation?.max_depth).toBe(1);
+  for (const name of ["review-scout", "review-worker", "review-validator"]) {
+    const definition = catalog.agents.find((agent) => agent.definition.name === name)?.definition;
+    expect(definition?.execution_kind).toBe("worker");
+    expect(definition?.delegation?.max_children).toBe(0);
   }
 });

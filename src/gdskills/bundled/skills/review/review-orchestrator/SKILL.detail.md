@@ -488,6 +488,120 @@ selected.
   limits, permissions, uniqueness, reserved names — beside the triggers the main
   file lists.
 
+## Review V3 — explicit hierarchical path
+
+This section replaces only reviewer dispatch when the request explicitly carries
+`--v3`. Everything before dispatch and every root/operator gate after collection
+still follows SKILL.md. Without `--v3`, do not probe, start, or mention V3: the
+legacy path remains the default.
+
+### Capability preflight and truthful limits
+
+1. Before Step 0, require the exact root tools `review_v3_start`,
+   `review_v3_plan`, `review_v3_spawn`, `review_v3_status`, `review_v3_wait`,
+   `review_v3_result`, and `review_v3_cancel`. If one is absent, return
+   `STATUS: BLOCKED v3_capability_unavailable — missing <names>`. Never silently
+   fall back to legacy or `keryx review run --autonomous`; the operator asked for
+   a different execution contract.
+2. Resolve the exact head commit, choose a stable unique `run_id`, then call
+   `review_v3_start` with `{run_id, revision}` before any V3 dispatch. Record the
+   returned `runId`, resolved `revision`, `storageDir`, effective `config`, and
+   `capabilityProfile` in the package. The returned revision is the only
+   revision the V3 run may review.
+3. Select an adapter only from that start result. It must report
+   `readOnlyEnforced`, `resultPersistence`, `cancellation`, and `hierarchy` as
+   true. `usageAccounting` is also required for measured-cost mode; otherwise
+   the run is explicitly cost-unknown. A missing property is unsupported, not
+   true. Stop with `STATUS: BLOCKED v3_capability_unavailable — adapter <id> lacks
+   <capabilities>` rather than widening authority or changing engines.
+4. The first host release exposes `native` and the reduced
+   `keryx-external-general` adapter. There is no exact parent tool parity.
+   Native source access is the read-only snapshot plus entity-declared read
+   tools, not inherited shell, MCP, web, workspace mutation, credentials or
+   every tool of root. The external adapter is bridge-only, coordinator-only,
+   has no source inspection and delegates to scoped soldiers; its provider
+   state must already be usable for the coordinator lifetime. Select it only
+   explicitly after its capability profile and credential preflight pass.
+
+`review_v3_spawn_children` is adapter-internal and is never a root tool. The root
+uses only the seven tools above; a coordinator uses the scoped child capability the
+controller gives it.
+
+### Preparation and the revision-bound plan
+
+1. Build the ordinary package, scope, slices, context and required roster through
+   Steps 0–7. The root — never a coordinator — creates an immutable,
+   revision-bound plan. It explicitly lists
+   behavior areas × aspects, risk, scenarios, boundary checks, exactly one
+   boundary owner, area owners, direct assignments, dependencies, and explicit
+   uncovered cells. A named entity, reviewer skill, or inferred relevance does
+   not mark a cell covered.
+2. Call `review_v3_plan` with `{run_id, plan, waves}` before `review_v3_spawn`.
+   The host validates the raw plan, computes the plan hash itself, authority-gates
+   registration and returns the accepted hash/version/revision; never invent or
+   supply a second hash. Root spawn refuses while no active plan is registered.
+3. Optional V3 reconnaissance uses a complete preliminary plan whose first wave
+   contains bounded `review-scout` root assignments. After their durable results
+   arrive, register a new complete plan with a higher plan version and later
+   review round before review dispatch. A coordinator may dynamically name leaf
+   tasks only inside its registered scopes and delegated coverage envelope; the
+   controller binds those children to the same plan and inherited wave.
+4. Refuse dispatch while an area or boundary has no owner, a required
+   area×aspect cell has no assignment, two owners claim one boundary, or an
+   assignment names a scope outside its area. If the repository head no longer
+   equals the resolved start revision, call `review_v3_cancel` for the run and
+   restart preparation; stale scout results and coverage never migrate to the
+   new revision.
+
+### Zones, generals and direct soldiers
+
+- Give a `review-coordinator` only one independent behavior zone whose internal
+  aspects benefit from parallel leaf checks. Its task names the exact revision,
+  area, scopes, aspects, boundary ownership, allowed reviewer skills, output
+  contract, and omissions. Never hand the whole round to a coordinator. Root
+  keeps cross-zone checks, global deduplication, validation,
+  verdict, readiness, premise decisions, completion, and publish gates.
+- Select `keryx-external-general` only for a coordinator explicitly assigned to
+  delegation and consolidation. It is bridge-only and has no source inspection;
+  it must use scoped soldiers for evidence and never impersonate a native leaf.
+- Keep small, indivisible, cross-zone, spec-gate, and independent verification
+  work as a direct worker/soldier spawned by root. A direct review worker uses
+  `entity: "review-worker"`, `role: "worker"`, its exact `skill_ref`, and its
+  assigned `scope_ids`. Scouts and validators remain leaf entities. Use only
+  entities, skills, adapters, deadlines, depth, concurrency, and launch counts
+  present in the effective config returned by `review_v3_start`; the initial
+  numeric profile is a ceiling, never a target.
+- For each root assignment call `review_v3_spawn`; an `{ok:false}` admission is
+  an explicit blocked/not-run assignment, never a reason to bypass the
+  controller. Retain the returned `dispatchId`. Poll `review_v3_status` only for
+  progress, use `review_v3_wait` for terminal state, and call
+  `review_v3_result` for the full durable result. On operator stop, stale
+  revision, fatal gate failure, or abandoned area, call `review_v3_cancel` on
+  the subtree or run and reconcile late results before reporting.
+
+### Leaf artifacts, coverage and the unchanged tail
+
+1. Read run-level `review_v3_status` to enumerate every assignment, including a
+   coordinator's children. Fetch each completed leaf with `review_v3_result` and
+   save its full `REVIEW_RESULT` under a dispatch-unique path in `<package>/raw/`;
+   write the matching driver with its actual entity, reviewer skill, scopes,
+   revision and dispatch id. A missing, malformed, failed, blocked, cancelled, or
+   stale leaf remains uncovered and follows the existing retry/Not run rules.
+2. Store coordinator syntheses separately under the package's research evidence.
+   A coordinator summary is not leaf evidence, not a reviewer result, and not
+   coverage. It never replaces, truncates, or duplicates its children's durable
+   results or usage.
+3. Reconcile the plan's behavior-area × aspect cells and boundary checks only
+   from completed leaf artifacts at the same revision. Spawn `review-validator`
+   only as an independent assignment: it may not validate a finding produced by
+   the same dispatch or agent instance. Preserve unresolved and uncovered cells
+   explicitly; do not infer a clean verdict from silence.
+4. Feed the dispatch-unique leaf artifacts through the existing quality gate,
+   ledger build, ingest, verifier/premise handling, verdict, mutation pass and
+   `keryx review readiness`. The root owns operator decisions and the complete and
+   publish gates exactly as in the legacy path. V3 changes fan-out and durable
+   lineage; it does not waive or reimplement those gates.
+
 ## Counterpart verification — the contract is enumerated, not summarised
 
 For an **input rule** the diff mirrors or depends on (what the server accepts

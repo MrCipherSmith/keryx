@@ -64,6 +64,16 @@ const DEFINITION: AgentDefinition = {
   body: "Find what the caller asked for and report file paths.",
 };
 
+const COORDINATOR: AgentDefinition = {
+  ...DEFINITION,
+  schema_version: 2,
+  name: "review-coordinator",
+  tools: ["read_file", "spawn_subagent"],
+  execution_kind: "orchestrator",
+  tool_scope: "parent",
+  delegation: { allowed_entities: ["review-worker", "review-validator"], max_depth: 1, max_children: 48 },
+};
+
 test("compiled keryx-shell input keys are a subset of the REAL tool's inputSchema.properties", () => {
   const tool = makeRealSpawnSubagentTool();
   const allowedKeys = new Set(Object.keys(tool.definition.inputSchema.properties as Record<string, unknown>));
@@ -114,6 +124,9 @@ test("every AgentDefinition field is projected into input or the policy sidecar 
     output_contract: "header", // not projected into keryx-shell (no dispatch slot for it)
     isolation: "policy", // -> policy.isolation
     origin: "header", // provenance only, not a dispatch input
+    execution_kind: "policy",
+    tool_scope: "policy",
+    delegation: "policy",
   };
   void destinations; // documents intent; the concrete assertions below are what actually guards it
 
@@ -124,6 +137,24 @@ test("every AgentDefinition field is projected into input or the policy sidecar 
   expect(policy.toolAllowlist).toEqual(DEFINITION.tools);
   expect(policy.profile).toBe("shellChildReadOnlyProfile");
   expect(policy.isolation).toBe(DEFINITION.isolation);
+});
+
+test("v2 orchestration constraints are carried but reported unsupported until the runtime controller enforces them", () => {
+  const result = compileAgentDefinition(COORDINATOR, "keryx-shell");
+  if (!result.ok || result.result.target !== "keryx-shell") throw new Error("expected keryx-shell result");
+  expect(result.result.policy.executionKind).toBe("orchestrator");
+  expect(result.result.policy.toolScope).toBe("parent");
+  expect(result.result.policy.delegation).toEqual(COORDINATOR.delegation!);
+  expect(result.result.policy.enforcement.unsupported).toEqual(["executionKind", "toolScope", "delegation"]);
+  expect(result.result.policy.enforcement.enforced).toEqual(["mode"]);
+});
+
+test("host exports report v2 orchestration constraints as unsupported instead of implying native enforcement", () => {
+  for (const target of ["claude", "codex", "kiro", "opencode"] as const) {
+    const result = compileAgentDefinition(COORDINATOR, target);
+    if (!result.ok || result.result.target === "keryx-shell") throw new Error(`expected ${target} host export`);
+    expect(result.result.unsupportedConstraints).toEqual(["executionKind", "toolScope", "delegation"]);
+  }
 });
 
 test("R1-F6: the policy sidecar is honest about what spawn_subagent actually enforces — only `mode`, never the tool allowlist or isolation", () => {

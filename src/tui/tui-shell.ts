@@ -4695,6 +4695,13 @@ export async function launchTuiAgentShell(opts: {
   // `/model`/`/connect`/side-worker rebuild) — `commands/shell.ts`'s
   // `makeAgentDeps` reads `bus.client()` at call time, never a snapshot.
   const busClientRef = { client: (): BusClient | undefined => liveBus };
+  let reviewV3Io: AgentIO | undefined;
+  Object.assign(busClientRef, {
+    reviewV3Io: (): AgentIO => {
+      if (reviewV3Io === undefined) throw new Error("Review V3 TUI authority is not initialized");
+      return reviewV3Io;
+    },
+  });
   // Flow 275 (agent bus P4, T7; specification §4.3): this instance's cached
   // lease reader, or `undefined` before the bus join settles / when the bus
   // is disabled — `BusClient.leaseView()` always returns the SAME object
@@ -5736,6 +5743,7 @@ export async function launchTuiAgentShell(opts: {
     setMainAgent("queued", "ready");
 
     const io = createTuiAgentIo(otui, r, transcript);
+    reviewV3Io = io;
     const ctrlCPolicy = createCtrlCPolicy({ now: Date.now });
     ctrlCPress = () => {
       // A turn already told to stop but not yet unwound counts as idle, so a wedged one cannot trap the user.

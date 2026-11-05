@@ -50,7 +50,7 @@ import {
   structuralSentinelOf,
   type AgentSentinelFormat,
 } from "./sentinel";
-import type { AgentDefinition, AgentExportRuntime, ExportSupportLevel, IsolationMode, ModelTier } from "./types";
+import type { AgentDefinition, AgentDelegation, AgentExecutionKind, AgentExportRuntime, AgentToolScope, ExportSupportLevel, IsolationMode, ModelTier } from "./types";
 
 // R2-F1: `AGENT_SENTINEL_PREFIX` now lives in `./sentinel` (the tiny,
 // dependency-free leaf module both this file and `export.ts`/the audit
@@ -106,12 +106,15 @@ export interface KeryxShellEnforcement {
   readonly enforced: readonly string[];
   /** Sidecar fields recorded but not consumed by `spawn_subagent` today. */
   readonly advisory: readonly string[];
+  /** Constraints this compiler can record but the current target cannot enforce. */
+  readonly unsupported: readonly string[];
   readonly note: string;
 }
 
 const KERYX_SHELL_ENFORCEMENT: KeryxShellEnforcement = {
   enforced: ["mode"],
   advisory: ["toolAllowlist", "isolation"],
+  unsupported: ["executionKind", "toolScope", "delegation"],
   note:
     "spawn_subagent enforces only `mode` (read_only vs general) as of v1 — see " +
     "src/harness/tool/builtin/spawn-subagent-tool.ts's mode-to-tools construction. " +
@@ -120,7 +123,9 @@ const KERYX_SHELL_ENFORCEMENT: KeryxShellEnforcement = {
     "web_search — \"v1 general: still no shell_exec\", parent owns mutations). " +
     "toolAllowlist and isolation are carried here for a future dispatcher to read " +
     "but are NOT enforced by spawn_subagent today; nothing is silently dropped (every " +
-    "field lands in input or here), but only `mode` actually constrains the child.",
+    "field lands in input or here), but only `mode` actually constrains the child. " +
+    "V2 executionKind, toolScope, and delegation are recorded as unsupported until " +
+    "the durable review controller performs admission and tool rebinding.",
 };
 
 /**
@@ -144,6 +149,9 @@ export interface KeryxShellCompileResult {
     readonly profile: string;
     readonly toolAllowlist: readonly string[];
     readonly isolation: IsolationMode;
+    readonly executionKind: AgentExecutionKind;
+    readonly toolScope: AgentToolScope;
+    readonly delegation: AgentDelegation;
     /** R1-F6: which of the above `spawn_subagent` actually enforces today. */
     readonly enforcement: KeryxShellEnforcement;
   };
@@ -156,6 +164,8 @@ export interface HostAgentExport {
   readonly relativePath: string;
   readonly content: string;
   readonly droppedTools: readonly string[];
+  /** V2 constraints the host export carries as instructions but cannot enforce mechanically. */
+  readonly unsupportedConstraints: readonly string[];
 }
 
 export type CompiledAgent = KeryxShellCompileResult | HostAgentExport;
@@ -218,6 +228,7 @@ function containsBaselineNearCopy(body: string): boolean {
  * per-target content against itself.
  */
 function canonicalDefinitionSource(definition: AgentDefinition): string {
+  const delegation = definition.delegation ?? { allowed_entities: [], max_depth: 0, max_children: 0 };
   return JSON.stringify({
     schema_version: definition.schema_version ?? null,
     name: definition.name,
@@ -230,6 +241,13 @@ function canonicalDefinitionSource(definition: AgentDefinition): string {
     stacks: [...definition.stacks],
     output_contract: definition.output_contract,
     isolation: definition.isolation,
+    execution_kind: definition.execution_kind ?? "worker",
+    tool_scope: definition.tool_scope ?? "static",
+    delegation: {
+      allowed_entities: [...delegation.allowed_entities],
+      max_depth: delegation.max_depth,
+      max_children: delegation.max_children,
+    },
     origin: definition.origin ?? null,
     body: definition.body,
   });
@@ -426,6 +444,9 @@ function compileKeryxShell(definition: AgentDefinition, header: string): Compile
         profile: policyResolution.resolution.profileName,
         toolAllowlist: [...definition.tools],
         isolation: definition.isolation,
+        executionKind: definition.execution_kind ?? "worker",
+        toolScope: definition.tool_scope ?? "static",
+        delegation: definition.delegation ?? { allowed_entities: [], max_depth: 0, max_children: 0 },
         enforcement: KERYX_SHELL_ENFORCEMENT,
       },
     },
@@ -553,6 +574,7 @@ function renderClaudeExport(definition: AgentDefinition, header: string, options
     relativePath: `.claude/agents/${definition.name}.md`,
     content: finalizeAgentContentHash("md", draft),
     droppedTools: [...droppedTools, ...strippedForPolicy],
+    unsupportedConstraints: definition.schema_version === 2 ? ["executionKind", "toolScope", "delegation"] : [],
   };
 }
 
@@ -635,6 +657,7 @@ function renderCodexExport(definition: AgentDefinition, header: string): Compile
       relativePath: `.codex/agents/${definition.name}.toml`,
       content: finalizeAgentContentHash("toml", draft),
       droppedTools: [],
+      unsupportedConstraints: definition.schema_version === 2 ? ["executionKind", "toolScope", "delegation"] : [],
     },
   };
 }
@@ -674,6 +697,7 @@ function renderKiroExport(definition: AgentDefinition, header: string): CompileR
       relativePath: `.kiro/agents/${definition.name}.json`,
       content: finalizeAgentContentHash("kiro-json", draft),
       droppedTools: [...droppedTools, ...strippedForPolicy],
+      unsupportedConstraints: definition.schema_version === 2 ? ["executionKind", "toolScope", "delegation"] : [],
     },
   };
 }
@@ -722,6 +746,7 @@ function renderOpencodeExport(definition: AgentDefinition, header: string): Comp
       relativePath: `.opencode/agents/${definition.name}.md`,
       content: finalizeAgentContentHash("md", draft),
       droppedTools,
+      unsupportedConstraints: definition.schema_version === 2 ? ["executionKind", "toolScope", "delegation"] : [],
     },
   };
 }

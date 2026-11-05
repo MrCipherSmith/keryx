@@ -60,6 +60,8 @@ import { printImportHelp, runImportReviewers } from "../review/import-reviewers"
 import { runJevRules } from "./review-jev-rules";
 import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { RUN_HELP, runReviewRun } from "./review-run";
+import { runReviewV3, type ReviewV3CliFactory } from "./review-v3";
+import { runReviewV3ServeCommand } from "./review-v3-serve";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
@@ -674,6 +676,8 @@ export interface ReviewCommandSeams {
   priorRound?: Partial<Omit<PriorRoundDeps, "cwd" | "forced" | "excludeReviewId">>;
   /** Test seam: a pull request's own base ref for `start|attach|ingest` of a PR target. Default: `gh pr view` (see ghPrBase). */
   prBase?: (ref: string) => Promise<string | undefined>;
+  /** Live Review V3 host binding. Omitted means fail-closed: no adapter or authority is invented by the CLI. */
+  reviewV3Factory?: ReviewV3CliFactory;
 }
 
 /** At most this long is spent asking gh for a pull request's base; a slower answer is no answer. */
@@ -846,6 +850,17 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     // flow 424: one unattended review of a pull request (the review-autonomous profile).
     if (command === "run") {
       await runReviewRun(args.slice(1));
+      return;
+    }
+    // Review V3 remains hidden from the stable help until a shell/session host
+    // supplies live adapters and authority. The command itself is fail-closed.
+    if (command === "v3") {
+      if (args[1] === "serve") {
+        const code = await runReviewV3ServeCommand(args.slice(2));
+        if (code !== 0) process.exitCode = code;
+        return;
+      }
+      await runReviewV3(args.slice(1), seams?.reviewV3Factory);
       return;
     }
     // flow 343: the Jev EDIT GUARD — see `review-jev-edit-guard.ts` for
@@ -5252,6 +5267,29 @@ ${reviewHelpSection("learn")}
 `);
 }
 
+function printReviewV3Help(): void {
+  console.log(`keryx review v3
+
+Usage:
+  keryx review v3 serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+                        --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
+  keryx review v3 start --run-dir <dir> --run-id <id> --revision <git-revision> --config <json>
+  keryx review v3 plan --run-dir <dir> --payload <json>
+  keryx review v3 capabilities --run-dir <dir> [--adapter <id>]
+  keryx review v3 status --run-dir <dir> [--dispatch <id>]
+  keryx review v3 spawn --run-dir <dir> --payload <json>
+  keryx review v3 wait --run-dir <dir> --dispatch <id>
+  keryx review v3 cancel --run-dir <dir> [--dispatch <id>] --reason <text>
+  keryx review v3 result --run-dir <dir> --dispatch <id>
+
+\`serve\` is the foreground owner for ordinary terminal, Codex CLI and Claude Code clients. It prints an explicit
+Unix-socket connection handshake; export exactly the three KERYX_REVIEW_V3_ROOT_* values into the controlling
+harness. The bearer grants the host ceiling selected by these startup flags, so keep it out of logs and child-agent
+environments. Root commands fail closed without that complete environment. Descendant agents use their separate,
+run-scoped bridge grant and cannot combine it with the root environment.
+`);
+}
+
 /**
  * The help a `keryx review <subcommand> --help` question is answered with.
  *
@@ -5263,6 +5301,7 @@ ${reviewHelpSection("learn")}
  * subcommand, mutating or not; a subcommand with no entry gets the group help.
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["v3", printReviewV3Help],
   ["start", printStartHelp],
   ["ingest", printIngestHelp],
   ["mutate", printMutateHelp],
@@ -5421,6 +5460,9 @@ function reviewHelpText(): string {
   return `keryx review
 
 Usage:
+  keryx review v3 serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+                        --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
+  keryx review v3 <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
                       [--automatic] [--no-prior-round | --prior <package|reviewId>]

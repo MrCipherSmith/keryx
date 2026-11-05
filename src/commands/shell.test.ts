@@ -123,7 +123,7 @@ import type {
 // PINNED API (RED: module does not exist until T6).
 import type { ShellDeps, ShellIO } from "./shell";
 import type { SignalShutdownParts } from "./shell";
-import { EXPAND_MAX_LINES, expandedToolOutput, makeSignalShutdown, parseShellCliFlags, runShell, shellCommand } from "./shell";
+import { EXPAND_MAX_LINES, expandedToolOutput, formatReviewV3ShutdownWarning, makeSignalShutdown, parseShellCliFlags, runShell, shellCommand } from "./shell";
 import type { BusClient } from "../bus/client";
 import type { SessionLeaseHandle } from "../session/lease";
 import { blockLabel } from "../lib/md-blocks";
@@ -139,6 +139,13 @@ const NO_CAPS: ProviderCapabilities = {
   tokenCounting: false,
   modelListing: false,
 };
+
+test("Review V3 shell shutdown reports unconfirmed external work and preserved evidence", () => {
+  expect(formatReviewV3ShutdownWarning({ stopped: false, activeRunIds: ["run-a"] }, "readline")).toBe(
+    "keryx: Review V3 readline shutdown is unconfirmed; external work may still be running (run-a). Durable run evidence was preserved.",
+  );
+  expect(formatReviewV3ShutdownWarning({ stopped: true, activeRunIds: [] }, "tui")).toBeUndefined();
+});
 
 /** Deterministic fixed clock stub — never `Date.now`. */
 function fixedClock(): () => string {
