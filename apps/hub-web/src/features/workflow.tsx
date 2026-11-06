@@ -50,6 +50,7 @@ export function ProjectsView() {
   const [creating, setCreating] = useState(false);
   const nameInput = useRef<HTMLInputElement>(null);
   const errorId = useId();
+  useEffect(() => { if (creating) nameInput.current?.focus(); }, [creating]);
   const [draftKept, setDraftKept] = useState(false);
   const isCurrent = usePresentationGuard(`${hub.scopeKey}:${hub.projectId}:${hub.location.tab}`);
   const projects = useQuery({ queryKey: [hub.scopeKey, 'projects'], queryFn: ({ signal }) => getJson<{ projects: Project[] }>('/projects', signal) });
@@ -59,18 +60,19 @@ export function ProjectsView() {
   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.name.trim()) { setValidation(t('projectNameRequired')); nameInput.current?.focus(); return; } create.mutate({ isCurrent, draft: draft }); }
   return <div className="space-y-5">
     <PageHeading title={t('projectsTitle')} action={<Button variant={creating ? 'secondary' : 'primary'} aria-expanded={creating} onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'createProject')}</Button>} />
-    <QueryFeedback query={projects} />
-    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="hub-project-card">
-      <span className="flex size-10 items-center justify-center rounded-xl bg-teal-50 text-lg font-semibold text-teal-800">{project.name.slice(0, 1).toUpperCase()}</span>
-      <span className="min-w-0 break-words font-semibold">{project.name}</span><span aria-hidden="true">→</span>
-    </button>)}</div>}
-    {projects.data?.projects.length === 0 && <EmptyState>{t('noProjects')}</EmptyState>}
     {creating && <Panel title={t('createProject')}><form noValidate onSubmit={submit} className="max-w-xl space-y-3">
       <Field label={t('projectName')}><input ref={nameInput} className={inputClass} value={draft.name} onChange={event => { setValidation(''); setDraft({ name: event.target.value }); }} aria-invalid={!!validation} aria-errormessage={validation ? errorId : undefined} maxLength={200} required /></Field>
       {validation && <p id={errorId} role="alert" className="text-sm text-red-700">{validation}</p>}
       {draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{create.isError && <ErrorNotice error={create.error} />}
       <Button type="submit" disabled={create.isPending}>{create.isPending ? t('loading') : t('createProject')}</Button>
     </form></Panel>}
+    <QueryFeedback query={projects} />
+    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="hub-project-card">
+      <span className="flex size-10 items-center justify-center rounded-xl bg-teal-50 text-lg font-semibold text-teal-800">{project.name.slice(0, 1).toUpperCase()}</span>
+      <span className="min-w-0 break-words font-semibold">{project.name}</span><span aria-hidden="true">→</span>
+    </button>)}</div>}
+    {projects.data?.projects.length === 0 && <EmptyState>{t('noProjects')}</EmptyState>}
+
     {projects.data && <ManagedAttentionOverview projects={projects.data.projects}/>}
   </div>;
 }
@@ -92,12 +94,7 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
   const board = useRef<HTMLDivElement>(null);
   const returnCard = useRef<string | null>(null);
   const selected = hub.location.flowId;
-  useLayoutEffect(() => {
-    if (selected || !returnCard.current) return;
-    const card = board.current?.querySelector<HTMLButtonElement>(`[data-board-flow="${CSS.escape(returnCard.current)}"]`);
-    card?.focus();
-    returnCard.current = null;
-  }, [selected]);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false); const [search, setSearch] = useState(''); const [validation, setValidation] = useState('');
   const [draftKept, setDraftKept] = useState(false);
   const [draft, setDraft, clearDraft] = useDraft(`create-flow:${projectId}`, { title: '', specDocumentId: '', criteria: '' });
@@ -109,8 +106,19 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
     void client.invalidateQueries({ queryKey: [hub.scopeKey, projectId, 'flows'] }); const cleared = clearDraft(context.draft); if (!context.isCurrent()) return; setDraftKept(!cleared); if (!cleared) return; setCreating(false); hub.navigate({ tab: 'flows', flowId: flow.id });
   } });
   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.title.trim() || !specs.some(spec => spec.id === draft.specDocumentId) || !draft.criteria.trim()) { setValidation(t('required')); return; } create.mutate({ isCurrent, draft: draft }); }
-  if (selected) return <FlowDetail key={`${projectId}:${selected}`} projectId={projectId} flowId={selected} documents={documents.data?.documents ?? []} />;
   const filtered = flows.data?.flows.filter(flow => `${flow.title} ${flow.specContentDigest}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
+  const returningStatus = filtered.find(flow => flow.id === returnCard.current)?.status;
+  useLayoutEffect(() => {
+    if (selected || !returnCard.current || flows.isFetching) return;
+    if (returningStatus && lane !== returningStatus) {
+      setLane(returningStatus);
+      return;
+    }
+    const card = board.current?.querySelector<HTMLButtonElement>(`[data-board-flow="${CSS.escape(returnCard.current)}"]`);
+    (card ?? searchInput.current)?.focus();
+    returnCard.current = null;
+  }, [selected, returningStatus, lane, flows.isFetching]);
+  if (selected) return <FlowDetail key={`${projectId}:${selected}`} projectId={projectId} flowId={selected} documents={documents.data?.documents ?? []} />;
   return <div className="space-y-6"><PageHeading title={title} description={t('boardDescription')} action={<Button variant={creating ? 'secondary' : 'primary'} onClick={() => setCreating(!creating)}>{creating ? t('cancel') : t('createFlow')}</Button>} />
     <Notice>
       <p>{t('flowWorkspaceDistinction')}</p>
@@ -127,7 +135,7 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
     <QueryFeedback query={flows} /><QueryFeedback query={documents} />
     {flows.data && <>
       <div className="flow-list-toolbar">
-        <Field label={t('searchFlows')}><input className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} aria-label={t('flowSearchLabel')} /></Field>
+        <Field label={t('searchFlows')}><input ref={searchInput} className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} aria-label={t('flowSearchLabel')} /></Field>
         <div className="flex gap-2" role="group" aria-label={t('boardLabel')}><Button variant={layout === 'list' ? 'primary' : 'secondary'} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>{t('listView')}</Button><Button variant={layout === 'board' ? 'primary' : 'secondary'} aria-pressed={layout === 'board'} onClick={() => setLayout('board')}>{t('boardView')}</Button></div>
       </div>
       {flows.data.flows.length === 0 && <EmptyState>{t('noFlows')}</EmptyState>}

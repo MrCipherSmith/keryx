@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
@@ -90,6 +90,7 @@ export function SessionWorkspace({
   control,
   history,
   conversation,
+  messages,
   composer,
   queue,
   settings,
@@ -100,6 +101,7 @@ export function SessionWorkspace({
   control: Controller;
   history: ReactNode;
   conversation?: HTMLDivElement | null;
+  messages?: Control["SessionMessage"][];
   composer: ReactNode;
   queue: ReactNode;
   settings: ReactNode;
@@ -213,8 +215,9 @@ export function SessionWorkspace({
           type="button"
           className="session-attention"
           onClick={() => {
-            conversation?.scrollIntoView({ block: "nearest" });
-            conversation?.focus({ preventScroll: true });
+            const target = conversation?.querySelector<HTMLElement>("[data-chat-approval=waiting]") ?? conversation;
+            target?.scrollIntoView({ block: "nearest" });
+            target?.focus({ preventScroll: true });
           }}
         >
           {words.attention}
@@ -306,6 +309,7 @@ export function SessionWorkspace({
               control={control}
               mode={tab === "changes" || tab === "checks" ? tab : "context"}
               conversation={conversation}
+              messages={messages}
             />
           </div>
           <div
@@ -347,6 +351,12 @@ function SessionNavigator({
   const [projectId, setProjectId] = useState(record.projectId);
   const client = useQueryClient();
   const projects = client.getQueryData<{ projects: Project[] }>([hub.scopeKey, "projects"])?.projects ?? [];
+  const alternateMachines = useQuery({
+    queryKey: [hub.scopeKey, projectId, "remote", "machines"],
+    queryFn: ({ signal }) => remoteGet<{ machines: MachineSummary[] }>("/machines?projectId=" + encodeURIComponent(projectId), signal),
+    enabled: projectId !== record.projectId,
+  });
+  const visibleMachines = projectId === record.projectId ? machines : alternateMachines.data?.machines ?? [];
   const sessions = useInfiniteQuery({
     queryKey: [
       hub.scopeKey,
@@ -386,7 +396,7 @@ function SessionNavigator({
         <Button
           variant="ghost"
           onClick={() =>
-            hub.navigate({ tab: "sessions", sessionId: undefined })
+            hub.navigate({ projectId, tab: "sessions", sessionId: undefined })
           }
         >
           {words.all}
@@ -408,10 +418,10 @@ function SessionNavigator({
       <Feedback query={sessions} />
       {[...groups].map(([key, items]) => {
         const sample = items[0]!;
-        const machine = machines.find((m) => m.machineId === sample.machineId);
+        const machine = visibleMachines.find((m) => m.machineId === sample.machineId);
         const checkout = machine?.inventory?.checkouts.find(
           (c) =>
-            c.projectId === record.projectId &&
+            c.projectId === sample.projectId &&
             c.checkoutId === sample.checkoutId,
         );
         return (

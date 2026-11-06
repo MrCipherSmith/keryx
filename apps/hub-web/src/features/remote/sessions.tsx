@@ -2,7 +2,7 @@ import { getJson } from '../../api/client';
 import type { HubFlow } from '../../api/types';
 import { digestCriteria } from './shared';
 import { Textarea } from '../../components/ui';
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { remoteGet } from "../../api/remote";
 import { formatDate } from "../../i18n/format";
@@ -337,6 +337,13 @@ export function SessionSurface({
   // invocation time for display and the history cursor at invocation for placement; the first report
   // of an operation fixes both, later reports only refresh the outcome.
   const [conversation, setConversation] = useState<HTMLDivElement | null>(null);
+  const history = useSessionHistory(record);
+  const messages = useMemo(() => {
+    const loaded = new Map<string, Control["SessionMessage"]>();
+    for (const page of history.data?.pages ?? [])
+      for (const message of page.messages) loaded.set(message.messageId, message);
+    return [...loaded.values()].sort((a, b) => a.historyCursor - b.historyCursor);
+  }, [history.data]);
   const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
   const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
     setOutcomes(previous => {
@@ -366,8 +373,9 @@ export function SessionSurface({
       openingRejected={!!openingError}
       record={record}
       control={control}
-      history={<History record={record} outcomes={outcomes} liveRef={setConversation} />}
+      history={<History record={record} outcomes={outcomes} liveRef={setConversation} query={history} messages={messages} />}
       conversation={conversation}
+      messages={messages}
       composer={
         <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
       }
@@ -439,10 +447,9 @@ export function SessionSurface({
   );
 }
 
-function History({ record, outcomes, liveRef }: { record: Control["SessionRecord"]; outcomes: CommandEntry[]; liveRef: (element: HTMLDivElement | null) => void }) {
-  const { t } = useTranslation("remote");
+function useSessionHistory(record: Control["SessionRecord"]) {
   const hub = useHub();
-  const query = useInfiniteQuery({
+  return useInfiniteQuery({
     queryKey: historyQueryKey(hub.scopeKey, record.projectId, record.sessionId),
     initialPageParam: 0,
     queryFn: ({ signal, pageParam }) =>
@@ -454,16 +461,17 @@ function History({ record, outcomes, liveRef }: { record: Control["SessionRecord
       ),
     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
   });
-  const messages = new Map<string, Control["SessionMessage"]>();
-  query.data?.pages.forEach((page) =>
-    page.messages.forEach((message) =>
-      messages.set(message.messageId, message),
-    ),
-  );
-  const ordered = [...messages.values()].sort(
-    (a, b) => a.historyCursor - b.historyCursor,
-  );
-  const timeline = mergeTimeline(ordered, outcomes);
+}
+
+function History({ record, outcomes, liveRef, query, messages }: {
+  record: Control["SessionRecord"];
+  outcomes: CommandEntry[];
+  liveRef: (element: HTMLDivElement | null) => void;
+  query: ReturnType<typeof useSessionHistory>;
+  messages: Control["SessionMessage"][];
+}) {
+  const { t } = useTranslation("remote");
+  const timeline = mergeTimeline(messages, outcomes);
   return (
     <section className="session-transcript" aria-label={t("history")}>
       <header className="session-transcript-header">
@@ -477,7 +485,7 @@ function History({ record, outcomes, liveRef }: { record: Control["SessionRecord
         {query.data?.pages.some((page) => page.gap) && (
           <Notice>{t("gap")}</Notice>
         )}
-        {query.data && !ordered.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
+        {query.data && !messages.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
         <div ref={liveRef} tabIndex={-1} />
       </SessionTranscript>
       {query.hasNextPage && (

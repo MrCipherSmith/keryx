@@ -1,7 +1,6 @@
 import { createPortal } from "react-dom";
-import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { Markdown } from "../../components/Markdown";
-import { historyQueryKey } from "./session-timeline";
+import { pendingAssistantText } from "./session-timeline";
 import { useTranslation } from "react-i18next";
 import type {
   ApprovalProjection,
@@ -31,9 +30,10 @@ type Props = {
   control: Controller;
   mode: SessionRunMode;
   conversation?: HTMLDivElement | null;
+  messages?: Control["SessionMessage"][];
 };
 /** Mount one instance per workspace; changing mode preserves its bounded event accumulator. */
-export function SessionRunContext({ record, control, mode, conversation }: Props) {
+export function SessionRunContext({ record, control, mode, conversation, messages }: Props) {
   const hub = useHub();
   const { i18n } = useTranslation();
   const copy = sessionRunCopy[i18n.language.startsWith("ru") ? "ru" : "en"];
@@ -78,21 +78,19 @@ export function SessionRunContext({ record, control, mode, conversation }: Props
           control={control}
           mode={mode}
           conversation={conversation}
+          messages={messages}
         />
       )}
     </div>
   );
 }
-function LoadedRun({ run, record, control, mode, conversation }: Props & { run: RunRecord }) {
+function LoadedRun({ run, record, control, mode, conversation, messages }: Props & { run: RunRecord }) {
   const hub = useHub();
   const { t, i18n } = useTranslation("remote");
   const copy = sessionRunCopy[i18n.language.startsWith("ru") ? "ru" : "en"];
   const { timeline, query } = useRunTimeline(run);
-  const client = useQueryClient();
   const cancel = useRemoteAction();
-  const history = client.getQueryData<InfiniteData<Control["HistoryPage"]>>(historyQueryKey(hub.scopeKey, record.projectId, record.sessionId));
-  const saved = history?.pages.some(page => page.messages.some(message => message.role === "assistant" && message.runId === run.runId));
-  const reply = timeline.events.flatMap(event => event.kind === "log" && event.stream === "assistant" ? [event.text] : []).join("");
+  const reply = pendingAssistantText(run.runId, timeline.events, messages ?? []);
   const toolLog = timeline.events.flatMap(event => event.kind === "log" && event.stream === "tool-summary" ? [event] : []);
   const terminal = ["succeeded", "failed", "cancelled", "rejected", "lost", "unknown"].includes(run.state);
   const safe =
@@ -120,37 +118,27 @@ function LoadedRun({ run, record, control, mode, conversation }: Props & { run: 
         sessionId: undefined,
       });
   };
-  const approvalCards = [...approvals.values()].map((approval) => (
-    <ApprovalCard
-      key={approval.approvalId}
-      approval={approval}
-      run={run}
-      session={record}
-      control={control}
-      safe={safe}
-      outcome={timeline.events.find(
-        (
-          event,
-        ): event is Extract<
-          FrameOf<"run-event">["payload"],
-          { kind: "approval-outcome" }
-        > =>
-          event.kind === "approval-outcome" &&
-          event.approvalId === approval.approvalId,
-      )}
-    />
-  ));
+  const approvalCards = [...approvals.values()].map(approval => {
+    const outcome = timeline.events.find(
+      (event): event is Extract<FrameOf<"run-event">["payload"], { kind: "approval-outcome" }> =>
+        event.kind === "approval-outcome" && event.approvalId === approval.approvalId,
+    );
+    const waiting = approval.status === "waiting" && !outcome;
+    return <div key={approval.approvalId} data-chat-approval={waiting ? "waiting" : undefined} tabIndex={waiting ? -1 : undefined}>
+      <ApprovalCard approval={approval} run={run} session={record} control={control} safe={safe} outcome={outcome} />
+    </div>;
+  });
   if (mode === "attention") return <>{approvalCards}</>;
   return (
     <>
       {conversation ? createPortal(
         <div className="session-live">
-          {!saved && reply && <Markdown content={reply} />}
+          {reply && <Markdown content={reply} />}
           {!terminal && <div className="session-live-controls">
             <span role="status">{run.cancelRequested || cancel.isSuccess
               ? t("receiptStatuses.requested")
               : t("states." + run.state, { defaultValue: run.state })}</span>
-            <Button variant="secondary" disabled={!run.connected || !control.active || !safe || cancel.isPending || cancel.isSuccess || !!run.cancelRequested} onClick={() => {
+            <Button variant="secondary" disabled={!run.connected || !control.active || timeline.conflict || timeline.overflow || cancel.isPending || cancel.isSuccess || !!run.cancelRequested} onClick={() => {
               if (!control.binding) return;
               cancel.mutate({
                 path: remoteProject(run.projectId) + "/runs/" + encodeURIComponent(run.runId) + "/cancel",

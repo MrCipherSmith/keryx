@@ -264,7 +264,7 @@ export function MessageComposer({
                 event.preventDefault();
                 return;
               }
-              if (canSend && !event.repeat) {
+              if (canSend && !event.repeat && !window.matchMedia?.("(max-width: 767px), (pointer: coarse)").matches) {
                 event.preventDefault();
                 submit();
               }

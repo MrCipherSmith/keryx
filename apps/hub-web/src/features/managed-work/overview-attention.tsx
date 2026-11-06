@@ -108,7 +108,7 @@ function ProjectAttention({
   if (!capabilities.data?.enabled || !items.length) return null;
   return (
     <div className="managed-project-attention">
-      <strong>{project.name} · {t("itemsShown", { count: items.length })}</strong>
+      <strong>{project.name}</strong>
       <div className="work-attention-items">
         {items.slice(0, shown).map((item) => {
           const flowId = attentionTarget(item, [])?.flowId;

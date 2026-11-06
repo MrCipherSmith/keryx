@@ -50,18 +50,26 @@ function useWrite<T, D = undefined>(resources: string[], onSaved?: (result: T, s
   });
 }
 
+function wikiScalar(value: string | undefined) {
+  const scalar = value?.trim();
+  if (scalar?.startsWith('"') && scalar.endsWith('"')) return scalar.slice(1, -1).replace(/\\(["\\])/g, '$1');
+  if (scalar?.startsWith("'") && scalar.endsWith("'")) return scalar.slice(1, -1).replaceAll("''", "'");
+  return scalar;
+}
+
 /** Read the scalar metadata emitted by the wiki generator. Keep the source untouched. */
 function documentPresentation(doc: HubDocument) {
-  const front = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(doc.content);
+  const front = /^---\r?\n((?:[^\r\n]*\r?\n)*?)---(?:\r?\n|$)/.exec(doc.content);
   const fields = front?.[1] ?? '';
-  const title = /^Title:[ \t]+(.+)$/mi.exec(fields)?.[1]?.trim().replace(/^["']|["']$/g, '');
-  const summary = /^Summary:[ \t]+(.+)$/mi.exec(fields)?.[1]?.trim().replace(/^["']|["']$/g, '');
+  const title = wikiScalar(/^Title:[ \t]+(.+)$/mi.exec(fields)?.[1]);
+  const summary = wikiScalar(/^Summary:[ \t]+(.+)$/mi.exec(fields)?.[1]);
   const body = front && (title || summary) ? doc.content.slice(front[0].length) : doc.content;
-  const heading = /^\s*# (.+)(?:\r?\n|$)/.exec(body);
+  const heading = /^(?:[ \t]*\r?\n)* {0,3}#[ \t]+(.+)(?:\r?\n|$)/.exec(body);
+  const headingText = heading?.[1]?.replace(/[ \t]+#+[ \t]*$/, '').trim();
   return {
-    title: title || heading?.[1]?.trim() || doc.path.split('/').at(-1) || doc.path,
+    title: title || headingText || doc.path.split('/').at(-1) || doc.path,
     summary,
-    body: heading && (!title || heading[1].trim() === title) ? body.slice(heading[0].length) : body,
+    body: heading && (!title || headingText === title) ? body.slice(heading[0].length) : body,
   };
 }
 
@@ -290,7 +298,7 @@ function RevisionFiles({ revision, project }: { revision: CodeRevision; project:
   const [acknowledged, setAcknowledged] = useState(false);
   const [lineVersion, setLineVersion] = useState(project.lineVersion);
   const mutation = useWrite<Project>(['project']);
-  const file = revision.files.find(item => item.path === filePath);
+  const file = paths.find(item => item.path === filePath);
   const preview = file ? decodeRevisionFile(file.contentBase64) : undefined;
   return <div className="space-y-5"><Panel title={revision.message}>
     {revision.purpose === 'review-bundle' ? <Notice>{t('reviewBundleHint')}</Notice> : <StatusBadge status={project.lineRevisionId === revision.id ? 'accepted' : 'unreviewed'} />}
@@ -307,7 +315,7 @@ function RevisionFiles({ revision, project }: { revision: CodeRevision; project:
       {types.length > 1 && <Field label={t('fileType')}><Select value={fileType} onChange={event => setFileType(event.target.value)}>
         <option value="">{t('all')}</option>{types.map(type => <option key={type} value={type}>.{type}</option>)}
       </Select></Field>}
-      {paths.length ? <Field label={t('selectFile')}><Select value={paths.some(item => item.path === filePath) ? filePath : ''} onChange={event => setFilePath(event.target.value)}>
+      {paths.length ? <Field label={t('selectFile')}><Select value={file?.path ?? ''} onChange={event => setFilePath(event.target.value)}>
         <option value="" disabled>{t('selectFile')}</option>
         {[...folders].map(([folder, files]) => <optgroup key={folder} label={folder}>{files.map(item => <option key={item.path} value={item.path}>{item.path}</option>)}</optgroup>)}
       </Select></Field> : <EmptyState>{t('noRevisionFiles')}</EmptyState>}
@@ -388,12 +396,17 @@ export function HistoryView() {
   const visible = useMemo(() => items.filter(event => !eventType || event.type === eventType), [items, eventType]);
   const groups = useMemo(() => {
     const result: HubEvent[][] = [];
+    const days = new Intl.DateTimeFormat(undefined, { dateStyle: 'short' });
+    const day = (value: string) => {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : days.format(date);
+    };
     for (const event of visible) {
       const previous = result.at(-1);
       const first = previous?.[0];
       if (previous && first && first.type === event.type && first.entityId === event.entityId &&
         first.actorId === event.actorId && first.actorRole === event.actorRole &&
-        first.createdAt.slice(0, 10) === event.createdAt.slice(0, 10)) previous.push(event);
+        day(first.createdAt) === day(event.createdAt)) previous.push(event);
       else result.push([event]);
     }
     return result;

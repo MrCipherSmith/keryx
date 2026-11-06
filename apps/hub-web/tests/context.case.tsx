@@ -71,6 +71,24 @@ describe('document provenance and draft version', () => {
   });
 });
 
+it.each([
+  { source: '    # code, not a heading', visible: '# code, not a heading', selector: 'code' },
+  { source: '---\n---\nTitle: Keep this paragraph\n\n---', visible: 'Title: Keep this paragraph' },
+  { source: String.raw`---
+Title: "Review \"copy\""
+Summary: "Use the \"real\" example"
+---
+# Review "copy"
+
+Content.`, visible: 'Use the "real" example' },
+])('keeps document content readable in preview: $visible', async ({ source, visible, selector }) => {
+  mocks.get.mockImplementation((path: string) => Promise.resolve(
+    path.endsWith('/documents') ? { documents: [{ ...document, content: source }] } : project,
+  ));
+  await mount(<DocumentsView />);
+  expect(await within(await screen.findByRole('article')).findByText(visible, { selector })).toBeVisible();
+});
+
 it('keeps specification search and returns focus to the same card after reading a document', async () => {
   const wiki = { ...document, id: 'wiki', path: 'wiki/example.md', kind: 'wiki' };
   mocks.get.mockImplementation((path: string) => Promise.resolve(
@@ -109,9 +127,10 @@ it('renders highlighted, numbered source safely and copies the complete revision
     path: 'src/example.ts', mode: '100644', contentDigest: 'content-digest',
     contentBase64: btoa(String.fromCharCode(0xef, 0xbb, 0xbf) + source.slice(1)),
   };
+  const readme = { ...file, path: 'README.md', contentBase64: btoa('Text from the README') };
   mocks.get.mockImplementation((path: string) => Promise.resolve(
-    path.endsWith('/revisions?summary=1') ? { revisions: [{ ...revision, fileCount: 1 }] }
-      : path.endsWith('/revisions/r') ? { ...revision, files: [file] } : project,
+    path.endsWith('/revisions?summary=1') ? { revisions: [{ ...revision, fileCount: 2 }] }
+      : path.endsWith('/revisions/r') ? { ...revision, files: [file, readme] } : project,
   ));
   const writeText = vi.fn().mockResolvedValue(undefined);
   const oldClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
@@ -130,6 +149,10 @@ it('renders highlighted, numbered source safely and copies the complete revision
     fireEvent.click(screen.getByRole('button', { name: en.copyCode }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(source));
     expect(await screen.findByText(en.codeCopied)).toBeVisible();
+    fireEvent.change(screen.getByLabelText(en.fileType), { target: { value: 'md' } });
+    expect(screen.queryByRole('button', { name: en.copyCode })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(en.selectFile), { target: { value: readme.path } });
+    expect(await screen.findByRole('region', { name: readme.path })).toHaveTextContent('Text from the README');
   } finally {
     if (oldClipboard) Object.defineProperty(navigator, 'clipboard', oldClipboard);
     else Reflect.deleteProperty(navigator, 'clipboard');
