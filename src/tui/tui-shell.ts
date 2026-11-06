@@ -302,7 +302,8 @@ import {
 // dispatch into one rule rather than growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import { runTasksCommand } from "./tasks-command";
-import { formatUsageLine } from "./usage-format";
+import { formatUsageFooter, formatUsageLine, formatUsageTable } from "./usage-format";
+import { createUsageTracker } from "./usage-tracker";
 import {
   applyThemeId,
   formatThemeList,
@@ -4862,7 +4863,7 @@ export async function launchTuiAgentShell(opts: {
     // `/think`'s handler below both updates this and persists it.
     let thinkDisplayMode: ThinkDisplayMode = resolveThinkDisplayMode(loadShellConfig().thinkDisplay);
 
-    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C cancels a turn (twice to exit) · /exit";
+    const FOOTER_IDLE = "/ commands · Ctrl+C cancels a turn";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
 
     // Flow 303 (AC14 follow-up, PR #669 review HIGH 2): `startupIndicator`
@@ -4997,6 +4998,10 @@ export async function launchTuiAgentShell(opts: {
     // while idle, and the `isBusy` guard keeps it from reading a source (the turn
     // queue, the session stores) that setup has not built yet.
     const turnFooter = { tokensIn: 0, tokensOut: 0, costUsd: undefined as number | undefined };
+    // Flow 483: per-turn + session usage (tokens, cache, cost, active time) for the footer and /status Usage.
+    const usageTracker = createUsageTracker();
+    let usageTurnOpen = false;
+    chrome.setUsageSource(() => formatUsageFooter(usageTracker.snapshot()));
     let contextTotal = 0;
     const pushBusyFooter = (): void => {
       if (!chrome.isBusy()) return;
@@ -5018,10 +5023,18 @@ export async function launchTuiAgentShell(opts: {
       turnFooter.tokensIn = 0;
       turnFooter.tokensOut = 0;
       turnFooter.costUsd = undefined;
+      if (!usageTurnOpen) {
+        usageTracker.startTurn();
+        usageTurnOpen = true;
+      }
       chrome.startBusy(phase);
       pushBusyFooter();
     };
     const stopBusy = (): void => {
+      if (usageTurnOpen) {
+        usageTracker.endTurn();
+        usageTurnOpen = false;
+      }
       chrome.stopBusy();
     };
 
@@ -8116,6 +8129,7 @@ export async function launchTuiAgentShell(opts: {
           ...(currentSel.baseUrl !== undefined ? { baseUrl: currentSel.baseUrl } : {}),
         });
         const snapshot = buildSessionInfoSnapshot({
+          usageTable: formatUsageTable(usageTracker.snapshot()),
           summary: liveSession.summary,
           selection: currentSel,
           version: packageJson.version,
@@ -10912,6 +10926,8 @@ export async function launchTuiAgentShell(opts: {
           cacheReadTokens: turnCacheReadTokens,
           cacheWriteTokens: turnCacheWriteTokens,
         });
+        usageTracker.addUsage(usage);
+        usageTracker.setTurnCost(turnFooter.costUsd);
         prevOnUsageForCost?.(usage);
         pushBusyFooter();
       };
@@ -11416,6 +11432,7 @@ export async function launchTuiAgentShell(opts: {
       const cwd = inspectorCwd();
       const [workspaces, flows] = await Promise.all([loadInspectorWorkspaces(cwd), loadInspectorFlows(cwd)]);
       const snapshot = buildSessionInfoSnapshot({
+        usageTable: formatUsageTable(usageTracker.snapshot()),
         summary: liveSession.summary,
         selection: currentSel,
         version: packageJson.version,
