@@ -179,7 +179,7 @@ export function decideAcpPermission(
     destructive: classification.destructive,
     credentials: classification.credentials,
     sacReviewConfirmation: classification.sacReviewConfirmation,
-    hcAgentLaunch: classification.hcAgentLaunch,
+    hcAgentLaunch: classification.hcAgentLaunch === true,
     readOnly: false,
   });
 }
