@@ -33,9 +33,13 @@ export type SessionInfoSnapshot = {
   flowLines: string[];
   hasWorkspaces: boolean;
   hasFlows: boolean;
+  /** Flow 483: turn/session usage table for the Usage tab. */
+  usageTable?: string;
 };
 
 export type SessionInfoSource = {
+  /** Flow 483: rendered usage table (Usage tab). */
+  usageTable?: string;
   summary?: {
     id?: string;
     title?: string;
@@ -223,6 +227,7 @@ export function buildSessionInfoSnapshot(source: SessionInfoSource): SessionInfo
     flowLines: formatSessionFlowLines(sessionFlows),
     hasWorkspaces: sessionWorkspaces.length > 0,
     hasFlows: sessionFlows.length > 0,
+    ...(source.usageTable !== undefined ? { usageTable: source.usageTable } : {}),
   };
 }
 
@@ -256,6 +261,9 @@ export function statusModalTabs(snapshot: SessionInfoSnapshot): { id: string; la
     { id: "status", label: "Status" },
     { id: "context", label: "Context" },
   ];
+  if (snapshot.usageTable !== undefined) {
+    tabs.push({ id: "usage", label: "Usage" });
+  }
   if (snapshot.hasWorkspaces) {
     tabs.push({ id: "workspaces", label: "Workspaces" });
   }
@@ -348,6 +356,7 @@ export function presentSessionInfo(
     contextRows,
     snapshot.workspaceLines.length,
     snapshot.flowLines.length,
+    snapshot.usageTable?.split("\n").length ?? 0,
   );
   const handle = openModal(otui, chrome, {
     title: "/status",
@@ -361,6 +370,10 @@ export function presentSessionInfo(
       const width = ctx?.width;
       if (tabId === "context") {
         paintContent(otui, renderer, body, formatContextUsageText(snapshot.context).trimEnd(), width);
+        return;
+      }
+      if (tabId === "usage" && snapshot.usageTable !== undefined) {
+        paintContent(otui, renderer, body, snapshot.usageTable, width);
         return;
       }
       if (tabId === "workspaces") {

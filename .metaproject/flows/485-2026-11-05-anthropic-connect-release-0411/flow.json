@@ -11,12 +11,12 @@
   "title": "Anthropic connect + live models, release 0.4.11",
   "status": "in-progress",
   "createdAt": "2026-11-05T15:20:01.140Z",
-  "updatedAt": "2026-11-05T21:29:29.664Z",
+  "updatedAt": "2026-11-06T08:26:38.924Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:8325950aa1d4f5e61e152cfc7b631ce19137b43c8af66afafc850b189b1fca33",
+  "acChecksum": "sha256:aa97f35294dcbb93050224994df7d20dd3096ac1cf1aca1394e1bf85c099f9d9",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -138,6 +138,16 @@
       "at": "2026-11-05T21:29:29.664Z",
       "event": "ac-updated",
       "detail": "AC1: \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec bun test src/commands/providers.anthropic.test.ts]\" -> \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]\" (Repair malformed exec marker responsible for PR1134 corpus CI failure; command and criterion meaning unchanged)"
+    },
+    {
+      "at": "2026-11-06T06:21:36.505Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec bun test src/commands/providers.anthropic.test.ts]\" -> \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]\" (AC1 marker had no backticks around the exec command, so the acceptance-kind parser rejects it and breaks src/flow/ac-kinds-corpus.test.ts on main (CI red since bd434000a); same text, command now backticked)"
+    },
+    {
+      "at": "2026-11-06T08:26:38.924Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]\" -> \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts` · sensitive: mutation]\" (Declare sensitivity of AC1: mutation of providers.ts:855 (x-api-key -> authorization) makes providers.anthropic.test.ts fail 2 of 8; restored, 8 pass)"
     }
   ],
   "owner": {
@@ -148,7 +158,8 @@
   "acKinds": {
     "AC1": {
       "kind": "exec",
-      "check": "bun test src/commands/providers.anthropic.test.ts"
+      "check": "bun test src/commands/providers.anthropic.test.ts",
+      "sensitivity": "mutation"
     }
   },
   "signatures": [

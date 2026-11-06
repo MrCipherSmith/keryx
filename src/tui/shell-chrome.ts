@@ -498,6 +498,8 @@ export interface ShellChrome {
    * Pass `undefined` to drop the figures and keep only the key hints.
    */
   setBusyFooter(info: BusyFooterInfo | undefined): void;
+  /** Flow 483: live usage text (turn + session) shown in the footer; undefined hides it. */
+  setUsageSource(source: (() => string | undefined) | undefined): void;
   isBusy(): boolean;
   /** Repaint the footer status (after something changed the override). */
   repaintStatus(): void;
@@ -1312,6 +1314,7 @@ export async function createShellChrome(
     return Math.max(1, room - 1 >= BUSY_FOOTER_MIN_HINT.length ? room - 1 : room);
   };
 
+  let usageSource: (() => string | undefined) | undefined;
   const paintBusyStatus = (): void => {
     // The busy line (spinner, phase, timer) is painted ONCE, in the transcript
     // above the composer; the footer never repeats it (flow 468 AC20).
@@ -1328,7 +1331,8 @@ export async function createShellChrome(
       return;
     }
     if (!busy) {
-      footerLeft.content = otui.t`${dimChunk(otui, opts.footerHint)}`;
+      const usageIdle = usageSource?.();
+      footerLeft.content = otui.t`${dimChunk(otui, usageIdle ? `${opts.footerHint} \u00b7 ${usageIdle}` : opts.footerHint)}`;
       footerRight.content = otui.t`${dimChunk(otui, status)}`;
       return;
     }
@@ -1337,7 +1341,8 @@ export async function createShellChrome(
     const perm = opts.permissionMode?.();
     const right = perm !== undefined && perm.length > 0 ? `mode ${perm}` : status;
     footerRight.content = otui.t`${dimChunk(otui, right)}`;
-    footerLeft.content = otui.t`${dimChunk(otui, formatBusyFooter(busyFooterInfo, footerLeftBudget(right)))}`;
+    const usageBusy = usageSource?.();
+    footerLeft.content = otui.t`${dimChunk(otui, usageBusy ? `${usageBusy} \u00b7 ${BUSY_FOOTER_MIN_HINT}` : formatBusyFooter(busyFooterInfo, footerLeftBudget(right)))}`;
   };
 
   // The footer's width is known only after layout; refit the busy parts when it moves.
@@ -1754,6 +1759,10 @@ export async function createShellChrome(
     stopBusy,
     setBusyPhase,
     setBusyFooter,
+    setUsageSource: (source) => {
+      usageSource = source;
+      paintBusyStatus();
+    },
     isBusy: () => busy,
     repaintStatus: paintBusyStatus,
     setFooterOverride: (paint) => {

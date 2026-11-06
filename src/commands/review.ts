@@ -2035,7 +2035,10 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
   if (session.providerId === "" || session.modelId === "") {
     return [];
   }
-  return await withLiveCodexModels(await detectProviders({ fetch, env: envWithSavedApiKeys() }));
+  const env = envWithSavedApiKeys();
+  const detected = await detectProviders({ fetch, env });
+  const hasKey = typeof env.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.length > 0;
+  return await withLiveCodexModels(detected.filter((d) => d.name !== "anthropic" || hasKey));
 }
 
 /**

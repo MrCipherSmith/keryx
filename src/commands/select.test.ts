@@ -349,6 +349,28 @@ describe("AC2 — pickProviderModel: numbered picker, invalid-input safe, no har
     { name: "fake", models: ["fake-a", "fake-b"] },
   ];
 
+  test("hides Anthropic without a key and keeps the fallback usable", async () => {
+    const writes: string[] = [];
+    const io: ShellIO = { lines: linesFrom(), write: (s) => writes.push(s) };
+    const result = await pickProviderModel(io, [
+      { name: "anthropic", models: ["claude-test"] },
+      { name: "fake", models: ["fake-a"] },
+    ], { env: {} });
+    expect(result.provider).toBe("fake");
+    expect(writes.join("")).not.toContain("anthropic");
+  });
+
+  test("refuses an Anthropic-only list without a key", async () => {
+    const io: ShellIO = { lines: linesFrom(), write: () => {} };
+    await expect(pickProviderModel(io, [{ name: "anthropic", models: ["claude-test"] }], { env: {} })).rejects.toThrow("No usable providers");
+  });
+
+  test("retains Anthropic when its key is present", async () => {
+    const io: ShellIO = { lines: linesFrom(), write: () => {} };
+    const result = await pickProviderModel(io, [{ name: "anthropic", models: ["claude-test"] }], { env: { ANTHROPIC_API_KEY: "test-key" } });
+    expect(result.provider).toBe("anthropic");
+  });
+
   test("renders provider + model menus and returns the chosen {provider, model, baseUrl}", async () => {
     const writes: string[] = [];
     const io: ShellIO = { lines: linesFrom("1", "1"), write: (s: string) => writes.push(s) };

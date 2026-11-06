@@ -4659,7 +4659,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         env: process.env,
         ...(baseUrl !== undefined ? { baseUrl } : {}),
       });
-      const picked = await pickProviderModel(io, detected);
+      const picked = await pickProviderModel(io, detected, { env: envWithSavedApiKeys(process.env) });
       provider = picked.provider;
       model = picked.model;
       if (picked.baseUrl !== undefined) {
