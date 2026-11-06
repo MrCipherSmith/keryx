@@ -111,6 +111,53 @@ test("web_search passes the provider's own refusal through, not just 'search fai
   expect(result.output).not.toContain("Retry later");
 });
 
+test("a permanent refusal is not dressed in retry advice", async () => {
+  const tool = webSearchTool({
+    async search() {
+      return { ok: false, reason: "search-failed", detail: "DeepSeek refused the search for insufficient balance (HTTP 402): top up the account, then retry" };
+    },
+  });
+  const result = await tool.invoke({ query: "keryx sandbox" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("insufficient balance");
+  expect(result.output).not.toContain("Wait a few minutes");
+});
+
+test("a permanent 4xx carries no wait advice, even without a known phrase", async () => {
+  const tool = webSearchTool({
+    async search() {
+      return { ok: false, reason: "search-failed", detail: "DeepSeek rejected the request (HTTP 400): fix the request or the key before retrying", permanent: true };
+    },
+  });
+  const result = await tool.invoke({ query: "keryx sandbox" });
+  expect(result.output).toContain("HTTP 400");
+  expect(result.output).not.toContain("Wait a few minutes");
+  expect(result.output).toContain("Do not retry");
+});
+
+test("a cancelled search reports a cancellation, not advice to wait", async () => {
+  const tool = webSearchTool({
+    async search() {
+      return { ok: false, reason: "search-failed", detail: "cancelled by the operator", cancelled: true };
+    },
+  });
+  const result = await tool.invoke({ query: "keryx sandbox" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("cancelled by the operator");
+  expect(result.output).not.toContain("Wait a few minutes");
+});
+
+test("a request-scoped refusal tells the model to fix the request, not to wait", async () => {
+  const tool = webSearchTool({
+    async search() {
+      return { ok: false, reason: "search-failed", detail: "DeepSeek rejected the request (HTTP 400): the request or query is invalid", permanent: true, scope: "request" };
+    },
+  });
+  const result = await tool.invoke({ query: "keryx sandbox" });
+  expect(result.output).toContain("Fix the request");
+  expect(result.output).not.toContain("Wait a few minutes");
+});
+
 test("web_search tells the agent not to retry a rate-limited search", async () => {
   const tool = webSearchTool({ search: async () => ({ ok: false, reason: "search-failed", detail: RATE_LIMITED_SEARCH_ERROR }) });
   const result = await tool.invoke({ query: "keryx" });

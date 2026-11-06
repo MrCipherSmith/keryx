@@ -73,7 +73,7 @@ import {
   runMcpTrustCommand,
   TRUSTED_MARKER,
 } from "../mcp-servers/approval-render";
-import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
+import { connectedMessage, createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createTierRankHost } from "../harness/routing/tier-rank-agent";
@@ -3188,18 +3188,20 @@ export async function runAgentRepl(
           continue;
         }
         const providerId: SearchProviderId = descriptor.id;
-        searchProviderController.configure(providerId, { ...descriptor.defaults, ...args.fields }, args.credential);
-        const tested = await searchProviderController.test(providerId);
-        if (!tested.ok) {
-          const reason = describeConnectionFailure(tested.reason);
+        // One controller operation: configure, test and (unless told otherwise)
+        // activate. A successful test IS the connect gesture, and keeping the
+        // policy in the controller is what stops the two surfaces from drifting.
+        const connected = await searchProviderController.connect(providerId, args.fields, args.credential);
+        if (!connected.ok) {
+          const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, providerId);
           agentIo.onSystem?.(
             `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
           );
           continue;
         }
-        agentIo.onSystem?.(
-          `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
-        );
+        // The sentence lives in the search module so a test can pin the
+        // `web_fetch` warning instead of grepping source text.
+        agentIo.onSystem?.(`${connectedMessage(providerId, connected)}\n`);
       } else if (command === "/search-connect") {
         const providerId = parts[1];
         if (providerId === undefined) {

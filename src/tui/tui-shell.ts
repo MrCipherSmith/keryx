@@ -285,7 +285,7 @@ import { openSetupModal } from "./setup-modal";
 import { ownKeryxPrefix, runSetupSteps } from "./setup-run";
 import { parseSetupArgs } from "../commands/setup-guide";
 import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
-import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
+import { connectedMessage, createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
 import {
@@ -2766,29 +2766,26 @@ function runSearchProviderTestStep(
       }
     });
     void (async () => {
-      controller.configure(provider.id, { ...provider.defaults, ...fields }, credential);
-      const tested = await controller.test(provider.id);
+      // The same controller operation the argument paths use, so the wizard is
+      // not a third hand-rolled copy of configure -> test -> select and cannot
+      // drift from them.
+      const connected = await controller.connect(provider.id, fields, credential, { activate: setActive, isCancelled: () => left });
       if (left) {
-        return; // backed out mid-test: nothing to show, and no select()
+        return; // backed out mid-test: nothing to show
       }
-      if (!tested.ok) {
+      if (!connected.ok) {
         settled = "failure";
-        const reason = describeConnectionFailure(tested.reason);
+        const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, provider.id);
         status.content = otui.t`${roleChunk(otui, "error", "✗")} ${boldChunk(otui, `'${provider.id}' test failed: ${reason}`)} ${dimChunk(otui, "(Esc to go back and retry)")}`;
         return;
       }
       settled = "success";
-      if (!setActive) {
-        status.content = otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested successfully`)} ${dimChunk(otui, "(Enter to close)")}`;
-        return;
-      }
-      const selected = await controller.select(provider.id);
-      if (left) {
-        return;
-      }
-      status.content = selected.ok
-        ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured, tested, and set as active`)} ${dimChunk(otui, "(Enter to close)")}`
-        : otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested`)} ${dimChunk(otui, `but could not be set active (${selected.reason ?? "unknown"})`)} ${dimChunk(otui, "(Enter to close)")}`;
+      const scope = connected.servesPages ? " (web_search and web_fetch)" : "";
+      status.content = connected.active
+        ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured, tested, and set as active${scope}`)} ${dimChunk(otui, "(Enter to close)")}`
+        : connected.activationReason !== undefined
+          ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested`)} ${dimChunk(otui, `but could not be set active (${connected.activationReason})`)} ${dimChunk(otui, "(Enter to close)")}`
+          : otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested successfully`)} ${dimChunk(otui, "(Enter to close)")}`;
     })();
   });
 }
@@ -10026,22 +10023,20 @@ export async function launchTuiAgentShell(opts: {
               return;
             }
             const providerId: SearchProviderId = descriptor.id;
-            searchProviderController.configure(
-              providerId,
-              { ...descriptor.defaults, ...args.fields },
-              args.credential,
-            );
-            const tested = await searchProviderController.test(providerId);
-            if (!tested.ok) {
-              const reason = describeConnectionFailure(tested.reason);
+            // One controller operation: configure, test and activate. Keeping
+            // the policy in the controller is what stops this surface and the
+            // headless shell from drifting apart.
+            const connected = await searchProviderController.connect(providerId, args.fields, args.credential);
+            if (!connected.ok) {
+              const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, providerId);
               io.onSystem?.(
                 `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
               );
               return;
             }
-            io.onSystem?.(
-              `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
-            );
+            // The sentence lives in the search module so a test can pin the
+            // `web_fetch` warning instead of grepping source text.
+            io.onSystem?.(`${connectedMessage(providerId, connected)}\n`);
           })());
           return;
         }
