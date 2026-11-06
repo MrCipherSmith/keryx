@@ -41,6 +41,7 @@ import {
   MAX_ACTIVITY_CHARS,
   type BusEvent,
   type BusEventKind,
+  type BusOrigin,
   type BusSender,
   type LeaseScope,
   type PauseLease,
@@ -87,6 +88,8 @@ export interface RenderedBusEvent {
   body?: string;
   /** True when addressed via `@all` (`to === ["*"]`); false/absent when addressed by name (flow 274). Optional for the same reason as `body`. */
   toStar?: boolean;
+  /** The sender's origin; absent on hand-built fixtures. `external` marks an unauthenticated report. */
+  origin?: BusOrigin;
 }
 
 /** `BusClient.resolveRef`'s result: enough to address a reply without a fresh name lookup. */
@@ -619,6 +622,7 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         preview: preview(event.body),
         body: event.body ?? "",
         toStar: event.to.length === 1 && event.to[0] === "*",
+        origin: event.from.origin,
         ...(event.refs?.replyTo !== undefined ? { replyTo: event.refs.replyTo } : {}),
       };
       rememberRendered(rendered);

@@ -546,7 +546,7 @@ export async function cursorAtStart(root: string): Promise<BusCursor> {
  */
 export async function countRecent(
   root: string,
-  options: { origin: BusOrigin; sinceMs: number; now?: () => number; instanceId?: string },
+  options: { origin: BusOrigin; sinceMs: number; now?: () => number; instanceId?: string; fromName?: string },
 ): Promise<number> {
   const since = (options.now ?? Date.now)() - options.sinceMs;
   const rotated = await listRotatedSegments(root);
@@ -559,6 +559,7 @@ export async function countRecent(
       if (
         event.from.origin === options.origin &&
         (options.instanceId === undefined || event.from.instanceId === options.instanceId) &&
+        (options.fromName === undefined || event.from.name === options.fromName) &&
         Date.parse(event.ts) >= since
       ) {
         count += 1;

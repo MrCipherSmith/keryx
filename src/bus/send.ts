@@ -42,6 +42,13 @@ export const OPERATOR_RATE_LIMIT_PER_MINUTE = 30;
  * than of any one in-memory closure.
  */
 export const AGENT_RATE_LIMIT_PER_MINUTE = 10;
+/**
+ * `keryx report` (origin `external`): messages per minute per sender NAME.
+ * A report process mints a fresh instanceId every run, so the name is the only
+ * stable key; tighter than the agent budget. The name is self-declared, so this
+ * bounds an honest loop, not a hostile same-user process.
+ */
+export const EXTERNAL_RATE_LIMIT_PER_MINUTE = 5;
 const RATE_WINDOW_MS = 60_000;
 
 export interface SendInput {
@@ -50,8 +57,8 @@ export interface SendInput {
   kind: string;
   body: string;
   replyTo?: string | undefined;
-  origin: "cli" | "operator" | "agent";
-  /** Required (and used) for `origin: "operator"` and `origin: "agent"`; the CLI path always mints its own. */
+  origin: "cli" | "operator" | "agent" | "external";
+  /** Required (and used) for `origin: "operator"`, `"agent"` and `"external"`; the CLI path always mints its own. */
   from?: BusSender | undefined;
   now?: (() => number) | undefined;
   /** D-09 inputs for recipient resolution; defaults to this host and `processIsAlive`. */
@@ -133,7 +140,15 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
   if (input.replyTo !== undefined && !isBusId(input.replyTo)) {
     throw new BusRefusal("invalid-id", `replyTo ${JSON.stringify(input.replyTo)} is not a UUID`);
   }
-  if ((input.origin === "operator" || input.origin === "agent") && input.from === undefined) {
+  if (input.origin === "external") {
+    if (input.kind !== "notice") {
+      throw new BusRefusal("invalid-event", "an external-origin message can only be a notice");
+    }
+    if (input.toLabel === "@all") {
+      throw new BusRefusal("invalid-event", "an external-origin message must name one recipient, not @all");
+    }
+  }
+  if ((input.origin === "operator" || input.origin === "agent" || input.origin === "external") && input.from === undefined) {
     throw new BusRefusal("invalid-event", `a ${input.origin} send needs from: { instanceId, name, origin: "${input.origin}" }`);
   }
 
@@ -194,6 +209,14 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
             throw new BusRefusal(
               "rate-limited",
               `${recent} operator messages from this instance in the last minute; the limit is ${OPERATOR_RATE_LIMIT_PER_MINUTE}`,
+            );
+          }
+        } else if (from.origin === "external") {
+          const recent = await countRecent(root, { origin: "external", sinceMs: RATE_WINDOW_MS, now, fromName: from.name });
+          if (recent >= EXTERNAL_RATE_LIMIT_PER_MINUTE) {
+            throw new BusRefusal(
+              "rate-limited",
+              `${recent} reports from "${from.name}" in the last minute; the limit is ${EXTERNAL_RATE_LIMIT_PER_MINUTE}`,
             );
           }
         } else if (from.origin === "agent") {

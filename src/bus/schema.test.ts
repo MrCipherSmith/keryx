@@ -217,3 +217,25 @@ test("headless is an explicit local transport label while legacy peer records re
  // Historical readPresence/listPresence skip an individually invalid record; one new label cannot hide legacy peers.
  expect(records.filter(record=>validateAgainstSchemaObject(legacy,record).errors.length===0).map(record=>record.surface)).toEqual(["tui","readline"]);
 });
+
+describe("external origin", () => {
+  const external = { instanceId: B, name: "external", origin: "external" };
+
+  test("a notice from an external origin is valid", () => {
+    expect(busEventProblems(event({ from: external, to: [A], toLabel: "@release" }))).toEqual([]);
+  });
+
+  test("pause-request, resume and override are refused from an external origin", () => {
+    for (const kind of ["pause-request", "resume", "override"]) {
+      const value = event({ from: external, kind, refs: { leaseId: A }, body: kind === "pause-request" ? "stop" : undefined });
+      expect(busEventProblems(value).length).toBeGreaterThan(0);
+      expect(parseBusEvent(value)).toBeUndefined();
+    }
+  });
+
+  test("reserved names stay refused for an external origin", () => {
+    for (const name of ["cli", "system", "all"]) {
+      expect(busEventProblems(event({ from: { ...external, name } })).length).toBeGreaterThan(0);
+    }
+  });
+});

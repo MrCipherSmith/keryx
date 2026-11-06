@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +11,7 @@ import type { PresenceRecord } from "./schema";
 import {
   AGENT_RATE_LIMIT_PER_MINUTE,
   CLI_RATE_LIMIT_PER_MINUTE,
+  EXTERNAL_RATE_LIMIT_PER_MINUTE,
   OPERATOR_RATE_LIMIT_PER_MINUTE,
   rateLimitBypassed,
   sendMessage,
@@ -310,5 +312,33 @@ describe("sendMessage: recipient-is-self (review r1 F6)", () => {
     const root = await seeded();
     const sent = await sendMessage(root, input({ origin: "cli", toLabel: "@release" }));
     expect(sent.resolvedTo).toEqual([LIVE]);
+  });
+});
+
+describe("external origin sends", () => {
+  const from = { instanceId: "5d2c9a10-1b3e-4f6a-9c7d-8e0f1a2b3c4d", name: "scribe", origin: "external" as const };
+
+  test("a notice is written with the external origin and counted per sender name", async () => {
+    const root = await seeded();
+    const sent = await sendMessage(root, input({ origin: "external", toLabel: "@release", from }));
+    expect(sent.event.from.origin).toBe("external");
+    expect(EXTERNAL_RATE_LIMIT_PER_MINUTE).toBeLessThanOrEqual(AGENT_RATE_LIMIT_PER_MINUTE);
+    for (let i = 1; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() } }));
+    }
+    const refused = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() } }),
+    ).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+  });
+
+  test("@all and non-notice kinds are refused", async () => {
+    const root = await seeded();
+    for (const overrides of [{ toLabel: "@all" }, { kind: "question", toLabel: "@release" }]) {
+      const refused = await sendMessage(root, input({ origin: "external", from, ...overrides })).catch((error: unknown) => error);
+      expect(isBusRefusal(refused, "invalid-event")).toBe(true);
+    }
+    expect((await readEvents(root, await cursorAtStart(root))).events).toHaveLength(0);
   });
 });

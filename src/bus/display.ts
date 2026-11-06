@@ -53,7 +53,8 @@ export function formatBusEventLine(event: RenderedBusEvent): string {
   const fromName = displaySafe(event.fromName);
   const kind = displaySafe(event.kind);
   const preview = displaySafe(event.preview);
-  return `⇄ [${seq}] @${fromName} ${kind}: ${preview}`;
+  const mark = event.origin === "external" ? " (external, unverified)" : "";
+  return `⇄ [${seq}] @${fromName}${mark} ${kind}: ${preview}`;
 }
 
 /** Where a bus background failure was observed. */
