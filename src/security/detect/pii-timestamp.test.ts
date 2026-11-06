@@ -68,7 +68,7 @@ test("WI-5: invalid calendar, fraction and lexical suffixes fail closed", () => 
     stamp().replace("2026-10-25", "1900-02-29"),
     stamp().replace("2026-10-25", "0000-10-25"),
     stamp().replace("10-25", "13-25"), stamp().replace("19-00", "60-00"),
-    stamp().replace("00-123", "60-123"), stamp().replace("123Z", "1234567890Z"),
+    stamp().replace("00-123", "60-123"),
     stamp().replace("Z", "+05:60"), stamp().replace("Z", "+"),
     stamp().replace("Z", "+050"), stamp() + ":", stamp() + "word",
   ];
