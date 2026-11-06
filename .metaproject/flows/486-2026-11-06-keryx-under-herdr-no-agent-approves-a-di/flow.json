@@ -11,7 +11,7 @@
   "title": "Keryx under herdr: no agent approves a dialog by accident; hc delegation is a conscious choice",
   "status": "in-progress",
   "createdAt": "2026-11-06T22:23:44.020Z",
-  "updatedAt": "2026-11-06T22:25:38.344Z",
+  "updatedAt": "2026-11-06T22:52:39.644Z",
   "source": {
     "type": "description",
     "ref": null
@@ -99,7 +99,7 @@
       "id": "T5",
       "title": "L1 dialog input guard and terminal approval mark",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -107,13 +107,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "L2 hc dialog-control and agent-launch floors",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -121,13 +122,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "L3 herdr prompt section and template",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -135,13 +137,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "L4 keryx report and external bus origin",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -149,13 +152,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "L5 strip HC_ and HERDR_ from the external child env",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -163,13 +167,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Live stand: force send, Enter and a real Claude child's report",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -177,7 +182,23 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Fix the three defects the live stand found: grant lifetime, remember options, transcript mark",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -258,6 +279,46 @@
       "at": "2026-11-06T22:25:38.344Z",
       "event": "ac-updated",
       "detail": "AC8: \"The external child env contains no `HC_*` or `HERDR_*` variable. [verify: exec `bun test src/harness/external/env.test.ts`] · sensitive: revert\" -> \"The external child env contains no `HC_*` or `HERDR_*` variable. [verify: exec `bun test src/harness/external/env.test.ts` · sensitive: revert]\" (the sensitive tag belongs inside the verify marker)"
+    },
+    {
+      "at": "2026-11-06T22:29:15.281Z",
+      "event": "task-done",
+      "detail": "T9: L5 strip HC_ and HERDR_ from the external child env"
+    },
+    {
+      "at": "2026-11-06T22:32:43.421Z",
+      "event": "task-done",
+      "detail": "T6: L2 hc dialog-control and agent-launch floors"
+    },
+    {
+      "at": "2026-11-06T22:34:27.355Z",
+      "event": "task-done",
+      "detail": "T8: L4 keryx report and external bus origin"
+    },
+    {
+      "at": "2026-11-06T22:38:34.796Z",
+      "event": "task-done",
+      "detail": "T7: L3 herdr prompt section and template"
+    },
+    {
+      "at": "2026-11-06T22:38:47.288Z",
+      "event": "task-done",
+      "detail": "T5: L1 dialog input guard and terminal approval mark"
+    },
+    {
+      "at": "2026-11-06T22:43:39.596Z",
+      "event": "task-added",
+      "detail": "T11: Fix the three defects the live stand found: grant lifetime, remember options, transcript mark"
+    },
+    {
+      "at": "2026-11-06T22:49:42.235Z",
+      "event": "task-done",
+      "detail": "T11: Fix the three defects the live stand found: grant lifetime, remember options, transcript mark"
+    },
+    {
+      "at": "2026-11-06T22:52:39.644Z",
+      "event": "task-done",
+      "detail": "T10: Live stand: force send, Enter and a real Claude child's report"
     }
   ],
   "acKinds": {

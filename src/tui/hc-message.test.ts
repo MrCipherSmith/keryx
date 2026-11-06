@@ -339,7 +339,7 @@ describe("buildHerdrCoreSection", () => {
   });
 
   test("a real 50-character nvm path and a 32-character bus name round-trip into the text, uncut", () => {
-    const keryxPath = "/home/altsay/.nvm/versions/node/v24.14.0/bin/keryx";
+    const keryxPath = "/home/dev000/.nvm/versions/node/v24.14.0/bin/keryx";
     expect(keryxPath).toHaveLength(50);
     const busName = `a${"1".repeat(31)}`;
     const text = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t1" }, sandboxOn: false, keryxPath, busName })!;
