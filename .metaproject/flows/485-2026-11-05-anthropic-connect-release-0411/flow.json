@@ -11,18 +11,13 @@
   "title": "Anthropic connect + live models, release 0.4.11",
   "status": "in-progress",
   "createdAt": "2026-11-05T15:20:01.140Z",
-  "updatedAt": "2026-11-05T16:52:12.592Z",
+  "updatedAt": "2026-11-06T06:21:36.505Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:84d6c8fb6991b2e3beb08464c2aa82c260a30322bf563044c069b27945dae223",
-  "acConfirmed": {
-    "AC1": {
-      "at": "2026-11-05T16:52:12.591Z",
-      "note": "bun test src/commands/providers.anthropic.test.ts: зелёный на main d5de38e78"
-    }
-  },
+  "acChecksum": "sha256:8325950aa1d4f5e61e152cfc7b631ce19137b43c8af66afafc850b189b1fca33",
+  "acConfirmed": {},
   "pr": {
     "url": null
   },
@@ -138,6 +133,11 @@
       "at": "2026-11-05T16:52:12.592Z",
       "event": "ac-confirmed",
       "detail": "AC1: bun test src/commands/providers.anthropic.test.ts: зелёный на main d5de38e78 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-11-06T06:21:36.505Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec bun test src/commands/providers.anthropic.test.ts]\" -> \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]\" (AC1 marker had no backticks around the exec command, so the acceptance-kind parser rejects it and breaks src/flow/ac-kinds-corpus.test.ts on main (CI red since bd434000a); same text, command now backticked)"
     }
   ],
   "owner": {
@@ -147,7 +147,8 @@
   },
   "acKinds": {
     "AC1": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/commands/providers.anthropic.test.ts"
     }
   },
   "signatures": [
