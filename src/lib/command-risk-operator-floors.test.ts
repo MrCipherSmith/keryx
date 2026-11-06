@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hcAgentLaunchOf, touchesAgentCredentials, touchesHcDialogControl, touchesHumanConfirmation, touchesOperatorDecision, touchesSacConfirmReview } from "./command-risk";
+import { HC_UNKNOWN_AGENT, hcAgentLaunchOf, hcAgentLaunchesOf, hcGrantableLaunchesOf, touchesAgentCredentials, touchesHcDialogControl, touchesHumanConfirmation, touchesOperatorDecision, touchesSacConfirmReview } from "./command-risk";
 
 describe("SAC confirm-review floor is decided on parsed words (review-security-code-w12:F-001)", () => {
   const spellings: Array<[string, string]> = [
@@ -298,4 +298,202 @@ describe("hcAgentLaunchOf (flow 486 AC4)", () => {
   ]) {
     test(`undefined: ${command}`, () => expect(hcAgentLaunchOf(command)).toBeUndefined());
   }
+});
+
+/** Every shell shape that puts a command somewhere other than the first word of a `;`-cut segment. */
+const hiddenBySyntax = (hc: string): string[] => [
+  `if hc wait t7; then ${hc}; fi`,
+  `if ${hc}; then echo ok; fi`,
+  `if false; then :; elif ${hc}; then :; else echo no; fi`,
+  `if false; then :; else ${hc}; fi`,
+  `for t in a b; do ${hc}; done`,
+  `while ${hc}; do sleep 1; done`,
+  `until ${hc}; do sleep 1; done`,
+  `(${hc})`,
+  `( ${hc} )`,
+  `((${hc}))`,
+  `{ ${hc}; }`,
+  `! ${hc}`,
+  `sleep 1 & ${hc}`,
+  `echo $(${hc})`,
+  `echo "$(${hc})"`,
+  `echo \`${hc}\``,
+  `echo "\`${hc}\`"`,
+  `echo "a $(echo "b $(${hc})")"`,
+  `x=$(${hc})`,
+  `case x in x) ${hc};; esac`,
+  `f() { ${hc}; }; f`,
+  `function f { ${hc}; }; f`,
+  `time ${hc}`,
+  `2>/dev/null ${hc}`,
+  `sh -c 'if true; then ${hc}; fi'`,
+];
+
+describe("flow 486 review: shell syntax does not hide hc from the floors", () => {
+  for (const hc of ["hc keys t7 enter", "hc send t7 ok --force"]) {
+    for (const command of hiddenBySyntax(hc)) {
+      test(`dialog control: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(true));
+    }
+  }
+  for (const command of hiddenBySyntax("hc run claude")) {
+    test(`launch: ${command}`, () => expect(hcAgentLaunchesOf(command)).toContain("claude"));
+  }
+  for (const command of [
+    "ls 2>&1",
+    "ls &> /tmp/out",
+    "(ls)",
+    "echo $(date) hc keys t7",
+    "if hc wait t7; then echo ok; fi",
+    "echo keys",
+    "cat <(ls) keys",
+    "{ hc read t7; }",
+  ]) {
+    test(`no match: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(false);
+      expect(hcAgentLaunchesOf(command)).toEqual([]);
+    });
+  }
+  test("hc run of hc itself is dialog control", () => {
+    expect(touchesHcDialogControl("hc run hc keys t7 enter")).toBe(true);
+    expect(touchesHcDialogControl("hc run -- env X=1 hc send t7 ok --force")).toBe(true);
+    expect(touchesHcDialogControl("hc run hc read t7")).toBe(false);
+    expect(touchesHcDialogControl("hc exec hc keys t7 enter")).toBe(true);
+  });
+  test("the same shapes reach the other families through the shared walker", () => {
+    expect(touchesHumanConfirmation("if true; then keryx flow confirm 7; fi")).toBe(true);
+    expect(touchesHumanConfirmation("(keryx flow confirm 7)")).toBe(true);
+    expect(touchesHumanConfirmation('echo "$(keryx flow confirm 7)"')).toBe(true);
+    expect(touchesHumanConfirmation("sleep 1 & keryx flow confirm 7")).toBe(true);
+  });
+});
+
+describe("flow 486 review: a forged identity is decided on the whole line", () => {
+  for (const command of [
+    "HC_TERMINAL_ID=t3 sh -c 'hc send t7 hi'",
+    "env HC_TERMINAL_ID=t3 bash -c 'hc ls'",
+    "export HC_TERMINAL_ID=t3; hc send t7 hi",
+    "export HC_TERMINAL_ID=t3 && hc ls",
+    "HC_TERMINAL_ID=t3; hc send t7 hi",
+    "(HC_TERMINAL_ID=t3; hc send t7 hi)",
+    "declare -x HC_TERMINAL_ID=t3; hc ls",
+    "typeset -x HC_TERMINAL_ID=t3; hc ls",
+    "readonly HC_TERMINAL_ID=t3; hc ls",
+    "hc ls; export HC_TERMINAL_ID=t3",
+    "if true; then export HC_TERMINAL_ID=t3; fi; hc ls",
+    "HC_TERMINAL_ID=t3 $HC ls",
+    `sh -c "export HC_TERMINAL_ID=t3; hc ls"`,
+    "HC_TERMINAL_ID+=3; hc ls",
+  ]) {
+    test(command, () => expect(touchesHcDialogControl(command)).toBe(true));
+  }
+  for (const command of ["export HC_TERMINAL_ID=t3", "HC_TERMINAL_ID=t3 ls", "export FOO=1; hc ls", "echo $HC_TERMINAL_ID; hc ls"]) {
+    test(`no match: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(false));
+  }
+});
+
+describe("flow 486 review: words the shell has yet to expand", () => {
+  for (const command of [
+    "hc $v t7 enter",
+    'hc "$v" t7 enter',
+    "hc --json $v t7 enter",
+    "$HC keys t7 enter",
+    '"$HC" keys t7 enter',
+    "$(which hc) keys t7 enter",
+    "`which hc` send t7 ok --force",
+    "$HC send t7 ok",
+    "hc send t7 ok $FLAGS",
+    "hc send $T ok",
+    "env $HC --json keys t7 enter",
+  ]) {
+    test(command, () => expect(touchesHcDialogControl(command)).toBe(true));
+  }
+  for (const command of ["$PY $SCRIPT", "$HC read t7", "hc '$v' t7", "hc read $T", "hc wait $T", "$EDITOR notes", "hc send t7 '$literal'", "hc run $CMD"]) {
+    test(`no match: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(false));
+  }
+
+  for (const command of [
+    "hc run $(which claude)",
+    'hc run "$(command -v keryx)" shell "x"',
+    "hc run $AGENT",
+    'hc run "$AGENT" task',
+    "hc run `which claude`",
+    "hc run env X=1 $AGENT",
+    "hc run bunx $PKG",
+    'hc run sh -c "$AGENT"',
+    "hc run --bg --name w $AGENT",
+    "hc run ${AGENT}",
+  ]) {
+    test(`unknown agent, never granted: ${command}`, () => {
+      expect(hcAgentLaunchesOf(command)).toContain(HC_UNKNOWN_AGENT);
+      expect(hcGrantableLaunchesOf(command)).not.toContain(HC_UNKNOWN_AGENT);
+    });
+  }
+  for (const command of ["hc run '$AGENT'", "hc run --name $N cargo test", "hc run cargo test $ARGS"]) {
+    test(`not an unknown agent: ${command}`, () => expect(hcAgentLaunchesOf(command)).toEqual([]));
+  }
+});
+
+describe("flow 486 review: launch detection", () => {
+  const launches: Array<[string, string]> = [
+    ["hc run npx claude", "claude"],
+    ["hc run bunx codex", "codex"],
+    ["hc run npx -y @openai/codex", "codex"],
+    ["hc run npx --yes @openai/codex@latest exec", "codex"],
+    ["hc run npx @anthropic-ai/claude-code", "claude"],
+    ["hc run npx @anthropic-ai/claude-code@2.0.1 -p hi", "claude"],
+    ["hc run npx @google/gemini-cli", "gemini"],
+    ["hc run bunx opencode", "opencode"],
+    ["hc run bunx opencode-ai", "opencode"],
+    ["hc run npx -p @openai/codex codex", "codex"],
+    ["hc run npx --package=@openai/codex run-it", "codex"],
+    ["hc run pnpm dlx @openai/codex", "codex"],
+    ["hc run yarn dlx @google/gemini-cli", "gemini"],
+    ["hc run npm exec @anthropic-ai/claude-code", "claude"],
+    ["hc run deno run -A npm:@anthropic-ai/claude-code", "claude"],
+    ["hc run node /opt/lib/claude", "claude"],
+    ["hc run script -q /dev/null claude", "claude"],
+    ["hc run unbuffer claude", "claude"],
+    ["hc run unbuffer npx codex", "codex"],
+    ["hc run tmux new-session claude", "claude"],
+    ["hc run script -qfc 'claude --resume' /dev/null", "claude"],
+    ["hc run 'claude --resume'", "claude"],
+    ["hc run env A=1 npx codex", "codex"],
+  ];
+  for (const [command, agent] of launches) {
+    test(command, () => expect(hcAgentLaunchOf(command)).toBe(agent));
+  }
+  for (const command of ["hc run npx prettier --write .", "hc run bun test", "hc run bunx tsc", "hc run unbuffer cargo test", "hc run node server.js", "hc run 'cargo test'", "hc run npx -p typescript tsc"]) {
+    test(`undefined: ${command}`, () => expect(hcAgentLaunchOf(command)).toBeUndefined());
+  }
+  test("hc exec starts a program too, and an expanded head may be hc", () => {
+    expect(hcAgentLaunchesOf("hc exec claude -p hi")).toEqual(["claude"]);
+    expect(hcAgentLaunchesOf("hc exec --on m1 codex")).toEqual(["codex"]);
+    expect(hcAgentLaunchesOf("hc exec $AGENT")).toEqual([HC_UNKNOWN_AGENT]);
+    expect(hcAgentLaunchesOf("hc exec ls")).toEqual([]);
+    expect(hcAgentLaunchesOf("$HC run claude")).toEqual(["claude"]);
+    expect(hcGrantableLaunchesOf("$HC run claude")).toEqual([]);
+  });
+  test("every launch in the line is named, in order, once", () => {
+    expect(hcAgentLaunchesOf("hc run claude; hc run codex")).toEqual(["claude", "codex"]);
+    expect(hcAgentLaunchesOf("hc run claude; hc run claude")).toEqual(["claude"]);
+  });
+  test("a quoted argument that reads like a command line asks but records no grant", () => {
+    for (const command of ["echo 'hc run claude'", `git commit -m "hc run claude"`, "hc send t7 'hc run claude'"]) {
+      expect(hcAgentLaunchesOf(command)).toEqual(["claude"]);
+      expect(hcGrantableLaunchesOf(command)).toEqual([]);
+    }
+    expect(hcGrantableLaunchesOf("hc run codex 'hc run claude'")).toEqual(["codex"]);
+  });
+  test("a real launch records a grant, through wrappers, sh -c and syntax", () => {
+    expect(hcGrantableLaunchesOf("hc run --bg claude 'task'")).toEqual(["claude"]);
+    expect(hcGrantableLaunchesOf("hc run -- env X=1 claude")).toEqual(["claude"]);
+    expect(hcGrantableLaunchesOf(`sh -c "hc run --bg claude"`)).toEqual(["claude"]);
+    expect(hcGrantableLaunchesOf(`hc run sh -c "claude --resume"`)).toEqual(["claude"]);
+    expect(hcGrantableLaunchesOf("if true; then hc run codex; fi")).toEqual(["codex"]);
+    expect(hcGrantableLaunchesOf("hc run npx -y @openai/codex")).toEqual(["codex"]);
+  });
+  test("past the nesting limit the launch is unknown, not silently absent", () => {
+    expect(hcAgentLaunchesOf("hc run eval eval eval claude")).toEqual(["claude"]);
+    expect(hcAgentLaunchesOf("hc run eval eval eval eval eval eval claude")).toEqual([HC_UNKNOWN_AGENT]);
+  });
 });

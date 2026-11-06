@@ -1,7 +1,7 @@
 // RED tests for the busInbox-to-history notification builder (flow 274 T5,
 // AC3). Pure: no clock, no I/O.
 import { describe, expect, test } from "bun:test";
-import { buildPeerMessageNotification, PEER_MESSAGE_BANNER } from "./peer-notification";
+import { buildPeerMessageNotification, holdsExternalReport, PEER_MESSAGE_BANNER } from "./peer-notification";
 import type { BusInboxEvent } from "./inbox";
 
 function event(overrides: Partial<BusInboxEvent> = {}): BusInboxEvent {
@@ -112,4 +112,10 @@ describe("external-origin reports", () => {
     const out = buildPeerMessageNotification([event(), event({ origin: "agent" })]);
     expect(out).not.toContain("external");
   });
+});
+
+test("holdsExternalReport: one external event in the batch is enough; keryx peers are not one", () => {
+  expect(holdsExternalReport([])).toBe(false);
+  expect(holdsExternalReport([event(), event({ origin: "agent" })])).toBe(false);
+  expect(holdsExternalReport([event(), event({ origin: "external" })])).toBe(true);
 });

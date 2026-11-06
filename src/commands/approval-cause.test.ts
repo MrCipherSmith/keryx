@@ -94,6 +94,9 @@ test("flow 486 hc-launch: an hc agent launch names hc-launch and the line names 
   expect(classifyApprovalCause({ hcLaunch: true })).toBe("hc-launch");
   expect(classifyApprovalCause({ publishLease: true, hcLaunch: true })).toBe("publish");
   expect(classifyApprovalCause({ hcLaunch: true, hookAsk: true })).toBe("hc-launch");
+  expect(classifyApprovalCause({ destructive: true, hcLaunch: true })).toBe("destructive");
+  expect(classifyApprovalCause({ credentials: true, hcLaunch: true })).toBe("credentials");
+  expect(classifyApprovalCause({ confirmation: true, hcLaunch: true })).toBe("credentials");
   const meta = { fingerprint: "fp", destructive: false, hcLaunch: "claude" };
   expect(causeOfMeta("shell_exec", meta)).toBe("hc-launch");
   expect(approvalCauseLine("hc-launch", "claude")).toContain("claude");

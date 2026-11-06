@@ -57,3 +57,8 @@ export function buildPeerMessageNotification(events: readonly BusInboxEvent[]): 
   const external = events.some((event) => event.origin === "external") ? `${EXTERNAL_REPORT_BANNER}\n` : "";
   return `${PEER_MESSAGE_BANNER}\n${external}${blocks.join("\n")}`;
 }
+
+/** True when the batch holds a report from a process that is not a keryx shell: untrusted content for the turn that reads it. */
+export function holdsExternalReport(events: readonly BusInboxEvent[]): boolean {
+  return events.some((event) => event.origin === "external");
+}

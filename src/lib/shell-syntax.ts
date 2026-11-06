@@ -271,3 +271,117 @@ export function commandWord(words: readonly string[]): string {
   const base = first.split("/").pop() ?? first;
   return base.toLowerCase();
 }
+
+/** Syntax a shell reads in front of a command: a reserved word, or a redirection with its target. */
+const LEADING_SYNTAX = /^(?:(?:if|then|elif|else|while|until|do|coproc|!)\s+|\d*(?:>>?|<)&?\s*\S+\s+)+/;
+/** How many levels of `(…)` and `$(…)` {@link structuralCommands} opens; past this the caller's other readings stand alone. */
+const MAX_STRUCTURAL_NESTING = 16;
+
+/** Index of the backtick closing a substitution whose body starts at `from`, or `text.length` when it never closes. */
+function closingBacktick(text: string, from: number): number {
+  for (let i = from; i < text.length; i++) {
+    if (text[i] === "\\") i++;
+    else if (text[i] === "`") return i;
+  }
+  return text.length;
+}
+
+/** Index of the `)` closing a group whose body starts at `from`, or `text.length` when it never closes. Quote-aware, per open paren. */
+function closingParen(text: string, from: number): number {
+  const quotes: Array<'"' | "'" | undefined> = [undefined];
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i]!;
+    const quote = quotes[quotes.length - 1];
+    if (quote === "'") {
+      if (ch === "'") quotes[quotes.length - 1] = undefined;
+    } else if (ch === "\\") {
+      i++;
+    } else if (ch === "`") {
+      i = closingBacktick(text, i + 1);
+    } else if (quote === '"') {
+      if (ch === '"') quotes[quotes.length - 1] = undefined;
+      else if (ch === "$" && text[i + 1] === "(") {
+        quotes.push(undefined);
+        i++;
+      }
+    } else if (ch === '"' || ch === "'") {
+      quotes[quotes.length - 1] = ch;
+    } else if (ch === "(") {
+      quotes.push(undefined);
+    } else if (ch === ")") {
+      quotes.pop();
+      if (quotes.length === 0) return i;
+    }
+  }
+  return text.length;
+}
+
+/**
+ * Every simple command in `command`, cut at what {@link splitSegments} leaves inside a segment: a single `&`, a subshell
+ * or a standalone `{ }` group, a case arm, `$(…)`, `<(…)` and backticks (also inside double quotes), and with leading
+ * shell syntax (`then`, `do`, `!`, `2>/dev/null`) dropped. A substitution stays in its outer command as the opaque word
+ * `$_`, so `echo $(date) hc keys` still reads as `echo`.
+ *
+ * Still not a shell parser. An unbalanced group runs to the end of the text; input in a heredoc reads as commands, as
+ * it does in `splitSegments`. Callers use this next to the plain segments, never instead of them.
+ */
+export function structuralCommands(command: string, nesting = 0): string[] {
+  if (nesting >= MAX_STRUCTURAL_NESTING) return [];
+  const out: string[] = [];
+  let buf = "";
+  let quote: '"' | "'" | undefined;
+  const flush = (): void => {
+    const raw = buf.trim().replace(LEADING_SYNTAX, "");
+    if (raw.length > 0) out.push(raw);
+    buf = "";
+  };
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    const next = command[i + 1];
+    if (quote === "'") {
+      buf += ch;
+      if (ch === "'") quote = undefined;
+      continue;
+    }
+    if (ch === "\\" && next !== undefined) {
+      buf += ch + next;
+      i++;
+      continue;
+    }
+    const opensSubstitution = (ch === "$" && next === "(") || (quote === undefined && (ch === "<" || ch === ">") && next === "(");
+    if (ch === "`" || opensSubstitution) {
+      const open = ch === "`" ? i + 1 : i + 2;
+      const close = ch === "`" ? closingBacktick(command, open) : closingParen(command, open);
+      out.push(...structuralCommands(command.slice(open, close), nesting + 1));
+      buf += "$_";
+      i = close;
+      continue;
+    }
+    if (quote === '"') {
+      buf += ch;
+      if (ch === '"') quote = undefined;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      buf += ch;
+      continue;
+    }
+    if (ch === "(") {
+      flush();
+      const close = closingParen(command, i + 1);
+      out.push(...structuralCommands(command.slice(i + 1, close), nesting + 1));
+      i = close;
+      continue;
+    }
+    const redirection = ch === "&" && (next === ">" || command[i - 1] === ">" || command[i - 1] === "<");
+    const groupWord = (ch === "{" || ch === "}") && (i === 0 || /\s/.test(command[i - 1]!)) && (next === undefined || /[\s;]/.test(next));
+    if (groupWord || ch === ")" || ch === ";" || ch === "|" || ch === "\n" || (ch === "&" && !redirection)) {
+      flush();
+      continue;
+    }
+    buf += ch;
+  }
+  flush();
+  return out;
+}
