@@ -451,11 +451,11 @@ function useSessionHistory(record: Control["SessionRecord"]) {
   const hub = useHub();
   return useInfiniteQuery({
     queryKey: historyQueryKey(hub.scopeKey, record.projectId, record.sessionId),
-    initialPageParam: 0,
+    initialPageParam: "latest" as number | "latest",
     queryFn: ({ signal, pageParam }) =>
       remoteGet<Control["HistoryPage"]>(
         sessionPath(record.projectId, record.sessionId) +
-          "/history?after=" +
+          "/history?before=" +
           pageParam,
         signal,
       ),
@@ -471,13 +471,39 @@ function History({ record, outcomes, liveRef, query, messages }: {
   messages: Control["SessionMessage"][];
 }) {
   const { t } = useTranslation("remote");
+  const announcedCursor = useRef<number | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    if (!query.data) return;
+    const last = messages.at(-1)?.historyCursor ?? 0;
+    const previous = announcedCursor.current;
+    announcedCursor.current = Math.max(previous ?? 0, last);
+    if (previous === null) return;
+    for (let i = messages.length - 1; i >= 0 && messages[i].historyCursor > previous; i--) {
+      if (messages[i].role !== 'assistant') continue;
+      setAnnouncement(t('newAssistantReply', { cursor: messages[i].historyCursor }));
+      break;
+    }
+  }, [messages, query.data, t]);
   const timeline = mergeTimeline(messages, outcomes);
   return (
     <section className="session-transcript" aria-label={t("history")}>
+      <p role="status" aria-atomic="true" className="sr-only">{announcement}</p>
       <header className="session-transcript-header">
         <h2>{t("history")}</h2>
         <span>{record.agentProfileId}</span>
       </header>
+      {query.hasNextPage && (
+        <div className="session-history-pages">
+          <Button
+            variant="secondary"
+            disabled={query.isFetchingNextPage}
+            onClick={() => void query.fetchNextPage()}
+          >
+            {t("olderMessages")}
+          </Button>
+        </div>
+      )}
       <SessionTranscript entries={timeline} renderEntry={entry => entry.kind === "outcome"
         ? <OutcomeItem record={record} item={entry.item} />
         : <MessageItem message={entry.message} />}>
@@ -488,17 +514,6 @@ function History({ record, outcomes, liveRef, query, messages }: {
         {query.data && !messages.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
         <div ref={liveRef} tabIndex={-1} />
       </SessionTranscript>
-      {query.hasNextPage && (
-        <footer className="session-history-pages">
-          <Button
-            variant="secondary"
-            disabled={query.isFetchingNextPage}
-            onClick={() => void query.fetchNextPage()}
-          >
-            {t("more")}
-          </Button>
-        </footer>
-      )}
     </section>
   );
 }

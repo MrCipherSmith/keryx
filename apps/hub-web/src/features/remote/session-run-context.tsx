@@ -91,7 +91,7 @@ function LoadedRun({ run, record, control, mode, conversation, messages }: Props
   const { timeline, query } = useRunTimeline(run);
   const cancel = useRemoteAction();
   const reply = pendingAssistantText(run.runId, timeline.events, messages ?? []);
-  const toolLog = timeline.events.flatMap(event => event.kind === "log" && event.stream === "tool-summary" ? [event] : []);
+  const toolLog = timeline.events.flatMap(event => event.kind === "log" && event.stream !== "assistant" ? [event] : []);
   const terminal = ["succeeded", "failed", "cancelled", "rejected", "lost", "unknown"].includes(run.state);
   const safe =
     !query.isPending &&

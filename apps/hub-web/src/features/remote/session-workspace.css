@@ -491,3 +491,23 @@
   .composer-command-actions { gap: 4px; }
   .composer-command-actions .hub-button { min-height: 40px; padding-inline: 8px; }
 }
+
+.session-history-pages {
+  border-top: 0;
+  border-bottom: 1px solid var(--hub-border);
+}
+.composer-keyboard-hint {
+  display: none;
+  font-size: 11px;
+  color: var(--hub-muted);
+}
+@media (min-width: 768px) and (pointer: fine) {
+  .composer-keyboard-hint { display: block; }
+}
+
+.composer-send-icon { display: none; }
+@media (max-width: 480px) {
+  .composer-send-label { display: none; }
+  .composer-send-icon { display: block; }
+  .composer-command-actions .hub-button { min-width: 44px; min-height: 44px; }
+}

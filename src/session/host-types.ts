@@ -24,7 +24,7 @@ interface TurnObservationBase { sessionId: string; runId: string; turnId: string
 export type NativeTurnObservation = TurnObservationBase & (
   | { kind: "admission-refused"; operationId: string; reason: "expired-work" | "temporarily-unavailable" | "renewal-drift" | "revoked-or-forbidden" | "stale-subject"; retainedQueue: boolean; selectionSettled: true; codingAdmitted: false }
   | { kind: "running"; snapshot: Control["ConfigSnapshot"] }
-  | { kind: "progress"; text: string; toolName?: string }
+  | { kind: "progress"; text: string; toolName?: string; diagnostic?: true }
   | { kind: "usage"; usage: NormalizedUsage; source?: "agent" | "routing-classifier"; candidateId?: string; providerId?: string; modelId?: string; actualProviderId?: string; actualModelId?: string }
   | { kind: "terminal"; outcome: "succeeded" | "failed" | "cancelled" | "unknown"; reason: string; result?: RunAgentTurnResult; checks: NativeCheckObservation[]; workspaceBaseline: string; partial: boolean }
 );

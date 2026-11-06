@@ -210,6 +210,9 @@ export function SessionWorkspace({
         </span>
       </div>
       {machine && !machine.connected && <Notice>{words.stale}</Notice>}
+      <p role="status" aria-atomic="true" className="sr-only">
+        {run.data?.state === "waiting-approval" ? words.attention : ""}
+      </p>
       {run.data?.state === "waiting-approval" && (
         <button
           type="button"
@@ -355,6 +358,7 @@ function SessionNavigator({
     queryKey: [hub.scopeKey, projectId, "remote", "machines"],
     queryFn: ({ signal }) => remoteGet<{ machines: MachineSummary[] }>("/machines?projectId=" + encodeURIComponent(projectId), signal),
     enabled: projectId !== record.projectId,
+    refetchInterval: projectId === record.projectId ? false : 20_000,
   });
   const visibleMachines = projectId === record.projectId ? machines : alternateMachines.data?.machines ?? [];
   const sessions = useInfiniteQuery({
@@ -371,6 +375,8 @@ function SessionNavigator({
         remoteProject(projectId) + "/sessions?after=" + pageParam,
         signal,
       ),
+    // Hub events follow the open session's project; keep the other project's sidebar fresh.
+    refetchInterval: projectId === record.projectId ? false : 20_000,
     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
   });
   const unique = new Map<string, Control["SessionRecord"]>();

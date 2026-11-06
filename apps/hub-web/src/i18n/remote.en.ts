@@ -1,4 +1,4 @@
-export default {
+export default { composerKeyboardHint: "Enter to send · Shift+Enter for a new line", newAssistantReply: "New Keryx reply (message {{cursor}}).", olderMessages: "Older messages",
   sessionOpeningScope: "Check that this machine allows the selected checkout and agent profile.", sessionOpeningRecovery: "Resolve the unfinished run on this machine before retrying this checkout.",
   messagePlaceholder: "Write a message…",
   searchCommands: "Search Keryx commands", noCommandsFound: "No matching commands.",

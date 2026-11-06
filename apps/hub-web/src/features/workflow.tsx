@@ -59,7 +59,7 @@ export function ProjectsView() {
   } });
   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.name.trim()) { setValidation(t('projectNameRequired')); nameInput.current?.focus(); return; } create.mutate({ isCurrent, draft: draft }); }
   return <div className="space-y-5">
-    <PageHeading title={t('projectsTitle')} action={<Button variant={creating ? 'secondary' : 'primary'} aria-expanded={creating} onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'createProject')}</Button>} />
+    <PageHeading title={t('projectsTitle')} action={<Button variant={creating ? 'secondary' : 'primary'} aria-expanded={creating} disabled={create.isPending} onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'createProject')}</Button>} />
     {creating && <Panel title={t('createProject')}><form noValidate onSubmit={submit} className="max-w-xl space-y-3">
       <Field label={t('projectName')}><input ref={nameInput} className={inputClass} value={draft.name} onChange={event => { setValidation(''); setDraft({ name: event.target.value }); }} aria-invalid={!!validation} aria-errormessage={validation ? errorId : undefined} maxLength={200} required /></Field>
       {validation && <p id={errorId} role="alert" className="text-sm text-red-700">{validation}</p>}
@@ -106,7 +106,11 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
     void client.invalidateQueries({ queryKey: [hub.scopeKey, projectId, 'flows'] }); const cleared = clearDraft(context.draft); if (!context.isCurrent()) return; setDraftKept(!cleared); if (!cleared) return; setCreating(false); hub.navigate({ tab: 'flows', flowId: flow.id });
   } });
   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.title.trim() || !specs.some(spec => spec.id === draft.specDocumentId) || !draft.criteria.trim()) { setValidation(t('required')); return; } create.mutate({ isCurrent, draft: draft }); }
-  const filtered = flows.data?.flows.filter(flow => `${flow.title} ${flow.specContentDigest}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
+  const filtered = flows.data?.flows.filter(flow => `${flow.title} ${flow.specContentDigest}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) ?? [];
+  const filtering = search.trim() !== '';
+  const selectedLane = filtering && !filtered.some(flow => flow.status === lane)
+    ? filtered[0]?.status ?? lane
+    : lane;
   const returningStatus = filtered.find(flow => flow.id === returnCard.current)?.status;
   useLayoutEffect(() => {
     if (selected || !returnCard.current || flows.isFetching) return;
@@ -138,17 +142,17 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
         <Field label={t('searchFlows')}><input ref={searchInput} className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} aria-label={t('flowSearchLabel')} /></Field>
         <div className="flex gap-2" role="group" aria-label={t('boardLabel')}><Button variant={layout === 'list' ? 'primary' : 'secondary'} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>{t('listView')}</Button><Button variant={layout === 'board' ? 'primary' : 'secondary'} aria-pressed={layout === 'board'} onClick={() => setLayout('board')}>{t('boardView')}</Button></div>
       </div>
-      {flows.data.flows.length === 0 && <EmptyState>{t('noFlows')}</EmptyState>}
-      {layout === 'list' ? <FlowRows rows={filtered.map(flow => ({ flow }))} /> : <>
+      {flows.data.flows.length === 0 ? <EmptyState>{t('noFlows')}</EmptyState> : filtering && !filtered.length ? <EmptyState>{t('noFlowMatches')}</EmptyState> : null}
+      {!filtered.length ? null : layout === 'list' ? <FlowRows rows={filtered.map(flow => ({ flow }))} /> : <>
         <div className="flow-lane-picker" role="group" aria-label={t('flowState')}>
-          {flowStatuses.map(status => <Button key={status} variant={lane === status ? 'primary' : 'secondary'} aria-pressed={lane === status} onClick={() => setLane(status)}>
+          {flowStatuses.map(status => <Button key={status} variant={selectedLane === status ? 'primary' : 'secondary'} aria-pressed={selectedLane === status} disabled={filtering && !filtered.some(flow => flow.status === status)} onClick={() => setLane(status)}>
             {t(statusKeys[status])} · {filtered.filter(flow => flow.status === status).length}
           </Button>)}
         </div>
         <div ref={board} className="flow-board-grid" aria-label={t('boardLabel')}>
           {flowStatuses.map(status => {
             const cards = filtered.filter(flow => flow.status === status);
-            return <section key={status} data-lane-visible={lane === status}>
+            return <section key={status} data-lane-visible={selectedLane === status}>
               <h2>{t(statusKeys[status])} <span>{cards.length}</span></h2>
               {cards.map(flow => <button key={flow.id} data-board-flow={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => {
                 returnCard.current = flow.id;

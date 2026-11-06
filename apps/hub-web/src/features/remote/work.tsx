@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ArrowUp } from "lucide-react";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
 import type { CommandOutcomeListener } from "./session-timeline";
@@ -253,7 +254,7 @@ export function MessageComposer({
         <Notice>{t("observer")} {control.operator && <a href="#session-controller" className="underline">{t("goToController")}</a>}</Notice>
       )}
       <span id={commandsId + "-hint"} className="sr-only">{t("commandsHint")}</span>
-      <Field label={t("message")}>
+      <Field label={<span className="sr-only">{t("message")}</span>}>
         <Textarea aria-describedby={commandsId + "-hint"}
           value={draft.text}
           rows={2}
@@ -297,7 +298,10 @@ export function MessageComposer({
             {shortcut}
           </Button>
         ))}
-        <Button className="composer-send" disabled={!canSend} onClick={submit}>{t("send")}</Button>
+        <Button className="composer-send" aria-label={t("send")} disabled={!canSend} onClick={submit}>
+          <ArrowUp className="composer-send-icon" size={20} aria-hidden="true" />
+          <span className="composer-send-label">{t("send")}</span>
+        </Button>
       </div>
       {commands !== "unopened" && (
         <div id={commandsId} hidden={commands !== "open"}
@@ -344,6 +348,16 @@ export function MessageComposer({
           </Field>
         ) : null}
       </div>
+      {mode === "flow" && (
+        <details className="composer-pins">
+          <summary>{t("pins")}</summary>
+          <Definition label={t("pins")}>
+            {draft.specDigest || "—"}
+            <br />
+            {draft.criteriaDigest || "—"}
+          </Definition>
+        </details>
+      )}
       </details>
       {mode === "flow" ? (
         <>
@@ -355,14 +369,6 @@ export function MessageComposer({
               {t("pins")}
             </Button>
           )}
-          <details className="composer-pins">
-            <summary>{t("pins")}</summary>
-            <Definition label={t("pins")}>
-              {draft.specDigest || "—"}
-              <br />
-              {draft.criteriaDigest || "—"}
-            </Definition>
-          </details>
         </>
       ) : hasProfileConsent ? (
         <label className="flex gap-2 text-xs">
@@ -398,7 +404,8 @@ export function MessageComposer({
       {validation && <Notice tone="error">{validation}</Notice>}
       {mode === "flow" && <Feedback query={flows} />}
       <Feedback query={consent} />
-      <ActionFeedback action={action} />
+      {action.data?.status !== "admitted" && <ActionFeedback action={action} />}
+      <p className="composer-keyboard-hint">{t("composerKeyboardHint")}</p>
       <div className="composer-footer">
         <details>
           <summary>{t("chatOptions")}</summary>
@@ -417,6 +424,7 @@ export function MessageComposer({
           </Select>
           </Field>
           <p className="composer-hint">{t("secretWarning")}</p>
+          {action.data?.status === "admitted" && <ActionFeedback action={action} />}
         </details>
       </div>
     </Panel>

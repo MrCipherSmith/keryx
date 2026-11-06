@@ -66,10 +66,12 @@ function documentPresentation(doc: HubDocument) {
   const body = front && (title || summary) ? doc.content.slice(front[0].length) : doc.content;
   const heading = /^(?:[ \t]*\r?\n)* {0,3}#[ \t]+(.+)(?:\r?\n|$)/.exec(body);
   const headingText = heading?.[1]?.replace(/[ \t]+#+[ \t]*$/, '').trim();
+  // Preserve headings with inline Markdown; a plain navigation title can't carry their links or formatting.
+  const plainHeading = headingText && !/[\\`*_~[\]<>&]/.test(headingText);
   return {
-    title: title || headingText || doc.path.split('/').at(-1) || doc.path,
+    title: title || (plainHeading ? headingText : '') || doc.path.split('/').at(-1) || doc.path,
     summary,
-    body: heading && (!title || headingText === title) ? body.slice(heading[0].length) : body,
+    body: heading && plainHeading && (!title || headingText === title) ? body.slice(heading[0].length) : body,
   };
 }
 

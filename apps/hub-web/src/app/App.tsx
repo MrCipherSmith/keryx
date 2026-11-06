@@ -338,6 +338,14 @@ function Shell({
         ?.querySelector<HTMLButtonElement>("button:not(.desktop-rail-toggle)")
         ?.focus();
   }, [menu]);
+  const switchProject = (nextProjectId: string | null) => {
+    navigate({
+      projectId: nextProjectId,
+      tab: location.tab === "machines" || location.tab === "flows" ? location.tab : "overview",
+      flowId: undefined,
+      machineId: undefined,
+    });
+  };
   const navTabs = projectId
     ? tabs
     : (["overview", "flows", "machines"] as Tab[]);
@@ -431,8 +439,9 @@ function Shell({
                   "nav-item " + (projectId === p.id ? "project-active" : "")
                 }
                 onClick={() => {
-                  navigate({ projectId: p.id, tab: "overview" });
+                  switchProject(p.id);
                   setMenu(false);
+                  if (menu) document.getElementById("main-content")?.focus();
                 }}
               >
                 <span className="project-initial">{p.name.slice(0, 1)}</span>
@@ -501,15 +510,7 @@ function Shell({
               <Select
                 id="hub-project-selector"
                 value={projectId ?? ""}
-                onChange={(e) =>
-                  navigate({
-                    projectId: e.target.value || null,
-                    tab:
-                      location.tab === "machines" || location.tab === "flows"
-                        ? location.tab
-                        : "overview",
-                  })
-                }
+                onChange={e => switchProject(e.target.value || null)}
               >
                 <option value="">
                   {ru ? "Hub · все проекты" : "Hub · all projects"}

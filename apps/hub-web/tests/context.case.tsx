@@ -89,6 +89,15 @@ Content.`, visible: 'Use the "real" example' },
   expect(await within(await screen.findByRole('article')).findByText(visible, { selector })).toBeVisible();
 });
 
+it('keeps a link in the first Markdown heading usable in preview', async () => {
+  const content = '# [Open runbook](https://example.com/runbook)';
+  mocks.get.mockImplementation((path: string) => Promise.resolve(
+    path.endsWith('/documents') ? { documents: [{ ...document, content }] } : project,
+  ));
+  await mount(<DocumentsView />);
+  expect(await screen.findByRole('link', { name: 'Open runbook' })).toHaveAttribute('href', 'https://example.com/runbook');
+});
+
 it('keeps specification search and returns focus to the same card after reading a document', async () => {
   const wiki = { ...document, id: 'wiki', path: 'wiki/example.md', kind: 'wiki' };
   mocks.get.mockImplementation((path: string) => Promise.resolve(

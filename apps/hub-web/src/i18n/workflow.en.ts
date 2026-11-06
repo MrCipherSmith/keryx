@@ -94,6 +94,7 @@ export default {
     "One criterion per line. These will be frozen before work starts.",
   noSpecifications:
     "Import a specification in Documents before creating a Flow.",
+  noFlowMatches: "No Flows match your search.",
   noFlows: "No Flows yet. Create one from a specification.",
   searchFlows: "Search Flows",
   searchFlowsPlaceholder: "Search by title or digest",

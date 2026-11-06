@@ -372,9 +372,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       turnLog.append(observation);
       for (const sink of turnListeners) { try { sink(observation); } catch { turnListeners.delete(sink); } }
     };
-    const progress = (value: string) => {
+    const progress = (value: string, diagnostic = false) => {
       let remaining = redactSensitiveText(value);
-      while (remaining.length > 0) { const chunk = utf8Bounded(remaining, 8192); observe({ kind: "progress", text: chunk }); remaining = remaining.slice(chunk.length); }
+      while (remaining.length > 0) { const chunk = utf8Bounded(remaining, 8192); observe({ kind: "progress", text: chunk, ...(diagnostic ? { diagnostic: true } : {}) }); remaining = remaining.slice(chunk.length); }
     };
     const receipt = command === undefined ? checked("TurnReceipt", { operationId: operation.operationId, messageId: request.messageId, sessionId: record.sessionId,
       sessionVersion: record.version, queueItemId: null, status: "admitted", runId: operation.runId, turnId: operation.turnId, turnOrdinal })
@@ -404,7 +404,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
             persist();
           },
           onAssistantText: (text) => publishMessage("assistant", text, operation.runId, operation.turnId),
-          onSystem: progress,
+          onSystem: (value) => progress(value, true),
           beforeAction: async (action) => { if (commandOwnershipUnknown) throw new SessionHostError("workspace-conflict"); await beforeAction(action); if (!announcedRunning) { announcedRunning = true; observe({ kind: "running", snapshot }); } },
           beforeMutation: async () => {
             const before = await options.workspace.verify(record.workspaceBaseline); if (!before.ok) throw new SessionHostError("workspace-conflict");
