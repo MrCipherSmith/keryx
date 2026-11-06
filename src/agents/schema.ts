@@ -17,7 +17,18 @@
 // reasons, not an exception the caller has to wrap.
 
 import { isModelTier, MODEL_TIERS } from "../gdskills/model-tier";
-import type { AgentDefinition, AgentOrigin, IsolationMode, ModelTier, OriginKind, OutputContract } from "./types";
+import type {
+  AgentDefinition,
+  AgentDelegation,
+  AgentExecutionKind,
+  AgentOrigin,
+  AgentSchemaVersion,
+  AgentToolScope,
+  IsolationMode,
+  ModelTier,
+  OriginKind,
+  OutputContract,
+} from "./types";
 
 export const AGENT_NAME_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
 export const AGENT_DESCRIPTION_MAX_LENGTH = 1024;
@@ -48,6 +59,9 @@ export const AGENT_TOP_LEVEL_FIELDS = [
   "output_contract",
   "isolation",
   "origin",
+  "execution_kind",
+  "tool_scope",
+  "delegation",
 ] as const;
 
 export const AGENT_OUTPUT_CONTRACT_VALUES = ["subagent-result"] as const;
@@ -57,6 +71,10 @@ export const AGENT_ORIGIN_KIND_VALUES = ["authored", "generated", "imported", "l
 /** `origin.required` + every key `origin.properties` declares. */
 export const AGENT_ORIGIN_REQUIRED_FIELDS = ["kind"] as const;
 export const AGENT_ORIGIN_FIELDS = ["kind", "sourceRef", "generatedAt"] as const;
+export const AGENT_EXECUTION_KIND_VALUES = ["worker", "orchestrator"] as const;
+export const AGENT_TOOL_SCOPE_VALUES = ["static", "parent"] as const;
+export const AGENT_DELEGATION_REQUIRED_FIELDS = ["allowed_entities", "max_depth", "max_children"] as const;
+export const AGENT_DELEGATION_FIELDS = [...AGENT_DELEGATION_REQUIRED_FIELDS] as const;
 
 export type AgentSchemaErrorReason =
   | "not-an-object"
@@ -68,6 +86,13 @@ export type AgentSchemaErrorReason =
   | "invalid-enum"
   | "duplicate-item"
   | "invalid-schema-version"
+  | "v2-field-without-v2-schema"
+  | "delegation-not-an-object"
+  | "delegation-missing-required-field"
+  | "delegation-unknown-field"
+  | "delegation-invalid-type"
+  | "delegation-invalid-bound"
+  | "invalid-delegation-contract"
   | "origin-not-an-object"
   | "origin-missing-required-field"
   | "origin-unknown-field"
@@ -161,6 +186,42 @@ function validateOrigin(value: unknown, errors: AgentSchemaError[]): void {
   }
 }
 
+function validateDelegation(value: unknown, errors: AgentSchemaError[]): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    pushError(errors, "delegation-not-an-object", "delegation", "delegation must be a mapping");
+    return;
+  }
+  const delegation = value as Record<string, unknown>;
+  for (const field of AGENT_DELEGATION_REQUIRED_FIELDS) {
+    if (delegation[field] === undefined) {
+      pushError(errors, "delegation-missing-required-field", `delegation.${field}`, `delegation.${field} is required`);
+    }
+  }
+  for (const key of Object.keys(delegation)) {
+    if (!(AGENT_DELEGATION_FIELDS as readonly string[]).includes(key)) {
+      pushError(errors, "delegation-unknown-field", `delegation.${key}`, `delegation.${key} is not recognized`);
+    }
+  }
+  const allowed = delegation.allowed_entities;
+  if (allowed !== undefined) {
+    if (!Array.isArray(allowed) || !allowed.every((item) => typeof item === "string" && AGENT_NAME_PATTERN.test(item))) {
+      pushError(errors, "delegation-invalid-type", "delegation.allowed_entities", "allowed_entities must contain valid agent names");
+    } else if (hasDuplicates(allowed)) {
+      pushError(errors, "duplicate-item", "delegation.allowed_entities", "allowed_entities must not contain duplicates");
+    }
+  }
+  for (const [field, maximum] of [["max_depth", 1], ["max_children", 512]] as const) {
+    const bound = delegation[field];
+    if (bound !== undefined) {
+      if (typeof bound !== "number" || !Number.isSafeInteger(bound)) {
+        pushError(errors, "delegation-invalid-type", `delegation.${field}`, `${field} must be an integer`);
+      } else if (bound < 0 || bound > maximum) {
+        pushError(errors, "delegation-invalid-bound", `delegation.${field}`, `${field} must be between 0 and ${maximum}`);
+      }
+    }
+  }
+}
+
 /**
  * Validate a parsed frontmatter mapping (no `body` key — that is Markdown,
  * not part of the JSON Schema) against every rule
@@ -184,8 +245,25 @@ export function validateAgentFrontmatter(raw: unknown): AgentSchemaValidationRes
     }
   }
 
-  if (data.schema_version !== undefined && data.schema_version !== 1) {
-    pushError(errors, "invalid-schema-version", "schema_version", "schema_version must be the literal 1");
+  if (data.schema_version !== undefined && data.schema_version !== 1 && data.schema_version !== 2) {
+    pushError(errors, "invalid-schema-version", "schema_version", "schema_version must be 1 or 2");
+  }
+
+  if (data.schema_version === 2) {
+    for (const field of ["execution_kind", "tool_scope", "delegation"] as const) {
+      if (data[field] === undefined) pushError(errors, "missing-required-field", field, `${field} is required in schema v2`);
+    }
+  } else {
+    for (const field of ["execution_kind", "tool_scope", "delegation"] as const) {
+      if (data[field] !== undefined) {
+        pushError(
+          errors,
+          "v2-field-without-v2-schema",
+          field,
+          `${field} requires schema_version: 2`,
+        );
+      }
+    }
   }
 
   if (data.name !== undefined) {
@@ -252,6 +330,39 @@ export function validateAgentFrontmatter(raw: unknown): AgentSchemaValidationRes
     validateOrigin(data.origin, errors);
   }
 
+  if (data.execution_kind !== undefined && !(AGENT_EXECUTION_KIND_VALUES as readonly unknown[]).includes(data.execution_kind)) {
+    pushError(errors, "invalid-enum", "execution_kind", `execution_kind must be one of ${AGENT_EXECUTION_KIND_VALUES.join(", ")}`);
+  }
+  if (data.tool_scope !== undefined && !(AGENT_TOOL_SCOPE_VALUES as readonly unknown[]).includes(data.tool_scope)) {
+    pushError(errors, "invalid-enum", "tool_scope", `tool_scope must be one of ${AGENT_TOOL_SCOPE_VALUES.join(", ")}`);
+  }
+  if (data.delegation !== undefined) validateDelegation(data.delegation, errors);
+
+  const executionKind = (data.execution_kind as AgentExecutionKind | undefined) ?? "worker";
+  const toolScope = (data.tool_scope as AgentToolScope | undefined) ?? "static";
+  const delegation = data.delegation as Record<string, unknown> | undefined;
+  const allowedEntities = Array.isArray(delegation?.allowed_entities) ? delegation.allowed_entities : [];
+  const maxDepth = typeof delegation?.max_depth === "number" ? delegation.max_depth : 0;
+  const maxChildren = typeof delegation?.max_children === "number" ? delegation.max_children : 0;
+  if (data.schema_version === 2 && executionKind === "worker" && (toolScope !== "static" || allowedEntities.length > 0 || maxDepth !== 0 || maxChildren !== 0)) {
+    pushError(errors, "invalid-delegation-contract", "execution_kind", "workers must use static tools and cannot delegate");
+  }
+  if (data.schema_version === 2 && executionKind === "worker" && Array.isArray(data.tools) && data.tools.includes("spawn_subagent")) {
+    pushError(errors, "invalid-delegation-contract", "tools", "workers cannot declare spawn_subagent");
+  }
+  if (executionKind === "orchestrator") {
+    const delegates = allowedEntities.length > 0 || maxDepth > 0 || maxChildren > 0;
+    if (delegates && (!Array.isArray(data.tools) || !data.tools.includes("spawn_subagent"))) {
+      pushError(errors, "invalid-delegation-contract", "tools", "a delegating orchestrator must declare spawn_subagent");
+    }
+    if (delegates && (allowedEntities.length === 0 || maxDepth === 0 || maxChildren === 0)) {
+      pushError(errors, "invalid-delegation-contract", "delegation", "delegation allowlist, depth, and child count must be enabled together");
+    }
+  }
+  if (typeof data.name === "string" && allowedEntities.includes(data.name)) {
+    pushError(errors, "invalid-delegation-contract", "delegation.allowed_entities", "an agent cannot delegate to itself");
+  }
+
   return { ok: errors.length === 0, errors };
 }
 
@@ -265,6 +376,20 @@ export function validateAgentFrontmatter(raw: unknown): AgentSchemaValidationRes
  */
 export function validateAgentDefinition(definition: AgentDefinition): AgentSchemaValidationResult {
   const { body: _body, ...frontmatter } = definition as unknown as Record<string, unknown>;
+  if (definition.schema_version !== 2) {
+    const delegation = definition.delegation;
+    const normalizedLegacyDefaults =
+      definition.execution_kind === "worker" &&
+      definition.tool_scope === "static" &&
+      delegation?.allowed_entities.length === 0 &&
+      delegation.max_depth === 0 &&
+      delegation.max_children === 0;
+    if (normalizedLegacyDefaults) {
+      delete frontmatter.execution_kind;
+      delete frontmatter.tool_scope;
+      delete frontmatter.delegation;
+    }
+  }
   return validateAgentFrontmatter(frontmatter);
 }
 
@@ -286,9 +411,17 @@ export function buildAgentDefinition(data: Record<string, unknown>, body: string
           ...(typeof originRaw.sourceRef === "string" ? { sourceRef: originRaw.sourceRef } : {}),
           ...(typeof originRaw.generatedAt === "string" ? { generatedAt: originRaw.generatedAt } : {}),
         };
+  const delegationRaw = data.delegation as Record<string, unknown> | undefined;
+  const delegation: AgentDelegation = delegationRaw === undefined
+    ? { allowed_entities: [], max_depth: 0, max_children: 0 }
+    : {
+        allowed_entities: Array.isArray(delegationRaw.allowed_entities) ? [...(delegationRaw.allowed_entities as string[])] : [],
+        max_depth: Number(delegationRaw.max_depth ?? 0),
+        max_children: Number(delegationRaw.max_children ?? 0),
+      };
 
   return {
-    ...(data.schema_version === 1 ? { schema_version: 1 as const } : {}),
+    ...((data.schema_version === 1 || data.schema_version === 2) ? { schema_version: data.schema_version as AgentSchemaVersion } : {}),
     name: String(data.name),
     description: String(data.description),
     role: String(data.role),
@@ -299,6 +432,9 @@ export function buildAgentDefinition(data: Record<string, unknown>, body: string
     stacks: Array.isArray(data.stacks) ? [...(data.stacks as string[])] : [],
     output_contract: data.output_contract as OutputContract,
     isolation: (data.isolation as IsolationMode | undefined) ?? "none",
+    execution_kind: (data.execution_kind as AgentExecutionKind | undefined) ?? "worker",
+    tool_scope: (data.tool_scope as AgentToolScope | undefined) ?? "static",
+    delegation,
     ...(origin !== undefined ? { origin } : {}),
     body,
   };

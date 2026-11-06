@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.29
+Version: 0.29.31
 
 ## Status
 
@@ -12,6 +12,10 @@ carrying the measurement that found it and the reason it was not done then.
 
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
+>
+> - **0.29.31**: [Keryx Review V3](keryx-revview-v3/README.md) — **spec ready, D1–D7 accepted; runtime not implemented**. Schema v2/v1 compatibility, shared Keryx controller, native plus Keryx external general in first release, review-only authority, behavior-based coverage and initial large-review limits accepted. Implementation explicitly not started.
+>
+> - **0.29.30**: [Keryx Review V3](keryx-revview-v3/README.md) — **draft, runtime not implemented**. Preparation and coverage planning, catalog-backed generals/soldiers, shared tree limits and authority, native/external execution across harnesses.
 >
 > - **0.29.29**: [Unified model routing](keryx-unified-model-routing/README.md) — **spec ready, runtime v2 not implemented**. Four absolute model classes, cross-provider pools, one resolver, explicit fallback and reversible migration from category/tier mechanisms.
 >

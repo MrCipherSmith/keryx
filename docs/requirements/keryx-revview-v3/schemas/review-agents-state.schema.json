@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://keryx.dev/schemas/review-agents-state.schema.json",
+  "title": "Keryx Review V3 Durable Run State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "revision", "config", "status", "createdAt", "updatedAt", "controllerLease", "activePlan", "highestReviewRound", "usedLaunches", "outsideWaveLaunches", "usedActiveAgentTimeMs", "reservedAgentTimeMs", "waveLaunches", "registeredWaves", "assignments", "idempotency", "results", "coverage"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runId": { "$ref": "#/definitions/text" },
+    "revision": { "$ref": "#/definitions/text" },
+    "config": { "$ref": "review-agents-config.schema.json" },
+    "status": { "enum": ["active", "cancelled", "completed"] },
+    "createdAt": { "$ref": "#/definitions/timestamp" },
+    "updatedAt": { "$ref": "#/definitions/timestamp" },
+    "controllerLease": {
+      "type": "object", "additionalProperties": false, "required": ["ownerId", "fencingToken", "expiresAt"],
+      "properties": { "ownerId": { "$ref": "#/definitions/text" }, "fencingToken": { "$ref": "#/definitions/text" }, "expiresAt": { "$ref": "#/definitions/timestamp" } }
+    },
+    "activePlan": { "anyOf": [{ "type": "null" }, { "$ref": "#/definitions/activePlan" }] },
+    "highestReviewRound": { "$ref": "#/definitions/nonNegativeInteger" },
+    "usedLaunches": { "$ref": "#/definitions/nonNegativeInteger" },
+    "outsideWaveLaunches": { "$ref": "#/definitions/nonNegativeInteger" },
+    "usedActiveAgentTimeMs": { "$ref": "#/definitions/nonNegativeInteger" },
+    "reservedAgentTimeMs": { "$ref": "#/definitions/nonNegativeInteger" },
+    "waveLaunches": { "type": "object", "additionalProperties": { "$ref": "#/definitions/nonNegativeInteger" } },
+    "registeredWaves": { "type": "object", "additionalProperties": { "$ref": "#/definitions/registeredWave" } },
+    "assignments": { "type": "object", "additionalProperties": { "$ref": "#/definitions/assignment" } },
+    "idempotency": { "type": "object", "additionalProperties": { "$ref": "#/definitions/text" } },
+    "results": { "type": "object", "additionalProperties": { "$ref": "#/definitions/result" } },
+    "coverage": { "type": "object", "additionalProperties": { "$ref": "#/definitions/coverage" } }
+  },
+  "definitions": {
+    "text": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "positiveInteger": { "type": "integer", "minimum": 1 },
+    "role": { "enum": ["coordinator", "worker", "scout", "validator"] },
+    "stringList": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/definitions/text" } },
+    "cell": {
+      "type": "object", "additionalProperties": false, "required": ["scopeId", "aspect"],
+      "properties": { "scopeId": { "$ref": "#/definitions/text" }, "aspect": { "$ref": "#/definitions/text" } }
+    },
+    "registeredWave": {
+      "type": "object", "additionalProperties": false, "required": ["waveId", "planHash", "reviewRound", "registeredAt"],
+      "properties": { "waveId": { "$ref": "#/definitions/text" }, "planHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "reviewRound": { "$ref": "#/definitions/positiveInteger" }, "registeredAt": { "$ref": "#/definitions/timestamp" } }
+    },
+    "planBinding": {
+      "type": "object", "additionalProperties": false, "required": ["taskId", "entity", "role", "scopeIds", "waveId", "coverage"],
+      "properties": {
+        "taskId": { "$ref": "#/definitions/text" }, "parentTaskId": { "$ref": "#/definitions/text" }, "entity": { "$ref": "#/definitions/text" }, "role": { "$ref": "#/definitions/role" },
+        "scopeIds": { "$ref": "#/definitions/stringList" }, "waveId": { "$ref": "#/definitions/text" }, "coverage": { "type": "array", "items": { "$ref": "#/definitions/cell" } },
+        "delegatedCoverage": { "type": "array", "items": { "$ref": "#/definitions/cell" } }, "allowDynamicChildren": { "type": "boolean" }
+      }
+    },
+    "activePlan": {
+      "type": "object", "additionalProperties": false, "required": ["planHash", "planVersion", "revision", "registeredAt", "waves", "assignments"],
+      "properties": {
+        "planHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "planVersion": { "$ref": "#/definitions/positiveInteger" }, "revision": { "$ref": "#/definitions/text" }, "registeredAt": { "$ref": "#/definitions/timestamp" },
+        "waves": { "type": "object", "additionalProperties": { "$ref": "#/definitions/registeredWave" } },
+        "assignments": { "type": "object", "additionalProperties": { "$ref": "#/definitions/planBinding" } }
+      }
+    },
+    "assignment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["dispatchId", "taskId", "task", "attempt", "idempotencyKey", "entity", "role", "adapterId", "scopeIds", "budgetClass", "depth", "status", "children", "reservationMs", "requestedRuntimeMs", "selectedModelRounds", "usedActiveMs", "createdAt", "updatedAt"],
+      "properties": {
+        "dispatchId": { "$ref": "#/definitions/text" }, "taskId": { "$ref": "#/definitions/text" }, "task": { "$ref": "#/definitions/text" }, "attempt": { "$ref": "#/definitions/positiveInteger" }, "idempotencyKey": { "$ref": "#/definitions/text" },
+        "entity": { "$ref": "#/definitions/text" }, "role": { "$ref": "#/definitions/role" }, "adapterId": { "$ref": "#/definitions/text" }, "skillRef": { "$ref": "#/definitions/text" }, "scopeIds": { "$ref": "#/definitions/stringList" }, "waveId": { "$ref": "#/definitions/text" },
+        "planHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "planVersion": { "$ref": "#/definitions/positiveInteger" }, "coverageCells": { "type": "array", "items": { "$ref": "#/definitions/cell" } },
+        "budgetClass": { "enum": ["ordinary", "reserved"] }, "parentDispatchId": { "$ref": "#/definitions/text" }, "authorityRef": { "$ref": "#/definitions/text" }, "depth": { "$ref": "#/definitions/positiveInteger" },
+        "status": { "enum": ["queued", "running", "waiting_children", "collecting", "cancelling", "completed", "blocked", "failed", "cancelled", "unresolved"] }, "children": { "$ref": "#/definitions/stringList" },
+        "reservationMs": { "$ref": "#/definitions/nonNegativeInteger" }, "requestedRuntimeMs": { "$ref": "#/definitions/positiveInteger" }, "selectedModelRounds": { "$ref": "#/definitions/positiveInteger" }, "usedActiveMs": { "$ref": "#/definitions/nonNegativeInteger" },
+        "activeStartedAt": { "$ref": "#/definitions/timestamp" }, "createdAt": { "$ref": "#/definitions/timestamp" }, "updatedAt": { "$ref": "#/definitions/timestamp" }, "resultId": { "$ref": "#/definitions/text" }, "error": { "$ref": "#/definitions/text" }, "cancelReason": { "$ref": "#/definitions/text" }
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false, "required": ["resultId", "dispatchId", "runId", "taskId", "attempt", "revision", "entity", "scopeIds", "content", "createdAt"],
+      "properties": {
+        "resultId": { "$ref": "#/definitions/text" }, "dispatchId": { "$ref": "#/definitions/text" }, "runId": { "$ref": "#/definitions/text" }, "taskId": { "$ref": "#/definitions/text" }, "attempt": { "$ref": "#/definitions/positiveInteger" }, "revision": { "$ref": "#/definitions/text" },
+        "planHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "planVersion": { "$ref": "#/definitions/positiveInteger" }, "entity": { "$ref": "#/definitions/text" }, "skillRef": { "$ref": "#/definitions/text" }, "scopeIds": { "$ref": "#/definitions/stringList" }, "content": {}, "usage": { "type": "object" }, "metadata": { "type": "object" }, "createdAt": { "$ref": "#/definitions/timestamp" }
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false, "required": ["key", "scopeId", "aspect", "dispatchId", "status", "recordedAt"],
+      "properties": { "key": { "$ref": "#/definitions/text" }, "scopeId": { "$ref": "#/definitions/text" }, "aspect": { "$ref": "#/definitions/text" }, "dispatchId": { "$ref": "#/definitions/text" }, "status": { "enum": ["result", "blocked", "not_run"] }, "resultId": { "$ref": "#/definitions/text" }, "evidence": { "$ref": "#/definitions/stringList" }, "planHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "planVersion": { "$ref": "#/definitions/positiveInteger" }, "recordedAt": { "$ref": "#/definitions/timestamp" } }
+    }
+  }
+}

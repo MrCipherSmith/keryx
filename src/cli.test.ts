@@ -58,6 +58,16 @@ test("`keryx shell` is dispatched via shellCommand, and bare `keryx` is not", ()
   expect(cliSource).toMatch(/printHelp\(\)/);
 });
 
+test("`keryx review agents serve` reaches the public command instead of the unknown-subcommand guard", async () => {
+  const cliPath = path.join(import.meta.dir, "cli.ts");
+  const result = await runBunCapture([cliPath, "review", "agents", "serve"]);
+
+  expect(result.code).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("--project is required");
+  expect(result.stderr).not.toContain("Unknown command: v3");
+});
+
 test("dash alias is advertised in CLI help", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
   const output = await runBun([cliPath, "--help"]);

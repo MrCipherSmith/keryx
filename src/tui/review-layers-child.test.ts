@@ -46,10 +46,12 @@ describe("the production runner behind the /reviews layers refresh", () => {
   test("a child that outlives the timeout is killed, gone, and reported as a timeout", async () => {
     const pidFile = path.join(dir, "child.pid");
     const entry = await stub(`require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
-    const timeoutMs = 600;
+    // The deadline includes runtime startup. Loaded native CI must have time to
+    // write the PID before we can assert that the timed-out child is gone.
+    const timeoutMs = 5000;
     const started = Date.now();
     let outcome: unknown = "pending";
-    const guard = new Promise<void>((resolve) => setTimeout(resolve, 8000));
+    const guard = new Promise<void>((resolve) => setTimeout(resolve, 12000));
     try {
       await Promise.race([
         makeLayersRefreshRunner(entry, timeoutMs)(dir, "/p").then(

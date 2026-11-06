@@ -67,10 +67,16 @@ const NESTED_KEY = /^[ \t]+([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/;
  * one-level nested mapping (`  subkey: value`, used only for `origin`).
  * Returns how many lines were consumed so the caller can advance past them.
  */
+function parseNestedScalar(value: string): string | number | string[] {
+  if (value.startsWith("[") && value.endsWith("]")) return parseFlowArray(value);
+  if (/^-?\d+$/.test(value)) return Number.parseInt(value, 10);
+  return stripQuotes(value);
+}
+
 function parseIndentedBlock(
   lines: readonly string[],
   startIndex: number,
-): { readonly value: string[] | Record<string, string> | undefined; readonly consumed: number } {
+): { readonly value: string[] | Record<string, unknown> | undefined; readonly consumed: number } {
   const first = lines[startIndex];
   if (first === undefined || !INDENTED_LINE.test(first)) {
     return { value: undefined, consumed: 0 };
@@ -88,7 +94,7 @@ function parseIndentedBlock(
     }
     return { value: items, consumed: index - startIndex };
   }
-  const mapping: Record<string, string> = {};
+  const mapping: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   while (index < lines.length) {
     const line = lines[index] ?? "";
     if (!INDENTED_LINE.test(line)) break;
@@ -97,7 +103,7 @@ function parseIndentedBlock(
     const key = match[1] ?? "";
     const value = (match[2] ?? "").trim();
     if (value.length > 0) {
-      mapping[key] = stripQuotes(value);
+      mapping[key] = parseNestedScalar(value);
     }
     index += 1;
   }
@@ -126,7 +132,7 @@ export function parseAgentFrontmatter(content: string): AgentFrontmatterParseRes
   const body = bodyStart === -1 ? "" : content.slice(bodyStart + 1);
 
   const lines = content.slice(3, end).split("\n");
-  const data: Record<string, unknown> = {};
+  const data: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   let i = 0;
   while (i < lines.length) {
     const line = lines[i] ?? "";

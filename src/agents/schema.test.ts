@@ -4,8 +4,11 @@
 // were authored to match.
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import Ajv from "ajv";
 import { describe, expect, test } from "bun:test";
 import {
+  AGENT_DELEGATION_FIELDS,
+  AGENT_EXECUTION_KIND_VALUES,
   AGENT_ISOLATION_VALUES,
   AGENT_NAME_PATTERN,
   AGENT_ORIGIN_FIELDS,
@@ -14,6 +17,7 @@ import {
   AGENT_OUTPUT_CONTRACT_VALUES,
   AGENT_REQUIRED_FIELDS,
   AGENT_TOP_LEVEL_FIELDS,
+  AGENT_TOOL_SCOPE_VALUES,
   buildAgentDefinition,
   validateAgentDefinition,
   validateAgentFrontmatter,
@@ -36,13 +40,20 @@ interface JsonSchemaLike {
   readonly additionalProperties: boolean;
   readonly properties: Record<
     string,
-    { readonly type?: string; readonly enum?: string[]; readonly pattern?: string; readonly required?: string[]; readonly properties?: Record<string, unknown>; readonly additionalProperties?: boolean }
+    { readonly type?: string | string[]; readonly enum?: (string | number)[]; readonly pattern?: string; readonly required?: string[]; readonly properties?: Record<string, unknown>; readonly additionalProperties?: boolean }
   >;
 }
 
 function loadRealSchema(): JsonSchemaLike {
   const text = readFileSync(SCHEMA_PATH, "utf8");
   return JSON.parse(text) as JsonSchemaLike;
+}
+
+function validateWithCanonicalSchema(value: unknown): boolean {
+  const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8")) as Record<string, unknown>;
+  delete schema.$schema;
+  const ajv = new Ajv({ allErrors: true, schemaId: "auto" });
+  return Boolean(ajv.validate(schema, value));
 }
 
 describe("agent-definition.schema.json parses and the validator agrees with it (AC1)", () => {
@@ -85,6 +96,19 @@ describe("agent-definition.schema.json parses and the validator agrees with it (
     expect([...(schema.properties.isolation?.enum ?? [])].sort()).toEqual([...AGENT_ISOLATION_VALUES].sort());
   });
 
+  test("v2 execution, tool scope, and delegation fields agree", () => {
+    const schema = loadRealSchema();
+    expect(schema.properties.schema_version?.enum).toEqual([1, 2]);
+    expect(schema.properties.execution_kind?.enum).toEqual([...AGENT_EXECUTION_KIND_VALUES]);
+    expect(schema.properties.tool_scope?.enum).toEqual([...AGENT_TOOL_SCOPE_VALUES]);
+    const delegation = schema.properties.delegation as unknown as {
+      readonly additionalProperties: boolean;
+      readonly properties: Record<string, unknown>;
+    };
+    expect(delegation.additionalProperties).toBe(false);
+    expect(Object.keys(delegation.properties).sort()).toEqual([...AGENT_DELEGATION_FIELDS].sort());
+  });
+
   test("origin required/properties/additionalProperties and origin.kind enum agree", () => {
     const schema = loadRealSchema();
     const origin = schema.properties.origin as unknown as {
@@ -98,6 +122,31 @@ describe("agent-definition.schema.json parses and the validator agrees with it (
     expect(ourOriginFields.sort()).toEqual(Object.keys(origin.properties).sort());
     expect(origin.additionalProperties).toBe(false);
     expect([...(origin.properties.kind?.enum ?? [])].sort()).toEqual([...AGENT_ORIGIN_KIND_VALUES].sort());
+  });
+
+  test("the executable schema rejects representable orchestrator contract violations", () => {
+    const base = {
+      ...VALID_FRONTMATTER,
+      schema_version: 2,
+      execution_kind: "orchestrator",
+      tool_scope: "parent",
+    };
+    const withoutSpawn = {
+      ...base,
+      delegation: { allowed_entities: ["review-worker"], max_depth: 1, max_children: 1 },
+    };
+    const partialBounds = {
+      ...base,
+      tools: ["read_file", "spawn_subagent"],
+      delegation: { allowed_entities: ["review-worker"], max_depth: 0, max_children: 1 },
+    };
+    expect(validateWithCanonicalSchema(withoutSpawn)).toBe(false);
+    expect(validateWithCanonicalSchema(partialBounds)).toBe(false);
+    expect(validateWithCanonicalSchema({
+      ...base,
+      tools: ["read_file", "spawn_subagent"],
+      delegation: { allowed_entities: ["review-worker"], max_depth: 1, max_children: 1 },
+    })).toBe(true);
   });
 });
 
@@ -180,6 +229,84 @@ describe("validateAgentFrontmatter", () => {
     });
     expect(result.ok).toBe(true);
   });
+
+  test("accepts a v2 orchestrator with bounded leaf delegation", () => {
+    const result = validateAgentFrontmatter({
+      ...VALID_FRONTMATTER,
+      schema_version: 2,
+      execution_kind: "orchestrator",
+      tool_scope: "parent",
+      tools: ["read_file", "spawn_subagent"],
+      delegation: { allowed_entities: ["review-worker", "review-validator"], max_depth: 1, max_children: 48 },
+    });
+    expect(result).toEqual({ ok: true, errors: [] });
+  });
+
+  test("rejects v2-only fields on legacy v1 and unversioned definitions", () => {
+    for (const schemaVersion of [undefined, 1] as const) {
+      const result = validateAgentFrontmatter({
+        ...VALID_FRONTMATTER,
+        ...(schemaVersion === undefined ? {} : { schema_version: schemaVersion }),
+        execution_kind: "worker",
+        tool_scope: "static",
+        delegation: { allowed_entities: [], max_depth: 0, max_children: 0 },
+      });
+      expect(result.ok).toBe(false);
+      expect(result.errors.some((e) => e.reason === "v2-field-without-v2-schema")).toBe(true);
+    }
+  });
+
+  test("v2 requires all delegation fields and refuses unknown nested data", () => {
+    const result = validateAgentFrontmatter({
+      ...VALID_FRONTMATTER,
+      schema_version: 2,
+      execution_kind: "orchestrator",
+      tool_scope: "parent",
+      tools: ["read_file", "spawn_subagent"],
+      delegation: { allowed_entities: ["review-worker"], max_depth: 1, surprise: true },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.field === "delegation.max_children" && e.reason === "delegation-missing-required-field")).toBe(true);
+    expect(result.errors.some((e) => e.field === "delegation.surprise" && e.reason === "delegation-unknown-field")).toBe(true);
+  });
+
+  test("only orchestrators may inherit parent tools or delegate", () => {
+    const result = validateAgentFrontmatter({
+      ...VALID_FRONTMATTER,
+      schema_version: 2,
+      execution_kind: "worker",
+      tool_scope: "parent",
+      tools: ["read_file", "spawn_subagent"],
+      delegation: { allowed_entities: ["review-worker"], max_depth: 1, max_children: 1 },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.reason === "invalid-delegation-contract")).toBe(true);
+  });
+
+  test("a worker cannot expose spawn_subagent even when its delegation bounds are zero", () => {
+    const result = validateAgentFrontmatter({
+      ...VALID_FRONTMATTER,
+      schema_version: 2,
+      execution_kind: "worker",
+      tool_scope: "static",
+      tools: ["read_file", "spawn_subagent"],
+      delegation: { allowed_entities: [], max_depth: 0, max_children: 0 },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.field === "tools" && e.reason === "invalid-delegation-contract")).toBe(true);
+  });
+
+  test("an orchestrator that delegates must declare spawn_subagent", () => {
+    const result = validateAgentFrontmatter({
+      ...VALID_FRONTMATTER,
+      schema_version: 2,
+      execution_kind: "orchestrator",
+      tool_scope: "parent",
+      delegation: { allowed_entities: ["review-worker"], max_depth: 1, max_children: 1 },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.field === "tools" && e.reason === "invalid-delegation-contract")).toBe(true);
+  });
 });
 
 describe("buildAgentDefinition", () => {
@@ -188,8 +315,26 @@ describe("buildAgentDefinition", () => {
     expect(definition.skills).toEqual([]);
     expect(definition.stacks).toEqual([]);
     expect(definition.isolation).toBe("none");
+    expect(definition.execution_kind).toBe("worker");
+    expect(definition.tool_scope).toBe("static");
+    expect(definition.delegation).toEqual({ allowed_entities: [], max_depth: 0, max_children: 0 });
     expect(definition.body).toBe("Body text.");
     expect(definition.name).toBe("codebase-navigator");
+  });
+
+  test("preserves explicit v2 orchestration fields", () => {
+    const definition = buildAgentDefinition({
+      ...VALID_FRONTMATTER,
+      schema_version: 2,
+      execution_kind: "orchestrator",
+      tool_scope: "parent",
+      tools: ["read_file", "spawn_subagent"],
+      delegation: { allowed_entities: ["review-worker"], max_depth: 1, max_children: 48 },
+    }, "Coordinate a bounded area.");
+    expect(definition.schema_version).toBe(2);
+    expect(definition.execution_kind).toBe("orchestrator");
+    expect(definition.tool_scope).toBe("parent");
+    expect(definition.delegation).toEqual({ allowed_entities: ["review-worker"], max_depth: 1, max_children: 48 });
   });
 });
 

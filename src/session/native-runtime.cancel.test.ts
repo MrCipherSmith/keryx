@@ -42,6 +42,25 @@ test("native run-scope stop leaves another run's and an unowned job running", as
   } finally { await runtime.stop(); await rm(cwd, { recursive: true, force: true }); }
 });
 
+test("native run-scope stop does not close unrelated session-owned Review agents runs", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-runtime-v3-scope-"));
+  let closes = 0;
+  const runtime = createNativeSessionRuntime({
+    cwd, provider: scriptedProvider([okReply]).provider, providerId: "scripted", modelId: "m",
+    reviewAgentsHostFactory: () => ({
+      tools: () => [],
+      controller: async () => { throw new Error("not used"); },
+      close: async () => { closes += 1; return { stopped: true, activeRunIds: [] }; },
+    }),
+  });
+  try {
+    expect((await runtime.stop({ kind: "run", identity: "run-a" })).status).toBe("stopped");
+    expect(closes).toBe(0);
+    expect((await runtime.stop()).status).toBe("stopped");
+    expect(closes).toBe(1);
+  } finally { await runtime.stop(); await rm(cwd, { recursive: true, force: true }); }
+});
+
 test.each([["owned", { kind: "session" as const, identity: "native-session" }], ["unowned", undefined]])("native stop of a surviving %s job is bounded and stays unknown on every call", async (_label, owner) => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-runtime-unkillable-"));
   const spawnIdle = () => Bun.spawn([process.execPath, "-e", "setInterval(()=>{},1000)"], { stdout: "pipe", stderr: "pipe", detached: true });

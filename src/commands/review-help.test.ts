@@ -72,6 +72,16 @@ test("flow 420: the group help lists every flag attach, start and ingest accept"
   expect(help).toContain("--research <ledger.json>");
 });
 
+test("Review agents help advertises the foreground owner and every root operation", () => {
+  const help = helpFor(["agents"]);
+  expect(help).toContain("keryx review agents serve");
+  expect(help).toContain("--permission-mode trust");
+  for (const operation of ["start", "plan", "capabilities", "status", "spawn", "wait", "cancel", "result"]) {
+    expect(help).toContain(`keryx review agents ${operation}`);
+  }
+  expect(help).toContain("KERYX_REVIEW_AGENTS_ROOT_*");
+});
+
 test("verdict lists every flag its parser accepts, in both helps", () => {
   const entry = (help: string): string => {
     const line = help.split("\n").find((l) => l.trim().startsWith("keryx review verdict "));

@@ -109,6 +109,8 @@ export interface AgentExportPlan {
   /** Present only for `runtime: "keryx-shell"` — the compiled dispatch-input result (`compile.ts`'s `KeryxShellCompileResult`). */
   readonly keryxShell?: KeryxShellCompileResult;
   readonly droppedTools: readonly string[];
+  /** V2 orchestration constraints the selected host export cannot enforce. */
+  readonly unsupportedConstraints?: HostAgentExport["unsupportedConstraints"];
   readonly action: AgentExportAction;
   readonly reason?: string;
 }
@@ -395,6 +397,7 @@ export async function planAgentExport(
       supportLevel,
       relativePath: hostResult.relativePath,
       droppedTools: hostResult.droppedTools,
+      unsupportedConstraints: hostResult.unsupportedConstraints,
       action: "refuse-unmanaged",
       reason: safetyReason,
     };
@@ -408,6 +411,7 @@ export async function planAgentExport(
     relativePath: hostResult.relativePath,
     content: hostResult.content,
     droppedTools: hostResult.droppedTools,
+    unsupportedConstraints: hostResult.unsupportedConstraints,
     action: decided.action,
     ...(decided.reason !== undefined ? { reason: decided.reason } : {}),
   };

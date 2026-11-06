@@ -47,6 +47,17 @@ const DEFINITION: AgentDefinition = {
   body: "Report exact file paths and line ranges.",
 };
 
+const V2_COORDINATOR: AgentDefinition = {
+  ...DEFINITION,
+  schema_version: 2,
+  name: "review-coordinator",
+  policy_profile: "read-only",
+  tools: ["read_file", "spawn_subagent"],
+  execution_kind: "orchestrator",
+  tool_scope: "parent",
+  delegation: { allowed_entities: ["review-worker"], max_depth: 1, max_children: 48 },
+};
+
 // ---------------------------------------------------------------------------
 // AC4: registry-backed support level
 // ---------------------------------------------------------------------------
@@ -111,6 +122,11 @@ describe("planAgentExport — instruction-only fallback (AC4)", () => {
 // ---------------------------------------------------------------------------
 
 describe("planAgentExport / writeAgentExport lifecycle", () => {
+  test("host export plans preserve unsupported v2 orchestration constraints", async () => {
+    const plan = await planAgentExport(root, V2_COORDINATOR, "codex");
+    expect(plan.unsupportedConstraints).toEqual(["executionKind", "toolScope", "delegation"]);
+  });
+
   test("create: no existing file", async () => {
     const plan = await planAgentExport(root, DEFINITION, "claude");
     expect(plan.action).toBe("create");
