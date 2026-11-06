@@ -52,6 +52,15 @@ test("AC3: live selection wins over summary provider/model", () => {
   expect(row(snap.sessionRows, "Model")).toBe("kimi");
 });
 
+test("status exposes unified Routing without a legacy engine toggle", () => {
+  const snap = buildSessionInfoSnapshot({ summary: SUMMARY });
+  expect(row(snap.sessionRows, "Routing")).toBe("unified");
+  const text = formatSessionInfoText(snap);
+  expect(text).toMatch(/Routing\s+unified/);
+  expect(text).not.toContain("route-v2");
+  expect(text).not.toContain("legacy");
+});
+
 test("AC3: missing provider/model paint — not a guessed backend", () => {
   const snap = buildSessionInfoSnapshot({
     summary: { id: "id-only", projectPath: "/p" },

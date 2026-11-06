@@ -59,7 +59,7 @@ export interface RoutingCommandDeps {
   session?: () => { providerId: string; modelId: string } | undefined;
 }
 
-function printRoutingHelp(): void {
+export function printRoutingHelp(): void {
   console.log(
     [
       "Usage: keryx routing <subcommand>",

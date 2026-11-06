@@ -19,9 +19,9 @@
 // approved; an interrupted activation edit or rollback refuses migration until
 // it is recovered.
 import { createHash } from "node:crypto";
-import { copyFileSync, constants as fsConstants, lstatSync } from "node:fs";
+import { lstatSync } from "node:fs";
 import path from "node:path";
-import { keryxConfigDir, readConfigFile } from "../../lib/config-dir";
+import { copyConfigFileExclusive, keryxConfigDir, readConfigFile } from "../../lib/config-dir";
 import { isNotFound } from "../../lib/fs";
 import {
   ROUTING_CONFIG_KEY,
@@ -360,11 +360,5 @@ export function planLegacyRoutingMigration(
 export function adoptLegacyRoutingJournal(configDir: string | undefined, filename: string, target: string): void {
   const legacy = path.join(path.resolve(keryxConfigDir(configDir)), LEGACY_ACTIVATION_DIR, "journal", filename);
   if (pathPresent(target) || !ownerOnlyRegularFile(legacy, "journal")) return;
-  try {
-    copyFileSync(legacy, target, fsConstants.COPYFILE_EXCL);
-  } catch (error) {
-    // Another process adopted it first; the current file is authoritative.
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return;
-    throw error;
-  }
+  copyConfigFileExclusive(legacy, target);
 }

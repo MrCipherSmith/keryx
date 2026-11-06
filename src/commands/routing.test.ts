@@ -47,18 +47,34 @@ async function capture(run: () => Promise<void>): Promise<{ stdout: string[]; st
   const origErr = console.error;
   console.log = (...args: unknown[]) => stdout.push(args.map(String).join(" "));
   console.error = (...args: unknown[]) => stderr.push(args.map(String).join(" "));
-  const origExit = process.exitCode;
-  process.exitCode = undefined;
+  const origExit = process.exitCode ?? 0;
+  process.exitCode = 0;
   try {
     await run();
   } finally {
     console.log = origLog;
     console.error = origErr;
+    process.exitCode = origExit;
   }
-  const result = { stdout, stderr };
-  process.exitCode = origExit;
-  return result;
+  return { stdout, stderr };
 }
+
+test("capture restores the exit code and console even when a command throws", async () => {
+  const originalExit = process.exitCode ?? 0;
+  const originalLog = console.log;
+  const originalError = console.error;
+  try {
+    await expect(capture(async () => {
+      process.exitCode = 1;
+      throw new Error("expected command failure");
+    })).rejects.toThrow("expected command failure");
+    expect(process.exitCode).toBe(originalExit);
+    expect(console.log).toBe(originalLog);
+    expect(console.error).toBe(originalError);
+  } finally {
+    process.exitCode = originalExit;
+  }
+});
 
 test("keryx routing set <category> <provider>/<model> writes an explicit model, default layer --user", async () => {
   const d = await deps();
