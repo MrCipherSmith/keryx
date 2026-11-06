@@ -2936,8 +2936,8 @@ describe("PR 992 round 3 — tui-shell.ts refusal memory and self-answer line (s
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
   test.each([
-    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
-    ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
+    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
+    ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
     ["a permission-mode change (commitPermissionMode)", "paintModeRow();\n      resetOperatorDenials();\n      chrome.showToast(`Permission mode:"],
   ])("%s clears the remembered refusals", (_site, snippet) => {
     expect(source).toContain(snippet);

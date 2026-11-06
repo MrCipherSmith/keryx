@@ -6,9 +6,9 @@ Five lanes with disjoint files, then a live check.
 
 ## L1 Dialog input guard (`src/tui/composer-choice.ts`, `src/tui/tui-shell.ts`)
 
-While a choice is open, listen to the renderer's paste event. A paste in the list step: restart the accept delay, swallow the next Enter whatever the gap (a following deliberate Enter still works), hand the text to a sink. A paste in the text step belongs to the input, unchanged. The sink is registered once per dock, not on the 15+ call sites, and the shell queues the text as `origin: "agent-message"` so it is framed, never the user's words. No sink: the text is dropped with a notice, and Enter is still swallowed.
+While a choice is open, listen to the renderer's paste event. A paste in the list step: restart the accept delay, swallow the next Enter whatever the gap (a following deliberate Enter still works), hand the text to a sink. A paste in the text step stays in the input, but arms the same guard: the next Enter is swallowed once with a notice ("press Enter again to send"), because `hc send --force` is a paste plus Enter and would otherwise answer an `ask_user` question. Paste hygiene: ANSI/control sequences are stripped; a paste held for an idle shell is capped (8 pastes, 16,384 characters, then a stated notice) and delivered after the awaiting caller has continued, through the drain queue; with a modal open behind the dialog a paste is dropped, never delivered. `pasteArmed` stays a boolean on purpose: it has no expiry (one extra Enter for a person), and every swallowed Enter restarts the accept delay, so a chained Enter behind it is ignored too. The sink is registered once per dock, not on the 15+ call sites, and the shell queues the text as `origin: "agent-message"` so it is framed, never the user's words. No sink: the text is dropped with a notice, and Enter is still swallowed.
 
-Under `HC_TERMINAL_ID`, a keyboard shell approval adds to the `approved (once)` line that the author is unverified. Remote and saved-rule approvals are unchanged.
+Under `HC_TERMINAL_ID`, every keyboard shell approval line (once, remembered, cannot be remembered) says that the author is unverified. Remote and saved-rule approvals are unchanged.
 
 ## L2 Floors (`src/lib/command-risk.ts`, `src/commands/agent.ts`, `src/commands/permission-mode.ts`, `src/commands/shell-approval.ts`)
 
@@ -41,7 +41,8 @@ State × event matrix for the dialog (L1):
 
 | state \ event | paste | Enter within delay | Enter after delay | Esc |
 |---|---|---|---|---|
-| list step, no paste yet | text to sink, armed | ignored | approves highlighted | cancels |
-| list step, armed by paste | text to sink, stays armed | ignored | ignored once, disarms | cancels, disarms |
-| text step | goes to the input | sends text | sends text | back to list |
+| list step, no paste yet | text to sink (held when the shell is idle, dropped when a modal is open), armed | ignored | approves highlighted | cancels |
+| list step, armed by paste | as above, stays armed | ignored | ignored once, disarms, restarts the delay | cancels, disarms |
+| text step, no paste yet | goes to the input, armed | sends text | sends text | back to list |
+| text step, armed by paste | goes to the input, stays armed | swallowed once with a notice, disarms | swallowed once with a notice, disarms | back to list, disarms |
 | closed | composer's normal paste | n/a | n/a | n/a |

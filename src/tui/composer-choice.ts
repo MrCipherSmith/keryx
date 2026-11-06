@@ -191,31 +191,47 @@ function onPaste(r: Renderer, handler: (event: PasteEvent) => void): () => void 
   return () => input.offInternal("paste", handler);
 }
 
-/** Receives text that was pasted into an open choice's list step. */
-export type ChoicePasteSink = (text: string) => void;
+/**
+ * Receives text that was pasted into an open choice's list step. `afterClose` is true for text that was held
+ * while the choice was open: the sink then runs once the dock is released and the caller that awaited the choice
+ * has continued, and should hand the text to the same queue a busy shell uses.
+ */
+export type ChoicePasteSink = (text: string, afterClose?: boolean) => void;
+
+/**
+ * What to do with a paste into the list step, read at paste time. `deliver`: to the sink now. `hold`: keep it
+ * and deliver once the choice closes (an idle shell, where delivery would start a turn into an open picker).
+ * `drop`: discard it with a notice (a modal is open behind the dialog, so the text may be a secret meant for it).
+ */
+export type ChoicePasteDecision = "deliver" | "hold" | "drop";
 
 /** One sink per dock, so the call sites that open a choice never have to know about paste. */
-const pasteSinks = new WeakMap<object, { sink: ChoicePasteSink; shouldHold: () => boolean }>();
+const pasteSinks = new WeakMap<object, { sink: ChoicePasteSink; decide: () => ChoicePasteDecision }>();
 
 /**
  * Register (or, with `undefined`, remove) the place where text pasted into an open choice on `dock` goes.
  * A paste into the list step can never answer the dialog: it restarts the accept delay, swallows the next
- * Enter, and lands here. Without a sink the text is dropped and the dialog says so. When `shouldHold()` is true
- * at paste time (an idle shell, where delivery would start a turn) the text is kept and delivered once the
- * choice closes, however it closes.
+ * Enter, and lands here. Without a sink the text is dropped and the dialog says so. `decide()` is read at paste
+ * time (see {@link ChoicePasteDecision}).
  */
-export function setChoicePasteSink(dock: object, sink: ChoicePasteSink | undefined, shouldHold: () => boolean = () => false): void {
+export function setChoicePasteSink(dock: object, sink: ChoicePasteSink | undefined, decide: () => ChoicePasteDecision = () => "deliver"): void {
   if (sink === undefined) {
     pasteSinks.delete(dock);
   } else {
-    pasteSinks.set(dock, { sink, shouldHold });
+    pasteSinks.set(dock, { sink, decide });
   }
 }
 
-/** The transcript line of a keyboard shell approval "once"; under herdr-core the author of the keystrokes is unverified. */
-export function shellApprovedOnceLine(env: Readonly<Record<string, string | undefined>>): string {
-  const underHc = (env["HC_TERMINAL_ID"] ?? "").trim().length > 0;
-  return underHc ? "approved (once) · author unverified: this terminal runs under herdr-core" : "approved (once)";
+/** Held pastes are bounded: a flood of them must not grow without limit nor become one huge turn. */
+const MAX_HELD_PASTES = 8;
+const MAX_HELD_CHARS = 16_384;
+
+/** Control characters other than tab and newline: an escape sequence in a pasted report must not reach the transcript or the model. */
+const CONTROL_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f]/g;
+
+/** The pasted bytes as text the way OpenTUI's own paste handlers read them, with escape and control sequences removed. */
+function pastedText(otui: OpenTui, bytes: Uint8Array): string {
+  return otui.stripAnsiSequences(otui.decodePasteBytes(bytes)).replace(CONTROL_CHARS, "");
 }
 
 /** The slice of a renderable that handing the keyboard back reads. */
@@ -385,14 +401,23 @@ export async function showComposerChoiceDetailed(
   debugEvent("choice.request", { title: request.title, waitingBehind: dockDepth.get(dock) ?? 0 });
   const unlock = await lockDock(dock);
   debugEvent("choice.lock-acquired", { title: request.title, waitedMs: Date.now() - queuedAt });
+  let held: string | undefined;
   try {
     if (request.signal?.aborted === true) {
       debugEvent("choice.aborted-before-open", { title: request.title });
       return cancelled;
     }
-    return await presentComposerChoice(otui, r, dock, request);
+    const outcome = await presentComposerChoice(otui, r, dock, request);
+    held = outcome.held;
+    return outcome.result;
   } finally {
     unlock();
+    if (held !== undefined) {
+      // Text pasted while an idle shell showed this choice. Delivered on a later task: the lock is released and
+      // the code awaiting the choice (a picker applying its pick) has run, so a turn it starts sees that state.
+      const text = held;
+      setTimeout(() => pasteSinks.get(dock)?.sink(text, true), 0);
+    }
   }
 }
 
@@ -401,7 +426,7 @@ function presentComposerChoice(
   r: Renderer,
   dock: Box,
   request: ComposerChoiceRequest,
-): Promise<ComposerChoiceResult> {
+): Promise<{ result: ComposerChoiceResult; held: string | undefined }> {
   // Reentrancy guard: every choice menu in this shell shares one `dock`, and
   // each call below mounts its own rows AND wires its own global keypress
   // listener directly onto the renderer. Nothing stops a second call from
@@ -414,7 +439,7 @@ function presentComposerChoice(
   if (dock.visible === true) {
     debugEvent("choice.dock-already-visible", { title: request.title });
     request.onBusy?.();
-    return Promise.resolve({ kind: "id", id: request.cancelId });
+    return Promise.resolve({ result: { kind: "id", id: request.cancelId }, held: undefined });
   }
   return new Promise((resolve) => {
     // Read before anything below can move it: `onOpen` may blur the composer (the shell approval does), and the
@@ -446,8 +471,13 @@ function presentComposerChoice(
     let lastTypedAt = 0;
     /** A paste reached the list step: the next Enter, whatever the gap, is part of it and answers nothing. */
     let pasteArmed = false;
+    /** The same guard for the text step: a paste stays in the input, and the next Enter is not the one that sends it. */
+    let textPasteArmed = false;
     let pasteNotice: string | undefined;
     const heldPastes: string[] = [];
+    let heldChars = 0;
+    /** What was held while the choice was open; handed to the caller of `presentComposerChoice`. */
+    let heldText: string | undefined;
     request.onOpen?.();
     const theme = getTheme();
 
@@ -609,7 +639,7 @@ function presentComposerChoice(
         openMs: Date.now() - openedAt,
       });
       cleanup();
-      resolve(result);
+      resolve({ result, held: heldText });
     };
     const finish = (id: string, via = "key"): void => {
       if (id === OWN_ROW_ID) {
@@ -647,6 +677,7 @@ function presentComposerChoice(
         return;
       }
       textStep = undefined;
+      textPasteArmed = false;
       try {
         ownInput?.blur();
         for (const node of mountedExtras()) {
@@ -750,11 +781,8 @@ function presentComposerChoice(
       unsub();
       unsubPaste();
       if (heldPastes.length > 0) {
-        const held = heldPastes.join("\n");
+        heldText = heldPastes.join("\n");
         heldPastes.length = 0;
-        const registered = pasteSinks.get(dock);
-        // after the dock is free again, so the delivery cannot start a turn into a still-open choice
-        queueMicrotask(() => registered?.sink(held));
       }
       request.signal?.removeEventListener("abort", onAbort);
       const mounted = [
@@ -813,7 +841,17 @@ function presentComposerChoice(
         if (key.name === "escape") {
           closeTextStep();
         } else if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
-          submitTextStep();
+          if (textPasteArmed) {
+            // The Enter that ends a paste is not the operator's: swallowed once, and the next one sends.
+            textPasteArmed = false;
+            lastTypedAt = Date.now();
+            debugEvent("choice.enter-ignored", { title: request.title, afterPaste: true, textStep: true });
+            if (ownNote !== undefined) {
+              ownNote.content = otui.t`${roleChunk(otui, "attention", "Text was pasted: press Enter again to send (Esc goes back)")}`;
+            }
+          } else {
+            submitTextStep();
+          }
         } else {
           return;
         }
@@ -882,6 +920,8 @@ function presentComposerChoice(
         if (pasteArmed) {
           // The Enter that ends a paste: swallowed whatever the gap, once. A later, deliberate Enter answers.
           pasteArmed = false;
+          // a second Enter right behind it (another paste's) is inside the accept delay again
+          lastTypedAt = Date.now();
           debugEvent("choice.enter-ignored", { title: request.title, afterPaste: true });
           key.preventDefault();
           key.stopPropagation();
@@ -908,26 +948,37 @@ function presentComposerChoice(
       }
     };
     const onPasteEvent = (event: PasteEvent): void => {
-      // the text step: a paste belongs to its input, which has the focus
-      if (settled || textStep !== undefined) {
+      if (settled) {
+        return;
+      }
+      if (textStep !== undefined) {
+        // the text step: the paste belongs to its input, which has the focus; only the Enter after it is guarded
+        textPasteArmed = true;
         return;
       }
       lastTypedAt = Date.now();
       pasteArmed = true;
       event.preventDefault();
       event.stopPropagation();
-      const text = new TextDecoder().decode(event.bytes);
+      const text = pastedText(otui, event.bytes);
       const registered = pasteSinks.get(dock);
       const sink = registered?.sink;
+      const decision = registered?.decide() ?? "deliver";
       // the pasted text is never logged: only its size
-      debugEvent("choice.paste", { title: request.title, chars: text.length, sink: sink !== undefined });
-      if (sink === undefined) {
+      debugEvent("choice.paste", { title: request.title, chars: text.length, sink: sink !== undefined, decision });
+      if (sink === undefined || decision === "drop") {
         pasteNotice = "paste dropped";
         paintTitle();
         return;
       }
-      if (registered !== undefined && registered.shouldHold()) {
+      if (decision === "hold") {
+        if (heldPastes.length >= MAX_HELD_PASTES || heldChars + text.length > MAX_HELD_CHARS) {
+          pasteNotice = "paste dropped: too much held";
+          paintTitle();
+          return;
+        }
         heldPastes.push(text);
+        heldChars += text.length;
         pasteNotice = "paste held";
         paintTitle();
         return;

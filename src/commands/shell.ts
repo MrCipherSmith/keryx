@@ -231,6 +231,14 @@ import { detachSlateSession } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { journaledAskUser } from "../tui/ask-user-bridge";
 
+
+let resolvedKeryxPath: string | undefined;
+/** The keryx executable, looked up once per process so the herdr-core prompt section never changes between turns. */
+function startupKeryxPath(): string {
+  resolvedKeryxPath ??= Bun.which("keryx") ?? "keryx";
+  return resolvedKeryxPath;
+}
+
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
 /** A short, trusted system instruction assembled by the (trusted) shell itself. */
@@ -2374,6 +2382,7 @@ export async function runAgentRepl(
       );
       holdLease(next.lease);
       agentIo.trustedMcpTools?.clear();
+      agentIo.hcLaunchGrants?.clear();
       resetOperatorDenials();
       return next.handle;
     } catch (cause) {
@@ -2514,7 +2523,7 @@ export async function runAgentRepl(
             providerId: deps.providerId,
             modelId: deps.modelId,
             toolNames: interactiveAgentToolNames(rebuiltTools),
-            herdrCore: herdrCoreSectionFromEnv(process.env, { busName: joined.name }),
+            herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: joined.name }),
             busJoined: true,
           }),
         };
@@ -3000,6 +3009,7 @@ export async function runAgentRepl(
           history = [];
           archive = [];
           agentIo.trustedMcpTools?.clear();
+          agentIo.hcLaunchGrants?.clear();
           agentIo.onSystem?.("Conversation cleared.\n");
         }
       } else if (command === "/rewind") {
@@ -4344,7 +4354,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             providerId: sel.provider,
             modelId: sel.model,
             toolNames: interactiveAgentToolNames(deps.tools),
-            herdrCore: herdrCoreSectionFromEnv(process.env, { busName: bus?.client()?.name }),
+            herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: bus?.client()?.name }),
             // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
             // resolves. `tui-shell.ts` rebuilds via this same function right
             // after its own join settles, so a session that starts before the
@@ -4852,7 +4862,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: provider,
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
-          herdrCore: herdrCoreSectionFromEnv(process.env, { busName: busBox.current?.name }),
+          herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: busBox.current?.name }),
           // Flow 274 (T6/T7 contract): always `false` here — the bus join
           // happens later, inside `runAgentRepl` (`busBox.current` is still
           // empty at this point, and `agentDepsBase.tools` above was built

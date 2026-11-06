@@ -34,6 +34,7 @@ export type HerdrAction =
   | "absent"
   | "installed"
   | "modified"
+  | "outdated"
   | "error";
 
 export interface HerdrRow {
@@ -93,6 +94,27 @@ If another agent assigned this task, report the result or the blocker when you a
 Report over the bus first: with a bus name, use bus_send to \`@<bus name>\`, or from a non-keryx agent \`keryx report --to @<bus name> "<result>"\` (long text in a file, send its path). Use plain \`hc send <its address> "<result>"\` only when you are not on a bus.
 Never answer another terminal's dialog. \`hc keys\` and \`hc send --force\` only when the operator asks.
 `;
+
+/**
+ * Template texts an earlier keryx wrote. A file that still equals one of these is keryx's own, older copy:
+ * install updates it without --force, remove deletes it, status calls it out of date. Append the text a
+ * release replaces when HERDR_TEMPLATE_MD changes; never edit an entry.
+ */
+const HERDR_TEMPLATE_PREVIOUS: readonly string[] = [
+  `---
+description: Keryx agent shell. Give it one task and the files in scope.
+command: keryx shell
+---
+You are a Keryx agent started through herdr-core by another agent.
+Work only on the task below and stay inside the scope it names. Do not start other agents unless the task asks for it.
+If another agent assigned this task, report the result or the blocker with \`hc send <its address>\` when you are done or stuck, not just to acknowledge. Its address is in the \`from\` of the \`<hc from="...">\` message; otherwise \`hc get "$HC_TERMINAL_ID" --json\` shows your parent.
+`,
+];
+
+/** Older keryx copies, by target: only the template has had more than one text. */
+function olderCopies(target: HerdrTarget): readonly string[] {
+  return target === "template" ? HERDR_TEMPLATE_PREVIOUS : [];
+}
 
 const BACKUP_SUFFIX = ".keryx-backup";
 
@@ -268,10 +290,12 @@ async function installFile(target: HerdrTarget, file: string, content: string, w
   });
   const current = await readIfExists(file);
   if (current === content) return row("unchanged");
-  if (current !== undefined && opts.force !== true) {
+  const older = current !== undefined && olderCopies(target).includes(current);
+  if (current !== undefined && !older && opts.force !== true) {
     return row("kept", `${what} differs from keryx's (user-modified); re-run with --force to overwrite`);
   }
   if (!opts.dryRun) await writeLinked(file, content);
+  if (older) return row("updated", `replaced the ${what} an earlier keryx wrote`);
   return row(current === undefined ? "created" : "updated", current === undefined ? undefined : `overwrote ${what} (--force)`);
 }
 
@@ -307,7 +331,7 @@ async function removeFile(target: HerdrTarget, file: string, content: string, wh
   });
   const current = await readIfExists(file);
   if (current === undefined) return row("absent");
-  if (current !== content) return row("kept", `${what} differs from keryx's (user-modified)`);
+  if (current !== content && !olderCopies(target).includes(current)) return row("kept", `${what} differs from keryx's (user-modified)`);
   if (!opts.dryRun) {
     await unlink(file);
     // The `keryx/` directory we created: drop it only when nothing else lives there.
@@ -337,6 +361,9 @@ async function statusPrograms(p: Paths): Promise<HerdrRow> {
 async function statusFile(target: HerdrTarget, file: string, content: string): Promise<HerdrRow> {
   const current = await readIfExists(file);
   if (current === undefined) return { target, path: file, action: "absent" };
+  if (olderCopies(target).includes(current)) {
+    return { target, path: file, action: "outdated", reason: "written by an earlier keryx; `keryx herdr install` updates it" };
+  }
   return current === content
     ? { target, path: file, action: "installed" }
     : { target, path: file, action: "modified", reason: "content differs from keryx's" };

@@ -279,7 +279,7 @@ import {
   openSessionInfo,
 } from "./session-info";
 import { smallActionButton } from "./action-button";
-import { formatModalFooter, openModal, type ModalChrome, type ModalFooterAction, type ModalHandle } from "./modal-host";
+import { formatModalFooter, modalHides, openModal, type ModalChrome, type ModalFooterAction, type ModalHandle } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
 import { openSetupModal } from "./setup-modal";
 import { ownKeryxPrefix, runSetupSteps } from "./setup-run";
@@ -349,7 +349,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
-import { frameSubmittedLine, HC_PASTED_HEADER, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
+import { frameSubmittedLine, HC_PASTED_HEADER, hcHistoryEcho, hcTranscriptEcho, keyboardApprovalLine, looksLikeHcMessage } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -431,7 +431,7 @@ import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { createAgentHostStatus } from "./agent-host-status";
 import { createHerdrCoreReporter, createStatusWriter, type HerdrCoreAttention } from "./herdr-core-status";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
-import { setChoicePasteSink, shellApprovedOnceLine, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
+import { setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
@@ -6892,8 +6892,8 @@ export async function launchTuiAgentShell(opts: {
             id: `av${uid++}`,
             content:
               stored.length > 0
-                ? otui.t`${roleChunk(otui, "ok", `approved · remembered “${stored}”`)}`
-                : otui.t`${roleChunk(otui, "attention", `approved once · “${pattern}” cannot be remembered`)}`,
+                ? otui.t`${roleChunk(otui, "ok", keyboardApprovalLine(`approved · remembered “${stored}”`, process.env))}`
+                : otui.t`${roleChunk(otui, "attention", keyboardApprovalLine(`approved once · “${pattern}” cannot be remembered`, process.env))}`,
           }),
         );
         setMainAgent("running", "shell");
@@ -6905,7 +6905,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `av${uid++}`,
-          content: otui.t`${roleChunk(otui, "ok", shellApprovedOnceLine(process.env))}`,
+          content: otui.t`${roleChunk(otui, "ok", keyboardApprovalLine("approved (once)", process.env))}`,
         }),
       );
       setMainAgent("running", "shell");
@@ -7433,6 +7433,7 @@ export async function launchTuiAgentShell(opts: {
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
+      io.hcLaunchGrants?.clear();
       resetOperatorDenials();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
@@ -8043,6 +8044,7 @@ export async function launchTuiAgentShell(opts: {
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
+      io.hcLaunchGrants?.clear();
       resetOperatorDenials();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
@@ -11660,11 +11662,20 @@ export async function launchTuiAgentShell(opts: {
     // An idle shell would start a turn at once, with a picker still open: hold the text until the choice closes.
     setChoicePasteSink(
       chrome.dock,
-      (text) => {
+      (text, afterClose) => {
         const line = text.trim();
-        if (line.length > 0) runLine(line, "agent-message");
+        if (line.length === 0) return;
+        if (afterClose === true) {
+          // held while a picker was open on an idle shell: through the queue the drain owns, which waits for any
+          // detached slash work (`workInFlight`) instead of starting a turn beside it
+          turnLoop.enqueue(line, summarizeSubmittedLine(line), undefined, "agent-message");
+          drainSites.onLeaseRelease();
+          return;
+        }
+        runLine(line, "agent-message");
       },
-      () => !chrome.isBusy(),
+      // A modal open behind the dialog (a token entry, say) may be the paste's real target: never to the model.
+      () => (modalHides(r, chrome.dock) ? "drop" : chrome.isBusy() ? "deliver" : "hold"),
     );
 
     // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen

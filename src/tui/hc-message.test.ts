@@ -16,6 +16,8 @@ import {
   hcHistoryEcho,
   hcTranscriptEcho,
   herdrCoreSectionFromEnv,
+  isUnderHerdrCore,
+  keyboardApprovalLine,
   HERDR_CORE_SECTION_MAX_CHARS,
   looksLikeHcMessage,
   parseHcMessage,
@@ -311,7 +313,7 @@ describe("buildHerdrCoreSection", () => {
 
   test("delegating to keryx names the template form: `hc run … keryx shell` would run the template with the task `shell`", () => {
     const text = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t13" }, sandboxOn: false })!;
-    expect(text).toContain("for a keryx child <agent> is `keryx`");
+    expect(text).toContain('a keryx child is `hc run --bg --name <name> keryx "<task>"`');
     expect(text).not.toContain("keryx shell");
   });
 
@@ -343,9 +345,22 @@ describe("buildHerdrCoreSection", () => {
     expect(keryxPath).toHaveLength(50);
     const busName = `a${"1".repeat(31)}`;
     const text = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t1" }, sandboxOn: false, keryxPath, busName })!;
-    expect(text).toContain(`for a keryx child <agent> is \`${keryxPath}\``);
+    // the resolved path is for the `keryx report` line only; the delegation line keeps the template form
+    expect(text).toContain('a keryx child is `hc run --bg --name <name> keryx "<task>"`');
+    expect(text).not.toContain(`${keryxPath} "<task>"`);
     expect(text).toContain(`\`${keryxPath} report --to @${busName} "<result>"\``);
     expect(text).toContain(`bus_send to @${busName};`);
+  });
+
+  test("tells the model to put the child's report command in its task", () => {
+    const text = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t1" }, sandboxOn: false, busName: "boss" })!;
+    expect(text).toContain("put its report command");
+  });
+
+  test("without a bus the section warns that a non-keryx child's hc send reads as the operator's words", () => {
+    const text = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t1" }, sandboxOn: false })!;
+    expect(text).toContain("arrives unlabelled and reads as the operator's words");
+    expect(text).toContain("send only the path");
   });
 
   test("a bus name that does not match the bus pattern counts as absent, never truncated", () => {
@@ -471,10 +486,37 @@ const shellSource = readFileSync(path.join(import.meta.dir, "..", "commands", "s
 
 describe("wiring (source audit)", () => {
   test("all three instruction builders pass the joined bus name to the herdr section", () => {
-    expect(shellSource).toContain("herdrCoreSectionFromEnv(process.env, { busName: joined.name })");
-    expect(shellSource).toContain("herdrCoreSectionFromEnv(process.env, { busName: bus?.client()?.name })");
-    expect(shellSource).toContain("herdrCoreSectionFromEnv(process.env, { busName: busBox.current?.name })");
+    expect(shellSource).toContain("herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: joined.name })");
+    expect(shellSource).toContain("herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: bus?.client()?.name })");
+    expect(shellSource).toContain("herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: busBox.current?.name })");
     expect(shellSource).not.toContain("herdrCoreSectionFromEnv(process.env),");
+    // the path is resolved by the shell, not by hc-message: the prompt builder stays free of PATH lookups
+    expect(shellSource).toContain("Bun.which(\"keryx\")");
+  });
+
+  test("every session switch that clears the MCP trust grants clears the hc launch grants too", () => {
+    for (const [source, name] of [[tuiSource, "io"], [shellSource, "agentIo"]] as const) {
+      const clears = source.split(`${name}.trustedMcpTools?.clear();`).length - 1;
+      const paired = source.split(`${name}.trustedMcpTools?.clear();\n`).slice(1).filter((rest) => /^\s*\w+\.hcLaunchGrants\?\.clear\(\);/.test(rest)).length;
+      expect(clears).toBe(2);
+      expect(paired).toBe(clears);
+    }
+  });
+
+  test("the paste sink holds through the drain queue and drops while a modal is open", () => {
+    const sink = tuiSource.slice(tuiSource.indexOf("setChoicePasteSink(\n      chrome.dock,"));
+    const head = sink.slice(0, 1400);
+    expect(head).toContain("turnLoop.enqueue(line, summarizeSubmittedLine(line), undefined, \"agent-message\")");
+    expect(head).toContain("drainSites.onLeaseRelease()");
+    expect(head).toContain("modalHides(r, chrome.dock) ? \"drop\"");
+  });
+
+  test("all three keyboard shell approval lines go through the unverified-author helper", () => {
+    const start = tuiSource.indexOf("approved · remembered");
+    const region = tuiSource.slice(start - 200, start + 700);
+    // remembered, cannot be remembered, and (just below them) once
+    expect(region.match(/keyboardApprovalLine\(/g)?.length).toBe(3);
+    expect(tuiSource).toContain('keyboardApprovalLine("approved (once)", process.env)');
   });
 
   test("the TUI shows an hc message as a message from that agent and frames it for the model", () => {
@@ -519,7 +561,7 @@ describe("wiring (source audit)", () => {
     const sites = shellSource.split("buildAgentSystemInstruction(orient, {").slice(1);
     expect(sites).toHaveLength(3);
     for (const rest of sites) {
-      expect(rest.slice(0, 900)).toContain("herdrCore: herdrCoreSectionFromEnv(process.env, { busName:");
+      expect(rest.slice(0, 900)).toContain("herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName:");
     }
   });
 });
@@ -543,4 +585,22 @@ test("queued agent-origin slash text reaches the model before operator command r
   expect(queued).toBeLessThan(busyCommand);
   expect(tuiSource).toContain('const command = skipSlashRouting || agentShaped ? undefined : findAgentCommand(line, "agent");');
   expect(tuiSource.split('if (!skipSlashRouting && !agentShaped && line.startsWith("/"))').length).toBe(3);
+});
+
+describe("isUnderHerdrCore and keyboardApprovalLine", () => {
+  test("under herdr-core only with a non-blank HC_TERMINAL_ID", () => {
+    expect(isUnderHerdrCore({})).toBe(false);
+    expect(isUnderHerdrCore({ HC_TERMINAL_ID: "" })).toBe(false);
+    expect(isUnderHerdrCore({ HC_TERMINAL_ID: "  " })).toBe(false);
+    expect(isUnderHerdrCore({ HC_TERMINAL_ID: "t3" })).toBe(true);
+  });
+
+  test("every keyboard approval line is marked under hc and none outside it", () => {
+    for (const line of ["approved (once)", "approved · remembered “git status”", "approved once · “x” cannot be remembered"]) {
+      expect(keyboardApprovalLine(line, {})).toBe(line);
+      const marked = keyboardApprovalLine(line, { HC_TERMINAL_ID: "t3" });
+      expect(marked.startsWith(line)).toBe(true);
+      expect(marked).toContain("author unverified");
+    }
+  });
 });
