@@ -79,6 +79,18 @@ describe("herdr install", () => {
     expect(HERDR_TEMPLATE_MD).not.toContain("ready:");
   });
 
+  test("the template reports over the bus first, plain hc send off a bus, and keeps its other lines", () => {
+    const md = HERDR_TEMPLATE_MD;
+    expect(md.indexOf("bus_send")).toBeGreaterThan(-1);
+    expect(md).toContain('`keryx report --to @<bus name> "<result>"`');
+    expect(md.indexOf("Report over the bus first")).toBeLessThan(md.indexOf("plain `hc send"));
+    expect(md).toContain("only when you are not on a bus");
+    expect(md).toContain("Never answer another terminal's dialog");
+    expect(md).toContain("`hc keys` and `hc send --force` only when the operator asks");
+    expect(md).toContain('`hc get "$HC_TERMINAL_ID" --json`');
+    expect(md).toContain("Work only on the task below and stay inside the scope it names.");
+  });
+
   test("the embedded icon equals the VS Code extension glyph", () => {
     const source = readFileSync(path.join(import.meta.dir, "../../vscode-extension/media/keryx.svg"), "utf8");
     expect(HERDR_ICON_SVG).toBe(source);

@@ -1997,7 +1997,7 @@ export async function runAgentRepl(
       if (meta?.alwaysAsk === true && meta.card !== undefined && tool !== "user_prompt") {
         out(`\n${GUTTER}${style.yellow(meta.cardTitle ?? `Confirm ${tool}?`)}\n`);
         out(`${indentBlock(meta.card.join("\n"), GUTTER)}\n`);
-        out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta(tool, meta)))}\n`);
+        out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta(tool, meta), meta?.hcLaunch))}\n`);
         out(`\n${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
@@ -2135,7 +2135,7 @@ export async function runAgentRepl(
       for (const hint of formatShellApprovalHints(evaled)) {
         out(`${GUTTER}${style.yellow(hint)}\n`);
       }
-      out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta("shell_exec", meta)))}\n`);
+      out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta("shell_exec", meta), meta?.hcLaunch))}\n`);
       // Flow 275 (agent bus P4, T8; specification §4.4): a `git-publish` pause
       // lease that applies to this command must not be remembered, exactly
       // like `destructive`/`credentials`/`sacReviewConfirmation` — a saved
@@ -2514,7 +2514,7 @@ export async function runAgentRepl(
             providerId: deps.providerId,
             modelId: deps.modelId,
             toolNames: interactiveAgentToolNames(rebuiltTools),
-            herdrCore: herdrCoreSectionFromEnv(process.env),
+            herdrCore: herdrCoreSectionFromEnv(process.env, { busName: joined.name }),
             busJoined: true,
           }),
         };
@@ -4344,7 +4344,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             providerId: sel.provider,
             modelId: sel.model,
             toolNames: interactiveAgentToolNames(deps.tools),
-            herdrCore: herdrCoreSectionFromEnv(process.env),
+            herdrCore: herdrCoreSectionFromEnv(process.env, { busName: bus?.client()?.name }),
             // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
             // resolves. `tui-shell.ts` rebuilds via this same function right
             // after its own join settles, so a session that starts before the
@@ -4852,7 +4852,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: provider,
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
-          herdrCore: herdrCoreSectionFromEnv(process.env),
+          herdrCore: herdrCoreSectionFromEnv(process.env, { busName: busBox.current?.name }),
           // Flow 274 (T6/T7 contract): always `false` here — the bus join
           // happens later, inside `runAgentRepl` (`busBox.current` is still
           // empty at this point, and `agentDepsBase.tools` above was built
