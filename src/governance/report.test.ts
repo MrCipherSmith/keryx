@@ -14,6 +14,7 @@ import { appendTriggerRunRecord } from "../trigger/record";
 import { addConfirmedSchedule } from "../trigger/store";
 import { runTriggerOnce } from "../commands/trigger";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
+import { createRoutingSnapshot } from "../harness/routing/snapshot";
 import { registerProject } from "../lib/project-registry";
 import {
   buildGovernanceReport,
@@ -246,6 +247,22 @@ test("flow 295 AC14: a scheduled agent-task run's cost is included in project tr
     await runTriggerOnce(ROOT, "check-github", {
       agentTask: {
         makeProvider: () => provider,
+        // Scripted models need fixture facts, not the live provider catalogue.
+        // Routing admission and the real usage/spend path still execute.
+        routingSnapshot: ({ config, baseline }) => createRoutingSnapshot({
+          configDigest: config.configDigest,
+          observedAt: new Date().toISOString(),
+          catalogRevision: "governance-fixture",
+          policyRevision: "governance-fixture",
+          capabilityRevision: "governance-fixture",
+          authFailedProviderIds: [], baseline,
+          models: [{
+            target: baseline, connected: true, credentialsAvailable: true,
+            policyAllowed: true, parentAllowed: true, availability: "available",
+            capabilities: ["tools"], contextLength: 100_000, cooldown: false,
+            estimatedCostUsd: 0.01, observedLatencyMs: 1,
+          }],
+        }),
         planSandbox: () => ({ ok: true, launcher: "none", args: [], env: {}, wrap: () => ["/bin/true"] }),
       },
     });

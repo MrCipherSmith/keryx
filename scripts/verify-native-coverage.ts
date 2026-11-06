@@ -394,8 +394,10 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
         authorizeController: async () => true, authorizeQueued: async () => true, authorizeAction: async () => true, authorizeSelection: async () => true, authorizeInspection: async () => true, authorizeOwnedControl: async () => true });
       const tasks: string[] = [];
       const observed: string[] = []; value.subscribeTurnOutcome((observation) => { observed.push(`${observation.kind}:${"reason" in observation ? observation.reason : ""}:${"text" in observation ? observation.text.slice(0, 200) : ""}`); });
+      // Independent previews carry observation-time-derived snapshot, decision and receipt IDs.
+      // Normalize identities only; selections, exclusions, assignment sources and reasons remain compared.
       const replace = (text: string) => tasks.reduce((current, task) => current.replaceAll(task, "<owned>"), text).replaceAll(value.nativeSessionId(), "<native-session>").replaceAll(dataDir, "<state>").replaceAll(cwd, "<checkout>").replaceAll(configDir, "<config>")
-        .replaceAll(/"(pid|ageMs)":\d+/g, "\"$1\":0").replaceAll(/"(previewDigest|snapshotDigest|workspaceBaseline)":"[0-9a-f]{64}"/g, "\"$1\":\"<digest>\"").replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>").replaceAll(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, "<time>");
+        .replaceAll(/"(pid|ageMs)":\d+/g, "\"$1\":0").replaceAll(/"(previewDigest|snapshotDigest|workspaceBaseline|decisionId|receiptId)":"[0-9a-f]{64}"/g, "\"$1\":\"<digest>\"").replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>").replaceAll(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, "<time>");
       return { host: value, runtime: assembled.value, tasks, observed, cwd, peerInstances, replace };
     };
     type Hosted = Awaited<ReturnType<typeof host>>;

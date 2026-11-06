@@ -22,10 +22,14 @@ async function embedded(): Promise<NativeCoverageDescriptor> {
 
 test.skipIf(!launcher.available)(`receipts come from executing the same variant through the real terminal adapter and headless host, and expose failing parity${needsSandbox}`, async () => {
   const inventory = await readInventory(root);
-  const run = await collectParityRun(root, inventory, ["status.default", "reasoning.high", "reasoning.off", "trail.tool-NAME", "intake.list", "interrupt.default", "model.select", "history.N-1-20",
+  const run = await collectParityRun(root, inventory, ["routing.category-assignments", "status.default", "reasoning.high", "reasoning.off", "trail.tool-NAME", "intake.list", "interrupt.default", "model.select", "history.N-1-20",
     "tasks.kill", "demote.task-id", "flows.list", "flows.detail", "rewind.picker", "approvals.allow-once", "status.questions-answer", "goal.-workspace", "queue.remove-N", "queue.force-N"]);
   const receipts = receiptsFor(inventory, run, await sourceHashes(root, inventory));
   const parity = Object.fromEntries(receipts.map((receipt) => [receipt.variantId, { ...receiptParity(receipt), receipt }]));
+  expect(parity["routing.category-assignments"]).toMatchObject({ matched: true, admitted: true });
+  const routingReceipt = parity["routing.category-assignments"]!.receipt;
+  const routingDrift = { ...routingReceipt, headless: { ...routingReceipt.headless, outcome: { ...routingReceipt.headless.outcome!, resultDigest: "changed-routing-selection" } } };
+  expect(receiptParity(routingDrift)).toMatchObject({ matched: false, admitted: false });
   expect(parity["status.default"]).toMatchObject({ matched: true, admitted: true, receipt: { local: { line: "/status", outcome: { status: "applied" } }, headless: { arguments: {}, outcome: { status: "applied" } } } });
   // A real live owned turn is interrupted through both paths.
   expect(parity["interrupt.default"]).toMatchObject({ matched: true, admitted: true });
