@@ -14,7 +14,7 @@ import path from "node:path";
 import { ensureKeryxConfigDir, readConfigFile, type ConfigReadResult } from "./config-dir";
 import { updateConfigFile } from "./config-update";
 import { shellConfigPath } from "./shell-config";
-import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSchedulerControl } from "./command-risk";
+import { hcAgentLaunchOf, isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation, touchesSchedulerControl } from "./command-risk";
 import { createHash } from "node:crypto";
 import { commandWord, hasUnquotedMetacharacter, splitWords, stripAssignments } from "./shell-syntax";
 
@@ -586,7 +586,7 @@ export function suggestShellPatterns(command: string): ShellPatternSuggestion {
   const first = collapsed.split(" ")[0] ?? collapsed;
   const prefix = first.length > 0 ? `${escapeShellPatternLiteral(first)} *` : exact;
   const neverRemember =
-    trimmed.length > 0 && (isDestructiveCommand(trimmed) || touchesHumanConfirmation(trimmed));
+    trimmed.length > 0 && (isDestructiveCommand(trimmed) || touchesHumanConfirmation(trimmed) || hcAgentLaunchOf(trimmed) !== undefined);
   return {
     exact,
     prefix,

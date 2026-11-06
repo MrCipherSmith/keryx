@@ -2319,6 +2319,21 @@ for (const cause of APPROVAL_CAUSES) {
   });
 }
 
+otuiTest("flow 486: the hc agent launch dialog offers no Always allow, an ordinary command does (headless)", async () => {
+  const otui = requireOtui();
+  for (const hcLaunch of ["claude", undefined] as const) {
+    const h = await mountApprovalDock(otui, { width: 160 });
+    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "bun test src/x.test.ts", async () => "", false, false, {}, false, undefined, false, "hc-launch", hcLaunch);
+    await h.flush();
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("Allow once");
+    expect(frame.includes("Always allow")).toBe(hcLaunch === undefined);
+    await pressEscapeAndSettle(h);
+    expect(await choice).toBe("deny");
+    h.renderer.destroy();
+  }
+});
+
 otuiTest("a failing approval-context loader still renders a default-deny approval (headless)", async () => {
   const otui = requireOtui();
   const command = "rm -rf build";

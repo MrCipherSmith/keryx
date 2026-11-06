@@ -72,7 +72,7 @@ export interface RememberOffer {
  * The pattern comes from the command the shell parsed, never from model text.
  */
 export function telegramRememberOffer(ev: ShellApprovalEval): RememberOffer | undefined {
-  if (ev.destructive || ev.credentials || ev.sacReviewConfirmation || ev.publishLease || ev.hookAsk || ev.untrustedOrigin) {
+  if (ev.destructive || ev.credentials || ev.sacReviewConfirmation || ev.publishLease || ev.hookAsk || ev.untrustedOrigin || ev.hcLaunch !== undefined) {
     return undefined;
   }
   // The operator approves what the prompt shows. A command whose tail the prompt cuts off is not fully

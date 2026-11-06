@@ -8,6 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAgentTurn } from "./agent";
+import { createForegroundAgentIoFacade, createForegroundOperationOwner } from "../tui/foreground-operation";
 import type { AgentDeps, AgentIO, ApprovalMeta } from "./agent";
 import { catalogFingerprintResolver } from "../mcp-servers/approval-render";
 import type { PermissionMode } from "./permission-mode";
@@ -1487,4 +1488,30 @@ test("flow 486 AC4: with no approver an hc agent launch is refused", async () =>
   const io: AgentIO = { write: () => {}, permissionMode: () => "auto" };
   await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command: "hc run claude" }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
   expect(ran()).toBe(false);
+});
+
+test("flow 486: the hc agent grant lasts across turns through the per-turn facade; a Telegram turn gets none", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const asked: (string | undefined)[] = [];
+  const shellIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    requestApproval: async (_t, _i, meta) => {
+      asked.push(meta?.hcLaunch);
+      return true;
+    },
+  };
+  const owner = createForegroundOperationOwner();
+  const turn = async (command: string, telegram = false): Promise<void> => {
+    const token = owner.begin();
+    const io = createForegroundAgentIoFacade(owner, token, shellIo, telegram ? { mcpGrantsApply: () => false } : {});
+    await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+    owner.settle(token);
+  };
+  await turn("hc run --bg claude 'a'"); // asks, granted
+  await turn("hc run --bg claude 'b'"); // a new facade, same session: no ask
+  await turn("hc run --bg codex"); // another agent asks
+  expect(asked.filter((a) => a !== undefined)).toEqual(["claude", "codex"]);
+  await turn("hc run --bg claude 'c'", true); // a Telegram turn receives no grant
+  expect(asked.filter((a) => a !== undefined)).toEqual(["claude", "codex", "claude"]);
 });

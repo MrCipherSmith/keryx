@@ -24,6 +24,15 @@ import {
 const report = '<hc from="t7 review">Two bugs in x.rs; details in /path/to/findings.md</hc>';
 const task = '<hc from="t3 lead" reach="hc send t3 when done or stuck">Review x.rs</hc>';
 
+describe("hcTranscriptEcho for agent-origin lines (flow 486)", () => {
+  test("a plain line taken for an agent's is labelled as an unknown agent; a typed line keeps the user's mark", () => {
+    const text = "CI report: all tests are green on the branch.";
+    expect(hcTranscriptEcho(text, true)).toEqual({ marker: HC_UNPARSED_MARKER, line: text });
+    expect(hcTranscriptEcho(text)).toBeUndefined();
+    expect(hcTranscriptEcho(text, false)).toBeUndefined();
+  });
+});
+
 describe("parseHcMessage", () => {
   test("a child report", () => {
     expect(parseHcMessage(report)).toEqual({ from: "t7 review", body: "Two bugs in x.rs; details in /path/to/findings.md" });
@@ -469,7 +478,7 @@ describe("wiring (source audit)", () => {
   });
 
   test("the TUI shows an hc message as a message from that agent and frames it for the model", () => {
-    expect(tuiSource).toContain("hcTranscriptEcho(line)");
+    expect(tuiSource).toContain("hcTranscriptEcho(line, agentShaped)");
     expect(tuiSource).toContain("frameSubmittedLine(line)");
     expect(tuiSource).toMatch(/runAgentTurn\(foregroundIo, deps, history, modelLine,/);
     // The scroll pin carries the same label as the echo; the resume summary decodes stored frames.
@@ -478,7 +487,7 @@ describe("wiring (source audit)", () => {
   });
 
   test("a Telegram line is the operator's: its tg mark wins and it is never framed", () => {
-    expect(tuiSource).toContain("const hcEcho = source === undefined ? hcTranscriptEcho(line) : undefined;");
+    expect(tuiSource).toContain("const hcEcho = source === undefined ? hcTranscriptEcho(line, agentShaped) : undefined;");
     expect(tuiSource).toContain("...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : hcEcho !== undefined ?");
     expect(tuiSource).toContain("const modelLine = source === undefined");
     expect(tuiSource).toContain(": line;");

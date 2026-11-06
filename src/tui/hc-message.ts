@@ -151,10 +151,14 @@ export const HC_UNPARSED_MARKER = "◂ unknown agent ❯";
  * but does not parse is labelled {@link HC_UNPARSED_MARKER}, as the model is told
  * the same. `undefined` for any other line.
  */
-export function hcTranscriptEcho(line: string): { marker: string; line: string } | undefined {
+export function hcTranscriptEcho(line: string, agentOrigin = false): { marker: string; line: string } | undefined {
   const msg = parseHcMessage(line);
   if (msg !== undefined) return echoFor(msg.from, msg.reach !== undefined, msg.body);
-  return looksLikeHcMessage(line) ? { marker: HC_UNPARSED_MARKER, line: line.trim() } : undefined;
+  // `agentOrigin`: the shell took the line for an agent's (pasted into a dialog, an edited queue item), so the
+  // model gets it framed as unknown authorship and the transcript must not show it as the user's own words.
+  return looksLikeHcMessage(line) || (agentOrigin && line.trim().length > 0)
+    ? { marker: HC_UNPARSED_MARKER, line: line.trim() }
+    : undefined;
 }
 
 function echoFor(from: string, task: boolean, body: string): { marker: string; line: string } {

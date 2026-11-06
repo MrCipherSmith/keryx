@@ -1847,8 +1847,9 @@ export async function pickShellApproval(
   // `formatShellApprovalHints` (`../commands/shell-approval.ts`): while the
   // lease applies, neither grant is offered, whatever `suggestShellPatterns`
   // says.
-  const canOfferExact = offerExact && !publishLease && !hookAsk;
-  const canOfferPrefix = offerPrefix && !publishLease && !hookAsk;
+  // An `hc run` agent launch is granted per session by the agent loop; no saved rule can answer it.
+  const canOfferExact = offerExact && !publishLease && !hookAsk && hcLaunch === undefined;
+  const canOfferPrefix = offerPrefix && !publishLease && !hookAsk && hcLaunch === undefined;
   const options = [
     {
       id: "once",
@@ -10656,7 +10657,7 @@ export async function launchTuiAgentShell(opts: {
       // (one shaped like that which does not parse, as an unknown agent).
       // A Telegram line is the operator's own words, whatever its shape: it keeps
       // its `tg ❯` mark and is never treated as an agent message.
-      const hcEcho = source === undefined ? hcTranscriptEcho(line) : undefined;
+      const hcEcho = source === undefined ? hcTranscriptEcho(line, agentShaped) : undefined;
       const echoLine = hcEcho !== undefined ? summarizeSubmittedLine(hcEcho.line) : displayLine;
       const userEcho = appendUserEcho(otui, r, transcript, {
         id: `ub${uid++}`,
