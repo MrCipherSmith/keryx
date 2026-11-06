@@ -82,7 +82,7 @@ describe("herdr install", () => {
   test("the template reports over the bus first, plain hc send off a bus, and keeps its other lines", () => {
     const md = HERDR_TEMPLATE_MD;
     expect(md.indexOf("bus_send")).toBeGreaterThan(-1);
-    expect(md).toContain('`keryx report --to @<bus name> "<result>"`');
+    expect(md).toContain('`keryx report --to @<bus name> --from <your name> "<result>"`');
     expect(md.indexOf("Report over the bus first")).toBeLessThan(md.indexOf("plain `hc send"));
     expect(md).toContain("only when you are not on a bus");
     expect(md).toContain("Never answer another terminal's dialog");

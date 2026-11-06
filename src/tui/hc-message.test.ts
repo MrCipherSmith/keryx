@@ -387,7 +387,7 @@ describe("buildHerdrCoreSection", () => {
   test("with a bus name the report channel is the bus, with hc send as the fallback", () => {
     const text = buildHerdrCoreSection({ env: { HC_TERMINAL_ID: "t1" }, sandboxOn: false, keryxPath: "/opt/bin/keryx", busName: "boss" })!;
     expect(text).toContain("bus_send to @boss");
-    expect(text).toContain('`/opt/bin/keryx report --to @boss "<result>"`');
+    expect(text).toContain('`/opt/bin/keryx report --to @boss --from <your name> "<result>"`');
     expect(text).toContain("long text in a file, send its path");
     expect(text).toContain("`hc send` only if the bus is unavailable");
   });
