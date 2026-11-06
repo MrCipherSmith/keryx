@@ -10,14 +10,18 @@ import type { SearchConnectionResult } from "./types";
  * (`transport-failed`) — and the obvious response to the first one, retrying,
  * is precisely the one that cannot work.
  */
-export function describeConnectionFailure(reason: SearchConnectionResult["reason"]): string {
+export function describeConnectionFailure(reason: SearchConnectionResult["reason"], providerId?: string): string {
   switch (reason) {
     case "missing-credential":
       return "missing credential";
     case "invalid-credential":
       return "the API key was rejected — replace it with a valid key";
     case "rate-limited":
-      return "rate limited — the provider served its bot page to this machine; retrying will not help";
+      // Two different limits wear this reason: DuckDuckGo's bot page (retrying
+      // cannot help) and a provider's QPS limit (waiting is the fix).
+      return providerId === "deepseek"
+        ? "rate limited — DeepSeek's QPS limit; wait a few minutes and re-test"
+        : "rate limited — the provider served its bot page to this machine; retrying will not help";
     case "incompatible-response":
       return "the endpoint answered, but not with search results";
     case "insufficient-balance":
@@ -40,5 +44,9 @@ export function describeConnectionFailure(reason: SearchConnectionResult["reason
  * "Do not retry or rephrase; wait a few minutes or fetch known URLs directly" —
  * and it is the opposite of what a bare "search failed" invites.
  */
+/** DeepSeek's 429 is a QPS limit, never a bot page: its own words, never the DuckDuckGo string. */
+export const DEEPSEEK_RATE_LIMIT_ERROR =
+  "rate limited by DeepSeek (HTTP 429): wait a few minutes, then retry; do not rephrase the query";
+
 export const RATE_LIMITED_SEARCH_ERROR =
   "rate limited: DuckDuckGo served its bot-check page instead of results, even after retrying. Do not retry or rephrase; wait a few minutes or fetch a known URL directly";

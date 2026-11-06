@@ -3423,13 +3423,14 @@ function fakeSearchProviderController(opts: {
       providerId: SearchProviderId,
       fields: Record<string, string>,
       credential?: string,
-      options: { activate?: boolean; shouldActivate?: () => boolean } = {},
+      options: { activate?: boolean; isCancelled?: () => boolean } = {},
     ) => {
       const descriptor = opts.providers.find((candidate) => candidate.id === providerId);
       fake.configure(providerId, { ...(descriptor?.defaults ?? {}), ...fields }, credential);
       const tested = await fake.test(providerId);
       if (!tested.ok) return { ok: false as const, reason: tested.reason ?? "transport-failed" };
-      const activate = options.activate !== false && (options.shouldActivate?.() ?? true);
+      const cancelled = options.isCancelled?.() ?? false;
+      const activate = options.activate !== false && !cancelled;
       const selected = activate ? await fake.select(providerId) : ({ ok: true } as const);
       return { ok: true as const, active: activate && selected.ok, servesPages: descriptor?.fetchPage !== undefined };
     },

@@ -112,6 +112,7 @@ function stripScriptAndStyle(markdown: string): string {
   let text = markdown;
   for (const tag of ["script", "style"] as const) {
     const opener = new RegExp(`<${tag}\\b`, "gi");
+    const closer = new RegExp(`</${tag}>`, "gi");
     let out = "";
     let pos = 0;
     let cursor = 0;
@@ -119,11 +120,16 @@ function stripScriptAndStyle(markdown: string): string {
       opener.lastIndex = cursor;
       const open = opener.exec(text);
       if (open === null) break;
-      const closer = text.toLowerCase().indexOf(`</${tag}>`, open.index);
+      // Case-insensitive search over the ORIGINAL string: its indices are the
+      // ones `slice` uses, and it allocates nothing per block (a lowercased
+      // copy both leaked quadratic time and shifted indices when the fold
+      // changed the string's length, e.g. U+0130).
+      closer.lastIndex = open.index;
+      const end = closer.exec(text);
       // An unclosed block is left in place, as stripMarkup does.
-      if (closer === -1) break;
+      if (end === null) break;
       out += text.slice(pos, open.index) + " ";
-      pos = closer + tag.length + 3;
+      pos = end.index + end[0].length;
       cursor = pos;
     }
     out += text.slice(pos);

@@ -19,5 +19,5 @@ export type {
   SearchProviderId,
   SearchResponse,
 } from "./types";
-export { DEFAULT_SEARCH_PROVIDER_ID } from "./types";
+export { DEFAULT_SEARCH_PROVIDER_ID, SearchRefusalError, type SearchRefusalScope } from "./types";
 export type { SearchSelectionResult } from "./controller";

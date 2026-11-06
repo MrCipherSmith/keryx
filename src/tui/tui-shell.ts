@@ -2769,13 +2769,13 @@ function runSearchProviderTestStep(
       // The same controller operation the argument paths use, so the wizard is
       // not a third hand-rolled copy of configure -> test -> select and cannot
       // drift from them.
-      const connected = await controller.connect(provider.id, fields, credential, { activate: setActive, shouldActivate: () => !left });
+      const connected = await controller.connect(provider.id, fields, credential, { activate: setActive, isCancelled: () => left });
       if (left) {
         return; // backed out mid-test: nothing to show
       }
       if (!connected.ok) {
         settled = "failure";
-        const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason);
+        const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, provider.id);
         status.content = otui.t`${roleChunk(otui, "error", "✗")} ${boldChunk(otui, `'${provider.id}' test failed: ${reason}`)} ${dimChunk(otui, "(Esc to go back and retry)")}`;
         return;
       }
@@ -2783,7 +2783,9 @@ function runSearchProviderTestStep(
       const scope = connected.servesPages ? " (web_search and web_fetch)" : "";
       status.content = connected.active
         ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured, tested, and set as active${scope}`)} ${dimChunk(otui, "(Enter to close)")}`
-        : otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested successfully`)} ${dimChunk(otui, "(Enter to close)")}`;
+        : connected.activationReason !== undefined
+          ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested`)} ${dimChunk(otui, `but could not be set active (${connected.activationReason})`)} ${dimChunk(otui, "(Enter to close)")}`
+          : otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested successfully`)} ${dimChunk(otui, "(Enter to close)")}`;
     })();
   });
 }
@@ -10026,7 +10028,7 @@ export async function launchTuiAgentShell(opts: {
             // headless shell from drifting apart.
             const connected = await searchProviderController.connect(providerId, args.fields, args.credential);
             if (!connected.ok) {
-              const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason);
+              const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, providerId);
               io.onSystem?.(
                 `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
               );

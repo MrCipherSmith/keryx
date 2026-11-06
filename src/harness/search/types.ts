@@ -161,3 +161,26 @@ export type ProviderPageResult =
     };
 
 export type SearchCredentialResolver = (providerId: SearchProviderId) => string | undefined;
+
+/**
+ * A refusal that carries WHY waiting cannot help, as data rather than prose.
+ *
+ * - `account`: the account is refused (empty balance, rejected key, missing
+ *   credential) — every later call fails the same way, so it is worth caching.
+ * - `request`: this request was rejected (a 400/413, a malformed body) — the
+ *   next, corrected request may succeed, so it is NEVER cached.
+ * - `transient`: rate limit or timeout — wait, then retry.
+ */
+export type SearchRefusalScope = "account" | "request" | "transient";
+
+export class SearchRefusalError extends Error {
+  constructor(message: string, readonly scope: SearchRefusalScope = "transient") {
+    super(message);
+    this.name = "SearchRefusalError";
+  }
+
+  /** Only an account-scoped refusal means "every later call will fail too". */
+  get permanent(): boolean {
+    return this.scope !== "transient";
+  }
+}

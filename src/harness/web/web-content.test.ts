@@ -129,3 +129,30 @@ test("markdown stripping stays linear on a hostile body", () => {
   expect(result.ok).toBe(true);
   expect(Date.now() - started).toBeLessThan(250);
 });
+
+test("markdown stripping is linear on closed blocks too, and keeps indices in the original string", () => {
+  // The quadratic shape the first fix missed: many CLOSED blocks.
+  const closed = "<script>x</script>".repeat(6_500);
+  const started = Date.now();
+  const stripped = sanitizeWebContent({
+    url: "https://example.com/a",
+    providerId: "deepseek",
+    retrievedAt: "2026-11-06T00:00:00.000Z",
+    contentType: "text/markdown",
+    text: closed,
+  });
+  expect(Date.now() - started).toBeLessThan(250);
+  expect(stripped.ok && stripped.value.text).not.toContain("x</script>");
+
+  // Lowercasing used to lengthen the string (U+0130 -> two code points) so an
+  // index taken from the lowered copy skipped a later block in the original.
+  const shifted = sanitizeWebContent({
+    url: "https://example.com/a",
+    providerId: "deepseek",
+    retrievedAt: "2026-11-06T00:00:00.000Z",
+    contentType: "text/markdown",
+    text: `${"İ".repeat(30)}<script>a()</script>TAIL<script>b()</script>`,
+  });
+  expect(shifted.ok && shifted.value.text).not.toContain("b()");
+  expect(shifted.ok && shifted.value.text).toContain("TAIL");
+});

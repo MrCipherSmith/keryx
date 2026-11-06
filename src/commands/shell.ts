@@ -3193,7 +3193,7 @@ export async function runAgentRepl(
         // policy in the controller is what stops the two surfaces from drifting.
         const connected = await searchProviderController.connect(providerId, args.fields, args.credential);
         if (!connected.ok) {
-          const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason);
+          const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, providerId);
           agentIo.onSystem?.(
             `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
           );

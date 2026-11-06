@@ -18,6 +18,15 @@ describe("search connection failure wording", () => {
     expect(describeConnectionFailure("invalid-credential")).toContain("rejected");
   });
 
+  test("a rate limit is worded per provider", () => {
+    // DuckDuckGo served its bot page; DeepSeek's 429 is a QPS limit that clears
+    // by waiting, so the same reason must not say "retrying will not help".
+    expect(describeConnectionFailure("rate-limited", "duckduckgo")).toContain("bot page");
+    const deepseek = describeConnectionFailure("rate-limited", "deepseek");
+    expect(deepseek).toContain("QPS");
+    expect(deepseek).not.toContain("bot page");
+  });
+
   test("a rate limit never reads as a generic connection failure", () => {
     // The regression this wording exists against: DuckDuckGo answers a flagged
     // egress address with its anomaly page, forever. Reported as "connection
@@ -65,6 +74,11 @@ describe("both operator surfaces print the distinct wording", () => {
     expect(tuiSource.split("describeConnectionFailure(tested.reason)").length - 1).toBe(0);
     expect(tuiSource.split("describeConnectionFailure(connected.reason").length - 1).toBe(2);
     expect(shellSource.split("describeConnectionFailure(connected.reason").length - 1).toBe(1);
+  });
+
+  test("both argument surfaces render the sentence from the shared helper", () => {
+    expect(shellSource.split("connectedMessage(providerId, connected)").length - 1).toBe(1);
+    expect(tuiSource.split("connectedMessage(providerId, connected)").length - 1).toBe(1);
   });
 
   test("no surface still hardcodes the old two-way reason ternary", () => {

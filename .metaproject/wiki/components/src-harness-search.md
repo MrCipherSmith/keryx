@@ -1,6 +1,6 @@
 ---
 Title: Module src/harness/search
-Version: 1.4.0
+Version: 1.5.0
 Type: component
 Status: accepted
 Summary: "`src/harness/search` is the harness-side search layer. It defines the search provider contracts, a registry of six built-in providers, and a controller that runs only the provider the operator explicitly selected. Provider adapters never reach the network directly: every request goes through the sandboxed web transport, and the default factory is the trusted composition root that wires the two together."
@@ -10,7 +10,7 @@ Summary: "`src/harness/search` is the harness-side search layer. It defines the 
 
 ## Summary
 
-`src/harness/search` is the harness-side search layer. It defines the search provider contracts, a registry of five built-in providers, and a controller that runs only the provider the operator explicitly selected. Provider adapters never reach the network directly: every request goes through the sandboxed web transport, and the default factory is the trusted composition root that wires the two together.
+`src/harness/search` is the harness-side search layer. It defines the search provider contracts, a registry of six built-in providers, and a controller that runs only the provider the operator explicitly selected. Provider adapters never reach the network directly: every request goes through the sandboxed web transport, and the default factory is the trusted composition root that wires the two together.
 
 ## Overview
 
@@ -58,7 +58,7 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 - **Provider kind**: `local` (SearXNG, reached on loopback) or `remote` (DuckDuckGo and the five hosted APIs).
 - **Normalized result**: `NormalizedSearchResult`, with title, canonical URL, snippet, optional publication date and provenance. It is the only result shape the module returns.
 - **Connection state and reason**: `SearchProviderConnectionState`, and the `SearchConnectionResult.reason` values `missing-credential`, `invalid-credential`, `transport-failed`, `incompatible-response`, `rate-limited` and `insufficient-balance` (a paid provider accepting the key and refusing for lack of credit).
-- **Provider page retrieval**: `ProviderPageResult`, returned by an optional `fetchPage` on a descriptor. `web_fetch` consumes it through the narrow `WebPageFetcher` seam, sanitizes the Markdown with the same `sanitizeWebContent` used for scraped HTML, and falls back to the transport on `no-fetch-provider` and on a `retryable` provider failure.
+- **Provider page retrieval**: `ProviderPageResult`, returned by an optional `fetchPage` on a descriptor. `web_fetch` consumes it through the narrow `WebPageFetcher` seam, sanitizes the Markdown with the same `sanitizeWebContent` used for scraped HTML, and falls back to the transport on `no-fetch-provider`, on `provider-disconnected` (with a note) and on a `retryable` provider failure.
 - **Default provider**: DuckDuckGo, given by `DEFAULT_SEARCH_PROVIDER_ID`. It needs no credential and is used only when no provider is selected, never as a fallback after another provider fails.
 
 ## Main flows
@@ -106,6 +106,8 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 - `SearchProviderController`
 - `createDefaultSearchProviderController`
 - `searchCredentialResolver`
+- `connectedMessage`
+- `SearchRefusalError` (with its `scope`)
 
 ### Key files
 
@@ -151,3 +153,4 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 - 1.2.0 — Optional provider page retrieval (`fetchPage`) and the `web_fetch` provider path documented.
 - 1.3.0 — `connect()`, the permanent-refusal breaker, `provider-disconnected`/`retryable` page results and the deliberate `src/commands/providers` edge documented.
 - 1.4.0 — Round-2 fixes: shared refusal store, bounded target lookup, cancellation as its own outcome, no fetch-side 429 ladder, capability-first `web_fetch` and a wizard routed through `connect()`.
+- 1.5.0 — Round-3 fixes: the breaker caches only ACCOUNT refusals and is keyed per operation; request-scoped 4xx keeps `permanent` for advice but is never cached; the markdown scan is linear and index-safe; DeepSeek's 429 has its own wording; `SearchRefusalError.scope` and `connectedMessage` are public; `web_fetch` has one transport-fallback helper.

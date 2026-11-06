@@ -177,7 +177,7 @@ test("a connected provider's refusal is reported, not silently re-fetched by the
   const tool = webFetchTool({
     lookup: publicLookup,
     runner,
-    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "fetch-failed", detail: "DeepSeek refused the fetch for insufficient balance (HTTP 402): top up the account, then retry" }) },
+    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "fetch-failed", detail: "DeepSeek refused the fetch for insufficient balance (HTTP 402): top up the account" }) },
   });
   const result = await tool.invoke({ url: "https://example.com/docs" });
   expect(result.isError).toBe(true);
@@ -197,7 +197,7 @@ test("a disconnected page provider does not take the tool away", async () => {
   expect(result.output).toContain("not connected");
 });
 
-test("a rejecting page provider becomes an error string, never a rejection", async () => {
+test("a rejecting page provider falls back to the transport instead of rejecting the tool", async () => {
   const tool = webFetchTool({
     lookup: publicLookup,
     runner: worker({ status: 200, contentType: "text/plain", body: "transport" }),

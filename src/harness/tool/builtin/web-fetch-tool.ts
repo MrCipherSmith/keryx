@@ -69,9 +69,11 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
       if (typeof input.url !== "string") {
         return { output: "web_fetch: url must be an absolute HTTPS URL without credentials", isError: true };
       }
+      // Captured once: a closure (serveFromTransport) cannot rely on narrowing.
+      const url = input.url;
       // S-8 (flow 355, AC4): refuse BEFORE any network connection — the check
       // above only validates shape, not what a model put in the URL itself.
-      if (containsOutboundSecret(input.url)) {
+      if (containsOutboundSecret(url)) {
         // Only when a caller names a project: falling back to `process.cwd()`
         // would write a real incident file under whatever directory the TEST
         // RUNNER happens to be started from, not the operator's project.
@@ -80,11 +82,17 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
         }
         return { output: "web_fetch: outbound secret-shaped content", isError: true };
       }
-      // The page-provider seam is a contract, not a promise: a rejecting
-      // implementation must become an error string like every other tool failure.
+      // A provider that CRASHES is reported as an unavailable provider whose page
+      // the transport can still serve — never as "no such provider", which would
+      // switch egress silently.
       const viaProvider = deps.pageFetcher === undefined
         ? ({ ok: false, reason: "no-fetch-provider" } as const)
-        : await deps.pageFetcher.fetchPage(input.url, ctx?.signal).catch(() => ({ ok: false, reason: "no-fetch-provider" } as const));
+        : await deps.pageFetcher.fetchPage(url, ctx?.signal).catch(() => ({
+            ok: false,
+            reason: "fetch-failed",
+            detail: "the page provider failed unexpectedly",
+            retryable: true,
+          } as const));
       if (viaProvider.ok) {
         return providerPage(viaProvider.value, deps.now);
       }
@@ -93,18 +101,18 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
       // a page the operator did not ask another service for. A provider that
       // never answered (timeout, 429, 5xx) is a different thing — the transport
       // is the tool's own default path, and nothing is hidden by using it.
-      // A page-capable provider that is not connected still must not take the
-      // tool away: fall back to the transport and say so, rather than failing a
-      // page the operator could read before they ever selected a provider.
-      if (viaProvider.reason === "provider-disconnected") {
-        const fallback = await transport.fetchPage({ url: input.url, providerId: "web_fetch", ...(ctx?.signal ? { signal: ctx.signal } : {}) });
+      /** The tool's own path: one place for the signal, the note and the errors. */
+      const serveFromTransport = async (note: string) => {
+        const fallback = await transport.fetchPage({ url, providerId: "web_fetch", ...(ctx?.signal ? { signal: ctx.signal } : {}) });
         return fallback.ok
-          ? {
-              output: `${fallback.value.text}\n\nPage provider note: the selected page provider is not connected; this page was served by the sandbox transport.`,
-              isError: false,
-              untrusted: true,
-            }
-          : { output: `web_fetch: the selected page provider is not connected, and the sandbox transport failed: ${fallback.reason}`, isError: true };
+          ? { output: `${fallback.value.text}\n\n${note}`, isError: false, untrusted: true }
+          : { output: `web_fetch: ${note}; the sandbox transport also failed: ${fallback.reason}`, isError: true };
+      };
+      // A page-capable provider that is not connected still must not take the
+      // tool away: fall back and say so, rather than failing a page the
+      // operator could read before they ever selected a provider.
+      if (viaProvider.reason === "provider-disconnected") {
+        return serveFromTransport("Page provider note: the selected page provider is not connected; this page was served by the sandbox transport.");
       }
       if (viaProvider.reason === "fetch-failed" && viaProvider.retryable !== true) {
         return {
@@ -112,19 +120,11 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
           isError: true,
         };
       }
-      const result = await transport.fetchPage({ url: input.url, providerId: "web_fetch", ...(ctx?.signal ? { signal: ctx.signal } : {}) });
-      if (!result.ok) {
-        return {
-          output: viaProvider.reason === "fetch-failed"
-            ? `web_fetch: ${providerDetail(viaProvider.detail)}; the sandbox transport also failed: ${result.reason}`
-            : `web_fetch: ${result.reason}`,
-          isError: true,
-        };
-      }
-      const note = viaProvider.reason === "fetch-failed"
-        ? `\n\nPage provider note: ${providerDetail(viaProvider.detail)}; this page was served by the sandbox transport.`
-        : "";
-      return { output: result.value.text + note, isError: false, untrusted: true };
+      return serveFromTransport(
+        viaProvider.reason === "fetch-failed"
+          ? `Page provider note: ${providerDetail(viaProvider.detail)}; this page was served by the sandbox transport.`
+          : "Page provider note: no provider served this page; it was served by the sandbox transport.",
+      );
     },
   };
 }

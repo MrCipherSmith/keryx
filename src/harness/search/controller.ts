@@ -1,7 +1,8 @@
-import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig, type StoredSearchProvider } from "../../lib/search-config";
+import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, searchConfigPath, type SearchConfig, type StoredSearchProvider } from "../../lib/search-config";
 import { parsePublicHttpsUrl } from "../web/web-policy";
 import { DEFAULT_SEARCH_PROVIDER_ID, type ProviderPageResult, type SearchConnectionResult, type SearchProviderDescriptor, type SearchProviderId, type SearchResponse } from "./types";
-import { SearchProviderRegistry, SearchRefusalError } from "./registry";
+import { SearchProviderRegistry } from "./registry";
+import { SearchRefusalError, type SearchRefusalScope } from "./types";
 
 /**
  * Last permanent refusal per provider, shared by every controller in this
@@ -10,10 +11,27 @@ import { SearchProviderRegistry, SearchRefusalError } from "./registry";
  * instance-local cache would suppress a recovered provider for five minutes
  * after the operator's own reconnect said it worked.
  */
-const refusalStore = new Map<string, Map<SearchProviderId, { detail: string; at: number }>>();
+type RefusalKey = `${"search" | "fetch"}:${SearchProviderId}`;
+const refusalStore = new Map<string, Map<RefusalKey, { detail: string; at: number }>>();
 
-function refusalsFor(configDir: string | undefined): Map<SearchProviderId, { detail: string; at: number }> {
-  const key = configDir ?? "";
+/** Test-only: drop every recorded refusal so one test cannot arm the next. */
+export function resetSearchRefusalsForTests(): void {
+  refusalStore.clear();
+}
+
+/**
+ * Key by what actually identifies the shared resource: the config FILE, not
+ * the caller's argument (one surface may pass no dir, another the resolved
+ * one, and both read the same file). The operation is part of the key because
+ * a search refusal must never answer `web_fetch` and vice versa.
+ */
+function refusalsFor(configDir: string | undefined): Map<RefusalKey, { detail: string; at: number }> {
+  let key: string;
+  try {
+    key = searchConfigPath(configDir);
+  } catch {
+    key = configDir ?? "";
+  }
   let store = refusalStore.get(key);
   if (store === undefined) {
     store = new Map();
@@ -38,9 +56,14 @@ export class SearchProviderController {
    */
   private static readonly REFUSAL_TTL_MS = 5 * 60_000;
 
-  constructor(private readonly registry: SearchProviderRegistry, private readonly configDir?: string) {}
+  constructor(
+    private readonly registry: SearchProviderRegistry,
+    private readonly configDir?: string,
+    /** Injected for the TTL test; production reads the wall clock. */
+    private readonly now: () => number = Date.now,
+  ) {}
 
-  private get refusals(): Map<SearchProviderId, { detail: string; at: number }> {
+  private get refusals(): Map<RefusalKey, { detail: string; at: number }> {
     return refusalsFor(this.configDir);
   }
 
@@ -83,8 +106,8 @@ export class SearchProviderController {
     providerId: SearchProviderId,
     fields: Record<string, string>,
     credential?: string,
-    options: { activate?: boolean; shouldActivate?: () => boolean } = {},
-  ): Promise<{ ok: true; active: boolean; servesPages: boolean } | { ok: false; reason: NonNullable<SearchConnectionResult["reason"]> | "not-configurable" }> {
+    options: { activate?: boolean; isCancelled?: () => boolean } = {},
+  ): Promise<{ ok: true; active: boolean; servesPages: boolean; activationReason?: "not-configured" | "not-connected" } | { ok: false; reason: NonNullable<SearchConnectionResult["reason"]> | "not-configurable" }> {
     const descriptor = this.registry.get(providerId);
     if (descriptor === undefined) return { ok: false, reason: "not-configurable" };
     this.configure(providerId, { ...descriptor.defaults, ...fields }, credential);
@@ -92,13 +115,21 @@ export class SearchProviderController {
     if (!tested.ok) return { ok: false, reason: tested.reason ?? "transport-failed" };
     // A surface that was dismissed mid-test (the wizard's Esc) must not
     // activate behind the operator's back: the predicate is read AFTER the test.
-    const activate = options.activate !== false && (options.shouldActivate?.() ?? true);
+    const cancelled = options.isCancelled?.() ?? false;
+    const activate = options.activate !== false && !cancelled;
     const selected = activate ? await this.select(providerId) : ({ ok: true } as const);
-    return { ok: true, active: activate && selected.ok, servesPages: descriptor.fetchPage !== undefined };
+    return {
+      ok: true,
+      active: activate && selected.ok,
+      servesPages: descriptor.fetchPage !== undefined,
+      // Kept apart from `active` so a surface can tell "the operator said no"
+      // from "the activation itself failed".
+      ...(selected.ok ? {} : { activationReason: selected.reason }),
+    };
   }
 
   configure(providerId: SearchProviderId, fields: Record<string, string>, credential?: string): void {
-    this.refusals.delete(providerId);
+    this.forgetProvider(providerId);
     const config = this.config();
     const providers = { ...(config.providers ?? {}) };
     providers[providerId] = { fields: { ...fields }, status: "disconnected" };
@@ -115,7 +146,7 @@ export class SearchProviderController {
     const descriptor = this.registry.get(providerId);
     if (!stored || !descriptor) return { ok: false, reason: "incompatible-response" };
     const result = await descriptor.testConnection(stored.fields);
-    if (result.ok) this.refusals.delete(providerId);
+    if (result.ok) this.forgetProvider(providerId);
     const providers = { ...(config.providers ?? {}) };
     providers[providerId] = { ...stored, status: result.ok ? "connected" : "disconnected", lastTestedAt: new Date().toISOString() };
     saveSearchConfig({ ...config, providers }, this.configDir);
@@ -140,7 +171,7 @@ export class SearchProviderController {
     const stored = config.providers?.[providerId];
     if (!stored) return { ok: false, reason: "not-configured" };
     if (stored.status !== "connected") return { ok: false, reason: "not-connected" };
-    this.refusals.delete(providerId);
+    this.forgetProvider(providerId);
     saveSearchConfig({ ...config, activeProviderId: providerId }, this.configDir);
     return { ok: true };
   }
@@ -167,20 +198,27 @@ export class SearchProviderController {
     return this.runProvider(activeProviderId, stored, query, signal);
   }
 
-  /** A refusal this provider gave moments ago, if it is still fresh. */
-  private freshRefusal(providerId: SearchProviderId): string | undefined {
-    const refused = this.refusals.get(providerId);
+  /** The operator's re-test is the action that may have fixed it. */
+  private forgetProvider(providerId: SearchProviderId): void {
+    this.refusals.delete(`search:${providerId}`);
+    this.refusals.delete(`fetch:${providerId}`);
+  }
+
+  /** A refusal this provider gave moments ago for THIS operation. */
+  private freshRefusal(providerId: SearchProviderId, operation: "search" | "fetch"): string | undefined {
+    const key: RefusalKey = `${operation}:${providerId}`;
+    const refused = this.refusals.get(key);
     if (refused === undefined) return undefined;
-    if (Date.now() - refused.at > SearchProviderController.REFUSAL_TTL_MS) {
-      this.refusals.delete(providerId);
+    if (this.now() - refused.at > SearchProviderController.REFUSAL_TTL_MS) {
+      this.refusals.delete(key);
       return undefined;
     }
     return refused.detail;
   }
 
-  /** Record a refusal the provider itself declared permanent. */
-  private rememberPermanentRefusal(providerId: SearchProviderId, detail: string | undefined): void {
-    if (detail !== undefined) this.refusals.set(providerId, { detail, at: Date.now() });
+  /** Record only an account-scoped refusal, for the operation that saw it. */
+  private rememberPermanentRefusal(providerId: SearchProviderId, operation: "search" | "fetch", detail: string | undefined): void {
+    if (detail !== undefined) this.refusals.set(`${operation}:${providerId}`, { detail, at: this.now() });
   }
 
   private async runProvider(
@@ -190,13 +228,28 @@ export class SearchProviderController {
     signal?: AbortSignal,
   ): Promise<
     | { ok: true; value: SearchResponse }
-    | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string; permanent?: boolean }
+    | {
+        ok: false;
+        reason: "no-active-provider" | "provider-disconnected" | "search-failed";
+        detail?: string;
+        permanent?: boolean;
+        scope?: SearchRefusalScope;
+        cancelled?: boolean;
+      }
   > {
     const descriptor = this.registry.get(providerId);
     if (!descriptor) return { ok: false, reason: "no-active-provider" };
-    const refused = this.freshRefusal(providerId);
+    const refused = this.freshRefusal(providerId, "search");
     if (refused !== undefined) {
-      return { ok: false, reason: "search-failed", detail: `${refused} (not retried: this provider refused moments ago; fix it, then /search-provider ${providerId} to re-test)` };
+      // The flag survives the cache: the second call must not revert to the
+      // "wait a few minutes" advice the first one correctly dropped.
+      return {
+        ok: false,
+        reason: "search-failed",
+        detail: `${refused} (not retried: this provider refused moments ago; fix it, then /search-provider ${providerId} to re-test)`,
+        permanent: true,
+        scope: "account" as const,
+      };
     }
     try {
       return { ok: true, value: await descriptor.search(stored?.fields ?? {}, query, signal) };
@@ -206,9 +259,17 @@ export class SearchProviderController {
       // DuckDuckGo rate limit to the agent as "search failed. Retry later"
       // - advice that cannot work, because that limit is why it failed.
       const detail = error instanceof Error && error.message.length > 0 ? error.message : undefined;
-      const permanent = error instanceof SearchRefusalError ? error.permanent : undefined;
-      if (permanent === true) this.rememberPermanentRefusal(providerId, detail);
-      return { ok: false, reason: "search-failed", ...(detail !== undefined ? { detail } : {}), ...(permanent !== undefined ? { permanent } : {}) };
+      const scope: SearchRefusalScope | undefined = error instanceof SearchRefusalError ? error.scope : undefined;
+      // Only an ACCOUNT refusal is cached: a rejected request must not disable
+      // the next, corrected one, and no search refusal may gate web_fetch.
+      if (scope === "account") this.rememberPermanentRefusal(providerId, "search", detail);
+      return {
+        ok: false,
+        reason: "search-failed",
+        ...(detail !== undefined ? { detail } : {}),
+        ...(scope !== undefined ? { scope, permanent: scope !== "transient" } : {}),
+        ...(signal?.aborted === true ? { cancelled: true } : {}),
+      };
     }
   }
 
@@ -243,13 +304,13 @@ export class SearchProviderController {
       return { ok: false, reason: "provider-disconnected" };
     }
     const descriptor = selected;
-    const refused = this.freshRefusal(descriptor.id);
+    const refused = this.freshRefusal(descriptor.id, "fetch");
     if (refused !== undefined) {
-      return { ok: false, reason: "fetch-failed", detail: `${refused} (not retried: this provider refused moments ago; fix it, then /search-provider ${descriptor.id} to re-test)` };
+      return { ok: false, reason: "fetch-failed", detail: `${refused} (not retried: this provider refused moments ago; fix it, then /search-provider ${descriptor.id} to re-test)`, permanent: true };
     }
     try {
       const result = await fetchPage.call(descriptor, url, signal);
-      if (!result.ok && result.reason === "fetch-failed" && result.permanent === true) this.rememberPermanentRefusal(descriptor.id, result.detail);
+      if (!result.ok && result.reason === "fetch-failed" && result.permanent === true) this.rememberPermanentRefusal(descriptor.id, "fetch", result.detail);
       return result;
     } catch (error) {
       const detail = error instanceof Error && error.message.length > 0 ? error.message : undefined;

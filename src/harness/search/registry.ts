@@ -6,9 +6,11 @@ import {
   maybeDelayDuckDuckGoSearch,
   waitDuckDuckGoBackoff,
 } from "./duckduckgo";
-import { RATE_LIMITED_SEARCH_ERROR } from "./connection-message";
+import { DEEPSEEK_RATE_LIMIT_ERROR, RATE_LIMITED_SEARCH_ERROR } from "./connection-message";
 import { lookup as systemLookup } from "node:dns/promises";
+import { WEB_TOTAL_DEADLINE_MS } from "../web/sandboxed-web-transport";
 import { parsePublicHttpsUrl, validatePublicTarget, type HostLookup } from "../web/web-policy";
+import { SearchRefusalError, type SearchRefusalScope } from "./types";
 import type {
   CredentialInjection,
   NormalizedSearchResult,
@@ -111,27 +113,24 @@ function requestFailure(response: SandboxedWebResponse): SearchConnectionResult 
  * account instead of topping it up. `search` throws the message, so the
  * provider's own words reach the agent as the `search-failed` detail.
  */
-function deepseekFailure(response: SandboxedWebResponse): { reason: NonNullable<SearchConnectionResult["reason"]>; message: string; permanent: boolean } | undefined {
+function deepseekFailure(response: SandboxedWebResponse): { reason: NonNullable<SearchConnectionResult["reason"]>; message: string; scope: SearchRefusalScope } | undefined {
   if (response.ok && response.status >= 200 && response.status < 300) return undefined;
   const status = response.status;
   // The provider documents 400/401/403/404/413 as permanent: waiting cannot
   // clear them. Carried as data, so no consumer has to parse this prose.
-  if (status === 400 || status === 401 || status === 403 || status === 404 || status === 413) {
-    return { reason: status === 401 ? "invalid-credential" : "transport-failed", message: `DeepSeek rejected the request (HTTP ${status}): fix the request or the key before retrying`, permanent: true };
+  // Request-scoped: the next, corrected request may succeed, so this is never
+  // remembered provider-wide. Account-scoped (401/402) is.
+  if (status === 400 || status === 403 || status === 404 || status === 413) {
+    return { reason: "transport-failed", message: `DeepSeek rejected the request (HTTP ${status}): the request or query is invalid`, scope: "request" };
   }
-  if (status === 402) return { reason: "insufficient-balance", message: "DeepSeek refused the search for insufficient balance (HTTP 402): top up the account", permanent: true };
-  if (status === 429) return { reason: "rate-limited", message: RATE_LIMITED_SEARCH_ERROR, permanent: false };
-  if (status === 0) return { reason: "transport-failed", message: response.error === "cancelled" ? "cancelled by the operator" : `DeepSeek request failed before a response (${response.error ?? "transport-failed"})`, permanent: false };
-  return { reason: "transport-failed", message: `DeepSeek request failed (HTTP ${status})`, permanent: false };
+  if (status === 401) return { reason: "invalid-credential", message: "DeepSeek rejected the API key (HTTP 401): replace it with a valid key", scope: "account" };
+  if (status === 402) return { reason: "insufficient-balance", message: "DeepSeek refused the search for insufficient balance (HTTP 402): top up the account", scope: "account" };
+  // A DeepSeek QPS limit, and not DuckDuckGo's bot-check page: its own words.
+  if (status === 429) return { reason: "rate-limited", message: DEEPSEEK_RATE_LIMIT_ERROR, scope: "transient" };
+  if (status === 0) return { reason: "transport-failed", message: response.error === "cancelled" ? "cancelled by the operator" : `DeepSeek request failed before a response (${response.error ?? "transport-failed"})`, scope: "transient" };
+  return { reason: "transport-failed", message: `DeepSeek request failed (HTTP ${status})`, scope: "transient" };
 }
 
-/** A refusal that carries whether waiting could ever clear it. */
-export class SearchRefusalError extends Error {
-  constructor(message: string, readonly permanent: boolean) {
-    super(message);
-    this.name = "SearchRefusalError";
-  }
-}
 
 /**
  * DeepSeek authenticates with `Authorization: Bearer <key>`, and the worker
@@ -412,7 +411,7 @@ export function createSearchProviderRegistry(
       const key = credential(id, resolveCredential, injection, name);
       // A missing key is a refusal, never an empty SERP: the agent reads zero
       // results as "the web has nothing", and the operator is never told.
-      if (!key) throw new SearchRefusalError(`${displayName} has no API key — run /search-provider ${id} key=<value> to connect it`, true);
+      if (!key) throw new SearchRefusalError(`${displayName} has no API key — run /search-provider ${id} key=<value> to connect it`, "account");
       const response = await transport.request({ ...remoteRequest(id, endpoint, query, key), ...(signal ? { signal } : {}) });
       const parsed = parseResponse(response);
       const results = id === "brave" && parsed && typeof parsed === "object" ? resultsFrom((parsed as { web?: unknown }).web) : resultsFrom(parsed);
@@ -450,7 +449,7 @@ export function createSearchProviderRegistry(
       // `connected` is persisted by the connection TEST, but a borrowed key can
       // disappear afterwards. Answering that with an empty SERP is a silent
       // wrong result, so it refuses like any other missing credential.
-      if (key === undefined) throw new SearchRefusalError("DeepSeek has no API key — run /search-provider deepseek key=<value> to reconnect it", true);
+      if (key === undefined) throw new SearchRefusalError("DeepSeek has no API key — run /search-provider deepseek key=<value> to reconnect it", "account");
       for (let attempt = 0; ; attempt += 1) {
         const response = await transport.request({ ...deepseekSearchRequest(query, key), ...(signal ? { signal } : {}) });
         // A 429 is the one answer worth waiting out; the ladder is bounded and
@@ -459,8 +458,9 @@ export function createSearchProviderRegistry(
         // A refusal is not an empty SERP: thrown, the provider's own words reach
         // the caller as the `search-failed` detail, so 402 and 429 stop reading
         // like "nothing found".
+        if (isAborted(signal)) throw new SearchRefusalError("cancelled by the operator", "transient");
         const failed = deepseekFailure(response);
-        if (failed !== undefined) throw new SearchRefusalError(failed.message, failed.permanent);
+        if (failed !== undefined) throw new SearchRefusalError(failed.message, failed.scope);
         const parsed = parseResponse(response);
         return normalize("deepseek", query, parsed === undefined ? [] : resultsFrom(parsed), { title: "title", url: "url", snippet: "summary", date: "date" });
       }
@@ -481,8 +481,15 @@ export function createSearchProviderRegistry(
       if (key === undefined) return { ok: false, reason: "no-fetch-provider" };
       // The transport bounds this lookup inside its 20 s budget; this path
       // replaces it, so it bounds its own await under the caller's signal.
-      const resolved = await resolveTarget(target.value, lookup, signal);
+      // One budget for the lookup AND the provider request, as the transport
+      // does for its own hop: a stalled resolver must not add five seconds on
+      // top of a twenty-second request.
+      const budget = new AbortController();
+      const budgetTimer = setTimeout(() => budget.abort(), WEB_TOTAL_DEADLINE_MS);
+      const bounded = signal === undefined ? budget.signal : AbortSignal.any([signal, budget.signal]);
+      const resolved = await resolveTarget(target.value, lookup, bounded);
       if (!resolved.ok) {
+        clearTimeout(budgetTimer);
         // A lookup that timed out or failed is the provider being unavailable,
         // not the page being refused: the transport may still read it. A
         // cancelled call is neither.
@@ -492,8 +499,8 @@ export function createSearchProviderRegistry(
       // and the transport fallback exists for exactly that. Laddering first
       // would spend two refused billable calls and ten seconds to reach the
       // same fallback.
-      {
-        const response = await transport.request({ ...deepseekFetchRequest(target.value.toString(), key), ...(signal ? { signal } : {}) });
+      try {
+        const response = await transport.request({ ...deepseekFetchRequest(target.value.toString(), key), signal: bounded });
         const failure = deepseekFetchFailure(response);
         if (failure !== undefined) {
           return { ok: false, reason: "fetch-failed", detail: failure.detail, retryable: failure.retryable, ...(failure.permanent === true ? { permanent: true } : {}) };
@@ -514,6 +521,8 @@ export function createSearchProviderRegistry(
             text: record.content,
           },
         };
+      } finally {
+        clearTimeout(budgetTimer);
       }
     },
   };
