@@ -13,6 +13,8 @@ describe("search connection failure wording", () => {
     // A paid provider can accept the key and still refuse every request; that
     // must not read like a network fault an operator can retry away.
     expect(describeConnectionFailure("insufficient-balance")).toContain("insufficient balance");
+    // A rejected key is not a missing one: the operator fixes a different thing.
+    expect(describeConnectionFailure("invalid-credential")).toContain("rejected");
   });
 
   test("a rate limit never reads as a generic connection failure", () => {

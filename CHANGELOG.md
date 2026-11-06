@@ -6,6 +6,9 @@
 - **DeepSeek Search as a search provider.** `/search-provider deepseek` connects DeepSeek's Search API to `web_search`, reusing the API key already saved for the `deepseek` chat-model provider when no separate search key is stored. Results use DeepSeek's model-facing `summary` and publication date. A paid account out of credit now reports `insufficient balance` (HTTP 402) instead of a generic connection failure, and a refused search carries the provider's own words rather than an empty result set.
 - **`web_fetch` through DeepSeek's Fetch API.** While DeepSeek is the active provider, `web_fetch` retrieves the page as Markdown from `/v1/tools/fetch` instead of scraping HTML; the content still goes through the injection scan, secret redaction and the untrusted banner. Every other provider leaves `web_fetch` on the sandbox transport, and a provider that refuses a page is reported rather than silently replaced.
 
+### Fixed
+- **DeepSeek review round 1 (4 majors).** The provider fetch path now resolves the target with the same public-address policy as the sandbox transport, so `localhost`/private names are refused before anything is sent; a DeepSeek key that disappears after connect refuses `web_search` instead of answering with zero results and leaves `web_fetch` on the transport; a provider timeout, 429 or 5xx falls back to the sandbox transport instead of failing the tool; and 429s are absorbed by a bounded ladder before the "do not retry" refusal. HTTP 401 now reports `invalid-credential` rather than "missing credential", and a permanent refusal is no longer dressed in "wait and retry" advice.
+
 ### Changed
 - **`/search-provider <id>` connects in one step.** A successful connection test now also makes that provider active, so `web_search` (and `web_fetch`, for providers that retrieve pages) uses it immediately. `/search-connect` still switches between connected providers.
 

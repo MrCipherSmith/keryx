@@ -14,6 +14,8 @@ export function describeConnectionFailure(reason: SearchConnectionResult["reason
   switch (reason) {
     case "missing-credential":
       return "missing credential";
+    case "invalid-credential":
+      return "the API key was rejected — replace it with a valid key";
     case "rate-limited":
       return "rate limited — the provider served its bot page to this machine; retrying will not help";
     case "incompatible-response":

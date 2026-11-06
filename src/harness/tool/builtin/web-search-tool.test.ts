@@ -111,6 +111,18 @@ test("web_search passes the provider's own refusal through, not just 'search fai
   expect(result.output).not.toContain("Retry later");
 });
 
+test("a permanent refusal is not dressed in retry advice", async () => {
+  const tool = webSearchTool({
+    async search() {
+      return { ok: false, reason: "search-failed", detail: "DeepSeek refused the search for insufficient balance (HTTP 402): top up the account, then retry" };
+    },
+  });
+  const result = await tool.invoke({ query: "keryx sandbox" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("insufficient balance");
+  expect(result.output).not.toContain("Wait a few minutes");
+});
+
 test("web_search tells the agent not to retry a rate-limited search", async () => {
   const tool = webSearchTool({ search: async () => ({ ok: false, reason: "search-failed", detail: RATE_LIMITED_SEARCH_ERROR }) });
   const result = await tool.invoke({ query: "keryx" });

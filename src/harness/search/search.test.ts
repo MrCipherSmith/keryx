@@ -4,14 +4,18 @@ import os from "node:os";
 import path from "node:path";
 import { loadSearchConfig, searchConfigPath } from "../../lib/search-config";
 import { duckduckgoLiteUrl, resetDuckDuckGoRateLimitForTests, setDuckDuckGoTimingForTests } from "./duckduckgo";
+import { setDeepSeekTimingForTests } from "./registry";
 import {
   createSearchProviderRegistry,
   connectedProviderIds,
   SearchProviderController,
+  SearchProviderRegistry,
   type SandboxedWebRequest,
   type SandboxedWebTransport,
+  type SearchProviderDescriptor,
 } from "./index";
 
+const publicLookup = async () => [{ address: "93.184.216.34" }];
 const liteHtml = readFileSync(path.join(import.meta.dir, "fixtures/duckduckgo-lite.html"), "utf8");
 const anomalyHtml = readFileSync(path.join(import.meta.dir, "fixtures/duckduckgo-anomaly.html"), "utf8");
 
@@ -105,7 +109,11 @@ describe("search provider registry", () => {
   // The measured DuckDuckGo timings (4-8 s between searches, a 5 s + 20 s retry
   // ladder) would otherwise be spent asleep; the tests that exercise the ladder
   // set their own (zero-length) rungs below.
-  beforeEach(() => setDuckDuckGoTimingForTests({ minGapMs: 0, maxGapMs: 0, backoffMs: [] }));
+  beforeEach(() => {
+    setDuckDuckGoTimingForTests({ minGapMs: 0, maxGapMs: 0, backoffMs: [] });
+    // No DeepSeek ladder unless a test asks for one: a 429 must not sleep here.
+    setDeepSeekTimingForTests({ backoffMs: [] });
+  });
 
   test("describes DuckDuckGo first, then SearXNG, Brave, Tavily, Exa and DeepSeek", () => {
     const registry = createSearchProviderRegistry(new FakeTransport());
@@ -231,7 +239,7 @@ describe("search provider registry", () => {
 
   test("DeepSeek fetches a known URL through its Fetch API and returns Markdown", async () => {
     const transport = new FakeTransport();
-    const registry = createSearchProviderRegistry(transport, (providerId) => providerId === "deepseek" ? "ds-secret" : undefined);
+    const registry = createSearchProviderRegistry(transport, (providerId) => providerId === "deepseek" ? "ds-secret" : undefined, publicLookup);
 
     const deepseek = registry.get("deepseek")!;
     const fetchPage = deepseek.fetchPage;
@@ -256,12 +264,15 @@ describe("search provider registry", () => {
     // On this path the transport connects to api.deepseek.com, so nothing else
     // validates the page URL: `web_fetch`'s public-HTTPS promise must hold here.
     const transport = new FakeTransport();
-    const registry = createSearchProviderRegistry(transport, () => "key");
+    const privateLookup = async () => [{ address: "10.0.0.5" }];
+    const registry = createSearchProviderRegistry(transport, () => "key", privateLookup);
     const deepseek = registry.get("deepseek")!;
     const fetchPage = deepseek.fetchPage;
     if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
 
-    for (const url of ["http://example.com", "https://user:pass@example.com/a", "https://127.0.0.1/admin"]) {
+    // Syntactic rejections, then names that only DNS can catch — the exact gap
+    // `parsePublicHttpsUrl` alone left open.
+    for (const url of ["http://example.com", "https://user:pass@example.com/a", "https://127.0.0.1/admin", "https://localhost/admin", "https://internal.example/"]) {
       expect(await fetchPage.call(deepseek, url)).toMatchObject({ ok: false, reason: "fetch-failed" });
     }
     expect(transport.requests).toHaveLength(0);
@@ -275,7 +286,7 @@ describe("search provider registry", () => {
         return { ok: false, status, url: request.url, contentType: "application/json", text: JSON.stringify({ error: { message: "refused" } }) };
       },
     };
-    const deepseek = createSearchProviderRegistry(transport, () => "key").get("deepseek")!;
+    const deepseek = createSearchProviderRegistry(transport, () => "key", publicLookup).get("deepseek")!;
     const fetchPage = deepseek.fetchPage;
     if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
     const detail = async (url: string): Promise<string> => {
@@ -291,7 +302,7 @@ describe("search provider registry", () => {
   test("web_fetch uses the active provider only when it retrieves pages itself", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-fetch-controller-"));
     try {
-      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key"), dir);
+      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key", publicLookup), dir);
       // Default engine: no page retrieval, so the call reports "keep using the
       // sandbox transport" rather than an error.
       expect(await controller.fetchPage("https://example.com/article")).toEqual({ ok: false, reason: "no-fetch-provider" });
@@ -321,10 +332,116 @@ describe("search provider registry", () => {
     const error = (status: number): { status: number; body: string } => ({ status, body: JSON.stringify({ error: { message: "refused", param: null, code: "invalid_request_error" } }) });
 
     staged.push(error(401), error(402), error(429));
-    expect(await deepseek.testConnection({})).toEqual({ ok: false, reason: "missing-credential" });
+    expect(await deepseek.testConnection({})).toEqual({ ok: false, reason: "invalid-credential" });
     expect(await deepseek.testConnection({})).toEqual({ ok: false, reason: "insufficient-balance" });
     expect(await deepseek.testConnection({})).toEqual({ ok: false, reason: "rate-limited" });
     expect(await deepseek.testConnection({})).toEqual({ ok: true });
+  });
+
+  test("a missing DeepSeek key refuses search and leaves fetch on the transport", async () => {
+    const transport = new FakeTransport();
+    const registry = createSearchProviderRegistry(transport, () => undefined, publicLookup);
+    const deepseek = registry.get("deepseek")!;
+    const fetchPage = deepseek.fetchPage;
+    if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
+
+    // The borrow path makes "connected" independent of the credential, so an
+    // absent key must refuse — an empty SERP would read as "nothing found".
+    await expect(deepseek.search({}, "keryx sandbox")).rejects.toThrow(/no API key/);
+    expect(await fetchPage.call(deepseek, "https://example.com/a")).toEqual({ ok: false, reason: "no-fetch-provider" });
+    // The same rule closes the class for the keyed remotes.
+    await expect(registry.get("brave")!.search({}, "keryx sandbox")).rejects.toThrow(/no API key/);
+    expect(transport.requests).toHaveLength(0);
+  });
+
+  test("DeepSeek absorbs a 429 with a bounded ladder, then refuses without inviting a retry", async () => {
+    setDeepSeekTimingForTests({ backoffMs: [0, 0] });
+    const running = [429, 429, 200];
+    const answers: SandboxedWebTransport = {
+      async request(request) {
+        const status = running.shift() ?? 429;
+        return {
+          ok: status === 200,
+          status,
+          url: request.url,
+          contentType: "application/json",
+          text: status === 200
+            ? JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] })
+            : JSON.stringify({ error: { message: "rate limited" } }),
+        };
+      },
+    };
+    const registry = createSearchProviderRegistry(answers, () => "key", publicLookup);
+    expect((await registry.get("deepseek")!.search({}, "keryx sandbox")).results).toHaveLength(1);
+
+    let calls = 0;
+    const exhausted: SandboxedWebTransport = {
+      async request(request) {
+        calls += 1;
+        return { ok: false, status: 429, url: request.url, contentType: "application/json", text: JSON.stringify({ error: { message: "rate limited" } }) };
+      },
+    };
+    const blocked = createSearchProviderRegistry(exhausted, () => "key", publicLookup);
+    await expect(blocked.get("deepseek")!.search({}, "keryx sandbox")).rejects.toThrow(/rate limited/);
+    // One attempt plus the ladder's two rungs — not an unbounded retry loop.
+    expect(calls).toBe(3);
+  });
+
+  test("DeepSeek names every Fetch failure the provider documents, and which ones are retryable", async () => {
+    const table: [number, RegExp, boolean][] = [
+      [401, /rejected the API key/, false],
+      [402, /insufficient balance/, false],
+      [403, /security policy/, false],
+      [404, /usable page content/, false],
+      [408, /provider unavailable or rate limited/, true],
+      [429, /provider unavailable or rate limited/, true],
+      [500, /HTTP 500/, true],
+      [0, /before a response/, true],
+    ];
+    for (const [status, pattern, retryable] of table) {
+      const transport: SandboxedWebTransport = {
+        async request(request) {
+          return { ok: false, status, url: request.url, contentType: "application/json", text: JSON.stringify({ error: { message: "x" } }) };
+        },
+      };
+      const deepseek = createSearchProviderRegistry(transport, () => "key", publicLookup).get("deepseek")!;
+      const fetchPage = deepseek.fetchPage;
+      if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
+      const result = await fetchPage.call(deepseek, "https://example.com/a");
+      expect(result.ok).toBe(false);
+      if (!result.ok && result.reason === "fetch-failed") {
+        expect(result.detail ?? "").toMatch(pattern);
+        expect(result.retryable).toBe(retryable);
+      }
+    }
+  });
+
+  test("the controller turns a throwing provider into a reported failure", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-throwing-fetcher-"));
+    try {
+      const descriptor: SearchProviderDescriptor = {
+        id: "deepseek",
+        displayName: "DeepSeek Search",
+        kind: "remote",
+        fields: [],
+        defaults: {},
+        credentialSchema: { required: true, secret: true },
+        documentationUrl: "https://api-docs.deepseek.com/guides/search/",
+        capabilities: { localLoopback: false, supportsPublicationDate: false },
+        testConnection: async () => ({ ok: true }),
+        search: async (fields, query) => ({ query, providerId: descriptor.id, results: [] }),
+        fetchPage: async () => { throw new Error("provider exploded"); },
+      };
+      writeFileSync(searchConfigPath(dir), `${JSON.stringify({
+        schemaVersion: 2,
+        activeProviderId: "deepseek",
+        providers: { deepseek: { fields: {}, status: "connected" } },
+      })}\n`);
+      const controller = new SearchProviderController(new SearchProviderRegistry([descriptor]), dir);
+      expect(await controller.fetchPage("https://example.com/a")).toEqual({ ok: false, reason: "fetch-failed", detail: "provider exploded" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("a refused DeepSeek search reaches the caller as a refusal, never as zero results", async () => {
@@ -372,8 +489,12 @@ describe("search provider registry", () => {
       const resolver = searchCredentialResolver(dir, {});
 
       expect(resolver("deepseek")).toBeUndefined();
+      // An exported key is borrowed without any config at all, and it wins over
+      // a saved chat key (envWithSavedApiKeys fills only what env lacks).
+      expect(searchCredentialResolver(dir, { DEEPSEEK_API_KEY: "env-key" })("deepseek")).toBe("env-key");
       saveApiKey("DEEPSEEK_API_KEY", "chat-key", dir);
       expect(resolver("deepseek")).toBe("chat-key");
+      expect(searchCredentialResolver(dir, { DEEPSEEK_API_KEY: "env-key" })("deepseek")).toBe("env-key");
       // Borrowing is DeepSeek-only: a chat key never becomes another
       // provider's search credential.
       expect(resolver("brave")).toBeUndefined();
@@ -512,9 +633,12 @@ describe("search provider registry", () => {
         return { ok: true, status: 200, url: request.url, contentType: "application/json", text: JSON.stringify({ error: "invalid API key" }) };
       },
     };
-    const registry = createSearchProviderRegistry(transport, () => "key");
+    const registry = createSearchProviderRegistry(transport, () => "key", publicLookup);
     for (const id of ["brave", "tavily", "exa"] as const) {
       expect(await registry.get(id)!.testConnection({})).toEqual({ ok: false, reason: "transport-failed" });
     }
+    // DeepSeek distinguishes "answered, but not with search results" from a
+    // transport fault, so it is pinned separately rather than in the loop.
+    expect(await registry.get("deepseek")!.testConnection({})).toEqual({ ok: false, reason: "incompatible-response" });
   });
 });

@@ -19,7 +19,9 @@ export interface SettingsInspectionPort {
   search?: Pick<SearchProviderController, "configurable" | "selectable" | "active" | "select">;
 }
 /** The shipped search providers (harness/search/types.ts SearchProviderId); `/search-connect <id>` names one of them. */
-export const SEARCH_PROVIDER_IDS = ["duckduckgo", "searxng", "brave", "tavily", "exa", "deepseek"] as const satisfies readonly SearchProviderId[];
+/** Exhaustive over the id union: a provider added to `types.ts` fails the `satisfies` until it is named here. */
+const SEARCH_PROVIDER_ID_SET = { duckduckgo: true, searxng: true, brave: true, tavily: true, exa: true, deepseek: true } satisfies Record<SearchProviderId, true>;
+export const SEARCH_PROVIDER_IDS = Object.keys(SEARCH_PROVIDER_ID_SET) as readonly SearchProviderId[];
 const searchSelectSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { providerId: { type: "string", maxLength: 16, enum: [...SEARCH_PROVIDER_IDS] } }, required: ["providerId"] };
 /**
  * `/search-connect <id>` and the picker's pick (tui-shell.ts selectSearchProviderAndReport): the shared controller's select, which persists only

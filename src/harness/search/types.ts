@@ -91,7 +91,7 @@ export interface SearchConnectionResult {
    * and still refuse every request (DeepSeek answers HTTP 402). Reported as a
    * transport fault it sends the operator to retry a dead account.
    */
-  reason?: "missing-credential" | "transport-failed" | "incompatible-response" | "rate-limited" | "insufficient-balance";
+  reason?: "missing-credential" | "invalid-credential" | "transport-failed" | "incompatible-response" | "rate-limited" | "insufficient-balance";
 }
 
 export interface SearchProviderConnectionState {
@@ -117,6 +117,12 @@ export interface SearchProviderDescriptor {
    * the sandbox transport, which is what it did before this capability existed.
    */
   fetchPage?(url: string, signal?: AbortSignal): Promise<ProviderPageResult>;
+  /*
+   * An implementation MUST validate the TARGET before spending a request: the
+   * sandbox transport validates the host it connects to, which on this path is
+   * the provider, not the page. `parsePublicHttpsUrl` + `validatePublicTarget`
+   * is the same policy the transport applies.
+   */
 }
 
 /** A page a provider retrieved for `web_fetch`, before the caller sanitizes it. */
@@ -131,6 +137,12 @@ export type ProviderPageResult =
   | { ok: true; value: ProviderPage }
   /** The active provider does not retrieve pages: the caller falls back to the sandbox transport. */
   | { ok: false; reason: "no-fetch-provider" }
-  | { ok: false; reason: "fetch-failed"; detail?: string };
+  /**
+   * `retryable` marks a provider that never answered or asked us to back off
+   * (timeout, 429, 5xx): the caller may serve the page from the sandbox
+   * transport instead. A page-level refusal (402/403/404) is not retryable —
+   * swapping the egress there would hide what the operator chose.
+   */
+  | { ok: false; reason: "fetch-failed"; detail?: string; retryable?: boolean };
 
 export type SearchCredentialResolver = (providerId: SearchProviderId) => string | undefined;

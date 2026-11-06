@@ -47,6 +47,18 @@ export interface WebSearchDeps {
   cwd?: string;
 }
 
+/**
+ * The advice appended to a `search-failed` detail. "Wait a few minutes" is true
+ * of a rate limit and false of a rejected key or an empty balance, and the
+ * detail itself already names which one it is.
+ */
+function retryAdviceFor(detail: string | undefined): string {
+  const permanent = detail !== undefined && /balance|rejected the API key|missing|no API key/i.test(detail);
+  return permanent
+    ? "Do not retry or switch providers; report this to the operator."
+    : "Wait a few minutes before trying again, and do not switch providers yourself.";
+}
+
 /** Agent tool with no provider fallback: the service owns active-state checks. */
 export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = {}): InteractiveTool {
   return {
@@ -76,7 +88,10 @@ export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = 
           output: response.reason === "no-active-provider"
             ? "web_search: no active connected provider. Use /search-provider to configure one, test it, then use /search-connect to select it."
             : response.reason === "search-failed"
-              ? `web_search: search failed${response.detail !== undefined && response.detail.length > 0 ? ` (${response.detail})` : ""}. Wait a few minutes before trying again, and do not switch providers yourself.`
+              // Retry advice only fits a rate limit. A permanent refusal — a
+              // rejected key, an empty balance — is cleared by the operator, so
+              // the tail must not tell the model to wait for it.
+              ? `web_search: search failed${response.detail !== undefined && response.detail.length > 0 ? ` (${response.detail})` : ""}. ${retryAdviceFor(response.detail)}`
             : "web_search: active provider is unavailable; reconnect it with /search-provider before retrying.",
           isError: true,
         };

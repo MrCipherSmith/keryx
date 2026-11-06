@@ -185,6 +185,35 @@ test("a connected provider's refusal is reported, not silently re-fetched by the
   expect(transportCalls).toBe(0);
 });
 
+test("a provider that never answered falls back to the transport, and says so", async () => {
+  // A timeout/429/5xx is the provider being unavailable, not the page being
+  // refused: failing the tool there would disable web_fetch for pages the
+  // transport can still read.
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/html", body: "<p>transport copy</p>" }),
+    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "fetch-failed", detail: "DeepSeek fetch failed (HTTP 503): provider unavailable or rate limited", retryable: true }) },
+  });
+  const result = await tool.invoke({ url: "https://example.com/docs" });
+  expect(result.isError).toBe(false);
+  expect(result.untrusted).toBe(true);
+  expect(result.output).toContain("transport copy");
+  expect(result.output).toContain("Page provider note:");
+  expect(result.output).toContain("HTTP 503");
+});
+
+test("a retryable provider failure reports both when the transport cannot serve it either", async () => {
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 500, contentType: "text/plain", body: "boom" }),
+    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "fetch-failed", detail: "DeepSeek request failed before a response (timeout)", retryable: true }) },
+  });
+  const result = await tool.invoke({ url: "https://example.com/docs" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("DeepSeek request failed before a response");
+  expect(result.output).toContain("sandbox transport also failed");
+});
+
 test("provider Markdown is scanned for prompt injection and redacted like scraped HTML", async () => {
   const injected = webFetchTool({
     lookup: publicLookup,

@@ -86,21 +86,36 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
       if (viaProvider.ok) {
         return providerPage(viaProvider.value, deps.now);
       }
-      // A connected provider that refused is reported, never silently replaced
-      // by the transport: falling back would hide a 402 or a 404 behind a page
-      // the operator did not ask another service for.
-      if (viaProvider.reason === "fetch-failed") {
+      // A connected provider that REFUSED the page is reported, never silently
+      // replaced by the transport: falling back would hide a 402 or a 404 behind
+      // a page the operator did not ask another service for. A provider that
+      // never answered (timeout, 429, 5xx) is a different thing — the transport
+      // is the tool's own default path, and nothing is hidden by using it.
+      if (viaProvider.reason === "fetch-failed" && viaProvider.retryable !== true) {
         return {
-          output: `web_fetch: ${viaProvider.detail !== undefined && viaProvider.detail.length > 0 ? viaProvider.detail : "the page provider could not retrieve this page"}`,
+          output: `web_fetch: ${providerDetail(viaProvider.detail)}`,
           isError: true,
         };
       }
       const result = await transport.fetchPage({ url: input.url, providerId: "web_fetch" });
-      return result.ok
-      ? { output: result.value.text, isError: false, untrusted: true }
-        : { output: `web_fetch: ${result.reason}`, isError: true };
+      if (!result.ok) {
+        return {
+          output: viaProvider.reason === "fetch-failed"
+            ? `web_fetch: ${providerDetail(viaProvider.detail)}; the sandbox transport also failed: ${result.reason}`
+            : `web_fetch: ${result.reason}`,
+          isError: true,
+        };
+      }
+      const note = viaProvider.reason === "fetch-failed"
+        ? `\n\nPage provider note: ${providerDetail(viaProvider.detail)}; this page was served by the sandbox transport.`
+        : "";
+      return { output: result.value.text + note, isError: false, untrusted: true };
     },
   };
+}
+
+function providerDetail(detail: string | undefined): string {
+  return detail !== undefined && detail.length > 0 ? detail : "the page provider could not retrieve this page";
 }
 
 /** Sanitize provider Markdown with the same rules as scraped HTML. */
