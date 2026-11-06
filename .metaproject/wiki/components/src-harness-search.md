@@ -1,6 +1,6 @@
 ---
 Title: Module src/harness/search
-Version: 1.3.0
+Version: 1.4.0
 Type: component
 Status: accepted
 Summary: "`src/harness/search` is the harness-side search layer. It defines the search provider contracts, a registry of six built-in providers, and a controller that runs only the provider the operator explicitly selected. Provider adapters never reach the network directly: every request goes through the sandboxed web transport, and the default factory is the trusted composition root that wires the two together."
@@ -40,8 +40,8 @@ The module has four layers: contracts, a registry of provider adapters, a contro
   - `fetchPage` validates the target's SYNTAX at the seam (`parsePublicHttpsUrl`), delegates to the active descriptor's optional `fetchPage`, and answers `no-fetch-provider` when there is none — a direction to the transport, not an error — or `provider-disconnected` when the operator selected a provider that is not connected. An ACTIVE provider that refuses a page never falls back; a provider that never answered (`retryable`) does.
   - It returns descriptors and states rather than rendering them. Its own comment says it deliberately owns no terminal output.
   - Selection is explicit. A non-default provider must be connected before it can be selected or used.
-  - `connect()` is the one "connect" operation (configure → test → activate) the command surfaces call, so the policy cannot drift between the headless shell and the TUI.
-  - A permanent refusal (402, rejected key) is remembered for five minutes, so a dead account is not re-requested on every call; `configure`/`connect` clears it.
+  - `connect()` is the one "connect" operation (configure → test → activate); both argument paths and the TUI wizard call it, so the policy cannot drift between surfaces.
+  - A permanent refusal (402, rejected key, a permanent 4xx) is remembered for five minutes in a store shared by every controller in the process, keyed by config dir — `/search-provider` and the agent tools hold different instances. A successful `test`/`select`/`configure` clears it.
 
 - **Composition root (`default-controller.ts`)**
   - `createDefaultSearchProviderController(configDir?)` builds a `SandboxedWebTransport` over the system web worker runner, resolves credentials with `searchCredentialResolver`, and returns the controller. The resolver prefers a credential saved for search and, for DeepSeek only, falls back to the chat-model API key from `src/commands/providers` — one account bills both.
@@ -57,8 +57,8 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 - **Sandboxed transport**: `SandboxedWebTransport` and `SandboxedWebRequest`. A request carries a `capability` of `public-search` or `local-search`. Credentials are injected at this boundary as a header or JSON-body field (`CredentialInjection`), never in the URL or the environment.
 - **Provider kind**: `local` (SearXNG, reached on loopback) or `remote` (DuckDuckGo and the five hosted APIs).
 - **Normalized result**: `NormalizedSearchResult`, with title, canonical URL, snippet, optional publication date and provenance. It is the only result shape the module returns.
-- **Connection state and reason**: `SearchProviderConnectionState`, and the `SearchConnectionResult.reason` values `missing-credential`, `transport-failed`, `incompatible-response`, `rate-limited` and `insufficient-balance` (a paid provider accepting the key and refusing for lack of credit).
-- **Provider page retrieval**: `ProviderPageResult`, returned by an optional `fetchPage` on a descriptor. `web_fetch` consumes it through the narrow `WebPageFetcher` seam, sanitizes the Markdown with the same `sanitizeWebContent` used for scraped HTML, and falls back to the transport only on `no-fetch-provider`.
+- **Connection state and reason**: `SearchProviderConnectionState`, and the `SearchConnectionResult.reason` values `missing-credential`, `invalid-credential`, `transport-failed`, `incompatible-response`, `rate-limited` and `insufficient-balance` (a paid provider accepting the key and refusing for lack of credit).
+- **Provider page retrieval**: `ProviderPageResult`, returned by an optional `fetchPage` on a descriptor. `web_fetch` consumes it through the narrow `WebPageFetcher` seam, sanitizes the Markdown with the same `sanitizeWebContent` used for scraped HTML, and falls back to the transport on `no-fetch-provider` and on a `retryable` provider failure.
 - **Default provider**: DuckDuckGo, given by `DEFAULT_SEARCH_PROVIDER_ID`. It needs no credential and is used only when no provider is selected, never as a fallback after another provider fails.
 
 ## Main flows
@@ -79,7 +79,7 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 
 1. A consumer calls `search(query, signal)` on the controller.
 2. With no active provider, or DuckDuckGo active, the controller runs DuckDuckGo. Otherwise it requires the active provider's stored status to be `connected`, or returns `provider-disconnected`.
-3. The adapter's `search` makes its request through the transport: DuckDuckGo with pacing and backoff, SearXNG on loopback, and the hosted APIs with the injected credential. A hosted adapter with no stored key returns an empty result set.
+3. The adapter's `search` makes its request through the transport: DuckDuckGo with pacing and backoff, SearXNG on loopback, and the hosted APIs with the injected credential. A hosted adapter with no stored key refuses with reconnect wording, never an empty result set.
 4. If the adapter throws, the controller returns `search-failed` with the error message as `detail`. It does not try another provider.
 
 ### Fetch a page through the active provider
@@ -150,3 +150,4 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 - 1.1.0 — DeepSeek Search added as the sixth provider; credential borrowing from the chat-model key and the `insufficient-balance` reason documented.
 - 1.2.0 — Optional provider page retrieval (`fetchPage`) and the `web_fetch` provider path documented.
 - 1.3.0 — `connect()`, the permanent-refusal breaker, `provider-disconnected`/`retryable` page results and the deliberate `src/commands/providers` edge documented.
+- 1.4.0 — Round-2 fixes: shared refusal store, bounded target lookup, cancellation as its own outcome, no fetch-side 429 ladder, capability-first `web_fetch` and a wizard routed through `connect()`.

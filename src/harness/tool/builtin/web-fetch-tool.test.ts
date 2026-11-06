@@ -185,6 +185,42 @@ test("a connected provider's refusal is reported, not silently re-fetched by the
   expect(transportCalls).toBe(0);
 });
 
+test("a disconnected page provider does not take the tool away", async () => {
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/html", body: "<p>transport copy</p>" }),
+    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "provider-disconnected" }) },
+  });
+  const result = await tool.invoke({ url: "https://example.com/docs" });
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("transport copy");
+  expect(result.output).toContain("not connected");
+});
+
+test("a rejecting page provider becomes an error string, never a rejection", async () => {
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/plain", body: "transport" }),
+    pageFetcher: { fetchPage: async () => { throw new Error("seam exploded"); } },
+  });
+  const result = await tool.invoke({ url: "https://example.com/a" });
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("transport");
+});
+
+test("an operator stop does not trigger a second fetch", async () => {
+  let calls = 0;
+  const runner: WebWorkerRunner = { run: async () => { calls += 1; return { ok: true, value: { status: 200, contentType: "text/plain", body: "served" } }; } };
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner,
+    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "fetch-failed", detail: "cancelled by the operator", retryable: false }) },
+  });
+  const result = await tool.invoke({ url: "https://example.com/a" });
+  expect(result.isError).toBe(true);
+  expect(calls).toBe(0);
+});
+
 test("provider Markdown keeps its text but loses executable blocks", async () => {
   // Markdown reaches a model as text: every tag cannot be stripped (autolinks,
   // code fences), so only the executable blocks are removed.
@@ -200,6 +236,16 @@ test("provider Markdown keeps its text but loses executable blocks", async () =>
 });
 
 test("provider branches: an empty title, an empty detail, and the injected clock", async () => {
+  const styleAndUpper = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/plain", body: "" }),
+    pageFetcher: { fetchPage: async (url) => ({ ok: true, value: { providerId: "deepseek", url, title: "", text: "keep <style>body{}</style> and <SCRIPT>steal()</SCRIPT> here" } }) },
+  });
+  const stripped = await styleAndUpper.invoke({ url: "https://example.com/a" });
+  expect(stripped.output).not.toContain("body{}");
+  expect(stripped.output).not.toContain("steal()");
+  expect(stripped.output).toMatch(/keep\s+and\s+here/);
+
   const noTitle = webFetchTool({
     lookup: publicLookup,
     runner: worker({ status: 200, contentType: "text/plain", body: "" }),

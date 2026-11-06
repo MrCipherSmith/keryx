@@ -113,3 +113,19 @@ test("script and style blocks are still removed, case-insensitively, around kept
   expect(result.value.text).not.toContain(".x{}");
   expect(result.value.text).toMatch(/a\s+b\s+c/);
 });
+
+test("markdown stripping stays linear on a hostile body", () => {
+  // The lazy `[\s\S]*?` regex this replaced was quadratic: 128 KB of unclosed
+  // `<script` tokens cost ~1.5 s of synchronous CPU. A forward scan must not.
+  const hostile = "<script ".repeat(16_000);
+  const started = Date.now();
+  const result = sanitizeWebContent({
+    url: "https://example.com/a",
+    providerId: "deepseek",
+    retrievedAt: "2026-11-06T00:00:00.000Z",
+    contentType: "text/markdown",
+    text: hostile,
+  });
+  expect(result.ok).toBe(true);
+  expect(Date.now() - started).toBeLessThan(250);
+});

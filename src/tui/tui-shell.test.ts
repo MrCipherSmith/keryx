@@ -3416,6 +3416,23 @@ function fakeSearchProviderController(opts: {
       calls.push({ kind: "select", providerId });
       return opts.selectResult ?? { ok: true };
     },
+    // The wizard now drives the controller's one `connect()` operation; this
+    // mirror keeps the recorded call sequence the same (configure -> test ->
+    // select) so the AC6 assertions still describe the behaviour.
+    connect: async (
+      providerId: SearchProviderId,
+      fields: Record<string, string>,
+      credential?: string,
+      options: { activate?: boolean; shouldActivate?: () => boolean } = {},
+    ) => {
+      const descriptor = opts.providers.find((candidate) => candidate.id === providerId);
+      fake.configure(providerId, { ...(descriptor?.defaults ?? {}), ...fields }, credential);
+      const tested = await fake.test(providerId);
+      if (!tested.ok) return { ok: false as const, reason: tested.reason ?? "transport-failed" };
+      const activate = options.activate !== false && (options.shouldActivate?.() ?? true);
+      const selected = activate ? await fake.select(providerId) : ({ ok: true } as const);
+      return { ok: true as const, active: activate && selected.ok, servesPages: descriptor?.fetchPage !== undefined };
+    },
   };
   // `SearchProviderController` is a concrete class with private fields, so
   // TS only structurally accepts a real instance — the fake above has every

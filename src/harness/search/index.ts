@@ -1,6 +1,7 @@
 export { connectedProviderIds, createSearchProviderRegistry, SearchProviderRegistry } from "./registry";
 export { SearchProviderController } from "./controller";
 export { createDefaultSearchProviderController, searchCredentialResolver } from "./default-controller";
+export { connectedMessage, type ConnectOutcome } from "./connect-message";
 export { describeConnectionFailure } from "./connection-message";
 export type {
   CredentialInjection,

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { loadSearchConfig, searchConfigPath } from "../../lib/search-config";
 import { duckduckgoLiteUrl, resetDuckDuckGoRateLimitForTests, setDuckDuckGoTimingForTests } from "./duckduckgo";
-import { setDeepSeekTimingForTests } from "./registry";
+import { setDeepSeekDnsTimeoutForTests, setDeepSeekTimingForTests } from "./registry";
 import {
   createSearchProviderRegistry,
   connectedProviderIds,
@@ -410,6 +410,8 @@ describe("search provider registry", () => {
       [429, /provider unavailable or rate limited/, true],
       [500, /HTTP 500/, true],
       [0, /before a response/, true],
+      [400, /HTTP 400/, false],
+      [413, /HTTP 413/, false],
     ];
     for (const [status, pattern, retryable] of table) {
       const transport: SandboxedWebTransport = {
@@ -451,7 +453,8 @@ describe("search provider registry", () => {
         providers: { deepseek: { fields: {}, status: "connected" } },
       })}\n`);
       const controller = new SearchProviderController(new SearchProviderRegistry([descriptor]), dir);
-      expect(await controller.fetchPage("https://example.com/a")).toEqual({ ok: false, reason: "fetch-failed", detail: "provider exploded" });
+      // A throw is a provider that never produced a page: the tool may fall back.
+      expect(await controller.fetchPage("https://example.com/a")).toEqual({ ok: false, reason: "fetch-failed", detail: "provider exploded", retryable: true });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -569,6 +572,197 @@ describe("search provider registry", () => {
       controller.configure("deepseek", {});
       expect(await controller.test("deepseek")).toEqual({ ok: true });
       expect(await controller.search("after reconnect")).toMatchObject({ ok: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a refusal recorded by the tools is cleared by the command that re-tests", async () => {
+    // The two surfaces hold different controller instances, so the breaker must
+    // be shared or the operator's documented recovery does nothing.
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-shared-breaker-"));
+    try {
+      const transport = new FakeTransport();
+      transport.deepseekQueue.push(
+        { status: 200, body: JSON.stringify({ results: [] }) },
+        { status: 402, body: JSON.stringify({ error: { message: "insufficient balance" } }) },
+        { status: 200, body: JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] }) },
+        { status: 200, body: JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] }) },
+      );
+      const tools = new SearchProviderController(createSearchProviderRegistry(transport, () => "key", publicLookup), dir);
+      const commands = new SearchProviderController(createSearchProviderRegistry(transport, () => "key", publicLookup), dir);
+      commands.configure("deepseek", {});
+      expect(await commands.test("deepseek")).toEqual({ ok: true });
+      expect(await commands.select("deepseek")).toEqual({ ok: true });
+
+      expect(await tools.search("first")).toMatchObject({ ok: false, reason: "search-failed" });
+      const refused = await tools.search("second");
+      expect(refused.ok ? "" : refused.detail).toContain("not retried");
+
+      // The operator re-tests on the COMMAND instance; the tool instance must see it.
+      expect(await commands.connect("deepseek", {})).toMatchObject({ ok: true, active: true });
+      expect(await tools.search("after reconnect")).toMatchObject({ ok: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the refusal breaker also guards web_fetch, and a 429 is never remembered", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-fetch-breaker-"));
+    try {
+      const transport = new FakeTransport();
+      transport.deepseekQueue.push(
+        { status: 200, body: JSON.stringify({ results: [] }) },
+        { status: 402, body: JSON.stringify({ error: { message: "insufficient balance" } }) },
+        { status: 200, body: JSON.stringify({ title: "t", content: "body" }) },
+      );
+      const controller = new SearchProviderController(createSearchProviderRegistry(transport, () => "key", publicLookup), dir);
+      controller.configure("deepseek", {});
+      expect(await controller.test("deepseek")).toEqual({ ok: true });
+      expect(await controller.select("deepseek")).toEqual({ ok: true });
+
+      const first = await controller.fetchPage("https://example.com/a");
+      expect(first).toMatchObject({ ok: false, reason: "fetch-failed" });
+      const requestsAfterFirst = transport.requests.length;
+      const second = await controller.fetchPage("https://example.com/b");
+      expect(second.ok ? "" : second.reason === "fetch-failed" ? second.detail : "").toContain("not retried");
+      expect(transport.requests.length).toBe(requestsAfterFirst);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a rate limit is not remembered as a permanent refusal", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-429-not-remembered-"));
+    try {
+      const transport = new FakeTransport();
+      transport.deepseekQueue.push(
+        { status: 200, body: JSON.stringify({ results: [] }) },
+        { status: 429, body: JSON.stringify({ error: { message: "rate limited" } }) },
+        { status: 200, body: JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] }) },
+      );
+      const controller = new SearchProviderController(createSearchProviderRegistry(transport, () => "key", publicLookup), dir);
+      controller.configure("deepseek", {});
+      expect(await controller.test("deepseek")).toEqual({ ok: true });
+      expect(await controller.select("deepseek")).toEqual({ ok: true });
+
+      expect(await controller.search("first")).toMatchObject({ ok: false, reason: "search-failed" });
+      // A 429 clears by waiting, so the next call must reach the provider.
+      expect(await controller.search("second")).toMatchObject({ ok: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an empty extraction is retryable, so the transport can serve the page", async () => {
+    const transport: SandboxedWebTransport = {
+      async request(request) {
+        return { ok: true, status: 200, url: request.url, contentType: "application/json", text: JSON.stringify({ title: "x" }) };
+      },
+    };
+    const deepseek = createSearchProviderRegistry(transport, () => "key", publicLookup).get("deepseek")!;
+    const result = await deepseek.fetchPage!.call(deepseek, "https://example.com/a");
+    expect(result).toMatchObject({ ok: false, reason: "fetch-failed", retryable: true });
+  });
+
+  test("a search-only provider never takes web_fetch away, whatever its status", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-searxng-fetch-"));
+    try {
+      writeFileSync(searchConfigPath(dir), `${JSON.stringify({
+        schemaVersion: 2,
+        activeProviderId: "searxng",
+        providers: { searxng: { fields: { baseUrl: "http://localhost", port: "8080" }, status: "disconnected" } },
+      })}\n`);
+      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key", publicLookup), dir);
+      // SearXNG has no fetchPage, so "the selected provider is not connected"
+      // is not a statement about pages: the tool keeps the transport.
+      expect(await controller.fetchPage("https://example.com/a")).toEqual({ ok: false, reason: "no-fetch-provider" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a page-capable provider that is not connected is reported, and the tool still fetches", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-deepseek-disconnected-"));
+    try {
+      writeFileSync(searchConfigPath(dir), `${JSON.stringify({
+        schemaVersion: 2,
+        activeProviderId: "deepseek",
+        providers: { deepseek: { fields: {}, status: "disconnected" } },
+      })}\n`);
+      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key", publicLookup), dir);
+      expect(await controller.fetchPage("https://example.com/a")).toEqual({ ok: false, reason: "provider-disconnected" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a target lookup that never answers settles, and is retryable", async () => {
+    setDeepSeekDnsTimeoutForTests(20);
+    try {
+      const transport = new FakeTransport();
+      const deepseek = createSearchProviderRegistry(transport, () => "key", () => new Promise(() => {})).get("deepseek")!;
+      const fetchPage = deepseek.fetchPage;
+      if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
+      const started = Date.now();
+      const result = await fetchPage.call(deepseek, "https://example.com/a");
+      expect(Date.now() - started).toBeLessThan(2_000);
+      expect(result).toMatchObject({ ok: false, reason: "fetch-failed", retryable: true });
+      expect(transport.requests).toHaveLength(0);
+    } finally {
+      setDeepSeekDnsTimeoutForTests(5_000);
+    }
+  });
+
+  test("an operator interrupt is not a provider outage", async () => {
+    const transport = new FakeTransport();
+    const deepseek = createSearchProviderRegistry(transport, () => "key", publicLookup).get("deepseek")!;
+    const fetchPage = deepseek.fetchPage;
+    if (fetchPage === undefined) throw new Error("deepseek must expose fetchPage");
+    const aborted = new AbortController();
+    aborted.abort();
+    const transportWithCancel = createSearchProviderRegistry(
+      { async request(request) { return { ok: false, status: 0, url: request.url, contentType: "", text: "", error: "cancelled" as const }; } },
+      () => "key",
+      publicLookup,
+    );
+    const cancelled = transportWithCancel.get("deepseek")!;
+    const cancelledFetch = cancelled.fetchPage!;
+    const result = await cancelledFetch.call(cancelled, "https://example.com/a", aborted.signal);
+    expect(result).toMatchObject({ ok: false, reason: "fetch-failed", retryable: false });
+    expect(!result.ok && result.reason === "fetch-failed" ? result.detail : "").toContain("cancelled");
+  });
+
+  test("a 429 on fetch is not laddered: it falls back on the first answer", async () => {
+    let calls = 0;
+    const transport: SandboxedWebTransport = {
+      async request(request) {
+        calls += 1;
+        return { ok: false, status: 429, url: request.url, contentType: "application/json", text: JSON.stringify({ error: { message: "rate limited" } }) };
+      },
+    };
+    const deepseek = createSearchProviderRegistry(transport, () => "key", publicLookup).get("deepseek")!;
+    const result = await deepseek.fetchPage!.call(deepseek, "https://example.com/a");
+    expect(result).toMatchObject({ ok: false, reason: "fetch-failed", retryable: true });
+    expect(calls).toBe(1);
+  });
+
+  test("a permanent 4xx is told not to retry, not to wait", async () => {
+    const transport: SandboxedWebTransport = {
+      async request(request) {
+        return { ok: false, status: 400, url: request.url, contentType: "application/json", text: JSON.stringify({ error: { message: "query must be at most 128 characters" } }) };
+      },
+    };
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-permanent-4xx-"));
+    try {
+      writeFileSync(searchConfigPath(dir), `${JSON.stringify({ schemaVersion: 2, activeProviderId: "deepseek", providers: { deepseek: { fields: {}, status: "connected" } } })}\n`);
+      const controller = new SearchProviderController(createSearchProviderRegistry(transport, () => "key", publicLookup), dir);
+      const result = await controller.search("x".repeat(200));
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.permanent).toBe(true);
+        expect(result.detail ?? "").toContain("HTTP 400");
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

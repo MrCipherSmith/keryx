@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describeConnectionFailure, RATE_LIMITED_SEARCH_ERROR } from "./connection-message";
+import { connectedMessage } from "./connect-message";
 
 describe("search connection failure wording", () => {
   test("names each failure kind distinctly instead of printing one generic message", () => {
@@ -36,6 +37,18 @@ describe("search connection failure wording", () => {
   });
 });
 
+describe("the connect sentence", () => {
+  test("names the tool that changed hands only when the provider serves pages", () => {
+    expect(connectedMessage("deepseek", { active: true, servesPages: true }))
+      .toBe("Connected 'deepseek' and made it the active search provider (web_search and web_fetch). /search-connect duckduckgo switches back.");
+    expect(connectedMessage("brave", { active: true, servesPages: false }))
+      .toBe("Connected 'brave' and made it the active search provider. /search-connect duckduckgo switches back.");
+    // A connect that did not activate must not claim it did.
+    expect(connectedMessage("deepseek", { active: false, servesPages: true }))
+      .toBe("Configured and tested 'deepseek' successfully. Use /search-connect deepseek to make it active.");
+  });
+});
+
 describe("both operator surfaces print the distinct wording", () => {
   // `/search-provider`'s TUI wizard is additionally driven for real (flow 179
   // in tui-shell.test.ts) to prove this wording reaches the screen. The agent
@@ -48,8 +61,9 @@ describe("both operator surfaces print the distinct wording", () => {
     // tui-shell.ts has two such lines (the `/search-provider` wizard, which
     // still tests directly, and the args-given branch, which now goes through
     // the controller's `connect`); shell.ts has the agent REPL's one.
-    expect(tuiSource.split("describeConnectionFailure(tested.reason)").length - 1).toBe(1);
-    expect(tuiSource.split("describeConnectionFailure(connected.reason").length - 1).toBe(1);
+    // Both TUI paths now go through connect(); the shell has its own one.
+    expect(tuiSource.split("describeConnectionFailure(tested.reason)").length - 1).toBe(0);
+    expect(tuiSource.split("describeConnectionFailure(connected.reason").length - 1).toBe(2);
     expect(shellSource.split("describeConnectionFailure(connected.reason").length - 1).toBe(1);
   });
 

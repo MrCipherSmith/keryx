@@ -1,7 +1,26 @@
 import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig, type StoredSearchProvider } from "../../lib/search-config";
 import { parsePublicHttpsUrl } from "../web/web-policy";
 import { DEFAULT_SEARCH_PROVIDER_ID, type ProviderPageResult, type SearchConnectionResult, type SearchProviderDescriptor, type SearchProviderId, type SearchResponse } from "./types";
-import { SearchProviderRegistry } from "./registry";
+import { SearchProviderRegistry, SearchRefusalError } from "./registry";
+
+/**
+ * Last permanent refusal per provider, shared by every controller in this
+ * process and keyed by config dir. `/search-provider` runs on a different
+ * `SearchProviderController` instance than the agent tools do, so an
+ * instance-local cache would suppress a recovered provider for five minutes
+ * after the operator's own reconnect said it worked.
+ */
+const refusalStore = new Map<string, Map<SearchProviderId, { detail: string; at: number }>>();
+
+function refusalsFor(configDir: string | undefined): Map<SearchProviderId, { detail: string; at: number }> {
+  const key = configDir ?? "";
+  let store = refusalStore.get(key);
+  if (store === undefined) {
+    store = new Map();
+    refusalStore.set(key, store);
+  }
+  return store;
+}
 
 export type SearchSelectionResult = { ok: true } | { ok: false; reason: "not-configured" | "not-connected" };
 
@@ -17,10 +36,13 @@ export class SearchProviderController {
    * wasted round trips. Cleared by `configure`/`connect` — the operator's
    * re-test is the action that may have fixed it.
    */
-  private readonly refusals = new Map<SearchProviderId, { detail: string; at: number }>();
   private static readonly REFUSAL_TTL_MS = 5 * 60_000;
 
   constructor(private readonly registry: SearchProviderRegistry, private readonly configDir?: string) {}
+
+  private get refusals(): Map<SearchProviderId, { detail: string; at: number }> {
+    return refusalsFor(this.configDir);
+  }
 
   configurable(): readonly SearchProviderDescriptor[] {
     return this.registry.descriptors;
@@ -29,9 +51,13 @@ export class SearchProviderController {
   selectable(): SearchProviderDescriptor[] {
     const config = this.config();
     return this.registry.descriptors.filter((descriptor) => (
-      descriptor.id === DEFAULT_SEARCH_PROVIDER_ID
-      || config.providers?.[descriptor.id]?.status === "connected"
+      descriptor.id === DEFAULT_SEARCH_PROVIDER_ID || this.isConnected(config, descriptor.id)
     ));
+  }
+
+  /** One definition of "this provider may be used right now". */
+  private isConnected(config: SearchConfig, providerId: SearchProviderId): boolean {
+    return config.providers?.[providerId]?.status === "connected";
   }
 
   active(): SearchProviderDescriptor | undefined {
@@ -44,8 +70,7 @@ export class SearchProviderController {
     if (active === undefined || active === DEFAULT_SEARCH_PROVIDER_ID) {
       return this.registry.get(DEFAULT_SEARCH_PROVIDER_ID);
     }
-    const connected = config.providers?.[active]?.status === "connected";
-    return connected ? this.registry.get(active) : undefined;
+    return this.isConnected(config, active) ? this.registry.get(active) : undefined;
   }
 
   /**
@@ -58,14 +83,16 @@ export class SearchProviderController {
     providerId: SearchProviderId,
     fields: Record<string, string>,
     credential?: string,
-    options: { activate?: boolean } = {},
+    options: { activate?: boolean; shouldActivate?: () => boolean } = {},
   ): Promise<{ ok: true; active: boolean; servesPages: boolean } | { ok: false; reason: NonNullable<SearchConnectionResult["reason"]> | "not-configurable" }> {
     const descriptor = this.registry.get(providerId);
     if (descriptor === undefined) return { ok: false, reason: "not-configurable" };
     this.configure(providerId, { ...descriptor.defaults, ...fields }, credential);
     const tested = await this.test(providerId);
     if (!tested.ok) return { ok: false, reason: tested.reason ?? "transport-failed" };
-    const activate = options.activate !== false;
+    // A surface that was dismissed mid-test (the wizard's Esc) must not
+    // activate behind the operator's back: the predicate is read AFTER the test.
+    const activate = options.activate !== false && (options.shouldActivate?.() ?? true);
     const selected = activate ? await this.select(providerId) : ({ ok: true } as const);
     return { ok: true, active: activate && selected.ok, servesPages: descriptor.fetchPage !== undefined };
   }
@@ -88,6 +115,7 @@ export class SearchProviderController {
     const descriptor = this.registry.get(providerId);
     if (!stored || !descriptor) return { ok: false, reason: "incompatible-response" };
     const result = await descriptor.testConnection(stored.fields);
+    if (result.ok) this.refusals.delete(providerId);
     const providers = { ...(config.providers ?? {}) };
     providers[providerId] = { ...stored, status: result.ok ? "connected" : "disconnected", lastTestedAt: new Date().toISOString() };
     saveSearchConfig({ ...config, providers }, this.configDir);
@@ -112,6 +140,7 @@ export class SearchProviderController {
     const stored = config.providers?.[providerId];
     if (!stored) return { ok: false, reason: "not-configured" };
     if (stored.status !== "connected") return { ok: false, reason: "not-connected" };
+    this.refusals.delete(providerId);
     saveSearchConfig({ ...config, activeProviderId: providerId }, this.configDir);
     return { ok: true };
   }
@@ -149,11 +178,9 @@ export class SearchProviderController {
     return refused.detail;
   }
 
-  /** Record only refusals that cannot clear by waiting: balance and key. */
+  /** Record a refusal the provider itself declared permanent. */
   private rememberPermanentRefusal(providerId: SearchProviderId, detail: string | undefined): void {
-    if (detail !== undefined && /insufficient balance|rejected the API key/i.test(detail)) {
-      this.refusals.set(providerId, { detail, at: Date.now() });
-    }
+    if (detail !== undefined) this.refusals.set(providerId, { detail, at: Date.now() });
   }
 
   private async runProvider(
@@ -161,7 +188,10 @@ export class SearchProviderController {
     stored: StoredSearchProvider | undefined,
     query: string,
     signal?: AbortSignal,
-  ): Promise<{ ok: true; value: SearchResponse } | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string }> {
+  ): Promise<
+    | { ok: true; value: SearchResponse }
+    | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string; permanent?: boolean }
+  > {
     const descriptor = this.registry.get(providerId);
     if (!descriptor) return { ok: false, reason: "no-active-provider" };
     const refused = this.freshRefusal(providerId);
@@ -176,8 +206,9 @@ export class SearchProviderController {
       // DuckDuckGo rate limit to the agent as "search failed. Retry later"
       // - advice that cannot work, because that limit is why it failed.
       const detail = error instanceof Error && error.message.length > 0 ? error.message : undefined;
-      this.rememberPermanentRefusal(providerId, detail);
-      return { ok: false, reason: "search-failed", ...(detail !== undefined ? { detail } : {}) };
+      const permanent = error instanceof SearchRefusalError ? error.permanent : undefined;
+      if (permanent === true) this.rememberPermanentRefusal(providerId, detail);
+      return { ok: false, reason: "search-failed", ...(detail !== undefined ? { detail } : {}), ...(permanent !== undefined ? { permanent } : {}) };
     }
   }
 
@@ -199,26 +230,31 @@ export class SearchProviderController {
     if (!target.ok) return { ok: false, reason: "fetch-failed", detail: target.reason };
     const config = this.config();
     const activeProviderId = config.activeProviderId as SearchProviderId | undefined;
-    const descriptor = this.activeFrom(config);
-    // A selected provider that is not connected is not "no capability": the
-    // operator chose an egress that cannot serve, and switching to the
-    // transport silently would hide that.
-    if (descriptor === undefined && activeProviderId !== undefined && activeProviderId !== DEFAULT_SEARCH_PROVIDER_ID) {
+    // Capability first: a search-only provider (Brave, Tavily, Exa, SearXNG)
+    // never served pages, so its connection state must not take web_fetch away.
+    const selected = activeProviderId !== undefined && activeProviderId !== DEFAULT_SEARCH_PROVIDER_ID
+      ? this.registry.get(activeProviderId)
+      : this.registry.get(DEFAULT_SEARCH_PROVIDER_ID);
+    const fetchPage = selected?.fetchPage;
+    if (selected === undefined || fetchPage === undefined) return { ok: false, reason: "no-fetch-provider" };
+    // A page-capable provider that is selected but not connected is reported —
+    // the tool still falls back, with a note, instead of failing the page.
+    if (activeProviderId !== undefined && activeProviderId !== DEFAULT_SEARCH_PROVIDER_ID && !this.isConnected(config, activeProviderId)) {
       return { ok: false, reason: "provider-disconnected" };
     }
-    const fetchPage = descriptor?.fetchPage;
-    if (descriptor === undefined || fetchPage === undefined) return { ok: false, reason: "no-fetch-provider" };
+    const descriptor = selected;
     const refused = this.freshRefusal(descriptor.id);
     if (refused !== undefined) {
       return { ok: false, reason: "fetch-failed", detail: `${refused} (not retried: this provider refused moments ago; fix it, then /search-provider ${descriptor.id} to re-test)` };
     }
     try {
       const result = await fetchPage.call(descriptor, url, signal);
-      if (!result.ok && result.reason === "fetch-failed") this.rememberPermanentRefusal(descriptor.id, result.detail);
+      if (!result.ok && result.reason === "fetch-failed" && result.permanent === true) this.rememberPermanentRefusal(descriptor.id, result.detail);
       return result;
     } catch (error) {
       const detail = error instanceof Error && error.message.length > 0 ? error.message : undefined;
-      return { ok: false, reason: "fetch-failed", ...(detail !== undefined ? { detail } : {}) };
+      // A throw is a provider that never produced a page: the transport may.
+      return { ok: false, reason: "fetch-failed", ...(detail !== undefined ? { detail } : {}), retryable: true };
     }
   }
 

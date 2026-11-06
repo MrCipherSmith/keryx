@@ -6,7 +6,7 @@ import type { InteractiveTool } from "./interactive-tools";
 
 export type SearchToolResult =
   | { ok: true; value: SearchResponse }
-  | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string };
+  | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string; permanent?: boolean };
 
 export interface SearchToolService {
   search(query: string, signal?: AbortSignal): Promise<SearchToolResult>;
@@ -52,9 +52,12 @@ export interface WebSearchDeps {
  * of a rate limit and false of a rejected key or an empty balance, and the
  * detail itself already names which one it is.
  */
-function retryAdviceFor(detail: string | undefined): string {
-  const permanent = detail !== undefined && /balance|rejected the API key|missing|no API key/i.test(detail);
-  return permanent
+function retryAdviceFor(detail: string | undefined, permanent: boolean | undefined): string {
+  // Permanence is data when the provider supplies it; the text heuristic is the
+  // fallback for older providers (DuckDuckGo's rate-limit wording), never the
+  // primary classifier.
+  const isPermanent = permanent ?? (detail !== undefined && /balance|rejected the API key|missing|no API key/i.test(detail));
+  return isPermanent
     ? "Do not retry or switch providers; report this to the operator."
     : "Wait a few minutes before trying again, and do not switch providers yourself.";
 }
@@ -68,7 +71,7 @@ export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = 
       inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1 } }, required: ["query"], additionalProperties: false },
       risk: "read",
     },
-    invoke: async (input) => {
+    invoke: async (input, ctx) => {
       if (typeof input.query !== "string" || input.query.trim().length === 0) {
         return { output: "web_search: query must be a non-empty string", isError: true };
       }
@@ -82,7 +85,7 @@ export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = 
         }
         return { output: "web_search: outbound secret-shaped content", isError: true };
       }
-      const response = await service.search(query);
+      const response = await service.search(query, ctx?.signal);
       if (!response.ok) {
         return {
           output: response.reason === "no-active-provider"
@@ -91,7 +94,7 @@ export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = 
               // Retry advice only fits a rate limit. A permanent refusal — a
               // rejected key, an empty balance — is cleared by the operator, so
               // the tail must not tell the model to wait for it.
-              ? `web_search: search failed${response.detail !== undefined && response.detail.length > 0 ? ` (${response.detail})` : ""}. ${retryAdviceFor(response.detail)}`
+              ? `web_search: search failed${response.detail !== undefined && response.detail.length > 0 ? ` (${response.detail})` : ""}. ${retryAdviceFor(response.detail, response.permanent)}`
             : "web_search: active provider is unavailable; reconnect it with /search-provider before retrying.",
           isError: true,
         };

@@ -101,18 +101,41 @@ function stripMarkup(html: string): string {
 }
 
 /**
- * The only conversion permitted from an untrusted worker body to agent-visible
- * text. It deliberately drops headers and transport diagnostics.
- */
-/**
  * Markdown reaches a model as text, so stripping every tag would eat autolinks
  * and code fences. Only executable blocks are removed — the same defence the
  * HTML path applies, narrowed to what Markdown can carry.
  */
 function stripScriptAndStyle(markdown: string): string {
-  return markdown.replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ");
+  // Forward scan, not a lazy global regex: `[\s\S]*?` rescans to the end for
+  // every opener that has no closer, which is quadratic on hostile input — the
+  // exact hazard `stripMarkup` above was rewritten to avoid.
+  let text = markdown;
+  for (const tag of ["script", "style"] as const) {
+    const opener = new RegExp(`<${tag}\\b`, "gi");
+    let out = "";
+    let pos = 0;
+    let cursor = 0;
+    while (true) {
+      opener.lastIndex = cursor;
+      const open = opener.exec(text);
+      if (open === null) break;
+      const closer = text.toLowerCase().indexOf(`</${tag}>`, open.index);
+      // An unclosed block is left in place, as stripMarkup does.
+      if (closer === -1) break;
+      out += text.slice(pos, open.index) + " ";
+      pos = closer + tag.length + 3;
+      cursor = pos;
+    }
+    out += text.slice(pos);
+    text = out;
+  }
+  return text;
 }
 
+/**
+ * The only conversion permitted from an untrusted worker body to agent-visible
+ * text. It deliberately drops headers and transport diagnostics.
+ */
 export function sanitizeWebContent(
   content: UnsanitizedWebContent,
 ): WebPolicyResult<SanitizedWebContent> {

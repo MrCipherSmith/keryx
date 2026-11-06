@@ -123,6 +123,18 @@ test("a permanent refusal is not dressed in retry advice", async () => {
   expect(result.output).not.toContain("Wait a few minutes");
 });
 
+test("a permanent 4xx carries no wait advice, even without a known phrase", async () => {
+  const tool = webSearchTool({
+    async search() {
+      return { ok: false, reason: "search-failed", detail: "DeepSeek rejected the request (HTTP 400): fix the request or the key before retrying", permanent: true };
+    },
+  });
+  const result = await tool.invoke({ query: "keryx sandbox" });
+  expect(result.output).toContain("HTTP 400");
+  expect(result.output).not.toContain("Wait a few minutes");
+  expect(result.output).toContain("Do not retry");
+});
+
 test("web_search tells the agent not to retry a rate-limited search", async () => {
   const tool = webSearchTool({ search: async () => ({ ok: false, reason: "search-failed", detail: RATE_LIMITED_SEARCH_ERROR }) });
   const result = await tool.invoke({ query: "keryx" });

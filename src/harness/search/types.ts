@@ -135,16 +135,29 @@ export interface ProviderPage {
 
 export type ProviderPageResult =
   | { ok: true; value: ProviderPage }
-  /** The active provider does not retrieve pages: the caller falls back to the sandbox transport. */
+  /**
+   * No usable page provider: either the active provider has no such capability,
+   * or a fetch-capable provider's credential is gone. Both mean "the caller
+   * keeps the sandbox transport", which is what `web_fetch` did before this
+   * capability existed.
+   */
   | { ok: false; reason: "no-fetch-provider" }
   /** The operator selected a provider that is not connected: report it, never silently switch egress. */
   | { ok: false; reason: "provider-disconnected" }
   /**
-   * `retryable` marks a provider that never answered or asked us to back off
-   * (timeout, 429, 5xx): the caller may serve the page from the sandbox
-   * transport instead. A page-level refusal (402/403/404) is not retryable —
-   * swapping the egress there would hide what the operator chose.
+   * `retryable` marks a page the provider could not serve for a reason that is
+   * not about the page: a timeout, 408, 429 or 5xx, an empty extraction, or a
+   * 404 whose meaning is "no usable content". The caller may serve it from the
+   * sandbox transport instead. 402 and 403 stay terminal — swapping the egress
+   * there would hide what the operator chose.
    */
-  | { ok: false; reason: "fetch-failed"; detail?: string; retryable?: boolean };
+  | {
+      ok: false;
+      reason: "fetch-failed";
+      detail?: string;
+      retryable?: boolean;
+      /** The account (balance, key) is refused, not this page: every URL will fail until it is fixed. */
+      permanent?: boolean;
+    };
 
 export type SearchCredentialResolver = (providerId: SearchProviderId) => string | undefined;

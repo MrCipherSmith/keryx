@@ -73,7 +73,7 @@ import {
   runMcpTrustCommand,
   TRUSTED_MARKER,
 } from "../mcp-servers/approval-render";
-import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
+import { connectedMessage, createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createTierRankHost } from "../harness/routing/tier-rank-agent";
@@ -3199,15 +3199,9 @@ export async function runAgentRepl(
           );
           continue;
         }
-        // A provider that retrieves pages itself also takes over `web_fetch`;
-        // saying so is the only warning the operator gets that a tool they did
-        // not name just changed hands.
-        const scope = connected.servesPages ? " (web_search and web_fetch)" : "";
-        agentIo.onSystem?.(
-          connected.active
-            ? `Connected '${providerId}' and made it the active search provider${scope}. /search-connect duckduckgo switches back.\n`
-            : `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
-        );
+        // The sentence lives in the search module so a test can pin the
+        // `web_fetch` warning instead of grepping source text.
+        agentIo.onSystem?.(`${connectedMessage(providerId, connected)}\n`);
       } else if (command === "/search-connect") {
         const providerId = parts[1];
         if (providerId === undefined) {
