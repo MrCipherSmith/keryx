@@ -26,12 +26,7 @@ export function ManagedAttentionOverview({
     >
       <header>
         <h2>{t("managedAttention")}</h2>
-        <small>
-          {t("projectsShown", {
-            count: visible.length,
-            total: projects.length,
-          })}
-        </small>
+        {projects.length > pageSize && <small>{t("projectsShown", { count: visible.length, total: projects.length })}</small>}
       </header>
       {visible.map((project) => (
         <ProjectAttention key={project.id} project={project} />
@@ -113,7 +108,7 @@ function ProjectAttention({
   if (!capabilities.data?.enabled || !items.length) return null;
   return (
     <div className="managed-project-attention">
-      <strong>{project.name}</strong>
+      <strong>{project.name} · {t("itemsShown", { count: items.length })}</strong>
       <div className="work-attention-items">
         {items.slice(0, shown).map((item) => {
           const flowId = attentionTarget(item, [])?.flowId;

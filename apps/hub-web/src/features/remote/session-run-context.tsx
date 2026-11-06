@@ -1,3 +1,7 @@
+import { createPortal } from "react-dom";
+import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { Markdown } from "../../components/Markdown";
+import { historyQueryKey } from "./session-timeline";
 import { useTranslation } from "react-i18next";
 import type {
   ApprovalProjection,
@@ -6,11 +10,12 @@ import type {
 } from "../../../../../src/remote-control/protocol";
 import type { Control } from "../../api/remote";
 import { remoteProject } from "../../api/remote";
-import { useRemoteQuery } from "../../api/remote-hooks";
+import { useRemoteAction, useRemoteQuery } from "../../api/remote-hooks";
 import { useHub } from "../../app/hub-context";
 import { Button, EmptyState, Notice, Panel } from "../../components/ui";
 import { ApprovalCard } from "./runs";
 import {
+  ActionFeedback,
   Definition,
   Feedback,
   TechnicalDetails,
@@ -25,9 +30,10 @@ type Props = {
   record: Control["SessionRecord"];
   control: Controller;
   mode: SessionRunMode;
+  conversation?: HTMLDivElement | null;
 };
 /** Mount one instance per workspace; changing mode preserves its bounded event accumulator. */
-export function SessionRunContext({ record, control, mode }: Props) {
+export function SessionRunContext({ record, control, mode, conversation }: Props) {
   const hub = useHub();
   const { i18n } = useTranslation();
   const copy = sessionRunCopy[i18n.language.startsWith("ru") ? "ru" : "en"];
@@ -71,16 +77,24 @@ export function SessionRunContext({ record, control, mode }: Props) {
           record={record}
           control={control}
           mode={mode}
+          conversation={conversation}
         />
       )}
     </div>
   );
 }
-function LoadedRun({ run, record, control, mode }: Props & { run: RunRecord }) {
+function LoadedRun({ run, record, control, mode, conversation }: Props & { run: RunRecord }) {
   const hub = useHub();
   const { t, i18n } = useTranslation("remote");
   const copy = sessionRunCopy[i18n.language.startsWith("ru") ? "ru" : "en"];
   const { timeline, query } = useRunTimeline(run);
+  const client = useQueryClient();
+  const cancel = useRemoteAction();
+  const history = client.getQueryData<InfiniteData<Control["HistoryPage"]>>(historyQueryKey(hub.scopeKey, record.projectId, record.sessionId));
+  const saved = history?.pages.some(page => page.messages.some(message => message.role === "assistant" && message.runId === run.runId));
+  const reply = timeline.events.flatMap(event => event.kind === "log" && event.stream === "assistant" ? [event.text] : []).join("");
+  const toolLog = timeline.events.flatMap(event => event.kind === "log" && event.stream === "tool-summary" ? [event] : []);
+  const terminal = ["succeeded", "failed", "cancelled", "rejected", "lost", "unknown"].includes(run.state);
   const safe =
     !query.isPending &&
     !query.error &&
@@ -129,7 +143,33 @@ function LoadedRun({ run, record, control, mode }: Props & { run: RunRecord }) {
   if (mode === "attention") return <>{approvalCards}</>;
   return (
     <>
-      {approvalCards}
+      {conversation ? createPortal(
+        <div className="session-live">
+          {!saved && reply && <Markdown content={reply} />}
+          {!terminal && <div className="session-live-controls">
+            <span role="status">{run.cancelRequested || cancel.isSuccess
+              ? t("receiptStatuses.requested")
+              : t("states." + run.state, { defaultValue: run.state })}</span>
+            <Button variant="secondary" disabled={!run.connected || !control.active || !safe || cancel.isPending || cancel.isSuccess || !!run.cancelRequested} onClick={() => {
+              if (!control.binding) return;
+              cancel.mutate({
+                path: remoteProject(run.projectId) + "/runs/" + encodeURIComponent(run.runId) + "/cancel",
+                body: {
+                  expectedRunVersion: run.version,
+                  expectedSessionVersion: record.version,
+                  reason: t("cancel"),
+                  controller: control.binding,
+                } satisfies Control["CancelRequest"],
+              });
+            }}>{t("cancel")}</Button>
+          </div>}
+          <ActionFeedback action={cancel} />
+          {toolLog.length > 0 && <details className="session-tool-log">
+            <summary>{t("output")}</summary>
+            {toolLog.map(event => <pre key={event.localSeq}>{event.text}</pre>)}
+          </details>}
+          {approvalCards}
+        </div>, conversation) : approvalCards}
       {mode === "context" && (
         <>
           <Panel title={copy.currentRun}>

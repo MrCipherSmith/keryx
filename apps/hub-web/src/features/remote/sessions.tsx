@@ -39,6 +39,7 @@ import {
 } from "./shared";
 import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
 import { ForkSession } from "./fork";
+import { SessionTranscript } from "./session-transcript";
 import { Settings } from "./settings";
 import { historyQueryKey, mergeTimeline, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
 export function SessionsView() {
@@ -335,6 +336,7 @@ export function SessionSurface({
   // Command outcomes are tab-local (the history endpoint carries only messages). Each keeps its
   // invocation time for display and the history cursor at invocation for placement; the first report
   // of an operation fixes both, later reports only refresh the outcome.
+  const [conversation, setConversation] = useState<HTMLDivElement | null>(null);
   const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
   const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
     setOutcomes(previous => {
@@ -351,7 +353,8 @@ export function SessionSurface({
     <>
     {openingError && (
       <Notice tone="error">
-        {t("sessionOpeningRejected")} {t("sessionOpeningNextStep")}
+        {t("sessionOpeningRejected")} {t(openingError === "scope-denied" ? "sessionOpeningScope"
+          : openingError === "recovery-required" ? "sessionOpeningRecovery" : "sessionOpeningNextStep")}
         {onNewSession && <Button variant="secondary" onClick={onNewSession}>{t("sessionOpeningCreateNew")}</Button>}
         <details>
           <summary>{t("sessionOpeningDetails")}</summary>
@@ -363,7 +366,8 @@ export function SessionSurface({
       openingRejected={!!openingError}
       record={record}
       control={control}
-      history={<History record={record} outcomes={outcomes} />}
+      history={<History record={record} outcomes={outcomes} liveRef={setConversation} />}
+      conversation={conversation}
       composer={
         <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
       }
@@ -435,7 +439,7 @@ export function SessionSurface({
   );
 }
 
-function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: CommandEntry[] }) {
+function History({ record, outcomes, liveRef }: { record: Control["SessionRecord"]; outcomes: CommandEntry[]; liveRef: (element: HTMLDivElement | null) => void }) {
   const { t } = useTranslation("remote");
   const hub = useHub();
   const query = useInfiniteQuery({
@@ -466,18 +470,16 @@ function History({ record, outcomes }: { record: Control["SessionRecord"]; outco
         <h2>{t("history")}</h2>
         <span>{record.agentProfileId}</span>
       </header>
-      <div className="session-transcript-body">
+      <SessionTranscript entries={timeline} renderEntry={entry => entry.kind === "outcome"
+        ? <OutcomeItem record={record} item={entry.item} />
+        : <MessageItem message={entry.message} />}>
         <Feedback query={query} />
         {query.data?.pages.some((page) => page.gap) && (
           <Notice>{t("gap")}</Notice>
         )}
-        <ol>
-          {timeline.map((entry) => entry.kind === "outcome"
-            ? <OutcomeItem key={entry.item.outcome.operationId} record={record} item={entry.item} />
-            : <MessageItem key={entry.message.messageId} message={entry.message} />)}
-        </ol>
         {query.data && !ordered.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
-      </div>
+        <div ref={liveRef} tabIndex={-1} />
+      </SessionTranscript>
       {query.hasNextPage && (
         <footer className="session-history-pages">
           <Button
@@ -498,14 +500,14 @@ function formatResult(result: unknown) {
 }
 const isSettled = (status: Control["CommandOutcome"]["status"]) => status === "applied" || status === "rejected";
 /** One command outcome, followed through its own operation so it moves from queued to applied or rejected. */
-function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item: CommandEntry }) {
+function OutcomeItem({ record, item, ...props }: React.ComponentPropsWithRef<"li"> & { record: Control["SessionRecord"]; item: CommandEntry }) {
   const { t, i18n } = useTranslation("remote");
   // Follow the operation only until it settles: an applied or rejected record cannot change, and a live
   // query per outcome would be refetched on every invalidation for the tab's lifetime.
   const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, item.outcome, receipt => isSettled(receipt.status));
   const outcome = followed.data ?? item.outcome;
   return (
-    <li className="session-message system">
+    <li {...props} className="session-message system">
       <span className="session-avatar" aria-hidden="true">/</span>
       <div>
         <div className="session-message-header">
@@ -521,12 +523,12 @@ function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item:
     </li>
   );
 }
-function MessageItem({ message }: { message: Control["SessionMessage"] }) {
+function MessageItem({ message, ...props }: React.ComponentPropsWithRef<"li"> & { message: Control["SessionMessage"] }) {
   const { i18n } = useTranslation("remote");
   const hub = useHub();
   const words = useWorkspaceCopy();
   return (
-    <li className={"session-message " + message.role}>
+    <li {...props} className={"session-message " + message.role}>
       <span className="session-avatar" aria-hidden="true">
         {message.role === "human" ? "H" : message.role === "assistant" ? "K" : "↳"}
       </span>
@@ -536,7 +538,9 @@ function MessageItem({ message }: { message: Control["SessionMessage"] }) {
           <time dateTime={message.createdAt}>{formatDate(message.createdAt, i18n.language)}</time>
         </div>
         <div className="session-message-content">
-          {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
+          {message.role === "assistant" ? <Markdown content={message.text} /> : message.role === "tool-summary"
+            ? <details><summary>{words.role[message.role]}</summary><pre>{message.text}</pre></details>
+            : <pre>{message.text}</pre>}
         </div>
         {message.role === "assistant" && message.runId && (
           <Button

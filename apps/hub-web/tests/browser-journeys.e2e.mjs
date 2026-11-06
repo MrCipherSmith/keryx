@@ -71,7 +71,20 @@ async function runCell(browser,id){
  const attempt=async(j,body)=>{try{await body();j.status=j.softFailures?.length?'failed':j.notRun.length?'pending':'passed';if(j.softFailures?.length)j.error=j.softFailures.join('; ');}catch(error){j.status='failed';j.hard=true;j.error=String(error instanceof Error?error.message:error).slice(0,1200);}};
  const blocked=(n,title,reason)=>{const j=begin(n,title);j.notRun.push(reason);return j;};
  const panel=(page,title)=>page.locator('section').filter({has:page.getByRole('heading',{name:title,exact:true})});
- const navButton=(page,name)=>page.getByRole('navigation',{name:C.appName}).getByRole('button',{name,exact:true});
+ const openNav=async page=>{
+  const mobile=page.getByRole('button',{name:/^(Open navigation|Открыть навигацию)$/});
+  if(await mobile.isVisible()&&await mobile.getAttribute('aria-expanded')!=='true')await mobile.click();
+ };
+ const goNav=async(page,name)=>{
+  await openNav(page);
+  await page.getByRole('navigation',{name:C.appName}).getByRole('button',{name,exact:true}).click();
+ };
+ const setLocale=async page=>{
+  await page.locator('.workspace-preferences summary').click();
+  const languages=page.getByRole('group',{name:(await dictionaries('ru')).C.language}).first();
+  await languages.getByRole('button',{name:lang.toUpperCase(),exact:true}).click();
+  await page.locator('.workspace-preferences summary').press('Escape');
+ };
  const fit=page=>page.evaluate(()=>{const width=window.innerWidth;const scrollable=el=>{for(let n=el.parentElement;n;n=n.parentElement){const s=window.getComputedStyle(n);if(['auto','scroll'].includes(s.overflowX))return true;}return false;};const outside=[...document.querySelectorAll('button,label,h1,h2,p,dt,dd,select,input,textarea,a,summary')].filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.right>width+1&&!scrollable(el);}).map(el=>(el.textContent||el.tagName).trim().slice(0,40));const clipped=[...document.querySelectorAll('button')].filter(el=>el.scrollWidth>el.clientWidth+1).map(el=>(el.textContent||'').trim().slice(0,40));return {documentWidth:document.documentElement.scrollWidth,viewport:width,outside:outside.slice(0,5),clipped:clipped.slice(0,5)};});
  const fits=(j,label,value)=>soft(j,`${label}: no horizontal overflow and every label inside the viewport`,value.documentWidth<=value.viewport&&value.outside.length===0&&value.clipped.length===0,value);
  const hookCount=tool=>{const log=path.join(m1.cwd,'.metaproject','trial-hook-events.jsonl');return existsSync(log)?readFileSync(log,'utf8').split('\n').filter(line=>line.includes(`"keryxToolName":"${tool}"`)).length:0;};
@@ -80,18 +93,17 @@ async function runCell(browser,id){
   // Refused Hub requests by path and error code only: response bodies of refusals carry no credential.
   const refusals=[];const mutations=[];cell.mutations=mutations;page.on('response',async response=>{if(response.request().method()!=='GET')mutations.push({path:new URL(response.url()).pathname.replace(/[0-9a-f-]{36}|[0-9a-f]{64}/g,':id'),method:response.request().method(),status:response.status(),at:new Date().toISOString()});if(response.status()<400)return;let code='';try{code=(await response.json())?.error?.code??'';}catch{/* Not JSON. */}refusals.push({path:new URL(response.url()).pathname.replace(/[0-9a-f-]{36}|[0-9a-f]{64}/g,':id'),method:response.request().method(),status:response.status(),code});});cell.refusals=refusals;
   // Every cell starts from the default (RU) locale and switches explicitly, so both toggles are exercised.
-  await page.goto(fx.origin+'/');await page.getByLabel((await dictionaries('ru')).C.project,{exact:true}).waitFor();
-  const languages=page.getByRole('group',{name:(await dictionaries('ru')).C.language}).first();
-  await languages.getByRole('button',{name:lang.toUpperCase(),exact:true}).click();await until(()=>page.evaluate(()=>document.documentElement.lang),v=>v===lang,5000,'html lang');await page.getByLabel(C.project,{exact:true}).waitFor();
+  await page.goto(fx.origin+'/');await page.locator('#hub-project-selector').waitFor({state:'attached'});
+  await setLocale(page);await until(()=>page.evaluate(()=>document.documentElement.lang),v=>v===lang,5000,'html lang');
   let ordinal=0;let sessionId='';let sessionPath='';const runs={};
   const sessionRecord=()=>read(sessionPath);
   const latestRun=async(after=new Set())=>until(async()=>(await read(`/hub/v2/projects/${fx.projectId}/runs`)).runs.filter(r=>r.sessionId===sessionId&&!after.has(r.runId)),list=>list.length>0,20000,'run admitted').then(list=>list.at(-1));
   const runState=(runId,done,ms=30000)=>until(()=>read(`/hub/v2/projects/${fx.projectId}/runs/${runId}`),done,ms,`run ${runId}`);
   // In-app navigation only: a full reload makes this tab an observer again (its explicit controller claim is not persisted).
-  const openSession=async()=>{await navButton(page,L.sessions).click();await panel(page,`Browser ${id}`).getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.controller).waitFor();};
+  const openSession=async()=>{await goNav(page,L.sessions);await panel(page,`Browser ${id}`).getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.controller).waitFor();};
   /** The command catalogue lives in the composer and mounts only after its toggle (or '/') opens it. */
   const openCommands=async()=>{const toggle=page.getByRole('button',{name:L.commands,exact:true});if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();const commands=panel(page,L.commands);await commands.waitFor();return commands;};
-  const openRun=async runId=>{await navButton(page,L.runs).click();const card=panel(page,runId);await card.getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.actual).waitFor();};
+  const openRun=async runId=>{await goNav(page,L.runs);const card=panel(page,runId);await card.getByRole('button',{name:L.details,exact:true}).click();await panel(page,L.actual).waitFor();};
   /** The session version this tab displays (Versions panel), to wait until the page caught up with Hub. */
   const shownVersion=()=>page.evaluate(label=>{const dt=[...document.querySelectorAll('dt')].find(d=>d.textContent?.trim()===label);return dt?Number(dt.nextElementSibling?.textContent):NaN;},L.sessionVersion);
   const settled=async()=>until(async()=>[await shownVersion(),(await sessionRecord()).version],([a,b])=>a===b,15000,'page caught up with the session version');
@@ -104,11 +116,18 @@ async function runCell(browser,id){
   // Journey 1: exact selection, readiness, fit, keyboard, observer.
   const j1=begin(1,'Select exact project/machine/checkout/profile; ready vs offline/setup-required/unsupported; labels fit; keyboard access; observer cannot mutate or silently claim control');
   await attempt(j1,async()=>{
-   await page.getByLabel(C.project,{exact:true}).selectOption(fx.projectId);await navButton(page,L.machines).click();
+   const projectSelector=page.locator('#hub-project-selector');
+   if(await projectSelector.isVisible())await projectSelector.selectOption(fx.projectId);
+   else {
+    const project=(await read('/hub/v1/projects')).projects.find(item=>item.id===fx.projectId);
+    await openNav(page);
+    await page.locator('.sidebar-projects').getByRole('button',{name:project.name,exact:true}).click();
+   }await goNav(page,L.machines);
    for(const [index,t] of [m1,m2].entries()){const card=panel(page,`Deterministic serve machine ${index+1}`);await card.waitFor();check(j1,`${t.machine} shown online`,await card.getByText(L.online,{exact:true}).isVisible());check(j1,`${t.machine} profile shown ready from the published inventory`,await card.getByText(`remote-restricted · ${L.ready} · none`,{exact:true}).isVisible());}
    const listed=await read(`/hub/v2/machines?projectId=${fx.projectId}`);check(j1,'Hub inventory agrees: both machines connected and ready',listed.machines.length===2&&listed.machines.every(m=>m.connected&&m.inventory.checkouts.every(c=>c.agentProfiles.every(p=>p.readiness==='ready'))),listed.machines.map(m=>({machineId:m.machineId,connected:m.connected})));
    fits(j1,'machines',await fit(page));await shot(j1,page,'machines');
    // Keyboard: Tab reaches the Sessions navigation item and Enter opens it.
+   await openNav(page);
    let reached=false;for(let i=0;i<60&&!reached;i++){await page.keyboard.press('Tab');reached=await page.evaluate(name=>document.activeElement?.tagName==='BUTTON'&&document.activeElement.textContent?.trim()===name,L.sessions);}
    check(j1,'Tab reaches the Sessions navigation item',reached);await page.keyboard.press('Enter');await until(()=>page.evaluate(()=>window.location.search),v=>v.includes('view=sessions'),5000,'keyboard navigation');check(j1,'Enter on the focused navigation item opens Sessions',true);
    await page.getByRole('button',{name:L.newSession,exact:true}).click();const form=panel(page,L.newSession);const create=form.getByRole('button',{name:L.createSession,exact:true});
@@ -184,7 +203,7 @@ async function runCell(browser,id){
   await attempt(j6,async()=>{
    await openSession();await until(sessionRecord,v=>v.state==='idle',20000,'idle');sleepOrdinal=++ordinal;const before=await send(turn(sleepOrdinal,'cancel supervised sleep work'));const run=await latestRun(before);sleeper=run.runId;j7.receipts.runId=sleeper;
    await runState(sleeper,v=>v.state==='waiting-approval');await openRun(sleeper);await panel(page,L.approval).getByRole('button',{name:L.allowOnce,exact:true}).click();await until(async()=>processesWith(marker(m1.machine,sleepOrdinal)).length,n=>n===1,30000,'supervised child');
-   const second=await login();const observer=await second.newPage();await observer.goto(`${fx.origin}/?project=${fx.projectId}&view=sessions&session=${sessionId}`);await observer.getByRole('group',{name:(await dictionaries('ru')).C.language}).first().getByRole('button',{name:lang.toUpperCase(),exact:true}).click();const watching=panel(observer,L.controller);await watching.waitFor();
+   const second=await login();const observer=await second.newPage();await observer.goto(`${fx.origin}/?project=${fx.projectId}&view=sessions&session=${sessionId}`);await setLocale(observer);const watching=panel(observer,L.controller);await watching.waitFor();
    check(j6,'the reconnecting tab is an observer',await watching.getByText(L.observer,{exact:true}).isVisible());check(j6,'it cannot claim the held controller silently',await watching.getByRole('button',{name:L.claim,exact:true}).isDisabled());check(j6,'it cannot send',await panel(observer,L.message).getByRole('button',{name:L.send,exact:true}).isDisabled());
    await observer.reload();await panel(observer,L.history).getByText(turn(sleepOrdinal,'cancel supervised sleep work')).first().waitFor({timeout:20000});check(j6,'history survives the reload with the running turn',true);
    const record=await sessionRecord();check(j6,'the same native session identity and controller after the reconnect',record.sessionId===sessionId&&record.controller?.controllerLeaseId===j2.receipts.controllerLeaseId&&record.activeRunId===sleeper);
@@ -241,7 +260,7 @@ async function runCell(browser,id){
   // Journey 3, final part: typed help in a fresh session on the second machine (a refused help result wedges its session, so it runs last).
   await attempt(j3,async()=>{
    if(j3.hard)throw new JourneyFailure(j3.error);
-   await navButton(page,L.sessions).click();await page.getByRole('button',{name:L.newSession,exact:true}).click();const form=panel(page,L.newSession);await form.getByLabel(L.machine,{exact:true}).selectOption(m2.machineId);await form.getByLabel(L.checkout,{exact:true}).selectOption(m2.checkoutId);await form.getByLabel(L.profile,{exact:true}).selectOption('remote-restricted');await form.getByLabel(L.title,{exact:true}).fill(`Help ${id}`);await form.getByRole('button',{name:L.createSession,exact:true}).click();
+   await goNav(page,L.sessions);await page.getByRole('button',{name:L.newSession,exact:true}).click();const form=panel(page,L.newSession);await form.getByLabel(L.machine,{exact:true}).selectOption(m2.machineId);await form.getByLabel(L.checkout,{exact:true}).selectOption(m2.checkoutId);await form.getByLabel(L.profile,{exact:true}).selectOption('remote-restricted');await form.getByLabel(L.title,{exact:true}).fill(`Help ${id}`);await form.getByRole('button',{name:L.createSession,exact:true}).click();
    await until(()=>page.evaluate(()=>new URLSearchParams(window.location.search).get('session')),v=>!!v&&v!==sessionId,20000,'help session');const helpSession=await page.evaluate(()=>new URLSearchParams(window.location.search).get('session'));j3.receipts.helpSessionId=helpSession;const helpPath=`/hub/v2/projects/${fx.projectId}/sessions/${helpSession}`;
    await until(()=>read(helpPath),v=>v.state==='idle',20000,'help session idle');const controller=panel(page,L.controller);await controller.getByRole('button',{name:L.claim,exact:true}).click();await controller.getByRole('button',{name:L.release,exact:true}).waitFor({timeout:20000});
    const commands=await openCommands();await commands.getByLabel(L.command,{exact:true}).selectOption('help');await commands.getByLabel(L.arguments,{exact:true}).fill('{}');await commands.getByRole('button',{name:L.invoke,exact:true}).click();
@@ -253,7 +272,7 @@ async function runCell(browser,id){
    if(j1.hard)throw new JourneyFailure(j1.error);
    process.kill(m2.servePid,'SIGTERM');await until(async()=>(await read(`/hub/v2/machines/${m2.machineId}`)).connected,v=>v===false,30000,'second machine offline');
    await page.goto(`${fx.origin}/?project=${fx.projectId}&view=machines`);await panel(page,'Deterministic serve machine 2').getByText(L.offline,{exact:true}).waitFor({timeout:15000});check(j1,'an offline machine is shown offline',true);
-   await navButton(page,L.sessions).click();await page.getByRole('button',{name:L.newSession,exact:true}).click();const option=panel(page,L.newSession).getByLabel(L.machine,{exact:true}).locator(`option[value="${m2.machineId}"]`);check(j1,'an offline machine cannot be chosen',await option.isDisabled());await shot(j1,page,'offline');
+   await goNav(page,L.sessions);await page.getByRole('button',{name:L.newSession,exact:true}).click();const option=panel(page,L.newSession).getByLabel(L.machine,{exact:true}).locator(`option[value="${m2.machineId}"]`);check(j1,'an offline machine cannot be chosen',await option.isDisabled());await shot(j1,page,'offline');
   });
   cell.consoleErrors=errors;
  }finally{

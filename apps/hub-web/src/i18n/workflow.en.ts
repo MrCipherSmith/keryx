@@ -1,4 +1,5 @@
 export default {
+  projectNameRequired: "Enter a project name.",
   flowWorkspaceDistinction: "This view lists Flows based on specifications. Open Project work to manage intents, attempts and results.",
   openManagedWork: "Project work",
 

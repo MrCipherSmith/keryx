@@ -1,4 +1,6 @@
 export default {
+  sessionOpeningScope: "Check that this machine allows the selected checkout and agent profile.", sessionOpeningRecovery: "Resolve the unfinished run on this machine before retrying this checkout.",
+  messagePlaceholder: "Write a message…",
   searchCommands: "Search Keryx commands", noCommandsFound: "No matching commands.",
  sessionOpeningFailed: "Could not open", sessionOpeningNextStep: "Check that the machine is available, then create a new session.", sessionLaunchRequirements: "Choose an available machine, a clean checkout and a ready profile, then enter a title.", sessionLaunchOperatorOnly: "Only operators can create sessions. Ask an operator or switch to an operator account.", sessionLaunchEnterTitle: "Enter a session title to continue.", sessionLaunchFlowGone: "The selected Flow is no longer in progress. Choose another Flow or clear the selection.",
  sessionLaunchFlowsLoading: "Loading the Flows to check the selected one…", sessionLaunchFlowsFailed: "The Flows could not be loaded, so the selected Flow cannot be checked. Retry, or clear the selection.", sessionOpeningCreateNew: "Create a new session", sessionOpeningDetails: "Technical details", commandsHint: "Press / for commands. To type a literal slash instead, press Escape right after it.",

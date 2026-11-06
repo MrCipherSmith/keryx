@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
@@ -12,11 +12,12 @@ import type {
   MachineSummary,
   RunRecord,
 } from "../../../../../src/remote-control/protocol";
+import type { Project } from "../../api/types";
 import type { Control } from "../../api/remote";
 import { remoteGet, remoteProject } from "../../api/remote";
 import { sessionPath, useRemoteQuery } from "../../api/remote-hooks";
 import { useHub } from "../../app/hub-context";
-import { Button, EmptyState, Input, Notice } from "../../components/ui";
+import { Button, EmptyState, Input, Notice, Select } from "../../components/ui";
 import { ControllerPanel } from "./recovery";
 import { Feedback, type Controller } from "./shared";
 import { SessionRunContext } from "./session-run-context";
@@ -88,6 +89,7 @@ export function SessionWorkspace({
   record,
   control,
   history,
+  conversation,
   composer,
   queue,
   settings,
@@ -97,6 +99,7 @@ export function SessionWorkspace({
   record: Control["SessionRecord"];
   control: Controller;
   history: ReactNode;
+  conversation?: HTMLDivElement | null;
   composer: ReactNode;
   queue: ReactNode;
   settings: ReactNode;
@@ -210,11 +213,8 @@ export function SessionWorkspace({
           type="button"
           className="session-attention"
           onClick={() => {
-            setTab("context");
-            document
-              .getElementById(id + "-inspector")
-              ?.scrollIntoView({ block: "start" });
-            document.getElementById(id + "-context")?.focus();
+            conversation?.scrollIntoView({ block: "nearest" });
+            conversation?.focus({ preventScroll: true });
           }}
         >
           {words.attention}
@@ -305,6 +305,7 @@ export function SessionWorkspace({
               record={record}
               control={control}
               mode={tab === "changes" || tab === "checks" ? tab : "context"}
+              conversation={conversation}
             />
           </div>
           <div
@@ -343,10 +344,13 @@ function SessionNavigator({
   const words = useWorkspaceCopy();
   const { t } = useTranslation("remote");
   const [search, setSearch] = useState("");
+  const [projectId, setProjectId] = useState(record.projectId);
+  const client = useQueryClient();
+  const projects = client.getQueryData<{ projects: Project[] }>([hub.scopeKey, "projects"])?.projects ?? [];
   const sessions = useInfiniteQuery({
     queryKey: [
       hub.scopeKey,
-      record.projectId,
+      projectId,
       "remote",
       "sessions",
       "navigator",
@@ -354,7 +358,7 @@ function SessionNavigator({
     initialPageParam: 0,
     queryFn: ({ signal, pageParam }) =>
       remoteGet<Control["SessionPage"]>(
-        remoteProject(record.projectId) + "/sessions?after=" + pageParam,
+        remoteProject(projectId) + "/sessions?after=" + pageParam,
         signal,
       ),
     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
@@ -366,7 +370,7 @@ function SessionNavigator({
       if (!old || old.version <= s.version) unique.set(s.sessionId, s);
     }),
   );
-  unique.set(record.sessionId, record);
+  if (record.projectId === projectId) unique.set(record.sessionId, record);
   const filtered = [...unique.values()].filter((s) =>
     s.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
@@ -388,6 +392,12 @@ function SessionNavigator({
           {words.all}
         </Button>
       </div>
+      {projects.length > 1 && <Select aria-label={t("common:project")} value={projectId} onChange={event => {
+        setProjectId(event.target.value);
+        setSearch("");
+      }}>
+        {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+      </Select>}
       <Input
         type="search"
         aria-label={words.search}

@@ -1,4 +1,5 @@
 const en = {
+  startPendingAmendments: "Resolve the pending amendments before starting.", startMissingApprovedPlan: "Approve the current Flow revision and its required work items before starting.", startStaleIntent: "Update the work items to match the current Flow revision and criteria.",
   revisionTechnicalDetails: "Revision technical details",
   backToResults: "Back to results",
   editPlan: "Edit plan and required results",

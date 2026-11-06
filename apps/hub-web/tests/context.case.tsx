@@ -43,6 +43,7 @@ beforeEach(() => {
 
 describe('document provenance and draft version', () => {
   it('requires Source revision and sends the exact import version and source text', async () => {
+  mocks.location.documentId = undefined;
     mocks.post.mockResolvedValue({ documents: [document], proposals: [] });
     await mount(<DocumentsView />);
     const toggle = await screen.findByText(en.importDocument);
@@ -91,7 +92,7 @@ it('keeps specification search and returns focus to the same card after reading 
     expect(screen.queryByRole('button', { name: /wiki\/example/ })).not.toBeInTheDocument();
     const card = await screen.findByRole('button', { name: /specs\/example/ });
     fireEvent.click(card);
-    expect(await screen.findByRole('heading', { name: document.path })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Exact source' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: /Back to list/ }));
     expect(card).toHaveFocus();
     expect(scrollTo).toHaveBeenCalled();
@@ -208,6 +209,7 @@ it('pages older revisions behind the newest page and opens a deep-linked revisio
 });
 
 it('switches application copy to Russian while preserving private draft content', async () => {
+  mocks.location.documentId = undefined;
   const { i18n } = await mount(<DocumentsView />);
   fireEvent.click(await screen.findByText(en.importDocument));
   fireEvent.change(screen.getByLabelText(en.markdownSource), { target: { value: '# User content stays exact' } });
@@ -287,6 +289,7 @@ it('loads revision metadata without full trees and fetches only the selected imm
 });
 
 it('keeps a newer import draft after leaving, reopening and receiving the earlier success', async () => {
+  mocks.location.documentId = undefined;
   let resolve!: (value: unknown) => void;
   mocks.post.mockImplementation(() => new Promise(done => { resolve = done; }));
   const mounted = await mount(<DocumentsView />);

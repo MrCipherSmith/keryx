@@ -50,6 +50,21 @@ function useWrite<T, D = undefined>(resources: string[], onSaved?: (result: T, s
   });
 }
 
+/** Read the scalar metadata emitted by the wiki generator. Keep the source untouched. */
+function documentPresentation(doc: HubDocument) {
+  const front = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(doc.content);
+  const fields = front?.[1] ?? '';
+  const title = /^Title:[ \t]+(.+)$/mi.exec(fields)?.[1]?.trim().replace(/^["']|["']$/g, '');
+  const summary = /^Summary:[ \t]+(.+)$/mi.exec(fields)?.[1]?.trim().replace(/^["']|["']$/g, '');
+  const body = front && (title || summary) ? doc.content.slice(front[0].length) : doc.content;
+  const heading = /^\s*# (.+)(?:\r?\n|$)/.exec(body);
+  return {
+    title: title || heading?.[1]?.trim() || doc.path.split('/').at(-1) || doc.path,
+    summary,
+    body: heading && (!title || heading[1].trim() === title) ? body.slice(heading[0].length) : body,
+  };
+}
+
 export function DocumentsView() {
   const { t } = useTranslation('context');
   const { projectId, location, navigate, scopeKey } = useHub();
@@ -57,34 +72,38 @@ export function DocumentsView() {
   const project = useResource<Project>('project');
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<'all' | HubDocument['kind']>('all');
+  const catalogue = useMemo(() => (docs.data?.documents ?? []).map(doc => ({ doc, title: documentPresentation(doc).title })), [docs.data]);
   const documents = docs.data?.documents ?? [];
   const selected = documents.find(item => item.id === location.documentId);
-  const filtered = documents.filter(item => (kind === 'all' || item.kind === kind) && `${item.path} ${item.kind} ${item.approval} ${t(item.kind === 'spec' ? 'specification' : 'wiki')} ${t(`common:status.${item.approval}`)}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = catalogue.filter(({ doc, title }) => (kind === 'all' || doc.kind === kind) &&
+    `${title} ${doc.path} ${doc.kind} ${doc.approval} ${t(doc.kind === 'spec' ? 'specification' : 'wiki')} ${t(`common:status.${doc.approval}`)}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   return <>
-    <PageHeading title={t('documents')} description={t('documentsDescription')} />
-    {project.data ? <ImportForm key={`${scopeKey}:${projectId}`} project={project.data} /> : <ErrorNotice error={project.error} />}
+    {!location.documentId && <PageHeading title={t('documents')} action={project.data ? <ImportForm key={`${scopeKey}:${projectId}`} project={project.data} /> : undefined} />}
+    {!location.documentId && <ErrorNotice error={project.error} />}
     <RecordBrowser
       selectedId={location.documentId}
+      listOnly
       onBack={() => navigate({ documentId: undefined })}
-      list={<Panel>
-        <div className="flex w-fit flex-wrap rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label={t('kind')}>
+      list={<div className="document-catalogue">
+        <Field label={t('searchDocuments')}><Input value={search} onChange={event => setSearch(event.target.value)} type="search" /></Field>
+        <div className="document-filters" role="group" aria-label={t('kind')}>
           {(['all', 'spec', 'wiki'] as const).map(value => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={kind === value}
-              onClick={() => setKind(value)}
-              className={`rounded-md px-2 py-2 text-xs font-bold focus-visible:outline-2 focus-visible:outline-emerald-700 ${kind === value ? 'bg-emerald-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-            >
+            <Button key={value} variant={kind === value ? 'primary' : 'ghost'} aria-pressed={kind === value} onClick={() => setKind(value)}>
               {t(value === 'spec' ? 'specifications' : value)}
-            </button>
+            </Button>
           ))}
         </div>
-        <Field label={t('searchDocuments')}><Input value={search} onChange={event => setSearch(event.target.value)} type="search" /></Field>
         <ReadState pending={docs.isPending} error={docs.error} retry={docs.refetch}>
-          {filtered.length ? <div className="space-y-2 xl:max-h-[38rem] xl:overflow-y-auto">{filtered.map(doc => <button key={doc.id} type="button" data-record-open aria-pressed={doc.id === selected?.id} onClick={() => navigate({ documentId: doc.id })} className={`w-full rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${doc.id === selected?.id ? 'border-emerald-700 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}><span className="block break-words text-sm font-medium text-slate-900 [overflow-wrap:anywhere]">{doc.path}</span><span className="mt-2 flex flex-wrap items-center gap-2"><StatusBadge status={doc.approval} /><span className="text-xs text-slate-500">{t(doc.kind === 'spec' ? 'specification' : 'wiki')} · {t('version')} {doc.version}</span></span></button>)}</div> : <EmptyState>{t('noDocuments')}</EmptyState>}
+          {filtered.length ? <div className="document-rows">{filtered.map(({ doc, title }) => (
+            <button key={doc.id} type="button" data-record-open aria-current={doc.id === selected?.id ? 'page' : undefined} onClick={() => navigate({ documentId: doc.id })}>
+              <span><strong>{title}</strong><small>{doc.path}</small></span>
+              <StatusBadge status={doc.approval} />
+            </button>
+          ))}</div> : <EmptyState>
+            {search.trim() || kind !== 'all' ? <><p>{t('documentNoMatches')}</p><Button variant="secondary" onClick={() => { setSearch(''); setKind('all'); }}>{t('resetDocumentSearch')}</Button></> : t('noDocuments')}
+          </EmptyState>}
         </ReadState>
-      </Panel>}
+      </div>}
       detail={location.documentId ? (
         <ReadState pending={docs.isPending} error={docs.error} retry={docs.refetch}>
           {selected ? <DocumentDetail key={`${scopeKey}:${projectId}:${selected.id}`} document={selected} /> : !docs.error && <EmptyState>{t('missingDocument')}</EmptyState>}
@@ -107,7 +126,7 @@ function ImportForm({ project }: { project: Project }) {
     setValidation(false); setSaved(undefined);
     mutation.mutate({ submittedDraft: draft, path: '/import', body: { expectedVersion: draft.expectedVersion, sourceRevision: draft.sourceRevision.trim(), documents: [{ path: draft.path.trim(), kind: draft.kind, content: draft.content }] } });
   }
-  return <details className="group rounded-2xl border border-slate-200 bg-white"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-emerald-900 focus-visible:outline-2 focus-visible:outline-emerald-700">{t('importDocument')}</summary><form noValidate onSubmit={submit} className="space-y-4 border-t border-slate-100 p-5">
+  return <details className="document-import"><summary className="hub-button hub-button-secondary">{t('importDocument')}</summary><form noValidate onSubmit={submit} className="space-y-4 border-t border-slate-100 p-5">
     <div className="grid gap-4 md:grid-cols-2"><Field label={t('path')}><Input required value={draft.path} onChange={event => setDraft({ ...draft, path: event.target.value })} /></Field><Field label={t('kind')}><Select value={draft.kind} onChange={event => setDraft({ ...draft, kind: event.target.value === 'wiki' ? 'wiki' : 'spec' })}><option value="spec">{t('specification')}</option><option value="wiki">{t('wiki')}</option></Select></Field></div>
     <Field label={t('sourceRevision')} hint={t('sourceRevisionHint')}><Input required value={draft.sourceRevision} onChange={event => setDraft({ ...draft, sourceRevision: event.target.value })} /></Field>
     <Field label={t('markdownSource')}><Textarea required rows={8} value={draft.content} onChange={event => setDraft({ ...draft, content: event.target.value })} /></Field>
@@ -121,12 +140,18 @@ function ImportForm({ project }: { project: Project }) {
 function DocumentDetail({ document: doc }: { document: HubDocument }) {
   const { t, i18n } = useTranslation('context');
   const [raw, setRaw] = useState(false);
-  return <div className="space-y-5"><Panel title={<span className="break-all">{doc.path}</span>}>
+  const presentation = documentPresentation(doc);
+  return <div className="space-y-5"><article className="document-reader">
+    <h1>{presentation.title}</h1>
+    <p className="document-path">{doc.path}</p>
     <div className="flex flex-wrap items-center gap-2"><StatusBadge status={doc.approval} /><span className="text-xs text-slate-500">{t(doc.kind === 'spec' ? 'specification' : 'wiki')} · {t('version')} {doc.version}</span></div>
-    <dl className="grid gap-4 sm:grid-cols-2"><Value label={t('sourceRevision')}>{doc.sourceRevision}</Value><Value label={t('digest')}><code>{doc.contentDigest}</code></Value>{doc.acceptedBy ? <Value label={t('acceptedBy')}>{doc.acceptedBy}{doc.acceptedAt ? ` · ${formatDate(doc.acceptedAt, i18n.language)}` : ''}</Value> : null}</dl>
-    <div className="flex gap-2"><Button variant={raw ? 'secondary' : 'primary'} onClick={() => setRaw(false)}>{t('preview')}</Button><Button variant={raw ? 'primary' : 'secondary'} onClick={() => setRaw(true)}>{t('rawSource')}</Button></div>
-    {raw ? <pre className={`${codeClass} whitespace-pre-wrap break-words`}>{doc.content}</pre> : <Markdown content={doc.content} />}
-  </Panel><ProposalForm document={doc} /></div>;
+    <div className="document-reader-toolbar"><Button variant={raw ? 'secondary' : 'primary'} aria-pressed={!raw} onClick={() => setRaw(false)}>{t('preview')}</Button><Button variant={raw ? 'primary' : 'secondary'} aria-pressed={raw} onClick={() => setRaw(true)}>{t('rawSource')}</Button></div>
+    {raw ? <pre className={`${codeClass} whitespace-pre-wrap break-words`}>{doc.content}</pre> : <>
+      {presentation.summary && <p className="document-abstract">{presentation.summary}</p>}
+      <Markdown content={presentation.body} />
+    </>}
+    <details><summary>{t('fileTechnicalDetails')}</summary><dl className="grid gap-4 sm:grid-cols-2"><Value label={t('sourceRevision')}>{doc.sourceRevision}</Value><Value label={t('digest')}><code>{doc.contentDigest}</code></Value>{doc.acceptedBy ? <Value label={t('acceptedBy')}>{doc.acceptedBy}{doc.acceptedAt ? ` · ${formatDate(doc.acceptedAt, i18n.language)}` : ''}</Value> : null}</dl></details>
+  </article><ProposalForm document={doc} /></div>;
 }
 
 function ProposalForm({ document: doc }: { document: HubDocument }) {
@@ -249,6 +274,19 @@ function RevisionFiles({ revision, project }: { revision: CodeRevision; project:
   const { t, i18n } = useTranslation('context');
   const { principal } = useHub();
   const [filePath, setFilePath] = useState(revision.files[0]?.path ?? '');
+  const [fileSearch, setFileSearch] = useState('');
+  const [fileType, setFileType] = useState('');
+  const extension = (path: string) => /\.([^./]+)$/.exec(path)?.[1]?.toLowerCase() ?? '';
+  const types = [...new Set(revision.files.map(item => extension(item.path)).filter(Boolean))].sort();
+  const paths = revision.files.filter(item => (!fileType || extension(item.path) === fileType) &&
+    item.path.toLocaleLowerCase().includes(fileSearch.trim().toLocaleLowerCase()));
+  const folders = new Map<string, typeof paths>();
+  for (const item of paths) {
+    const folder = item.path.includes('/') ? item.path.split('/')[0] : '/';
+    const files = folders.get(folder);
+    if (files) files.push(item);
+    else folders.set(folder, [item]);
+  }
   const [acknowledged, setAcknowledged] = useState(false);
   const [lineVersion, setLineVersion] = useState(project.lineVersion);
   const mutation = useWrite<Project>(['project']);
@@ -264,7 +302,16 @@ function RevisionFiles({ revision, project }: { revision: CodeRevision; project:
       <ErrorNotice error={mutation.error} />{mutation.isSuccess ? <Notice tone="success">{t('selectionSaved')}</Notice> : null}
     </div> : <Notice>{t('humanRequired')}</Notice> : null}
   </Panel><Panel title={t('files')}>
-    {revision.files.length ? <Field label={t('selectFile')}><Select value={filePath} onChange={event => setFilePath(event.target.value)}>{revision.files.map(item => <option key={item.path} value={item.path}>{item.path}</option>)}</Select></Field> : <EmptyState>{t('selectFile')}</EmptyState>}
+    {revision.files.length ? <>
+      <Field label={t('searchRevisionFiles')}><Input type="search" value={fileSearch} onChange={event => setFileSearch(event.target.value)} /></Field>
+      {types.length > 1 && <Field label={t('fileType')}><Select value={fileType} onChange={event => setFileType(event.target.value)}>
+        <option value="">{t('all')}</option>{types.map(type => <option key={type} value={type}>.{type}</option>)}
+      </Select></Field>}
+      {paths.length ? <Field label={t('selectFile')}><Select value={paths.some(item => item.path === filePath) ? filePath : ''} onChange={event => setFilePath(event.target.value)}>
+        <option value="" disabled>{t('selectFile')}</option>
+        {[...folders].map(([folder, files]) => <optgroup key={folder} label={folder}>{files.map(item => <option key={item.path} value={item.path}>{item.path}</option>)}</optgroup>)}
+      </Select></Field> : <EmptyState>{t('noRevisionFiles')}</EmptyState>}
+    </> : <EmptyState>{t('selectFile')}</EmptyState>}
     {preview?.kind === 'binary' ? <Notice>{t('binaryFile', { size: preview.size })}</Notice> : file && preview ? (
       <RevisionCodeViewer key={file.path} file={file} preview={preview} />
     ) : null}
@@ -339,6 +386,18 @@ export function HistoryView() {
   // History grows by up to 500 events per page; derive once per data change, not per render.
   const items = useMemo(() => mergeEvents(events.data?.pages.map(page => page.events) ?? []), [events.data]);
   const visible = useMemo(() => items.filter(event => !eventType || event.type === eventType), [items, eventType]);
+  const groups = useMemo(() => {
+    const result: HubEvent[][] = [];
+    for (const event of visible) {
+      const previous = result.at(-1);
+      const first = previous?.[0];
+      if (previous && first && first.type === event.type && first.entityId === event.entityId &&
+        first.actorId === event.actorId && first.actorRole === event.actorRole &&
+        first.createdAt.slice(0, 10) === event.createdAt.slice(0, 10)) previous.push(event);
+      else result.push([event]);
+    }
+    return result;
+  }, [visible]);
   const eventTypes = useMemo(() => [...new Set(items.map(event => event.type))].sort(), [items]);
   const flowNames = useMemo(() => new Map(flows.data?.flows?.map(flow => [flow.id, flow.title])), [flows.data]);
   const documentNames = useMemo(() => new Map(documents.data?.documents?.map(doc => [doc.id, doc.path])), [documents.data]);
@@ -348,9 +407,16 @@ export function HistoryView() {
         <option value="">{t('all')}</option>
         {eventTypes.map(type => <option key={type} value={type}>{t(`event.${type}`, {defaultValue:type})}</option>)}
       </Select></Field></div>}
-      {visible.length ? <Panel><ol className="space-y-0">{visible.map(event => <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId === principal.id ? principal.email ?? t('historyYou') : event.actorId}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div>{flowNames.has(event.entityId) && <Button variant="ghost" className="max-w-full" onClick={() => navigate({tab:'flows',flowId:event.entityId})}><span className="min-w-0 break-all text-left">{flowNames.get(event.entityId)}</span></Button>}
+      {visible.length ? <Panel><ol className="space-y-0">{groups.map(group => {
+        const [event, ...repeated] = group;
+        return <li key={event.sequence} className="relative min-w-0 border-b border-slate-100 py-5 first:pt-0 last:border-0 last:pb-0"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold text-slate-900">{t(`event.${event.type}`, { defaultValue: event.type })}</h2><time dateTime={event.createdAt} className="text-xs text-slate-500">{formatDate(event.createdAt, i18n.language)}</time></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>#{event.sequence}</span><span className="break-all">{t('actor')}: {event.actorId === principal.id ? principal.email ?? t('historyYou') : event.actorId}</span><span>{t('role')}: {event.actorRole ? t(`common:${event.actorRole}`, { defaultValue: event.actorRole }) : t('unknownRole')}</span></div>{flowNames.has(event.entityId) && <Button variant="ghost" className="max-w-full" onClick={() => navigate({tab:'flows',flowId:event.entityId})}><span className="min-w-0 break-all text-left">{flowNames.get(event.entityId)}</span></Button>}
         {documentNames.has(event.entityId) && <Button variant="ghost" className="max-w-full" onClick={() => navigate({tab:'documents',documentId:event.entityId})}><span className="min-w-0 break-all text-left">{documentNames.get(event.entityId)}</span></Button>}
-        <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">{t('historyIdentifiers')}</summary><p className="break-all font-mono">{event.entityId} · {event.actorId}</p></details></li>)}</ol></Panel> : <EmptyState>{t(items.length ? 'historyNoMatchingEvents' : 'noHistory')}</EmptyState>}
+        <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">{t('historyIdentifiers')}</summary><p className="break-all font-mono">{event.entityId} · {event.actorId}</p></details>
+        {repeated.length > 0 && <details className="mt-2 text-xs text-slate-600">
+          <summary className="cursor-pointer">{t('historyRepeated', { count: repeated.length })}</summary>
+          <ul>{repeated.map(item => <li key={item.sequence}>#{item.sequence} · <time dateTime={item.createdAt}>{formatDate(item.createdAt, i18n.language)}</time></li>)}</ul>
+        </details>}</li>;
+      })}</ol></Panel> : <EmptyState>{t(items.length ? 'historyNoMatchingEvents' : 'noHistory')}</EmptyState>}
       <div className="mt-5">{events.hasNextPage ? <Button variant="secondary" disabled={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>{t('loadMore')}</Button> : items.length ? <p className="text-center text-xs text-slate-500">{t('endOfHistory')}</p> : null}</div>
     </ReadState></>;
 }

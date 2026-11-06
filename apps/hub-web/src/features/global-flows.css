@@ -73,22 +73,17 @@
 }
 .hub-project-card {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 2px 12px;
-  padding: 16px;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--hub-border);
+  border-radius: 8px;
+  background: var(--hub-surface);
+  text-align: start;
 }
-.hub-project-card > :first-child {
-  margin: 0;
-  grid-row: span 2;
-}
-.hub-project-card > :nth-child(2) {
-  font-size: 14px;
-}
-.hub-project-card > :nth-child(3) {
-  margin-top: 0;
-  font-size: 12px;
-}
+.hub-project-card:hover { border-color: var(--hub-accent); }
 .hub-project-metrics > button {
   padding: 14px 16px;
 }
