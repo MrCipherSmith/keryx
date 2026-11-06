@@ -18,7 +18,7 @@
 //   an external origin, and this command only ever sends a notice.
 // - Refusals exit non-zero with a named message and write nothing: bus
 //   disabled, unknown / not-live name, `@all`, a body over MAX_BODY_BYTES,
-//   the per-sender-name rate limit, and a keryx tool call (KERYX_TOOL_CALL=1,
+//   the per-sender-name and per-recipient rate limits, and a keryx tool call (KERYX_TOOL_CALL=1,
 //   the refusal `keryx bus send` gives; agents use `bus_send`).
 
 import { randomUUID } from "node:crypto";
@@ -27,7 +27,7 @@ import { BusRefusal, isBusRefusal } from "../bus/errors";
 import { resolveBusRoot } from "../bus/paths";
 import type { PresenceClassifyOptions } from "../bus/presence";
 import { isAssignableBusName, MAX_BODY_BYTES, RESERVED_BUS_NAMES } from "../bus/schema";
-import { EXTERNAL_RATE_LIMIT_PER_MINUTE, sendMessage } from "../bus/send";
+import { EXTERNAL_RATE_LIMIT_PER_MINUTE, EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE, sendMessage } from "../bus/send";
 import { loadShellConfig } from "../lib/shell-config";
 
 export interface ReportCommandDeps {
@@ -164,5 +164,6 @@ nothing.
 
 Refused with a non-zero exit, writing nothing: bus disabled, unknown or not-live
 name, @all, text over ${MAX_BODY_BYTES} bytes (put it in a file and send the path), more than
-${EXTERNAL_RATE_LIMIT_PER_MINUTE} reports per minute from one sender name, and use inside a keryx tool call.
+${EXTERNAL_RATE_LIMIT_PER_MINUTE} reports per minute from one sender name, more than ${EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE} per minute to one
+shell from all external senders, and use inside a keryx tool call. The shell cannot reply over the bus.
 `;

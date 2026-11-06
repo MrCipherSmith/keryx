@@ -225,12 +225,20 @@ describe("external origin", () => {
     expect(busEventProblems(event({ from: external, to: [A], toLabel: "@release" }))).toEqual([]);
   });
 
-  test("pause-request, resume and override are refused from an external origin", () => {
+  test("pause-request, resume and override are refused from an external origin by the schema rule", () => {
     for (const kind of ["pause-request", "resume", "override"]) {
       const value = event({ from: external, kind, refs: { leaseId: A }, body: kind === "pause-request" ? "stop" : undefined });
-      expect(busEventProblems(value).length).toBeGreaterThan(0);
+      // The schema is the only gate; the refusal is its `not enum` on kind.
+      expect(validateAgainstSchemaObject(BUS_EVENT_SCHEMA, value).errors.length).toBeGreaterThan(0);
+      expect(busEventProblems(value)).toContain("$.kind: Value must not match schema (not)");
       expect(parseBusEvent(value)).toBeUndefined();
     }
+  });
+
+  test("the same kinds stay valid from an agent origin, so the refusal is about the origin", () => {
+    const value = event({ from: { ...external, origin: "agent", name: "release" }, kind: "resume", refs: { leaseId: A } });
+    expect(validateAgainstSchemaObject(BUS_EVENT_SCHEMA, value).errors).toEqual([]);
+    expect(busEventProblems(value)).toEqual([]);
   });
 
   test("reserved names stay refused for an external origin", () => {

@@ -49,6 +49,12 @@ export const AGENT_RATE_LIMIT_PER_MINUTE = 10;
  * bounds an honest loop, not a hostile same-user process.
  */
 export const EXTERNAL_RATE_LIMIT_PER_MINUTE = 5;
+/**
+ * Per-recipient ceiling over every external sender, whatever name they carry:
+ * `--from` is free text, so the per-name budget alone is bypassed by varying
+ * the name, and children that pass no `--from` all share one name.
+ */
+export const EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE = 15;
 const RATE_WINDOW_MS = 60_000;
 
 export interface SendInput {
@@ -216,8 +222,18 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
           if (recent >= EXTERNAL_RATE_LIMIT_PER_MINUTE) {
             throw new BusRefusal(
               "rate-limited",
-              `${recent} reports from "${from.name}" in the last minute; the limit is ${EXTERNAL_RATE_LIMIT_PER_MINUTE}`,
+              `per-sender-name limit: ${recent} reports from "${from.name}" in the last minute; the limit is ${EXTERNAL_RATE_LIMIT_PER_MINUTE} per sender name`,
             );
+          }
+          for (const target of to) {
+            if (target === "*") continue;
+            const toRecipient = await countRecent(root, { origin: "external", sinceMs: RATE_WINDOW_MS, now, toInstanceId: target });
+            if (toRecipient >= EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE) {
+              throw new BusRefusal(
+                "rate-limited",
+                `per-recipient limit: ${toRecipient} external reports to ${input.toLabel} in the last minute from all senders; the limit is ${EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE} per recipient`,
+              );
+            }
           }
         } else if (from.origin === "agent") {
           // review r1 F3/F5: counted from the log, per instance, so the

@@ -446,6 +446,22 @@ describe("/bus modal tab content builders (specification §7.2)", () => {
     expect(line).toContain("@all");
   });
 
+  test("Log: an external-origin sender carries the unverified mark", () => {
+    const event: BusEvent = {
+      schemaVersion: 1,
+      seq: 3,
+      id: "00000000-0000-4000-8000-000000000003",
+      ts: "2026-01-01T00:00:00.000Z",
+      from: { instanceId: "00000000-0000-4000-8000-000000000009", name: "scribe", origin: "external" },
+      to: ["00000000-0000-4000-8000-000000000001"],
+      toLabel: "@release",
+      kind: "notice",
+      body: "done",
+    };
+    const [line] = formatBusLogLines([event]);
+    expect(line).toContain("@scribe (external, unverified) → @release");
+  });
+
   test("Log: no events says so", () => {
     expect(formatBusLogLines([])).toEqual(["No events yet."]);
   });

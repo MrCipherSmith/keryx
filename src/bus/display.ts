@@ -48,12 +48,21 @@ export function displaySafe(text: string): string {
  * surfaces render identically and a fix to the format only has one place to
  * land.
  */
+/**
+ * The one place the unverified-sender mark is decided: every surface that
+ * prints an event's sender (the live line, `keryx bus log`, the `/bus` Log
+ * tab) puts this after the name, so an external report is never shown bare.
+ */
+export function busOriginMark(origin: string | undefined): string {
+  return origin === "external" ? " (external, unverified)" : "";
+}
+
 export function formatBusEventLine(event: RenderedBusEvent): string {
   const seq = displaySafe(`#${event.seq}`);
   const fromName = displaySafe(event.fromName);
   const kind = displaySafe(event.kind);
   const preview = displaySafe(event.preview);
-  const mark = event.origin === "external" ? " (external, unverified)" : "";
+  const mark = busOriginMark(event.origin);
   return `⇄ [${seq}] @${fromName}${mark} ${kind}: ${preview}`;
 }
 

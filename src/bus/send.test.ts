@@ -12,6 +12,7 @@ import {
   AGENT_RATE_LIMIT_PER_MINUTE,
   CLI_RATE_LIMIT_PER_MINUTE,
   EXTERNAL_RATE_LIMIT_PER_MINUTE,
+  EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE,
   OPERATOR_RATE_LIMIT_PER_MINUTE,
   rateLimitBypassed,
   sendMessage,
@@ -331,6 +332,33 @@ describe("external origin sends", () => {
       input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() } }),
     ).catch((error: unknown) => error);
     expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+  });
+
+  test("the per-sender-name refusal names its limit", async () => {
+    const root = await seeded();
+    for (let i = 0; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() } }));
+    }
+    const refused = await sendMessage(root, input({ origin: "external", toLabel: "@release", from })).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+    expect((refused as Error).message).toContain("per-sender-name limit");
+  });
+
+  test("varying the sender name does not escape the per-recipient ceiling, which names itself", async () => {
+    const root = await seeded();
+    expect(EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE).toBeGreaterThan(EXTERNAL_RATE_LIMIT_PER_MINUTE);
+    for (let i = 0; i < EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(
+        root,
+        input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: `child-${i}`, origin: "external" } }),
+      );
+    }
+    const refused = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: "one-more", origin: "external" } }),
+    ).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+    expect((refused as Error).message).toContain("per-recipient limit");
   });
 
   test("@all and non-notice kinds are refused", async () => {

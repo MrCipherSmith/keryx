@@ -12,7 +12,7 @@ import {
   type JoinBusOptions,
   type RenderedBusEvent,
 } from "./client";
-import { displaySafe } from "./display";
+import { displaySafe, formatBusEventLine } from "./display";
 import { isBusRefusal } from "./errors";
 import { readLease } from "./leases";
 import { appendEvent, cursorAtStart, readEvents } from "./log";
@@ -21,6 +21,7 @@ import { readPresence, writePresence } from "./presence";
 import { processInstanceId } from "../session/lease";
 import type { PresenceRecord } from "./schema";
 import { sendMessage } from "./send";
+import { buildPeerMessageNotification, EXTERNAL_REPORT_BANNER } from "./peer-notification";
 
 // AC1, AC2, AC3, AC5, AC6: the surface-independent join/heartbeat/poll/leave
 // sequence, proven with injected timers and clock over a real temp git repo
@@ -767,6 +768,66 @@ describe("joinBus: resolveRef and reply (review r1 F4)", () => {
     const thrown = await client.reply(`#${seq}`, "on it").catch((error: unknown) => error);
     expect(isBusRefusal(thrown, "recipient-not-live")).toBe(true);
     client.leave();
+  });
+
+  describe("external reports (flow 486)", () => {
+    const EXTERNAL_SENDER = "5d2c9a10-1b3e-4f6a-9c7d-8e0f1a2b3c4d";
+
+    async function joinWithExternalReport(cwd: string): Promise<{ client: BusClient; seen: RenderedBusEvent[]; seq: number }> {
+      const seen: RenderedBusEvent[] = [];
+      const client = asClient(await join(cwd, { onEvent: (event) => seen.push(event) }));
+      const { root } = await resolveBusRoot(cwd);
+      const event = await appendEvent(
+        root,
+        {
+          from: { instanceId: EXTERNAL_SENDER, name: "scribe", origin: "external" },
+          to: [client.instanceId],
+          toLabel: `@${client.name}`,
+          kind: "notice",
+          body: "build is green",
+        },
+        { now: () => NOW },
+      );
+      await client.pollNow();
+      return { client, seen, seq: event.seq };
+    }
+
+    test("the origin on the log line reaches the rendered event, the banner and the display mark", async () => {
+      const cwd = await repo();
+      const { client, seen } = await joinWithExternalReport(cwd);
+      expect(seen).toHaveLength(1);
+      const rendered = seen[0] as RenderedBusEvent;
+      expect(rendered.origin).toBe("external");
+      expect(formatBusEventLine(rendered)).toContain("@scribe (external, unverified)");
+      const notice = buildPeerMessageNotification([{ ...rendered, body: rendered.body ?? "" }]);
+      expect(notice).toContain(EXTERNAL_REPORT_BANNER);
+      expect(notice).toContain('origin="external"');
+      client.leave();
+    });
+
+    test("a reply to an external sender is refused by name, not as a generic not-live failure", async () => {
+      const cwd = await repo();
+      const { client, seq } = await joinWithExternalReport(cwd);
+      const { root } = await resolveBusRoot(cwd);
+      const before = (await readEvents(root, await cursorAtStart(root))).events.length;
+      for (const reply of [client.reply.bind(client), client.replyAsAgent.bind(client)]) {
+        const thrown = await reply(`#${seq}`, "thanks").catch((error: unknown) => error);
+        expect(isBusRefusal(thrown, "external-sender-not-replyable")).toBe(true);
+      }
+      expect((await readEvents(root, await cursorAtStart(root))).events).toHaveLength(before);
+      client.leave();
+    });
+
+    test("an external event is not acknowledged (its sender has no presence to receive one)", async () => {
+      const cwd = await repo();
+      const { client, seen } = await joinWithExternalReport(cwd);
+      const { root } = await resolveBusRoot(cwd);
+      const before = (await readEvents(root, await cursorAtStart(root))).events.length;
+      client.ack(seen);
+      await settle();
+      expect((await readEvents(root, await cursorAtStart(root))).events).toHaveLength(before);
+      client.leave();
+    });
   });
 
   describe("sendAsAgent and replyAsAgent (review r1 F3, F5)", () => {

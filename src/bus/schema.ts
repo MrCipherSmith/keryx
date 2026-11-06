@@ -288,9 +288,9 @@ export function busEventProblems(value: unknown): string[] {
   if (!senderNameAllowed(event.from.name, event.from.origin)) {
     problems.push(`$.from.name: "${event.from.name}" is reserved for another origin`);
   }
-  if (event.from.origin === "external" && (EXTERNAL_FORBIDDEN_KINDS as readonly string[]).includes(event.kind)) {
-    problems.push(`$.kind: an external-origin event cannot be "${event.kind}"`);
-  }
+  // The external-origin kind ban lives in the JSON schema alone (`if/then not
+  // enum`, above): schemaProblems returns before this point for any event it
+  // refuses, so a second code check here could never run.
   if (!isTimestamp(event.ts)) problems.push("$.ts: not a timestamp");
   if (event.body !== undefined && Buffer.byteLength(event.body, "utf8") > MAX_BODY_BYTES) {
     problems.push(`$.body: longer than ${MAX_BODY_BYTES} bytes`);

@@ -1991,6 +1991,26 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   },
   {
     module: "bus",
+    command: "report",
+    summary:
+      "Send a one-way, unverified report (origin external, kind notice) to one live @name from a process that is not a keryx shell. " +
+      "Refused inside a keryx tool call (use-agent-tool), when the bus is disabled (bus-disabled), for @all, for an unknown or " +
+      "not-live name, past the per-sender-name or per-recipient external budget (rate-limited), and for a body over 2048 bytes.",
+    intent: ["отчёт агенту", "keryx report", "report to a keryx shell", "tell the keryx shell from another agent", "сообщить из другого агента"],
+    args: [
+      { name: "to", type: "string", required: true, desc: "@<name> of a live instance" },
+      { name: "from", type: "string", required: false, desc: "sender name shown to the receiver; default external; proves nothing" },
+      { name: "<text>", type: "string", required: true, desc: "report body, at most 2048 bytes after redaction" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: [
+      "appends one redacted external-origin notice to the clone's bus log under <git-common-dir>/keryx/bus/",
+      "the addressed shell shows it labelled as an external, unverified report",
+    ],
+  },
+  {
+    module: "bus",
     command: "bus log",
     summary: "Read the agent bus event log, oldest first.",
     intent: ["лог шины", "bus log", "show bus messages", "what did the agents say", "сообщения агентов"],

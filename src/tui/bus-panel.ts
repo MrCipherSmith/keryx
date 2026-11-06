@@ -6,7 +6,7 @@
 // a static snapshot taken when the modal opens, same as `/status`'s tabs.
 
 import type { BusPeer } from "../bus/client";
-import { displaySafe } from "../bus/display";
+import { busOriginMark, displaySafe } from "../bus/display";
 import type { BusEvent, PauseLease } from "../bus/schema";
 import { openModal } from "./modal-host";
 
@@ -114,7 +114,7 @@ export function formatBusLogLines(events: readonly BusEvent[]): string[] {
     const fromName = displaySafe(event.from.name);
     const toLabel = displaySafe(event.toLabel);
     const preview = displaySafe(event.body ?? "").slice(0, 160);
-    return `#${event.seq} [${shortId}]  @${fromName} → ${toLabel}  ${event.kind}${preview.length > 0 ? `: ${preview}` : ""}`;
+    return `#${event.seq} [${shortId}]  @${fromName}${busOriginMark(event.from.origin)} → ${toLabel}  ${event.kind}${preview.length > 0 ? `: ${preview}` : ""}`;
   });
 }
 
