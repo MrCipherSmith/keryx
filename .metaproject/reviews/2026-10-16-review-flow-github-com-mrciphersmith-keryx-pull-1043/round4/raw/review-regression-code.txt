@@ -1,0 +1,81 @@
+```json keryx:findings
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "prior_dispositions": [
+    {
+      "id": "r2-review-regression-code#RG2-004",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:366-373: an ingest without --premises now calls inheritedPremiseClaims (src/review/premise.ts:730-761), which re-applies research-evidence/premises.json while every held claim still lands and every previously held record keeps its subject, and throws a refusal naming the findings otherwise; managed.ts:516 moves the file aside only when nothing was held. The silent path (held findings written to findings.json with no premise, readiness item 11 passing) no longer exists. Residual, not a re-open: a claims file that held nothing but carried a `downgraded` claim is still moved aside unapplied (see RG4-002)."
+    },
+    {
+      "id": "r3-review-regression-skills#RG3-001",
+      "disposition": "closed",
+      "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1127 now says to renumber a collision (a new finding sharing a carried one's display id included) 'in the saved reviewer results, so the judge, its claims and ingest all see the same ids', and names the `ambiguous-finding` rejection; review-premise/SKILL.md `findings` row says the same."
+    },
+    {
+      "id": "r2-review-regression-skills#NEW-2",
+      "disposition": "closed",
+      "evidence": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md:366 (rule 7) now records the operator's answer on the Step 7 entry AND under `premise:` in the report's Stats, 'so the analysis that a resumed or --fix run reads carries it'; :813 adds the per-held-comment C-NNN, question and answer to the Stats line. Not written into the CLI durable record or the .premise.json sidecar, but the report is the artifact the --fix gate (:454) reads, which was the harm."
+    }
+  ],
+  "findings": [
+    {
+      "id": "RG4-001",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 750,
+      "quote": "if (trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== \"already-judged\")) lost.add(name);",
+      "problem": "inheritedPremiseClaims (new in this delta) counts every held claim in the stored premises.json that the trial merge rejects as a hold 'lost', whatever the reason. But the stored file is the claims as received, rejected ones included (managed.ts:512-514), so a held claim the ORIGINAL `ingest --premises` already rejected (unknown-finding, ambiguous-finding, duplicate-claim, self-judgement, below-minor, no-judge, unknown-property, missing question, ...) is rejected again on re-ingest and the re-ingest is refused, even though the findings and the claims are byte-identical and nothing was ever held under that claim.",
+      "impact": "Trigger: `keryx review ingest --premises premises.json` where one `challenged` claim names a typo id (rejected unknown-finding, recorded in scope.md, ingest succeeds); later `keryx review ingest` on the same package with the same report and no --premises. Outcome: the ingest is refused with 'the stored claims no longer hold <id> as they did (the finding is gone, or its severity, verdict or problem changed)', which is false: it never held it. The same claim file passed with --premises is accepted, so the no-flag path is stricter than the flag path and its message misdirects the operator. Workaround exists (pass --premises), hence minor.",
+      "suggested_fix": "Decide 'lost' from what was actually held, not from the raw claims: drop the first loop, or restrict it to held claims that previously applied (a claim whose name matches a key of a record in previousHeld). The previousHeld loop already covers 'a hold that existed is gone or changed'. Add a test: a stored file with one applied challenged claim and one rejected (unknown-finding) challenged claim re-ingests without --premises and is carried forward.",
+      "evidence": "premise.ts:739 (heldClaims = every non-malformed held-verdict claim, rejected or not), :748-751 (rejection => lost), :759 (refusal); managed.ts:512-514 writes input.premises unchanged ('rejected ones included'); premise.ts:64-80 PREMISE_REJECTION_REASONS; premise.ts:465 duplicate-claim rejects both claims of a pair.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/premise.ts:748-751"],
+        "enumeration_method": "every place inheritedPremiseClaims adds to `lost`: two loops (premise.ts:748-751 claims, :752-758 previous records); only the claims loop reads trial rejections, so it is the single site."
+      },
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG4-002",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 516,
+      "quote": "} else if (inherited === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {",
+      "problem": "After this delta, whether a stored `downgraded` claim is re-applied on an ingest without --premises depends on an unrelated claim: when the same premises.json also holds a finding, the whole file is carried forward and the downgrade applies; when it holds nothing (only upheld/downgraded), inheritedPremiseClaims returns undefined and the file is moved aside, so the downgrade is silently dropped and the finding returns at its original severity.",
+      "impact": "Trigger: Wave D saved claims with only `downgraded` verdicts to research-evidence/premises.json, then `keryx review ingest` without --premises. Outcome: the finding stays at the higher severity (over-blocks, never under-blocks), with no message. Pre-existing for the no-hold case (before the delta every no-flag ingest dropped all claims); the delta only made it inconsistent. Info: conservative direction; settle by deciding whether carry-forward should key on 'any applied claim' rather than 'any held claim'.",
+      "suggested_fix": "Return the carry result whenever the stored claims would apply anything (held or downgraded), or print a one-line warning when a moved-aside file carried a downgrade.",
+      "evidence": "premise.ts:740 returns undefined when no held claim and no held record; managed.ts:516-521 then renames the file; managed.ts:373 merges premiseClaims ?? inherited?.parsed.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG4-003",
+      "severity": "info",
+      "file": "src/flow/review-gate.ts",
+      "line": 531,
+      "quote": "const decisions: PremiseQuestionDecision[] = await readPremiseDecisions(packageDir);",
+      "problem": "operator-decisions.ts readEntries (via the new decisionsStorePath) now throws when a look-alike of operator-decisions.json is in the package, where it previously could not throw (readJsonFileOr). Its readers do not catch: the flow review gate (review-gate.ts:531, and confirmedDecision at operator-decisions.ts:271 for waivers), the verdict (verdict.ts:273) and the delta-round carry (premise-question.ts:103,107). So the gate surfaces an exception from `flow complete` / `review verdict` / `review start` instead of a named failing condition.",
+      "impact": "Fail-closed by the doc comment's design (operator-decisions.ts decisionsStorePath), and a look-alike can no longer be written through an approved patch (automatic-review.ts PLAIN_SEGMENT), so the trigger is a file placed outside the approved path. No reproducible harm beyond the error shape; info. Settle by confirming the gate wants an exception, not a failing `terminal-dispositions` condition naming the look-alike.",
+      "suggested_fix": "Optionally catch the look-alike error in withPremiseHolds / the verdict and report it as a failing condition with the file name, so the operator sees it on the gate surface.",
+      "evidence": "operator-decisions.ts:169-172 readEntries -> decisionsStorePath throw; callers review-gate.ts:531, verdict.ts:273, premise-question.ts:103/107, operator-decisions.ts:271.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    }
+  ]
+}
+```
+
+Summary (review-regression, round 4 fix delta, PR #1043):
+
+Prior: 3 review-regression findings dispositioned; all 3 closed (RG2-004 code, RG3-001 skills, NEW-2 skills).
+
+New: 0 blocker, 0 major, 1 minor, 2 info.
+- RG4-001 (minor): the new carry-forward check refuses a no-flag re-ingest when a held claim was already rejected at the original --premises ingest, with a message claiming the hold was lost.
+- RG4-002 (info): a downgrade-only claims file is still dropped on a no-flag ingest, while the same downgrade applies if any claim holds.
+- RG4-003 (info): a look-alike decisions file now makes the gate, verdict and start throw rather than report a failing condition (deliberate fail-closed).
+
+Checked and clean: normaliseCarriedPremise refactor is equivalent to the old branch logic; isReviewPackageDir move to package-location.ts is equivalent (flowsRoot is a plain join) and every importer was updated; recordPremiseDecision's third argument has no remaining caller (all moved to recordPremiseDecisionAfter); answerPremiseQuestion's registry re-record still runs only after both writes land; approvesPatchTargets keeps the old checks and adds the ASCII-segment rule; global_ids are minted (managed.ts:304) before the premise merge so the previous-record key join in inheritedPremiseClaims resolves.
+
+Radius: the review went over the delta and its callers found by search; runtime edges (CLI string dispatch, the shell guard) were read by hand, not computed. No cap record was consulted for this fix delta.

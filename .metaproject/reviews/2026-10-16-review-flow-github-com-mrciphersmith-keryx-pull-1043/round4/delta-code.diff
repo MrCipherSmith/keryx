@@ -1,0 +1,1098 @@
+diff --git a/src/commands/automatic-review.test.ts b/src/commands/automatic-review.test.ts
+index a38b659e3..b972a5c0f 100644
+--- a/src/commands/automatic-review.test.ts
++++ b/src/commands/automatic-review.test.ts
+@@ -220,6 +220,42 @@ test("the decisions guard folds case and looks at every depth: the same file on
+   expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/notes-on-operator-decisions.json.md`])).toBe(true);
+ });
+ 
++test("a non-ASCII spelling that a filesystem may fold onto the decisions file is never approved (review SEC3-001)", () => {
++  const run = boundRun();
++  const spellings = [
++    "operator-deciſions.json", // U+017F long s: APFS folds it to `s`, toLowerCase leaves it
++    "operator-decısions.json", // U+0131 dotless i: upcases to `I`
++    "operator-décisions.json", // NFD: e + combining acute
++    "operator-décisions.json", // NFC é
++    "ｏperator-decisions.json", // full-width o
++    ".operator-decisions.locK/x.json", // U+212A Kelvin sign: NFKC makes it `K`
++    ".operator-deciſions.lock/x.json",
++    "sub/operator-deciſions.json",
++    "notes-été.md", // any non-ASCII segment, even one that aliases nothing
++  ];
++  for (const name of spellings) {
++    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/${name}`])).toBe(false);
++  }
++  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/research-evidence/notes_1.md`])).toBe(true);
++});
++
++test("a long-s spelling of the decisions file is refused before and after it exists on disk (review SEC3-001)", async () => {
++  const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-fold-"));
++  try {
++    const dir = path.join(cwd, ".metaproject", "reviews", ID);
++    await mkdir(dir, { recursive: true });
++    const run = new AutomaticReviewRun(cwd);
++    run.observe(CREATE, CREATED);
++    const target = `.metaproject/reviews/${ID}/operator-deciſions.json`;
++    expect(run.approvesPatchTargets([target])).toBe(false);
++    await writeFile(path.join(cwd, target), "{}");
++    expect(run.approvesPatchTargets([target])).toBe(false);
++    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/operator-decisions.json`])).toBe(false);
++  } finally {
++    await rm(cwd, { recursive: true, force: true });
++  }
++});
++
+ test("a symlink inside the package that resolves to the decisions file, or out of the package, is not approved", async () => {
+   const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-link-"));
+   try {
+diff --git a/src/commands/automatic-review.ts b/src/commands/automatic-review.ts
+index c33e6347e..7e6b92f6e 100644
+--- a/src/commands/automatic-review.ts
++++ b/src/commands/automatic-review.ts
+@@ -11,8 +11,8 @@ import path from "node:path";
+ import { ASK_USER_EMERGENCIES } from "../harness/tool/builtin/ask-user-tool";
+ import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+ import { AUTOMATIC_REVIEW_DISCLOSURE_FILE } from "../review/chunks-estimate";
+-import { OPERATOR_DECISIONS_FILE, OPERATOR_DECISIONS_LOCK } from "../review/operator-decisions";
+-import { isReviewPackageDir } from "../review/premise-question";
++import { OPERATOR_DECISIONS_FILE, OPERATOR_DECISIONS_LOCK, foldFileName } from "../review/operator-decisions";
++import { isReviewPackageDir, reviewsRoot } from "../review/package-location";
+ import { describeAutomaticReviewLimit } from "./round-limit";
+ 
+ /** The flag that records the mode on a review package's manifest. */
+@@ -210,10 +210,17 @@ const PACKAGE_DATA_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".json", ".
+ /**
+  * Package data only the operator's own commands and cards write (flow 459 review): the operator's decisions, and the
+  * lock directory beside them. A patch naming either is never approved without asking, so an agent cannot write an
+- * answer the operator did not give. Lower-cased: on a case-insensitive filesystem (APFS, NTFS defaults)
+- * `Operator-Decisions.JSON` is the same file.
++ * answer the operator did not give. Folded ({@link foldFileName}): on a case-insensitive filesystem (APFS, NTFS
++ * defaults) `Operator-Decisions.JSON` is the same file.
+  */
+-const OPERATOR_ONLY_NAMES: ReadonlySet<string> = new Set([OPERATOR_DECISIONS_FILE.toLowerCase(), OPERATOR_DECISIONS_LOCK.toLowerCase()]);
++const OPERATOR_ONLY_NAMES: ReadonlySet<string> = new Set([foldFileName(OPERATOR_DECISIONS_FILE), foldFileName(OPERATOR_DECISIONS_LOCK)]);
++/**
++ * The only path segments an approved patch may name (review SEC3-001). Package data names are keryx's own, all plain
++ * ASCII; a JS case mapping is narrower than a filesystem's name match (U+017F long s folds to `s` on APFS, and
++ * `toLowerCase` leaves it as it is), so a segment with anything else in it could alias an operator-only file and is
++ * left to the operator.
++ */
++const PLAIN_SEGMENT = /^[A-Za-z0-9._-]+$/;
+ 
+ /** Whether `file` exists as an entry, a dangling symlink included (existsSync follows the link). */
+ function entryExists(file: string): boolean {
+@@ -245,20 +252,24 @@ function realTarget(target: string): string {
+   }
+ }
+ 
+-/**
+- * Whether a patch to `resolved` would touch an operator-only file of the package `dir`, or leave it: any path segment,
+- * at any depth, whose case-folded name is one of {@link OPERATOR_ONLY_NAMES}, read both as written and with symlinks
+- * resolved (a link named `notes.json` that points at the decisions file is the decisions file).
+- */
+-function touchesOperatorOnly(dir: string, resolved: string): boolean {
+-  const named = (base: string, target: string): boolean =>
+-    path
+-      .relative(base, target)
+-      .split(/[\\/]/)
+-      .some((segment) => OPERATOR_ONLY_NAMES.has(segment.toLowerCase()));
+-  const real = realTarget(resolved);
+-  const realDir = realTarget(dir);
+-  return named(dir, resolved) || named(realDir, real) || !real.startsWith(`${realDir}${path.sep}`);
++/** The segments of `target` below `base`. */
++function segmentsBelow(base: string, target: string): string[] {
++  return path.relative(base, target).split(/[\\/]/);
++}
++
++/** Whether every segment of `target` below `base` is plain ASCII ({@link PLAIN_SEGMENT}). */
++function hasOnlyPlainSegments(base: string, target: string): boolean {
++  return segmentsBelow(base, target).every((segment) => PLAIN_SEGMENT.test(segment));
++}
++
++/** Whether any segment of `target` below `base`, at any depth, folds to an operator-only name ({@link OPERATOR_ONLY_NAMES}). */
++function touchesOperatorOnlyName(base: string, target: string): boolean {
++  return segmentsBelow(base, target).some((segment) => OPERATOR_ONLY_NAMES.has(foldFileName(segment)));
++}
++
++/** Whether the real path `real` of a patch target lies outside the real package directory `realDir`. */
++function escapesPackage(realDir: string, real: string): boolean {
++  return !real.startsWith(`${realDir}${path.sep}`);
+ }
+ 
+ /**
+@@ -308,19 +319,30 @@ export class AutomaticReviewRun {
+     return this.approvesPackageCommand(sub, words.slice(3));
+   }
+ 
+-  /** Only data files: a test or script written into the package could later be run by an approved command. */
++  /**
++   * Only data files: a test or script written into the package could later be run by an approved command. Each target is
++   * read both as written and with symlinks resolved (a link named `notes.json` that points at the decisions file is the
++   * decisions file, and one that points out of the package leaves it).
++   */
+   approvesPatchTargets(targets: readonly string[]): boolean {
+     const dir = this.binding?.dir;
+     if (dir === undefined || targets.length === 0) {
+       return false;
+     }
++    const realDir = realTarget(dir);
++    const isData = (file: string): boolean => PACKAGE_DATA_EXTENSIONS.has(path.extname(file).toLowerCase());
+     return targets.every((target) => {
+       const resolved = path.resolve(this.cwd, target);
++      const real = realTarget(resolved);
+       return (
+         resolved.startsWith(`${dir}${path.sep}`) &&
+-        PACKAGE_DATA_EXTENSIONS.has(path.extname(resolved).toLowerCase()) &&
+-        PACKAGE_DATA_EXTENSIONS.has(path.extname(realTarget(resolved)).toLowerCase()) &&
+-        !touchesOperatorOnly(dir, resolved)
++        !escapesPackage(realDir, real) &&
++        hasOnlyPlainSegments(dir, resolved) &&
++        hasOnlyPlainSegments(realDir, real) &&
++        isData(resolved) &&
++        isData(real) &&
++        !touchesOperatorOnlyName(dir, resolved) &&
++        !touchesOperatorOnlyName(realDir, real)
+       );
+     });
+   }
+@@ -500,8 +522,7 @@ export class AutomaticReviewRun {
+       return this.insidePackage(value);
+     }
+     const resolved = path.resolve(this.cwd, value);
+-    const root = path.join(path.resolve(this.cwd), ".metaproject", "reviews") + path.sep;
+-    return resolved.startsWith(root);
++    return resolved.startsWith(reviewsRoot(path.resolve(this.cwd)) + path.sep);
+   }
+ 
+   private insidePackage(value: string): boolean {
+diff --git a/src/commands/review-premises-cli.test.ts b/src/commands/review-premises-cli.test.ts
+index a77c864f7..38fe84c70 100644
+--- a/src/commands/review-premises-cli.test.ts
++++ b/src/commands/review-premises-cli.test.ts
+@@ -63,13 +63,51 @@ test("ingest --premises reaches the merge: the finding carries the premise and t
+   expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual(PREMISES);
+ });
+ 
+-test("a re-ingest without --premises keeps the earlier claims file, moved aside, not deleted (review RG2-004)", async () => {
++type HeldRecord = { premise?: { verdict: string } };
++const readFindings = async (dir: string): Promise<HeldRecord[]> => JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as HeldRecord[];
++
++test("a re-ingest without --premises carries the held claims forward while they still hold the same finding (review RG2-004)", async () => {
+   await writeFile(path.join(ROOT, "report.md"), REPORT);
+   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+   const dir = await ingest("2026-10-16-reingest", ["--premises", "premises.json"]);
++  const lines: string[] = [];
++  console.log = (...args: unknown[]) => void lines.push(args.map(String).join(" "));
+   await ingest("2026-10-16-reingest");
++  expect(process.exitCode).toBe(0);
++  expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
++  expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual(PREMISES);
++  expect(lines.join("\n")).toContain("premise claims: carried forward");
++});
++
++test("a re-ingest without --premises whose held finding changed is refused, asks for --premises, and leaves the package as it was (review RG2-004)", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT);
++  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
++  const dir = await ingest("2026-10-16-changed", ["--premises", "premises.json"]);
++  const before = await readFile(path.join(dir, "findings.json"), "utf8");
++  await writeFile(path.join(ROOT, "report.md"), REPORT.replace("timeline pinned LTR", "timeline pinned LTR in every locale"));
++  const errors: string[] = [];
++  const realError = console.error;
++  console.error = (...args: unknown[]) => void errors.push(args.map(String).join(" "));
++  try {
++    await ingest("2026-10-16-changed");
++  } finally {
++    console.error = realError;
++  }
++  expect(process.exitCode).not.toBe(0);
++  expect(errors.join("\n")).toContain("Pass --premises <file>");
++  expect(errors.join("\n")).toContain("2026-10-16-changed#LY-003");
++  expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(before);
++  expect(existsSync(path.join(dir, PREMISES_FILE))).toBe(true);
++});
++
++test("a re-ingest without --premises over claims that held nothing moves the claims file aside, not deleted", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT);
++  const upheld = { judge: "review-premise", premises: [{ finding_id: "LY-003", verdict: "upheld" }] };
++  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(upheld));
++  const dir = await ingest("2026-10-16-upheld", ["--premises", "premises.json"]);
++  await ingest("2026-10-16-upheld");
+   expect(existsSync(path.join(dir, PREMISES_FILE))).toBe(false);
+-  expect(JSON.parse(await readFile(path.join(dir, PREMISES_SUPERSEDED_FILE), "utf8"))).toEqual(PREMISES);
++  expect(JSON.parse(await readFile(path.join(dir, PREMISES_SUPERSEDED_FILE), "utf8"))).toEqual(upheld);
+ });
+ 
+ test("--premises naming a missing file refuses the ingest, says which file, and writes no package", async () => {
+diff --git a/src/commands/review.ts b/src/commands/review.ts
+index 967d50e48..fe45880d0 100644
+--- a/src/commands/review.ts
++++ b/src/commands/review.ts
+@@ -1079,6 +1079,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
+   console.log(`status: ${result.manifest.status}`);
+   console.log(`path: ${result.path}`);
+   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
++  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward from this package's research-evidence/premises.json (no --premises given; the held findings still match them)");
+   if (mode !== "ingest") {
+     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
+     await writeRunProfile(result.path, profile, { stampManifest: true });
+@@ -5302,7 +5303,9 @@ verification (attach/start/ingest):
+   --premises takes what review-premise returned: the bare \`{ judge, model?, premises }\`
+   object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
+   DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
+-  only lower a severity. The operator answers with \`keryx review decide-premise\`.
++  only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
++  without --premises over a package the judge held re-applies its stored claims while they still
++  hold the same findings, and is refused otherwise.
+   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
+   per-drop reasons — so the package records what the pre-filter dropped and why.
+   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is
+diff --git a/src/flow/review-gate.test.ts b/src/flow/review-gate.test.ts
+index 65eaba0e9..30058673a 100644
+--- a/src/flow/review-gate.test.ts
++++ b/src/flow/review-gate.test.ts
+@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { runOperatorCommand } from "../commands/review-operator";
+ import { OPERATOR_DECISIONS_FILE, recordPremiseDecision } from "../review/operator-decisions";
+-import { downgradedPremise, heldPremise, premiseAnswer, premiseAnswerInput } from "../review/premise-fixtures";
++import { downgradedPremise, heldFinding, heldPremise, premiseAnswer, premiseAnswerInput } from "../review/premise-fixtures";
+ import { createFlowService } from "./service";
+ import {
+   EXTERNAL_COMMENT_COVERAGE_REVIEWERS,
+@@ -1607,14 +1607,15 @@ test("research ledger blocks a clean round and rechecks tampering after closure"
+ 
+ // The shared held premise (premise-fixtures.ts), on a finding of this suite's round: `round-1#LY-003`.
+ const HELD_PREMISE = heldPremise({ question: "Should the timeline mirror?" });
+-const heldFinding = (over: Partial<ReviewFixtureFinding> = {}): ReviewFixtureFinding => ({ id: "LY-003", global_id: "round-1#LY-003", severity: "major", problem: "timeline pinned LTR", premise: HELD_PREMISE, ...over });
++/** The shared held finding (premise-fixtures.ts `heldFinding`) under this round's key, typed for writeReviewPackage. */
++const roundHeld = (over: Partial<ReviewFixtureFinding> = {}): ReviewFixtureFinding => heldFinding({ global_id: "round-1#LY-003", premise: HELD_PREMISE, ...over }) as ReviewFixtureFinding;
+ 
+ test("flow 459 — a held finding with no operator decision fails the gate, at any severity, and is named", async () => {
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { id, dir } = await driveToGates(service);
+   await writeFile(path.join(ROOT, REVIEW_GATE_CONFIG_PATH), `${JSON.stringify({ completion: { severity_floor: "major" } }, null, 2)}\n`, "utf8");
+-  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ severity: "minor" })] });
++  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld({ severity: "minor" })] });
+ 
+   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+ 
+@@ -1627,10 +1628,10 @@ test("flow 459 — a dismiss decision in the package clears the hold and the gat
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { id, dir } = await driveToGates(service);
+-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
+   expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
+ 
+-  await recordPremiseDecision(packageDir, premiseAnswerInput(heldFinding() as Record<string, unknown>, { finding: "round-1#LY-003" }));
++  await recordPremiseDecision(packageDir, premiseAnswerInput(roundHeld(), { finding: "round-1#LY-003" }));
+ 
+   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
+ });
+@@ -1639,7 +1640,7 @@ test("flow 459 — the decision `keryx review decide-premise` writes clears the
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { id, dir } = await driveToGates(service);
+-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
+   expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
+ 
+   const code = await runOperatorCommand(
+@@ -1656,8 +1657,8 @@ test("flow 459 — an uphold decision ends the question but not the finding: it
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { id, dir } = await driveToGates(service);
+-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+-  await recordPremiseDecision(packageDir, premiseAnswerInput(heldFinding() as Record<string, unknown>, { finding: "LY-003", answer: "uphold", reason: "mirror it" }));
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
++  await recordPremiseDecision(packageDir, premiseAnswerInput(roundHeld(), { finding: "LY-003", answer: "uphold", reason: "mirror it" }));
+ 
+   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+ 
+@@ -1675,7 +1676,7 @@ test("flow 459 — an answer written onto the finding record is not an operator
+     flowDir: dir,
+     reviewId: "round-1",
+     head: HEAD,
+-    findings: [heldFinding({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } } })],
++    findings: [roundHeld({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } } })],
+   });
+ 
+   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+@@ -1692,7 +1693,7 @@ test("flow 459 — a dismissed-incorrect written onto a held record without a de
+     flowDir: dir,
+     reviewId: "round-1",
+     head: HEAD,
+-    findings: [heldFinding({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } }, disposition: { state: "dismissed-incorrect", evidence: "operator owner: kept LTR" } })],
++    findings: [roundHeld({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } }, disposition: { state: "dismissed-incorrect", evidence: "operator owner: kept LTR" } })],
+   });
+ 
+   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("fail");
+@@ -1702,7 +1703,7 @@ test("flow 459 — a dismissed-wont-fix an agent wrote with human-decision wordi
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { id, dir } = await driveToGates(service);
+-  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ disposition: { state: "dismissed-wont-fix", evidence: "the owner decided in the PR thread: keep LTR" } })] });
++  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld({ disposition: { state: "dismissed-wont-fix", evidence: "the owner decided in the PR thread: keep LTR" } })] });
+ 
+   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+   expect(gate.status).toBe("fail");
+@@ -1714,8 +1715,8 @@ for (const [first, last] of [["dismiss", "uphold"], ["uphold", "dismiss"]] as co
+     await fresh();
+     const service = createFlowService(makeDeps());
+     const { id, dir } = await driveToGates(service);
+-    const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+-    const record = heldFinding() as Record<string, unknown>;
++    const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
++    const record = roundHeld();
+     await recordPremiseDecision(packageDir, premiseAnswerInput(record, { finding: "round-1#LY-003", answer: first, at: "2026-10-16T12:00:00Z" }));
+     await recordPremiseDecision(packageDir, premiseAnswerInput(record, { finding: "round-1#LY-003", answer: last, reason: "changed my mind", at: "2026-10-16T13:00:00Z" }));
+     const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+@@ -1732,8 +1733,8 @@ test("flow 459 — a premise-question entry without confirmedVia leaves the find
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { id, dir } = await driveToGates(service);
+-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+-  const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(heldFinding() as Record<string, unknown>, { finding: "round-1#LY-003" });
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
++  const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(roundHeld(), { finding: "round-1#LY-003" });
+   await writeFile(path.join(packageDir, OPERATOR_DECISIONS_FILE), JSON.stringify({ schemaVersion: 1, decisions: [unconfirmed] }), "utf8");
+ 
+   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+@@ -1746,7 +1747,7 @@ test("flow 459 — a held finding below the floor is named as blocking, not as a
+   const service = createFlowService(makeDeps());
+   const { id, dir } = await driveToGates(service);
+   await writeFile(path.join(ROOT, REVIEW_GATE_CONFIG_PATH), `${JSON.stringify({ completion: { severity_floor: "major" } }, null, 2)}\n`, "utf8");
+-  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ severity: "minor" })] });
++  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld({ severity: "minor" })] });
+ 
+   const detail = conditionDetail(reviewOf((await service.complete({ cwd: ROOT, id })).gates), "terminal-dispositions");
+   expect(detail).toContain("blocking finding(s) are not terminal");
+@@ -1763,7 +1764,7 @@ test("flow 459 — a downgraded finding is not held: its lowered severity is the
+     flowDir: dir,
+     reviewId: "round-1",
+     head: HEAD,
+-    findings: [heldFinding({ severity: "minor", premise: downgradedPremise("major", "minor") })],
++    findings: [roundHeld({ severity: "minor", premise: downgradedPremise("major", "minor") })],
+   });
+ 
+   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
+@@ -1792,7 +1793,7 @@ test("flow 459 — a round's premise stats reach the round record", async () =>
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { dir } = await driveToGates(service);
+-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
+   const scope = await readFile(path.join(packageDir, "scope.md"), "utf8");
+   await writeFile(path.join(packageDir, "scope.md"), `${scope}\n## Premise check\n\npremise_claims_received: 1\npremise_claims_applied: 1\npremise_claims_rejected: 0\npremise_held: 1\n`, "utf8");
+ 
+diff --git a/src/gdskills/skill-length-ceilings.ts b/src/gdskills/skill-length-ceilings.ts
+index 8980e6af9..78efd0248 100644
+--- a/src/gdskills/skill-length-ceilings.ts
++++ b/src/gdskills/skill-length-ceilings.ts
+@@ -109,7 +109,7 @@ const CEILINGS_BY_KEY = {
+   "orchestration/flow-orchestrator": 682,
+   "orchestration/issue-analyzer": 373,
+   "orchestration/job-documenter": 414,
+-  "orchestration/job-orchestrator": 2199,
++  "orchestration/job-orchestrator": 2198,
+   "orchestration/task-implementer": 662,
+   "planning/autodoc-analyst": 180,
+   "planning/autodoc-architect": 179,
+diff --git a/src/review/managed.ts b/src/review/managed.ts
+index c7c25c4e3..fdf5817a5 100644
+--- a/src/review/managed.ts
++++ b/src/review/managed.ts
+@@ -16,7 +16,7 @@ import { loadSchema, validateJson } from "../gdskills/contracts";
+ import { pathExists, writeFileAtomic } from "../lib/fs";
+ import { resolveProjectRoot } from "../lib/contained-path";
+ import { clearActiveReview } from "./active-review";
+-import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
++import { listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
+ import type { FlowState } from "../flow/types";
+ import {
+   mergeVerifications,
+@@ -51,7 +51,9 @@ import {
+ } from "./filter-stats";
+ import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+ import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
+-import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
++import { flowReviewsRoot, reviewsRoot } from "./package-location";
++import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, inheritedPremiseClaims, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
++import { readJsonFileOr } from "../lib/json";
+ import { withOperatorDecisionsLock } from "./operator-decisions";
+ import { repairMechanicalOmissions, type FindingRepair } from "./repair";
+ import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
+@@ -86,9 +88,7 @@ import {
+ 
+ const REQUIRED_ARTIFACTS = ["scope", "coverage", "report", "findings", "learning", "decisions"] as const;
+ 
+-export function reviewsRoot(cwd: string): string {
+-  return path.join(cwd, ".metaproject", "reviews");
+-}
++export { reviewsRoot } from "./package-location";
+ 
+ /**
+  * `git rev-parse HEAD` in `cwd`, or `null` when there is no checkout to ask.
+@@ -363,7 +363,15 @@ export async function createManagedReviewPackage(
+   // which makes them a question for the operator and never a dismissal. A carried finding keeps its premise.
+   // One merge over both sets (a claim may name either, and two claims on one finding must meet to cancel), then split
+   // by what each finding IS rather than by position.
+-  const premised = mergePremises([...deduped.findings, ...scoped.external], premiseClaims);
++  const premiseSet = [...deduped.findings, ...scoped.external];
++  // Review RG2-004: an ingest without --premises over a package the judge held carries the stored claims forward while
++  // they still hold the same findings, and is refused otherwise; it never silently drops a hold.
++  const inherited =
++    premiseClaims === undefined
++      ? inheritedPremiseClaims(premiseSet, await readJsonFileOr<unknown>(path.join(packageDir, PREMISES_FILE), undefined), await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), undefined))
++      : undefined;
++  if (inherited?.ok === false) throw new Error(inherited.refusal);
++  const premised = mergePremises(premiseSet, premiseClaims ?? inherited?.parsed);
+   const premisedInternal = premised.findings.filter((finding) => finding.source !== "external");
+   const premisedExternal = premised.findings.filter((finding) => finding.source === "external");
+ 
+@@ -504,7 +512,7 @@ export async function createManagedReviewPackage(
+     // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
+     await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
+     await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
+-  } else if (await pathExists(path.join(packageDir, PREMISES_FILE))) {
++  } else if (inherited === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
+     // An ingest without --premises keeps the judge's record, moved aside (review RG2-004): the verdict never re-applies
+     // claims to an ingested round, so the file at its own name would only mislead a reader into thinking this ingest
+     // carried them.
+@@ -561,6 +569,7 @@ export async function createManagedReviewPackage(
+     verificationCaps: verification.caps,
+     premise: premised.counts,
+     premiseRejections: premised.rejections,
++    ...(inherited?.ok === true ? { premisesCarriedForward: true as const } : {}),
+     caps,
+     filterStats,
+     reviewNotes,
+@@ -1107,7 +1116,7 @@ function packagePath(
+   flowMatch: FlowMatchResult | null,
+ ): string {
+   if ((mode === "attach-review" || mode === "ingest") && flowMatch) {
+-    return path.join(flowsRoot(cwd), flowMatch.dir, "reviews", reviewId);
++    return path.join(flowReviewsRoot(cwd, flowMatch.dir), reviewId);
+   }
+   if (mode === "attach-review") {
+     throw new Error("attach-review requires an explicit or matched flow");
+@@ -2786,7 +2795,7 @@ export async function resolveReviewPackagePath(cwd: string, ref: string): Promis
+   }
+ 
+   for (const flowDir of await listFlowDirs(cwd)) {
+-    const reviewsDir = path.join(flowsRoot(cwd), flowDir, "reviews");
++    const reviewsDir = flowReviewsRoot(cwd, flowDir);
+     if (!(await pathExists(reviewsDir))) {
+       continue;
+     }
+diff --git a/src/review/operator-decisions.ts b/src/review/operator-decisions.ts
+index e8d95c6e3..18fc92489 100644
+--- a/src/review/operator-decisions.ts
++++ b/src/review/operator-decisions.ts
+@@ -14,6 +14,7 @@
+ // Every write is a read-modify-write of the whole file. An atomic rename stops a torn file, not a lost update, so the
+ // read and the write run under one lock beside the file: two writers that overlap both land.
+ 
++import { readdir } from "node:fs/promises";
+ import path from "node:path";
+ import { withFileLock, writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+@@ -131,8 +132,43 @@ function validDecision(entry: unknown): entry is OperatorDecision | PremiseQuest
+   return validGateDecision(entry) || validPremise(entry);
+ }
+ 
++/**
++ * A file name as a case-insensitive, normalisation-insensitive filesystem may compare it (review SEC3-001): NFKC (a
++ * full-width or composed spelling is its plain form), then upper- and lower-cased, so U+017F long s and U+0131 dotless
++ * i land on `s` and `i`, and U+212A Kelvin on `k`. Wider than any one filesystem's match, which is the point: a name
++ * that folds onto an operator-only name is treated as that name.
++ */
++export function foldFileName(name: string): string {
++  return name.normalize("NFKC").toUpperCase().toLowerCase().normalize("NFKC");
++}
++
++/**
++ * The decisions store's path, read by its exact name only (review SEC3-001). Undefined when the package holds no entry
++ * of that exact name: on a case-insensitive volume the plain path would open a look-alike an agent planted
++ * (`operator-deciſions.json`), so the store is never read through a name it does not have. Throws when any other
++ * entry folds to the store's name ({@link foldFileName}): with a look-alike in the package, which file the filesystem
++ * opens is not a fact the reader can trust, so no decision is read or written until it is removed.
++ */
++async function decisionsStorePath(packageDir: string): Promise<string | undefined> {
++  let names: string[];
++  try {
++    names = await readdir(packageDir);
++  } catch {
++    return undefined;
++  }
++  const folded = foldFileName(OPERATOR_DECISIONS_FILE);
++  const lookalikes = names.filter((name) => name !== OPERATOR_DECISIONS_FILE && foldFileName(name) === folded);
++  if (lookalikes.length > 0) {
++    throw new Error(
++      `${path.basename(packageDir)} holds ${lookalikes.map((name) => JSON.stringify(name)).join(", ")}, which a case-insensitive filesystem may read as ${OPERATOR_DECISIONS_FILE}. No operator decision is read or written while it is there: only the operator's own commands write that file, so remove the look-alike and check the decisions again.`,
++    );
++  }
++  return names.includes(OPERATOR_DECISIONS_FILE) ? path.join(packageDir, OPERATOR_DECISIONS_FILE) : undefined;
++}
++
+ async function readEntries(packageDir: string): Promise<unknown[]> {
+-  const file = await readJsonFileOr<unknown>(path.join(packageDir, OPERATOR_DECISIONS_FILE), undefined);
++  const store = await decisionsStorePath(packageDir);
++  const file = store === undefined ? undefined : await readJsonFileOr<unknown>(store, undefined);
+   return file !== null && typeof file === "object" && Array.isArray((file as { decisions?: unknown }).decisions) ? (file as { decisions: unknown[] }).decisions : [];
+ }
+ 
+@@ -165,18 +201,26 @@ export async function readPremiseDecisions(packageDir: string): Promise<PremiseQ
+   return (await readEntries(packageDir)).filter(validPremise);
+ }
+ 
++/** What an `applyFirst` step hands back: how to undo its write, and a value the caller reads once the decision landed. */
++export type AppliedFirst<A> = { undo: () => Promise<void>; value: A };
++
++/** Appends a premise-question decision (the operator's answer, or one carried from an earlier round). */
++export async function recordPremiseDecision(packageDir: string, input: PremiseDecisionInput): Promise<PremiseQuestionDecision> {
++  return (await recordPremiseDecisionAfter(packageDir, input, async () => undefined)).decision;
++}
++
+ /**
+- * Appends a premise-question decision. `applyFirst` runs inside the same lock, BEFORE the decision is appended: the
+- * answer command uses it to apply the answer to findings.json, so no other writer interleaves between the two files.
+- * The two writes land together or not at all (review HL2-003): `applyFirst` returns how to undo its write, and a failed
+- * append undoes it before the error reaches the caller. A failed `applyFirst` records nothing. Either way a retry
+- * starts from the state before the answer, never from a recorded decision whose findings.json was not updated.
++ * Appends a premise-question decision after `applyFirst`, inside the same lock: the answer command uses it to apply the
++ * answer to findings.json, so no other writer interleaves between the two files. The two writes land together or not
++ * at all (review HL2-003): a failed append runs `applyFirst`'s undo before the error reaches the caller, and a failed
++ * `applyFirst` records nothing. Either way a retry starts from the state before the answer, never from a recorded
++ * decision whose findings.json was not updated. `applied` is `applyFirst`'s value, returned only once both landed.
+  */
+-export async function recordPremiseDecision(
++export async function recordPremiseDecisionAfter<A>(
+   packageDir: string,
+   input: PremiseDecisionInput,
+-  applyFirst?: (decision: PremiseQuestionDecision) => Promise<(() => Promise<void>) | undefined>,
+-): Promise<PremiseQuestionDecision> {
++  applyFirst: (decision: PremiseQuestionDecision) => Promise<AppliedFirst<A> | undefined>,
++): Promise<{ decision: PremiseQuestionDecision; applied: A | undefined }> {
+   const kept: PremiseQuestionDecision = {
+     kind: PREMISE_DECISION_KIND,
+     finding: typeof input.finding === "string" ? input.finding.trim() : input.finding,
+@@ -192,16 +236,17 @@ export async function recordPremiseDecision(
+   if (!validPremise(kept)) {
+     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
+   }
+-  await withOperatorDecisionsLock(packageDir, async () => {
+-    const undo = await applyFirst?.(kept);
++  const applied = await withOperatorDecisionsLock(packageDir, async () => {
++    const first = await applyFirst(kept);
+     try {
+       await appendDecision(packageDir, kept);
+     } catch (error) {
+-      await undo?.();
++      await first?.undo();
+       throw error;
+     }
++    return first?.value;
+   });
+-  return kept;
++  return { decision: kept, applied };
+ }
+ 
+ function validSubject(value: unknown): value is OperatorDecisionSubject {
+diff --git a/src/review/package-location.ts b/src/review/package-location.ts
+new file mode 100644
+index 000000000..b977d1928
+--- /dev/null
++++ b/src/review/package-location.ts
+@@ -0,0 +1,44 @@
++// Where a review package lives (review R3-ARCH-001): directly under `.metaproject/reviews/`, or under
++// `.metaproject/flows/<flow>/reviews/`. The ingest's allocation, the prior-round detector's globs and the
++// "is this a real package" check all read the layout from here, so a change to it is made once.
++
++import { existsSync, realpathSync } from "node:fs";
++import path from "node:path";
++import { flowsRoot } from "../flow/store";
++
++/** The standalone packages' root. */
++export function reviewsRoot(cwd: string): string {
++  return path.join(cwd, ".metaproject", "reviews");
++}
++
++/** The packages' root of one flow. */
++export function flowReviewsRoot(cwd: string, flowDir: string): string {
++  return path.join(flowsRoot(cwd), flowDir, "reviews");
++}
++
++/** Every package's manifest, as git pathspec globs relative to the checkout. */
++export const REVIEW_PACKAGE_MANIFEST_GLOBS: readonly string[] = [
++  path.posix.join(".metaproject", "reviews", "*", "manifest.json"),
++  path.posix.join(".metaproject", "flows", "*", "reviews", "*", "manifest.json"),
++];
++
++/**
++ * Whether `dir` is a real review package of the checkout at `projectRoot` (review SEC2-001): a directory holding a
++ * manifest.json whose real path sits directly under {@link reviewsRoot} or a {@link flowReviewsRoot}. A directory
++ * nested inside a package, or a symlink into one, is not: an agent can write such a directory (apply_patch into the
++ * bound package is approved), and `--prior` accepts any directory with a manifest.
++ */
++export function isReviewPackageDir(dir: string, projectRoot: string): boolean {
++  let real: string;
++  let root: string;
++  try {
++    real = realpathSync(dir);
++    root = realpathSync(projectRoot);
++  } catch {
++    return false;
++  }
++  if (!existsSync(path.join(real, "manifest.json"))) return false;
++  const parent = path.dirname(real);
++  if (parent === reviewsRoot(root)) return true;
++  return parent === flowReviewsRoot(root, path.basename(path.dirname(parent))) && path.dirname(path.dirname(parent)) === flowsRoot(root);
++}
+diff --git a/src/review/premise-decision.test.ts b/src/review/premise-decision.test.ts
+index 779668577..ce67e9adc 100644
+--- a/src/review/premise-decision.test.ts
++++ b/src/review/premise-decision.test.ts
+@@ -6,7 +6,7 @@
+ // readiness, the round-to-round carry).
+ 
+ import { afterEach, describe, expect, test } from "bun:test";
+-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
++import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import {
+@@ -14,14 +14,17 @@ import {
+   OPERATOR_DECISION_KINDS,
+   PREMISE_DECISION_KIND,
+   decisionWriters,
++  foldFileName,
+   readOperatorDecisions,
+   readPremiseDecisions,
+   recordOperatorDecision,
+   recordPremiseDecision,
++  recordPremiseDecisionAfter,
+ } from "./operator-decisions";
+ import { applyPremiseDecision, applyPremiseDecisions, awaitingOperator, latestPremiseDecision, premiseHoldState } from "./premise";
+ import { heldFinding, premiseAnswer, premiseAnswerInput } from "./premise-fixtures";
+-import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding, isReviewPackageDir } from "./premise-question";
++import { isReviewPackageDir } from "./package-location";
++import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
+ import { computeReadiness } from "./readiness";
+ import { findingStatus } from "./round-record";
+ import { computeVerdict } from "./verdict";
+@@ -304,6 +307,37 @@ describe("the decision store", () => {
+     expect(await readOperatorDecisions(dir)).toHaveLength(4);
+   });
+ 
++  test("folds a file name the way a case-insensitive filesystem may compare it (review SEC3-001)", () => {
++    for (const name of ["operator-deciſions.json", "operator-decısions.json", "OPERATOR-DECISIONS.JSON", "ｏperator-decisions.json", "operator-decisions.json".normalize("NFD")]) {
++      expect(foldFileName(name)).toBe("operator-decisions.json");
++    }
++    expect(foldFileName(".operator-decisions.locK")).toBe(".operator-decisions.lock");
++    expect(foldFileName("operator-décisions.json")).toBe(foldFileName("operator-décisions.json"));
++  });
++
++  test("the store is read by its exact name only: a planted look-alike alone is not the store (review SEC3-001)", async () => {
++    const dir = await pkg();
++    const lookalike = path.join(dir, "operator-deciſions.json");
++    await writeFile(lookalike, JSON.stringify({ schemaVersion: 1, decisions: [premiseAnswer()] }));
++    // Whether the volume folds the two names or not, the agent's file is never read as the operator's decisions.
++    await expect(readPremiseDecisions(dir)).rejects.toThrow(/may read as operator-decisions\.json/);
++    await expect(recordPremiseDecision(dir, premiseAnswerInput())).rejects.toThrow(/remove the look-alike/);
++    expect(JSON.parse(await readFile(lookalike, "utf8"))).toEqual({ schemaVersion: 1, decisions: [premiseAnswer()] });
++  });
++
++  test("a look-alike next to the real store refuses every read and write until it is removed (review SEC3-001)", async () => {
++    const dir = await pkg();
++    await recordPremiseDecision(dir, premiseAnswerInput());
++    // Full-width o: NFKC folds it onto the store's name; no common filesystem treats the two as one file, so both exist.
++    const lookalike = path.join(dir, "ｏperator-decisions.json");
++    await writeFile(lookalike, JSON.stringify({ schemaVersion: 1, decisions: [premiseAnswer(heldFinding(), { answer: "uphold" })] }));
++    await expect(readPremiseDecisions(dir)).rejects.toThrow(/ｏperator-decisions\.json/);
++    await expect(readOperatorDecisions(dir)).rejects.toThrow(/look-alike/);
++    await expect(recordPremiseDecision(dir, premiseAnswerInput(heldFinding(), { answer: "uphold" }))).rejects.toThrow(/look-alike/);
++    await rm(lookalike);
++    expect((await readPremiseDecisions(dir)).map((entry) => entry.answer)).toEqual(["dismiss"]);
++  });
++
+   test("a premise record is never read as a gate decision, even with the fields of one", async () => {
+     const dir = await pkg();
+     await writeFile(
+@@ -346,8 +380,33 @@ describe("findHeldFinding: the hold is the finding record's, never a raw claim",
+     if (!lookup.ok) throw new Error(lookup.refusal);
+     // A directory where the decisions file should be: the append fails after findings.json was rewritten.
+     await mkdir(path.join(dir, OPERATOR_DECISIONS_FILE));
++    const inodeBefore = (await stat(path.join(dir, "findings.json"))).ino;
+     await expect(answerPremiseQuestion(dir, { finding: lookup.finding, answer: "dismiss", reason: "r", quote: "dismiss it", at: "2026-10-16T12:00:00Z", confirmedVia: "terminal" })).rejects.toThrow();
++    // The rewrite did happen (an atomic write replaces the file, so the inode is new) and was then undone.
++    expect((await stat(path.join(dir, "findings.json"))).ino).not.toBe(inodeBefore);
+     expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(original);
++    // And the decision itself was not recorded: the store still holds no answer, so the finding is still awaiting.
++    await rm(path.join(dir, OPERATOR_DECISIONS_FILE), { recursive: true });
++    expect(await readPremiseDecisions(dir)).toEqual([]);
++    expect(premiseHoldState(heldFinding(), await readPremiseDecisions(dir))).toBe("awaiting");
++  });
++
++  test("an append that fails runs the undo of the step before it, and returns no applied value", async () => {
++    const dir = await pkg();
++    await mkdir(path.join(dir, OPERATOR_DECISIONS_FILE));
++    const steps: string[] = [];
++    await expect(
++      recordPremiseDecisionAfter(dir, premiseAnswerInput(), async () => {
++        steps.push("applied");
++        return { undo: async () => void steps.push("undone"), value: true };
++      }),
++    ).rejects.toThrow();
++    expect(steps).toEqual(["applied", "undone"]);
++    await rm(path.join(dir, OPERATOR_DECISIONS_FILE), { recursive: true });
++    const landed = await recordPremiseDecisionAfter(dir, premiseAnswerInput(), async () => ({ undo: async () => void steps.push("wrong"), value: 7 }));
++    expect(landed.applied).toBe(7);
++    expect(steps).toEqual(["applied", "undone"]);
++    expect(await readPremiseDecisions(dir)).toHaveLength(1);
+   });
+ 
+   test("shows the answered state and a digest that changes with what was shown", async () => {
+diff --git a/src/review/premise-question.ts b/src/review/premise-question.ts
+index 143c8564a..4b269502d 100644
+--- a/src/review/premise-question.ts
++++ b/src/review/premise-question.ts
+@@ -8,7 +8,8 @@ import { readFile } from "node:fs/promises";
+ import path from "node:path";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+-import { readPremiseDecisions, recordPremiseDecision, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
++import { readPremiseDecisions, recordPremiseDecision, recordPremiseDecisionAfter, type AppliedFirst, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
++import { isReviewPackageDir } from "./package-location";
+ import { applyPremiseDecision, isHeldVerdict, latestPremiseDecision, premiseHoldState, premiseSubjectOf } from "./premise";
+ import { recordFinishedRound, registryVouchesPackage } from "./round-registry";
+ 
+@@ -73,26 +74,6 @@ export async function findHeldFinding(packageDir: string, ref: string): Promise<
+   return { ok: true, finding: { ...shown, subject, digest } };
+ }
+ 
+-/**
+- * Whether `dir` is a real review package of the checkout at `projectRoot` (review SEC2-001): a directory holding a
+- * manifest.json whose real path sits directly under `.metaproject/reviews/` or `.metaproject/flows/<flow>/reviews/`.
+- * A directory nested inside a package, or a symlink into one, is not: an agent can write such a directory (apply_patch
+- * into the bound package is approved), and `--prior` accepts any directory with a manifest.
+- */
+-export function isReviewPackageDir(dir: string, projectRoot: string): boolean {
+-  let real: string;
+-  let root: string;
+-  try {
+-    real = realpathSync(dir);
+-    root = realpathSync(projectRoot);
+-  } catch {
+-    return false;
+-  }
+-  if (!existsSync(path.join(real, "manifest.json"))) return false;
+-  const parent = path.relative(path.join(root, ".metaproject"), path.dirname(real)).split(path.sep);
+-  return (parent.length === 1 && parent[0] === "reviews") || (parent.length === 3 && parent[0] === "flows" && parent[1] !== ".." && parent[2] === "reviews");
+-}
+-
+ /**
+  * Carry the operator's premise answers into a delta round's package (flow 459). Each finding the round carries from
+  * `previousDir` keeps the answer the operator gave there, recorded as carried from that package, so an upheld finding is
+@@ -173,43 +154,48 @@ const registryPlace = (registry: RegistryOptions): { cwd?: string; dir?: string
+  * answer never makes the registry vouch for a package it did not vouch for already.
+  */
+ export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer, registry: RegistryOptions = {}): Promise<PremiseQuestionDecision> {
+-  const file = path.join(packageDir, FINDINGS_FILE);
+-  let rerecord = false;
+-  const decision = await recordPremiseDecision(
++  const { decision, applied: vouched } = await recordPremiseDecisionAfter(
+     packageDir,
+     { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, subject: input.finding.subject },
+-    async (kept) => {
+-      const before = await readFile(file, "utf8").catch(() => undefined);
+-      let findings: unknown;
+-      try {
+-        findings = before === undefined ? undefined : JSON.parse(before);
+-      } catch {
+-        findings = undefined;
+-      }
+-      if (before === undefined || !Array.isArray(findings)) return undefined;
+-      let changed = false;
+-      const next = findings.map((entry) => {
+-        const record = obj(entry);
+-        if (record === undefined || latestPremiseDecision(record, [kept]) === undefined) return entry;
+-        const applied = applyPremiseDecision(record, kept);
+-        changed ||= applied !== record;
+-        return applied;
+-      });
+-      if (!changed) return undefined;
+-      const vouched = registryVouchesPackage(packageDir, registryPlace(registry));
+-      await writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
+-      rerecord = vouched;
+-      return async () => {
+-        rerecord = false;
+-        await writeFileAtomic(file, before);
+-      };
+-    },
++    (kept) => applyAnswerToFindings(packageDir, kept, registry),
+   );
+-  if (rerecord) {
+-    const recorded = recordFinishedRound(packageDir, "decide-premise", registryPlace(registry));
+-    const problem = recorded.error ?? recorded.skipped;
+-    if (problem !== undefined) registry.warn?.(`the answer is recorded, but the local round registry was not updated (${problem}): the next round of this package runs full`);
+-    if (recorded.warning !== undefined) registry.warn?.(recorded.warning);
+-  }
++  if (vouched === true) reRecordRegistry(packageDir, registry);
+   return decision;
+ }
++
++/**
++ * Writes `kept` onto the finding records it answers in findings.json. Its value is whether the registry vouched for the
++ * package before the write; undefined (nothing to undo) when findings.json is missing, unparseable or holds no record
++ * the answer changes.
++ */
++async function applyAnswerToFindings(packageDir: string, kept: PremiseQuestionDecision, registry: RegistryOptions): Promise<AppliedFirst<boolean> | undefined> {
++  const file = path.join(packageDir, FINDINGS_FILE);
++  const before = await readFile(file, "utf8").catch(() => undefined);
++  let findings: unknown;
++  try {
++    findings = before === undefined ? undefined : JSON.parse(before);
++  } catch {
++    findings = undefined;
++  }
++  if (before === undefined || !Array.isArray(findings)) return undefined;
++  let changed = false;
++  const next = findings.map((entry) => {
++    const record = obj(entry);
++    if (record === undefined || latestPremiseDecision(record, [kept]) === undefined) return entry;
++    const applied = applyPremiseDecision(record, kept);
++    changed ||= applied !== record;
++    return applied;
++  });
++  if (!changed) return undefined;
++  const vouched = registryVouchesPackage(packageDir, registryPlace(registry));
++  await writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
++  return { undo: () => writeFileAtomic(file, before), value: vouched };
++}
++
++/** Records the round again after an answer changed findings.json, which the registry hashes; a failure is a warning. */
++function reRecordRegistry(packageDir: string, registry: RegistryOptions): void {
++  const recorded = recordFinishedRound(packageDir, "decide-premise", registryPlace(registry));
++  const problem = recorded.error ?? recorded.skipped;
++  if (problem !== undefined) registry.warn?.(`the answer is recorded, but the local round registry was not updated (${problem}): the next round of this package runs full`);
++  if (recorded.warning !== undefined) registry.warn?.(recorded.warning);
++}
+diff --git a/src/review/premise.ts b/src/review/premise.ts
+index bdcb8fd26..db380c278 100644
+--- a/src/review/premise.ts
++++ b/src/review/premise.ts
+@@ -238,22 +238,28 @@ const DOWNGRADE_TARGETS: readonly ReviewFindingSeverity[] = ["major", "minor"];
+ function normaliseCarriedPremise<T extends StructuredReviewFinding>(finding: T): T {
+   const premise = finding.premise;
+   if (premise === undefined) return finding;
+-  const stale = premise.severity !== undefined && premise.severity !== finding.severity;
+-  const stray = premise.verdict !== "downgraded" && (premise.severity !== undefined || premise.original_severity !== undefined);
+-  if (premise.operator === undefined && !stale && !stray) return finding;
++  const severityAgrees = premise.verdict === "downgraded" ? premise.severity === undefined || premise.severity === finding.severity : premise.severity === undefined && premise.original_severity === undefined;
++  // Nothing to strip: the finding itself, so a carried record stays the very object it was.
++  if (premise.operator === undefined && severityAgrees) return finding;
+   const { operator: _operator, ...judgement } = premise;
+-  if (premise.verdict !== "downgraded") {
+-    const { severity: _severity, original_severity: _original, ...rest } = judgement;
+-    return { ...finding, premise: rest } as T;
+-  }
+-  if (!stale) return { ...finding, premise: judgement } as T;
+-  const original = premise.original_severity;
+-  const stillADowngrade = DOWNGRADE_TARGETS.includes(finding.severity) && isSeverity(original) && severityRank(finding.severity) < severityRank(original);
+-  if (!stillADowngrade) {
++  if (premise.verdict !== "downgraded") return { ...finding, premise: withoutSeverities(judgement) };
++  if (severityAgrees) return { ...finding, premise: judgement };
++  if (!downgradeStillHolds(finding.severity, premise.original_severity)) {
+     const { premise: _dropped, ...unjudged } = finding;
+     return unjudged as T;
+   }
+-  return { ...finding, premise: { ...judgement, severity: finding.severity } } as T;
++  return { ...finding, premise: { ...judgement, severity: finding.severity } };
++}
++
++/** A judgement without the two severity fields only a `downgraded` verdict may carry. */
++function withoutSeverities(judgement: ReviewFindingPremise): ReviewFindingPremise {
++  const { severity: _severity, original_severity: _original, ...rest } = judgement;
++  return rest;
++}
++
++/** Whether `severity` is still a downgrade the merge could make from `original`: major or minor, strictly below it. */
++function downgradeStillHolds(severity: ReviewFindingSeverity, original: unknown): boolean {
++  return DOWNGRADE_TARGETS.includes(severity) && isSeverity(original) && severityRank(severity) < severityRank(original);
+ }
+ 
+ type Field<V> = { ok: true; value: V | undefined } | { ok: false; detail: string };
+@@ -706,3 +712,50 @@ export function renderPremiseMarkdown(input: PremiseRenderInput): string {
+   lines.push("");
+   return lines.join("\n");
+ }
++
++/** What an ingest without `--premises` does about the claims a package already holds (see {@link inheritedPremiseClaims}). */
++export type InheritedPremises = { ok: true; parsed: ParsedPremiseClaims } | { ok: false; refusal: string };
++
++/**
++ * An ingest without `--premises` over a package whose findings the judge held (review RG2-004). Ingesting without the
++ * claims would silently return every held finding to the fix loop as an ordinary open finding, and readiness would
++ * pass it as "no finding is held". So the package's stored claims (`stored`, the content of {@link PREMISES_FILE}) are
++ * carried forward when they still hold what they held: every held claim still lands on a finding of `findings`, and
++ * every finding the previous ingest recorded as held (`previousFindings`, its findings.json) is held again for the
++ * same subject (severity, verdict, problem; {@link premiseSubjectOf}). Otherwise the ingest is refused, naming the
++ * findings, so the caller passes `--premises` with claims for what this round reports.
++ *
++ * Undefined when nothing was held: no stored claim holds a finding and no previous record was held.
++ */
++export function inheritedPremiseClaims<T extends StructuredReviewFinding>(findings: readonly T[], stored: unknown, previousFindings: unknown): InheritedPremises | undefined {
++  const previousHeld = (Array.isArray(previousFindings) ? previousFindings : []).filter(isRecord).filter((record) => isRecord(record.premise) && isHeldVerdict(record.premise.verdict));
++  let parsed: ParsedPremiseClaims | undefined;
++  let unreadable: string | undefined;
++  try {
++    parsed = parsePremiseClaims(stored);
++  } catch (error) {
++    unreadable = error instanceof Error ? error.message : String(error);
++  }
++  const heldClaims = (parsed?.claims ?? []).filter((claim) => !isMalformed(claim) && isHeldVerdict(claim.verdict));
++  if (previousHeld.length === 0 && heldClaims.length === 0) return undefined;
++  const refuse = (why: string): InheritedPremises => ({
++    ok: false,
++    refusal: `This package holds findings the premise judge held, and an ingest without --premises would silently return them to the fix loop: ${why}. Pass --premises <file> with the judge's claims for this round (${PREMISES_FILE}, or ${PREMISES_SUPERSEDED_FILE} from an earlier ingest, when they still apply). Nothing was written.`,
++  });
++  if (parsed === undefined) return refuse(unreadable === undefined ? `${PREMISES_FILE} is gone, so the holds cannot be carried` : `${PREMISES_FILE} cannot be read (${unreadable})`);
++  const trial = mergePremises(findings, parsed);
++  const lost = new Set<string>();
++  for (const claim of heldClaims) {
++    const name = claimName(claim);
++    if (trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== "already-judged")) lost.add(name);
++  }
++  for (const record of previousHeld) {
++    const key = keysOf(record)[0];
++    if (key === undefined) continue;
++    const now: Loose | undefined = trial.findings.find((finding) => keysOf(finding as Loose).includes(key));
++    const subject = premiseSubjectOf(record);
++    if (now === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf(now))) lost.add(key);
++  }
++  if (lost.size > 0) return refuse(`the stored claims no longer hold ${[...lost].join(", ")} as they did (the finding is gone, or its severity, verdict or problem changed)`);
++  return { ok: true, parsed };
++}
+diff --git a/src/review/prior-round.test.ts b/src/review/prior-round.test.ts
+index 831881675..e341074e7 100644
+--- a/src/review/prior-round.test.ts
++++ b/src/review/prior-round.test.ts
+@@ -37,7 +37,8 @@ import {
+   type RoundRegistryEntry,
+ } from "./round-registry";
+ import { computeVerdict, renderVerdict } from "./verdict";
+-import { heldFinding } from "./premise-fixtures";
++import { readPremiseDecisions, recordPremiseDecision } from "./operator-decisions";
++import { heldFinding, premiseAnswerInput } from "./premise-fixtures";
+ import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
+ 
+ const PR = "https://github.com/acme/app/pull/7";
+@@ -649,6 +650,19 @@ describe("keryx review start writes the round record", () => {
+     expect(roundRecordTampered(dir)).toContain("prior_findings.json");
+   }, 60_000);
+ 
++  test("review start carries the operator's premise answer into the delta round's package (review T2-001)", async () => {
++    prepare();
++    const held = heldFinding({ id: "F-1", global_id: "r-old#F-1", reviewer: "review-logic", file: "src/a.ts", line: 15 });
++    writePackage(".metaproject/reviews/r-old", { reviewId: "r-old", head: A, findings: [held] });
++    const previous = path.join(root, ".metaproject", "reviews", "r-old");
++    await recordPremiseDecision(previous, premiseAnswerInput(held, { answer: "uphold", reason: "keep it" }));
++    const { output, dir } = await start(["--review-id", "r-carry"]);
++    expect(readRoundRecord(dir)).toMatchObject({ mode: "delta", previous: { reviewId: "r-old" } });
++    expect(output).toContain("premise answers carried from .metaproject/reviews/r-old: r-old#F-1");
++    const [carried] = await readPremiseDecisions(dir);
++    expect(carried).toMatchObject({ finding: "r-old#F-1", answer: "uphold", carriedFrom: ".metaproject/reviews/r-old" });
++  }, 60_000);
++
+   test("a malformed round.json is refused, not read leniently", () => {
+     const dir = path.join(root, "pkg");
+     mkdirSync(dir, { recursive: true });
+diff --git a/src/review/prior-round.ts b/src/review/prior-round.ts
+index 231ad6378..28b7f5280 100644
+--- a/src/review/prior-round.ts
++++ b/src/review/prior-round.ts
+@@ -36,6 +36,7 @@
+ import { existsSync, readdirSync, readFileSync } from "node:fs";
+ import path from "node:path";
+ import { readReviewRounds, type ReviewRoundRecord } from "../flow/review-gate";
++import { REVIEW_PACKAGE_MANIFEST_GLOBS } from "./package-location";
+ import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
+ import { mentionsFindingId } from "./publish";
+ import { readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
+@@ -125,7 +126,6 @@ export type RoundCandidate = {
+ 
+ export type PriorRoundResult = { round: RoundRecord; priorFindings: PriorFinding[]; identity: { targetKey: string; targetBase?: string | undefined } };
+ 
+-const PACKAGE_GLOBS = [".metaproject/reviews/*/manifest.json", ".metaproject/flows/*/reviews/*/manifest.json"];
+ /** How far back the git-history source reads. */
+ export const HISTORY_DAYS = 180;
+ 
+@@ -470,7 +470,7 @@ type HistoryEntry = { commit: string; at: number; manifestPath: string };
+ /** Read from the local branches, and the target's base branch (a resolved base ref, never dash-leading) when given. */
+ async function historyEntries(git: GitRunner, limit: number, baseRef: string | undefined): Promise<HistoryEntry[]> {
+   const base = baseRef === undefined || baseRef.startsWith("-") ? [] : [baseRef];
+-  const log = await git(["log", "--branches", `--since=${HISTORY_DAYS} days ago`, `-n${limit}`, "--format=%x01%H %ct", "--name-only", "--end-of-options", ...base, "--", ...PACKAGE_GLOBS]);
++  const log = await git(["log", "--branches", `--since=${HISTORY_DAYS} days ago`, `-n${limit}`, "--format=%x01%H %ct", "--name-only", "--end-of-options", ...base, "--", ...REVIEW_PACKAGE_MANIFEST_GLOBS]);
+   if (log.exitCode !== 0) return [];
+   const seen = new Set<string>();
+   const entries: HistoryEntry[] = [];
+diff --git a/src/review/types.ts b/src/review/types.ts
+index 6f1b2b01f..170a6d9b9 100644
+--- a/src/review/types.ts
++++ b/src/review/types.ts
+@@ -886,6 +886,8 @@ export type ManagedReviewPackageResult = {
+   /** Flow 459. Present on every package, whether or not a premise judge ran. */
+   premise: PremiseCounts;
+   premiseRejections: readonly PremiseRejection[];
++  /** Set when an ingest without `--premises` re-applied the package's stored claims (review RG2-004). */
++  premisesCarriedForward?: true | undefined;
+   /**
+    * What the findings, spend and concurrency caps did (flow 203 AC5–AC7, AC10).
+    *
+diff --git a/src/tui/review-readiness.test.ts b/src/tui/review-readiness.test.ts
+index 01774f1ab..dd427767e 100644
+--- a/src/tui/review-readiness.test.ts
++++ b/src/tui/review-readiness.test.ts
+@@ -6,10 +6,13 @@ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { reviewCommand } from "../commands/review";
+ import { recordLogStart, recordOrchestratorCall } from "../review/orchestrator-log";
+-import { computeReadiness, renderReadiness } from "../review/readiness";
++import { READINESS_ITEMS, computeReadiness, renderReadiness } from "../review/readiness";
+ import { formatReviewDepthLines, loadReviewDepth, renderReviewReadinessText } from "./review-panel";
+ import { isReviewReadinessCommand, projectReviewsReadinessLines } from "./reviews-inspector";
+ 
++/** The ordinal the checklist prints for the item these tests fail, read from the checklist itself. */
++const memoryItem = READINESS_ITEMS.find((entry) => entry.id === "memory-outside-stage")?.number;
++
+ const roots: string[] = [];
+ const cwd = process.cwd();
+ afterEach(async () => {
+@@ -114,13 +117,13 @@ describe("the memory-outside-stage item on every surface", () => {
+     return root;
+   }
+ 
+-  test("the checklist has eleven items (premise-decisions joined in flow 459) and the depth block, /review readiness and the sidebar name the failing one", async () => {
++  test("the checklist has every READINESS_ITEMS entry and the depth block, /review readiness and the sidebar name the failing one", async () => {
+     const root = await withStrayRead();
+     const rows = await loadReviewDepth(root);
+-    expect(rows[0]?.readiness?.items).toHaveLength(11);
++    expect(rows[0]?.readiness?.items.map((item) => item.id)).toEqual(READINESS_ITEMS.map((entry) => entry.id));
+     expect(rows[0]?.readiness?.items.find((item) => item.id === "memory-outside-stage")?.status).toBe("fail");
+     expect(formatReviewDepthLines(rows).join("\n")).toContain("memory-outside-stage:");
+-    expect(renderReviewReadinessText(rows)).toContain("10. [FAIL  ] memory-outside-stage");
++    expect(renderReviewReadinessText(rows)).toContain(`${memoryItem}. [FAIL  ] memory-outside-stage`);
+     expect(projectReviewsReadinessLines(rows, 120)[0]).toContain("memory-outside-stage");
+   });
+ 
+@@ -138,7 +141,7 @@ describe("the memory-outside-stage item on every surface", () => {
+     }
+     const output = lines.join("\n");
+     expect(output).toContain("memory-outside-stage");
+-    expect(output).toContain("10. [FAIL  ] memory-outside-stage");
++    expect(output).toContain(`${memoryItem}. [FAIL  ] memory-outside-stage`);
+     expect(output).toContain('--waive memory-outside-stage "<operator quote>"');
+   });
+ });

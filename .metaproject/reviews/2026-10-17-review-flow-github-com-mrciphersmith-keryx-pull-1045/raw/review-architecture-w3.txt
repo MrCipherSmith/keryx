@@ -1,0 +1,88 @@
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "summary": "Slice-04 keeps layering sound: the readiness and complete paths now share packageCoverageErrors, usage parsing lives in a leaf module. Only minor/info structural remarks: duplicated pathspec constants, a dynamic import, hand-parsing of the dispatch record in ingest, and a documented remaining ledger/complete divergence.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "title": "Two review-package pathspec constants with different depth semantics",
+      "file": "src/review/coverage.ts",
+      "line": 468,
+      "quote": "const NOT_REVIEW_PACKAGES_ANY_DEPTH = [\".\", \":(exclude,glob)**/.metaproject/reviews/**\", \":(exclude,glob)**/.metaproject/flows/*/reviews/**\"];",
+      "problem": "The canonical NOT_REVIEW_PACKAGES lives in round-record.ts and is shared with prior-round.ts; coverage.ts now defines a second, any-depth variant locally while the exported gitDiffStats still uses the top-level one. Two callers of the same git diff helper compute different scopes.",
+      "impact": "A future change to the exclusion rule must be made in two modules; gitDiffStats and packageDiffStats can disagree for a package under a subdirectory.",
+      "suggested_fix": "Move the any-depth constant next to NOT_REVIEW_PACKAGES in round-record.ts and decide one semantics for both callers, or document why gitDiffStats stays top-level.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "title": "ingest hand-parses the ledger's dispatch record",
+      "file": "src/review/managed.ts",
+      "line": 1343,
+      "quote": "const runs = dispatch !== null && typeof dispatch === \"object\" ? (dispatch as { runs?: unknown }).runs : undefined;",
+      "problem": "coverageFromResearch re-derives reviewer status from research.json with unknown casts and its own status-to-coverage mapping, while ledger.ts produces and readiness.ts (coverageMdCheck) separately consume the same runs shape. The managed package writer now depends on the ledger's output shape without a shared type or reader.",
+      "impact": "A change to run statuses in ledger.ts silently changes what coverage.md says, with no compile-time link.",
+      "suggested_fix": "Expose a typed dispatch-runs reader from the research/dispatch module and use it from managed.ts and readiness.ts.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "title": "ledgerBlockers still can disagree with review complete",
+      "file": "src/review/ledger.ts",
+      "line": 1006,
+      "quote": " * disagree with them. \"ready\" here is the ledger's view, not a promise that complete will pass.",
+      "problem": "The PR unifies readiness and complete through packageCoverageErrors, but ledgerBlockers keeps caller-supplied coverage options and only documents the divergence. Its comment calls it the ledger's view while the flow intent is one gate.",
+      "impact": "A caller passing different options (no prContext, other root) can still print READY that complete refuses.",
+      "suggested_fix": "When a packageDir is given, have ledgerBlockers call packageCoverageErrors instead of coverageErrors with caller options.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "title": "Dynamic import of ./prior-round inside coverage.ts",
+      "file": "src/review/coverage.ts",
+      "line": 511,
+      "quote": "const { defaultGitRunner, resolveBase } = await import(\"./prior-round\");",
+      "problem": "A lazy import in a hot path usually hides a module cycle (prior-round imports round-record, which coverage imports). Not shown to be a cycle in this diff.",
+      "impact": "If it is cycle avoidance, resolveBase belongs in a lower module both can import statically.",
+      "suggested_fix": "Move resolveBase/defaultGitRunner to a git-helpers module, or note the cycle in a comment.",
+      "confidence": "low"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "title": "Gate derives project roots from conversation text",
+      "file": "src/review/completion-gate.ts",
+      "line": 65,
+      "quote": "roots.add(path.resolve(cwd, prefix === \"\" ? \".\" : prefix));",
+      "problem": "sessionReviewRoots regex-scans message content and tool arguments, so any path text in the transcript (including tool output the model did not author) steers which directories the completion gate scans. The gate only reads manifests, so harm is limited to a wrong open/closed verdict.",
+      "impact": "A stray path mention could open a spurious blocker or, with a fresh closed package elsewhere, return null early.",
+      "suggested_fix": "Restrict to roots printed by the review start result or to the active-review pointer; keep the regex only as fallback.",
+      "confidence": "low"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "title": "harness tool imports a review module",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 26,
+      "quote": "import { formatUsageLine } from \"../../../review/dispatch-usage\";",
+      "problem": "A generic harness tool depends on the review domain for the usage-line format. dispatch-usage.ts is a dependency-free leaf and other harness files already import review/, so this is consistent with existing practice.",
+      "impact": "None now; a neutral location would keep harness independent of review.",
+      "suggested_fix": "Optionally relocate dispatch-usage.ts to a shared lib module.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## Architecture Review (slice-04)
+
+Stack: generic-ts. Dependency direction is sound: dispatch-usage is a leaf, readiness and complete share packageCoverageErrors in research.ts, locate.ts adds a pure `kind` consumed by managed.ts.
+
+Stats: blocker 0 | major 0 | minor 3 | info 3

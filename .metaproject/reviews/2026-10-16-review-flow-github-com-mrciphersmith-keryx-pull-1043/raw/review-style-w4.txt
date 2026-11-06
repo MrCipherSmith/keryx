@@ -1,0 +1,102 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 04 is consistent with its surroundings: names, help text, docs and tests follow the flow-457 sibling pattern. Three minor and two info style observations, no majors.",
+  "findings": [
+    {
+      "id": "STY-001",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "actor: process.env[\"USER\"] ?? \"operator\", confirmedVia: \"terminal\"",
+      "problem": "The same premise-question record is written with a different actor convention by its two entry points: the terminal path uses process.env USER with an \"operator\" fallback, the card path in operator-confirm-review.ts hardcodes actor: \"operator\". Two spellings of one field for one decision kind.",
+      "impact": "A reader of operator-decisions.json sees a username for terminal answers and the literal \"operator\" for card answers; filters on actor must know both.",
+      "suggested_fix": "Pick one convention (the literal \"operator\") or share a single helper that both entry points call.",
+      "evidence": "review-operator.ts: recordPremiseDecision(packageDir, { ..., actor: process.env[\"USER\"] ?? \"operator\", confirmedVia: \"terminal\" }); operator-confirm-review.ts: recordPremiseDecision(prepared.dir, { ..., actor: \"operator\", confirmedVia: confirmation.confirmedVia }).",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:premise-actor-inconsistent"
+    },
+    {
+      "id": "STY-002",
+      "severity": "minor",
+      "file": "src/flow/review-gate.ts",
+      "line": null,
+      "quote": "function withPremiseAnswers(findings: GateFinding[], decisions: Awaited<ReturnType<typeof readPremiseDecisions>>): GateFinding[] {",
+      "problem": "The parameter type is derived with Awaited<ReturnType<typeof readPremiseDecisions>> instead of naming the decision type that operator-decisions.ts owns (the type premiseDecisionFor takes).",
+      "impact": "Harder to read, and breaks silently if readPremiseDecisions changes its return shape; a named export documents intent.",
+      "suggested_fix": "Import and use an exported premise-decision type from ../review/operator-decisions (export one if absent).",
+      "evidence": "review-gate.ts withPremiseAnswers signature; premiseDecisionFor is imported from the same module.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:premise-decisions-type"
+    },
+    {
+      "id": "STY-003",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "line": null,
+      "quote": "parsePremiseClaims(parsed);\n  return parsed as ManagedReviewInput[\"premises\"];",
+      "problem": "readPremises calls parsePremiseClaims only for its throwing side effect, discards the result and returns the unparsed value cast with `as`. The sibling readVerifications returns the parsed claims.",
+      "impact": "Readability: a maintainer may delete the apparently unused call, or take the cast value for validated shape.",
+      "suggested_fix": "Return the parsed claims if the merge accepts them, or name the check explicitly (for example assertPremiseShape) so the discarded call is deliberate.",
+      "evidence": "review.ts readPremises versus readVerifications, which returns verificationClaims(...).",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "style:readpremises-discarded-parse"
+    },
+    {
+      "id": "STY-004",
+      "severity": "info",
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "line": null,
+      "quote": "// 80: flow 459 added review-premise; before it 79: flow 446 added review-pr-contract; before it 78:",
+      "problem": "The history comment is a growing run-on chain of flow ids that wraps mid-sentence across lines; each flow lengthens it.",
+      "impact": "Readability only; the count lives in the assertion.",
+      "suggested_fix": "Put each step on its own line, or keep only the current number with its latest reason.",
+      "evidence": "skills.bundled-verify.test.ts comment above skills_evaluated.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:bundled-verify-comment-chain"
+    },
+    {
+      "id": "STY-005",
+      "severity": "info",
+      "file": "src/commands/routing-corpus.ts",
+      "line": null,
+      "quote": "export const RANK1_FIRST = 338;",
+      "problem": "The ratchet doc comment narrates each flow that raised the corpus (295, 332, 333, 335) but has no entry for this change (334 to 338 of 337 to 341, four review-premise positives). Flow 446 was likewise not recorded, so a sibling does the same.",
+      "impact": "The comment is the stated place for the arithmetic; a reader cannot see why the numbers moved.",
+      "suggested_fix": "Add a line: Flow 459 added review-premise with four positives, all ranking first: 334/337 + 4 = 338/341.",
+      "evidence": "routing-corpus.ts doc comment ends at Flow 335; the diff changes only the two integers.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "style:routing-corpus-ratchet-comment"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Slice 04 (docs, commands, gate, tests) follows existing conventions: `decide-premise` mirrors `confirm-plan` and `waive-mutation` in help, card name, error wording and test layout, and the docs match the CLI help. Findings are small consistency items.
+
+## Stats
+- major: 0
+- minor: 3
+- info: 2
+
+## Minor & Info
+- STY-001 (minor): `actor` set two different ways for the same record (terminal vs card).
+- STY-002 (minor): `Awaited<ReturnType<...>>` parameter type in `withPremiseAnswers`; use a named type.
+- STY-003 (minor): `readPremises` discards the `parsePremiseClaims` result and returns a cast value.
+- STY-004 (info): run-on flow-id history comment in `skills.bundled-verify.test.ts`.
+- STY-005 (info): routing-corpus ratchet comment gets no entry for this change.
+
+## Positive Notes
+The `--premises` flag was added at every site (`CREATE_FLAGS`, `CREATE_PATH_FLAGS`, `TIER_FLAGS`, both usage blocks, ingest help, docs). Tests are named and grouped like their siblings.

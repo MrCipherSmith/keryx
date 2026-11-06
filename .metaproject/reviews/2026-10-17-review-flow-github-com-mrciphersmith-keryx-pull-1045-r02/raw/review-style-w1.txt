@@ -1,0 +1,398 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Fix slice slice-01: prior dispositions {'closed': 49, 'open': 8, 'partial': 1}; style findings {'blocker': 0, 'major': 0, 'minor': 2, 'info': 5}. No blocker or major; remaining items are a stacked doc comment in locate.ts, a helper named for the timeout case, and small duplication or ordering nits.",
+  "slices": [
+    "slice-01"
+  ],
+  "findings": [
+    {
+      "id": "STY-001",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/locate.ts",
+      "quote": "/** How a finding's `line` was arrived at. */",
+      "problem": "Two doc comments are stacked above the LocateMethod alias: the leftover one-line comment for LocatorRecord, then the new block about how a quote was placed. LocatorRecord, two declarations below, has no comment, and the first line reads as describing the wrong declaration. This is the prior CC-2 / style-w3 F-001 shape, still present at the head.",
+      "impact": "A reader sees a comment about how the line was arrived at above a type that lists locate methods; LocatorRecord loses its description.",
+      "suggested_fix": "Delete the one-line comment above LocateMethod and put it directly above `export type LocatorRecord`.",
+      "evidence": "src/review/locate.ts:62-69",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-002",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "const emptySaved = saveTarget.abs === undefined ? undefined : await saveTimedOutPartial(saveTarget.abs, `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`);",
+      "problem": "The empty-reply branch records its placeholder through saveTimedOutPartial, a helper named for the timeout case. A reader of the empty-reply exit sees a timeout name and has to open the helper (line 329) to learn it just writes without overwriting a complete result. The timeout branch (line 2260) and this one also repeat the same save-then-compose-a-note steps.",
+      "impact": "Misleading name at a second call site; the two exits drift if the keep-complete-result rule changes.",
+      "suggested_fix": "Rename the helper to describe what it does (for example saveUnlessComplete) and keep it as the one place that writes a non-final result.",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:329, 2260, 2328",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-003",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/review/dispatch-usage.ts",
+      "quote": "const USAGE_LINE = /^[ \\t]*KERYX_USAGE[ \\t]+([^\\n]*)$/gm;",
+      "problem": "The marker word is written as a literal in the regex while USAGE_MARKER (line 18) holds the same word and is used by formatUsageLine and the includes check.",
+      "impact": "A rename of the marker needs two edits that nothing ties together.",
+      "suggested_fix": "Build the regex from USAGE_MARKER with new RegExp, or note beside the literal that it must match USAGE_MARKER.",
+      "evidence": "src/review/dispatch-usage.ts:18, 36, 76",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-004",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/review/coverage.ts",
+      "quote": "return typeof manifest.target?.head === \"string\" && manifest.target.head.trim() !== \"\" ? manifest.target.head.trim() : undefined;",
+      "problem": "packageHead reads manifest.json and trims target.head. The new readPackageTarget in the same file reads the same file and the same field with its own str helper.",
+      "impact": "Two readers of one manifest field; a change to how a head is read has two places to land.",
+      "suggested_fix": "Have packageHead return (await readPackageTarget(packageDir)).head.",
+      "evidence": "src/review/coverage.ts:537-545, 602-609",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-005",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/review/mutate.ts",
+      "quote": "const MUTATION_RECORD_FILE = /^mutation-(\\d+)\\.json$/;",
+      "problem": "MUTATION_RECORD_FILE and BASELINE_RECORD_FILE are declared at line 359-361, after writeMutationEvidence (line 343) which uses them. It works only because the function runs after module load.",
+      "impact": "A reader meets the names before their definition; moving the function to run at load would throw.",
+      "suggested_fix": "Move the two constants above writeMutationEvidence.",
+      "evidence": "src/review/mutate.ts:347, 359-361",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-006",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/review/completion-gate.ts",
+      "quote": "const KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/;",
+      "problem": "The file has two separate tests for 'this tool call is a keryx review command': KERYX_REVIEW_COMMAND here and the inline /keryx review (start|scope|slice|ingest|complete)/ in reviewRunSeenInHistory (line 352). They accept different sets, with no comment saying the difference is meant.",
+      "impact": "A reader cannot tell if the narrower set is a decision or drift.",
+      "suggested_fix": "Add a one-line comment at reviewRunSeenInHistory saying why it lists subcommands, or share one constant.",
+      "evidence": "src/review/completion-gate.ts:106, 352",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-007",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/review/managed.ts",
+      "quote": "function normalizeCoverage(",
+      "problem": "normalizeCoverage still carries a third optional `research?: unknown` parameter that is only read when the first two are empty; the typed reader (dispatchRuns) now exists but the parameter stays untyped. Prior CC-13, partly addressed.",
+      "impact": "A caller can pass any value and get silent fall-through to the stand-in coverage entry.",
+      "suggested_fix": "Pass the already-read DispatchRun[] instead of the raw record.",
+      "evidence": "src/review/managed.ts:1242-1254",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 5
+  },
+  "prior_dispositions": [
+    {
+      "id": "review-architecture-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:557 now states why the import is lazy (prior-round -> publish -> readiness -> coverage cycle)"
+    },
+    {
+      "id": "review-architecture-w3:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:87-97 SessionReviewNames comes only from this session's `keryx review` calls and keryx's own output lines; sessionReviewRoots is gone"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "disposition": "closed",
+      "evidence": "src/commands/review-ledger.ts:190-201 LedgerReportExtras replaces the positional tail of renderLedgerReport; the one caller (line 360) is updated"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "disposition": "closed",
+      "evidence": "src/commands/review-ledger.ts:60-65 the scopeReviewed sentence now follows the models sentence and the Token spend paragraph stands alone"
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2190 failChild carries the shared epilogue; used at 2248, 2304, 2325, 2404"
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "disposition": "open",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1924-1927 onUsage still sums every usage_update; unchanged, and still no reproducible double-count path (info)"
+    },
+    {
+      "id": "review-clean-code-w3:CC-10",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:19-39 named pieces (OWN_STATEMENT, CANNOT, INPUT_NAMED), CLAIM_QUOTE_CHARS, no {0,80} gaps; helper now takes `object`"
+    },
+    {
+      "id": "review-clean-code-w3:CC-11",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:222-343 split into scanRoot, pickPackage, namedBySession; roots deduplicated with a Set at line 313"
+    },
+    {
+      "id": "review-clean-code-w3:CC-13",
+      "disposition": "partial",
+      "evidence": "src/review/managed.ts:1227 uses the shared typed dispatchRuns (src/review/research.ts:46) and DispatchRun documents pass-through statuses; normalizeCoverage still takes a third optional `research?: unknown` (line 1245)"
+    },
+    {
+      "id": "review-clean-code-w3:CC-2",
+      "disposition": "open",
+      "evidence": "src/review/locate.ts:62-63 two stacked doc comments remain above LocateMethod; LocatorRecord (line 69) still has none"
+    },
+    {
+      "id": "review-clean-code-w3:CC-3",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:526-573 split into packageDiffStats, readPackageTarget, resolveDiffBase, diffOfTarget; the lazy import is commented"
+    },
+    {
+      "id": "review-clean-code-w3:CC-4",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:544 nominalBase computed once in readPackageTarget and read at 530, 568, 570"
+    },
+    {
+      "id": "review-clean-code-w3:CC-7",
+      "disposition": "closed",
+      "evidence": "src/review/mutate.ts:359-368 MUTATION_RECORD_FILE, BASELINE_RECORD_FILE and mutationRecordNames shared by writeMutationEvidence (347), packageHasMutationRecord (372) and doneMutantIds (379)"
+    },
+    {
+      "id": "review-clean-code-w3:CC-9",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:681 runUsage returns the typed RunUsage (src/review/dispatch-usage.ts:30) built from usageTotals"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:12-14 says plainly the figure is reported, not proof, and that no gate reads it"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:65-85 reviewPackagePaths is indexOf-based and linear; test at completion-gate.test.ts:287 bounds a 1 MB token"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:51,181 roots capped at MAX_SESSION_REVIEW_ROOTS (8) and remembered once per call"
+    },
+    {
+      "id": "review-highload-w1:F-003",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:12-14 the forgeability is documented as accepted because no gate decision reads usage"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2330-2335 re-dispatch advice is bounded (once) and 2328 records the empty dispatch with its usage line"
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "disposition": "open",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1920-1930 unchanged; info with no reproducible path"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:65-85 no regex runs over whole text"
+    },
+    {
+      "id": "review-highload-w3:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:51,181 cap on roots, and roots must be inside cwd (line 179)"
+    },
+    {
+      "id": "review-highload-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:36,44-52 USAGE_LINE no longer has a backtracking `{...}` group; the rest of the line is checked by hand with a length bound"
+    },
+    {
+      "id": "review-highload-w3:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:279-280 a NaN startedAt makes `fresh` false, so the pointer counts only when this session named it"
+    },
+    {
+      "id": "review-logic-w1:LG-002",
+      "disposition": "closed",
+      "evidence": "docs/docs/cli-reference.md:59-60 now describes quote_unlocated and the quotes-located item"
+    },
+    {
+      "id": "review-logic-w1:LG-005",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:46 `=` is a prefix delimiter; test at completion-gate.test.ts:257-267"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "disposition": "closed",
+      "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md (diff line 245) names the cases that still refuse"
+    },
+    {
+      "id": "review-logic-w2:F-005",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2328 the empty reply is saved through saveTimedOutPartial, which keeps a complete earlier result"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "open",
+      "evidence": "src/review/completion-gate.test.ts:207-216 same fixture still finds pr-7975 with no pointer (test at 218-224 shows it), so the pointer branch is not exercised"
+    },
+    {
+      "id": "review-logic-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/ingest-locator-sha.test.ts diff lines 416-418: comment now says only an unchecked quote refuses"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:19-37 phrasings are anchored to a statement about the reviewer's own reading; defect prose no longer matches"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:252,280 an older package or pointer counts when this session's commands name its path or review id (namedBySession)"
+    },
+    {
+      "id": "review-logic-w4:F-003",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:158-173 names come only from keryx review calls and keryx's own output lines"
+    },
+    {
+      "id": "review-logic-w4:F-004",
+      "disposition": "closed",
+      "evidence": "src/commands/review.ts:1048 target.base is recorded when given; src/review/coverage.ts:516-519 doc matches the behaviour"
+    },
+    {
+      "id": "review-logic-w4:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:558-562 an empty range is refused through emptyRangeWarning"
+    },
+    {
+      "id": "review-logic-w4:F-006",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:1231 a routed-out role is described as not dispatched"
+    },
+    {
+      "id": "review-performance-w3:PERF-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:65-85 linear scan"
+    },
+    {
+      "id": "review-performance-w3:PERF-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:125-145,186-200 SessionReviewTracker scans only new messages, cached per history array"
+    },
+    {
+      "id": "review-performance-w3:PERF-004",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:500,547 gitTopLevel and the whole diff result are process-cached"
+    },
+    {
+      "id": "review-performance-w3:PERF-006",
+      "disposition": "open",
+      "evidence": "src/review/ledger.ts:45 both patterns are still tried through .map before .find (info)"
+    },
+    {
+      "id": "review-performance-w3:PERF-007",
+      "disposition": "open",
+      "evidence": "src/review/completion-gate.ts:316-320 roots still scanned one after another and every root's candidates collected (info)"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-001",
+      "disposition": "closed",
+      "evidence": "src/review/retry-eval.ts:82 a reply with no slices claims none, as the ledger does"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:252,280 earlier-session packages and pointers still count when the session names them"
+    },
+    {
+      "id": "review-security-code-w1:SEC-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:166 tool output is read only for keryx's own `# managed review:` and `path:` lines of a keryx review call"
+    },
+    {
+      "id": "review-security-code-w1:SEC-004",
+      "disposition": "closed",
+      "evidence": "src/gdskills/contracts/review-finding.schema.json and docs: readiness item quotes-located still gates complete, as the finding noted; nothing to change"
+    },
+    {
+      "id": "review-security-code-w2:SEC-W2-001",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:12-14 accepted and documented; usage is not read by any gate"
+    },
+    {
+      "id": "review-security-code-w3:SEC-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:65-85 linear scan"
+    },
+    {
+      "id": "review-security-code-w3:SEC-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:322-324 closedAt is taken only from the chosen package's root; roots must be inside cwd (179)"
+    },
+    {
+      "id": "review-security-code-w3:SEC-003",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:12-14 documented"
+    },
+    {
+      "id": "review-security-code-w3:SEC-005",
+      "disposition": "open",
+      "evidence": "src/review/research.ts:53-55 and src/review/managed.ts:1227 reviewer names are still accepted unsanitised (info; names are written by the CLI)"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "disposition": "closed",
+      "evidence": "src/commands/review-ledger.ts:60-65 the scopeReviewed sentence follows the models sentence"
+    },
+    {
+      "id": "review-style-w3:F-003",
+      "disposition": "closed",
+      "evidence": "src/review/mutate.ts:359-361 one constant per record shape, used by all readers and the writer"
+    },
+    {
+      "id": "review-style-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:544 the base expression is written once"
+    },
+    {
+      "id": "review-style-w3:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:41 renamed toTokenCount, with a doc comment"
+    },
+    {
+      "id": "review-style-w3:F-006",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:1250 `const named = reviewers !== undefined && reviewers.length > 0` is used at both places"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.test.ts:1391,1420,1426 several usage updates and the partial timeout and empty cases are exercised"
+    },
+    {
+      "id": "review-testing-practices-w2:T-001",
+      "disposition": "open",
+      "evidence": "same as review-logic-w3:F-002; src/review/completion-gate.test.ts:207-216 still does not drive the pointer branch"
+    },
+    {
+      "id": "review-testing-practices-w2:T-002",
+      "disposition": "closed",
+      "evidence": "src/review/locate.test.ts:83,90,97 the whitespace-ambiguity and both bound cases now assert kind"
+    }
+  ]
+}
+```
+
+Fix slice slice-01: prior dispositions {'closed': 49, 'open': 8, 'partial': 1}; style findings {'blocker': 0, 'major': 0, 'minor': 2, 'info': 5}. No blocker or major; remaining items are a stacked doc comment in locate.ts, a helper named for the timeout case, and small duplication or ordering nits.
+
+Prior findings: closed 49, open 8, partial 1, regressed 0. Open items are in prior_dispositions with file:line evidence.

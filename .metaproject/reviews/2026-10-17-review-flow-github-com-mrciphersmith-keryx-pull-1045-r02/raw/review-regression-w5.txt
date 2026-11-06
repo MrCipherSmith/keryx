@@ -1,0 +1,44 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-06"],
+  "summary": "Regression check of slice-06 (readiness.ts, research.ts, retry-eval.ts, round-record.ts, round-split.ts, routing-check.ts, types.ts, verdict.ts). Every dependent of a changed symbol was enumerated with keryx ctx rg: fixClaimBacked/expectedFixRoles/fixFindingIdsOf/onlyFixLines/partitionRegionsByFix (routing-check.ts, review-slice.ts, tests), parsePremiseClaimSets/readPremiseClaimsFile/PREMISES_FILE (verdict.ts, managed.ts, commands/review.ts), ReviewFindingLocator method (locate.ts, managed.ts, review-finding.schema.json already lists substring), unreadableInputClaim (ledger.ts, retry-eval.ts), COVERAGE_MD_MARK/coverageGated (managed.ts renderCoverage, readiness.ts), computeReadiness callers (publish.ts, publish-guard.ts, operator-confirm-review.ts, managed.ts, tui/review-panel.ts, commands/review.ts). Signature changes are all followed by their callers; premises arrays are accepted by mergePremises; the locator enum is mirrored in the schema. One behaviour regression: a fix slice no longer carries its own content's round-1 routing, so the flow 458 M3 guarantee (a fix touching process spawning still gets review-security-code) is gone. One observation (info) on closed packages re-running the coverage gate.",
+  "findings": [
+    {
+      "id": "RG-001",
+      "severity": "major",
+      "file": "src/review/routing-check.ts",
+      "line": null,
+      "quote": "const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? expectedFixRoles(entry, fix!, text) : needed.roles;",
+      "problem": "Flow 460 L6 dropped the union of the fix roster with the slice's own round-1 routing in classifyDeltaSlices (round-split.ts `roles: fixRosterRoles(findingIds, prior)`) and in narrowedSlices (routing-check.ts, now `expectedFixRoles(entry, fix!, text)` instead of `[...needed.roles, ...expectedFixRoles(...)]`). The union was added in f6d9e21c4 (flow 458 M2/M3) for two reasons, and the old classifyDeltaSlices doc named both: new lines inside a fix slice, AND 'a fix touching process spawning still gets the security reviewer'. partitionRegionsByFix answers only the first. The fix lines themselves still go unrouted: a fix hunk (a prior finding's located lines ± FIX_TOLERANCE) whose fix adds `spawn(`/`execFile`/`Bun.spawn`, an input-derived path or a network call is now read only by review-logic, review-regression and the finding's author. slice-routing.ts would route that content to review-security-code (`process, filesystem write or trust-sensitive code`). The new isSecurityFinding check only adds security when the PRIOR finding is a security one, not when the FIX introduces security-relevant code. The routing check in routing-check.ts is the guard that used to catch a narrowed fix slice, and it now accepts the narrowed roster because expectedFixRoles no longer includes `needed.roles`.",
+      "impact": "Silent coverage loss in every delta round. Trigger: round 2 of a PR where a review-logic or review-architecture finding is fixed by code that spawns a process or builds a path or argv inside the fix hunk. Outcome: no security reviewer is dispatched for that code, routing-check reports nothing narrowed, and the ledger and complete gate treat the round as fully covered. Before this change the same slice got review-security-code from its round-1 routing.",
+      "suggested_fix": "Keep content routing for fix lines. In classifyDeltaSlices, set roles to the union of fixRosterRoles(findingIds, prior) and the content-triggered roles of the slice (at least the codeOnly security rule, or all of `slice.roles` from routeSlices, which fix slices already pass through at review-slice.ts:255). In narrowedSlices, require `[...needed.roles, ...expectedFixRoles(entry, fix!, text)]` again. partitionRegionsByFix already keeps unrelated new lines out of fix slices, so the union no longer brings in roles owed only to new code. Add a test: a fix hunk that adds `Bun.spawn(` for a logic finding must route review-security-code.",
+      "evidence": "git show f6d9e21c4 message: 'M2/M3: ... a fix slice's roster is the fix roster plus its own round-1 routing, read deep, and the routing check holds it to the union.' Removed doc (slice-06 diff, round-split.ts): 'a fix slice may hold new lines too, and a fix touching process spawning still gets the security reviewer'. New header comment (round-split.ts:9) names only the new-lines reason. slice-routing.ts:116-117 route spawn/exec/child_process content to review-security-code. round-split.ts:199 `roles: fixRosterRoles(findingIds, prior),`; routing-check.ts:37 no longer unions needed.roles; review-slice.ts:255 routes fix slices through routeSlices and then discards those roles in classifyDeltaSlices.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": ["src/review/routing-check.ts:37", "src/review/round-split.ts:199", "src/commands/review-slice.ts:255"],
+        "enumeration_method": "keryx ctx rg over src for fixRosterRoles, expectedFixRoles, fixClaimBacked and classifyDeltaSlices: two roster producers (classifyDeltaSlices for review slice, expectedFixRoles for the routing check) and one call site that feeds routed fix slices into classifyDeltaSlices. All three drop content routing for fix lines. Tests in round-split.test.ts are excluded."
+      }
+    },
+    {
+      "id": "RG-002",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\",",
+      "problem": "managed.ts renderCoverage always writes COVERAGE_MD_MARK, so every package ingested by this keryx stays coverage-gated after it is closed. computeReadiness from publish.ts:153, publish-guard.ts:124 and the TUI review panel then re-runs packageCoverageErrors on a closed package. For a light dispatch that means a fresh git diff, because coverage.ts caches it only per process and drops errors. If the base resolved at complete no longer resolves in the publishing process (another checkout, a base ref gone, a shallow clone), the gate returns `UNRESOLVED` and a closed package that passed complete reads NOT READY at publish. That is the flip the Context.coverageGated comment says closed packages are protected from.",
+      "impact": "Observation, not shown reachable here: it needs a publish from an environment where resolveBase fails after a successful complete. To settle it, run `keryx review publish` on a closed light-round package from a clone that lacks target.base and origin/main.",
+      "suggested_fix": "Record the coverage gate's verdict at complete (for example in research.json or the manifest), then have readiness on a closed package read that record and not re-run git. Or treat an UNRESOLVED diff on a closed package as a note, not a failure.",
+      "evidence": "managed.ts:2736 renderCoverage writes `${COVERAGE_MD_MARK}` unconditionally; coverage.ts:547-550 packageDiffStatsCached is a per-process cache that does not keep error values; coverage.ts:568-572 returns UNRESOLVED errors; readiness.ts reviewersCheck runs packageCoverageErrors when ctx.coverageGated.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    }
+  ],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+}
+```
+
+Summary: slice-06 was checked for regressions in the dependents of every changed symbol. The callers of every changed signature were updated: fixClaimBacked now takes text, the premises input accepts several files, and the locator method gains `substring`, which the finding schema already lists. RG-001 (major): a fix slice no longer gets the routing its own content would get in round 1, so a fix that adds process spawning, a path built from input or a network call inside a fix hunk is no longer routed to review-security-code. Flow 458 M3 guaranteed that routing, and the routing check no longer enforces it. RG-002 (info): a closed package ingested by this keryx re-runs the coverage gate's git diff at publish time and can read NOT READY if the base no longer resolves there. The blast-radius cap was not consulted for this slice: it was reviewed as a NEW slice from the diff and its dependents, enumerated with keryx ctx rg. Runtime edges are not included: spawned processes and string-keyed lookups.

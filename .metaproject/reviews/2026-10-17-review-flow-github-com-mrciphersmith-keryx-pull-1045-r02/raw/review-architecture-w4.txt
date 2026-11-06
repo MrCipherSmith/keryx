@@ -1,0 +1,128 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": [
+    "slice-05"
+  ],
+  "summary": "Slice-05 (completion-gate, coverage, ledger, locate, managed, premise, dispatch-usage, display-id, filter-stats, mutate, prior-round): no blocker or major structural violation. Gate state is session-scoped and well bounded; the main structural debts are a lazy-import cycle break in coverage.ts, two diverging 'review run seen' predicates, and artifact contracts split across writer/reader modules.",
+  "findings": [
+    {
+      "id": "AR-001",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "const { defaultGitRunner, emptyRangeWarning, resolveBase } = await import(\"./prior-round\");",
+      "problem": "The coverage gate now reaches into prior-round (round planning) for base resolution and breaks the resulting import cycle (prior-round -> publish -> readiness -> coverage) with a lazy dynamic import inside diffOfTarget.",
+      "impact": "A cycle hidden behind await import() is invisible to static import checks and to gdgraph; the next edit that adds a top-level import in any of the four modules can turn it into a load-time undefined.",
+      "suggested_fix": "Move resolveBase, emptyRangeWarning and defaultGitRunner (pure git helpers) into a leaf module (e.g. ./git-base.ts) that both prior-round and coverage import statically.",
+      "evidence": "Comment on the import: 'prior-round imports publish, which imports readiness, which imports this module'. Only dynamic import in src/review/*.ts per grep.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-002",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "if (/keryx review (start|scope|slice|ingest|complete)/.test(call.arguments)) return true;",
+      "problem": "Two definitions of 'this session ran a review' now coexist: reviewRunSeenInHistory (a closed list of five subcommands) and SessionReviewTracker (KERYX_REVIEW_COMMAND = any `keryx review`). The new NO_PACKAGE nextStep tells the model to continue an earlier-session review with `keryx review status <id-or-path>`, and OWN_OUTPUT_LINE documents `attach`, yet neither status nor attach counts as runSeen.",
+      "impact": "decideReviewGate returns accept when !runSeen, so a session that only names an earlier package via status/attach is never nudged: the flow-460 C scenario (continuing a package) is only gated once a listed subcommand also runs.",
+      "suggested_fix": "Derive runSeen from the same predicate/tracker (any keryx review call) or extend the list with status and attach; keep one definition.",
+      "evidence": "completion-gate.ts: reviewRunSeenInHistory regex vs `const KERYX_REVIEW_COMMAND = /\\bkeryx review\\b/;` and nextStep text 'name its package (`keryx review status <review-id-or-path>`)'.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-003",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "const gitTopLevel = processCache(uncachedGitTopLevel, (top) => top !== undefined);",
+      "problem": "gitTopLevel is memoised in a module-level Map for the life of the process, and the doc says it 'does not change within a command'. The same gate code (reviewCompletionBlockers via completion-gate) runs in the long-lived keryx shell, where the process outlives many commands, worktree moves and checkouts.",
+      "impact": "Hidden mutable module state in a gate: a positive answer for a directory is never re-validated, so a removed or re-created worktree at the same path keeps its old top level until restart. Likely rare; settle by checking whether the shell harness calls coverageErrors in-process across commands.",
+      "suggested_fix": "Scope the cache to a call (pass a cache or memo via CoverageOptions) or give entries a short TTL; at least correct the comment to say per process.",
+      "evidence": "processCache keeps GIT_CACHE_ENTRIES=64 entries per process; the shell nudge path imports ./managed in-process (completion-gate.ts imports reviewCompletionBlockers).",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-004",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "async function readManifestHead(packageDir: string)",
+      "problem": "A new private manifest.json reader (mode and flow.id via an ad hoc cast) is added in managed.ts while completion-gate.ts scanRoot parses manifest.json with its own inline cast type and review/active-review does the same elsewhere. There is no shared manifest-header reader, so each caller re-declares the shape of the fields it trusts.",
+      "impact": "Manifest field renames or a version bump must be chased through N private casts; none is covered by validateManagedReviewManifest.",
+      "suggested_fix": "Export one readManifestHead (mode, status, reviewId, flow.id) from a small package-manifest module and use it in managed.ts and completion-gate.ts.",
+      "evidence": "managed.ts readManifestHead; completion-gate.ts scanRoot `JSON.parse(await readFile(path.join(dir, \"manifest.json\"), \"utf8\")) as { mode?: string; status?: string; reviewId?: string }`.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-005",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "await writeFileAtomic(path.join(packageDir, INGEST_SCREENED_FILE)",
+      "problem": "The ingest-screened.json artifact contract (file name, IngestScreened type, ingestScreenedOf reader) lives in research.ts, is written by managed.ts and consumed by ledger.ts. Likewise COVERAGE_MD_MARK is defined in readiness.ts (reader) and written into coverage.md by managed.ts, and readiness then decides coverageGated from that prose marker.",
+      "impact": "Writer, reader and format owner are three modules; a gate flag encoded as an HTML comment in rendered markdown is fragile to any reformat of coverage.md. No defect today.",
+      "suggested_fix": "Consider a manifest field (e.g. manifest.coverage.writtenFrom = 'dispatch') instead of a marker string, and a small package-artifacts module owning both file contracts.",
+      "evidence": "readiness.ts COVERAGE_MD_MARK and `coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true`; research.ts INGEST_SCREENED_FILE.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-006",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "const standalone = path.join(reviewsRoot(input.cwd), input.reviewId);",
+      "problem": "allocatePackage now hard-codes the reviews-root location next to packagePath(), so package location is decided in two places; an ingest with a flow match can now return a package outside flowReviewsRoot while manifest.flow records the flow.",
+      "impact": "Consumers that locate a flow's packages through flowReviewsRoot (flow review gate, readReviewRounds) may not see this package. Settle by checking that every flow-side lookup reads manifest.flow rather than the directory.",
+      "suggested_fix": "Route the choice through package-location (a resolver that returns the existing location for a review id) rather than inlining reviewsRoot.",
+      "evidence": "managed.ts allocatePackage lines for mode === 'ingest' && flowMatch !== null.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-007",
+      "severity": "info",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "return decisionWriters(kind, packageDir === undefined ? \"<review-dir>\" : path.relative(process.cwd(), packageDir) || \".\");",
+      "problem": "The new writersFor helper (and skipDecision, which now uses it) formats operator command hints relative to process.cwd(), a hidden global read inside gate-level library code.",
+      "impact": "Message text depends on the caller's cwd, which differs between the shell, tests and a subagent; the hint can name a path that is wrong from where the operator runs it.",
+      "suggested_fix": "Pass the display base (cwd) in via CoverageOptions or format the hint at the command layer.",
+      "evidence": "coverage.ts writersFor; previously the same expression was inlined at two sites, now centralised but still reading process.cwd().",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "AR-008",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "const reviewers = normalizeCoverage(input.coverage, input.reviewers).filter((entry) => entry.status === \"run\").map((entry) => entry.reviewer);",
+      "problem": "normalizeCoverage is called twice with different arguments (with and without research) to get two answers, and ATTRIBUTION_FALLBACK is returned from it as a fake coverage entry for the no-reviewer case; coverage and attribution are one function with a flag-like trailing parameter.",
+      "impact": "Readability and drift risk only: the two calls must be kept consistent by comment.",
+      "suggested_fix": "Split into coverageEntries() and attributionReviewers() so each has one job.",
+      "evidence": "managed.ts createManagedReviewPackage: `const coverage = normalizeCoverage(input.coverage, input.reviewers, input.research);` and the line above.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 4,
+    "info": 4
+  }
+}
+```
+
+## Architecture Review
+
+Slice-05 reviewed. No blocker/major. 4 minor (AR-001 lazy-import cycle in coverage.ts, AR-002 diverging review-run-seen predicates, AR-003 process-lifetime git cache in a gate, AR-004 duplicated manifest header readers) and 4 info (artifact contract placement, package location split, process.cwd() in hints, double normalizeCoverage).

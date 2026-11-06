@@ -1,0 +1,62 @@
+```json keryx:findings
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "summary": "Round 5 fix delta (code). RG4-001 is partial: the typo-id case is fixed, but a rejected held claim that names a finding a sibling claim did hold still refuses the re-ingest. One new minor: the prior-round detector's new 'skipped, not ingested' note names the package being created. Every other change in the delta is behaviour-preserving: the reviewsRoot/flowReviewsRoot routing, the normaliseCarriedPremise refactor and readStoredClaims.",
+  "prior_dispositions": [
+    {
+      "id": "r4-review-regression-code#RG4-001",
+      "disposition": "partial",
+      "evidence": "src/review/premise.ts:774-777 appliedClaimNames now keeps only held-verdict claims whose name is a key of a previously held record, and :747 returns undefined when nothing was held. So the reported trigger (a typo id rejected as unknown-finding) is closed, and the tests are at premise.test.ts 'a stored held claim the merge rejected' and review-premises-cli.test.ts RG4-001. The filter is still keyed on the claim's NAME, not on whether that claim applied. A second held claim on finding X that the first ingest rejected for a per-claim reason (held-without-question, challenged-without-evidence, owner-decision-without-options, malformed-field, unknown-property; premise.ts:403-447, all checked before the duplicate count at :469) while a sibling claim held X has a name in heldKeys. The trial merge rejects it again, :780-782 counts X as lost, and :752 refuses a byte-identical re-ingest with the false 'no longer hold X'. heldFindingsChanged (:785) already catches every real loss: a claim that no longer applies leaves its finding unheld or changed. So claimsNoLongerHeld can be dropped outright."
+    }
+  ],
+  "findings": [
+    {
+      "id": "RG4-001",
+      "global_id": "r4-review-regression-code#RG4-001",
+      "reviewer": "review-regression",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": null,
+      "quote": "return applied.filter((name) => trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== \"already-judged\"));",
+      "problem": "Residual of RG4-001 after the round-5 fix. appliedClaimNames (premise.ts:774-777) treats a stored held claim as 'applied' when its finding_id names a previously held record. It does not check that this claim was the one that held it. When two held claims name one finding, and the first ingest rejected one for a per-claim reason (held-without-question, challenged-without-evidence, owner-decision-without-options, malformed-field, unknown-property) while the other held the finding, the rejected claim's name is in heldKeys. On re-ingest the trial merge rejects it again, and claimsNoLongerHeld counts the finding as lost.",
+      "impact": "Trigger: `keryx review ingest --premises p.json`, where p.json has a valid `challenged` claim on LY-001 and a second `challenged` claim on LY-001 with no question. The second is rejected as held-without-question, the first applies, and LY-001 is held. Then run `keryx review ingest` on the same package and report without --premises. Outcome: the ingest is refused with 'the stored claims no longer hold LY-001 as they did', which is false: LY-001 is held again with the same subject. The workaround is to pass --premises, hence minor.",
+      "suggested_fix": "Drop claimsNoLongerHeld and appliedClaimNames and decide 'lost' from heldFindingsChanged alone. Any previously applied claim that stops applying leaves its finding unheld or with a different subject, and that loop already reports it. Add a test: one valid and one held-without-question challenged claim on the same finding re-ingest without --premises and are carried.",
+      "evidence": "premise.ts:751 (lost = claimsNoLongerHeld(appliedClaimNames(...)) + heldFindingsChanged). :774-777 (applied = name in heldKeys, rejection history not read). :780-782 (any non-already-judged rejection counts as a loss). :428-436 (held-without-question is rejected per claim, before the accepted map). :467-479 (only ACCEPTED claims count toward duplicate-claim, so the valid sibling applies alone). :785-797 (heldFindingsChanged compares every previously held record's subject).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/premise.ts:780-782"],
+        "enumeration_method": "every place inheritedPremiseClaims (premise.ts:745-755) turns a trial-merge rejection into a loss: only claimsNoLongerHeld reads trial.rejections; heldFindingsChanged reads trial.findings"
+      }
+    },
+    {
+      "id": "RG5-001",
+      "reviewer": "review-regression",
+      "severity": "minor",
+      "file": "src/review/prior-round.ts",
+      "line": null,
+      "quote": "const skipped = read.rounds.filter((round) => !round.ingested);",
+      "problem": "The new 'skipped, not ingested' note in findPreviousRound, added for LG4-002, lists every non-ingested round that readReviewRounds returns. It does not apply `exclude` / deps.excludeReviewId, which the candidate list on the line above does apply. findPreviousRound runs on `review start` / `attach-review` right after createManagedReviewPackage has written the new package's manifest (commands/review.ts:1076-1101). A flow-bound package is allocated under the flow's reviews root (managed.ts:1118-1119), so readReviewRounds sees the package being created, with no findings.json yet, as not ingested.",
+      "impact": "Trigger: `keryx review attach-review` (or any create that resolves to a flow) for a flow. Outcome: round.json's sourcesTried flow entry says 'skipped, not ingested: <this round's own reviewId> (findings.json is missing, unreadable, or not an array ...)'. That is a false record: the current round is not a candidate that was skipped. The same note also lists other in-progress drafts as if they were broken. It is persisted, not printed: attemptText (round-record.ts:371-373) prints detail only for not-consulted. So nothing fails, hence minor.",
+      "suggested_fix": "Filter the skipped list the same way as the candidates, `read.rounds.filter((round) => !round.ingested && round.reviewId !== deps.excludeReviewId)`. Optionally name only rounds with problems other than a missing findings.json, so drafts in progress are not reported as unreadable. Extend the prior-round.test.ts LG4-002 case with excludeReviewId set to a non-ingested round.",
+      "evidence": "prior-round.ts:847 (exclude applies excludeReviewId to candidates only). :901-903 (skipped is built from read.rounds unfiltered and appended to the persisted detail). commands/review.ts:1076, 1095-1102 (package created before findPreviousRound; excludeReviewId: result.reviewId; writeRoundRecord persists the round). flow/review-gate.ts:474-477, 510 (missing findings.json means ingested false).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/prior-round.ts:901-903"],
+        "enumeration_method": "every read of ReviewRoundRecord.ingested added by the delta: keryx ctx rg 'ingested' over prior-round.ts, review-gate.ts and loop.ts; only prior-round.ts:901 is new, and :595 (flowCandidates) is pre-existing and filtered by exclude"
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+```
+
+Summary (review-regression, round 5, code delta):
+- RG4-001: partial. The typo-id false refusal is fixed. The filter keys on the claim name rather than on whether the claim applied, so a rejected sibling held claim on a finding that is held still refuses a byte-identical re-ingest. The fix is to decide 'lost' from heldFindingsChanged alone. Re-reported with its carried global_id.
+- New: RG5-001 (minor). The LG4-002 'skipped, not ingested' note in prior-round.ts does not apply excludeReviewId, so a flow-bound create records itself as skipped in round.json.
+- Checked and found unchanged in behaviour:
+  - reviewsRoot and flowReviewsRoot equal the paths they replace in review-gate, spend, loop, arbiter-log, autonomous-run, prior-round and review.ts. There is no import cycle: flow/store imports nothing from review.
+  - The normaliseCarriedPremise refactor is logically equivalent.
+  - readStoredClaims keeps the gone and unreadable messages.
+  - findingsWithHolds fails safe: the ingested-round gate is unobserved for an unreadable round (review-gate.ts:1441-1449).
+- Coverage note: this is a fix-delta review, not a blast-radius sweep. No capped set applied. The radius is a code graph and cannot see the runtime path from create to findPreviousRound, which was traced by hand.

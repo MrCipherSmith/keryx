@@ -1,0 +1,1190 @@
+diff --git a/docs/docs/cli-reference.md b/docs/docs/cli-reference.md
+index 3ad137e6d..edaa3a18a 100644
+--- a/docs/docs/cli-reference.md
++++ b/docs/docs/cli-reference.md
+@@ -4848,6 +4848,15 @@ A package is bound to a pull request when it targets one or when its `--ref` is
+ 
+ `review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA; a quote absent from that file, or in it more than once, is kept with no line and flagged `quote_unlocated` (readiness item `quotes-located` lists it until it has a disposition), and only a quote it could not check at all (commit not in the checkout, no file named, or a size bound) refuses the round; ingest also adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
+ 
++`review start|attach|ingest` of a pull request target also record the base the depth gate measures. Without `--base`, the
++pull request's own base branch is read with `gh pr view` and stored as `target.base` (`origin/<branch>`; nothing is
++recorded when `gh` is missing, signed out, offline or names something that is not a branch). With `--base`, that value is
++`target.base` and the pull request's own base is kept beside it as `target.prBase` when it differs. The light recheck
++measures the widest of the recorded base, `target.prBase` and the default base, so a `--base` cannot narrow the diff.
++A small pull request into a non-default branch (a stacked PR, a release-branch backport) therefore never reads as a light
++round on its own base: the default-base diff, which carries everything the parent branch holds, is measured too and the
++wider one counts. `KERYX_REVIEW_PR_BASE=off` skips the `gh` read.
++
+ | Subcommand | Description |
+ |---|---|
+ | `attach` | Create a managed package linked to an existing Task Manager flow. Like `start`, it marks the package active (`.metaproject/data/review-active/active-review.json`, not committed) so keryx writes `tool-calls/orchestrator.jsonl` itself; `review complete` removes the pointer when it closes the package. |
+@@ -5555,15 +5564,14 @@ writes to the same file, every earlier dispatch's usage is kept as a `KERYX_USAG
+ line and counted as its own dispatch. A dispatch that did not finish (stopped, timed out, refused
+ for load, failed, or empty) is saved with its line marked `"incomplete":true`: it never replaces
+ a complete earlier result, a later partial with text replaces an earlier partial, and one with no
+-text keeps the earlier text. The lines are not part of the reply: they never make an
+-empty reply non-empty. A reviewer that could not read a mandatory input says so in its result's
++text keeps the earlier text. The lines are not part of the reply: they never make an empty
++reply non-empty. A reviewer that could not read a mandatory input says so in its result's
+ `inputs_unreadable` array (e.g. `["pr_context"]`), which makes the run incomplete; its prose is
+-never read for this. `ledger build` records each
+-run's `usage` (summed over its waves, with the count of waves that reported none, or
+-`"unknown"`) and the round's total as `research.json` `usage`
+-(`dispatches`, `known`, `unknown`, `tokens_in`, `tokens_out`); it prints `token spend: …`, and
+-`review ingest --research` adds a `## Token spend` section to report.md. A dispatch without
+-usage is counted unknown, never as 0.
++never read for this. `ledger build` records each run's `usage` (summed over its waves, with the
++count of waves that reported none, or `"unknown"`) and the round's total as `research.json`
++`usage` (`dispatches`, `known`, `unknown`, `tokens_in`, `tokens_out`); it prints
++`token spend: …`, and `review ingest --research` adds a `## Token spend` section to report.md.
++A dispatch without usage is counted unknown, never as 0.
+ The rule file is taken from `definition`, or from a `skill_path` at the top level or
+ inside a `payload` object, whichever names a file that exists; a reviewer with none
+ stays a named gap (`no resolved rule file`). Only reviewer replies belong in `raw/`.
+diff --git a/docs/docs/guides/review-with-a-record.md b/docs/docs/guides/review-with-a-record.md
+index bcfaf3961..198618789 100644
+--- a/docs/docs/guides/review-with-a-record.md
++++ b/docs/docs/guides/review-with-a-record.md
+@@ -653,9 +653,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
+ same numbers `scope.md` shows a person, in a form something else can check.
+ `not-measured` is not `0`: it means that stage did not run, and the reason is
+ printed underneath. `status` exits **1** when the numbers do not add up (`total`
+-minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
+-absent with no reason recorded, so a stage that starts dropping findings without
+-counting them is caught on the next status call rather than a release later.
++minus the measured finding-stage drops and `merged_duplicates` must equal
++`retained`) or when a count is absent with no reason recorded, so a stage that
++starts dropping findings without counting them is caught on the next status call
++rather than a release later.
+ 
+ `dropped_prefilter` counts diff material — whole files and change blocks removed
+ before anyone read them — so it is deliberately not summed with the rest.
+@@ -962,9 +963,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
+ same numbers `scope.md` shows a person, in a form something else can check.
+ `not-measured` is not `0`: it means that stage did not run, and the reason is
+ printed underneath. `status` exits **1** when the numbers do not add up (`total`
+-minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
+-absent with no reason recorded, so a stage that starts dropping findings without
+-counting them is caught on the next status call rather than a release later.
++minus the measured finding-stage drops and `merged_duplicates` must equal
++`retained`) or when a count is absent with no reason recorded, so a stage that
++starts dropping findings without counting them is caught on the next status call
++rather than a release later.
+ 
+ `dropped_prefilter` counts diff material — whole files and change blocks removed
+ before anyone read them — so it is deliberately not summed with the rest.
+diff --git a/src/commands/review-pr-base.test.ts b/src/commands/review-pr-base.test.ts
+new file mode 100644
+index 000000000..f530f4056
+--- /dev/null
++++ b/src/commands/review-pr-base.test.ts
+@@ -0,0 +1,47 @@
++// The pull request's own base, read with `gh pr view` (flow 460): branch-name validation, the refusals, and the off switch.
++// The real reader runs in a child whose PATH starts with a stand-in `gh` (Bun resolves `gh` from the PATH it started with).
++
++import { afterEach, beforeEach, expect, test } from "bun:test";
++import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { prBaseRef } from "./review";
++
++let root = "";
++beforeEach(async () => {
++  root = await mkdtemp(path.join(tmpdir(), "keryx-pr-base-"));
++});
++afterEach(async () => {
++  await rm(root, { recursive: true, force: true });
++});
++
++/** `ghPrBase(ref)` run against a stand-in `gh` that prints `output` and exits `code`; `off` sets the opt-out variable. */
++async function readBase(ref: string, output: string, code = 0, off = false): Promise<string> {
++  const bin = path.join(root, "bin");
++  await mkdir(bin, { recursive: true });
++  await writeFile(path.join(bin, "gh"), `#!/bin/sh\nprintf '%s\\n' ${JSON.stringify(output)}\nexit ${code}\n`, { mode: 0o755 });
++  const entry = path.join(root, "child.ts");
++  await writeFile(entry, `import { ghPrBase } from ${JSON.stringify(path.resolve(import.meta.dir, "review"))};\nconsole.log(JSON.stringify((await ghPrBase(${JSON.stringify(ref)})) ?? null));\n`);
++  const env: Record<string, string | undefined> = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` };
++  if (off) env.KERYX_REVIEW_PR_BASE = "off";
++  else delete env.KERYX_REVIEW_PR_BASE;
++  const child = Bun.spawn([process.execPath, "run", entry], { cwd: root, env, stdout: "pipe", stderr: "ignore" });
++  const [stdout] = await Promise.all([new Response(child.stdout).text(), child.exited]);
++  return stdout.trim();
++}
++
++test("prBaseRef accepts a plain branch name and nothing else", () => {
++  expect(prBaseRef("main\n")).toBe("origin/main");
++  expect(prBaseRef("release/1.2_x")).toBe("origin/release/1.2_x");
++  for (const bad of ["", "-x", "--upload-pack=evil", "a..b", "a b", "a;b", "$(x)", "a".repeat(201)]) expect(prBaseRef(bad)).toBeUndefined();
++});
++
++test("the real reader returns origin/<base> for a branch name and nothing for a bad name, a failed gh, a flag-like ref or the off switch", async () => {
++  const pr = "https://github.com/o/r/pull/7";
++  expect(await readBase(pr, "main")).toBe('"origin/main"');
++  expect(await readBase(pr, "-x")).toBe("null");
++  expect(await readBase(pr, "a..b")).toBe("null");
++  expect(await readBase(pr, "main", 1)).toBe("null");
++  expect(await readBase("--web", "main")).toBe("null");
++  expect(await readBase(pr, "main", 0, true)).toBe("null");
++});
+diff --git a/src/commands/review.test.ts b/src/commands/review.test.ts
+index 016ace777..9b6ee5c71 100644
+--- a/src/commands/review.test.ts
++++ b/src/commands/review.test.ts
+@@ -116,7 +116,7 @@ async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
+     "--research",
+     "research.json",
+     ...extra,
+-  ]);
++  ], { prBase: async () => undefined });
+   return path.join(ROOT, ".metaproject", "reviews", reviewId);
+ }
+ 
+diff --git a/src/commands/review.ts b/src/commands/review.ts
+index 87c65ef69..e7323bb1a 100644
+--- a/src/commands/review.ts
++++ b/src/commands/review.ts
+@@ -647,17 +647,23 @@ export interface ReviewCommandSeams {
+ /** At most this long is spent asking gh for a pull request's base; a slower answer is no answer. */
+ const PR_BASE_TIMEOUT_MS = 15_000;
+ 
++/** `origin/<name>` for the branch name `gh` printed; undefined when it is not a plain branch name (an option, a range, empty). */
++export function prBaseRef(output: string): string | undefined {
++  const name = output.trim();
++  return /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith("-") && !name.includes("..") ? `origin/${name}` : undefined;
++}
++
+ /**
+  * The pull request's own base as a ref git can resolve (`origin/<baseRefName>`), read with `gh pr view`; undefined when gh
+  * is missing, signed out or offline, or names something that is not a branch name. Never throws.
+  */
+-async function ghPrBase(ref: string): Promise<string | undefined> {
+-  if (ref.startsWith("-") || Bun.which("gh") === null) return undefined;
++export async function ghPrBase(ref: string): Promise<string | undefined> {
++  // `KERYX_REVIEW_PR_BASE=off` skips the lookup (the test runner sets it; an offline operator may too).
++  if (process.env.KERYX_REVIEW_PR_BASE === "off" || ref.startsWith("-") || Bun.which("gh") === null) return undefined;
+   try {
+     const proc = Bun.spawn(["gh", "pr", "view", ref, "--json", "baseRefName", "--jq", ".baseRefName"], { stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: PR_BASE_TIMEOUT_MS, killSignal: "SIGKILL" });
+     const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+-    const name = stdout.trim();
+-    return exitCode === 0 && /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith("-") && !name.includes("..") ? `origin/${name}` : undefined;
++    return exitCode === 0 ? prBaseRef(stdout) : undefined;
+   } catch {
+     return undefined;
+   }
+@@ -715,7 +721,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
+       return;
+     }
+     if (command === "ingest") {
+-      await runCreate("ingest", args.slice(1));
++      await runCreate("ingest", args.slice(1), seams);
+       return;
+     }
+     if (command === "scope") {
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+index 7f985208b..20606dc53 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ -1223,7 +1223,7 @@ Before consolidation, validate every reviewer result:
+ - Every blocker must include evidence and a concrete suggested fix.
+ - Findings without evidence are downgraded to `info` or returned to the reviewer for clarification.
+ - Duplicate findings are merged by `dedupe_key` or by `(file, quote, problem)`.
+-- **A reply that is not a result is `BLOCKED`.** That covers an empty reply (`(subagent produced no text)`), a reply without a valid `REVIEW_RESULT` block, and a `spawn_subagent` output whose first line is `status: BudgetExhausted (…)` or `status: NoProgress …` — the reviewer was cut short, so whatever fragment it left is not its review — and a `DONE` result whose `inputs_unreadable` lists a mandatory input it could not read. Re-dispatch it exactly once with a larger budget, telling it to return its report before the budget ends (and the same `cwd` when the round reviews a worktree). If that also fails, the pass is **not run**: list it under **Not run** with the reason, and never write its findings yourself — a review nobody ran reported as run is worse than a gap the operator can see.
++- **A reply that is not a result is `BLOCKED`.** That covers an empty reply (`(subagent produced no text)`), a reply without a valid `REVIEW_RESULT` block, and a `spawn_subagent` output whose first line is `status: BudgetExhausted (…)` or `status: NoProgress …` — the reviewer was cut short, so whatever fragment it left is not its review — and a `DONE` result whose `inputs_unreadable` lists a mandatory input it could not read. Re-dispatch it exactly once with a larger budget, telling it to return its report before the budget ends (and the same `cwd` when the round reviews a worktree). For unreadable inputs a larger budget changes nothing: first fix the path or payload that `inputs_unreadable` names, then re-dispatch once. If that also fails, the pass is **not run**: list it under **Not run** with the reason, and never write its findings yourself — a review nobody ran reported as run is worse than a gap the operator can see.
+ - **The verifier is held to the same rule.** A finding without an applied verifier verdict is `unverified`; the orchestrator never verifies one itself, and a verifier that returned nothing leaves every finding `unverified`, stated in the stage counts.
+ - If a reviewer exceeds `max_findings`, keep blockers/majors first and summarize lower severity findings.
+ 
+diff --git a/src/harness/tool/builtin/spawn-subagent-tool.test.ts b/src/harness/tool/builtin/spawn-subagent-tool.test.ts
+index 47594c4c8..7204b26fb 100644
+--- a/src/harness/tool/builtin/spawn-subagent-tool.test.ts
++++ b/src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ -1497,30 +1497,60 @@ test("flow 460 (H): a re-dispatch to the same path after an empty reply takes th
+   }
+ });
+ 
+-test("flow 460 (H): a child that fails with a thrown error still records its dispatch at save_result_to, as an incomplete record (LG-002, LG-006)", async () => {
++/**
++ * A child whose provider reports one request's usage and writes `text`, and whose id generator fails from then on: the
++ * dispatch's own bookkeeping throws after the request ran, so the dispatch's catch is what writes its record.
++ */
++function failsAfterFirstRequest(root: string, text: string, usage: { inputTokens: number; outputTokens: number }): ReturnType<typeof createSpawnSubagentTool> {
++  let streamed = false;
++  const provider: ProviderPort = {
++    describe: () => ({ capabilities: PROBE_CAPABILITIES, descriptor: { providerId: "usage-stream" } }),
++    async *stream(_req, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
++      let sequence = 0;
++      if (text !== "") yield { kind: "text_delta", sequence: sequence++, attemptId: opts.attemptId, text };
++      yield { kind: "usage_update", sequence: sequence++, attemptId: opts.attemptId, usage: { ...usage, exact: true } };
++      // A tool call makes the child ask for a second request, whose attempt id the failing generator refuses.
++      yield { kind: "tool_call_start", sequence: sequence++, attemptId: opts.attemptId, toolCallId: "t1", toolName: "probe_1" };
++      yield { kind: "tool_call_end", sequence: sequence++, attemptId: opts.attemptId, toolCallId: "t1", input: "{}" };
++      streamed = true;
++      yield { kind: "model_end", sequence, attemptId: opts.attemptId };
++    },
++  };
++  let n = 0;
++  return createSpawnSubagentTool({
++    cwd: root,
++    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
++    makeProvider: () => provider,
++    getDetectedProviders: () => [{ name: "ollama" }],
++    idSeq: () => {
++      if (streamed) throw new Error("idSeq boom");
++      return `id-${n++}`;
++    },
++    clock: () => "2020-01-01T00:00:00.000Z",
++  });
++}
++
++test("flow 460 (H): a child that fails with a thrown error records its dispatch once, as an incomplete record with partial usage (LG-002, LG-R4-002, RG4-005)", async () => {
+   const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-thrown-"));
+   try {
+-    let calls = 0;
+-    const tool = createSpawnSubagentTool({
+-      cwd: root,
+-      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+-      makeProvider: () => textProvider("never reached"),
+-      getDetectedProviders: () => [{ name: "ollama" }],
+-      idSeq: () => {
+-        calls += 1;
+-        if (calls >= 10) throw new Error("idSeq boom");
+-        return `id-${calls}`;
+-      },
+-      clock: () => "2020-01-01T00:00:00.000Z",
+-    });
+-    const result = await tool.invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
+-    expect(result.status).toBe("Error");
+-    expect(String(result.output)).toMatch(/failed: idSeq boom/);
+-    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+-    expect(isEmptyOutput(saved)).toBe(true);
+-    // The dispatch counts (as unknown usage), and the record says it is not a complete result.
+-    expect(splitUsage(saved)).toMatchObject({ incomplete: true });
+-    expect(splitUsage(saved).usage).toBeUndefined();
++    const withText = await failsAfterFirstRequest(root, "half a review", { inputTokens: 30, outputTokens: 4 }).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
++    expect(withText.status).toBe("Error");
++    expect(String(withText.output)).toMatch(/failed: idSeq boom/);
++    // The same note as the timeout path: the parent is told a partial result was saved.
++    expect(String(withText.output)).toContain("[partial result saved to raw/review-logic.txt]");
++    const saved = splitUsage(await readFile(path.join(root, "raw/review-logic.txt"), "utf8"));
++    expect(saved.body).toBe("half a review");
++    expect(saved.incomplete).toBe(true);
++    // The request in flight when it threw is marked partial, and the dispatch is counted once.
++    expect(saved.usage).toMatchObject({ model: "ollama/fake", partial: true });
++    expect((await readFile(path.join(root, "raw/review-logic.txt"), "utf8")).split("KERYX_USAGE").length - 1).toBe(1);
++
++    // Nothing written: the empty record is quiet, still counted, still incomplete.
++    const empty = await failsAfterFirstRequest(root, "", { inputTokens: 5, outputTokens: 0 }).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-style.txt" });
++    expect(String(empty.output)).not.toContain("saved to");
++    const emptyText = await readFile(path.join(root, "raw/review-style.txt"), "utf8");
++    expect(isEmptyOutput(emptyText)).toBe(true);
++    expect(splitUsage(emptyText)).toMatchObject({ incomplete: true, usage: { partial: true } });
+   } finally {
+     await rm(root, { recursive: true, force: true });
+   }
+diff --git a/src/harness/tool/builtin/spawn-subagent-tool.ts b/src/harness/tool/builtin/spawn-subagent-tool.ts
+index 67592ef2c..0efcd26cd 100644
+--- a/src/harness/tool/builtin/spawn-subagent-tool.ts
++++ b/src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ -1974,9 +1974,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
+       const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
+       const measuredUsage = (options: { partial?: boolean } = {}): DispatchUsage | undefined =>
+         childUsage.known ? { tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}`, ...(options.partial === true ? { partial: true as const } : {}) } : undefined;
++      /** Whether this dispatch's record is already written: a later throw must not save (and count) the same dispatch twice. */
++      let recordSaved = false;
+       /** Save this dispatch's record at `save_result_to` (saveDispatchRecord), when the parent asked for one. */
+-      const saveRecord = async (text: string, options: { final: boolean; partial?: boolean }): Promise<DispatchRecordSave | undefined> =>
+-        saveTarget.abs === undefined ? undefined : await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options) });
++      const saveRecord = async (text: string, options: { final: boolean; partial?: boolean }): Promise<DispatchRecordSave | undefined> => {
++        if (saveTarget.abs === undefined) return undefined;
++        const saved = await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options) });
++        recordSaved = true;
++        return saved;
++      };
+       // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
+       // own reasons (the deadline below, the catch block's cleanup) exactly
+       // as `childAbort` always was; `composed` additionally aborts when the
+@@ -2471,10 +2477,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
+         releaseBudget(); // a failed child must not hold the parent's budget either
+         const msg = cause instanceof Error ? cause.message : String(cause);
+         await failChild("error", "Error");
+-        // The failed dispatch still ran: it leaves what it wrote and its usage so far (unknown when none was reported), so
+-        // the round counts it; its text is a partial, never written over a complete result.
+-        const failedSaved = await saveRecord(assistant.trim(), { final: false }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+-        const failedSaveNote = recordSaveNote(failedSaved, "partial result", String(input.save_result_to), { quietWhenSaved: true });
++        // The failed dispatch still ran: it leaves what it wrote and its usage so far, so the round counts it. The request in
++        // flight when it threw had not reported its tokens (the usage line is marked partial, as on a timeout), and the text is
++        // a partial, never written over a complete result. A record this dispatch already wrote stays the only one.
++        const failedText = assistant.trim();
++        const failedSaved = recordSaved
++          ? undefined
++          : await saveRecord(failedText, { final: false, partial: true }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
++        const failedSaveNote = recordSaveNote(failedSaved, failedText.length > 0 ? "partial result" : "empty result", String(input.save_result_to), { quietWhenSaved: failedText.length === 0 });
+         return { status: "Error", output: `subagent ${label} failed: ${msg}${failedSaveNote}`, isError: true };
+       }
+       } catch (cause) {
+diff --git a/src/lib/map-bounded.test.ts b/src/lib/map-bounded.test.ts
+new file mode 100644
+index 000000000..c8bb22277
+--- /dev/null
++++ b/src/lib/map-bounded.test.ts
+@@ -0,0 +1,49 @@
++import { expect, test } from "bun:test";
++import { mapBounded } from "./map-bounded";
++
++const tick = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
++
++test("results keep the input order whatever order the calls finish in", async () => {
++  // Earlier items take longer, so completion order is the reverse of input order.
++  const out = await mapBounded([30, 20, 10, 0], 4, async (ms) => {
++    await tick(ms);
++    return `item-${ms}`;
++  });
++  expect(out).toEqual(["item-30", "item-20", "item-10", "item-0"]);
++});
++
++test("at most `limit` calls are in flight, and every item is mapped once", async () => {
++  let running = 0;
++  let peak = 0;
++  const seen: number[] = [];
++  const items = Array.from({ length: 20 }, (_, index) => index);
++  const out = await mapBounded(items, 3, async (item) => {
++    running += 1;
++    peak = Math.max(peak, running);
++    seen.push(item);
++    await tick(2);
++    running -= 1;
++    return item * 2;
++  });
++  expect(peak).toBe(3);
++  expect(seen.slice().sort((a, b) => a - b)).toEqual(items);
++  expect(out).toEqual(items.map((item) => item * 2));
++});
++
++test("an empty list maps nothing; a limit above the list size, or below one, still works", async () => {
++  let calls = 0;
++  const count = async (): Promise<number> => ++calls;
++  expect(await mapBounded([], 4, count)).toEqual([]);
++  expect(calls).toBe(0);
++  expect(await mapBounded(["a", "b"], 100, async (item) => item.toUpperCase())).toEqual(["A", "B"]);
++  expect(await mapBounded(["a", "b"], 0, async (item) => item.toUpperCase())).toEqual(["A", "B"]);
++});
++
++test("a rejected call rejects the whole map", async () => {
++  await expect(
++    mapBounded([1, 2, 3], 2, async (item) => {
++      if (item === 2) throw new Error("two");
++      return item;
++    }),
++  ).rejects.toThrow("two");
++});
+diff --git a/src/lib/shell-tool-names.ts b/src/lib/shell-tool-names.ts
+index 6e669b63a..c694d0bce 100644
+--- a/src/lib/shell-tool-names.ts
++++ b/src/lib/shell-tool-names.ts
+@@ -1,6 +1,8 @@
+ /**
+  * The harness tools whose `command` argument is a shell line the session executes: `shell_exec`, and `shell`, the name
+  * an approval meta and an older history may carry for it. The one list the approval-cause classifier and the review
+- * completion gate read, so a new shell tool is added in one place.
++ * completion gate read, so a new shell tool is added in one place. `bash` is deliberately absent: it is another agent
++ * host's tool name, and no keryx harness tool is registered under it (the shell tool is `shell_exec`); a host that
++ * registers one adds its name here.
+  */
+ export const SHELL_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_exec", "shell"]);
+diff --git a/src/lib/test-preload.ts b/src/lib/test-preload.ts
+index 7d55db0bc..bd3c4ec36 100644
+--- a/src/lib/test-preload.ts
++++ b/src/lib/test-preload.ts
+@@ -84,6 +84,13 @@ if (process.env.KERYX_HOOKS === undefined) {
+   process.env.KERYX_HOOKS = "off";
+ }
+ 
++// `keryx review start|attach|ingest` of a pull request target asks `gh pr view` for the PR's own base (flow 460). A test that
++// reaches it without the `prBase` seam would run a real `gh` against GitHub (up to 15 s offline); off by default here. A test of
++// the real reader sets `KERYX_REVIEW_PR_BASE` to something else around a stand-in `gh` on PATH (src/commands/review-pr-base.test.ts).
++if (process.env.KERYX_REVIEW_PR_BASE === undefined) {
++  process.env.KERYX_REVIEW_PR_BASE = "off";
++}
++
+ // Sweep the roots left by earlier runs.
+ //
+ // Without this every `bun test` left a directory behind — 23 had accumulated on
+diff --git a/src/review/completion-gate.test.ts b/src/review/completion-gate.test.ts
+index 16912904d..0fce9c702 100644
+--- a/src/review/completion-gate.test.ts
++++ b/src/review/completion-gate.test.ts
+@@ -2,17 +2,22 @@
+ // package is open and `keryx review complete` would still refuse.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
+ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { REPEATABLE_TOOL_NAMES } from "../commands/agent";
+ import {
+   decideReviewGate,
++  explicitReviewIds,
++  fileHash,
+   findReviewGateState,
++  hashedFileCount,
+   keryxArgs,
+   keryxReviewInvocations,
+   MAX_REVIEW_GATE_CONTINUES,
+   type OpenManagedReview,
++  VALUELESS_FLAGS,
+   reviewRunSeenInHistory,
+   NO_PACKAGE_BLOCKER,
+   MAX_SESSION_REVIEW_ROOTS,
+@@ -522,8 +527,27 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
+   test("a pipe keeps its left command: a filter after it does not make the invocation share its output", () => {
+     expect(invoked("keryx review start --pr 7 2>&1 | tee start.log")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
+     expect(invoked("keryx review start --pr 7 | head -40")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
++    expect(invoked("keryx review start --pr 7 | tail -n 20")[0]?.alone).toBe(true);
++    expect(invoked("keryx review start --pr 7 | grep path:")[0]?.alone).toBe(true);
++    expect(invoked("keryx review start --pr 7 | grep -e path: -i")[0]?.alone).toBe(true);
+     // A stage that prints a file of its own, `||` (a separator, not a pipe), and a keryx fed by a pipe are not alone.
+-    expect(invoked("keryx review start --pr 7 | cat - notes.md")[0]?.alone).toBe(false);
++    for (const reader of [
++      "cat - notes.md",
++      "head notes.md",
++      "head -40 notes.md",
++      "tail -n 50 notes.md",
++      "less notes.md",
++      "more notes.md",
++      "grep path: notes.md",
++      "grep -r path:",
++      "grep -rh path: .",
++      "grep -R x",
++      "grep --recursive x",
++      "grep -d recurse x",
++      "grep -e path: notes.md",
++    ]) {
++      expect(invoked(`keryx review start --pr 7 | ${reader}`)[0]?.alone).toBe(false);
++    }
+     expect(invoked("keryx review start --pr 7 || cat notes.md")[0]?.alone).toBe(false);
+     expect(invoked("cat notes.md | keryx review start --pr 7")[0]?.alone).toBe(false);
+     expect(shellCommands("a | b |& c || d")).toEqual([
+@@ -534,7 +558,7 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
+     ]);
+   });
+ 
+-  test("keryx is recognised by path, through npx/bunx/bun x, and as a checkout's cli.ts or the bun script", () => {
++  test("keryx is recognised by path, through npx/bunx/bun x, and as its own cli.ts or the bun script", async () => {
+     expect(keryxArgs(["keryx", "review"])).toEqual(["review"]);
+     expect(keryxArgs(["./node_modules/.bin/keryx", "review"])).toEqual(["review"]);
+     expect(keryxArgs(["/usr/local/bin/keryx", "review"])).toEqual(["review"]);
+@@ -542,15 +566,26 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
+     expect(keryxArgs(["npx", "-y", "@mrciphersmith/keryx@0.3.121", "review"])).toEqual(["review"]);
+     expect(keryxArgs(["bunx", "keryx@latest", "review"])).toEqual(["review"]);
+     expect(keryxArgs(["bun", "x", "keryx", "review"])).toEqual(["review"]);
+-    expect(keryxArgs(["bun", "src/cli.ts", "review"])).toEqual(["review"]);
+-    expect(keryxArgs(["bun", "run", "/w/keryx/src/cli.ts", "review"])).toEqual(["review"]);
+-    expect(keryxArgs(["node", "dist/cli.js", "review"])).toEqual(["review"]);
+     expect(keryxArgs(["bun", "run", "keryx", "review"])).toEqual(["review"]);
+     expect(keryxArgs(["npx", "other", "review"])).toBeUndefined();
+     expect(keryxArgs(["bun", "test", "review"])).toBeUndefined();
+     expect(keryxArgs(["echo", "keryx", "review"])).toBeUndefined();
+     expect(invoked("KERYX_REVIEW_CALLER=x npx keryx review status pr-7 2>&1")).toEqual([{ subcommand: "status", args: ["pr-7"], alone: true }]);
+-    expect(invoked("bun src/cli.ts review start --pr 7")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
++    // A cli.ts / cli.js counts only inside a package named keryx (a checkout's src/cli.ts, an install's dist/cli.js).
++    await mkdir(path.join(root, "keryx", "src"), { recursive: true });
++    await writeFile(path.join(root, "keryx", "package.json"), JSON.stringify({ name: "@mrciphersmith/keryx" }));
++    await mkdir(path.join(root, "other", "dist"), { recursive: true });
++    await writeFile(path.join(root, "other", "package.json"), JSON.stringify({ name: "other-tool" }));
++    await mkdir(path.join(root, "bare"), { recursive: true });
++    expect(keryxArgs(["bun", "src/cli.ts", "review"], path.join(root, "keryx"))).toEqual(["review"]);
++    expect(keryxArgs(["bun", "run", path.join(root, "keryx", "src", "cli.ts"), "review"], root)).toEqual(["review"]);
++    expect(keryxArgs(["node", "src/cli.js", "review"], path.join(root, "keryx"))).toEqual(["review"]);
++    expect(keryxArgs(["node", "dist/cli.js", "review"], path.join(root, "other"))).toBeUndefined();
++    expect(keryxArgs(["node", path.join(root, "other", "dist", "cli.js"), "review"], root)).toBeUndefined();
++    expect(keryxArgs(["bun", "cli.ts", "review"], path.join(root, "bare"))).toBeUndefined();
++    expect(keryxArgs(["node", "tools/cli.js", "review"], root)).toBeUndefined();
++    expect(keryxReviewInvocations("node dist/cli.js review start --pr 7", path.join(root, "other"))).toEqual([]);
++    expect(keryxReviewInvocations("bun src/cli.ts review start --pr 7", path.join(root, "keryx")).map((entry) => entry.subcommand)).toEqual(["start"]);
+   });
+ 
+   test("`cd sub && keryx review start --pr N 2>&1` names the package under sub from keryx's own output", async () => {
+@@ -572,6 +607,27 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
+     expect(await findReviewGateState(root, Date.now() - 60_000, names)).toBeNull();
+   });
+ 
++  test("a switch does not swallow the positional review id, a valued flag does (RG4-001)", () => {
++    const named = (line: string): string[] => keryxReviewInvocations(line, root).flatMap((invocation) => explicitReviewIds(invocation));
++    for (const flag of VALUELESS_FLAGS) expect(named(`keryx review attach ${flag} pr-9`)).toEqual(["pr-9"]);
++    for (const flag of ["--waive-coverage", "--flow", "--head", "--evidence", "--disposition", "--raw", "--base"]) {
++      expect(named(`keryx review complete ${flag} "x" pr-9`)).toEqual(["pr-9"]);
++      expect(named(`keryx review complete ${flag} pr-9`)).toEqual([]);
++    }
++    expect(named("keryx review attach --unattended pr-9")).toEqual(["pr-9"]);
++    expect(named("keryx review complete --waive-coverage pr-9")).toEqual([]);
++  });
++
++  test("the switches are exactly the flags review.ts reads as switches", () => {
++    const source = readFileSync(path.resolve(import.meta.dir, "..", "commands", "review.ts"), "utf8");
++    const read = new Set([...source.matchAll(/args\.includes\("(--[a-z-]+)"\)/g)].map((match) => match[1]!));
++    read.add("--automatic");
++    // `--help` and the publish/import switches are read through other helpers.
++    for (const flag of read) expect(VALUELESS_FLAGS.has(flag)).toBe(true);
++    for (const flag of ["--partial", "--yes", "--force", "--allow-flagged"]) expect(VALUELESS_FLAGS.has(flag)).toBe(true);
++    expect(VALUELESS_FLAGS.has("--waive-coverage")).toBe(false);
++  });
++
+   test("a flag's value is not taken for the positional review id", () => {
+     expect(sessionReviewNames([reviewCall("c1", "keryx review readiness --flow 460 pr-7975-r02 --json")], root).reviewIds).toEqual(["pr-7975-r02"]);
+     expect(sessionReviewNames([reviewCall("c1", "keryx review complete --json pr-7975-r03")], root).reviewIds).toEqual(["pr-7975-r03"]);
+@@ -600,3 +656,28 @@ test("a manifest that claims the session's review id from another directory is n
+   await rm(real, { recursive: true });
+   expect((await findReviewGateState(root, since, named))?.packageDir).toBe("");
+ });
++
++describe("fileHash: a file unchanged since the last stop is not read again, a changed one is", () => {
++  test("a rewrite of the same size is seen, an aged file is remembered and a fresh one is not", async () => {
++    const file = path.join(root, "artifact.txt");
++    await writeFile(file, "aaaa");
++    const aged = Date.now() + 60_000;
++    const before = hashedFileCount();
++    const first = await fileHash(file, aged);
++    expect(hashedFileCount()).toBe(before + 1);
++    // Unchanged: the remembered hash answers.
++    expect(await fileHash(file, aged)).toBe(first);
++    // The same size, different bytes: the hash changes (the timestamps moved with the write).
++    await writeFile(file, "bbbb");
++    const second = await fileHash(file, aged);
++    expect(second).not.toBe(first);
++    // A file written just now is inside the racy window: hashed again on every stop, never remembered.
++    const fresh = path.join(root, "fresh.txt");
++    await writeFile(fresh, "cccc");
++    const count = hashedFileCount();
++    await fileHash(fresh);
++    expect(hashedFileCount()).toBe(count);
++    // A file that cannot be read is reported, not remembered.
++    expect(await fileHash(path.join(root, "missing.txt"), aged)).toBe("unreadable");
++  });
++});
+diff --git a/src/review/completion-gate.ts b/src/review/completion-gate.ts
+index afaaca312..8f7b0b9c0 100644
+--- a/src/review/completion-gate.ts
++++ b/src/review/completion-gate.ts
+@@ -3,6 +3,7 @@
+ // used to accept it; a review is finished when `keryx review complete` accepts
+ // the package, not when the model stops writing. Deterministic: no model judges.
+ 
++import { readFileSync } from "node:fs";
+ import { readdir, readFile, stat } from "node:fs/promises";
+ import path from "node:path";
+ import { createHash } from "node:crypto";
+@@ -34,7 +35,11 @@ const RACY_WINDOW_MS = 2_000;
+ /** File -> its stat key and content hash, so a stop re-reads only the files that changed since the last one. */
+ const fileHashes = new Map<string, { key: string; hash: string }>();
+ 
+-async function fileHash(file: string): Promise<string> {
++/** The number of file hashes currently remembered (for tests). */
++export const hashedFileCount = (): number => fileHashes.size;
++
++/** `now` is injectable so a test can age a file past {@link RACY_WINDOW_MS} without sleeping. */
++export async function fileHash(file: string, now: number = Date.now()): Promise<string> {
+   const info = await stat(file).catch(() => undefined);
+   if (info === undefined) return "unreadable";
+   const key = `${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.ino}`;
+@@ -42,7 +47,7 @@ async function fileHash(file: string): Promise<string> {
+   if (hit !== undefined && hit.key === key) return hit.hash;
+   const hash = await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
+   fileHashes.delete(file);
+-  if (hash !== "unreadable" && Date.now() - Math.max(info.mtimeMs, info.ctimeMs) > RACY_WINDOW_MS) {
++  if (hash !== "unreadable" && now - Math.max(info.mtimeMs, info.ctimeMs) > RACY_WINDOW_MS) {
+     fileHashes.set(file, { key, hash });
+     if (fileHashes.size > MAX_HASHED_FILES) fileHashes.delete(fileHashes.keys().next().value as string);
+   }
+@@ -145,17 +150,60 @@ type HistoryMessage = {
+ const OPENING_SUBCOMMANDS: ReadonlySet<string> = new Set(["start", "attach", "ingest"]);
+ /** The subcommands whose first positional argument is a review id or package path. */
+ const PACKAGE_ARG_SUBCOMMANDS: ReadonlySet<string> = new Set(["status", "readiness", "complete", "attach", "publish", "verdict", "show"]);
+-/** Flags that take no value: the word after one can still be the positional id. Any other `--flag` (no `=`) takes the next word. */
+-const VALUELESS_FLAGS: ReadonlySet<string> = new Set(["--json", "--yes", "--dry-run", "--force", "--partial", "--waive-coverage", "--help"]);
++/**
++ * The `keryx review` flags that take no value (the ones `review.ts` reads with `args.includes`, plus the publish and
++ * import switches): the word after one can still be the positional id. Any other `--flag` (no `=`) takes the next word,
++ * so `--waive-coverage "<reason>"` and `--detail`-less forms stay right. A test keeps this list equal to the flags
++ * `review.ts` reads as switches.
++ */
++export const VALUELESS_FLAGS: ReadonlySet<string> = new Set([
++  "--json",
++  "--yes",
++  "--dry-run",
++  "--force",
++  "--partial",
++  "--help",
++  "--unattended",
++  "--automatic",
++  "--final",
++  "--allow-closed-pr",
++  "--no-prior-round",
++  "--detail",
++  "--brief",
++  "--all",
++  "--gating",
++  "--confirm",
++  "--explain",
++  "--live",
++  "--full",
++  "--no-related-tests",
++  "--no-text-links",
++  "--report-only",
++  "--scoped-diff",
++  "--security",
++  "--premise",
++  "--from-shell-config",
++  "--forced-strategy-change",
++  "--allow-flagged",
++]);
+ /** The lines `keryx review start|attach|ingest` prints about the package it opened. */
+ const OWN_OUTPUT_LINE = /^(# managed review|path): (\S.*)$/;
+ /** The npm package keryx runs from through `npx`/`bunx`/`pnpx`/`bun x`, with an optional `@version`. */
+ const KERYX_PACKAGE = /^(?:@mrciphersmith\/)?keryx(?:@[^\s/]+)?$/;
+ /**
+  * Programs a pipeline's later stage may run while what the tool printed stays the left command's output: they pass on,
+- * cut or copy what they read. `cat` and `grep` count only when they name no file of their own (a file is not keryx's output).
++ * cut or copy what they read. Every reader of files (`cat`, `head`, `tail`, `less`, `more`, `grep`) counts only as a pure
++ * stdin filter: naming a file of its own, or searching a tree, prints something that is not keryx's output.
+  */
+ const PIPE_FILTERS: ReadonlySet<string> = new Set(["tee", "head", "tail", "cat", "grep", "less", "more"]);
++/** Options of the readers that consume the next word as their value, so it is not a file operand. */
++const READER_VALUE_OPTIONS: ReadonlySet<string> = new Set(["-n", "-c", "--lines", "--bytes", "-m", "--max-count", "-A", "-B", "-C", "--include", "--exclude"]);
++/** grep options that take the pattern (or the pattern file) from the option, so a file operand is every positional word. */
++const GREP_PATTERN_OPTIONS: ReadonlySet<string> = new Set(["-e", "--regexp", "-f", "--file"]);
++/** grep options that read a tree or a directory instead of stdin. */
++const GREP_TREE_OPTION = /^(?:--(?:recursive|dereference-recursive|directories(?:=.*)?)|-[A-Za-z]*[rRd][A-Za-z]*)$/;
++/** The keryx package names a checkout's or install's `package.json` carries. */
++const KERYX_PACKAGE_NAMES: ReadonlySet<string> = new Set(["keryx", "@mrciphersmith/keryx"]);
+ 
+ /** One `keryx review` invocation of a shell line: the directory it ran in, its words after `review`, and whether it ran alone. */
+ export type ReviewInvocation = { cwd: string; subcommand: string; args: string[]; alone: boolean };
+@@ -163,91 +211,120 @@ export type ReviewInvocation = { cwd: string; subcommand: string; args: string[]
+ /** One command of a shell line: its words, and whether it reads a pipe (a later stage of a pipeline). */
+ export type ShellCommand = { words: string[]; piped: boolean };
+ 
++/** What {@link shellCommands} has read so far: the finished commands and the command and word being built. */
++type LexState = {
++  commands: ShellCommand[];
++  words: string[];
++  word: string;
++  inWord: boolean;
++  quotedWord: boolean;
++  quote: "'" | '"' | undefined;
++  piped: boolean;
++  /** The next word is a redirection's target: dropped. */
++  dropNext: boolean;
++};
++
++const nextIs = (line: string, at: number, chars: string): boolean => at + 1 < line.length && chars.includes(line[at + 1]!);
++
++function endWord(state: LexState): void {
++  if (state.inWord) {
++    if (state.dropNext) state.dropNext = false;
++    else state.words.push(state.word);
++  }
++  state.word = "";
++  state.inWord = false;
++  state.quotedWord = false;
++}
++
++function endCommand(state: LexState, nextPiped: boolean): void {
++  endWord(state);
++  state.dropNext = false;
++  if (state.words.length > 0) state.commands.push({ words: state.words, piped: state.piped });
++  state.words = [];
++  state.piped = nextPiped;
++}
++
++/**
++ * A character inside quotes. In double quotes a backslash escapes only `$`, a backtick, `"`, `\` and a newline (as sh
++ * reads it): a Windows path keeps its separators. Returns the index of the last character used.
++ */
++function readQuoted(state: LexState, line: string, at: number): number {
++  const ch = line[at]!;
++  if (ch === state.quote) state.quote = undefined;
++  else if (ch === "\\" && state.quote === '"' && at + 1 < line.length && '$`"\\\n'.includes(line[at + 1]!)) {
++    state.word += line[at + 1];
++    return at + 1;
++  } else state.word += ch;
++  return at;
++}
++
++/** A redirection operator at `at` (`>`, `<` or `&>`): ends the word before it and drops its target. Returns the index of the operator's last character. */
++function readRedirection(state: LexState, line: string, at: number): number {
++  const ch = line[at]!;
++  // The fd number of `2>` belongs to the redirection, not to the command.
++  if (state.inWord && !state.quotedWord && /^\d+$/.test(state.word)) {
++    state.word = "";
++    state.inWord = false;
++  } else endWord(state);
++  let last = at;
++  if (ch === "&") {
++    last += 1;
++    if (nextIs(line, last, ">")) last += 1;
++  } else if (ch === ">") {
++    if (nextIs(line, last, ">&|")) last += 1;
++  } else if (nextIs(line, last, "<")) {
++    last += 1;
++    if (nextIs(line, last, "<")) last += 1;
++  } else if (nextIs(line, last, "&>")) last += 1;
++  state.dropNext = true;
++  return last;
++}
++
++/** A command separator at `at` (`&`, `&&`, `;`, newline, `|`, `||`, `|&`): ends the command. Returns the index of its last character. */
++function readSeparator(state: LexState, line: string, at: number): number {
++  const ch = line[at]!;
++  if (ch !== "|") {
++    endCommand(state, false);
++    return ch === "&" && nextIs(line, at, "&") ? at + 1 : at;
++  }
++  if (nextIs(line, at, "|")) {
++    endCommand(state, false);
++    return at + 1;
++  }
++  endCommand(state, true);
++  return nextIs(line, at, "&") ? at + 1 : at;
++}
++
+ /**
+  * The shell line split into commands, each into words (quotes removed, a backslash escaping the next character outside
+  * single quotes). A command ends at `;`, `&&`, `||`, a background `&`, a newline, or a pipe `|`/`|&` (the command after
+  * a pipe is `piped`). A redirection is neither a separator nor a word: `>`, `>>`, `<`, `<<`, `<<<`, `>|`, `<>`, `>&n`,
+  * `<&n`, `&>`, `&>>`, and an fd number written right before one (`2>&1`), are dropped with their target. A small reader,
+- * not a shell: it is enough to tell which program a command runs and with which words.
++ * not a shell: it is enough to tell which program a command runs and with which words. Subshells, command
++ * substitutions and heredocs are not read.
+  */
+ export function shellCommands(line: string): ShellCommand[] {
+-  const commands: ShellCommand[] = [];
+-  let words: string[] = [];
+-  let word = "";
+-  let inWord = false;
+-  let quotedWord = false;
+-  let quote: "'" | '"' | undefined;
+-  let piped = false;
+-  /** The next word is a redirection's target: dropped. */
+-  let dropNext = false;
+-  const endWord = (): void => {
+-    if (inWord) {
+-      if (dropNext) dropNext = false;
+-      else words.push(word);
+-    }
+-    word = "";
+-    inWord = false;
+-    quotedWord = false;
+-  };
+-  const endCommand = (nextPiped: boolean): void => {
+-    endWord();
+-    dropNext = false;
+-    if (words.length > 0) commands.push({ words, piped });
+-    words = [];
+-    piped = nextPiped;
+-  };
+-  const nextIs = (at: number, chars: string): boolean => at + 1 < line.length && chars.includes(line[at + 1]!);
++  const state: LexState = { commands: [], words: [], word: "", inWord: false, quotedWord: false, quote: undefined, piped: false, dropNext: false };
+   for (let at = 0; at < line.length; at += 1) {
+     const ch = line[at]!;
+-    if (quote !== undefined) {
+-      if (ch === quote) quote = undefined;
+-      // In double quotes a backslash escapes only `$`, a backtick, `"`, `\` and a newline (as sh reads it): a Windows path keeps its separators.
+-      else if (ch === "\\" && quote === '"' && at + 1 < line.length && '$`"\\\n'.includes(line[at + 1]!)) word += line[++at];
+-      else word += ch;
+-      continue;
+-    }
+-    if (ch === "'" || ch === '"') {
+-      quote = ch;
+-      inWord = true;
+-      quotedWord = true;
++    if (state.quote !== undefined) at = readQuoted(state, line, at);
++    else if (ch === "'" || ch === '"') {
++      state.quote = ch;
++      state.inWord = true;
++      state.quotedWord = true;
+     } else if (ch === "\\" && at + 1 < line.length) {
+-      word += line[++at];
+-      inWord = true;
+-    } else if (ch === ">" || ch === "<" || (ch === "&" && nextIs(at, ">"))) {
+-      // The fd number of `2>` belongs to the redirection, not to the command.
+-      if (inWord && !quotedWord && /^\d+$/.test(word)) {
+-        word = "";
+-        inWord = false;
+-      } else endWord();
+-      if (ch === "&") {
+-        at += 1;
+-        if (nextIs(at, ">")) at += 1;
+-      } else if (ch === ">") {
+-        if (nextIs(at, ">&|")) at += 1;
+-      } else if (nextIs(at, "<")) {
+-        at += 1;
+-        if (nextIs(at, "<")) at += 1;
+-      } else if (nextIs(at, "&>")) at += 1;
+-      dropNext = true;
+-    } else if (ch === "&" || ch === ";" || ch === "\n") {
+-      if (ch === "&" && nextIs(at, "&")) at += 1;
+-      endCommand(false);
+-    } else if (ch === "|") {
+-      if (nextIs(at, "|")) {
+-        at += 1;
+-        endCommand(false);
+-      } else {
+-        if (nextIs(at, "&")) at += 1;
+-        endCommand(true);
+-      }
+-    } else if (/\s/.test(ch)) endWord();
++      state.word += line[++at];
++      state.inWord = true;
++    } else if (ch === ">" || ch === "<" || (ch === "&" && nextIs(line, at, ">"))) at = readRedirection(state, line, at);
++    else if (ch === "&" || ch === ";" || ch === "\n" || ch === "|") at = readSeparator(state, line, at);
++    else if (/\s/.test(ch)) endWord(state);
+     else {
+-      word += ch;
+-      inWord = true;
++      state.word += ch;
++      state.inWord = true;
+     }
+   }
+-  endCommand(false);
+-  return commands;
++  endCommand(state, false);
++  return state.commands;
+ }
+ 
+ /** The last path component of a program or script word, for a `/` or a `\` separated path. */
+@@ -256,9 +333,10 @@ const baseName = (word: string): string => path.posix.basename(word.replace(/\\/
+ /**
+  * The words after the keryx program when `command` runs keryx, else undefined: `keryx` by any path; `npx`, `bunx`,
+  * `pnpx` or `bun x` of the `keryx` / `@mrciphersmith/keryx` package (any version); `bun`/`node` [`run`] of a `cli.ts` or
+- * `cli.js` (a checkout's entry point, `bun src/cli.ts`); `bun run keryx` (the package script).
++ * `cli.js` that is keryx's own entry point (see {@link isKeryxEntry}; `bun src/cli.ts` in a keryx checkout, resolved from
++ * `cwd`); `bun run keryx` (the package script).
+  */
+-export function keryxArgs(command: readonly string[]): string[] | undefined {
++export function keryxArgs(command: readonly string[], cwd: string = process.cwd()): string[] | undefined {
+   const [program, ...rest] = command;
+   if (program === undefined) return undefined;
+   const name = baseName(program);
+@@ -282,18 +360,53 @@ export function keryxArgs(command: readonly string[]): string[] | undefined {
+   while (at < rest.length && rest[at]!.startsWith("-")) at += 1;
+   const script = rest[at];
+   if (script === undefined) return undefined;
++  const bunScript = name === "bun" && run && script === "keryx";
++  return bunScript || isKeryxEntry(script, cwd) ? rest.slice(at + 1) : undefined;
++}
++
++/**
++ * Whether `script` (resolved from `cwd`) is a `cli.ts` / `cli.js` of the keryx package: the nearest `package.json` above it
++ * (at most three directories up) names keryx. Another project's `cli.js` is not keryx's.
++ */
++function isKeryxEntry(script: string, cwd: string): boolean {
+   const scriptName = baseName(script);
+-  return scriptName === "cli.ts" || scriptName === "cli.js" || (name === "bun" && run && script === "keryx") ? rest.slice(at + 1) : undefined;
++  if (scriptName !== "cli.ts" && scriptName !== "cli.js") return false;
++  let dir = path.dirname(path.resolve(cwd, script));
++  for (let up = 0; up < 3; up += 1, dir = path.dirname(dir)) {
++    try {
++      const { name } = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as { name?: unknown };
++      return typeof name === "string" && KERYX_PACKAGE_NAMES.has(name);
++    } catch {
++      // No readable package.json here: look one directory up.
++    }
++  }
++  return false;
++}
++
++/** The words of a file-reading filter that name a file (or, for grep, a tree): positional words other than option values. */
++function readerOperands(args: readonly string[], skipValue: ReadonlySet<string>): string[] {
++  const operands: string[] = [];
++  for (let at = 0; at < args.length; at += 1) {
++    const arg = args[at]!;
++    if (arg === "--") operands.push(...args.slice(at + 1));
++    else if (skipValue.has(arg)) at += 1;
++    else if (!arg.startsWith("-")) operands.push(arg);
++    if (arg === "--") break;
++  }
++  return operands;
+ }
+ 
+ /** True for a pipeline stage that only passes the left command's output on (see {@link PIPE_FILTERS}). */
+ function isPipeFilter(command: readonly string[]): boolean {
+   const program = command[0] === undefined ? "" : baseName(command[0]);
+   if (!PIPE_FILTERS.has(program)) return false;
+-  const operands = command.slice(1).filter((word) => !word.startsWith("-"));
+-  if (program === "cat") return operands.length === 0;
+-  if (program === "grep") return operands.length <= 1;
+-  return true;
++  const args = command.slice(1);
++  if (program === "tee") return true;
++  if (program !== "grep") return readerOperands(args, READER_VALUE_OPTIONS).length === 0;
++  if (args.some((arg) => GREP_TREE_OPTION.test(arg))) return false;
++  // The pattern is one positional word, unless an option supplies it; any further word is a file.
++  const patternFromOption = args.some((arg) => GREP_PATTERN_OPTIONS.has(arg));
++  return readerOperands(args, new Set([...READER_VALUE_OPTIONS, ...GREP_PATTERN_OPTIONS])).length <= (patternFromOption ? 0 : 1);
+ }
+ 
+ /**
+@@ -316,7 +429,7 @@ export function keryxReviewInvocations(line: string, cwd: string): ReviewInvocat
+       dir = path.resolve(dir, command[1]!);
+       continue;
+     }
+-    const keryx = keryxArgs(command);
++    const keryx = keryxArgs(command, dir);
+     if (keryx !== undefined && keryx[0] === "review") {
+       found.push({ cwd: dir, subcommand: keryx[1] ?? "", args: keryx.slice(2), alone: false });
+       // A keryx fed by a pipe ran, but what the tool printed may still be the left command's.
+@@ -347,7 +460,7 @@ function executedCommand(call: { name?: string | undefined; arguments: string })
+  * subcommand that takes a package, its first positional word. A word right after another `--flag` (no `=`) is that flag's
+  * value, not the positional (`readiness --flow 460 <id>` names `<id>`, never `460`), unless the flag takes none.
+  */
+-function explicitReviewIds(invocation: ReviewInvocation): string[] {
++export function explicitReviewIds(invocation: ReviewInvocation): string[] {
+   const ids: string[] = [];
+   const args = invocation.args;
+   let positional: string | undefined;
+diff --git a/src/review/coverage-md.test.ts b/src/review/coverage-md.test.ts
+index 5c0571758..acb3cebec 100644
+--- a/src/review/coverage-md.test.ts
++++ b/src/review/coverage-md.test.ts
+@@ -13,3 +13,13 @@ test("a field holding a line break is written on one line, so it cannot forge a
+   // An entry the writer left as it was reads back unchanged.
+   expect(parseCoverageEntries(renderCoverageMd([{ reviewer: "review-logic", status: "run", reason: "dispatched" }]))).toEqual([{ reviewer: "review-logic", status: "run" }]);
+ });
++
++test("a key starts its line: a `reviewer:` inside a sentence is no entry, an indented or CRLF one is (TP4-002)", () => {
++  expect(parseCoverageEntries("note reviewer: x\nstatus: y")).toEqual([]);
++  expect(parseCoverageEntries("reviewer: a\n  note status: y")).toEqual([]);
++  expect(parseCoverageEntries("reviewer: a\r\nstatus: run\r\nreason: ok\r\n\r\nreviewer: b\r\nstatus: failed")).toEqual([
++    { reviewer: "a", status: "run" },
++    { reviewer: "b", status: "failed" },
++  ]);
++  expect(parseCoverageEntries("  reviewer: a\n\tstatus: run")).toEqual([{ reviewer: "a", status: "run" }]);
++});
+diff --git a/src/review/coverage.ts b/src/review/coverage.ts
+index 62e4885a6..b0800a8f0 100644
+--- a/src/review/coverage.ts
++++ b/src/review/coverage.ts
+@@ -546,6 +546,7 @@ async function packageDiffStats(options: CoverageOptions): Promise<DiffStats | {
+   if (options.packageDir === undefined) return { error: UNRESOLVED };
+   const target = await readPackageTarget(options.packageDir);
+   if (target.head === undefined) return { error: `${UNRESOLVED}: the package manifest records no target head (cwd ${options.packageDir}, base ${target.recordedBase ?? "unresolved"}, head unrecorded)` };
++  // The spread narrows `head` to a string for the request type.
+   return packageDiffStatsCached({ packageDir: options.packageDir, root: options.root, target: { ...target, head: target.head } });
+ }
+ 
+@@ -564,6 +565,8 @@ async function readPackageTarget(packageDir: string): Promise<PackageTarget> {
+   return { recordedBase: str(target.base), prBase: str(target.prBase), head: str(target.head) };
+ }
+ 
++// The key holds the package, root and target, not the bases' resolved shas: a base ref that moves within the cache's TTL is
++// read as it stood at the first computation (a successful result is remembered only briefly, see processCache).
+ const packageDiffStatsCached = processCache(diffOfTarget, (value) => !("error" in value), (request: DiffRequest) => JSON.stringify([request.packageDir, request.root, request.target]));
+ 
+ /**
+@@ -606,10 +609,14 @@ async function diffOfTarget({ packageDir, root, target }: DiffRequest): Promise<
+   // through a symlink (macOS /tmp -> /private/tmp) yields a `../..` pathspec that excludes no review package.
+   const realRoot = await realpath(path.resolve(root)).catch(() => path.resolve(root));
+   const pathspec = notReviewPackagesAt(path.relative(cwd, realRoot));
++  // At most three bases, each a full diff: they run side by side, and the first failure in base order is the one reported.
++  const results = await Promise.all(resolved.bases.map((base) => gitDiffAt(cwd, base, target.head, pathspec)));
+   const diffs: DiffStats[] = [];
+-  for (const base of resolved.bases) {
+-    const result = await gitDiffAt(cwd, base, target.head, pathspec);
+-    if ("error" in result) return { error: `${UNRESOLVED}: git diff ${base}...${target.head} failed (${where(base)}): ${result.error}` };
++  for (const [index, result] of results.entries()) {
++    if ("error" in result) {
++      const base = resolved.bases[index]!;
++      return { error: `${UNRESOLVED}: git diff ${base}...${target.head} failed (${where(base)}): ${result.error}` };
++    }
+     diffs.push(result);
+   }
+   return widestDiff(diffs);
+diff --git a/src/review/dispatch-usage.ts b/src/review/dispatch-usage.ts
+index 1c190b2a3..e29887445 100644
+--- a/src/review/dispatch-usage.ts
++++ b/src/review/dispatch-usage.ts
+@@ -22,9 +22,9 @@
+ // (Claude Code, Codex) the reviewer can write a line too. A line without the host's mark, and a result envelope's own
+ // `usage`, read as `reported` (stated by the reviewer, not measured), and a total says how many it holds; a reviewer
+ // that copies the mark is not caught. That is acceptable only because no gate decision reads usage: it is the round's
+-// stated spend, nothing more. Counts above
+-// MAX_DISPATCH_TOKENS are not believed. Nothing here invents a count: a dispatch with no usage is `unknown`, and a total
+-// over dispatches where some are unknown says how many, never folds them in as 0.
++// stated spend, nothing more. Counts above MAX_DISPATCH_TOKENS are not believed. Nothing here invents a count: a
++// dispatch with no usage is `unknown`, and a total over dispatches where some are unknown says how many, never folds
++// them in as 0.
+ 
+ export const USAGE_MARKER = "KERYX_USAGE";
+ /** The marker of another dispatch's usage, kept when a re-dispatch saves to the same path. */
+diff --git a/src/review/ledger.test.ts b/src/review/ledger.test.ts
+index 3ed11008d..ef2a1b09b 100644
+--- a/src/review/ledger.test.ts
++++ b/src/review/ledger.test.ts
+@@ -72,6 +72,26 @@ async function inputs(overrides: Partial<LedgerInputs> = {}): Promise<LedgerInpu
+ const blockersOf = (result: ReturnType<typeof buildLedger>, canonical: Array<Record<string, unknown>> = []) =>
+   ledgerBlockers(result.ledger, canonical, { root, files: FILES });
+ 
++/**
++ * Asserts `work(size)` grows about linearly with `size`: quadrupling the input may cost a few times more (a generous 12x for
++ * noise), never the 16x of a quadratic pattern. Best of three runs per size; the slack absorbs a loaded machine.
++ */
++function expectLinearTime(work: (size: number) => unknown): void {
++  const best = (size: number): number => {
++    let fastest = Infinity;
++    for (let run = 0; run < 3; run += 1) {
++      const start = performance.now();
++      work(size);
++      fastest = Math.min(fastest, performance.now() - start);
++    }
++    return fastest;
++  };
++  best(10_000);
++  const small = best(50_000);
++  const large = best(200_000);
++  expect(large).toBeLessThan(small * 12 + 25);
++}
++
+ describe("parseReviewResult", () => {
+   test("takes the last fenced block that is a result: a REVIEW_RESULT fence needs a status, a json fence a reviewer or findings", () => {
+     const labelled = 'STATUS: DONE\n\n```REVIEW_RESULT\n{"status":"DONE","reviewer":"review-logic","findings":[]}\n```\n';
+@@ -1111,22 +1131,19 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
+     expect(usageTotals(raws.map(rawUsage))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 940, tokens_out: 90 });
+   });
+ 
+-  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces states nothing and is never parsed", () => {
+-    const hostile = `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\nKERYX_USAGE {${"}".repeat(200_000)} trailing\n`;
+-    // Deterministic, not a clock: the over-long line is refused by its length before any JSON parse, and the line pattern
+-    // runs once per line that holds the marker, never again over the text.
++  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces states nothing, is never parsed and costs time linear in its size", () => {
++    const hostile = (size: number): string => `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\nKERYX_USAGE {${"}".repeat(size)} trailing\n`;
+     const parse = spyOn(JSON, "parse");
+-    const exec = spyOn(RegExp.prototype, "exec");
+     try {
+-      const { body, usage } = splitUsage(hostile);
++      const { body, usage } = splitUsage(hostile(200_000));
+       expect(usage).toBeUndefined();
+       expect(body).not.toContain("KERYX_USAGE");
++      // The over-long line is refused by its length before any JSON parse.
+       expect(parse).not.toHaveBeenCalled();
+-      expect(exec.mock.calls.filter(([input]) => String(input).length > 1_000)).toHaveLength(1);
+     } finally {
+       parse.mockRestore();
+-      exec.mockRestore();
+     }
++    expectLinearTime((size) => splitUsage(hostile(size)));
+   });
+ 
+   test("a file saved with CRLF line endings states its usage, and its usage lines leave the body (HL-R3-001)", () => {
+@@ -1179,17 +1196,10 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
+     expect(splitUsage(`my review\n\n${line(3, 1)}\n\n`).usage).toEqual({ tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" });
+   });
+ 
+-  test("a long run of whitespace in a reply is never scanned by a pattern: only the lines that hold the marker are", () => {
+-    const reply = `a${" ".repeat(200_000)}b\n${line(1, 1)}`;
+-    // Deterministic, not a clock: a pattern trim (`/\s+$/`) backtracks quadratically on this line; the reply text reaches
+-    // no pattern at all (every String replace/match/test goes through RegExp.prototype.exec).
+-    const exec = spyOn(RegExp.prototype, "exec");
+-    try {
+-      expect(splitUsage(reply).body).toBe(`a${" ".repeat(200_000)}b`);
+-      expect(exec.mock.calls.filter(([input]) => String(input).length > 1_000)).toEqual([]);
+-    } finally {
+-      exec.mockRestore();
+-    }
++  test("a long run of whitespace in a reply costs time linear in its size (a pattern trim backtracks quadratically on it)", () => {
++    const reply = (size: number): string => `a${" ".repeat(size)}b\n${line(1, 1)}`;
++    expect(splitUsage(reply(200_000)).body).toBe(`a${" ".repeat(200_000)}b`);
++    expectLinearTime((size) => splitUsage(reply(size)));
+   });
+ });
+ 
+diff --git a/src/review/managed.test.ts b/src/review/managed.test.ts
+index 2ba8410e7..ad2767acb 100644
+--- a/src/review/managed.test.ts
++++ b/src/review/managed.test.ts
+@@ -1,5 +1,5 @@
+ import { READY_DISPATCH } from "./dispatch.test-helpers";
+-import { COVERAGE_MD_MARK } from "./readiness";
++import { COVERAGE_MD_MARK } from "./coverage-md";
+ import { afterEach, describe, test, expect } from "bun:test";
+ import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+ import { existsSync, readFileSync } from "node:fs";
+diff --git a/src/review/readiness.test.ts b/src/review/readiness.test.ts
+index e63fd26fb..f054d46c5 100644
+--- a/src/review/readiness.test.ts
++++ b/src/review/readiness.test.ts
+@@ -13,7 +13,8 @@ import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./o
+ import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
+ import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
+ import { packageCoverageErrors } from "./research";
+-import { COVERAGE_MD_MARK, READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
++import { COVERAGE_MD_MARK } from "./coverage-md";
++import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
+ 
+ let root: string;
+ let pkg: string;
+diff --git a/src/review/readiness.ts b/src/review/readiness.ts
+index 6386ede42..357dc6125 100644
+--- a/src/review/readiness.ts
++++ b/src/review/readiness.ts
+@@ -26,8 +26,6 @@ import { asRecord as record } from "./record";
+ import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
+ import { FINDING_DISPOSITION_STATES, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
+ 
+-export { COVERAGE_MD_MARK };
+-
+ export const READINESS_ITEMS = [
+   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
+   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },
+diff --git a/src/review/round-cut.ts b/src/review/round-cut.ts
+index 5a79610c0..c1d068a9d 100644
+--- a/src/review/round-cut.ts
++++ b/src/review/round-cut.ts
+@@ -43,12 +43,14 @@ function cutRegions(from: SliceSource, regions: ScopedRegion[], sizes: SliceSize
+ export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord; prior: readonly PriorFinding[]; sizes: SliceSizes; routing: RoutingOptions; secondLook: SecondLookSource | undefined }): RoundCut {
+   const { source, delta, prior, sizes, routing } = input;
+   const routeAsDelta = (slices: BuiltSlice[]): BuiltSlice[] => classifyDeltaSlices(routeSlices(slices, routing), delta, prior);
++  /** A second-look slice is routed by the head alone, then tagged with the round it answers. */
++  const routeAsSecondLook = (slices: BuiltSlice[]): BuiltSlice[] => tagSecondLookSlices(routeSlices(slices, { head: routing.head }), delta.round - 1);
+   const ledgers = ledgerOmissions(source.regions);
+   const parts = partitionRegionsByFix(withoutOmitted(source.regions, ledgers), delta.fixHunks);
+   const built = cutRegions(source, parts.other, sizes, true);
+   const fixSlices = parts.fix.length === 0 ? [] : routeAsDelta(cutRegions(source, parts.fix, sizes, false).slices);
+   const classified = routeAsDelta(built.slices);
+-  const look = input.secondLook === undefined ? undefined : secondLookCut(input.secondLook, delta, sizes, routing, routeAsDelta);
++  const look = input.secondLook === undefined ? undefined : secondLookCut(input.secondLook, sizes, { routeAsDelta, routeAsSecondLook });
+   const ordered = [...fixSlices, ...classified, ...(look?.outside ?? []), ...(look?.second ?? [])];
+   const slices = ordered.length === classified.length ? classified : renumberSlices(ordered);
+   const omissions = [...built.manifest.omissions, ...ledgers, ...(look?.omissions ?? [])].filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index);
+@@ -59,12 +61,16 @@ export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord;
+  * Second look (flow 460): ledgers are judged over the second-look and outside regions together, then each side is cut
+  * apart, so a second-look slice holds only second-look lines (what the routing check backs) and the rest is new.
+  */
+-function secondLookCut(look: SecondLookSource, delta: RoundRecord, sizes: SliceSizes, routing: RoutingOptions, routeAsDelta: (slices: BuiltSlice[]) => BuiltSlice[]): { second: BuiltSlice[]; outside: BuiltSlice[]; omissions: SliceOmission[] } {
++function secondLookCut(
++  look: SecondLookSource,
++  sizes: SliceSizes,
++  route: { routeAsDelta: (slices: BuiltSlice[]) => BuiltSlice[]; routeAsSecondLook: (slices: BuiltSlice[]) => BuiltSlice[] },
++): { second: BuiltSlice[]; outside: BuiltSlice[]; omissions: SliceOmission[] } {
+   const ledgers = ledgerOmissions([...look.regions, ...look.outside]);
+   const secondBuilt = cutRegions(look, withoutOmitted(look.regions, ledgers), sizes, true);
+   const outsideRegions = withoutOmitted(look.outside, ledgers);
+-  const outside = outsideRegions.length === 0 ? [] : routeAsDelta(cutRegions(look, outsideRegions, sizes, false).slices);
+-  const second = tagSecondLookSlices(routeSlices(secondBuilt.slices, { head: routing.head }), delta.round - 1);
++  const outside = outsideRegions.length === 0 ? [] : route.routeAsDelta(cutRegions(look, outsideRegions, sizes, false).slices);
++  const second = route.routeAsSecondLook(secondBuilt.slices);
+   return { second, outside, omissions: [...ledgers, ...secondBuilt.manifest.omissions] };
+ }
+ 
+diff --git a/src/review/wave-drivers.ts b/src/review/wave-drivers.ts
+index ae38218ce..054095bbc 100644
+--- a/src/review/wave-drivers.ts
++++ b/src/review/wave-drivers.ts
+@@ -5,7 +5,7 @@ import { type DriverFile, readDrivers } from "./driver-read";
+ import { writeFileAtomic } from "../lib/fs";
+ import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+ import { manifestRosterRoles } from "./round-split";
+-import { type SliceManifest } from "./slice";
++import type { SliceManifest } from "./slice";
+ import { roleDispatchWaves } from "./estimate";
+ 
+ /** Flow 458 AC12: the reviewers of a package and the per-wave driver files `review slice --package` writes for them. */

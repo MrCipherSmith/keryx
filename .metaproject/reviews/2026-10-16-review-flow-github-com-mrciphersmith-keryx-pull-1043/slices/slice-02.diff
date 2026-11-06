@@ -1,0 +1,1926 @@
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 1,79 @@
+ # gdgraph Summary
+ 
+ ## Stats
+ 
+-- Source files indexed: 2564
+-- Imported asset files indexed: 11
+-- Total nodes: 2575
+-- Edges: 8652
+-- Import edges: 8535
+-- Asset edges: 27
+-- Unresolved imports: 90
+-- Import resolution: 99%
+-- Skipped generated/static directories: 17
++- Source files indexed: 3186
++- Imported asset files indexed: 14
++- Total nodes: 3200
++- Edges: 11391
++- Import edges: 11238
++- Asset edges: 31
++- Unresolved imports: 122
++- Import resolution: 98.9%
++- Skipped generated/static directories: 16
+ 
+ ## Top Modules
+ 
+ | Module | Source Files |
+ |---|---:|
+-| harness | 386 |
+-| commands | 303 |
+-| tui | 251 |
+-| lib | 191 |
+-| review | 113 |
+-| gdskills | 96 |
+-| security | 75 |
+-| flow | 72 |
+-| sac | 61 |
+-| wiki | 61 |
++| commands | 399 |
++| harness | 399 |
++| tui | 304 |
++| review | 268 |
++| lib | 205 |
++| remote | 131 |
++| gdskills | 107 |
++| flow | 90 |
++| security | 85 |
++| wiki | 70 |
++| scripts | 67 |
++| sac | 65 |
++| health | 57 |
+ | learning | 57 |
+ | mcp-servers | 56 |
+-| scripts | 54 |
+-| gdgraph | 52 |
+-| health | 52 |
+-| remote | 52 |
++| gdgraph | 55 |
+ | memory | 49 |
+-| acp | 41 |
++| session | 46 |
++| acp | 42 |
+ | metrics | 39 |
+-| bus | 35 |
+ 
+ ## Unresolved By Type
+ 
+ | Type | Count |
+ |---|---:|
+-| relative-code | 69 |
+-| package | 13 |
++| relative-code | 94 |
++| package | 17 |
++| .js | 3 |
+ | . | 2 |
+-| .js | 2 |
+ | .css | 1 |
++| .slice(4, -3)} | 1 |
+ | .scanner | 1 |
+ | .scan-helper | 1 |
+ | .ts | 1 |
++| .key | 1 |
+ 
+ ## Skipped Directories
+ 
+ - `.claude`
+ - `.metaproject`
+ - `bench/jev-review/fixtures/conform-project/.metaproject`
+-- `dist`
+ - `docs/requirements/keryx-mcp-client/.metaproject`
+ - `fixtures/memory-reliability-p0/.metaproject`
+ - `fixtures/paraphrase/.metaproject`
+ - `fixtures/temporal/.metaproject`
+ - `node_modules`
+ - `src/bundle/fixtures/roundtrip/project/.metaproject`
+ - `src/security/audit-harness/fixtures/agents/.metaproject`
+ - `src/security/audit-harness/fixtures/baseline-indefinite/.metaproject`
+ - `src/security/audit-harness/fixtures/baseline-tampered/.metaproject`
+ - `src/security/audit-harness/fixtures/hook-exfil/.claude`
+ - `src/security/audit-harness/fixtures/hook-injection/.claude`
+ - `src/security/audit-harness/fixtures/hook-suppression/.claude`
+ - `src/security/audit-harness/fixtures/permissive-settings/.claude`
+ 
+ ## Generated Files
+ 
+ - `.metaproject/data/gdgraph/storage/nodes.jsonl`
+ - `.metaproject/data/gdgraph/storage/edges.jsonl`
+ - `.metaproject/data/gdgraph/artifacts/module-map.json`
+ 
+
+--- .metaproject/flows/459-2026-10-16-review-premise/acceptance-criteria.md
+@@ 1,23 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++## Criteria
++
++- AC1: `keryx review ingest --premises <file|->` reads a premise claims file (context.md "Contract") and merges it delete-only after dedupe: `upheld` changes nothing; `downgraded` lowers severity (a raise is rejected); `challenged`/`owner-decision` mark the finding held; claims with an unknown finding id, a judge equal to the finding's reporter, `challenged` without an intent signal or practice source, or a held verdict without a question (owner-decision without ≥2 options) are rejected and listed in scope.md; the claims are stored in `research-evidence/premises.json` and on each finding record. Tests per rule. · sensitive: failure-scenario [verify: exec `bun test src/review/premise.test.ts`]
++- AC2: A held finding is not counted as an open blocker/major by the verdict, is listed as "awaiting operator: <ids>", and readiness and the flow review gate fail while any held finding has no operator decision; a downgraded severity is the one verdict and dedupe use. Tests. [verify: exec `bun test src/review/verdict.test.ts src/review/readiness.test.ts src/flow/review-gate.test.ts src/review/dedupe.test.ts`]
++- AC3: Operator decision kind `premise-question`: `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"` needs a terminal (refused in the no-prompt routine list) and has a keryx shell card `review_decide_premise`; `uphold` returns the finding to kept at its original severity, `dismiss` records `dismissed-incorrect` with the operator's reason; after it, readiness and the gate pass for that finding. Tests. [verify: exec `bun test src/review/premise-decision.test.ts src/commands/review-operator-cli.test.ts src/commands/operator-confirm-review-tools.test.ts`]
++- AC4: `review-premise` is a bundled reviewer (catalog, install manifest, both skill copies byte-identical, length ceiling set, `model_tier: deep`, not in the fan-out roster, never path-gated, iron-laws and class-scope exemptions with reasons, `keryx review tier` gives it deep); its SKILL.md requires claim-first reading (the finding's claim before the reviewer's argument), the four questions (intent, accepted practice, consistency, fix soundness), cited signals or sources for `challenged`, and delete-only output. [verify: invariant `bun test src/gdskills/ src/review/coverage.test.ts src/commands/skills.bundled-verify.test.ts`]
++- AC5: Every reviewer carries a fourth shared law, from the canonical block: an explicit override, suppression, exemption, a comment or commit giving a reason, or a sibling doing the same is a deliberate choice, not a defect until its reason is read and shown wrong; a project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported. review-layout's RTL section names what does not mirror (media/playback controls and progress, timelines, numbers and code, charts' time axes unless the product decides otherwise). [verify: invariant `bun test src/gdskills/review-skills-iron-laws.test.ts src/gdskills/`]
++- AC6: review-orchestrator runs `review-premise` as Wave D after the verifier over the canonical findings (severity ≥ minor; in a delta round only those without a carried premise), passes its result with `--premises`, and stays within its length ceiling. flow-orchestrator, job-orchestrator, review-pr-feedback and feature-dev never pass a held finding in `fix_context.review_feedback`; they ask the operator (card in keryx shell, question tool elsewhere) and record the answer with `review decide-premise`; a flow whose source is a follow-up issue or an external review finding runs `review-premise` on it before freeze. Both copies identical. [verify: invariant `bun test src/gdskills/`]
++- AC7: Evaluation (live, Opus): on a synthetic fixture reproducing the #7849 case (explicit `dir="ltr"` on a playback timeline, an exemption note, a sibling media control doing the same) `review-premise` returns `challenged` or `owner-decision` for the "timeline pinned LTR" finding, citing an intent signal and a platform practice source; on the round-2 ground-truth findings of #992 and #1005 (and the fixture's real control findings) it challenges none. Results and dispatch/token counts in `eval/`. [verify: judged]
++- AC8: The repository stays green (CI) and a patch release containing this flow is published to npm. [verify: exec `npm view @mrciphersmith/keryx version`]
+
+--- .metaproject/flows/459-2026-10-16-review-premise/context.md
+@@ 1,106 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-10-16T11:39:18.647Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [2.081] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++2. [1.841] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++3. [1.78] gdctx-flag-allowlist-no-bundle-expansion (known-mistake/accepted) - known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md
++   A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:ctx, ripgrep, flag-parsing, entity:buildRgCommand, RG_SAFE_FLAGS, RG_SAFE_VALUE_FLAGS
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-3) author=unknown confirmedBy=Reproduced this session via `keryx ctx rg -il "todo" src`
++4. [1.78] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++5. [1.759] The keryx on PATH is a stale build; the review pipeline does not exercise the code under review (constraint/accepted) - constraints/stale-installed-keryx-binary.md
++   `~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.
++   claimType: constraint | confidence: high | version: 0.1.0
++   scope: module:review, memory, entity:managed-review-package
++   provenance: source=fix-round review of PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/220 author=unknown confirmedBy=unknown
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++### Case (vantage-frontend #7849 → #7908 → #7966)
++
++- Finding (final review of #7435): "Playback slider pinned LTR — `MultiLayerPlaybackSlider.tsx:150` and `PlaybackHeader.tsx:101` hard-code `dir="ltr"`, so the timeline does not mirror in RTL." Filed as an issue item, implemented in #7908, extracted to #7966, reviewed twice (implementation only), approved, then refuted by the owner on platform practice (Material: do not mirror media controls/progress; Apple HIG: video controls and timeline indicators do not flip) and closed.
++- Intent signals present in the code and ignored: explicit `dir="ltr"` override; a lint exemption noted as a "physical-LTR scroll/pixel island"; `MediaPlaybackControls.tsx:81` also forces `dir="ltr"`. The fix's reviewer filed that sibling as a follow-up instead of as evidence against the premise.
++- The finding travelled through a follow-up ISSUE, not a review round: a premise check only inside `review ingest` would not have caught the implementation step.
++
++### Where the gap is (0.3.120)
++
++- Shared laws: canonical block `review-orchestrator/SKILL.md` "### Shared laws (every reviewer)" (~1318), copied into every reviewer, enforced by `src/gdskills/review-skills-iron-laws.test.ts` (derived from the canonical block; EXEMPT map 45-56). Laws: no reproducible path → info; never the theoretical; one per class. No intent/practice law.
++- `review-layout/SKILL.md:116-124` RTL section lists only what flips.
++- `review-verifier/SKILL.md:127` confirmed = procedure reproduced the defect; the verifier is delete-only (`src/review/verification.ts:173`).
++
++### Wiring map for a new delete-only judge (mirror the verifier)
++
++- types: `src/review/types.ts` verification vocab 287-379, finding `verification?` 479, managed input 594-604, package counts 784-787.
++- merge: `src/review/verification.ts` (claims 143, merge 173, self-verification rejection, scope.md render 578-605).
++- ingest: `src/commands/review.ts` flags 331/333, managed input 1049, reader 3586, counts 1128, help 4784/4865/5256; `src/commands/automatic-review.ts:203` CREATE_PATH_FLAGS; `src/review/managed.ts` merge 306, dedupe 349, persist 1540, scope blocks 2429.
++- verdict `src/review/verdict.ts` classify 115-131, `VERIFICATIONS_FILE` 23; readiness `src/review/readiness.ts` verifierCheck 171, registry 318; flow gate `src/flow/review-gate.ts` 1221/1511-1578, dispositions 590-686.
++- dedupe `src/review/dedupe.ts` severityRule; coverage `NOT_ROSTER` `src/review/coverage.ts:72`; operator decisions `src/review/operator-decisions.ts:17`, `src/commands/review-operator.ts:124`, `src/commands/operator-confirm-review.ts:565`; tier `src/gdskills/model-tier.ts:1337`; routing `src/commands/routing-corpus.ts:399,725,901`; catalog `src/gdskills/catalog.ts:282`; manifest `src/gdskills/bundled/install-manifest.json:474`; ceilings `src/gdskills/skill-length-ceilings.ts` (orchestrator at its 1582 ceiling — offset any new text; ceilings are only lowered).
++- count tests: `src/gdskills/bundled-eval.test.ts:119` (79), `src/commands/skills.bundled-verify.test.ts:40-52` (79); exempt lists in the iron-laws and class-scope tests.
++- fix-loop consumers: flow-orchestrator SKILL.md 412/447/690, task-implementer `input-contract.schema.json:140` `fix_context.review_feedback`, job-orchestrator, review-pr-feedback, feature-dev.
++
++### Contract (all lanes build to this)
++
++Premise claims file, `--premises <file|->` on `keryx review ingest` (beside `--verifications`):
++
++```json
++{ "judge": "review-premise", "model": "<id>",
++  "premises": [ {
++    "finding_id": "LY-003",
++    "verdict": "upheld | downgraded | challenged | owner-decision",
++    "severity": "minor",
++    "intent_signals": [ { "ref": "src/x.tsx:150 | <sha>", "says": "explicit dir=ltr override" } ],
++    "practice_sources": [ { "name": "Material Design — Bidirectionality", "says": "media controls do not mirror" } ],
++    "reasoning": "…",
++    "question": "…",
++    "options": ["uphold — mirror the timeline", "dismiss — keep LTR, as platforms do"]
++  } ] }
++```
++
++- `severity` only with `downgraded`, strictly lower than the finding's. `question` with `challenged`/`owner-decision`; `options` (≥2) with `owner-decision`.
++- Delete-only: never adds a finding, never raises severity, never edits finding text. A judge equal to the finding's reporter is rejected (`self-judgement`). `challenged` needs ≥1 intent_signal or practice_source. An unknown finding id is rejected. Rejections are listed in scope.md like discarded verification claims.
++- Stored at `research-evidence/premises.json`; a `premise` field on each finding record; counts in scope.md.
++- Runs after dedupe over canonical findings of severity ≥ minor; external (PR-comment) findings may be challenged — they become questions, never auto-dismissed. Carried findings in a delta round keep their premise.
++- Effect: `challenged`/`owner-decision` findings are **held** — not counted as open blocker/major, not passed in `fix_context.review_feedback`, listed in the verdict as "awaiting operator: <ids>". Readiness and the flow review gate fail while a held finding has no operator decision.
++- Operator decision kind `premise-question`: `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"` (terminal; card `review_decide_premise` in keryx shell, like `review_override_reviewers`). `uphold` returns the finding to kept at its original severity; `dismiss` records `dismissed-incorrect` with the operator's reason as evidence.
++- `downgraded` makes the judge's severity canonical (dedupe and verdict use it).
++- Tier: `review-premise` runs on the deep tier (`model_tier: deep`); `keryx review tier` gives it deep.
++- Standalone use (no review round): `keryx review premise-check --finding-file <json>` is NOT added; a fix-loop orchestrator whose input is a follow-up issue or an external finding dispatches `review-premise` directly with the finding text and code refs, and asks the operator on `challenged`/`owner-decision` before implementing.
+
+--- .metaproject/flows/459-2026-10-16-review-premise/description.md
+@@ 1,31 @@
++# Review findings get an independent premise check before anyone acts on them
++
++Status: formalized
++Source: owner (origin: human-request)
++
++## Problem
++
++A keryx final review of vantage-frontend #7435 reported "Playback slider pinned LTR": `MultiLayerPlaybackSlider.tsx:150` and `PlaybackHeader.tsx:101` hard-code `dir="ltr"`, so the timeline does not mirror in RTL (issue #7849). The finding was wrong: Material Design and Apple's RTL guidance say media playback controls and timelines do not mirror, and the code carried three signals of a deliberate choice (an explicit `dir="ltr"` override, a lint exemption noted as a "physical-LTR scroll/pixel island", and `MediaPlaybackControls` doing the same). The agent implemented the mirroring (#7908, then #7966); two keryx-style reviews of that fix checked only the implementation (RTL maths, tests, lint) and passed it; a reviewer even noted the inconsistency with `MediaPlaybackControls` and filed it as a follow-up. When a human asked "is this standard practice?", the model refuted the finding at once, and the PR was closed after costing reviewer time and trust.
++
++Verified on 0.3.120:
++- The shared reviewer laws (copied into every reviewer `SKILL.md`, enforced by `src/gdskills/review-skills-iron-laws.test.ts`) cover reachability, no theoretical findings and one finding per class. Nothing tells a reviewer that an explicit override, suppression or exemption is a decision whose reason must be read before calling it a defect, or to check a project rule against accepted platform practice and its known exceptions. The finding passed all three laws: the harm (an LTR timeline in Arabic) is reproducible.
++- `review-layout` § "Logical properties and RTL" lists what must flip and nothing that must not.
++- `review-verifier` confirms a finding when its procedure "reproduced the defect" (`review-verifier/SKILL.md:127`). A fact ("`dir="ltr"` is hard-coded") always reproduces; whether it is a defect at all is asked by no role.
++- A fix round treats the finding's premise as settled: flow-orchestrator treats `suggested_fix` as a hypothesis about HOW, not about WHETHER.
++
++## Expected Outcome
++
++1. Prevention in the reviewers: a fourth shared law — a deliberate choice (explicit override, suppression, exemption, comment or commit giving a reason, a sibling doing the same) is not a defect until its reason is read and shown wrong, and a project rule is checked against accepted platform practice and its known exceptions. `review-layout` names what does not mirror.
++2. An independent final check, `review-premise`: after the verifier, on a clean context and without the reviewer's reasoning first, it judges every finding that asks for a behaviour or structure change on intent, accepted practice (platform guidelines, language idioms, clean code, common patterns), consistency and fix soundness, and returns `upheld | downgraded | challenged | owner-decision`. `challenged` and `owner-decision` findings do not block and are not sent to a fixer; they become operator questions (card in keryx shell, question tool elsewhere).
++3. The same premise check runs in flow-orchestrator (and the other fix-loop orchestrators) before a finding that changes user-visible behaviour is implemented.
++
++## Outcome criteria
++
++- Запрос: «главное нужно понять почему ревьюер нашел ошибку там где ее нет, и почему в пре было неправильное исправление… Можем ли мы для keryx реализовать дополнительного независимого верификатора, который в самом конце перепроверяет находки на логику, смысл, клинкод, и другие обще принятые паттерны? что бы он находил вот такое»; «может это растет изза того что reviewing не достаточно четко описан?» (claude-code session 2026-10-16, after vantage-frontend #7966)
++- Эффект: ложные находки «по правилу, но против практики/намерения» не доходят до исполнителя; вместо неверного фикса оператор получает вопрос.
++- Как наблюдать: на эталоне #7849 (playback LTR) review-premise выдаёт challenged/owner-decision; на наборах реальных находок #992/#1005 он не гасит ни одной подтверждённой; владелец видит то же на следующем PR vantage-frontend.
++
++## Out of Scope
++
++- Changing what each reviewer looks for beyond the shared law and the review-layout "does not mirror" list.
++- Re-opening vantage-frontend #7966/#7908 (owner already closed and reverted).
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/README.md
+@@ 1,37 @@
++# Flow 459 evaluation (AC7)
++
++Live run, judge = `review-premise` on Opus, one fresh subagent per input set, prompt = SKILL.md path + repo path + findings path only.
++
++| Set | Finding | Verdict | Pass |
++|---|---|---|---|
++| fixture (#7849 analogue) | F1 timeline pinned LTR (major) | challenged, 6 intent signals, 2 practice sources (Material, Apple HIG) | yes |
++| fixture | C1 wheel seek ignores scrollLeft | upheld | yes |
++| fixture | C2 resize listener not removed | upheld | yes |
++| fixture | C3 icon-only button, no name | upheld | yes |
++| #1005 @ f5d3385f | F-066 | upheld | yes |
++| #1005 | F-067 | upheld | yes |
++| #992 @ d9ccfb6c | F-007, F-008 | upheld | yes |
++| #992 | F-009, F-011, F-012 | downgraded major -> minor | MISS |
++
++Dispatches 1 per set (3 total). Subagent tokens: fixture 70,419 / #1005 74,684 / #992 80,772.
++All three claims files parse and merge with `parsePremiseClaims` + `mergePremises` (`inputs/validate.ts`, outputs `validate-*.json`): 11 claims applied, 0 rejected.
++
++## Reading
++
++- The headline case works: F1 is held with cited intent and practice, and no real or truth finding is challenged or held (AC7 as worded is met).
++- Strictly (a downgrade of a truth finding is a miss) three of the seven #992/#1005 truth findings were downgraded. All three are test-coverage-gap findings (surviving mutants, no runtime defect) that the judge re-graded minor using the canonical severity rubric. It never held them, so none would be blocked from a fix loop; they only drop out of the major count. Whether that is a defect is an owner call: the downgrade is rubric-consistent, but it is outside the premise-judge's brief (is it a defect at all).
++
++Files: `judge-*.raw.md` (raw outputs), `premise-eval.json`, `validate-*.json`, `inputs/` (findings, validate.ts, fixture.bundle: `git clone` it to reproduce the repo).
++Caveats: the truth findings carry no `title`; the #1005/#992 checkouts contain round-1 review packages (as any real repo would); fixture findings were authored by the evaluator.
++
++## Rerun on #992 after the fix (commit f41a21612)
++
++Fix: a `downgraded` claim needs a cited intent signal or practice source (`downgrade-without-evidence` otherwise); the skill forbids rubric re-grades and its worked example no longer teaches one. Same prompt shape, fresh Opus judge (86,933 subagent tokens), raw output `judge-pr992-rerun.raw.md`.
++
++| Finding | Verdict | Reading |
++|---|---|---|
++| F-007, F-008, F-011 | upheld | pass (F-011 was a rubric downgrade before; fixed) |
++| F-009 | downgraded major -> minor, 2 intent signals (commit d9ccfb6ce, `test-preload-hooks.ts:4`) + 2 practice sources (Bun preload hooks, xUnit fresh fixture) | stays at the fix-loop threshold (minor); the judge argues the reset is deliberate standard isolation and does not hide F-007 "by construction" |
++| F-012 | challenged, held for the operator | the judge argues M10 is an equivalent mutant (every read checks the spelled key, which equals the exact hash for non-shell calls) and that the suggested test cannot kill it; the finding itself said "may be partly equivalent", confidence medium |
++
++Net on 10 controls: 8 upheld, 1 downgraded with cited evidence (still minor, still fixed), 1 held as an operator question (not dismissed). Strict AC7 ("challenges none of the truth findings") is not met for F-012; whether this hold is a defect or the intended behaviour is the owner's judgement (AC7 is `judged`).
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/judge-fixture.raw.md
+@@ 1,48 @@
++STATUS: DONE
++
++```json keryx:premises
++{
++  "judge": "review-premise",
++  "model": "claude-opus-5-5",
++  "premises": [
++    {
++      "finding_id": "F1",
++      "verdict": "challenged",
++      "intent_signals": [
++        { "ref": "src/player/PlaybackTimeline.tsx:33", "says": "explicit dir=\"ltr\" override on the timeline root" },
++        { "ref": "src/player/PlaybackTimeline.tsx:7", "says": "doc comment: pixel offset from the scroller's left edge is media time (physical-LTR mapping by design)" },
++        { "ref": "eslint.config.js:10", "says": "exemption names PlaybackTimeline.tsx and MediaPlaybackControls.tsx a physical-LTR scroll/pixel island because the timeline maps pixels to media time, which runs left to right" },
++        { "ref": "src/player/MediaPlaybackControls.tsx:8", "says": "sibling media control forces the same dir=\"ltr\"; this contradicts the finding's claim that the timeline is the only component in src/player forcing a direction" },
++        { "ref": "8c77b10", "says": "commit message: pin the timeline to dir=ltr because scrollLeft and pixel offsets map to media time, which flows left to right, and the sibling media controls already do the same; exempted from the lint for this island" },
++        { "ref": "a398b42", "says": "commit message: force dir=ltr on media controls because play/seek icons carry a direction that must not swap in RTL" }
++      ],
++      "practice_sources": [
++        { "name": "Material Design — Bidirectionality (what not to mirror: media playback controls and progress)", "says": "media playback buttons and the playback progress indicator do not mirror in RTL, because they show the direction of tape/time rather than reading direction" },
++        { "name": "Apple Human Interface Guidelines — Right to left", "says": "video/audio playback controls and timeline indicators keep their left-to-right direction in RTL layouts" }
++      ],
++      "reasoning": "The fact reproduces (dir=\"ltr\" is there), but the code chose it deliberately, with a lint exemption, a commit message giving the reason, and a sibling media control doing the same. Platform practice is that playback progress does not mirror, so STYLING.md's general rule meets a recognised exception here. The suggested fix would remove a documented exemption and make the timeline differ from its sibling MediaPlaybackControls, which makes the system less consistent, and a senior reviewer would reject mirroring a playback timeline on platform grounds.",
++      "question": "The playback timeline is LTR on purpose, as Material and Apple guidance do for media progress, and it matches the sibling media controls. Keep it LTR, or mirror it anyway?",
++      "options": ["dismiss — keep the timeline LTR, as platforms do", "uphold — mirror the timeline and drop the lint exemption"]
++    },
++    {
++      "finding_id": "C1",
++      "verdict": "upheld",
++      "reasoning": "No intent signal for ignoring scroll offset. The component's own contract (line 7) defines media time as pixel offset from the scroller's content left edge, and the effect at line 21 maps time to scrollLeft, so a pointer-to-time conversion without scrollLeft is inconsistent and seeks to the wrong time once the strip is scrolled. The fix is sound and stays physical-LTR, consistent with the island."
++    },
++    {
++      "finding_id": "C2",
++      "verdict": "upheld",
++      "reasoning": "The effect at lines 24-30 adds a window resize listener with no cleanup and re-runs on every positionMs change, so listeners accumulate and the element is kept after unmount. No signal of intent; returning removeEventListener is the standard React effect idiom."
++    },
++    {
++      "finding_id": "C3",
++      "verdict": "upheld",
++      "reasoning": "The emoji-only button at VolumeBar.tsx:6 has no accessible name (WCAG 4.1.2 Name, Role, Value), and sibling buttons in MediaPlaybackControls.tsx:9-11 all carry aria-label, so the fix makes the system more consistent. No intent signal against it."
++    }
++  ]
++}
++```
++
++## Summary
++
++upheld 3 (C1, C2, C3); challenged 1 (F1). Held: F1.
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr1005.raw.md
+@@ 1,22 @@
++STATUS: DONE
++
++```json keryx:premises
++{
++  "judge": "review-premise",
++  "model": "claude-opus-5-5",
++  "premises": [
++    {
++      "finding_id": "F-066",
++      "verdict": "upheld",
++      "reasoning": "Nothing shows the gap was chosen. The comment at src/lib/trust-routine-command.ts:126-128 says the gate does not compute what the shell will make of a word and refuses it instead, so failing closed is the stated intent. The gap is that isShellSpelledOption only checks words that start with a dash or with \\ { $. A word like `HEAD$IFS--output=X` starts with H and gets through, and so does a backslash inside double quotes. This allowlist sits in front of git, which runs no check of its own, so the outcome (git writes or truncates an arbitrary file without a prompt) is real. Accepted practice for a command allowlist is to refuse anything the tokenizer cannot fully resolve. The suggested fix moves the code toward that, and it matches what the file already does elsewhere: isExpandable (line 279) refuses any $ \\ { } for cd targets, and line 347 refuses $( ${ and backticks across the whole command. A senior reviewer would accept the fix."
++    },
++    {
++      "finding_id": "F-067",
++      "verdict": "upheld",
++      "reasoning": "There is one sign of intent: the scan-test exemption at src/commands/review-revision-operand.test.ts:184 says the operands are commits recorded in the graph provenance. The finding shows that reason is wrong. readProvenance (src/sync/provenance.ts:242) only checks that commit is a string, and .provenance.json is a tracked file, so whoever controls the repository controls the value. git's own documentation (git-rev-parse --end-of-options, added in git 2.24) recommends the same guard for revision operands that may be untrusted. The PR applies that guard (revisionOperand) at its other ref-to-git sites, so the fix makes the code more consistent, and it keeps checkGraphStaleness's never-throws contract by returning [] when a value is rejected. The trigger is reachable from `keryx gdgraph find`. The fix is sound."
++    }
++  ]
++}
++```
++
++2 judged: 2 upheld, 0 held.
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr992-rerun.raw.md
+@@ 1,11 @@
++STATUS: DONE
++
++Verdicts (claims block as returned; reasoning abbreviated by the evaluator, citations verbatim):
++
++- F-007 upheld — commit 887ffb1ac intent ("only review-auto answers from the memory and grants", agent.ts:5570) is contradicted by the unguarded delegate (5821) and write (5868) reads; the shell read (5686) has the guard, so the fix is consistent.
++- F-008 upheld — nothing marks answering a policy-tagged question outside an AutomaticReviewRun as intended (agent.ts:2497-2503 excludes only automatic-review turns); reachable; skips arbiter and journal.
++- F-009 downgraded major -> minor — intent_signals: d9ccfb6ce (commit message: refusals leaked between tests; runner-only second preload), src/lib/test-preload-hooks.ts:4 (process-wide memory reset per test); practice_sources: Bun docs — Test runner lifecycle hooks via preload; Meszaros, xUnit Test Patterns — Fresh Fixture / Interacting Tests. Remaining defect: the preload itself is unpinned (M25/M26 survived).
++- F-011 upheld — the disclaimer at ask-user-tool.ts:162 is the documented guarantee (permission-modes.md); M18 survived; suggested assertions are sound.
++- F-012 challenged — intent_signals: src/review/review-system.ts:90 (non-shell calls keep the exact hash as their spelled key), src/commands/agent.ts:5574, 5688, 5821 (every read checks the spelled key). Question: "The exact-fingerprint recording looks redundant … so M10 seems equivalent. Treat it as an equivalent mutant (or remove the redundant line), or keep the finding and require a test?" Options: "dismiss — equivalent mutant; optionally drop the redundant exact-fingerprint recording" / "uphold — keep the finding and require a test that tells the two recordings apart".
++
++Summary: 5/5 judged; 3 upheld, 1 downgraded (cited), 1 challenged, 0 owner-decision. Only git log/blame/show and file reads were run.
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr992.raw.md
+@@ 1,40 @@
++STATUS: DONE
++
++```json keryx:premises
++{
++  "judge": "review-premise",
++  "model": "claude-opus-5-5",
++  "premises": [
++    {
++      "finding_id": "F-007",
++      "verdict": "upheld",
++      "reasoning": "There is no intent signal against the finding; the code's own intent statement supports it. The comment at agent.ts:5570 says the refusal is remembered in every mode so the auto question floor sees it, and that 'only review-auto answers from the memory'. The wrapper read at 5574 honours this (guarded by reviewAuto). The write and delegate reads at 5821 and 5868 call operatorDenied with no mode guard, so in ask mode one refusal answers REFUSED_EARLIER to the identical retry without asking the operator. That breaks the comment's stated design and the ordinary practice that ask mode asks every time. The trigger (refuse, then repeat the call) and the outcome (no prompt, refused) are both named. The suggested fix restores the code's stated intent rather than diverging from siblings: 5686 is already guarded."
++    },
++    {
++      "finding_id": "F-008",
++      "verdict": "upheld",
++      "reasoning": "selfAnsweredQuestion (agent.ts:2511) stands aside only for reviewRun !== undefined, and askFloor is applied at 2521 with no policy rule. The doc comment at 2497-2503 says the decision for policy-tagged questions belongs to AutomaticReviewRun. Nothing marks the combination 'review-auto system on, no run, /mode auto' as deliberately excluded from that guarantee. Both sibling answerers apply floor then arbiter, so making this third answerer defer on policy-tagged questions makes the system more consistent, not less. The trigger and the outcome (arbiter skipped, no journal row) are named."
++    },
++    {
++      "finding_id": "F-009",
++      "verdict": "downgraded",
++      "severity": "minor",
++      "reasoning": "Resetting process-wide state in a beforeEach preload (test-preload-hooks.ts:11, with its reason given at lines 4-6) is accepted test-isolation practice, and it is a deliberate choice. The premise that it makes the F-007 leak 'invisible to CI by construction' does not hold. The reset runs between tests, not inside one, so a test that refuses and then repeats the call still sees the leak; F-007's own repros observed it under this preload. What remains is a correct-behaving preload whose presence no test pins (mutants M25/M26). That is a maintenance cost at a named site with no runtime outcome, which is minor under the canonical rubric. The production-path part of the fix is already carried by F-007."
++    },
++    {
++      "finding_id": "F-011",
++      "verdict": "downgraded",
++      "severity": "minor",
++      "reasoning": "The code behaves correctly: ask-user-tool.ts:162 emits 'The user did not answer this question.' The finding names no input that produces a wrong result today, only that a future refactor could drop the sentence without a red test (mutant M18 survived). The canonical rubric (review-orchestrator SKILL.md:1321-1323) puts a correct-behaving gap with a cost to the next editor at a named site at minor."
++    },
++    {
++      "finding_id": "F-012",
++      "verdict": "downgraded",
++      "severity": "minor",
++      "reasoning": "This is a test-assertion gap with no claimed runtime defect. The finding itself says the mutant (M10) 'may be partly equivalent' and is 'reported as a survivor, not as proof of a bug', with medium confidence. The code records both fingerprints (agent.ts:5581-5582) and behaves as written. The rubric puts this at minor. The repeated-call behaviour it touches is already carried by F-007."
++    }
++  ]
++}
++```
++
++Upheld 2 (F-007, F-008); downgraded 3 (F-009, F-011, F-012: major to minor); challenged 0; owner-decision 0.
+
+--- .metaproject/flows/459-2026-10-16-review-premise/journal.md
+@@ 1,22 @@
++# Flow Journal
++
++- 2026-10-16T11:39:19.756Z - flow created
++- 2026-10-16T11:45:27.901Z - task-done: T1: Collect remaining context
++- 2026-10-16T11:45:28.049Z - task-done: T2: Implement per plan
++- 2026-10-16T11:45:28.198Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-10-16T11:45:28.346Z - task-done: T4: Self-review and prepare draft PR
++- 2026-10-16T11:45:28.496Z - task-added: T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe
++- 2026-10-16T11:45:28.644Z - task-added: T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators
++- 2026-10-16T11:45:28.799Z - task-added: T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs
++- 2026-10-16T11:45:28.947Z - task-added: T8: Live eval: #7849 fixture + #992/#1005 controls
++- 2026-10-16T11:45:29.103Z - task-added: T9: PR review round(s) clean
++- 2026-10-16T11:45:29.253Z - task-added: T10: CHANGELOG, release 0.3.121
++- 2026-10-16T11:45:29.556Z - frozen: 8 criteria; checksum recorded
++- 2026-10-16T11:45:29.707Z - started
++- 2026-10-16T11:46:27.181Z - task-attempt: T5: started (attempt 1) — 459-T5 sonnet worktree lane L1
++- 2026-10-16T11:46:27.335Z - task-attempt: T6: started (attempt 1) — 459-T6 opus worktree lane L3
++- 2026-10-16T12:04:21.666Z - task-done: T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators
++- 2026-10-16T12:09:31.586Z - task-done: T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe
++- 2026-10-16T12:09:31.742Z - task-attempt: T7: started (attempt 1) — 459-T7 sonnet worktree lane L2
++- 2026-10-16T12:43:37.426Z - task-done: T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs
++- 2026-10-16T12:43:37.574Z - task-done: T8: Live eval: #7849 fixture + #992/#1005 controls
+
+--- .metaproject/flows/459-2026-10-16-review-premise/plan.md
+@@ 1,30 @@
++# Implementation Plan
++
++Status: formalized
++
++## Approach
++
++Two layers, because either alone fails on this case:
++
++1. **Prevention in every reviewer** (cheap, runs where the finding is born): a fourth shared law about deliberate choices and accepted practice, propagated through the canonical block, plus a "does not mirror" list in review-layout.
++2. **An independent delete-only judge, `review-premise`** (catches what a rule-anchored reviewer still raises): mirrors the verifier's wiring — claims file, delete-only merge, stored record, verdict/readiness/gate effects — with one new effect, *held* findings that wait for an operator decision instead of reaching a fixer. Clean context and claim-first reading counter anchoring on the reviewer's argument.
++
++The fix-loop orchestrators (flow-orchestrator, job-orchestrator, review-pr-feedback, feature-dev) skip held findings in `fix_context.review_feedback` and ask the operator. A flow whose source is a follow-up issue or an external finding runs `review-premise` on it before planning — that is the path the case actually took.
++
++Alternative rejected: extending `review-verifier`. The verifier runs on the light tier and its value is that it runs something; a premise judgement is the opposite (reasoning on practice and intent, deep tier). Mixing them would cap one by the other's rules (`REASONING_CAPPED_VERDICT`).
++
++State × event matrix: not applicable — CLI/package records and skill text; no UI state. The keryx shell card is an existing card kind (`operator-confirm-review.ts`) with one new decision spec.
++
++## Steps (lanes)
++
++- **L1 code core** (T1): types, `src/review/premise.ts` (claims, validation, delete-only merge), managed ingest after dedupe, persistence, scope.md block, verdict held class, readiness check, flow review-gate condition, dedupe severity, coverage `NOT_ROSTER`. Tests in `src/review/premise.test.ts` + the touched suites.
++- **L2 operator + CLI surface** (T2, after T1): `premise-question` decision kind, `keryx review decide-premise` (terminal + card), `--premises` flag/help/automatic-review path flags, tier rule, routing corpus, catalog + install manifest, docs/cli-reference + review-with-a-record guide.
++- **L3 skills** (T3, parallel with T1): new `review-premise/SKILL.md` (both copies); shared law 4 in the canonical block and every reviewer copy; review-layout "does not mirror"; review-orchestrator Wave D (offset text into SKILL.detail.md to stay ≤ ceiling); flow-orchestrator, job-orchestrator, review-pr-feedback, feature-dev, task-implementer handling of held findings and follow-up sources; exempt lists, count tests, ceilings.
++- **T4 verify**: synthetic eval — a fixture reproducing the case (a timeline with an explicit `dir="ltr"`, an exemption comment and a sibling media control doing the same) plus control findings that are real; run `review-premise` live (Opus) and record verdicts; replay #992/#1005 ground-truth findings and record that none is challenged. Results in `eval/`.
++- **T5 review** of the PR, T6 docs/CHANGELOG, then release 0.3.121.
++
++## Risks
++
++- The judge gutting real findings: guarded by delete-only + held-not-dismissed (only the operator dismisses) and by the #992/#1005 control eval.
++- Orchestrator ceiling: Wave D text must be offset by moving detail out.
++- Shared-law propagation touches ~25 reviewer files ×2 copies: mechanical, verified by the derived iron-laws test.
+
+--- .metaproject/flows/459-2026-10-16-review-premise/tasks.md
+@@ 1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+
+--- .metaproject/modules/gdskills.md
+@@ 100,132 @@
+ - `review-frontend`: Review frontend components, state boundaries, rendering behavior, and UI integration patterns.
+ - `review-frontend-conventions`: Review frontend code against repository-local frontend conventions and agent entrypoints.
+ - `review-highload`: Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks.
+ - `review-jev-comments`: Check whether open PR review comments were addressed, scored by Jev.
+ - `review-jev-contract`: Check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff, scored by Jev.
+ - `review-jev-docs`: Find documentation sections that went stale because of a diff, scored by Jev.
+ - `review-jev-risk`: Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency.
+ - `review-jev-rules`: Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx.
+ - `review-jev-scenarios`: Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario.
+ - `review-layout`: Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry.
+ - `review-logic`: Review logic correctness, contracts, edge cases, nullability, and async behavior.
+ - `review-orchestrator`: Route review requests to specialized reviewers and consolidate findings.
+ - `review-performance`: Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.
+ - `review-pr-feedback`: Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer.
+ - `review-pr-contract`: Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale.
+ - `review-regression`: Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round.
+ - `review-security-code`: Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure.
+ - `review-style`: Review naming, readability, duplication, dead code, and maintainability.
+ - `review-testing-practices`: Review test structure, coverage quality, determinism, and repository test conventions.
+ - `review-verifier`: Verify reported findings by executing a check that fails if the finding is real; delete-only.
++- `review-premise`: Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only.
+ 
+ ## Commands
+ 
+ - `keryx skills status`
+ - `keryx skills catalog --profile full`
+ - `keryx skills install --profile full`
+ 
+ ## Storage
+ 
+ - `skills/gdskills/` - installed working skills.
+ - `project-skills/` - generated entity/project skills.
+ - `data/gdskills/` - reports, proposals, and artifacts.
+
+--- .metaproject/skills/catalog.md
+@@ 96,125 @@
+ | review-frontend | review | Review frontend components, state boundaries, rendering behavior, and UI integration patterns. | gdskills/review/review-frontend/SKILL.md |
+ | review-frontend-conventions | review | Review frontend code against repository-local frontend conventions and agent entrypoints. | gdskills/review/review-frontend-conventions/SKILL.md |
+ | review-highload | review | Review concurrency, retries, queues, idempotency, resource pools, and high-traffic risks. | gdskills/review/review-highload/SKILL.md |
+ | review-jev-comments | review | Check whether open PR review comments were addressed, scored by Jev. | gdskills/review/review-jev-comments/SKILL.md |
+ | review-jev-contract | review | Check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff, scored by Jev. | gdskills/review/review-jev-contract/SKILL.md |
+ | review-jev-docs | review | Find documentation sections that went stale because of a diff, scored by Jev. | gdskills/review/review-jev-docs/SKILL.md |
+ | review-jev-risk | review | Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency. | gdskills/review/review-jev-risk/SKILL.md |
+ | review-jev-rules | review | Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx. | gdskills/review/review-jev-rules/SKILL.md |
+ | review-jev-scenarios | review | Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario. | gdskills/review/review-jev-scenarios/SKILL.md |
+ | review-layout | review | Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry. | gdskills/review/review-layout/SKILL.md |
+ | review-logic | review | Review logic correctness, contracts, edge cases, nullability, and async behavior. | gdskills/review/review-logic/SKILL.md |
+ | review-orchestrator | review | Route review requests to specialized reviewers and consolidate findings. | gdskills/review/review-orchestrator/SKILL.md |
+ | review-performance | review | Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk. | gdskills/review/review-performance/SKILL.md |
+ | review-pr-feedback | review | Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer. | gdskills/review/review-pr-feedback/SKILL.md |
+ | review-pr-contract | review | Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale. | gdskills/review/review-pr-contract/SKILL.md |
+ | review-regression | review | Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round. | gdskills/review/review-regression/SKILL.md |
+ | review-security-code | review | Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure. | gdskills/review/review-security-code/SKILL.md |
+ | review-style | review | Review naming, readability, duplication, dead code, and maintainability. | gdskills/review/review-style/SKILL.md |
+ | review-testing-practices | review | Review test structure, coverage quality, determinism, and repository test conventions. | gdskills/review/review-testing-practices/SKILL.md |
+ | review-verifier | review | Verify reported findings by executing a check that fails if the finding is real; delete-only. | gdskills/review/review-verifier/SKILL.md |
++| review-premise | review | Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only. | gdskills/review/review-premise/SKILL.md |
+ 
+ <!-- gdskills:project-skills:start -->
+ ## Project Skills
+ 
+ | Module | Skill | Target | Entry |
+ |---|---|---|---|
+ | gdgraph | module | `src/gdgraph` | .metaproject/project-skills/gdgraph/module/SKILL.md |
+ | metaproject | init-command | `src/commands/init.ts` | .metaproject/project-skills/metaproject/init-command/SKILL.md |
+ <!-- gdskills:project-skills:end -->
+
+--- .metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md
+@@ 22,62 @@
+ Proceed directly with your assigned task.
+ </SUBAGENT-STOP>
+ 
+ # Feature Development (7-Phase)
+ 
+ End-to-end feature development workflow from idea to merge-ready PR.
+ 
+ ## Arguments
+ 
+ - `/feature-dev <description>` — start from a text description. Plan bridge: publish `phase-1`…`phase-8` with `plan_set`/`plan_update`; while a confirmation question is open the items are `proposed` — see the `session-plan-bridge` rule.
+ - `/feature-dev #<issue>` — start from a GitHub issue
+ - `/feature-dev --resume` — resume interrupted feature-dev (checks for existing worktree/branch)
+ 
+ ## 8-Phase Architecture
+ 
+ > **Rules always loaded:** `tdd-workflow.mdc`, `implementation-doc-mandate.mdc`, `error-handling.mdc`
+ > **Sub-agents used:** `tests-creator` (before implement), `code-verifier` (after implement)
+ 
+ ### Phase 1: REQUIREMENTS + SPEC
+ 
+-1. Parse input (description or GitHub issue via `gh issue view`)
++1. Parse input (description or GitHub issue via `gh issue view`). An issue filed from a review finding, or an external review comment, is a premise to check: dispatch `review-premise` on it first, and on `challenged` or `owner-decision` ask the operator its question with its options before writing the spec
+ 2. Clarify ambiguities — ask the user up to 3 questions max
+ 3. Produce the **Implementation Spec** (per `implementation-doc-mandate.mdc`):
+    - **What**: feature description in 2-3 sentences
+    - **Why**: user value / business reason
+    - **Scope**: what's in, what's explicitly out
+    - **Acceptance criteria**: testable bullet points
+    - **Approach**: which files will change, key design decisions
+    - **Test strategy**: framework, which scenarios will be covered
+ 4. **Save spec** to `.feature-spec.md` in project root (add to .gitignore if not already)
+ 5. **Get user confirmation before proceeding**
+ 
+ ### Phase 2: DESIGN
+ 
+ 1. Research the codebase:
+    - Find related modules via search tools
+    - Read neighboring implementations for patterns
+    - **Detect test framework** (package.json, existing test files) — needed for tests-creator
+ 2. Produce implementation plan:
+    - Files to create/modify (with brief description of changes)
+    - Dependencies or packages needed
+
+--- .metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md
+@@ 96,136 @@
+ ### Phase 6: VERIFY (code-verifier gate)
+ 
+ Run `code-verifier` on the full diff:
+ 
+ ```
+ Invoke: .metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md
+ Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
+ ```
+ 
+ - `gate: PASS` → proceed to Phase 7
+ - `gate: FAIL` → fix findings, re-run code-verifier (max 2 cycles)
+ - Still FAIL after 2 cycles → report blocker to user, stop
+ 
+ ### Phase 7: REVIEW (Self)
+ 
+ 1. Launch the `review-orchestrator` skill on own changes
+ 2. Or run a focused self-review:
+    - `git diff main...HEAD` — review the full diff
+    - Check for: TODOs left behind, console.logs, hardcoded values
+    - Verify all acceptance criteria from Phase 1 spec
+-3. Fix any findings (max 2 review-fix cycles). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
++3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere) and record it with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`; only an upheld one is fixed. Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
+ 4. Re-run `code-verifier` after any fixes
+ 
+ ### Phase 8: DELIVER + CHANGE REPORT
+ 
+ 1. Push branch
+ 2. Create PR:
+    - Link to issue if applicable
+    - Include acceptance criteria checklist
+    - Add test plan and code-verifier results
+ 3. **Produce Change Report** (per `implementation-doc-mandate.mdc`):
+    - Files created/modified with descriptions
+    - Test count and results
+    - code-verifier gate result
+    - Acceptance criteria checklist (checked off)
+    - Commits list
+ 4. Print Change Report to user
+ 5. Report PR URL to user
+ 
+ ## Status Updates
+ 
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 247,298 @@
+ 
+ When the scope touches UI, a store, or other code that holds state across events, `plan.md` carries a state × event matrix before `flow freeze`. Rows are the states the surface can be in (for example loading, loaded, empty, missing, first-load failed, refresh failed); columns are the events that reach it (for example the user switches selection, unmount, workspace or context change, retry). Each cell is one line: what the user sees and which state survives, citing the project's styling/UX rules where they decide it. Every non-trivial cell gets an `ACn` row, or one AC per group of cells with the same result; a cell that is genuinely "no change" needs none. List only the states and events the change reaches:
+ 
+ | state \ event | user switches selection | unmount | retry |
+ |---|---|---|---|
+ | loading | drop the stale response; loading shows for the new one | no state write after unmount | — |
+ | refresh failed | keep loaded data; the error does not follow to the new selection | — | re-fetch; error stays inline until success |
+ 
+ It does not apply when the scope holds no UI or state (CLI output, pure functions, docs, build config): write `State × event matrix: not applicable — <why>` in `plan.md`. The matrix is what workers and fix rounds check behavior against; a choice no cell decides is a `behavior_changes` entry for the operator (Phase 2).
+ 
+ ### A verification step in the plan is a task, not a sentence
+ 
+ Every check the plan says must happen before the work is accepted - run the thing end to end, confirm two components agree, exercise the path no test covers - is added with `keryx flow task add` and closed with `keryx flow task done`. Prose in `plan.md` blocks nothing, and an orchestrator that wrote the step is the same one deciding whether to run it.
+ 
+ The failure this prevents is specific and has happened: a plan listed "confirm both components agree on the same input" as step 5, the implementation shipped without it, and review found that the two did not agree at all - the change could not work in production. The check had been identified correctly and then skipped, because nothing made skipping it visible.
+ 
+ Tasks are the mechanism for this. `keryx flow complete` runs a `tasks` gate over them, so an unrun verification step keeps the flow open instead of being quietly dropped.
+ 
+ Know the gate's exact scope, because for years this file claimed a gate that did not exist and 24 completed flows shipped with an open task:
+ 
+-- the gate is **opt-in per flow package**, keyed on `gates.tasks` in
+-  `flow.json`, which `keryx flow init` writes for every flow it creates. A
+-  package created before the gate landed does not carry the flag, and for it
+-  the gate reports `skipped` and blocks nothing;
+-- a task fails the gate when its status is not `done`; when its disposition is
+-  `failed`; when its disposition is `blocked` (terminal, but the work did not
+-  happen — and the harness emits this disposition on its own for a run that
+-  ended blocked); when its disposition is `skipped` with no recorded reason; or
+-  when its disposition is a value this build does not recognise. An
+-  unrecognised disposition FAILS rather than falling through: a gate whose
+-  default for the unknown case is "pass" is not a gate;
++- the gate is **opt-in per flow package**, keyed on `gates.tasks` in `flow.json`, which `keryx flow init` writes for every flow it creates. A package created before the gate landed does not carry the flag, and for it the gate reports `skipped` and blocks nothing;
++- a task fails the gate when its status is not `done`; when its disposition is `failed`; when its disposition is `blocked` (terminal, but the work did not happen — and the harness emits this disposition on its own for a run that ended blocked); when its disposition is `skipped` with no recorded reason; or when its disposition is a value this build does not recognise. An unrecognised disposition FAILS rather than falling through: a gate whose default for the unknown case is "pass" is not a gate;
+ - to close a task as deliberately not needed, record why:
+ 
+   ```bash
+   keryx flow task done <id> <Tn> --disposition skipped --reason "<why it was not needed>"
+   ```
+ 
+ Read the `tasks` line in the `flow complete` output. If it says `skipped`, the gate did not run and the task list is yours to verify by hand.
+ 
++**A flow whose source is a finding** — a follow-up issue filed from a review, or an external review comment — is a premise to check, not a settled requirement. Before `flow freeze`, dispatch `review-premise` on that finding (its claim, file, quote and the code it names); on `challenged` or `owner-decision` ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere), journal the answer, and plan only what the operator upholds.
++
+ Then freeze and start (`--yes`: the operator already answered the kinds question, so the freeze must not prompt):
+ 
+ ```bash
+ keryx flow freeze <id> --yes
+ keryx flow start <id>
+ ```
+ 
+ ## Phase 2: Execute Tasks
+ 
+ Use existing gdskills as workers. Do not duplicate their internal workflows.
+ 
+ Recommended worker routing:
+ 
+ | Flow task kind | Worker skill |
+ |---|---|
+ | `context` | `context-collector` |
+ | `test` | `tests-creator` or `test-gen` |
+ | `implement` | `task-implementer` |
+ | `review` | `review-orchestrator` |
+ | `docs` | `job-documenter`, `prd-creator`, or documentation-specific project skill |
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 420,460 @@
+ 
+ 1. Run focused tests for touched scope.
+ 2. Run `code-verifier`.
+ 3. Run `keryx health run` when Code Health is enabled.
+ 4. **First-green gate, once per flow.** The first time every implement/test task is `done` and steps 1–3 pass, ask the operator one question (question tool, options) before any review round: `issue AC met — open the PR with the standard review`, or `harden first` with each extra matrix cell or failure path you would add as its own option. Record the answer in `journal.md`; picked hardening becomes `keryx flow task add` tasks (plus `keryx flow ac update` when it adds criteria) before review. A dispatched run has no operator: it takes the standard review and journals that the dispatch answered the gate.
+ 5. Check the bounds, then run `review-orchestrator` with relevant domains — in this session,
+    never handed whole to one subagent: one without a dispatch tool returns `STATUS: BLOCKED`.
+    ```bash
+    keryx review budget --spent <usd-so-far> --full --outstanding <subagents still running, 0 if none>
+    ```
+    A non-zero exit means the spend ceiling (3 USD by default) has been reached:
+    **stop and ask the user** rather than dispatching another fan-out — never shrink the fan-out to fit.
+    Dispatch prompts point at sources (files, SHAs, the PR) and never paraphrase a contract.
+    Every round opens with `keryx review start` on the current head, never a hand-built range (Phase 4 loop, step 1).
+ 
+    `--outstanding` is the part that matters here. `review-orchestrator` runs inline in this session and dispatches reviewers in parallel; keryx cannot observe other subagents. Passing the count still running is the only thing that makes the concurrency cap mean anything; omit it and the cap bounds the reviewer fan-out alone, which the review record then states plainly. Add `--full` for `--all`.
+ 
+ 6. If findings require code changes, run a fix round through `task-implementer`, recorded as a flow fix task:
+    - **Scope freeze.** A fix round fixes the round's findings and nothing else. Hardening, refactors or new cells a fix suggests go to the operator as a question (as in step 4); never grow scope inside a fix round.
+    - **Red probes → ONE implementer.** When reviewers left red probes (failing tests or commands on the findings), pass them as `test_case_specs` to one `task-implementer` dispatch — no separate `tests-creator` task. `tests-creator` runs only for a new contract no probe covers.
++   - **A held finding is not fixed.** A finding `review-premise` held (`challenged` or `owner-decision`) never goes into `fix_context.review_feedback`: ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere) and record the answer with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`; only an upheld finding enters a fix round. A dispatched run leaves it held and journals it.
+    - **`suggested_fix` is a hypothesis.** Pass each finding's `id` and `suggested_fix` in `fix_context.review_feedback`; the implementer reproduces the finding (red), checks the suggestion against the state × event matrix, then fixes (task-implementer 1.3). Journal every `suggested_fix diverged` / `did not reproduce` note it returns.
+ 7. Close the skill-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect
+    the `skill_drift` fields from task-implementer results and the
+    `## Skill Learning` block from review-orchestrator. For each flagged
+    project-skill, dispatch a subagent — on a cheaper / non-flagship model if one
+    is available (`keryx review tier --findings 1 --diff-lines 0` resolves one from runtime
+    provider detection; see `rules/core/model-selection.mdc`), otherwise the session model — to run
+    `keryx skills learn --from-review <report> --skill <m>/<s>` and return the
+    proposal. Then read the proposal and `skills learn apply` it, or discard it.
+    Never apply unread; never put `learn` in a hook.
+ 
+ The implementer never self-accepts. Only flow-orchestrator decides whether the
+ flow can move to `implemented`. Record any applied skill updates in the
+ completion report.
+ 
+ ## Phase 4: Completion Choice
+ 
+ When tasks, verification and review are complete:
+ 
+ 1. Stop before creating a PR or changing the flow to `implemented`.
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 663,686 @@
+ - Do not let `task-implementer` edit `flow.json`, frozen AC, or decide
+   completion.
+ - Do not read broad source trees when gdgraph/gdctx/wiki/memory can first
+   narrow context.
+ 
+ ## Red Flags
+ 
+ Stop and re-read this skill if you are thinking:
+ 
+ | Rationalization | Rebuttal |
+ |---|---|
+ | "The worker's reply reads like it finished, so the task is done." | The STATUS protocol says read the `STATUS:` line first and never infer the outcome from prose. A reply without one is `NEEDS_CONTEXT` — a confident-sounding summary is exactly what an unusable result looks like. |
+ | "`DONE_WITH_CONCERNS` is still done, so I can move on." | Every concern goes into `journal.md` and gets an explicit continue-or-fix decision before `flow task done`. Concerns dropped at the task boundary are invisible by the completion report, which is where they would have mattered. |
+ | "The acceptance criterion no longer matches what we built, so I'll reword it." | Frozen AC changes only through `keryx flow ac update <id> --reason "<why>"`, or `--criterion ACn --text "<criterion>" --reason "<why>"` to rewrite the line itself. Rewriting a criterion to fit the implementation makes the flow pass a gate it actually failed, and leaves no record that it moved. |
+ | "`flow.json` is just a file — editing one field is faster than the CLI." | `flow.json`, status transitions, task status and attempt counts are CLI-owned. A hand-written field desynchronises the durable state from the flow's own history, and the CLI's next gate check reads yours, not reality. |
+ | "Tests pass and the review is clean, so I'll open the PR and complete the flow." | Phase 4 stops and asks the user how the flow should end; not every flow wants a PR. And completion requires a confirmed merge into the base branch captured at creation — not a green local run. |
+ | "The worker returned BLOCKED twice — faster if I implement this task myself." | The implementer never self-accepts and the orchestrator never implements. Block the flow, escalate one concise question, then unblock and re-dispatch. Doing the work here erases the boundary the whole flow model rests on. |
+ | "Verification is described in the plan, so it will happen." | A verification step in the plan is a task, not a sentence. If it is not a task with a status, nothing records whether it ran, and the flow reaches `implemented` with an unrun gate. |
+ | "The review fan-out is cheap, so the budget check can wait." | `keryx review budget --spent … --outstanding …` gates the fan-out, and `review-orchestrator` runs inline in this same main session, where keryx cannot see the in-flight subagents; declare them with `--outstanding`. Skipping the check means the cap bounds nothing. |
+ | "The reviewer wrote the fix; applying it is the fastest close." | A `suggested_fix` is a hypothesis. Most majors in a long fix loop are introduced by fixes: reproduce the finding red, check the suggestion against the state × event matrix, then fix (Phase 3 step 6). |
++| "The finding came from a review, so its premise is settled." | A finding can reproduce and still not be a defect. Never pass a held finding in `fix_context.review_feedback`; ask the operator and record it with `review decide-premise` (Phase 3 step 6); a flow sourced from a finding runs `review-premise` before freeze (Phase 1). |
+ | "While I'm in this code, the fix round can also harden the empty state." | Scope freeze: a fix round fixes findings. New hardening is an operator decision at the first-green gate or as an explicit question, never silent growth. |
+ | "The implementer journaled its UX choice, so it is decided." | A `behavior_changes` entry with `needs_operator: true` is decided by the operator, asked with options before the result is accepted (Phase 2). A journal line decides nothing. |
+ | "I'll set the verification kind later." | An `unclassified` criterion cannot become data afterwards without a recorded rewrite: `keryx flow ac update <id> --criterion ACn --text "…" --reason "<why>"`. Put the `[verify: …]` marker on every criterion before `flow freeze`. |
+
+--- .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md
+@@ 1259,1345 @@
+ 
+ Three is the self-fix bound `task-implementer` and this skill share
+ (`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to four repair iterations account for
+ most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
+ correctness falls **0.820 -> 0.673** across two forced revisions while
+ cumulative ever-correct is **0.847**
+ ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
+ hardcode the same bound (`max_reflections = 3`).
+ 
+ The bound is a ceiling, not a target. Repetition ends the loop earlier and
+ **regardless of remaining iterations** — a counter cannot tell "converging
+ slowly" from "stuck", and an agent emitting the identical failing output three
+ times spends the whole budget before anything notices.
+ 
+ **A finding leaves this loop by being dispositioned, never by being absent.** The
+ previous version of this section recomputed "unresolved" as whatever the next round
+ still reported — so a finding the next reviewer simply did not look at was recorded as
+ fixed. That is absence-as-evidence, and the completion gate refuses it.
+ 
+ ```
+-UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6
++UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6, never one review-premise holds   # held (challenged/owner-decision): ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere), record it with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`; only an upheld one enters the fix prompt
+ PREVIOUS_REVIEW_OUTPUT = <the ingested report from step 2.6>
+ 
+ FOR iteration in [1, 2, 3]:
+   IF NOT NEEDS_FIX: BREAK
+ 
+   keryx job step <job-name> fix --status in-progress     # increments metrics.steps[].retries
+ 
+   1. Group UNRESOLVED_FINDINGS by file
+   2. Construct fix prompt — MUST include unresolved findings from previous attempt:
+ 
+      task_type: "fix"
+      findings: <UNRESOLVED_FINDINGS, in the canonical finding shape>
+      iteration: <N>
+      previously_unresolved: <findings that were in UNRESOLVED_FINDINGS last iteration but still present>
+          → Prefix: "These specific findings were NOT fixed in iteration <N-1>: [list]"
+ 
+   3. Launch task-implementer with the fix prompt (subagent_type: "general-purpose"),
+      on the model `keryx review tier --fix-attempt <N> --findings <n> --json` computes
+   4. Run the sanity check (step 2.5.2 logic) — verify commits were made
+   5. Run the next managed round — the FULL 2.6.1 sequence, not a bare re-dispatch:
+        keryx review budget  --spent <usd> --outstanding <n>
+        keryx review plan    --target branch --ref <feature-branch> --head <new-head>
+                             # start + scope + blast-radius + slice + required + estimate on the new head;
+                             # round.json names the delta, scope.json and blast-radius.json land in the package
+        keryx review comments collect --repo <r> --pr <n> --sha <new-head> --round <N+1> --out <file>
+        <run review-orchestrator inline, in this session; it takes the round from round.json>
+        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
+                             --scope scope.json --blast-radius blast-radius.json \
+-                            --verifications <file> --refuted <file> --outstanding <n>
++                            --verifications <file> --premises <file> --refuted <file> --outstanding <n>
+   6. Recompute NEEDS_FIX from the ingested findings
+   7. Record what became of each finding raised in the PREVIOUS round — every one of
+      them, before the next iteration starts:
+ 
+        keryx review complete <previous-review-id-or-path> \
+          --finding F-001 --disposition acted-on --evidence "fixed in <commit-sha>" \
+          --finding F-002 --disposition dismissed-incorrect --evidence "<what was run, what it showed>" \
+          --finding F-003 --disposition dismissed-out-of-scope --evidence "<decision, where written>"
+ 
+      States: unknown, acted-on, dismissed-incorrect, dismissed-wont-fix,
+      dismissed-out-of-scope, dismissed-deprioritised. Everything except `unknown`
+      must cite where the outcome is written down. A recorded state and its citation
+      cannot be overwritten by a later close — record a correction as a new round.
+      Closing with no dispositions leaves every finding reading `unknown`, which means
+      "nobody wrote down what happened".
+   8. UNRESOLVED_FINDINGS = the blocker + major findings of the NEW round that are
+-     still without a terminal disposition
++     still without a terminal disposition and not held by review-premise
+ 
+   9. STUCK CHECK — runs before the next iteration and ignores the budget:
+      IF any finding identity is in UNRESOLVED_FINDINGS for the SECOND iteration
+         OR the new review output is identical to PREVIOUS_REVIEW_OUTPUT
+      THEN log "stuck: <what repeated>" and BREAK, even with iterations left.
+      Identity is the finding's dedupe_key when it has one, otherwise
+      reviewer + file + symbol + problem — never the display id, which is
+      per-report and would fire on every second iteration whatever happened.
+ 
+      Detection is also available from the durable record rather than this
+      session's memory, which is the version that survives a restart:
+        keryx review loop --flow <flow-id>
+      It escalates with a non-zero exit on a recurring finding or two identical
+      consecutive rounds, regardless of the remaining budget.
+  10. PREVIOUS_REVIEW_OUTPUT = the new ingested report
+ 
+   keryx job step <job-name> fix --status completed
+ 
+ AFTER THE LAST ROUND ONLY — answer every inbound PR comment, once:
+   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file> \
+
+--- .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md
+@@ 81,121 @@
+   module_patterns:      string: how similar code is written in this module
+   test_case_specs:      optional — provided by tests-creator (RED-phase test stubs already committed)
+ ```
+ 
+ **1.2 Extract from workspace context:**
+ 
+ ```
+ WORKSPACE:
+   codebase_path:        absolute path to the repository
+   branch:               feature branch to work on (already checked out by orchestrator)
+   issue_number:         Optional real GitHub issue number; omit for description-based tasks
+   issue_title:          issue title (for commit messages)
+ ```
+ 
+ For a description-based task, omit `issue_number` and issue references in commit messages. Never substitute a flow ID or fabricate a GitHub issue. A supplied issue number must remain a positive integer.
+ 
+ **1.3 For fix tasks (dispatched from review loop):**
+ 
+ ```
+ FIX_CONTEXT:
+-  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix)
++  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix); never a finding review-premise holds for the operator
+   original_task_ids:    the tasks that introduced the findings (array)
+   iteration:            fix iteration number, 1..3 — the same repair bound as 5.4
+ ```
+ 
+ **A reviewer's `suggested_fix` is a hypothesis, not an instruction.** Per finding: reproduce it first — a test or probe that fails on the current head (red); check the suggested fix against the plan's state × event matrix (`plan.md`, when it has one) and every caller the change reaches; then fix and show the probe green. A finding that does not reproduce is reported, not fixed. Record each divergence in `notes`: `suggested_fix diverged: <id> — <what you did instead and why>` or `did not reproduce: <id>`.
+ 
+ **1.4 Validate the request against the contract:**
+ 
+ Write the request you were handed to a file and run:
+ 
+ ```bash
+ keryx skills contracts validate <request.json> --schema task-implementer-input
+ ```
+ 
+ Non-zero exit means the dispatch is malformed — ABORT and report `NEEDS_CONTEXT`
+ with the validator's own message. Do not repair the request yourself; the
+ orchestrator owns it.
+ 
+ The refusals are the contract's, not a checklist you run by eye
+ (`input-contract.schema.json`, registered in `src/gdskills/contracts.ts`):
+
+--- .metaproject/skills/gdskills/review/review-architecture/SKILL.md
+@@ 252,295 @@
+ Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+ This reviewer keeps no table of its own; what follows is where its recurring
+ conditions land under that rubric, not a second rubric.
+ 
+ | Condition | Severity | Why, under the canonical rubric |
+ |---|---|---|
+ | Circular dependency that fails at runtime (an import resolves to `undefined` on a path the change reaches) | `blocker` | Crash |
+ | Module scope mismatch that produces wrong data across requests | `blocker` | Data corruption |
+ | Layer violation — API/IO call in a component, business logic in a controller, domain importing infrastructure | `major` | A named trigger and a named outcome, but structural: not a crash, data loss, vulnerability, or missing acceptance criterion. Identical to `review-frontend`'s rule for the same condition |
+ | Broken DIP; cross-module coupling with a named consequence | `major` | Same |
+ | SRP smell with a clear separation path; ISP violation; a component reading several raw observables instead of a computed | `minor` | The code is correct; the cost is to whoever restructures it next |
+ | Architectural opinion with no named violation | `info` | Shared laws 1 and 2 |
+ 
+ A circular import that resolves cleanly is not a `blocker` — it is `minor`, and
+ if the concern is purely readability it belongs to `review-style`.
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ### Architecture laws
+ 
+ - Only flag actual violations found **in the diff**, not pre-existing issues untouched by the change.
+ - Every finding MUST cite a specific `file:line` from the diff.
+ - Architecture opinions without a clear, named violation (layer, SOLID principle, pattern misuse) are `info` only — never `blocker` or `major`.
+ - Do not flag correct framework usage as a violation just because an alternative exists.
+ 
+ ---
+ 
+ ## Output Contract
+ 
+ ```
+ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
+ ```
+
+--- .metaproject/skills/gdskills/review/review-backend/SKILL.md
+@@ 170,213 @@
+ - Service contracts expressed as interfaces (`IUserService`), not just class implementations
+ - No `as any` or unsafe casts (`as unknown as T`) without a comment explaining why
+ - `@ts-ignore` / `@ts-expect-error` without explanation comment — flag as `minor`
+ 
+   **This is the one severity for this condition, repo-wide.** It was previously
+   `minor` here and `major` in `review-strict`, which is deleted. `minor` is what
+   the canonical rubric returns: a suppressed compiler error names no trigger and
+   no observable wrong outcome — the code does exactly what it did before the
+   comment was added. What it costs is the next reader, who cannot tell what was
+   suppressed or whether it is still needed. That is the definition of `minor`.
+   It becomes `major` only when you can name the input the suppressed error was
+   hiding and the wrong value it produces — at which point the finding is about
+   that bug, not about the comment.
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ### Backend conditions
+ 
+ Where this reviewer's recurring conditions land under the canonical rubric. Not a
+ second rubric — each `blocker` names which of the four merge-blocking shapes it
+ is, and a condition that cannot name one is not a `blocker`.
+ 
+ | Condition | Severity | Shape |
+ |---|---|---|
+ | Missing DTO validation on an endpoint accepting user input | `blocker` | Exploitable vulnerability |
+ | String interpolation in raw SQL query | `blocker` | Exploitable vulnerability |
+ | Leaking stack trace / raw ORM error to API response | `blocker` | Exploitable vulnerability (information disclosure) |
+ | `REQUEST`-scoped provider injected into a `Singleton` | `blocker` | Data corruption — one request's state is served to another |
+ | Unhandled promise rejection in a controller method | `blocker` | Crash |
+ | `NOT NULL` column added without a default to a populated table | `blocker` | Data loss — the migration fails or truncates |
+
+--- .metaproject/skills/gdskills/review/review-clean-code/SKILL.md
+@@ 66,109 @@
+ ## Scope Detection
+ 
+ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ 
+ Review scope: **only code introduced or modified in this branch since merge-base**.
+ Pre-existing problems in unchanged lines are out of scope unless a change directly
+ worsens them.
+ 
+ **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+ ```
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ### Clean Code laws
+ 
+ 1. **Findings without a specific `file:line` from the diff are not valid findings.** Never cite general observations about the codebase.
+ 2. **A naming issue is `minor`.** It reaches `major` only when the name has
+    already produced an observable wrong outcome at a call site you can name — a
+    caller misusing the API because of what it is called. "A future reader might
+    misread it" is the maintenance cost that makes it `minor`, not a trigger.
+    Naming is never a `blocker`. (`review-style` carries the identical rule.)
+ 3. **DRY violations need at least 3 repetitions before they are worth reporting,
+    and they are `minor`.** Two occurrences can be accidental; three is a pattern.
+    Duplication is a cost to whoever edits it next, which is `minor` by the
+    canonical test — report it once, listing every site, per shared law 3.
+ 4. **SOLID opinions without a named principle and a concrete violation description are `info` only.** State the principle (e.g., SRP), the two responsibilities, and the impact.
+ 5. **Do not flag language idioms or framework conventions as Clean Code violations.** If it is the standard way to do something in TypeScript / NestJS / React, it is not a violation.
+
+--- .metaproject/skills/gdskills/review/review-core-boundaries/SKILL.md
+@@ 41,84 @@
+ 
+ - Shared/core modules contain reusable utilities, base components, base stores, primitives, and
+   infrastructure.
+ - Feature-specific code does not move into core just to avoid imports.
+ - Core does not import feature/domain modules.
+ - Dependencies stay minimal and point inward: feature modules depend on core, not the reverse.
+ - Prefer composition through interfaces, base classes, adapters, or callbacks over hard-coded
+   feature knowledge.
+ - Public core APIs remain stable and domain-neutral.
+ - New exports are added only when there is a real shared consumer need.
+ - Changes are conservative because core has broad blast radius.
+ - Generic helpers remain generic; names, types, and state do not leak a single feature's language.
+ - Resource-owning utilities document and test cleanup semantics.
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ---
+ 
+ ## Orchestrated Review Contract
+ 
+ When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
+ 
+ ---
+ 
+ ## Finding Format
+ 
+ ### Class scope — required for `blocker` and `major`
+ 
+ Every `blocker` and `major` finding must carry `class_scope`: **every** site that
+ holds the shape you found, and **how you enumerated them** — the grep or query
+
+--- .metaproject/skills/gdskills/review/review-flow-graph/SKILL.md
+@@ 66,109 @@
+ 
+ ### Shared Graph Defaults and Performance
+ 
+ - Shared graph defaults are configured in one surface, not repeated per consumer.
+ - Large nodes/edges arrays avoid deep observation/proxying when shallow/reference observation is
+   enough.
+ - Selection/detail slots use reference semantics when values are swapped as units.
+ - Lookup maps/indexes are computed once from source arrays for O(1) access.
+ - Hand graph libraries fresh array references without deep cloning on every render.
+ - User-initiated graph changes batch writes.
+ - Animated edge/node effects do not restart unnecessarily on parent rerenders.
+ - Level-of-detail logic uses discrete thresholds or policy helpers rather than per-frame UI
+   rerenders.
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ---
+ 
+ ## Orchestrated Review Contract
+ 
+ When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
+ 
+ ---
+ 
+ ## Finding Format
+ 
+ ### Class scope — required for `blocker` and `major`
+ 
+ Every `blocker` and `major` finding must carry `class_scope`: **every** site that
+ holds the shape you found, and **how you enumerated them** — the grep or query
+
+--- .metaproject/skills/gdskills/review/review-frontend-conventions/SKILL.md
+@@ 90,133 @@
+   entries.
+ - Browser storage goes through shared wrappers/adapters; direct `localStorage`/`sessionStorage`
+   access is a review finding when wrappers exist.
+ - Catch blocks normalize user-facing messages, preserve original errors for logging, and notify
+   through the established UI notification channel.
+ 
+ ### Stories and Tooling
+ 
+ - New reusable UI surfaces have stories or examples matching local standards.
+ - Stories include representative default, empty/minimal, and stress/large states where useful.
+ - Wrapper components expose plain props for controls when the primary component is store-only.
+ - Treat unused-code tools as signals: preserve intentional public APIs with narrow ignores rather
+   than deleting documented runtime/story/test entrypoints.
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ---
+ 
+ ## Orchestrated Review Contract
+ 
+ When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
+ 
+ ---
+ 
+ ## Finding Format
+ 
+ ### Class scope — required for `blocker` and `major`
+ 
+ Every `blocker` and `major` finding must carry `class_scope`: **every** site that
+ holds the shape you found, and **how you enumerated them** — the grep or query
+
+--- .metaproject/skills/gdskills/review/review-frontend/SKILL.md
+@@ 38,81 @@
+ 
+ | Concern | This skill | Use instead |
+ |---------|-----------|-------------|
+ | React component patterns (observer, MVVM, useEffect, keys, a11y) | YES | — |
+ | MobX store: structure, actions, computed, reactions, lifecycle | YES | — |
+ | MobX: observable collections, bidirectional sync, disposers | YES | — |
+ | View↔Store boundary violations | YES | — |
+ | TypeScript safety in frontend code (no any, I* prefix, ?./??/!) | YES | — |
+ | Backend patterns, NestJS, server-side logic | NO | `review-logic`, `review-architecture` |
+ | Cross-layer architecture (service layer design, module boundaries) | NO | `review-architecture` |
+ | Security vulnerabilities (XSS, injection, auth gaps) | NO | `review-security-code` |
+ | Performance bottlenecks (N+1, bundle size, re-render frequency) | NO | `review-performance` |
+ | Code style, naming outside frontend conventions | NO | `code-style-review` |
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ### Frontend / MobX laws
+ 
+ These say what is **always reported**. What severity each carries is the
+ conditions table under Finding Format, and it is the canonical rubric applied —
+ not a second opinion.
+ 
+ 1. **Every observable mutation outside an action or `runInAction` is reported.**
+    No exception for "small stores" or "simple assignments".
+ 2. **Missing `observer()` on a component that reads MobX observables is
+    reported.** The component will not react to state changes — a silent runtime
+    correctness bug, and silence is exactly why nobody else will find it.
+ 3. **An API call in a component is reported.** API/IO belongs in private store
+    methods, not in JSX, hooks, or event handlers within the component file.
+ 4. **`public` on a class member is reported.** The ESLint rule
+
+--- .metaproject/skills/gdskills/review/review-highload/SKILL.md
+@@ 66,109 @@
+ 
+ ## Scope Detection
+ 
+ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+ 
+ Review scope: **changes introduced in the current branch since merge-base only**.
+ Pre-existing problems in unchanged lines are out of scope unless the diff makes them worse.
+ 
+ **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
+ ```bash
+ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+ # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+ ```
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ### High-load laws
+ 
+ 1. **Every finding states its failure mode: what breaks, and at what load.** "OOM
+    at ~1k RPS", "pool exhausted at 500 concurrent users", "duplicate charge on the
+    first retry". This is what shared law 1 asks of a load finding — a load level
+    is the trigger.
+ 2. **A race condition on shared mutable state is never dismissed as unlikely.**
+    "It probably won't happen in practice" is not an argument; races manifest
+    unpredictably under load. Its *severity* still comes from its outcome — see the
+    conditions table below — but it is never dropped for improbability.
+ 3. **An unbounded resource that grows with request rate is never `minor`.**
+    Connections, threads, queues, in-memory collections: under load it exhausts.
+ 4. **Architecture opinions without a named pattern violation and a load-related
+    failure mode are `info` only.** State the failure mode, not just that "it could
+
+--- .metaproject/skills/gdskills/review/review-jev-comments/SKILL.md
+@@ 140,179 @@
+ 
+ ## Verification
+ 
+ Before trusting a run's findings:
+ 
+ 1. Read `openComments` in the `--json` output against the ledger's own
+    `unanswered so far` count from the last `comments collect` — they should
+    agree.
+ 2. Spot-check a `needs-escalation` finding against the comment text: does it
+    actually block progress, or is it a `still-open` case Jev over-called?
+ 3. Confirm every finding carries `reviewer: "review-jev-comments"` and a
+    `dedupe_key` — both are required for the orchestrator's Quality Gate and
+    Wave C verification to route it correctly.
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: it emits only
+ `minor` (`still-open`) or `major` (`needs-escalation`, always with
+ `class_scope`) — `blocker` never applies to an unanswered comment.
+ 
+ ---
+ 
+ ## Scope Boundaries
+ 
+ | Concern | This skill | Use instead |
+ |---------|------------|-------------|
+ | An open PR comment looks unaddressed or blocking | YES | — |
+ | Posting a reply, resolving a thread | NO | `keryx review comments reply`, a human |
+ | Judging whether a reported finding is real | NO | `review-verifier` |
+ | Collecting comments from GitHub | NO | `keryx review comments collect` |
+
+--- .metaproject/skills/gdskills/review/review-jev-contract/SKILL.md
+@@ 119,162 @@
+ ## Orchestrator integration
+ 
+ - `keryx review reviewers --json` lists it under `bundled` with
+   `"engine": "jev"`.
+ - `review-orchestrator` dispatches it in **Wave B**, alongside the domain/
+   convention reviewers and the other CLI-engine reviewers, when the opt-in is
+   on and a Jev/OpenRouter credential resolves. When either is false it is
+   **skipped with the stated reason**, recorded in `Skipped reviewers` — never
+   silently absent.
+ - It is **ADDITIONAL**: it never replaces any other pass. **When the opt-in is
+   on, it REPLACES the orchestrator's by-eye Stage 1 "description vs diff"
+   judgement with this scored input** — see `review-orchestrator/SKILL.md`'s
+   "This gate owns the description-vs-diff comparison" and `SKILL.detail.md`'s
+   "CLI-engine reviewers" section. When the opt-in is off, the by-eye check
+   stays the fallback, unchanged.
+ 
+ ---
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ This reviewer satisfies all three by construction: `evidence` always names the
+ matched artefacts/facts and the claim text (never an unreproducible claim); a
+ finding is synthesized only against a claim actually extracted from the real
+ description, never a hypothetical one; and each claim is its own site, so
+ there is no repeated class across claims for this reviewer to collapse — a
+ `major` finding's `class_scope` still enumerates every matched region, not
+ just the first.
+ 
+ ---
+ 
+ ## Red Flags
+ 
+ | Rationalization | Why it is wrong |
+ |---|---|
+ | "Jev said 0.9, so the claim is definitely supported" | A `noul` score is a probability the claim is evidenced, not a verdict — a contradiction detected by the deterministic facts overrides it regardless of the score |
+ | "The description doesn't mention an API, so 'no change' can't be contradicted" | The contradiction check only runs when the claim's own text IS API-shaped (mentions api/public/export/interface/signature/contract) — a claim like "no change to behavior for CLI callers" is checked for tokens, but the exported-symbol contradiction path is intentionally narrower |
+ | "No claims extracted means the description said nothing" | `--diff` targets have no PR description at all — zero claims there is a target-shape fact, not a description-quality one; check `budget.claimsSkipped` too before reading silence as clean |
+ | "The AC track failed, so the whole review failed" | `acCheck` degrades to facts-only (never throws) exactly like `keryx flow check-ac` does — a Jev failure on the criteria track is advisory, same as on the claims track |
+ 
+
+--- .metaproject/skills/gdskills/review/review-jev-docs/SKILL.md
+@@ 145,184 @@
+ ---
+ 
+ ## Verification
+ 
+ Before trusting a run's findings:
+ 
+ 1. Read `selection.droppedSections` in the `--json` output — a capped run
+    covered less than every linked section.
+ 2. Spot-check a finding against the cited hunk: does the section's own text
+    actually conflict with what the diff changed?
+ 3. Confirm every finding carries `reviewer: "review-jev-docs"` and a
+    `dedupe_key` — both are required for the orchestrator's Quality Gate and
+    Wave C verification to route it correctly.
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them — it only ever
+ emits `minor`, capped by construction (`docsFindingStats`), so the
+ `major`/`blocker` shapes never apply here.
+ 
+ ---
+ 
+ ## Scope Boundaries
+ 
+ | Concern | This skill | Use instead |
+ |---------|------------|-------------|
+ | A doc section linked to changed code likely went stale | YES | — |
+ | Documentation quality/completeness unrelated to this diff | NO | a human, or a dedicated docs review |
+ | Judging whether a reported finding is real | NO | `review-verifier` |
+ | Editing the documentation itself | NO | a human, following `suggested_fix` |
+
+--- .metaproject/skills/gdskills/review/review-jev-risk/SKILL.md
+@@ 114,157 @@
+   `"engine": "jev"`.
+ - `review-orchestrator` dispatches it in **Wave B**, alongside the domain/
+   convention reviewers and flow 330's `review-jev-rules`, when the opt-in is
+   on and a Jev/OpenRouter credential resolves. When either is false it is
+   **skipped with the stated reason**, recorded in `Skipped reviewers` — never
+   silently absent.
+ - It is **ADDITIONAL**: it never replaces `review-security-code`,
+   `review-highload`, or any other pass.
+ - **Routing hint**: read `routingHints` from its `--json` output. Each entry
+   names a hunk location, the dimension that crossed threshold
+   (`security`/`concurrency`) and a `suggestedReviewer`
+   (`review-security-code`/`review-highload`). When that reviewer was not
+   already selected for the round, dispatch it too — the hint is advisory,
+   not a hard requirement, and the orchestrator's own path-based selection
+   always takes precedence when it already covers the same hunk.
+ 
+ ---
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ This reviewer satisfies all three by construction: `evidence` always names the
+ hunk location, quotes the changed line, and states every dimension's
+ probability (never an unreproducible claim); a finding is synthesized only
+ against the hunk actually scored, never a hypothetical pattern; and each
+ hunk is a distinct site with its own probabilities, so there is no repeated
+ class across sites for this reviewer to collapse — the routing hint follows
+ the same discipline, naming the exact hunk and dimension that crossed
+ threshold rather than a general warning.
+ 
+ ---
+ 
+ ## Red Flags
+ 
+ | Rationalization | Why it is wrong |
+ |---|---|
+ | "Jev said 0.9, so this hunk is definitely dangerous" | A `noul` score is a probability across one dimension, not a verdict — severity stays capped at `info`/`minor` precisely because Jev alone is not authoritative |
+ | "No nearby test means nobody tested this at all" | `hasNearbyTest` requires the nearby test's OWN diff text to mention a touched symbol or import the hunk's module (`testHunkEvidence`), tightened after a live-check false negative — still a regex heuristic, not proof of coverage through an indirection it cannot see |
+ | "This hunk touches a .md file, so 'no nearby test' is a meaningful finding" | Docs (`.md`/`.txt`) hunks are excluded before scoring (`isNonCodeHunk`) after a live check where prose scored `public-api` — this cannot happen; `selection.hunksNotCode` reports the count |
+ | "No findings means the diff is low risk" | `--max-calls` bounds how many hunks are scored; a capped run reports `selection.hunksSkipped` for exactly this reason — read the selection stats before treating silence as clean |
+
+--- .metaproject/skills/gdskills/review/review-jev-rules/SKILL.md
+@@ 188,231 @@
+ 
+ ## Orchestrator integration
+ 
+ - `keryx review reviewers --json` lists it under `bundled` with
+   `"engine": "jev"`.
+ - `review-orchestrator` dispatches it in **Wave B**, alongside the domain/
+   convention reviewers, when the opt-in is on and a Jev/OpenRouter credential
+   resolves (`resolveJevApiKeyResolution`). When either is false it is
+   **skipped with the stated reason**, recorded in `Skipped reviewers` —
+   never silently absent.
+ - It is **ADDITIONAL**: it never replaces `review-style`, the convention
+   reviewers, or any other pass. A rule clause this reviewer flags may also be
+   the exact concern a domain reviewer raises independently; the dedup pass
+   (by `dedupe_key`/`(file, quote, problem)`) merges the two rather than
+   double-counting.
+ 
+ ---
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ This reviewer already satisfies all three by construction: `evidence` always
+ names the hunk and quotes it (never an unreproducible claim), a finding is
+ only synthesized when the hunk itself is checked against the clause (never a
+ theoretical pattern), and `synthesizeFindingsFromViolations` dedupes by
+ `(clause, file)` with every hunk listed, never one finding per hunk.
+ 
+ ---
+ 
+ ## Red Flags
+ 
+ | Rationalization | Why it is wrong |
+ |---|---|
+ | "Jev said 0.9, so this is definitely a violation" | A `noul` score is a probability, not a verdict — severity stays capped at `minor` unless the rule itself declares higher, precisely because Jev alone is not authoritative |
+ | "This rule clause doesn't really describe code, but the pair matched anyway" | Applicability defaults to "applies everywhere" when a rule declares no path/stack restriction — the clause-kind filter (step 3), the category filter (step 2), and the file-kind gate (step 4) catch most of this before scoring, but a `state_kind: "hunk"` clause on an off-topic rule can still pass through; that is a property of the rule corpus, not a defect in this reviewer |
+ | "No findings means the diff is clean" | `--max-calls` bounds how many pairs are checked; a capped run reports `selection.droppedPairs`/`hunksNeverReached` for exactly this reason — read the selection stats before treating silence as clean |
+ | "A rule wasn't checked and I don't know why" | Read `excludedSources` (category filter, at discovery), `droppedClauses` (tag filter, per clause), and `droppedPlaceholderClauses` (template scaffolding, per clause) before assuming a rule was silently skipped — each names the exact reason |
+ | "I passed `--rules` at a whole rule directory, so every file in it was checked" | Only a `--rules` entry naming ONE file bypasses the category filter; a directory's files are filtered exactly like auto-discovery — check `excludedSources` |
+ | "I'll skip the opt-in check since I trust this project" | The opt-in and credential gates exist because hunk and rule-clause text leaves the machine; skipping them is skipping consent, not a shortcut |
+ 
+
+--- .metaproject/skills/gdskills/review/review-jev-scenarios/SKILL.md
+@@ 112,155 @@
+ ## Orchestrator integration
+ 
+ - `keryx review reviewers --json` lists it under `bundled` with
+   `"engine": "jev"`.
+ - `review-orchestrator` dispatches it in **Wave B**, alongside the domain/
+   convention reviewers and flow 330's `review-jev-rules`/flow 332's
+   `review-jev-risk`, when the opt-in is on and a Jev/OpenRouter credential
+   resolves. When either is false it is **skipped with the stated reason**,
+   recorded in `Skipped reviewers` — never silently absent.
+ - It is **ADDITIONAL**: it never replaces any domain reviewer's own read of
+   the diff.
+ - The consolidated report's "Manual verification" section (or equivalent)
+   should surface `checklist` verbatim alongside any findings — a scenario
+   that scored below the finding threshold but above the checklist threshold
+   is still worth a human glance even though it produced no finding.
+ 
+ ---
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ This reviewer satisfies all three by construction: severity is fixed at
+ `minor` — never higher — and `evidence` always names the scenario's linked
+ code and the exact files this diff touched (never an unreproducible claim);
+ a scenario is only asked about when a real link of its own is in the diff,
+ never a hypothetical connection; and each scenario is its own class with its
+ own `dedupe_key`, so there is nothing to collapse across sites.
+ 
+ ---
+ 
+ ## Red Flags
+ 
+ | Rationalization | Why it is wrong |
+ |---|---|
+ | "Jev said 0.9, so this scenario is definitely broken" | A `noul` score is a probability that behaviour changed, not a verdict — it only ever produces a `minor` finding, and only when paired with the separate "no covering test" fact |
+ | "This PRD scenario links to a huge, frequently-touched file, so the match is meaningless" | Down-weighted after a live check (`SCENARIO_LINK_FANOUT_THRESHOLD`): a link to a file referenced by more scenarios than that only still counts as touched when the scenario's own text names one of the diff's touched exported symbols — read the scenario's own text before assuming a surviving entry is still spurious |
+ | "No entries in checklist means nothing changed functionally" | Discovery only covers three sources (gdwiki `user-scenario` pages, `docs/requirements/**`, README/docs "how to" sections); a scenario that exists only in someone's head, or in a doc outside those three locations, is invisible to this reviewer |
+ | "checklist is empty so scenarioSources must be empty too" | `scenarioSources` lists every discovered scenario; `checklist` lists only those with a touched link at/above threshold — a project can have hundreds of scenarios discovered and zero touched by a given diff |
+ 
+ ---
+
+--- .metaproject/skills/gdskills/review/review-layout/SKILL.md
+@@ 102,176 @@
+ - [ ] `w-fit` + `max-w-full` is an overflow fix, not a sizing floor. Replacing a
+       removed `min-w-*` with `min-w-0` trades an overflow bug for a collapse bug.
+ - [ ] A `min-w-*` on a child plus `w-fit` at the call sites gives the card a hard
+       floor. Compute it, and check it against the narrowest supported host.
+ 
+ ### Box model and centring
+ 
+ - [ ] Padding inside a fixed-width box shifts centred content by half the asymmetric
+       padding. `w-48` (192px) with `pe-6` (24px) centres in 168px — 12px toward the
+       inline start.
+ - [ ] Directional padding that is a gutter in one state is an uncompensated offset in
+       the state where the neighbour is absent. Check **every** conditional render of
+       that sibling, including the empty and never-run states.
+ 
+ ### Logical properties and RTL
+ 
+ - [ ] `ps-*` / `pe-*` / `ms-*` / `me-*` flip under RTL: an offset toward the start in
+       LTR is toward the end in RTL. State both.
+ - [ ] A physical gradient, shadow, or transform in a component that otherwise uses
+       logical properties does **not** flip. Name the direction it points in each.
++- [ ] Some surfaces do **not** mirror, by platform practice (Material Bidirectionality,
++      Apple HIG): media and playback controls and their progress indicator, timelines,
++      numbers, code, phone numbers, and a chart's time axis unless the product decides
++      otherwise. A forced `dir="ltr"` on such a surface is expected, not a defect.
+ - [ ] Text length differs by locale. A component sized by its own labels renders
+       **different geometry for identical data** across locales. Measure with the
+       longest real translation in the catalog, never the English one.
+ 
+ ### Truncation and overflow
+ 
+ - [ ] `truncate` / `line-clamp` needs a constrained width to do anything at all.
+ - [ ] `overflow-hidden` on a container with a percentage-width child silently clips
+       rather than scrolls.
+ 
+ ---
+ 
+ ## Iron Laws
+ 
+ ### This reviewer's own
+ 
+ 1. **A layout finding without a measurement is `info`.** Name the host width, the
+    element width or the offset in pixels, and the command or probe that produced it.
+ 2. **Measure the worst real case, not the convenient one.** The longest translation
+    in the catalog, the narrowest supported host, the state where the sibling is
+    absent, the locale that flips direction.
+ 3. **Never flag a theoretical narrow viewport.** If no supported host reaches the
+    collapse width, the finding is `info` and says what would settle it. A breakpoint
+    nobody ships is not a trigger.
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer keeps no rubric of its own; below is only
+ where its recurring conditions land under that one.
+ 
+ | Condition | Severity | Why, under the canonical rubric |
+ |---|---|---|
+ | An element renders at 0px while its label shows, at a supported host width | `major` | Named trigger (that width), named outcome (the control is invisible) |
+ | Identical data renders different geometry per locale | `major` | Named trigger (the locale), named outcome (a different picture of the same number) |
+ | Content clipped, or the page forced to scroll horizontally, at a supported width | `major` | Named trigger and outcome |
+ | A cosmetic offset a user would not notice — a few px off centre | `minor` | The code behaves correctly; the cost is aesthetic |
+ | A measured-but-unreachable collapse, or any claim you could not measure | `info` | Shared law 1 |
+ 
+ ---
+ 
+ ## Orchestrated Review Contract
+ 
+ When dispatched by `review-orchestrator`, follow the provided
+ `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible
+ with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a
+
+--- .metaproject/skills/gdskills/review/review-logic/SKILL.md
+@@ 243,286 @@
+ This reviewer keeps no table of its own; what follows is where its recurring
+ conditions land under that rubric, not a second rubric.
+ 
+ | Condition | Severity | Why, under the canonical rubric |
+ |---|---|---|
+ | Unhandled promise rejection reaching the process | `blocker` | Crash |
+ | Corrupted or lost persisted/returned data | `blocker` | Data loss or corruption |
+ | Unimplemented acceptance criterion | `blocker` | Named shape 4 |
+ | Race condition on shared mutable state | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | The outcome decides, not the word "race" |
+ | Silent wrong result on a named input | `major` | Trigger and outcome are both named |
+ | Swallowed error that hides a failed operation | `major` — `blocker` only if the caller then persists or returns wrong data | Silent failure is wrong behaviour; corruption is a different shape |
+ | Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
+ | Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
+ | Non-null assertion without a comment | `minor` | Behaves correctly today; the cost is to the reader |
+ | "Could be more defensive", no observable defect | `info` | Neither trigger nor maintenance cost named |
+ 
+ ## Iron Laws
+ 
+ ### Shared laws (every reviewer)
+ 
+-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
+-   name the input, call, or condition that reaches the code, you have an
+-   observation, not a finding. Report it as `info` and say what would settle it.
+-2. **Never flag the theoretical.** The path you describe must exist in the code
+-   under review. Do not report a safe API because it could be misused, or a
+-   pattern because it is often wrong elsewhere.
+-3. **One finding per class, not one per occurrence.** When the same shape appears
+-   at several sites, report it once and list every site. Ten findings that are one
+-   finding hide the other nine problems.
++1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
++2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
++3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
++4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+ 
+ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+ **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+ four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+ boundary is the trigger-and-outcome test.
+ 
+ ### Logic laws
+ 
+ - Every `blocker` MUST include a concrete reproduction scenario or a spec reference.
+ - NEVER flag a style preference (naming, formatting) as a logic bug.
+ - If in doubt between `major` and `blocker`, use `major` — overstating severity loses credibility.
+ 
+ ---
+ 
+ ## Output Contract
+ 
+ ```
+ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
+ ```
+ 
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 900,941 @@
+ 
+ The orchestrator owns the token budget. Sub-reviewers receive only the context their domain needs.
+ 
+ Budget rules:
+ - Compute a scope digest before dispatch: file list, diff stats, module map, and top risks.
+ - Send full diffs only for files relevant to each reviewer.
+ - For large files, send changed hunks plus nearby symbols first; include the full file only when path mode or the reviewer requires whole-file context.
+ - Never send generated files, lockfiles, snapshots, build output, or vendored code unless the reviewer is specifically about that file type.
+ - Cap each reviewer prompt with the `per_reviewer` budget when provided; otherwise use the smallest prompt that preserves evidence.
+ - Record omitted files and truncation in `review_context.token_policy.omissions`.
+ - If a reviewer returns `NEEDS_CONTEXT`, provide only the missing targeted context, not the entire repository.
+ 
+ Default budget guidance:
+ 
+ | Review size | Detection | Context mode | Dispatch style |
+ |---|---|---|---|
+ | small | <= 5 files and <= 300 changed lines | `light` | full relevant diff to selected reviewers |
+ | medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
+ | large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
+ | high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
++
++## Everything written to GitHub is brief
++
++One rule, applied to every outward surface: **PR bodies, PR comments, review
++replies, issue comments, and commit messages going to a PR.**
++
++- Lead with the conclusion. No preamble, no restating the question, no apology,
++  no summary of the flow.
++- Say what changed and where. **Link, do not paste.**
++- The reasoning, the evidence, the rejected alternatives and the round history live
++  in the flow package — `journal.md`, `context.md`, the review artifacts — which is
++  durable, searchable, and costs a reader nothing to skip.
++- A GitHub artifact that needs more than a short paragraph is a signal that the
++  detail belongs in the flow with a link out, **not** that the paragraph should
++  grow.
++- No orchestrator-written PR comment or reply exceeds two sentences without
++  carrying a link to the artifact holding the detail. The reply pass enforces
++  this; for anything else you write outward, hold yourself to it.
++
++This is deliberately asymmetric: **verbose in the flow, terse on GitHub.** The
++flow is written for whoever resumes the work; GitHub is read by someone who did
++not ask for our reasoning and is reading between other tasks.

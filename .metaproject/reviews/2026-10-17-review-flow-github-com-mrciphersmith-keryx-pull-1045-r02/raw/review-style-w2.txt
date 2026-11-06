@@ -1,0 +1,59 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Slice 02 (docs, schema, flow bookkeeping, tests) is stylistically clean; one stale doc sentence and two small test-style points.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "ST-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops",
+      "problem": "The slice adds a third locator step (a one-line quote matched as an exact substring of exactly one line, locator method `substring`) to the schema description, but this guide paragraph still says matching stops after the whitespace-collapsed step and then lists three outcomes. The sentence is now wrong about the behaviour this PR ships.",
+      "impact": "A reader of the CLI reference believes a quote that is only a fragment of a line is unlocatable; the schema and ingest say otherwise.",
+      "suggested_fix": "Say: exact first, then whitespace-collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops; mention `substring` among the methods.",
+      "evidence": "Schema description in this slice reads 'then (a one-line quote) as an exact substring of exactly one line, then not at all'; cli-reference.md line 6674 at head still reads 'then it stops - nothing fuzzy'.",
+      "confidence": "high"
+    },
+    {
+      "id": "ST-002",
+      "severity": "minor",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "quote": "const git = (...args: string[]): string => {",
+      "problem": "The e2e test defines its own git helper and repeats the author e-mail literal, although src/review/git-fixture.test-helpers.ts already exports git(cwd, ...args), initRepo and commitFiles, and four other test files share that fixture. The block was moved from review-plan.test.ts, so the duplication is new at this location.",
+      "impact": "Another copy of the identity env and spawn wrapper to keep in step with the shared helper.",
+      "suggested_fix": "Import git/initRepo/commitFiles from ../review/git-fixture.test-helpers and drop the local helper and EMAIL constant.",
+      "evidence": "The same e-mail literal appears in src/review/l6-hardening.test.ts, round-split.test.ts, second-look.test.ts and git-fixture.test-helpers.ts (keryx ctx rg).",
+      "confidence": "medium"
+    },
+    {
+      "id": "ST-003",
+      "severity": "info",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "quote": "expect(second.dispatches).toBeLessThanOrEqual(40);",
+      "problem": "40 is the default reviewPlan.maxDispatches threshold written as a bare literal; the intent (stays under the confirmation threshold) is only readable from the number.",
+      "impact": "If the default moves, this assertion silently encodes the old value.",
+      "suggested_fix": "Name it or read the default constant the plan uses.",
+      "evidence": "Docs in this slice: 'reviewPlan.maxDispatches (default 40)'.",
+      "confidence": "medium"
+    },
+    {
+      "id": "ST-004",
+      "severity": "info",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "quote": "flow 460 L6: a fix of F-1",
+      "problem": "Test titles carry internal lane/flow tags in mixed forms: 'flow 460:', 'flow 460 L6:', '(flow 460 D, ...)'. The convention is inconsistent across the slice's new tests and 'L6' means nothing outside the flow journal.",
+      "impact": "Titles read less well in test output; the tags go stale once the flow closes.",
+      "suggested_fix": "Pick one prefix form (e.g. 'flow 460:') and describe the behaviour in the title.",
+      "evidence": "Titles in review-ledger.test.ts ('flow 460: ingest's merges...'), review-slice.test.ts ('(flow 460 D, ...)'), this file ('flow 460 L6:').",
+      "confidence": "low"
+    }
+  ],
+  "needs_context": []
+}
+```
+
+# Style Review Report
+
+Verdict: APPROVE_WITH_SUGGESTIONS. Slice 02 is mostly docs, schema, flow bookkeeping and tests. Naming and structure are consistent. The one real defect is a doc paragraph left stale by the new substring locator step (ST-001); the rest is test-helper duplication and tag consistency. Counts: major 0, minor 2, info 2.

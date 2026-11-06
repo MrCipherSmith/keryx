@@ -1,0 +1,37 @@
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "round": 5,
+  "prior_dispositions": [
+    {
+      "id": "r4-review-architecture-code#R4-ARCH-001",
+      "disposition": "closed",
+      "evidence": "src/review/package-location.ts:1-6 header now scopes the claim and names what is not routed (tui jev-triage/conform-source, bot/packages.ts, flow-move, pr-comments/bot caches); the listed manual sites are routed: review/loop.ts:486, flow/review-gate.ts:460, governance/spend.ts:21, review/arbiter-log.ts:90, review/autonomous-run.ts:180, commands/review.ts:3616, prior-round.ts:416-419. Remaining raw \"reviews\" joins in src are exactly the ones the header lists."
+    }
+  ],
+  "findings": [
+    {
+      "id": "R5-ARCH-001",
+      "severity": "info",
+      "file": "src/review/prior-round.ts",
+      "line": 900,
+      "problem": "The flow branch of findPreviousRound annotates the result of record() by reading tried.at(-1) and guarding on source === 'flow', then mutating its detail. This couples the annotation to record()'s side effect of pushing exactly one entry last.",
+      "impact": "A later change to record() (for example pushing two entries or none) silently drops or misplaces the 'skipped, not ingested' note; the guard hides the failure instead of surfacing it.",
+      "suggested_fix": "Give record() an optional extra-detail parameter, or compute the skipped suffix before the call and pass it in.",
+      "confidence": "medium"
+    },
+    {
+      "id": "R5-ARCH-002",
+      "severity": "info",
+      "file": "src/review/arbiter-log.ts",
+      "line": 10,
+      "problem": "arbiter-log (a sync, runner-child module with only node: imports) now imports package-location, which imports flow/store for flowsRoot, so the layout helper for standalone packages pulls the flow store into every consumer of reviewsRoot.",
+      "impact": "No cycle today (flow/store imports only node modules), but review -> flow/store can become one if flow/store ever imports from review/; reviewsRoot itself needs nothing from flow.",
+      "suggested_fix": "Keep reviewsRoot dependency-free, or move flowReviewsRoot to the flow side, if flow/store ever imports from review/.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+Summary: R4-ARCH-001 closed (header softened to the true scope and the named sites routed through reviewsRoot/flowReviewsRoot; remaining unrouted sites are those the header lists). The delta introduces no layer violation or cycle; two info notes (annotation via tried.at(-1); package-location pulling flow/store into light modules). The premise.ts split of inheritedPremiseClaims into small helpers is structurally sound.

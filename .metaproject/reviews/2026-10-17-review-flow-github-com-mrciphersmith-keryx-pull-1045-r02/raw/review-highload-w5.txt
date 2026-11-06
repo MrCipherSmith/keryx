@@ -1,0 +1,45 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "slices": ["slice-06"],
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line_quote": "const before = changedAt.filter((at) => at < index).at(-1);",
+      "title": "partitionRegionsByFix is quadratic in region length",
+      "problem": "For every context line of a mixed region the loop re-filters and re-scans changedAt (O(changes) each), and every line also runs hunks.some(...) in the kinds map. Cost is O(lines x changes) per region. Failure mode: a delta round whose scoped region is a very large mixed fix/new block (a regenerated or moved file, ~20k lines with thousands of changes) costs on the order of 1e8 operations on the single-threaded CLI/shell process, stalling it (including an in-process keryx shell) for seconds. Regions are normally small, so this is a minor tuning cost, not a defect at ordinary sizes.",
+      "evidence": "slice-06 round-split.ts partitionRegionsByFix: const before = changedAt.filter((at) => at < index).at(-1); const after = changedAt.find((at) => at > index); inside the per-line loop.",
+      "suggested_fix": "Precompute previous/next changed index with two linear passes, and index fix hunks by file so hunks.some is not a full scan per line."
+    },
+    {
+      "id": "HL-002",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line_quote": "const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+      "title": "Readiness now spawns a git diff per computation",
+      "problem": "computeReadiness now runs the coverage gate, which spawns git diff -U20 (15s timeout in coverage.ts) at the repository top level. The comment says the diff is remembered per package and head, and the cache is bounded (GIT_CACHE_ENTRIES), so repeated panel/publish-guard polling of an unchanged head is cheap. Observation only: the first call per head per process on a huge diff pays the full git cost and a 15s worst-case wait; nothing here grows unbounded. Would be settled by confirming that publish/panel callers do not run readiness for many packages concurrently.",
+      "evidence": "slice-06 readiness.ts reviewersCheck; coverage.ts:469 (timeout 15_000) and :483 (bounded cache) read at head."
+    },
+    {
+      "id": "HL-003",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line_quote": "if (!(await pathExists(path.join(ctx.dir, evidence))) && (await pathExists(path.join(ctx.dir, \"raw\")))) lost.push(String(run.reviewer));",
+      "title": "Sequential stat per run (unchanged context line)",
+      "problem": "One awaited stat (two when missing) per dispatch run, sequentially. Runs are bounded by the reviewer roster (tens), so no load failure mode exists; noted only because the loop sits in the readiness path that now also runs the coverage gate.",
+      "evidence": "Pre-existing line, untouched by the diff; no failure mode at stated load."
+    }
+  ]
+}
+```
+
+## High-Load Review (slice-06, kind new)
+
+Scope: readiness coverage gate, dispatchRuns and the ingest-screened record, late-result collection, the fix/new partition, the routing check, premise claim sets. This is single-process CLI review tooling, not request-path code: no shared mutable state across concurrent requests, no pools, queues or retries. The screened record is written with writeFileAtomic. The module-level global regex COVERAGE_ENTRY is used only via matchAll, which clones it, so lastIndex state is not shared. The one scaling point is the quadratic scan in partitionRegionsByFix (HL-001).
+
+Stats: blocker 0 | major 0 | minor 1 | info 2

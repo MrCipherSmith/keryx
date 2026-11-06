@@ -1,0 +1,47 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-02: no hot-path cost found. The only production code (usage accumulation, empty-reply early return, usage suffix on save) is O(1) per provider request or per child; one info on a slow end-to-end test.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-performance",
+      "severity": "info",
+      "file": "src/commands/review-plan.test.ts",
+      "line": null,
+      "quote": "describe(\"plan → ingest with an unplaceable quote → fix commit → plan\", () => {",
+      "problem": "The new end-to-end test builds a real git repo per test run and runs the real plan, ingest, git commit and plan again, with a 60_000 ms timeout. Each beforeEach spawns several git processes synchronously (Bun.spawnSync) and the test runs two full review plans.",
+      "impact": "Test-suite wall time only, once per run of the file. Not a runtime cost and not a hot path; nothing measured here, so it stays info.",
+      "suggested_fix": "None required. If the file's runtime shows up in CI timings, measure it before trimming; the real steps are the point of the test.",
+      "evidence": "Read the diff of the describe block: git init/commit in beforeEach, two reviewCommand plan calls, one ingest, timeout 60_000.",
+      "confidence": "low",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Performance Review (slice-02)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Findings
+- F-001 (info): the real-git end-to-end test in review-plan.test.ts is slow by construction; test time only.
+
+### Clean Areas
+- N+1 / unbounded collections: none. `childUsage` is three scalars, summed once per provider usage event (`onUsage`), O(1) per request.
+- Synchronous blocking: none in production code; `Bun.spawnSync` appears only in a test helper.
+- Redundant work: `usageSuffix()` is a string build called once per child on the save paths (timeout and completion); no loop.
+- Empty-reply branch in spawn-subagent-tool.ts returns early and skips the summary build; it adds no cost to the Completed path (one string comparison).
+- Schema, SKILL docs and ledger test changes: no executable cost.
+- Bundle imports: the new `formatUsageLine` and test imports are named imports from local modules.
+- Not assessed as performance: whether summing `usage_update` events double counts when a provider reports cumulative usage per request. That is a correctness question for review-logic.

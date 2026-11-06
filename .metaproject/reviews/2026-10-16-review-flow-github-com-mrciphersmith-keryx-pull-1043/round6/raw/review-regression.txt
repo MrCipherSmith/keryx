@@ -1,0 +1,69 @@
+```json keryx:findings
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "summary": "Round 6 fix delta (code). Both prior review-regression findings are closed. The redesigned carry (carriedPremiseHolds, premise.ts:746-763, caller managed.ts:369-371) reads only the previous findings.json and never premises.json. It refuses when a held finding is gone or its subject (severity, verdict, problem digest) changed. It keeps every operator-only guarantee: the carried premise goes through mergePremises -> normaliseCarriedPremise, which strips premise.operator; findings.json is schema-validated before it is written; and decisions stay bound to the unchanged subject. One new minor: on a carried re-ingest, the scope.md premise block now says the judge is not named and that 0 claims were received. One info: the carry re-checks the schema but not the merge rules, and the gate already trusts findings.json the same way.",
+  "prior_dispositions": [
+    {
+      "id": "r4-review-regression-code#RG4-001",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:746-763. carriedPremiseHolds no longer parses stored claims or runs a trial merge. claimsNoLongerHeld and appliedClaimNames are deleted, as suggested. 'Lost' is decided only from each previously held record: is its key present in this round, and is premiseSubjectOf(candidate) the same as the record's (:753-759)? A rejected sibling claim is never an input, so it cannot refuse the re-ingest. Covered by premise.test.ts 'two held claims on one finding, one rejected: the hold that applied carries (RG4-001)' and review-premises-cli.test.ts 'a re-ingest without --premises carries the hold when a second claim on the same finding was rejected (review RG4-001)', which is the exact trigger from round 5."
+    },
+    {
+      "id": "review-regression#RG5-001",
+      "disposition": "closed",
+      "evidence": "src/review/prior-round.ts:902. skipped now filters `round.reviewId !== deps.excludeReviewId`, the same exclusion the candidates get at :847. The note is passed into record() (:903-904) and appended to that attempt's own detail, so it can no longer attach to a different tried entry. Covered by prior-round.test.ts 'flow: the package being started is never named as a skipped round (review LG5-001, RG5-001)'. The existing LG4-002 case still asserts that other non-ingested rounds are named."
+    }
+  ],
+  "findings": [
+    {
+      "id": "RG6-001",
+      "reviewer": "review-regression",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 683,
+      "quote": "lines.push(`premise_judge: ${counts.judge ?? \"not named\"}`);",
+      "problem": "Since the managed.ts:371 change to mergePremises(carriedHolds.findings, premiseClaims) with premiseClaims undefined, a carried re-ingest builds its PremiseCounts with no judge and claims/applied/rejected = 0, while held = N. renderPremiseMarkdown (premise.ts:676-691) renders that as `premise_judge: not named`, `premise_claims_received: 0`, `premise_claims_applied: 0`, `premise_held: N`. Round 5's inheritedPremiseClaims re-merged the stored claims, so the same re-ingest recorded the real judge and claim counts. The premise on each held record still names its judge, so the block contradicts the rows listed under it. The same counts go into the result's `premise` field (managed.ts:567).",
+      "impact": "Trigger: `keryx review ingest --premises p.json` on a package with a held finding, then `keryx review ingest` on the same package without --premises. Outcome: scope.md's `## Premise check` says no judge was named and no claim was received, yet it lists a held finding judged by `review-premise`. A reader auditing the round cannot tell from the block that the holds were carried, not judged. Nothing gates on counts.judge or counts.claims (keryx ctx rg over src: premise.ts:683 is the only reader), so this is a wrong record, not a wrong verdict. Hence minor.",
+      "suggested_fix": "When carriedHolds.ok, render the block as carried: for example, add a `premise_holds_carried: N (from the previous findings.json)` line, and take premise_judge from the carried records' premise.judge (or say `carried`). Do not print `not named`. Extend the review-premises-cli carry test to assert the scope.md block.",
+      "evidence": "managed.ts:369-371 (premiseClaims undefined on a carry, so mergePremises gets parsed = undefined). premise.ts:309-310 (judge = parsed?.judge, claims = []), :490-509 (counts.judge omitted, claims 0, held counted from the carried premises), :679-691 (the block renders because judged > 0, with judge 'not named').",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/premise.ts:683-686"],
+        "enumeration_method": "every reader of PremiseCounts.judge/claims/applied: keryx ctx rg 'premise\\.(judge|claims|applied)\\b|counts\\.judge|\\.premise\\.counts' over src (non-test); only renderPremiseMarkdown reads them"
+      }
+    },
+    {
+      "id": "RG6-002",
+      "reviewer": "review-regression",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 756,
+      "quote": "{ ...current, premise: record.premise as ReviewFindingPremise }",
+      "problem": "The carry trusts the previous findings.json record's premise. Only the held verdict and the subject are checked, and the premise is cast, not re-run through the merge's per-claim rules (self-judgement, challenged-without-evidence, held-without-question, owner-decision-without-options). If an agent edits findings.json, it can still plant a hold that a re-ingest without --premises carries.",
+      "impact": "No guarantee gets weaker, so this is an observation. premiseHoldState (premise.ts:586-596), readiness (readiness.ts:197-213) and the flow gate already treat findings.json's premise as the hold, so a planted hold binds them with no re-ingest at all. A hold only routes a finding to the operator and never dismisses it. mergePremises -> normaliseCarriedPremise (premise.ts:245-247) strips premise.operator and stray severities. A malformed premise fails the review-finding.schema.json check before findings.json is written (managed.ts:498, premise additionalProperties false). What would settle it: decide whether findings.json is meant to be the trust boundary for holds. If it is, the docstring's 'already validated' should say 'validated when it was written'.",
+      "suggested_fix": "Optional: re-check the per-verdict invariants of a carried held premise (question present; owner-decision with 2+ options; judge not in raisedBy), or reword the premise.ts:735-742 docstring to name findings.json as the trust boundary.",
+      "evidence": "premise.ts:746-763, 245-247, 586-596; managed.ts:369-371, 498; src/gdskills/contracts/review-finding.schema.json (premise: additionalProperties false, required verdict and judge).",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+Summary (review-regression, round 6, code delta):
+- Prior: RG4-001 closed (claimsNoLongerHeld and appliedClaimNames removed; the decision comes from each previously held record's subject alone). RG5-001 closed (excludeReviewId is applied to the skipped note).
+- Checks on the redesigned carry:
+  - It reads only findings.json (managed.ts:369). premises.json is not an input, and the SEC5-001 test plants an edited file to prove it.
+  - It refuses when a held finding is gone or changed (premise.ts:753-761), and nothing is written.
+  - It carries only holds; upheld and downgraded verdicts are not carried.
+  - A finding that is already judged keeps its own premise, and a verdict mismatch is refused.
+  - premise.operator is stripped. Decisions stay bound to the unchanged subject, so the operator-only lift is intact.
+  - A malformed carried premise fails the findings.json schema check.
+- New: RG6-001 (minor), the scope.md premise block says judge not named / 0 claims on a carried re-ingest. RG6-002 (info), the carry re-checks the schema, not the merge rules (findings.json is already the gate's trust boundary).
+- Also checked and behaviour-preserving:
+  - packageDirById returns the same path as before for a standalone or not-yet-created package. The `..` id case is pre-existing (the same regex and path.join as before).
+  - Lookup order between flows is readdir order. That matters only if two flows share a review id.
+  - premises.json is now kept, not moved aside, on a carried ingest. verdict.ts:228 still applies nothing from it to an ingested round.
+  - The premise-decision test edits are test-only.
+- Coverage: this is a fix-delta review, not a capped blast-radius sweep, so no files were dropped. The runtime paths (ingest CLI -> managed.ts -> premise.ts; verify-run -> packageDirById) were traced by hand.

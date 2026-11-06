@@ -1,0 +1,106 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "summary": "Slice-05 (completion gate, coverage git cache, ledger, ingest, premise, locate, usage) reviewed for load and concurrency. No blocker or major: the new loops are bounded (session caps, 64-entry git cache, linear path scanner, capped blocker lines). Two minors and five infos on unbounded per-stop work and cache behaviour.",
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 217,
+      "quote": "if ((named.commands ?? []).some((command) => namesToken(command, id))) return true;",
+      "problem": "namedBySession re-scans the full text of every retained command for every stale open package, on every stop. The tracker keeps whole tool-call argument strings (up to 64) and only the count is capped, not their size.",
+      "impact": "Failure mode: per-stop CPU stall in the keryx shell. A session that ran 64 `keryx review ingest`-style commands with inline reports of ~1 MB, in a checkout carrying ~50 stale open drafts (the case the comment names), does 50 x 2 ids x 64 x 1 MB, about 6 GB of indexOf scanning per model stop, on the event loop, plus the memory for the retained strings. Realistic argument sizes (KBs) make it negligible, so this is a bound that is missing, not a measured stall.",
+      "suggested_fix": "When the tracker scans a call, extract only the review-id tokens it names (SAFE_REVIEW_ID-shaped words next to `keryx review`) into a capped Set and test membership; or truncate the stored arguments to a few KB. Then namedBySession is O(ids).",
+      "evidence": "completion-gate.ts remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS) stores the whole argument string; scanRoot calls namedBySession for each open package older than the session.",
+      "confidence": "medium"
+    },
+    {
+      "id": "HL-002",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": 559,
+      "quote": "const resolved = await resolveBase(defaultGitRunner(cwd)",
+      "problem": "The light-round recheck now runs git through defaultGitRunner, which spawns with no timeout and no kill signal, unlike gitTopLevel and gitDiffAt (15 s, SIGKILL). The result goes through processCache, which stores the pending promise and removes it only after it settles.",
+      "impact": "Failure mode: if one `git merge-base` hangs (stalled network or FUSE file system, wedged git), the promise never settles and stays cached under that key. Every later readiness, complete and panel refresh in the same process awaits the same hung promise, so the gate and panel freeze until the process restarts. The other git calls in this path would fail after 15 s and be retried.",
+      "suggested_fix": "Give defaultGitRunner (or the resolveBase call here) the same timeout and killSignal as gitDiffAt, and have processCache drop an entry that has not settled after a deadline.",
+      "evidence": "coverage.ts spawns gitTopLevel/gitDiffAt with `timeout: 15_000, killSignal: \"SIGKILL\"`; prior-round.ts defaultGitRunner spawns with `stdout: \"pipe\", stderr: \"ignore\"` only.",
+      "confidence": "medium"
+    },
+    {
+      "id": "HL-003",
+      "severity": "info",
+      "file": "src/review/coverage.ts",
+      "line": 550,
+      "quote": "}, (value) => !(\"error\" in value));",
+      "problem": "Only successful diff results are remembered. The case this flow targets, a merged PR with an empty range or no resolvable base, is an error result, so it is recomputed (rev-parse, up to five merge-base, and the diff) on each call.",
+      "impact": "Failure mode: a light dispatch whose base cannot resolve costs about 7 git spawns per completion-gate evaluation and per panel refresh, at every model stop. That is wasted work, not an outage. A short negative TTL (a few seconds) would settle whether it matters; no load is stated.",
+      "suggested_fix": "Remember errors for a short TTL, or key them by head and invalidate on a manifest mtime change.",
+      "evidence": "processCache deletes the key when `keep(value)` is false.",
+      "confidence": "low"
+    },
+    {
+      "id": "HL-004",
+      "severity": "info",
+      "file": "src/review/coverage.ts",
+      "line": 531,
+      "quote": "return packageDiffStatsCached(JSON.stringify",
+      "problem": "The cache key is package, root and the manifest target (kind, ref, recorded base, head). The base that is actually diffed is resolved later from origin/main or main and is not in the key.",
+      "impact": "Observation: in a long-lived shell or panel process a cached success is served after the base ref moves, for example once the PR merges and `resolveBase` would now give an empty range. The light/full decision could then differ between a fresh process and the running one. Settled by checking whether the shell process outlives a fetch of the base branch.",
+      "suggested_fix": "Include the resolved merge-base sha in the key, or cache only the diff after resolveBase has run.",
+      "evidence": "diffOfTarget resolves the base inside the cached computation.",
+      "confidence": "low"
+    },
+    {
+      "id": "HL-005",
+      "severity": "info",
+      "file": "src/review/prior-round.ts",
+      "line": 323,
+      "quote": "const shas = await Promise.all(candidates.map((ref) => mergeBaseOf(git, ref, head)));",
+      "problem": "resolveBase used to stop at the first qualifying candidate and now always spawns a git merge-base for all five, concurrently.",
+      "impact": "Observation: bounded at five processes per call, so no unbounded growth; the cost is up to four wasted spawns on the common path, now also reached from the coverage recheck. No stated load makes it a problem.",
+      "suggested_fix": "Probe the explicit base first and only fan out when it does not qualify, or accept the cost knowingly.",
+      "evidence": "The comment says the probes are independent and the first qualifying one in candidate order wins.",
+      "confidence": "low"
+    },
+    {
+      "id": "HL-006",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": 625,
+      "quote": "const byObligation = byReviewer.length === 1 ? [] : canonicalByObligation(id);",
+      "problem": "For each raw finding the ledger now makes about seven linear passes over the canonical list (reviewer link, obligation link, resolvesOnce, closeWith matching) plus a linear `dispositions.find`, so the build is O(findings x (canonical + dispositions)).",
+      "impact": "Observation: at hundreds of findings this is a few million comparisons; it would matter only for thousands. Settled by timing `ledger build` on the largest recorded round.",
+      "suggested_fix": "Index canonical findings by id, global_id and merged_from once before the loop.",
+      "evidence": "canonicalByReviewer and canonicalByObligation are filter() calls inside the per-finding loop.",
+      "confidence": "low"
+    },
+    {
+      "id": "HL-007",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 561,
+      "quote": "await writeFileAtomic(path.join(packageDir, INGEST_SCREENED_FILE)",
+      "problem": "findings.json is written under the operator-decisions lock, but ingest-screened.json is written after it and outside the lock, so the two artifacts are not updated as one unit.",
+      "impact": "Observation: a `ledger build` that runs between the two writes of a re-ingest sees the new findings.json with the previous screened record and reports a transient gap for a finding the screen just removed. Each file is replaced atomically, so there is no torn read, and a rebuild after ingest returns settles it.",
+      "suggested_fix": "Write the screened record before findings.json, or inside the same lock.",
+      "evidence": "The comment says it is rewritten on every ingest; the findings.json write is wrapped in withOperatorDecisionsLock.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## High-Load Review (slice-05)
+
+Scope: new diff, slice-05 (completion-gate, coverage, dispatch-usage, ledger, locate, managed, premise, prior-round, mutate, filter-stats, display-id). Load profile not provided; severity assumes moderate-to-high traffic.
+
+Summary: the new per-stop work in the completion gate is bounded: session caps of 8 roots, 32 packages and 64 commands, a linear indexOf path scanner, a history cursor so each stop scans only new messages, a 64-entry FIFO git cache that also de-duplicates in-flight work, and capped nudge lines. The locate substring pass is linear in file lines and already behind the file-size bounds. The remaining concerns are unbounded size of retained command text (HL-001) and a hang-prone, cached git probe without a timeout (HL-002).
+
+Stats: blocker 0 | major 0 | minor 2 | info 5
+
+Clean areas: queues and backpressure, retry and idempotency, DB access, cache key namespacing, shared mutable state (the module-level tracker WeakMap is per history array and the git cache is per process, both single-threaded).

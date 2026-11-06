@@ -1,0 +1,112 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "slice-04 wires the premise hold into the CLI, the operator card, the flow gate and the tier/routing surfaces without a layer or dependency-direction problem. One structural gap: the flow gate treats any record in an agent-writable file as the operator's answer, because the authority check the sibling decisions carry is missing for premise-question.",
+  "findings": [
+    {
+      "id": "ARCH-001",
+      "severity": "major",
+      "reviewer": "review-architecture",
+      "file": "src/flow/review-gate.ts",
+      "line": 415,
+      "problem": "The gate lifts a premise hold, and makes the finding terminal without a verifier verdict, on an answer it never authenticates. premiseGateState/withPremiseAnswers accept any premise-question entry in operator-decisions.json, and validPremise makes confirmedVia optional, takes any non-empty actor and stores no confirming quote. A bare {kind:'premise-question',answer:'dismiss'} entry, or a premise.operator.answer written into findings.json, therefore passes. findingVerdict short-circuits to terminal 'dismissed' before the dismissed-incorrect rule that otherwise requires a verifier 'refuted' verdict with method and evidence.",
+      "impact": "The invariant stated in the description, that a held finding never leaves held without the operator, is enforced only by the two writers (card and TTY command), not by the reader that gates flow completion. Sibling decisions (mutation-waiver, reviewer-override) require confirmedVia in tui-card|remote-card|terminal, a quote and a head-bound subject in valid(). The gate's authority is looser here than anywhere else in the same file. Under the automatic-review run, apply_patch may write .json inside the package (PACKAGE_DATA_EXTENSIONS), so the same agent that raised or judged the finding can clear it.",
+      "suggested_fix": "Make the gate read premise answers through one validator that requires confirmedVia in the VIAS set (drop the optional branch in validPremise, or have premiseGateState ignore an answer without it). Record the operator's confirming words (CLI: the typed answer; card: confirmation.quote) as 'quote' on the decision and require it. Take the answer from the decisions file only, or require premise.operator to carry the same fields. Add a gate test: a premise-question decision without confirmedVia leaves the finding awaiting.",
+      "evidence": "src/review/operator-decisions.ts:63-75 (confirmedVia optional, no quote), src/flow/review-gate.ts:415-421 and 513-524 (answer taken as-is), src/flow/review-gate.ts:686-688 (terminal dismissed before the verifier-refuted rule at 732-748), src/commands/review-operator.ts:709 and src/commands/operator-confirm-review.ts:558 (neither writer stores the quote), src/commands/automatic-review.ts:389 (.json allowed inside the package).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/operator-decisions.ts:63",
+          "src/flow/review-gate.ts:415",
+          "src/flow/review-gate.ts:513",
+          "src/review/premise.ts:429",
+          "src/review/premise.ts:454"
+        ],
+        "enumeration_method": "keryx ctx rg for premiseDecisionFor|premiseHoldState|premiseGateState|readPremiseDecisions|applyPremiseDecision across src (non-test): 5 readers/appliers of premise answers; none checks confirmedVia, quote or provenance. valid() for the other two decision kinds does."
+      }
+    },
+    {
+      "id": "ARCH-002",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/flow/review-gate.ts",
+      "line": 415,
+      "problem": "The held/answered state machine exists twice. premiseGateState (gate) re-implements premiseHoldState (src/review/premise.ts:429) over a different record shape, with its own names (none/awaiting/dismissed vs none/awaiting/upheld/dismissed) and its own precedence for decision-vs-premise.operator, applied via withPremiseAnswers.",
+      "impact": "verdict.ts, readiness, findHeldFinding and the gate each decide 'is this finding held' independently. A change to what counts as an answer (for example the fix for ARCH-001) must be made in two places, and the two can drift so readiness reports pass while the gate reports awaiting.",
+      "suggested_fix": "Have the gate reuse premiseHoldState by passing a record built from the finding's raw premise (or export a small pure function over {verdict, operatorAnswer} from premise.ts and call it from both).",
+      "evidence": "src/flow/review-gate.ts:415-421, 513-524 versus src/review/premise.ts:429-437.",
+      "confidence": "high"
+    },
+    {
+      "id": "ARCH-003",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/commands/review-operator.ts",
+      "line": 709,
+      "problem": "The two writers of the same decision record different actors: the TTY command writes actor = process.env.USER ?? 'operator', the card writes the literal 'operator'. Neither keeps the operator's confirming words, although the sibling decisions persist them as 'quote' and the prompt asks the operator to 'type your own words'.",
+      "impact": "The 'operator <actor>' string that applyPremiseDecision puts into the dismissal evidence differs by surface, and the confirming words are collected then dropped, so an audit of a dismissal cannot show what the operator agreed to.",
+      "suggested_fix": "Share one actor convention (a fixed 'operator' plus confirmedVia is enough) and persist the confirmation quote on PremiseQuestionDecision, as for OperatorDecision.",
+      "evidence": "src/commands/review-operator.ts:704-709, src/commands/operator-confirm-review.ts:558, src/review/operator-decisions.ts:49-57.",
+      "confidence": "high"
+    },
+    {
+      "id": "ARCH-004",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/flow/review-gate.ts",
+      "line": 505,
+      "problem": "ReviewRound.premise (PremiseStats) and parsePremiseStats are populated for every round but nothing outside tests reads them in this change.",
+      "impact": "Dead data on the round record today. Fine if a later task consumes it; a reader who relies on it would see an unused field.",
+      "suggested_fix": "Either consume it (for example an unobserved/violated condition when claimsRejected > 0 or held != unanswered count) or drop it until needed.",
+      "evidence": "keryx ctx rg for parsePremiseStats|PremiseStats|.premise in non-test src: only review-gate.ts, definition and assignment.",
+      "confidence": "medium"
+    },
+    {
+      "id": "ARCH-005",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/review/operator-decisions.ts",
+      "line": 107,
+      "problem": "premiseDecisionFor matches a decision against a finding's global_id or its bare id. The writers refuse an ambiguous bare id when recording, but the gate matches by either key later, so a decision recorded under a bare id that becomes ambiguous after a later ingest into the same package would answer both findings.",
+      "impact": "Needs a package whose findings.json gains a second finding with the same bare id after the answer was recorded; not reproduced in the code under review.",
+      "suggested_fix": "Record the decision under global_id when the finding has one (the card and CLI already store found.key, which is global_id first), and match bare ids only for findings without a global_id.",
+      "evidence": "src/review/operator-decisions.ts:107-110 and src/review/premise-question.ts:37-40.",
+      "confidence": "low"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 2 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Slice: slice-04 (docs, src/commands/*, src/flow/review-gate.ts, review-fixtures, tests), PR #1043 head c144874f
+- Stack detected: generic-ts (CLI + operator-card tools + flow gate)
+
+### Summary
+The change adds a premise hold across CLI flags, a TTY command, an operator card, the tier signal and the flow gate. Dependency direction is sound (commands -> review library, flow gate -> review/operator-decisions and review/premise, no new inversions), the card and command share findHeldFinding, the unattended roster and exclusion list were updated together, and the new command is kept off the routine-command list. The one structural gap is that the gate trusts premise answers without the provenance checks the sibling decisions enforce.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 2  |  info: 2
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+- [ARCH-001] gate accepts an unauthenticated operator answer (major)
+- [ARCH-002] duplicated hold-state logic (minor)
+- [ARCH-003] writer inconsistency, quote dropped (minor)
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific
+N/A.

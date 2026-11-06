@@ -1,0 +1,1608 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The same section now lists twelve items (item 12 quotes-located is added in this slice) but its lead) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w1:F-001"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (This slice changes ingest so an unplaceable quote is kept as quote_unlocated and no longer refuses t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w1:F-002"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (The loader destructures usage from splitUsage(body) one line above, then calls splitUsage(body) agai) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w1:F-003"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (On non-shell hosts the orchestrator appends KERYX_USAGE to raw/<reviewer>.txt, a file the same docum) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w1:F-004"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (A finding whose quote cannot be placed is now described by three overlapping fields: `locator.state:) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w2:F-001"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (The empty-reply decision is keyed on a display placeholder string compared by value. The same litera) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w2:F-002"
+    },
+    {
+      "id": "review-architecture-w2:F-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-003 (The new empty-reply exit repeats the upsert, foldChildSlateAndCleanup and fireSubagentStop sequence ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w2:F-003"
+    },
+    {
+      "id": "review-architecture-w2:F-004",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-004 (The reviewer-facing contract still says an unplaceable/ambiguous quote is recorded as `unlocatable`;) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w2:F-004"
+    },
+    {
+      "id": "review-architecture-w2:F-005",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-005 (The harness tool layer imports a review-domain module. Direction is acceptable here: the module is a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w2:F-005"
+    },
+    {
+      "id": "review-architecture-w2:F-006",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-006 (The new end-to-end block mutates process-global cwd, XDG_DATA_HOME, console and exitCode inside a de) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w2:F-006"
+    },
+    {
+      "id": "review-architecture-w3:F-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-001 (The canonical NOT_REVIEW_PACKAGES lives in round-record.ts and is shared with prior-round.ts; covera) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w3:F-001"
+    },
+    {
+      "id": "review-architecture-w3:F-002",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-002 (coverageFromResearch re-derives reviewer status from research.json with unknown casts and its own st) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w3:F-002"
+    },
+    {
+      "id": "review-architecture-w3:F-003",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-003 (The PR unifies readiness and complete through packageCoverageErrors, but ledgerBlockers keeps caller) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w3:F-003"
+    },
+    {
+      "id": "review-architecture-w3:F-004",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-004 (A lazy import in a hot path usually hides a module cycle (prior-round imports round-record, which co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w3:F-004"
+    },
+    {
+      "id": "review-architecture-w3:F-005",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-005 (sessionReviewRoots regex-scans message content and tool arguments, so any path text in the transcrip) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w3:F-005"
+    },
+    {
+      "id": "review-architecture-w3:F-006",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-006 (A generic harness tool depends on the review domain for the usage-line format. dispatch-usage.ts is ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-architecture-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-architecture-w3:F-006"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (The diff adds readiness item 12 (`quotes-located`) directly below the list, but the sentence introdu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w1:F-001"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (The paragraph under the `review complete` section still says `review ingest` refuses a finding whose) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w1:F-002"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (`splitUsage(body)` is called twice in the same statement block: once destructured as `{ usage }` and) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w1:F-003"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-004 (The diff adds a ninth positional parameter (`usage?: UsageTotals`) to renderLedgerReport, which alre) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w1:F-004"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-005 (In the ledger help text the sentence 'scopeReviewed and rawReconciled are true only when established) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w1:F-005"
+    },
+    {
+      "id": "review-clean-code-w2:F-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-001 (The readiness section still says the command prints eleven items, but this diff adds item 12 (`quote) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w2:F-001"
+    },
+    {
+      "id": "review-clean-code-w2:F-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-002 (The placeholder string '(subagent produced no text)' is now a sentinel compared at three sites (the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w2:F-002"
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-003 (The new empty-reply exit repeats the failure epilogue (fleet upsert status failed, foldChildSlateAnd) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w2:F-003"
+    },
+    {
+      "id": "review-clean-code-w2:F-004",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-004 (Two parallel `Number.isFinite(...) ? (x as number) : undefined` lines, each with a type assertion; a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w2:F-004"
+    },
+    {
+      "id": "review-clean-code-w2:F-005",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-005 (`latest` holds every package that has a plan file, not the latest; the real latest is picked two lin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w2:F-005"
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-006 (onUsage is summed over every `usage_update` the child's provider emits. If an adapter emits a cumula) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w2:F-006"
+    },
+    {
+      "id": "review-clean-code-w2:F-007",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-007 (The empty-reply return (and the rate-limit one) writes no `save_result_to` file, so no KERYX_USAGE l) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w2:F-007"
+    },
+    {
+      "id": "review-clean-code-w3:CC-1",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-1 (The edit that removed the `closed` const left this statement indented 16 spaces inside a loop body t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-1"
+    },
+    {
+      "id": "review-clean-code-w3:CC-2",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-2 (The new `UnlocatableKind` doc block and type were inserted after the existing doc comment, so `How a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-2"
+    },
+    {
+      "id": "review-clean-code-w3:CC-3",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-3 (`packageDiffStats` (~35 lines) parses the manifest, finds the git top level, resolves the base and r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-3"
+    },
+    {
+      "id": "review-clean-code-w3:CC-4",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-4 (The two early-return error messages repeat the argument `recordedBase ?? (kind === \"pr\" ? undefined ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-4"
+    },
+    {
+      "id": "review-clean-code-w3:CC-5",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-5 (The `decisionWriters(\"reviewer-override\", path.relative(process.cwd(), dir) || \".\")` expression alre) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-5"
+    },
+    {
+      "id": "review-clean-code-w3:CC-6",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-6 (The same regex is now written twice in `coverageMdCheck` (once for `claimed`, once for `listed`), an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-6"
+    },
+    {
+      "id": "review-clean-code-w3:CC-7",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-7 (`packageHasMutationRecord` repeats the `/^mutation-\\d+\\.json$/` literal and the exists/readdir pream) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-7"
+    },
+    {
+      "id": "review-clean-code-w3:CC-8",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-8 (The `## Token spend` heading is a magic string here and again inside `renderSpendMarkdown`; the writ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-8"
+    },
+    {
+      "id": "review-clean-code-w3:CC-9",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-9 (`runUsage` returns either a loose `Record<string, unknown>` or the string literal `\"unknown\"`, and t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-9"
+    },
+    {
+      "id": "review-clean-code-w3:CC-10",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-10 (`unreadableInputClaim` decides a reviewer did not finish by regex over free-text `summary`, with une) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-10"
+    },
+    {
+      "id": "review-clean-code-w3:CC-11",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-11 (`findReviewGateState` now scans roots, resolves the active pointer, picks the newest candidate, appl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-11"
+    },
+    {
+      "id": "review-clean-code-w3:CC-12",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-12 (The test helper hard-codes the maintainer's GitHub noreply address, and exports a bare `git` functio) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-12"
+    },
+    {
+      "id": "review-clean-code-w3:CC-13",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC-13 (The nested `unknown` narrowing (`research.dispatch.runs`) is hand-rolled here; every non-`complete`/) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-clean-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-clean-code-w3:CC-13"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-001",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding F-001 (The diff adds readiness item 12 `quotes-located` to the list directly below, but the sentence introd) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-clean-code-w1:F-001",
+      "finding": "review-clean-code-w1:F-001"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-002",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding F-002 (The paragraph on `review complete` / `review ingest` (near line 4849) still says ingest refuses a fi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-clean-code-w1:F-002",
+      "finding": "review-clean-code-w1:F-002"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-003",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding F-003 (parseReviewResult and isEmptyOutput were taught to strip the appended KERYX_USAGE line, but wholeFil) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-core-boundaries-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-core-boundaries-w1:F-003"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-004",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding F-004 (The header comment says the host's line wins because the host measured it and the reviewer cannot, b) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-core-boundaries-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-core-boundaries-w1:F-004"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-005",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding F-005 (The new `quote_unlocated` object restates what the existing `locator` (state `unlocatable`, reason a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-core-boundaries-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-core-boundaries-w1:F-005"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-006",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding F-006 (Invariant acceptance criteria AC9 here, and AC4-AC6 in flow 459, were signed with a failing test in ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-core-boundaries-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-core-boundaries-w1:F-006"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (sessionReviewRoots runs REVIEW_PACKAGE_PATH over every history message and every tool-call argument.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w1:F-001"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-002 (The extra roots come from every path in the session transcript that matches `.metaproject/reviews/`,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w1:F-002"
+    },
+    {
+      "id": "review-highload-w1:F-003",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-003 (The module says the host measured the usage and the reviewer cannot forge it, but the parser accepts) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w1:F-003"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-001 (The new empty-reply error tells the parent to re-dispatch with no bound or backoff, and the path wri) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w2:F-001"
+    },
+    {
+      "id": "review-highload-w2:F-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-002 (Emptiness is detected by comparing against the placeholder string literal, which is duplicated in th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w2:F-002"
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-003 (onUsage sums every usage_update. Anthropic's message_delta restates cumulative counts; if a stream e) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w2:F-003"
+    },
+    {
+      "id": "review-highload-w2:F-004",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-004 (The new e2e test mutates process-global cwd, XDG_DATA_HOME and console.* and restores them in afterE) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-architecture-w2:F-006",
+      "finding": "review-architecture-w2:F-006"
+    },
+    {
+      "id": "review-highload-w2:F-005",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-005 (When no usage was measured the suffix is empty, so a child that writes its own KERYX_USAGE line in i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w2:F-005"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-001 (The lazy prefix group [^\\s\"'`<>|;&()]*? is tried from every start offset and, for a run of n non-del) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w3:F-001"
+    },
+    {
+      "id": "review-highload-w3:F-002",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-002 (sessionReviewRoots returns every distinct directory any tool output named through a '.metaproject/re) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w3:F-002"
+    },
+    {
+      "id": "review-highload-w3:F-003",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-003 (reviewersCheck used to read files only. It now calls packageCoverageErrors, which for a dispatch tha) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w3:F-003"
+    },
+    {
+      "id": "review-highload-w3:F-004",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-004 (For a line that starts with KERYX_USAGE, '\\{[^\\n]*\\}' is greedy then backtracks to each earlier '}' ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w3:F-004"
+    },
+    {
+      "id": "review-highload-w3:F-005",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding F-005 (Date.parse of a malformed string gives NaN, and NaN < since is false, so the stale-pointer guard doe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-highload-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-highload-w3:F-005"
+    },
+    {
+      "id": "review-logic-w1:LG-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-001 (Spec gap, AC8: 'Flows 458 and 459 are closed through the flow CLI (AC confirmations with evidence, i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w1:LG-001"
+    },
+    {
+      "id": "review-logic-w1:LG-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-002 (This paragraph (unchanged context in the slice's cli-reference hunk) still says `review ingest` refu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w1:LG-002"
+    },
+    {
+      "id": "review-logic-w1:LG-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-003 (AC8's verify is `invariant keryx flow status 459`: it inspects only flow 459, and `flow status` exit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w1:LG-003"
+    },
+    {
+      "id": "review-logic-w1:LG-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-004 (On Claude Code/Codex the orchestrator appends the usage line to a file the reviewer wrote. splitUsag) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w1:LG-004"
+    },
+    {
+      "id": "review-logic-w1:LG-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-005 (sessionReviewRoots (newly wired into holdReviewGate in agent.ts) takes everything before `.metaproje) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w1:LG-005"
+    },
+    {
+      "id": "review-logic-w1:LG-006",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-006 (The round total (`dispatches`, `unknown`) counts raw result files, not dispatches: a dispatch whose ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w1:LG-006"
+    },
+    {
+      "id": "review-logic-w1:LG-007",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LG-007 (The new `quote_unlocated` object accepts `candidate_lines` with `reason: \"absent\"`; the description ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w1:LG-007"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (The diff adds item 12 `quotes-located` to the readiness list, but the sentence that introduces the l) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-clean-code-w2:F-001",
+      "finding": "review-clean-code-w2:F-001"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (The rewritten rule replaces \"refuses\" with \"keeps ... instead of refusing the round\" but drops the c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w2:F-002"
+    },
+    {
+      "id": "review-logic-w2:F-003",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-003 (The usage line is written only where a file is saved, and only with what has been reported by then. ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w2:F-003"
+    },
+    {
+      "id": "review-logic-w2:F-004",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-004 (The `turnResult?.submittedResult === undefined` clause cannot be false while `status === \"Completed\") real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w2:F-004"
+    },
+    {
+      "id": "review-logic-w2:F-005",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-005 (The empty-reply branch writes nothing to `save_result_to`. If a file already exists at that path fro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w2:F-005"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-001 (The flow 460 D check that marks a DONE reply as incomplete when it says it could not read a mandator) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w3:F-001"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-002 (The test `the nudge names the package the active-review pointer names, not an older open one in cwd`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w3:F-002"
+    },
+    {
+      "id": "review-logic-w3:F-003",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-003 (Flow 460 changed ingest so that a quote absent from its file at the head never refuses. These two te) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w3:F-003"
+    },
+    {
+      "id": "review-logic-w3:F-004",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-004 (This comment from the flow 458 era says that a quote failing at an existing file refuses. After flow) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w3:F-004"
+    },
+    {
+      "id": "review-logic-w3:F-005",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-005 (This PR makes the `raw()` fixture default to `slices: [\"slice-01\", \"slice-02\"]` (line 835 of the dif) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w3:F-005"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (unreadableInputClaim treats any summary in which one of the MANDATORY_INPUT words (payload, schema, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-001"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-002 (findReviewGateState now ignores an open package whose manifest is older than the session's first mes) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-002"
+    },
+    {
+      "id": "review-logic-w4:F-003",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-003 (sessionReviewRoots adds a root for every `.metaproject/reviews/<x>` path found in any message conten) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-003"
+    },
+    {
+      "id": "review-logic-w4:F-004",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-004 (packageDiffStats documents that the light recheck diffs 'against the recorded `target.base`', but `k) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-004"
+    },
+    {
+      "id": "review-logic-w4:F-005",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-005 (When every base candidate gives an empty range, resolveBase returns that empty-range base rather tha) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-005"
+    },
+    {
+      "id": "review-logic-w4:F-006",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-006 (coverageFromResearch lists every `status: complete` run as 'dispatched'. That includes the runs buil) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-006"
+    },
+    {
+      "id": "review-logic-w4:F-007",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-007 (Without --reviewers, the `reviewers` list given to normalizeFindings is now the complete runs from r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-007"
+    },
+    {
+      "id": "review-logic-w4:F-008",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-008 (The new omitted-reviewer check fails item 6 whenever coverage.md does not list every run in the disp) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-logic-w4.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-logic-w4:F-008"
+    },
+    {
+      "id": "review-logic-w4:F-009",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-009 (The new UnlocatableKind block and its JSDoc were inserted between the existing doc comment and Locat) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-clean-code-w3:CC-2",
+      "finding": "review-clean-code-w3:CC-2"
+    },
+    {
+      "id": "review-performance-w2:F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-001 (The new end-to-end test builds a real git repo per test run and runs the real plan, ingest, git comm) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w2:F-001"
+    },
+    {
+      "id": "review-performance-w3:PERF-001",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-001 (REVIEW_PACKAGE_PATH has no literal prefix and begins with a lazy `[^\\s\"'`<>|;&()]*?` that must exten) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w3:PERF-001"
+    },
+    {
+      "id": "review-performance-w3:PERF-002",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-002 (sessionReviewRoots is a pure function of the whole history and is recomputed from scratch on every g) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w3:PERF-002"
+    },
+    {
+      "id": "review-performance-w3:PERF-003",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-003 (reviewersCheck now runs the complete coverage gate (packageScopeFiles, packageChangedLines, blast-ra) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w3:PERF-003"
+    },
+    {
+      "id": "review-performance-w3:PERF-004",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-004 (Every packageDiffStats call starts one or two sequential git processes just to find the repository t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w3:PERF-004"
+    },
+    {
+      "id": "review-performance-w3:PERF-005",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-005 (`/\\s+$/` is quadratic in the length of any whitespace run inside the text, because each start offset) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w3:PERF-005"
+    },
+    {
+      "id": "review-performance-w3:PERF-006",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-006 (Both UNREADABLE_INPUT patterns are tried eagerly through map even when the first matches, and each p) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w3:PERF-006"
+    },
+    {
+      "id": "review-performance-w3:PERF-007",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-007 (Roots are scanned one after another, and every root's open-package candidates are collected even whe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-performance-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-performance-w3:PERF-007"
+    },
+    {
+      "id": "review-regression-w1:F-001",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-001 (The `review complete` paragraph of cli-reference.md still says `review ingest` refuses a finding who) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w1:F-002",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-002 (The readiness section's lead sentence still says readiness prints eleven items, while this PR append) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w1:F-003",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-003 (sessionReviewRoots, now passed by src/commands/agent.ts holdReviewGate into findReviewGateState, col) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w1:F-004",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding F-004 (slice-01 carries hunks for .metaproject/data/gdgraph/.provenance.json and .metaproject/data/gdgraph/) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w2:F-001",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding F-001 (The change adds readiness item 12 `quotes-located` to the list in SKILL.detail.md (and READINESS_ITE) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w2:F-002",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding F-002 (The `review_waive_readiness` card's input schema tells the model that readiness items are numbered 1) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w2:F-003",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding F-003 (The flow 460 E empty-reply branch in spawn-subagent-tool.ts applies to every spawn_subagent child, n) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w2:F-004",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding F-004 (Before this change, an empty child with save_result_to overwrote the target with '(subagent produced) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-001",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is review-regression finding REG-W3-001 (Flow 460 D changed src/review/ledger.ts buildLedger so that a reply with no `slices` claims no slice) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-regression-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-regression-w3:REG-W3-001"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-002",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is review-regression finding REG-W3-002 (The change to src/review/completion-gate.ts findReviewGateState/scanRoot now skips every open packag) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-regression-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-regression-w3:REG-W3-002"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-003",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is review-regression finding REG-W3-003 (src/review/readiness.ts changed two checks that existing packages fail without anyone touching them.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-regression-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-regression-w3:REG-W3-003"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-004",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is review-regression finding REG-W3-004 (spawn-subagent-tool.ts now appends a `KERYX_USAGE {...}` line to each saved child result. Only src/r) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-005",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is review-regression finding REG-W3-005 (reviewersCheck in src/review/readiness.ts now calls packageCoverageErrors on every computeReadiness.) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "scope.md#scope-B screen (manifest scope-B rejected rows)",
+      "reason": "review ingest scope-B screen rejected this review-regression finding (severity below the scope-B floor major, or outside the blast-radius set); not carried into findings.json"
+    },
+    {
+      "id": "review-security-code-w1:SEC-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-001 (The review-gate now derives extra project roots from every string in the session history, including ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w1:SEC-001"
+    },
+    {
+      "id": "review-security-code-w1:SEC-002",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-002 (The usage channel trusts any `KERYX_USAGE {...}` line in the raw result file. dispatch-usage.ts stat) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w1:SEC-002"
+    },
+    {
+      "id": "review-security-code-w1:SEC-003",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-003 (dirSignature recursively reads and SHA-256-hashes every file under `<root>/.metaproject/data/review`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w1:SEC-003"
+    },
+    {
+      "id": "review-security-code-w1:SEC-004",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-004 (Ingest no longer refuses a finding whose quote is not at its path; it is kept unanchored and flagged) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w1:SEC-004"
+    },
+    {
+      "id": "review-security-code-w2:SEC-W2-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding SEC-W2-001 (When the provider reports no usage (childUsage.known stays false) spawn_subagent saves the child's r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w2:SEC-W2-001"
+    },
+    {
+      "id": "review-security-code-w2:SEC-W2-002",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding SEC-W2-002 (The new empty-reply branch returns an Error before saveChildResult runs, and nothing clears save_res) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w2:SEC-W2-002"
+    },
+    {
+      "id": "review-security-code-w3:SEC-001",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding SEC-001 (sessionReviewRoots runs REVIEW_PACKAGE_PATH with matchAll over the content of every history message ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w3:SEC-001"
+    },
+    {
+      "id": "review-security-code-w3:SEC-002",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding SEC-002 (Extra gate roots are taken from any message content, including tool results that carry untrusted tex) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w3:SEC-002"
+    },
+    {
+      "id": "review-security-code-w3:SEC-003",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding SEC-003 (The header states the KERYX_USAGE line wins over the result envelope 'because the host measured it a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w3:SEC-003"
+    },
+    {
+      "id": "review-security-code-w3:SEC-004",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding SEC-004 (Ingest no longer refuses a finding whose quote is absent or ambiguous; it keeps it with no line and ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w3:SEC-004"
+    },
+    {
+      "id": "review-security-code-w3:SEC-005",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding SEC-005 (coverageFromResearch copies reviewer names from research.json dispatch.runs into coverage.md without) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-security-code-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-security-code-w3:SEC-005"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The diff appends item 12 `quotes-located` to the list directly under this sentence and cli-reference) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w1:F-001"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The paragraph (an unchanged context line in the diff) still says `review ingest` refuses an internal) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-clean-code-w1:F-002",
+      "finding": "review-clean-code-w1:F-002"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (The model sentence originally ran straight into 'scopeReviewed and rawReconciled are true only when ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w1:F-003"
+    },
+    {
+      "id": "review-style-w1:F-004",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-004 (`const { usage } = splitUsage(body);` is followed on the next line by a second `splitUsage(body)` ca) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w1:F-004"
+    },
+    {
+      "id": "review-style-w1:F-005",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-005 (Another optional positional parameter is appended to a signature that already had eight, several of ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w1:F-005"
+    },
+    {
+      "id": "review-style-w1:F-006",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-006 (provenance.json, module-map.json and summary.md changed only because the graph was rebuilt on anothe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w1:F-006"
+    },
+    {
+      "id": "review-style-w2:S-1",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-1 (The section still says readiness prints eleven items, but this diff adds a twelfth item (quotes-loca) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-clean-code-w2:F-001",
+      "finding": "review-clean-code-w2:F-001"
+    },
+    {
+      "id": "review-style-w2:S-2",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-2 (The placeholder string \"(subagent produced no text)\" is now a magic literal in three places (the fal) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w2:S-2"
+    },
+    {
+      "id": "review-style-w2:S-3",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-3 (`latest` holds every package directory that has a plan file, not the latest one; the real latest is ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w2:S-3"
+    },
+    {
+      "id": "review-style-w2:S-4",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-4 (tokensIn and tokensOut repeat the same isFinite-and-cast expression, and the `as number` casts exist) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w2:S-4"
+    },
+    {
+      "id": "review-style-w2:S-5",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding S-5 (The new empty-reply exit repeats the emit-upsert / foldChildSlateAndCleanup / fireSubagentStop seque) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w2:S-5"
+    },
+    {
+      "id": "review-style-w3:F-001",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-001 (The new UnlocatableKind doc block was inserted between the existing one-line doc comment for Locator) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "scope.md#Duplicates merged",
+      "reason": "duplicate merged by review ingest into review-clean-code-w3:CC-2",
+      "finding": "review-clean-code-w3:CC-2"
+    },
+    {
+      "id": "review-style-w3:F-002",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-002 (The coverage.md entry regex is duplicated: the existing `claimed` line in coverageMdCheck and the ne) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w3:F-002"
+    },
+    {
+      "id": "review-style-w3:F-003",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-003 (The mutation record filename pattern is repeated in packageHasMutationRecord and in doneMutantIds di) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w3:F-003"
+    },
+    {
+      "id": "review-style-w3:F-004",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-004 (The expression `recordedBase ?? (kind === \"pr\" ? undefined : ref)` is written twice (the head-missin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w3:F-004"
+    },
+    {
+      "id": "review-style-w3:F-005",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-005 (`count` is a noun naming a validator/normaliser that returns number|undefined; it reads like a tally) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w3:F-005"
+    },
+    {
+      "id": "review-style-w3:F-006",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-006 (A negated compound condition whose positive form `reviewers && reviewers.length > 0` is repeated two) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w3:F-006"
+    },
+    {
+      "id": "review-style-w3:F-007",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-007 (The line is indented 16 extra spaces after the removed `closed` line (edit leftover). Formatter-owne) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w3:F-007"
+    },
+    {
+      "id": "review-style-w3:F-008",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-008 (A near-copy of the existing NOT_REVIEW_PACKAGES pathspec list with different globs; two parallel con) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-style-w3.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-style-w3:F-008"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (Mutation pass was NOT run: this dispatch forbids running tests. No mutation table exists; nothing be) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w1:F-001"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (The new test (flow 460 E) builds only a child with empty text and no submitted result. No fixture bu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w1:F-002"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (The H test feeds exactly one usage_update on the Completed path. Accumulation over several provider ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w1:F-003"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 (The changed assertion is falsy-only: it passes when coverageErrors returns nothing, any other error ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w1:F-004"
+    },
+    {
+      "id": "review-testing-practices-w1:F-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-005 (The file header says the steps are replaced by a fake; the new block drives real reviewCommand plan ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w1:F-005"
+    },
+    {
+      "id": "review-testing-practices-w1:F-006",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-006 (In the plan() helper the local `latest` holds every package that has a plan file, not the latest one) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w1.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w1:F-006"
+    },
+    {
+      "id": "review-testing-practices-w2:T-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-001 (The pointer-wins test does not drive the pointer branch. The package the pointer names (pr-7975) is ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w2:T-001"
+    },
+    {
+      "id": "review-testing-practices-w2:T-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-002 (The new machine-readable `kind` is asserted only for the exact-pass ambiguity (kind ambiguous, candi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w2:T-002"
+    },
+    {
+      "id": "review-testing-practices-w2:T-003",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-003 (The 'Not run: mutation (light round)' line is tested only with depth light. No case builds a non-lig) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w2:T-003"
+    },
+    {
+      "id": "review-testing-practices-w2:T-004",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-004 (The comment states a precedence (host KERYX_USAGE line first, envelope usage as fallback) but no fix) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w2:T-004"
+    },
+    {
+      "id": "review-testing-practices-w2:T-005",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-005 (The positive AC2 case builds its subject with the production helper `operatorDecisionSubject`, the s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w2:T-005"
+    },
+    {
+      "id": "review-testing-practices-w2:T-006",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-006 (The same coverage.md write is added by hand beside each `research.json` write in seven places: activ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "raw/review-testing-practices-w2.txt",
+      "reason": "kept as reported; premise judged in raw/review-premise-*.txt",
+      "finding": "review-testing-practices-w2:T-006"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-core-boundaries",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:4f56895542be",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:4f56895542be",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:760ae6a3dd50",
+        "rawEvidence": "raw/review-clean-code-w3.txt#sha256:760ae6a3dd50",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-core-boundaries",
+        "executionId": "review-core-boundaries:b0bf90e7e173",
+        "rawEvidence": "raw/review-core-boundaries-w1.txt#sha256:b0bf90e7e173",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-core-boundaries/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:37fa92e995a3",
+        "rawEvidence": "raw/review-highload-w1.txt#sha256:37fa92e995a3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:c7fdf9cf1f20",
+        "rawEvidence": "raw/review-logic-w4.txt#sha256:c7fdf9cf1f20",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:1985cba417f9",
+        "rawEvidence": "raw/review-performance-w3.txt#sha256:1985cba417f9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:0fdc8476e900",
+        "rawEvidence": "raw/review-regression-w3.txt#sha256:0fdc8476e900",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:4e61b12720c6",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:4e61b12720c6",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:3a531612eba1",
+        "rawEvidence": "raw/review-style-w3.txt#sha256:3a531612eba1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:92d29b276817",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:92d29b276817",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 28,
+    "known": 0,
+    "unknown": 28,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-premise-code.txt",
+    "raw/review-premise-rest.txt"
+  ]
+}

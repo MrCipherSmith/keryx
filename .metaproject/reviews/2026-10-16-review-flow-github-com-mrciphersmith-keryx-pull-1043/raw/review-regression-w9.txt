@@ -1,0 +1,50 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "slice-09 (scope B, regression check). The slice is seven test files (dedupe, premise-decision, premise-embedded, premise, readiness, verdict) and one production line: src/trigger/unattended.ts adds review_decide_premise to OPERATOR_CONFIRM_TOOL_NAMES. I walked the blast-radius dependents of that change (src/commands/trigger-dispatch.ts:142 buildUnattendedRoster and src/commands/trigger-agent-task.ts:547). Both throw when a roster offers an excluded tool. Neither roster can offer review_decide_premise: builtinReadOnlyTools (src/harness/tool/builtin/interactive-tools.ts) does not define it, and GRANTED_TOOL_CATALOGUE (src/trigger/granted-tools.ts) holds no review_* card. Adding the name therefore cannot make an existing unattended roster throw. It only excludes a tool that did not exist before. I also checked the production behaviour these tests pin against the dependents in the set. Readiness item 11 (premise-decisions) is appended, so items 1-10 keep their numbers; readinessItemId and --waive <n> still resolve them, and existing manifest readiness_waivers stay valid. Packages with no premise field pass item 11, so a READY package before this change stays READY. OPERATOR_DECISION_KINDS now includes premise-question, but readOperatorDecisions, confirmedDecision and recordOperatorDecision exclude it from the gate kinds and preserve it on write. Its other consumers (src/review/coverage.ts:556 and :660 via decisionWriters) pass only the gate kinds. src/review/publish.ts reads only computeVerdict().minors. Its output on a package with no premise data is unchanged. dedupe.mergeable and mergeCluster change only for records that carry premise. Neither src/review/premise.ts nor operator-decisions.ts imports dedupe, verdict or readiness, so the new imports add no import cycle. Result: no regression at major or above. Scope note: the blast-radius record dropped 31 files by cap and 231 test consumers (run, not read). 92 of the 131 changed files are unresolved non-graph nodes (schemas, skills, flow docs), so the radius cannot answer whether those break anything. Runtime edges are invisible to the graph: the shell card registry is string-keyed by tool name.",
+  "findings": [],
+  "slices": ["slice-09"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## review-regression, slice-09 (wave 9)
+
+**Result:** no regressions at major or above. No findings filed.
+
+### What I checked (dependency path first)
+
+- **src/trigger/unattended.ts → review_decide_premise added to OPERATOR_CONFIRM_TOOL_NAMES**
+  - The dependents in the set are `src/commands/trigger-dispatch.ts:142` (`buildUnattendedRoster`) and `src/commands/trigger-agent-task.ts:547` (the agent-task roster).
+  - Both throw if a roster offers an excluded tool.
+  - Neither roster can contain `review_decide_premise`. It is not in `builtinReadOnlyTools`, and `GRANTED_TOOL_CATALOGUE` has no `review_*` cards.
+  - The change cannot make an existing unattended run fail. It only excludes a new tool.
+  - `operator-confirm-rosters.test.ts` ties the list to the registry.
+- **Readiness item 11 `premise-decisions`**
+  - It is appended at the end, so the numbers of items 1-10 do not move.
+  - `--waive <n>`, `readinessItemId` and stored `readiness_waivers` still resolve.
+  - It passes when no finding carries a premise, so packages that were READY stay READY.
+- **operator-decisions.json now also holds `premise-question` records**
+  - The gate readers (`readOperatorDecisions`, `confirmedDecision`) filter them out.
+  - `recordOperatorDecision` now keeps them on write instead of dropping them.
+  - The `decisionWriters` callers in `coverage.ts` pass only the gate kinds.
+- **verdict.ts consumers**
+  - `publish.ts` reads only `.minors`.
+  - `review.ts` writes the interim verdict.
+  - Output is unchanged for packages without premise data.
+- **dedupe.ts**
+  - The merge eligibility and severity rule change only for records that carry `premise`.
+  - No import cycle was introduced: `premise.ts` imports only `verification` plus types.
+
+### Coverage caveats
+
+- The cap dropped 31 files, and 231 test consumers were dropped as "run, not read".
+- 92 of the 131 changed files are non-graph nodes (schemas, skills, flow docs). The radius is **unresolved** for those, not clean.
+- The tool-name card registry is a string-keyed runtime edge that the graph does not carry. I checked it by reading the code.
+
+### Observations for scope A (not regressions, so not filed here)
+
+- `premise-decisions` can be waived through `keryx review waive-readiness --waive 11`. `readiness.ts` has no non-waivable list, yet its doc comment says "the repair is the answer, not a waiver".
+  - On a waived package, `publish.ts` builds its minors section from `computeVerdict().minors`, which leaves out held findings. A held minor would then be missing from the published body.
+- Readiness reads only `findings.json`, while the verdict also applies the raw `research-evidence/premises.json`. review-logic-w8 already reported this.

@@ -1,0 +1,64 @@
+STATUS: DONE
+
+REVIEW_RESULT:
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r3-review-clean-code-skills#CC3-002", "disposition": "closed", "evidence": "feature-dev/SKILL.md:51 now lists '**Premise**' in the Implementation Spec template (:45-51), matching the reference at :42."},
+    {"id": "r3-review-clean-code-skills#CC3-003", "disposition": "closed", "evidence": "review-premise/SKILL.md:73-74 question 1 now reads 'where your host gives you git; on keryx shell, the history excerpts the caller passes in `context_files`'."}
+  ],
+  "findings": [
+    {
+      "id": "CC4-001", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md", "line": 66,
+      "quote": "any claim on a finding below `minor` (`below-minor`)",
+      "problem": "The delta adds a general refusal 'any claim on a finding below minor' to the source row, but the same row still lists 'a downgrade of an external or review-security-code finding, of a minor, or below minor' further on. The tail 'or below minor' is now subsumed by the new first clause, so the list states one refusal twice under different reasons.",
+      "impact": "A caller applying the refusals by hand cannot tell which reason code to record for a downgrade of a sub-minor finding (below-minor vs the downgrade clause).",
+      "suggested_fix": "Drop 'or below `minor`' from the downgrade clause, leaving 'of a `minor`'.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC4-002", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md", "line": 813,
+      "quote": "premise: upheld N, held N (per held comment its C-NNN, the judge's question and the operator's answer, in their words)",
+      "problem": "The Stats line is a counts line; the delta puts a per-comment narrative into it, and rule 7 (:366) now also stores the same answer on the Step 7 entry (**Premise**, :390). The operator's answer is recorded in two places in one report.",
+      "impact": "Two copies of one fact drift: a later edit to a held comment's answer on one site leaves the other stale, and a resumed --fix run has two places to read.",
+      "suggested_fix": "Keep counts only in Stats ('premise: upheld N, held N') and have rule 7 point resumed runs at the Step 7 **Premise** entries.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC4-003", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md", "line": 1165,
+      "quote": "Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer.",
+      "problem": "'a first ingest' implies a later ingest differs, but this section states no contrast, so the qualifier is unexplained. The line is also 105 columns in a block wrapped near 88, and the delta rewraps the unrelated arXiv/repetition paragraph (:1273-1285) with no content change, leaving a 120-column first line followed by short ones.",
+      "impact": "Reader cannot tell what a non-first ingest does; the whitespace-only rewrap adds noise to blame and to the next diff.",
+      "suggested_fix": "Say what a later ingest does (or drop 'first'), rewrap the line, and revert the whitespace-only rewrap of :1273-1285.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC4-004", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md", "line": 1127,
+      "quote": "renumber a collision, a new finding whose display id a carried one already has included, in the saved reviewer results",
+      "problem": "The dispatch bullet grows to one sentence with nested parentheticals and an interjected 'included' clause that reads as a stray word; it mixes three rules (ingest refusal, ambiguous-finding rejection, renumber-before-dispatch) in one bullet.",
+      "impact": "The renumber instruction, the one action the dispatcher must take, is the hardest part to find and parse.",
+      "suggested_fix": "Split: one bullet for the dispatch inputs, a second 'Before dispatch, renumber any display id a carried finding already has, in the saved reviewer results' with the two rejection reasons as its rationale.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC4-005", "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md", "line": 366,
+      "quote": "7. **A `valid` comment has its premise checked before it enters the plan.**",
+      "problem": "Rule 7 is a single list item of roughly 2,000 characters covering dispatch, saving, refusals, holding, asking, recording and planning, and the delta lengthens it again.",
+      "impact": "Hard to scan; the one-rule-per-item pattern of rules 1-6 is lost.",
+      "suggested_fix": "Split into sub-bullets: dispatch, record, held, upheld/dismissed.",
+      "confidence": "low"
+    }
+  ],
+  "summary": "Both in-scope prior findings (CC3-002, CC3-003) are closed. The delta introduces 4 minor and 1 info documentation-quality defects, no blocker or major."
+}
+```
+
+Summary: CC3-002 and CC3-003 closed. CC3-001, CC3-004 and CC2-003 are owner-dismissed and not re-raised. New: 0 blocker, 0 major, 4 minor, 1 info.

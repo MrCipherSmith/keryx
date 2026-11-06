@@ -1,0 +1,43 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "slices": ["slice-06"],
+  "findings": [
+    {
+      "id": "PERF-001",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "title": "partitionRegionsByFix labels context lines with a filter/find scan per line (quadratic in region size)",
+      "problem": "In the mixed-region branch, every context line runs changedAt.filter(...).at(-1) and changedAt.find(...) over the whole changed-index array, so labelling costs O(lines x changes) per region and allocates a fresh array per line.",
+      "evidence": "const before = changedAt.filter((at) => at < index).at(-1);",
+      "hot_path": "Once per scoped region of a delta round at review slice time; N is region lines (bounded by slice size, tens to low thousands). Not per request.",
+      "suggested_fix": "Single forward pass tracking the previous changed index, and a backward pass (or a pointer into changedAt) for the next one, making labelling O(lines)."
+    },
+    {
+      "id": "PERF-002",
+      "severity": "info",
+      "file": "src/review/round-split.ts",
+      "title": "A slice's text is walked and parsed repeatedly by fixFindingIdsOf, onlyFixLines and expectedFixRoles",
+      "problem": "classifyDeltaSlices calls fixFindingIdsOf then onlyFixLines (each parseScopedDiff + walkRegion), and routing-check re-does fixClaimBacked and expectedFixRoles on the same text; each changed line also scans all fixHunks linearly.",
+      "evidence": "if (!round.fixHunks.some((hunk) => lineInHunk(hunk, region.path, walked.line, walked.removed))) return false;",
+      "hot_path": "Per slice, once per slicing/routing check; slices and fix hunks are tens, so cost is negligible. Would only matter for a very large delta with thousands of fix hunks.",
+      "suggested_fix": "Optional: index fixHunks by file and compute the walk once per slice if the counts ever grow."
+    },
+    {
+      "id": "PERF-003",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "title": "Readiness now runs the coverage gate (git diff) on every computation",
+      "problem": "reviewersCheck now calls packageCoverageErrors, which shells git. computeReadiness is also used by publish guard and panel, so repeated calls could re-run git. coverage.ts has a bounded process-level cache keyed per package, target and head (GIT_CACHE_ENTRIES), so the repeat cost appears covered.",
+      "evidence": "const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+      "hot_path": "Once per readiness computation; cached per package, target and head for the process. Not confirmed under a long-lived panel that recomputes on a timer; cache invalidation on a moved head is outside this slice.",
+      "suggested_fix": "None required; confirm the panel does not poll computeReadiness so often that a cache miss on each new head matters."
+    }
+  ]
+}
+```
+
+Summary: no blocker or major performance issues. Slice-06 is dominated by pure, small-N review-tooling code that runs once per round, not per request. One minor quadratic label scan in partitionRegionsByFix and two info notes (repeated slice-text walks; coverage gate now run by readiness, cached per head). readiness.ts reads coverage.md once instead of twice (a small gain).

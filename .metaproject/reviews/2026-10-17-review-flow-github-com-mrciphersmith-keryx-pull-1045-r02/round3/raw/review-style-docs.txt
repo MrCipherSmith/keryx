@@ -1,0 +1,178 @@
+REVIEW_RESULT
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Round-3 delta (docs and bundled skills) reviewed at 17e2e4417.",
+  "findings": [
+    {
+      "id": "r3-review-style-docs:DS-001",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": 699,
+      "quote": "the authors of the attached findings and the verifier, each with its `prior_findings`",
+      "problem": "The delta adds review-security-code to the fix-slice roster ('when one of them is a security finding') in review-orchestrator/SKILL.md:685 and flow-orchestrator/SKILL.md:529, but the delta-round table row in SKILL.detail.md:699 still lists only review-logic, review-regression, the authors and the verifier. Three statements of one roster now disagree. The same stale row sits in the .metaproject copy.",
+      "impact": "An orchestrator reading the detail file's table skips security-code on a fix slice with a security finding, against the other two texts.",
+      "suggested_fix": "Add 'review-security-code when one of them is a security finding' to the roster in the SKILL.detail.md:699 table row.",
+      "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:699 against SKILL.md:685 and docs/docs/cli-reference.md:4888 (which already names review-security-code)",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "r3-review-style-docs:DS-002",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 1226,
+      "quote": "a `DONE` result whose `inputs_unreadable` lists a mandatory input it could not read",
+      "problem": "The BLOCKED bullet now covers a DONE result with unreadable inputs, but its remedy is still 'Re-dispatch ... with a larger budget, telling it to return its report before the budget ends'. A larger budget does not make an unreadable input readable; the sentence reads as if all three cases share one cause.",
+      "impact": "A reader re-dispatches with more budget and gets the same unreadable input.",
+      "suggested_fix": "Add a clause: for unreadable inputs, fix the path or payload named in inputs_unreadable before the one re-dispatch.",
+      "evidence": "SKILL.md:1226",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "r3-review-style-docs:DS-003",
+      "severity": "info",
+      "confidence": "high",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": 656,
+      "quote": "minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is",
+      "problem": "The reworded line is about 110 characters while its neighbours wrap near 80, in both copies of the paragraph (lines 656 and 965); the cli-reference.md paragraph at 5548-5557 was re-flowed the same way, ending in a short ragged line ('is not part of the reply ... `ledger build` records each').",
+      "impact": "Uneven wrapping makes the docs diff noisy on the next edit; no behaviour effect.",
+      "suggested_fix": "Re-wrap both paragraphs at the width of their neighbours.",
+      "evidence": "docs/docs/guides/review-with-a-record.md:656,965; docs/docs/cli-reference.md:5548-5557",
+      "reviewer": "review-style"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "r2-review-style-w1:STY-001",
+      "disposition": "closed",
+      "evidence": "src/review/locate.ts:62-69 each of LocateMethod and LocatorRecord now has its own doc comment"
+    },
+    {
+      "id": "r2-review-style-w1:STY-002",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2304 uses recordSaveNote; saveTimedOutPartial no longer exists"
+    },
+    {
+      "id": "r2-review-style-w2:ST-001",
+      "disposition": "closed",
+      "evidence": "docs/docs/cli-reference.md:6679-6685 names the substring pass and locator.method; schema copies agree (src/gdskills/contracts/review-finding.schema.json:195, reviewer-finding.schema.json:85)"
+    },
+    {
+      "id": "r2-review-style-w2:ST-002",
+      "disposition": "closed",
+      "evidence": "src/commands/review-plan.e2e.test.ts:14 imports commitFiles, git, initRepo from ../review/git-fixture.test-helpers; no local helper or EMAIL left"
+    },
+    {
+      "id": "r2-review-style-w3:ST-001",
+      "disposition": "closed",
+      "evidence": "src/commands/review.ts:230-231 ManagedReviewMode precedes PremiseSource"
+    },
+    {
+      "id": "r2-review-style-w3:ST-002",
+      "disposition": "closed",
+      "evidence": "src/commands/review.ts:3625,3645 readPremiseFile returns Promise<PremiseSource[]>; the double cast is gone (one narrowing at 3657 after isPremiseSourceList)"
+    },
+    {
+      "id": "r2-review-style-w3:ST-003",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2304 the note chain is a single recordSaveNote call"
+    },
+    {
+      "id": "r2-review-style-w3:ST-004",
+      "disposition": "closed",
+      "evidence": "src/commands/operator-confirm-review.ts:306 derives the item number from READINESS_ITEMS; SKILL.detail.md no longer says twelve (delta); docs/docs/cli-reference.md:4857 still says twelve-item, which is the true count (readiness.ts:30-43)"
+    },
+    {
+      "id": "r2-review-style-w4:ST-002",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:156-160 namesObligation, holdsKey, mergedFromHas are used at 598, 607-608, 616, 619, 790"
+    },
+    {
+      "id": "r2-review-style-w4:ST-003",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:381 uses displayIdHasHash; the detail text is built from DISPLAY_ID_FORM (202-204)"
+    },
+    {
+      "id": "r2-review-style-w4:ST-004",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:187-196,347 normalised with isClaimSetList and parseOnePremiseResult; no casts"
+    },
+    {
+      "id": "r2-review-style-w5:ST-001",
+      "disposition": "closed",
+      "evidence": "src/review/readiness.ts:212,310 read runs through dispatchRuns; line 93 shares asRecord"
+    },
+    {
+      "id": "r2-review-style-w5:ST-002",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:339-346 secondLookClaimBacked uses everyChangedLine/inSecondLookHunk over walkRegion"
+    },
+    {
+      "id": "r2-review-style-w5:ST-003",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:29-40 stems only, with a comment that none is listed beside a literal it matches"
+    },
+    {
+      "id": "r2-review-style-w5:ST-004",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:211 SECOND_LOOK_ROLES uses FIX_SECURITY_ROLE"
+    },
+    {
+      "id": "r2-review-style-w5:ST-005",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:155,187-205 cutPieces and labelLines extracted"
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1963-1972 now documents that each adapter emits one usage_update per request, so the sum is not a double count"
+    },
+    {
+      "id": "review-clean-code-w3:CC-13",
+      "disposition": "partial",
+      "evidence": "src/review/managed.ts:1227 uses typed dispatchRuns, but normalizeCoverage (1246) still takes a third untyped research: unknown"
+    },
+    {
+      "id": "review-clean-code-w3:CC-2",
+      "disposition": "closed",
+      "evidence": "src/review/locate.ts:62-69 stacked comments split; LocatorRecord has its own"
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "disposition": "closed",
+      "evidence": "same location and documentation as F-006 (spawn-subagent-tool.ts:1963-1972)"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.test.ts:448-467 'named nothing: a pointer written this session picks the older package' drives the pointer branch"
+    },
+    {
+      "id": "review-performance-w3:PERF-006",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:29-30 unreadableInputClaim reads the structured inputs_unreadable list; the prose-pattern .map/.find is gone"
+    },
+    {
+      "id": "review-performance-w3:PERF-007",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:430-432 roots are scanned with Promise.all, bounded by MAX_SESSION_REVIEW_ROOTS (line 51)"
+    },
+    {
+      "id": "review-security-code-w3:SEC-005",
+      "disposition": "closed",
+      "evidence": "src/review/research.ts:54,65 REVIEWER_NAME validates names in dispatchRuns, which managed.ts:1227 uses"
+    },
+    {
+      "id": "review-testing-practices-w2:T-001",
+      "disposition": "closed",
+      "evidence": "same test as F-002, completion-gate.test.ts:461-467"
+    }
+  ]
+}
+```
+
+Summary: all 16 review-style findings at minor or above (owner-dismissed w4:ST-001 skipped) are closed at HEAD. Of the 9 prior records from review-style, 8 are closed and 1 is partial (CC-13: normalizeCoverage still takes research: unknown). The docs delta introduces one minor defect (SKILL.detail.md:699 roster omits review-security-code, now stated in two other places) and two info items (unreadable-input remedy wording, uneven wrapping).

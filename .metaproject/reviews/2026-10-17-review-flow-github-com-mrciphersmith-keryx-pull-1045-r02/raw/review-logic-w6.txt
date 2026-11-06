@@ -1,0 +1,63 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "slices": ["slice-11"],
+  "summary": "Second look at slice-11 (readiness.ts item 3 coverage gate, item 6 omitted check, item 12 quotes-located; research.ts dispatchRuns/packageCoverageErrors; types.ts quote_unlocated). One new major: a closed package that carries the flow 460 mark keeps re-running a coverage gate whose inputs move after close (current reviewer roster, git base resolution that refuses an empty range once the PR merges), so publish, the publish guard and the panel can call a correctly closed round NOT READY. Two lower findings on masking in coverage-md and an unguarded throw path.",
+  "findings": [
+    {
+      "id": "LG-001",
+      "severity": "major",
+      "reviewer": "review-logic",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\",",
+      "problem": "coverageGated exempts only closed packages WITHOUT the flow 460 mark, on the stated reason that a closed package's recorded state is final and publish, the publish guard and the panel must not suddenly call it NOT READY. A closed package WITH the mark (every package ingested since flow 460, since renderCoverage always writes it) still re-runs packageCoverageErrors in reviewersCheck on every computeReadiness, and that gate's inputs are not frozen at close: requiredReviewers reads the project's current roster (collectReviewers(root), detectProjectStack), and for a dispatch with depth light effectiveDepth -> packageDiffStats resolves the base from git now. A PR package records no target.base (e.g. this round's manifest.target is {kind, ref, head}), so once the PR is merged by merge commit or fast-forward every resolveBase candidate (origin/main, main, ...) gives merge-base == head, resolveDiffBase returns the emptyRangeWarning error, effectiveDepth returns depth full with refused, and reviewerSetErrors demands the full set that the light round legitimately did not run.",
+      "impact": "A light-round PR review closed READY turns NOT READY on item 3 after the PR merges (or after any reviewer skill is added to the project): `keryx review publish` refuses it, the publish guard (reviewPublishRefusal -> computeReadiness(newest.dir)) refuses `gh pr review` on that PR, and the review panel shows a closed round as failing. The repair the item prints (dispatch the missing reviewers / re-ingest) is not available on a closed package. This is exactly the outcome the coverageGated comment says it prevents, so the deliberate choice's reason does not hold for marked packages.",
+      "suggested_fix": "Gate the re-run of the coverage gate on the package being open (manifest.status !== \"closed\"): `review complete` already ran packageResearchErrors before closing, so a closed package's item 3 should report the recorded close (as it does for unmarked packages). If a closed-package recheck is wanted, freeze its inputs at close (record the required set / effective depth in research.json at complete) instead of recomputing from the current roster and git.",
+      "evidence": "src/review/readiness.ts computeReadiness sets coverageGated = mark || status !== closed; reviewersCheck calls packageCoverageErrors(ctx.dir, dispatch) whenever coverageGated. src/review/research.ts packageCoverageErrors -> src/review/coverage.ts coverageErrors -> effectiveDepth (record.depth === 'light') -> packageDiffStats -> diffOfTarget -> resolveDiffBase -> prior-round.ts resolveBase, whose comment states 'A merged pull request's merge-base with origin/main is its own head (an empty range)' and returns the empty candidate, then emptyRangeWarning yields an error -> effectiveDepth returns {depth:'full', refused}. reviewerSetErrors then calls requiredReviewers(options.root, ...) which reads collectReviewers(root) at call time. src/review/managed.ts renderCoverage always writes COVERAGE_MD_MARK. Callers on closed packages: src/review/publish.ts publishReview, src/review/publish-guard.ts reviewPublishRefusal, src/tui/review-panel.ts. Round 1 manifest target has no base: {'kind':'pr','ref':'https://github.com/MrCipherSmith/keryx/pull/1045','head':'dff7a38...'}.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/readiness.ts:coverageGated in computeReadiness (feeds both reviewersCheck coverage gate and coverageMdCheck omitted check)"],
+        "enumeration_method": "keryx ctx rg 'COVERAGE_ENTRY|COVERAGE_MD_MARK|coverageGated|coverageMd' src/review: coverageGated is computed once and read by two checks; only the item 3 read re-runs time-dependent inputs (the item 6 omitted check reads coverage.md and research.json, both frozen at close). computeReadiness callers enumerated with keryx ctx rg 'computeReadiness\\(' src: managed.ts complete (open package, unaffected), publish.ts, publish-guard.ts, review-panel.ts (all reach closed packages)."
+      }
+    },
+    {
+      "id": "LG-002",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "if (omitted.length > 0) {",
+      "problem": "coverageMdCheck returns early on an omitted reviewer, before the pre-existing 'lying' check runs. When coverage.md both omits a run and lists an unfinished reviewer as 'run', the item names only the omission; the contradiction is reported only after the next repair cycle.",
+      "impact": "The item's evidence is incomplete for a package with both defects; an operator who repairs coverage.md by an explicit --coverage list (which the repair text warns against but does not prevent) can fix the omission and still fail on the second defect, discovering it one cycle later.",
+      "suggested_fix": "Compute both `omitted` and `lying`, and return one bad() whose evidence names each non-empty set.",
+      "evidence": "src/review/readiness.ts coverageMdCheck: `lying` is computed, then `if (omitted.length > 0) { return bad(...omits...) }` precedes `if (lying.length === 0) return ok(...)`, so `lying` is discarded on that path.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-003",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+      "problem": "packageResearchErrors wraps packageCoverageErrors in try/catch (returns 'research ledger unreadable or invalid JSON'), and reviewCompletionBlockers wraps again; readiness calls packageCoverageErrors unguarded, so a throw from the roster/stack scan (collectReviewers, detectProjectStack, readSkill) or an operator-decision read rejects computeReadiness as a whole instead of failing item 3. No input that throws there was identified, so this is an observation, not a reproduced defect.",
+      "impact": "If reachable, publish and the publish guard would surface a raw exception rather than a readiness item, and complete and readiness would disagree in shape (refusal text vs thrown error) on the same package.",
+      "suggested_fix": "Catch around packageCoverageErrors in reviewersCheck and turn the error into a coverage-gate problem string, matching packageResearchErrors. Settled by confirming whether collectReviewers/detectProjectStack can throw on an unreadable skill directory.",
+      "evidence": "src/review/research.ts packageResearchErrors: the coverage call sits inside `try { ... } catch { return [\"research ledger unreadable or invalid JSON\"]; }`; src/review/readiness.ts reviewersCheck has no try/catch around the same call.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 }
+}
+```
+
+## Logic Review (second look, slice-11)
+
+- Scope: slice-11 (src/review/readiness.ts, src/review/research.ts, src/review/types.ts), unchanged since round 1. Spec gate: intent read from flow 460 description context in the diff comments; no unimplemented criterion found in this slice.
+- Round 1 already reported: duplicated COVERAGE_ENTRY use, the routed-out/explicit-list omission repair (F-008), the git cost of the coverage gate in readiness (highload/perf), the disposition trust model of quotes-located (SEC-004). Not repeated.
+- New: LG-001 (major) — closed packages carrying the flow 460 mark re-run a coverage gate whose inputs move after close; a merged light-round PR (no recorded base) or a later roster change flips a closed READY round to NOT READY in publish, the publish guard and the panel. LG-002 (minor) — the omitted check masks the "lying" check. LG-003 (info) — readiness calls the coverage gate without the try/catch complete uses.
+- quotesLocatedCheck, dispatchRuns, ingestScreenedOf, packageCoverageErrors extraction and the quote_unlocated type read as correct.
+
+Routing audit: graph_used: no (not-relevant, slice supplied); wiki_used: no (not-relevant, intent stated in code comments); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

@@ -1,0 +1,81 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 09 is test code plus one roster entry; it is clear and well named. Three low-cost maintenance findings (repeated casts, three near-identical held-finding builders, a shadowed name) and one info.",
+  "slices": ["slice-09"],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "findings": [
+    {
+      "id": "CC-001",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/review/premise.test.ts",
+      "line": 59,
+      "problem": "`result.findings[0] as StructuredReviewFinding` is repeated 10+ times (verdicts, rejections, external-findings and 'the model is recorded' tests), each time re-casting the same first element.",
+      "impact": "Every new assertion copies the cast; a change to the return type of mergePremises touches all sites. A one-line helper removes the noise.",
+      "suggested_fix": "Add `const first = (r: { findings: readonly unknown[] }) => r.findings[0] as StructuredReviewFinding;` next to `reasons` and use it at each site.",
+      "evidence": "Slice diff lines 393, 399, 414, 423, 496, 510, 516, 587-588, 628 (premise.test.ts).",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-002",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/review/premise-decision.test.ts",
+      "line": 38,
+      "problem": "Three test files each define their own held-finding builder with near-identical content: `heldFinding` (premise-decision.test.ts), `held` (readiness.test.ts, same premise object) and `held` (verdict.test.ts, same premise plus an owner-decision options branch). The premise-question decision literal (same finding/answer/reason/at/actor fields) also recurs in premise-decision.test.ts (`answer`), readiness.test.ts (inline) and verdict.test.ts (`decision`).",
+      "impact": "Three copies of one fixture must change together when the held-premise shape changes (e.g. a new required premise field).",
+      "suggested_fix": "Export one heldFinding/premiseAnswer fixture pair from a shared test helper and import it in the three files.",
+      "evidence": "Slice diff lines 118-130, 832, 854, 917-919.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC-003",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/review/verdict.test.ts",
+      "line": 34,
+      "problem": "The local helper `decision = (finding: string, ...)` names its first parameter `finding`, shadowing the module-level `finding(id, severity, problem, extra)` factory in the same file; the parameter is a finding id, not a finding.",
+      "impact": "Two meanings of `finding` in one describe block; a reader editing `decision` could call the wrong one. No call site misuses it today.",
+      "suggested_fix": "Rename the parameter to `findingId`.",
+      "evidence": "Slice diff line 919 vs line 910.",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-004",
+      "severity": "info",
+      "reviewer": "review-clean-code",
+      "file": "src/review/premise-decision.test.ts",
+      "line": 168,
+      "problem": "One test titled 'a decision names a finding by global_id or by id, and any other decision leaves the finding as it was' asserts two behaviours, as do several premise.test.ts rejection tests that loop over 3-4 variants.",
+      "impact": "When one variant fails the title does not say which. Observation only; no wrong behaviour.",
+      "suggested_fix": "Split into two tests or use test.each so a failure names its variant.",
+      "evidence": "Slice diff lines 168-172.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## Clean Code Review
+
+### Summary
+The slice is almost entirely new tests (premise, premise-decision, premise-embedded, readiness, verdict, dedupe) plus one added roster name in `src/trigger/unattended.ts`. Names are intention-revealing, each rejection reason has its own test, and comments match the code. Nothing blocks; only fixture duplication and one shadowed name.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 3 | info: 1
+
+### Findings
+- Naming: CC-003.
+- Functions: none in production code.
+- Comments: no issues found.
+- Error handling: no issues found.
+- DRY: CC-001, CC-002.
+- SOLID: not applicable (test code; unattended.ts is one list entry).
+- Info: CC-004.
+
+### Clean Areas
+Magic numbers (test fixtures), OCP/ISP/LSP/DIP, error handling, comments.

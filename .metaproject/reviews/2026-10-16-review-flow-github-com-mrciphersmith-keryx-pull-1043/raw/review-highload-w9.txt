@@ -1,0 +1,51 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice 09 is test files plus one roster line; no hot-path or load-bearing production code is changed here. One minor: the premise-decision store's read-modify-write is unserialised and the new tests cover only sequential writes.",
+  "slices": ["slice-09"],
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "minor",
+      "problem": "recordPremiseDecision (and recordOperatorDecision) read the whole operator-decisions.json, append, and write it back atomically but with no lock or compare-and-swap, so two concurrent writers lose one entry. The new store tests (shares the file with the gate decisions) only exercise sequential writes.",
+      "impact": "Two operator answers recorded at the same moment (the shell review_decide_premise card and a terminal `keryx review decide-premise` on the same package, or two cards for different held findings) both read N entries and each writes N+1; the later write drops the earlier answer. Fail-safe direction: the dropped finding stays `awaiting`, readiness stays failing and the operator must answer again, so no wrongly cleared hold. Load is operator-driven (a handful of writes per package), not RPS.",
+      "suggested_fix": "Serialise the read-modify-write per package (an O_EXCL lock file or an in-process mutex keyed on the path) or re-read and retry on a changed mtime; add a test that fires two recordPremiseDecision calls with Promise.all and expects both entries. Or document the single-writer assumption next to the function.",
+      "evidence": "src/review/operator-decisions.ts:118-125 and :149-157: readEntries then writeFileAtomic of [...entries, kept]. src/review/premise-decision.test.ts 'shares the file...' awaits each write in turn.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "file": "src/review/operator-decisions.ts",
+      "line": 118
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+## High-Load Review
+
+### Review Scope
+- Slice: slice-09 (src/review/dedupe.test.ts, premise-decision.test.ts, premise-embedded.test.ts, premise.test.ts, readiness.test.ts, verdict.test.ts, src/trigger/unattended.ts)
+- Load profile: not provided; severity assumes moderate-to-high traffic, though this code is an operator-driven CLI/review pipeline.
+
+### Summary
+The slice is almost entirely tests of premise merge, decision store, readiness and verdict. The only production change is adding `review_decide_premise` to the unattended-excluded operator-confirm roster, which is correct and bounded. The one concurrency observation is the unserialised decision-file read-modify-write (HL-001), fail-safe and low-frequency.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 1 | info: 0
+
+### Findings
+
+#### Concurrency & Race Conditions
+HL-001 (minor), see above.
+
+#### Resource Management
+None detected. Tests clean up temp dirs in afterEach.
+
+#### Caching / Database / Async / Retry / Idempotency
+None detected. Roster addition keeps an unattended run from answering the premise card.
+
+### Clean Areas
+Caching, DB access, queues, retry/timeout, idempotency reviewed; no findings in this slice.

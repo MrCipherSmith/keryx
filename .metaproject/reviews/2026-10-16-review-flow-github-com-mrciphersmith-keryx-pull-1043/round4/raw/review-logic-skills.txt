@@ -1,0 +1,39 @@
+REVIEW_RESULT review-logic (skills delta, PR #1043 round 4)
+
+```json keryx:findings
+{
+ "reviewer": "review-logic",
+ "findings": [
+  {
+   "id": "LG4-001",
+   "severity": "info",
+   "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+   "line": 1165,
+   "quote": "Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer.",
+   "problem": "The sentence was narrowed to 'a first ingest' and now says nothing about a later ingest. managed.ts:515-519 distinguishes them: with inherited premises the file is kept, otherwise it is renamed to premises.superseded.json. A reader cannot tell what a later ingest without --premises does.",
+   "impact": "Reader ambiguity only; behaviour is unchanged and RG2-004 already tracks the silent drop.",
+   "suggested_fix": "Add 'a later round keeps the premises it carried' or drop 'first'.",
+   "confidence": "low"
+  },
+  {
+   "id": "LG4-002",
+   "severity": "info",
+   "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+   "line": 65,
+   "quote": "a downgrade of an external or `review-security-code` finding, of a `minor`, or below `minor`;",
+   "problem": "With the new `below-minor` item at the head of the same list, the trailing 'or below `minor`' is the downgrade-below-threshold case (premise.ts:384) but reads as a repeat of below-minor. The list is accurate, only the wording overlaps.",
+   "impact": "None functional; a by-hand applier refuses the same claims either way.",
+   "suggested_fix": "Word the last item as 'a downgrade to `info`'.",
+   "confidence": "low"
+  }
+ ],
+ "prior_dispositions": [
+  {"id": "r3-review-logic-skills#LG3-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1127 now counts a new finding sharing a carried display id as a collision, renumbered in the saved reviewer results; review-premise/SKILL.md:63 matches (claim names the id or a carried global_id)."},
+  {"id": "r3-review-logic-skills#LG3-002", "disposition": "closed", "evidence": "feature-dev/SKILL.md:51 adds the Premise field to the Step 3 spec list that Step 1 (:42) points at; step 4 (:52) still saves the spec."},
+  {"id": "r2-review-logic-skills#LG2-003", "disposition": "closed", "evidence": "review-premise/SKILL.md:65 'For one finding those are' now lists below-minor, not-a-downgrade, raise-severity and severity-without-downgrade, matching premise.ts:339, :355, :371-379."},
+  {"id": "r2-review-style-skills#R2-002", "disposition": "closed", "evidence": "job-orchestrator/SKILL.md:1273-1285 arXiv-bound and 'ceiling' paragraphs are identical to origin/main's wrap (origin/main:1260-1271)."}
+ ]
+}
+```
+
+Summary: all four prior review-logic skills findings are closed. The delta introduces no blocker, major or minor defect; two info wording notes (LG4-001, LG4-002). The feature-dev step 4/5 merge leaves no dangling step-number references.

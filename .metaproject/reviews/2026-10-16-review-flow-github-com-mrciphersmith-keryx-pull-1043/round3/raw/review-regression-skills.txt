@@ -1,0 +1,64 @@
+STATUS: DONE
+
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r2-review-regression-skills#NEW-1", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1127 now dispatches Wave D with display ids, says a new finding has no global_id yet, and a claim names the id; matches premise.ts mergedKeyNames/claimTargets (premise.ts:201-208) and managed.ts:304 minting after Wave D."},
+    {"id": "r2-review-regression-skills#NEW-2", "disposition": "partial", "evidence": "id is now C-NNN with the URL in a `url` field in both review-premise/SKILL.md (source row) and review-pr-feedback/SKILL.md:366, and the claims are saved to pr-comments/<owner>__<repo>__<n>.premise.json; but the operator's answer for a held comment is still recorded only on the Step 7 entry (SKILL.md:390), not in the durable record or the sidecar."},
+    {"id": "r2-review-regression-skills#NEW-3", "disposition": "closed", "evidence": "session-plan-bridge.mdc:39 (bundled and .metaproject copies) now names `step-0` ... `step-14` and `step-10b`; session-plan-bridge-contract.test.ts pins both the skill and the rule."},
+    {"id": "review-regression-skills#RG-002", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md Step 10b and the Wave D bullet (:1129) say the operator question is asked at the tail after `ingest --premises` wrote findings.json, never during Wave D; step 9 (:59) lists ingest with --premises, then the answer, then readiness."},
+    {"id": "review-regression-w8#RG8-003", "disposition": "closed", "evidence": "src/commands/operator-confirm-review.ts:306 now says `(1-11)` and states item 11 is never waived; docs cli-reference.md:4857 says eleven-item."},
+    {"id": "r2-review-regression-code#RG2-001", "disposition": "closed", "evidence": "src/review/premise-question.ts:209 calls recordFinishedRound(packageDir, \"decide-premise\", ...) after the findings.json rewrite."},
+    {"id": "r2-review-regression-code#RG2-002", "disposition": "closed", "evidence": "src/review/dedupe.ts:356 carries a premise only from a member at the canonical's severity."},
+    {"id": "r2-review-regression-code#RG2-003", "disposition": "closed", "evidence": "src/commands/operator-confirm-review.ts:306 (same site as RG8-003) now covers 1-11."},
+    {"id": "r2-review-regression-code#RG2-004", "disposition": "closed", "evidence": "src/review/managed.ts:507-511 renames premises.json to PREMISES_SUPERSEDED_FILE instead of deleting it."}
+  ],
+  "findings": [
+    {
+      "id": "RG3-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 1127,
+      "quote": "display ids must be unique in the package (ingest refuses two findings under one key): renumber a collision before dispatch.",
+      "problem": "The text does not say where to renumber. Ingest's collision check (managed.ts:452-459) runs on the final findings after dedupe, over the ids in the saved reviewer results. A renumber done only in the judge's payload leaves both reviewers' `F-001` in the results, so ingest refuses, and the judge's claims name an id that exists nowhere in the package.",
+      "impact": "Trigger: two reviewers both return F-001 (the collision case the text handles). Outcome: either ingest refuses the round, or, if the results are edited afterwards, the judge's claims name the old id and are rejected as unknown-finding, losing the held finding.",
+      "suggested_fix": "Say the renumber is made in the saved reviewer results before Wave D (so the judge, the claims and ingest all see the same ids), not in the dispatch payload alone.",
+      "evidence": "managed.ts:304 and :452-459; premise.ts:201-208.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG3-002",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": 366,
+      "quote": ".metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json",
+      "problem": "The sidecar sits in the directory whose `*.json` files are read as pr-comments records (src/learning/signals/reviewer-comment.ts:25). The reader treats a file without `seen` as empty, so nothing breaks today, but the dependency is accidental.",
+      "impact": "No failure now; a future reader of that directory that does not tolerate a non-record `.json` would misread it.",
+      "suggested_fix": "Acceptable as is; optionally note the name is reserved for the premise sidecar.",
+      "evidence": "reviewer-comment.ts:22-29, :60-66.",
+      "confidence": "low",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG3-003",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.detail.md",
+      "line": 3,
+      "quote": "Nothing here is an instruction the agent must follow at a step",
+      "problem": "SKILL.md:2156 says `Use the template in SKILL.detail.md` for the post-mortem, so the file does hold material the agent follows at a step. The header contradicts the link.",
+      "impact": "Wording only; an agent that treats the file as optional skips the post-mortem template.",
+      "suggested_fix": "Reword the header to 'templates and examples the steps link to'.",
+      "evidence": "SKILL.md:1955, :2156, :2197.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    }
+  ]
+}
+```
+
+Summary: of 9 prior review-regression findings, 8 closed and 1 partial (NEW-2: ids aligned, operator answer still only on the Step 7 entry). R2-002 (job-orchestrator reference moved to SKILL.detail.md in b8ed54038) verified: three links at SKILL.md:1955, :2156, :2197, ceiling 2199 matches the file's 2199 lines, KNOWN_SKILL_COMPANION_DOCUMENTS names job-orchestrator, install and round-bound tests adjusted; no regression found. New: 0 blocker, 0 major, 1 minor, 2 info.

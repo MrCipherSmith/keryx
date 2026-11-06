@@ -1,0 +1,209 @@
+[
+ {
+  "id": "r3-review-architecture-code#R3-ARCH-001",
+  "severity": "minor",
+  "file": "src/review/premise-question.ts",
+  "line": 81,
+  "problem": "isReviewPackageDir hard-codes the package layout (.metaproject/reviews/<id> and .metaproject/flows/<flow>/reviews/<id>) in the premise-answer module, a third encoding of it beside reviewsRoot/flowsRoot in managed.ts:89 and PACKAGE_GLOBS in prior-round.ts:128. commands/automatic-review.ts (the approval policy) now imports this predicate from the answer module.",
+  "impact": "A change to the package location (a new root, a configurable reviews dir) must be made in three places; if premise-question's copy lags, --prior and carryPremiseDecisions refuse a real package, silently (carry returns []) while the other two accept it. The approval policy depends on an unrelated answer module for a layout fact.",
+  "suggested_fix": "Move the predicate next to reviewsRoot/flowsRoot (managed.ts or a small package-location module) and build it from those roots; import it from there in premise-question.ts and automatic-review.ts.",
+  "evidence": "premise-question.ts:81-95; managed.ts:89,1110-1115; prior-round.ts:128; automatic-review.ts:14 import.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r3-review-clean-code-code#CC3-1",
+  "severity": "minor",
+  "file": "src/review/premise-question.ts",
+  "line": 82,
+  "problem": "isReviewPackageDir restates the rule for where a review package lives (directly under .metaproject/reviews/ or .metaproject/flows/<flow>/reviews/) that prior-round.ts already owns as PACKAGE_GLOBS (prior-round.ts:128). The predicate is also a generic path check housed in the premise-answer module, and src/commands/automatic-review.ts now imports it from there for the --prior approval.",
+  "impact": "A change to the package layout (a new location, a rename of the flows tree) needs two edits in two modules; the one that is missed makes --prior accept or refuse a directory the round detector treats the opposite way, which is the SEC2-001 boundary.",
+  "suggested_fix": "Put one `isReviewPackageDir(dir, projectRoot)` next to PACKAGE_GLOBS in prior-round.ts (or a small review-package-path module) and import it from premise-question.ts and automatic-review.ts.",
+  "evidence": "premise-question.ts:82-98; prior-round.ts:128; automatic-review.ts import of isReviewPackageDir from ../review/premise-question",
+  "confidence": "medium",
+  "principle": "Clean Code G5 duplication / SRP"
+ },
+ {
+  "id": "r3-review-clean-code-code#CC3-2",
+  "severity": "minor",
+  "file": "src/commands/automatic-review.ts",
+  "line": 253,
+  "problem": "touchesOperatorOnly answers two questions under a name that states one: whether a path hits an operator-only name, and (last clause, `!real.startsWith(realDir + sep)`) whether the resolved target escapes the package. A reader of the call site at :323 sees 'not operator-only' and cannot tell it also decides containment. It also resolves symlinks repeatedly: realTarget(resolved) runs at :322 and again inside at :259, and realTarget(dir) at :260 for every approved patch path.",
+  "impact": "A later edit that narrows the helper to its name (for example to reuse it for a read check) silently drops the containment guard; the repeated filesystem walks are cheap today but hide that the caller and the helper must agree on the same real path.",
+  "suggested_fix": "Split into `touchesOperatorOnlyName` and `escapesPackage`, compute `real` once in the approval and pass it in; keep the call site reading `inside && dataExtension && !operatorOnly`.",
+  "evidence": "automatic-review.ts:253-262, :322-323",
+  "confidence": "medium",
+  "principle": "Clean Code G11/N4 (name says one thing), G5"
+ },
+ {
+  "id": "r3-review-clean-code-code#CC3-3",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "line": 238,
+  "problem": "normaliseCarriedPremise grew to five exit paths and three derived flags (stale, stray, stillADowngrade) mixing three rules: strip the operator answer, strip a severity a non-downgrade verdict cannot carry, and re-validate a downgrade against the finding's severity or drop the premise. Each rule is commented in the doc block, but the function body interleaves them.",
+  "impact": "Adding a verdict or a fourth rule needs reasoning about which early return it must precede; the two `{ ...finding, premise: ... }` branches differ only by which keys are removed.",
+  "suggested_fix": "Extract `withoutStraySeverity(judgement)` and `downgradeStillHolds(finding, premise)` so the body reads: strip operator; if not downgraded return stripped; if downgrade no longer holds drop the premise; else restamp severity.",
+  "evidence": "premise.ts:238-259",
+  "confidence": "medium",
+  "principle": "Clean Code F3/G30 (one level of abstraction, function does one thing)"
+ },
+ {
+  "id": "r3-review-clean-code-code#CC3-4",
+  "severity": "minor",
+  "file": "src/review/premise-question.ts",
+  "line": 171,
+  "problem": "answerPremiseQuestion carries a mutable `rerecord` flag that the applyFirst callback sets and the undo closure clears, then is read after recordPremiseDecision returns: control state passed through a captured variable across two closures and a lock boundary. The function also now does four things (apply to findings.json with undo, append the decision, decide whether the registry vouched, re-record and warn).",
+  "impact": "The invariant 'rerecord is true only when the findings write landed and the decision append did not undo it' lives in three places (assignment at 202, reset at 205, read at 211); a future early return in the callback that forgets the reset leaves the registry re-recording a package whose answer was rolled back.",
+  "suggested_fix": "Have the callback return `{ undo, vouched }` (or have recordPremiseDecision return what applyFirst returned) so the caller reads one value after the lock instead of a flag mutated by two closures; move the registry step into a small `reRecordRegistry(packageDir, registry)` helper.",
+  "evidence": "premise-question.ts:171-216 (delta lines 124-171)",
+  "confidence": "medium",
+  "principle": "Clean Code G36/F3 (flag state across closures, function does one thing)"
+ },
+ {
+  "id": "r3-review-clean-code-skills#CC3-001",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+  "line": 277,
+  "quote": "**A flow sourced from a finding: check its premise before freeze.**",
+  "problem": "The CC2-003 fix went the other way: it removed the heading instead of giving the freeze block one. 'Then freeze and start' with `flow freeze --yes` / `flow start` (:279-284) now belongs to the tasks-gate section (:257-275). The mandatory freeze of every flow reads as the tail of a verification-task section.",
+  "impact": "An agent skimming by heading finds no freeze step; feature-dev:42 also cites the paragraph by its former heading title.",
+  "suggested_fix": "Keep a heading for the finding-sourced paragraph and add '### Freeze and start' before :279.",
+  "confidence": "high"
+ },
+ {
+  "id": "r3-review-clean-code-skills#CC3-002",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md",
+  "line": 42,
+  "quote": "its claims object goes into the Implementation Spec under **Premise**",
+  "problem": "The Implementation Spec template (:45-50) has no Premise field: What, Why, Scope, Acceptance criteria, Approach, Test strategy. The instruction names a slot nothing defines, and .feature-spec.md (:51) is saved from that template.",
+  "impact": "The recorded claims have no defined place; a resumed run cannot find the operator's answer.",
+  "suggested_fix": "Add '**Premise**: claims object and the operator's answer, when the input was a finding' to the template list at :45-50.",
+  "confidence": "high"
+ },
+ {
+  "id": "r3-review-clean-code-skills#CC3-003",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+  "line": 73,
+  "quote": "comment or commit message giving a reason (`git log -L <start>,<end>:<file>`,",
+  "problem": "The delta made git conditional on the host (Read-only row, source row :66), but question 1's signal-gathering text (:73-76) still names git log -L, git blame and git show as the method, with no keryx shell fallback.",
+  "impact": "A judge on keryx shell reads question 1 as an instruction to run commands it does not have; two statements of the same capability disagree inside one page.",
+  "suggested_fix": "Add 'or the excerpts in context_files where you have no git' at :73-74.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r3-review-clean-code-skills#CC3-004",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-style/SKILL.md",
+  "line": 28,
+  "quote": "except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).",
+  "problem": "The same host-git caveat is pasted twice (Purpose sentence and 'Supplied text first') into about 14 reviewer skills, plus the input schema and the orchestrator. The delta lengthened both copies, so the next host-fact edit is 30+ edits across two trees; the law is already named 'law 4'.",
+  "impact": "Drift risk: round 2 already had to correct this wording everywhere.",
+  "suggested_fix": "State it once in the shared reviewer laws and keep a one-clause pointer in each skill.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r3-review-logic-code#LG3-001",
+  "severity": "minor",
+  "file": "src/commands/automatic-review.ts",
+  "line": 258,
+  "quote": ".some((segment) => OPERATOR_ONLY_NAMES.has(segment.toLowerCase()));",
+  "problem": "The case fold that closes LG2-001/SEC2-001 is JavaScript toLowerCase. A case-insensitive filesystem does not compare names that way: NTFS upcases both names through its $UpCase table, and APFS uses Unicode case folding. Some characters are not ASCII and do not lower-case to ASCII, yet upcase or fold to an ASCII letter. Examples: dotless '\u0131' (U+0131) upcases to 'I', and long 's' '\u017f' (U+017F) upcases to 'S' and case-folds to 's'. So `operator-dec\u0131sions.json` and `operator-deci\u017fions.json` pass the name check. On such a filesystem they may name the same file as `operator-decisions.json`. When the decisions file does not exist yet (no operator answer so far), realTarget returns the spelling as written, so the symlink-resolved check does not catch it either.",
+  "impact": "Trigger: in automatic review, an agent's apply_patch creates `.metaproject/reviews/<id>/operator-deci\u017fions.json` before the operator has answered anything. If the filesystem folds that name onto operator-decisions.json, the patch is approved without asking. readPremiseDecisions then opens the agent's file, and a forged premise-question record is trusted by the verdict, readiness item 11 and the flow gate. The comment at :213-214 claims the fold matches APFS/NTFS, and that claim is what fails. Whether each filesystem folds these two characters this way is not verified here.",
+  "suggested_fix": "Refuse any patch target segment that is not plain ASCII (`/^[\\x20-\\x7e]+$/`) before the name check, since package data names are keryx's own. Or compare both `segment.toLowerCase()` and `segment.toUpperCase().toLowerCase()` against OPERATOR_ONLY_NAMES. Add the two spellings to the 'folds case' test.",
+  "evidence": "automatic-review.ts:213-216 (comment and lower-cased set), :232-246 realTarget returns a non-existent path as written, :253-262 touchesOperatorOnly. '\u0131'.toLowerCase() === '\u0131' and '\u0131'.toUpperCase() === 'I'; '\u017f'.toLowerCase() === '\u017f' and '\u017f'.toUpperCase() === 'S'. To settle it: create operator-deci\u017fions.json on an APFS case-insensitive volume and on NTFS, then check whether operator-decisions.json opens it.",
+  "confidence": "low"
+ },
+ {
+  "id": "r3-review-logic-skills#LG3-001",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+  "line": null,
+  "quote": "renumber a collision before dispatch. A claim names the `id`; it names the `global_id` only when a carried finding shares a new one's display id.",
+  "problem": "The two sentences give opposite instructions for the one case the second sentence exists for: a new finding whose display id equals a carried finding's. 'Renumber a collision' does not cover it, because ingest keys by global_id (managed.ts:1679-1683): carried `<oldReview>#F-001` and new `<thisReview>#F-001` do not collide, so ingest never refuses them. The second sentence then lets the carried one be named by its global_id. That leaves the new one named by bare `F-001`. claimTargets matches `finding.id === id` for both (premise.ts:219), so that claim is rejected as ambiguous-finding (premise.ts:325). The text also says the new finding has no global_id to name. review-premise's `findings` row (review-premise/SKILL.md:63) repeats the same rule.",
+  "impact": "Trigger: in a delta round, a carried finding with no carried premise and a new finding share a display id. The judge's claim on the new finding is rejected and listed in scope.md. That finding goes on unjudged, which fails safe but loses the premise check on it (it can still be held or lowered on a rerun). The final state is not wrong.",
+  "suggested_fix": "Count a new finding that shares a carried finding's display id as a collision too, and renumber the new one before dispatch. Then every claim can name the display id, except one that targets the carried finding, which names its global_id. Or say the orchestrator may pass the new finding's future key `<reviewId>#<id>` as its global_id. Use the same wording in the review-premise `findings` row.",
+  "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1127; src/gdskills/bundled/skills/review/review-premise/SKILL.md:63; src/review/managed.ts:1670-1683 (assignGlobalIds keeps carried keys; findingKeyCollisions keys by global_id); src/review/premise.ts:218-221, :325.",
+  "confidence": "medium",
+  "reviewer": "review-logic"
+ },
+ {
+  "id": "r3-review-logic-skills#LG3-002",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md",
+  "line": null,
+  "quote": "with none, its claims object goes into the Implementation Spec under **Premise**",
+  "problem": "Step 1 sends the judge's claims to a **Premise** section of the Implementation Spec. Step 3 (lines 44-50) is the list of fields that spec has, and it holds no Premise field: What, Why, Scope, Acceptance criteria, Approach, Test strategy. Step 4 saves the spec to `.feature-spec.md` and gitignores it, so where no flow exists that file is the only record of the premise.",
+  "impact": "A spec writer following Step 3's list leaves the section out, so the judge's claims and the operator's answer are not recorded anywhere. Phase 7 fix cycles then cannot cite them, and a dismissed premise can come back as a requirement.",
+  "suggested_fix": "Add `- **Premise** (only for an input sourced from a finding): the review-premise claims object and the operator's answer, in their words` to the Step 3 list.",
+  "evidence": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md:42 (new text), :44-51 (spec fields, .gitignore). The .metaproject copy is identical.",
+  "confidence": "high",
+  "reviewer": "review-logic"
+ },
+ {
+  "id": "r3-review-regression-skills#RG3-001",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+  "line": 1127,
+  "quote": "display ids must be unique in the package (ingest refuses two findings under one key): renumber a collision before dispatch.",
+  "problem": "The text does not say where to renumber. Ingest's collision check (managed.ts:452-459) runs on the final findings after dedupe, over the ids in the saved reviewer results. A renumber done only in the judge's payload leaves both reviewers' `F-001` in the results, so ingest refuses, and the judge's claims name an id that exists nowhere in the package.",
+  "impact": "Trigger: two reviewers both return F-001 (the collision case the text handles). Outcome: either ingest refuses the round, or, if the results are edited afterwards, the judge's claims name the old id and are rejected as unknown-finding, losing the held finding.",
+  "suggested_fix": "Say the renumber is made in the saved reviewer results before Wave D (so the judge, the claims and ingest all see the same ids), not in the dispatch payload alone.",
+  "evidence": "managed.ts:304 and :452-459; premise.ts:201-208.",
+  "confidence": "medium",
+  "reviewer": "review-regression"
+ },
+ {
+  "id": "r3-review-security-code-code#SEC3-001",
+  "severity": "major",
+  "file": "src/commands/automatic-review.ts",
+  "line": 258,
+  "quote": ".some((segment) => OPERATOR_ONLY_NAMES.has(segment.toLowerCase()));",
+  "problem": "The operator-only guard compares path segments after String.prototype.toLowerCase(). The APFS (and NTFS) name match uses Unicode case folding, and that is wider. U+017F LATIN SMALL LETTER LONG S folds to `s`, and toLowerCase() leaves it as it is, so `operator-deci\u017fions.json` passes `named(dir, resolved)`. The realpath branch catches the name only when operator-decisions.json already exists, because Bun's realpathSync then returns the on-disk name. When it does not exist yet, realTarget appends the missing segment as written, and `named(realDir, real)` misses it too. The extension check passes, since `.json` is unchanged. Once the agent has created the file, the realpath branch returns the agent's own spelling, so later patches are approved as well. readPremiseDecisions opens path.join(dir, 'operator-decisions.json'), and on a case-insensitive volume that finds the agent's file.",
+  "impact": "Attack vector, the same as SEC2-001(a): during an automatic review, hostile PR content steers the orchestrating agent. The agent apply_patches `<bound package>/operator-deci\u017fions.json` with a complete premise-question record: {kind:'premise-question', finding:<held id>, answer:'dismiss', reason, quote, at, actor:'operator', confirmedVia:'terminal', subject:{severity, verdict, problemSha256}}. The subject's problemSha256 is sha256 of the problem text, which the agent can compute. approvesPatchTargets approves the patch with no question. readPremiseDecisions returns the forged record, premiseHoldState returns `dismissed`, and the flow gate and readiness item 11 pass for a held blocker the operator never answered. The precondition is a package with no operator-decisions.json yet, which is the usual state while a held finding waits for its first answer. Probe (scratchpad, HEAD code, APFS): approvesPatchTargets(['.metaproject/reviews/<ID>/operator-deci\u017fions.json']) returns true with no file and again after the file exists; readdir shows only 'operator-deci\u017fions.json'; readFileSync('<dir>/operator-decisions.json') returns its contents.",
+  "suggested_fix": "Do not rely on a JS case mapping to match the filesystem. Either (1) refuse any approved patch target with a segment outside a conservative ASCII set (e.g. /^[A-Za-z0-9._-]+$/), so a name that could alias the operator files always needs the operator; or (2) fold with segment.normalize('NFC').toUpperCase().toLowerCase() (\u017f\u2192S\u2192s, Kelvin K\u2192K\u2192k) and keep (1) as defence in depth. Add `operator-deci\u017fions.json` and `.operator-deci\u017fions.lock/x` to the test at automatic-review.test.ts:16-23.",
+  "evidence": "src/commands/automatic-review.ts:216 builds OPERATOR_ONLY_NAMES with toLowerCase(); :232-246 realTarget appends the non-existent tail as written; :253-262 touchesOperatorOnly; :320-324 approvesPatchTargets. A Bun probe shows 'operator-deci\u017fions.json'.toLowerCase() !== 'operator-decisions.json' and that APFS resolves the name to the same file. The guard approved the path before and after creation, and the ASCII path read back the agent-created file.",
+  "confidence": "high",
+  "reviewer": "review-security-code",
+  "class_scope": {
+   "sites": [
+    "src/commands/automatic-review.ts:216",
+    "src/commands/automatic-review.ts:258"
+   ],
+   "enumeration_method": "grep toLowerCase|OPERATOR_DECISIONS_FILE in src/commands/automatic-review.ts. The only name compares for operator-only files are the set construction (:216) and the segment test (:258), and both cover both members (decisions file, lock dir). The extension compares at :321-322 fail closed on a folded variant (.j\u017fon is not allowed), so they are outside the class."
+  }
+ },
+ {
+  "id": "r3-review-style-skills#R3-001",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md",
+  "line": 42,
+  "quote": "its claims object goes into the Implementation Spec under **Premise**",
+  "problem": "The fix for R2-004 sends the claims to a spec section the spec template does not have: the field list at lines 43-49 is What, Why, Scope, Acceptance criteria, Approach, Test strategy.",
+  "impact": "A feature-dev run with no flow is told to write to a field the template never defines, so each run invents its own place.",
+  "suggested_fix": "Add a conditional '**Premise**: the judge's claims and the operator's answer (only for an issue or comment sourced from a review)' bullet to the spec list.",
+  "confidence": "high"
+ },
+ {
+  "id": "r3-review-style-skills#R3-002",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+  "line": 528,
+  "quote": "recorded as follow-up, not fixed in this flow.\", \"premise: every plan item's comment",
+  "problem": "The new `premise:` constraint is appended on the same line as the `scope:` string, after a comma; every other constraint in the array sits on its own line.",
+  "impact": "Inconsistent array layout in the dispatch template; the added constraint is easy to miss in a diff.",
+  "suggested_fix": "Put the premise string on its own line.",
+  "confidence": "high"
+ },
+ {
+  "id": "r3-review-style-skills#R3-003",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+  "line": 668,
+  "quote": "A failing item but `premise-decisions` is waived only by the operator.",
+  "problem": "Ungrammatical: 'but' needs 'any' ('Any failing item but ...'); as written it is ambiguous in the sentence that sets the non-waivable rule.",
+  "impact": "Reads ambiguously in the one sentence that states the exception.",
+  "suggested_fix": "Write 'A failing item other than `premise-decisions` is waived only by the operator.'",
+  "confidence": "medium"
+ }
+]

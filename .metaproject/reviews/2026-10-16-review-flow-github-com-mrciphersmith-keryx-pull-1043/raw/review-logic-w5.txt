@@ -1,0 +1,28 @@
+STATUS: DONE
+
+```json keryx:findings
+{"reviewer":"review-logic","status":"DONE","slices":["slice-05"],"findings":[]}
+```
+
+## Logic Review
+
+### Summary
+Slice-05 is the tests, ceilings, catalog/manifest entries, the `premiseJudge` tier signal and two schema descriptions. No logic defect found. Checked against src/flow/review-gate.ts: the held/awaiting/dismissed/uphold paths match what the new gate tests assert, and each test exercises one mechanism. The `premiseJudge` floor is applied after the downgrade step, so it beats `light:verifier-execution`, as the test expects. The ceilings recorded in skill-length-ceilings.ts equal the shipped line counts (review-clean-code 538, review-logic 365, review-premise 180, review-orchestrator 1572, flow-orchestrator 686). The skill count is 80 and the four-laws derivation is consistent.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+### Logic Bugs
+None detected.
+### Async & Concurrency
+None detected.
+### Error Handling
+None detected.
+### Null / Undefined Safety
+None detected.
+### Type Contract Violations
+None detected.
+### Edge Cases
+None detected.

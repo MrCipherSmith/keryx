@@ -1,0 +1,61 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 7 delta (fix 898cb41ca). The verify-run promotion moved out of the CLI (review.ts:3615 now only parses claims) into the ingest: ownPackageVerifications (managed.ts:2837-2849) runs right after allocatePackage and promotes only against the packageDir the ingest writes. It refuses when the id names more than one package (reviewPackagesNamed, managed.ts:2811). packageDirById is deleted. The hold carry (premise.ts:781-822) turns each held findings.json premise back into a claim. It drops judge/model/operator from the claim fields (:760, :826-829) and re-runs mergePremises (:811), so self-judgement, held-without-question, owner-decision-without-options, malformed-field, unknown-property and no-judge all refuse. An unreadable or non-array findings.json refuses instead of reading as 'nothing held' (managed.ts:2856-2871, premise.ts:783). scope.md names the carry (premise.ts:692-707). None of the five priors stays open. No forge path was found for an operator answer, a hold release, or a verification promotion. The operator-only guard is unchanged: operator is excluded from the carried claim, and mergePremises builds the premise from a fixed field list (premise.ts:450-460). New: one info (the ambiguity refusal counts a bare flow-side directory with no manifest as a package, so a stray directory can block an ingest that carries verification claims; this fails closed).",
+  "prior_dispositions": [
+    {
+      "id": "r6-review-security-code-code#SEC6-001",
+      "disposition": "closed",
+      "evidence": "review.ts:3609-3615: readVerifications no longer takes --review-id and no longer promotes. managed.ts:270-272: promotion runs after allocatePackage. managed.ts:2848: promoteParentExecutions(claims, packageDir) is given the ingest's own directory, which packagePath resolved with the flow match. managed.ts:2842-2846: an id that names more than one package refuses before anything is written. package-location.ts: packageDirById and flowDirs are removed. Tests: harness-robustness.test.ts 'a standalone package of the same id never promotes a flow-bound ingest's claim' and 'names 2 packages'."
+    },
+    {
+      "id": "r6-review-security-code-code#SEC6-002",
+      "disposition": "closed",
+      "evidence": "premise.ts:799-810 turns each carried held premise into a claim (carriedClaim :826-829, which excludes judge/model/operator via CARRIED_PREMISE_CONTEXT :760). The claims are grouped by judge/model and merged by mergePremises (:811). Any rejection refuses the ingest (:815), which covers self-judgement (:361), challenged-without-evidence (:429), held-without-question (:433), owner-decision-without-options (:440), malformed-field, unknown-property (:327-334, so original_severity is refused) and severity-without-downgrade (:367). The premise is rebuilt from a fixed field list (:450-460), so no planted field survives. managed.ts:519-520 is reworded. Tests: premise.test.ts lines 622-657."
+    },
+    {
+      "id": "LG6-001",
+      "disposition": "closed",
+      "evidence": "managed.ts:2856-2871 readPreviousFindings: ENOENT means a first ingest (undefined). Any other read error, or a JSON parse failure, throws previousFindingsUnreadable. premise.ts:782-783: undefined returns undefined, and a non-array value refuses. The refusal comes before any write, since managed.ts:262-373 only reads up to that point. The test review-premises-cli.test.ts LG6-001 checks that findings.json is left byte-identical. Residual edge, not raised: non-object entries inside a valid array are still skipped silently by heldRecords (premise.ts:832)."
+    },
+    {
+      "id": "r6-review-clean-code-code#CC6-001",
+      "disposition": "closed",
+      "evidence": "The bare cast is gone. The carried premise is re-parsed as a claim and checked by mergePremises (premise.ts:799-815). Malformed options, intent_signals or practice_sources refuse with the merge's reason, not a crash. See premise.test.ts 'options are malformed' and 'malformed field'."
+    },
+    {
+      "id": "RG6-001",
+      "disposition": "closed",
+      "evidence": "premise.ts:692-693 renders 'premise_judge: carried from the previous ingest's findings.json (<judges>)' and 'premise_claims_carried: N' when carried is set. managed.ts:521-526 passes carried only when carriedHolds.ok and carried > 0. A note says upholds and downgrades are not re-applied (premise.ts:702-707). The CLI test asserts the scope.md block and that it never says 'not named'."
+    }
+  ],
+  "findings": [
+    {
+      "id": "SEC7-001",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 2843,
+      "quote": "if (named.length > 1) {",
+      "problem": "The ambiguity refusal counts every package reviewPackagesNamed returns. The standalone side needs a manifest.json, but the flow side counts any directory with the id's name under any flow's reviews/ (managed.ts:2811-2831). An empty or stray directory .metaproject/flows/<any>/reviews/<id> therefore makes every ingest of that id with verification claims refuse. That covers the CLI and the PR bot (bot/run.ts:345, which now also goes through ownPackageVerifications), and the refusal says 'names 2 packages'. Before this delta, ingest never refused on a collision.",
+      "impact": "Availability only, and it fails closed. The refusal grants no promotion, and records are still read only from the ingest's own packageDir (managed.ts:2848), so no claim is promoted wrongly. An agent that can create a directory can stall a re-ingest that carries verifications until someone removes the directory. The refusal message names the directory, so the cause is visible.",
+      "suggested_fix": "Count a flow-side entry as a package only when it holds a manifest.json, as the standalone side does. Or exclude packageDir itself and compare realpaths. Optional: a test with a bare flow directory.",
+      "evidence": "managed.ts:2814-2816 (standalone needs manifest.json) against :2822-2826 (flow entry only needs isDirectory and a matching name); :2838-2846 refusal; bot/run.ts:332-346.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Summary
+
+- Priors: SEC6-001, SEC6-002, LG6-001, CC6-001 and RG6-001 are all closed.
+- Verification promotion: records are read only from the directory this ingest allocates (managed.ts:2848). A same-id package elsewhere never promotes a claim, and an ambiguous id refuses before anything is written. No new forge path. That a record is plain text and that a claim may self-declare `execution` (verify-run.ts:150) are both pre-existing and out of this delta.
+- Hold carry: a carried hold now meets the same merge rules as a fresh claim. The carry only re-applies held verdicts (heldRecords), so it cannot downgrade or release anything. `operator` is never a claim field, and the premise is rebuilt from a fixed list. The gate still recomputes the operator answer from the decisions store, bound to the subject. So a planted answer in findings.json is dropped, and a real one stays valid through the store. The carry cannot release a hold, and it cannot forge an operator answer.
+- Operator-only file guard: the delta does not touch it.
+- New: 1 info (SEC7-001). The ambiguity check counts a bare flow directory without a manifest as a package, which can stall an ingest that carries verifications. It fails closed.
+- Checked and clean: no write happens before the refusals. The judge strings rendered into scope.md come from the same agent-writable trust level as before. The removed `--review-id` regex only guarded the old lookup: packagePath already used the raw id, which round 6 recorded as pre-existing.

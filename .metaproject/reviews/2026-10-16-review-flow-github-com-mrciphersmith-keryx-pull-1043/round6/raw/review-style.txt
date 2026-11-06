@@ -1,0 +1,14 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r5-review-style-skills#R5-001", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:363-365: rule 6 is hard-wrapped again (80/78/60 cols, 3-space continuation), identical to origin/main's form."},
+    {"id": "r5-review-style-skills#R5-002", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1126-1128: renumber bullet now precedes the dispatch bullet (:1127) and :1128 opens with 'The judge's claims', so the antecedent is explicit."},
+    {"id": "r4-review-style-skills#R4-001", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:453-454: precondition 3 stays wrapped with 3-space continuation, consistent with items 4-5."}
+  ],
+  "findings": []
+}
+```
+
+Summary: round 6 skills delta. All prior review-style findings are closed (R5-001, R5-002, R4-001). The delta introduces no new style defects: the Wave D bullets are in reading order, rule 6 is restored to its origin/main wrapping, and precondition 3 and the folded premise constraint (review-pr-feedback/SKILL.md:525) read consistently. New: 0 blocker, 0 major, 0 minor, 0 info.

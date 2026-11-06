@@ -1,0 +1,93 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 3 fix delta (f47ebb0ec..8a9ae3d20, read at HEAD). All 8 attached review-logic findings are closed: the 2 code minors from round 2, the round-1 partial LG8-002 (bare display id through merged_from), and the 5 skill findings (LG-003 and LG2-001..004). The delta adds no blocker or major. It adds one minor: the operator-only patch guard folds case with toLowerCase, which misses characters a case-insensitive filesystem treats as ASCII letters. It also adds three info observations.",
+  "prior_dispositions": [
+    { "id": "r2-review-logic-code#LG2-001", "disposition": "closed", "evidence": "src/commands/automatic-review.ts:216 lower-cases OPERATOR_ONLY_NAMES and :253-262 compares every segment's toLowerCase(), as written and symlink-resolved; tests automatic-review.test.ts:216-23 cover the upper-case spellings." },
+    { "id": "r2-review-logic-code#LG2-002", "disposition": "closed", "evidence": "src/review/premise.ts:238-258: a stale downgrade keeps the finding's severity only when it is major|minor and strictly below original_severity, and otherwise drops the premise. A stray severity on another verdict is stripped. A non-stale ill-formed downgrade still reaches the schema check, which refuses the ingest loudly (managed.ts:493)." },
+    { "id": "r2-review-logic-skills#LG2-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:110 makes git conditional on the host, states that a keryx-shell child has no shell or git, puts git log -L / blame -L output in context_files, and adds the 'history was not read' fallback. :1127 (Wave D) has the same pre-run. review-premise/SKILL.md:112 and review-logic/SKILL.md:31,72 (and the 13 sibling reviewers) carry the same clause." },
+    { "id": "r2-review-logic-skills#LG2-002", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1127: a claim names the display id, and the global_id only for a carried finding. It says new findings have no global_id before ingest, and a display-id collision must be renumbered because ingest refuses it." },
+    { "id": "r2-review-logic-skills#LG2-003", "disposition": "closed", "evidence": "flow-orchestrator/SKILL.md:277 says to apply every refusal of the merge (PREMISE_REJECTION_REASONS). review-premise/SKILL.md:65 lists the single-finding set: uncited, external/security downgrade, downgrade of or below minor, hold without question, owner-decision with <2 options, self-judgement." },
+    { "id": "r2-review-logic-skills#LG2-004", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:528 Step 9 constraint 'premise: ... The premise is recorded: do not run review-premise again before freeze'; flow-orchestrator/SKILL.md:277 'Skip it when the dispatch says the premise is already recorded'." },
+    { "id": "review-logic-w8#LG8-002", "disposition": "closed", "evidence": "src/review/premise.ts:206-209 mergedKeyNames matches a merged_from global_id by its display-id part. claimTargets (:219-221) uses it, so a bare id of an absorbed finding resolves to the surviving record." },
+    { "id": "review-logic-skills#LG-003", "disposition": "closed", "evidence": "Same fix as LG2-001: review-orchestrator/SKILL.md:110 and reviewer-input.schema.json:188 make the history commands host-conditional, and the orchestrator supplies the excerpts on keryx shell." }
+  ],
+  "findings": [
+    {
+      "id": "LG3-001",
+      "severity": "minor",
+      "file": "src/commands/automatic-review.ts",
+      "line": 258,
+      "quote": ".some((segment) => OPERATOR_ONLY_NAMES.has(segment.toLowerCase()));",
+      "problem": "The case fold that closes LG2-001/SEC2-001 is JavaScript toLowerCase. A case-insensitive filesystem does not compare names that way: NTFS upcases both names through its $UpCase table, and APFS uses Unicode case folding. Some characters are not ASCII and do not lower-case to ASCII, yet upcase or fold to an ASCII letter. Examples: dotless 'ı' (U+0131) upcases to 'I', and long 's' 'ſ' (U+017F) upcases to 'S' and case-folds to 's'. So `operator-decısions.json` and `operator-deciſions.json` pass the name check. On such a filesystem they may name the same file as `operator-decisions.json`. When the decisions file does not exist yet (no operator answer so far), realTarget returns the spelling as written, so the symlink-resolved check does not catch it either.",
+      "impact": "Trigger: in automatic review, an agent's apply_patch creates `.metaproject/reviews/<id>/operator-deciſions.json` before the operator has answered anything. If the filesystem folds that name onto operator-decisions.json, the patch is approved without asking. readPremiseDecisions then opens the agent's file, and a forged premise-question record is trusted by the verdict, readiness item 11 and the flow gate. The comment at :213-214 claims the fold matches APFS/NTFS, and that claim is what fails. Whether each filesystem folds these two characters this way is not verified here.",
+      "suggested_fix": "Refuse any patch target segment that is not plain ASCII (`/^[\\x20-\\x7e]+$/`) before the name check, since package data names are keryx's own. Or compare both `segment.toLowerCase()` and `segment.toUpperCase().toLowerCase()` against OPERATOR_ONLY_NAMES. Add the two spellings to the 'folds case' test.",
+      "evidence": "automatic-review.ts:213-216 (comment and lower-cased set), :232-246 realTarget returns a non-existent path as written, :253-262 touchesOperatorOnly. 'ı'.toLowerCase() === 'ı' and 'ı'.toUpperCase() === 'I'; 'ſ'.toLowerCase() === 'ſ' and 'ſ'.toUpperCase() === 'S'. To settle it: create operator-deciſions.json on an APFS case-insensitive volume and on NTFS, then check whether operator-decisions.json opens it.",
+      "confidence": "low"
+    },
+    {
+      "id": "LG3-002",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 208,
+      "quote": "if (rerecord) {\n    const recorded = recordFinishedRound(packageDir, \"decide-premise\", registryPlace(registry));",
+      "problem": "The registry vouch check runs inside the decisions lock (:199), but the re-record runs after the lock is released (:208-213). Take two answers to one package that overlap (a terminal decide-premise and a review_decide_premise card). A writes and releases. B takes the lock and finds the registry not yet re-recorded, so vouched=false. A then re-records the A-only state. B writes and skips the re-record. The registry ends up vouching for hashes that no longer match findings.json.",
+      "impact": "The next round of that package falls back to full, with no warning (B saw vouched=false, so it emits none). Only state is lost, never an answer. It needs two concurrent operator answers.",
+      "suggested_fix": "Re-record inside the lock: return a flag from applyFirst and call recordFinishedRound in recordPremiseDecision's locked section after the append, or run it inside a second withOperatorDecisionsLock.",
+      "evidence": "premise-question.ts:175-215; operator-decisions.ts:195-203 (the lock covers applyFirst and the append only).",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG3-003",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 92,
+      "quote": "const parent = path.relative(path.join(root, \".metaproject\"), path.dirname(real)).split(path.sep);",
+      "problem": "isReviewPackageDir realpaths the project root but not `<root>/.metaproject`, then compares it with the realpath of the package. If `.metaproject` (or `.metaproject/reviews`) is itself a symlink, every real previous package resolves outside `<root>/.metaproject`. The check then rejects it, and carryPremiseDecisions returns [] with no message.",
+      "impact": "No answer is carried into the delta round, so the operator is asked again for findings they already answered. Nothing in the repo is known to symlink .metaproject, so no input that reaches this is named.",
+      "suggested_fix": "Compare against `realpathSync(path.join(root, '.metaproject'))`, falling back to the joined path when that does not exist.",
+      "evidence": "premise-question.ts:82-94, used at :118.",
+      "confidence": "low"
+    },
+    {
+      "id": "LG3-004",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 511,
+      "quote": "await rename(path.join(packageDir, PREMISES_FILE), path.join(packageDir, PREMISES_SUPERSEDED_FILE));",
+      "problem": "The record is kept only one deep. A second ingest without --premises after another --premises ingest overwrites the earlier premises.superseded.json (rename replaces the target). An ingest with --premises leaves an older superseded file beside the new premises.json.",
+      "impact": "Audit history only: an earlier judge's claims are lost after two cycles, or a stale superseded file sits beside current claims. No reader of either file decides an outcome.",
+      "suggested_fix": "Either say in the PREMISES_SUPERSEDED_FILE doc that it holds only the latest superseded claims, or suffix it with the ingest time.",
+      "evidence": "managed.ts:507-512 (HEAD); premise.ts:62 PREMISES_SUPERSEDED_FILE.",
+      "confidence": "high"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 }
+}
+```
+
+## Logic Review — round 3 (fix delta)
+
+### Review Scope
+- Delta: f47ebb0ec..8a9ae3d20 (round3/delta-code.diff), read at HEAD 8a9ae3d20
+- Spec compliance gate: skipped (fix round; priors carried instead)
+- History: read from the flow 459 journal and the round-2 premise judge output. No git history was needed for these sites.
+
+### Summary
+The round-2 fixes are sound. Here is what changed:
+- The operator-only guard now folds case and checks every depth, both as written and with symlinks resolved.
+- `--prior` must name an id or a real package.
+- The carry re-validates the previous package.
+- Premise answers write findings.json first, with undo, and re-record a vouched round.
+- A `dismissed*` disposition no longer lifts a hold. The verdict, readiness and the gate apply this the same way.
+- A carried downgrade is either kept as a valid downgrade or dropped.
+
+The only new defect is the toLowerCase fold (LG3-001, minor, low confidence: it depends on how each filesystem folds non-ASCII characters).
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 3
+- prior: 8 closed, 0 partial, 0 open, 0 regressed
+
+### Routing audit
+graph_used: not-relevant (bounded delta, diff supplied) · wiki_used: not-relevant · ctx_used: yes (keryx ctx rg) · raw_rg_used: no

@@ -1,0 +1,86 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-02 tests are well shaped (real steps end to end, behaviour assertions, no sleeps). Mutation pass not run (read-only, no run-tests); gaps below are read from the fixtures, not executed.",
+  "slices": [{"id": "slice-02", "status": "DONE"}],
+  "findings": [
+    {
+      "id": "F-001", "reviewer": "review-testing-practices", "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "quote": "expect(result.output).toContain(\"no text\");",
+      "problem": "Mutation pass was NOT run: this dispatch forbids running tests. No mutation table exists; nothing below is a measured survivor. Candidates proposed, 0 of 5 reached.",
+      "impact": "The added gates (empty-reply guard, usage accumulation, usage suffix on saved results) have no execution evidence of being pinned.",
+      "suggested_fix": "Run the five mutants listed in mutant_candidates and publish the table.",
+      "evidence": "No command executed; read-only dispatch.",
+      "confidence": "high",
+      "mutant_candidates": [
+        {"id": "m1", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined", "replacement": "raw === \"(subagent produced no text)\"", "kind": "behavior"},
+        {"id": "m2", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "childUsage.tokens_in += tokensIn ?? 0;", "replacement": "childUsage.tokens_in = tokensIn ?? 0;", "kind": "behavior"},
+        {"id": "m3", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "saveTimedOutPartial(saveTarget.abs, `${partial}${usageSuffix()}`)", "replacement": "saveTimedOutPartial(saveTarget.abs, partial)", "kind": "behavior"},
+        {"id": "m4", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "if (tokensIn === undefined && tokensOut === undefined) return;", "replacement": "", "kind": "behavior"},
+        {"id": "m5", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`)", "replacement": "saveChildResult(saveTarget.abs, raw)", "kind": "behavior"}
+      ]
+    },
+    {
+      "id": "F-002", "reviewer": "review-testing-practices", "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "The new test (flow 460 E) builds only a child with empty text and no submitted result. No fixture builds the input that separates the `submittedResult === undefined` clause from the `raw` clause (empty text but a submit_result payload); `rg submittedResult` in the test file returns 0 matches. The guard keys on the placeholder string, and the test asserts the wording with toContain(\"no text\") and the fleet status only, not detail `empty-reply`.",
+      "impact": "Dropping the submittedResult clause would turn a child that submitted a real result with empty text into an error and the suite would likely stay green. Predicted, not run (shared law 1).",
+      "suggested_fix": "Add a case where the provider calls submit_result with no text and assert it is not the empty-reply error; assert the fleet detail `empty-reply` in the existing case.",
+      "evidence": "Guard at spawn-subagent-tool.ts:2316; test body in the diff.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "childUsage.tokens_in += tokensIn ?? 0;",
+      "problem": "The H test feeds exactly one usage_update on the Completed path. Accumulation over several provider requests (the comment says 'summed over its provider requests'), the one-sided branch (only one token count finite), and the Timeout partial-save path (`${partial}${usageSuffix()}`) have no fixture. The 'silent' case only proves no line is written when nothing is reported.",
+      "impact": "Changing `+=` to `=` or dropping the suffix on the timeout path leaves this suite green by reading; the ledger's spend figure would under-count with no test noticing.",
+      "suggested_fix": "Yield two usage_update events and assert the sum, one with only outputTokens, and add a timeout case asserting the saved partial carries KERYX_USAGE.",
+      "evidence": "Fixture yields a single usage_update (sequence 1); no timeout test in the diff touches usage.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/commands/review-ledger.test.ts",
+      "quote": "expect((await coverageErrors({ mode: \"all\", selected: dispatch.selected }, { root, files: [\"src/a.ts\"], packageDir: pkg })).join(\"\\n\")).not.toContain(\"missing\");",
+      "problem": "The changed assertion is falsy-only: it passes when coverageErrors returns nothing, any other error text, or when the path never ran. The previous assertion was positive (`toContain(`missing: ${skipped}`)`) and was inverted into a negative with no positive artifact (for example toEqual([])) proving the recorded decision is what accounted for the reviewer.",
+      "impact": "A regression that makes coverageErrors fail with a different message still passes; the sibling assertion earlier in the test uses the same weak form, so the gap is now doubled.",
+      "suggested_fix": "Assert the exact result (toEqual([]) or the expected list) instead of not.toContain(\"missing\").",
+      "evidence": "Diff replaces a toContain with .not.toContain(\"missing\").",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005", "reviewer": "review-testing-practices", "severity": "minor",
+      "file": "src/commands/review-plan.test.ts",
+      "quote": "describe(\"plan → ingest with an unplaceable quote → fix commit → plan\", () => {",
+      "problem": "The file header says the steps are replaced by a fake; the new block drives real reviewCommand plan and ingest with a real git repo, process.chdir, process.exitCode and XDG_DATA_HOME mutation, and a 60_000 ms timeout, inside the fast unit file (tier mixing). It also pins only reason \"absent\"; the schema's new `ambiguous` / `candidate_lines` branch is not driven here (it may be covered in another slice).",
+      "impact": "Slower unit lane and process-global cwd mutation, a flake risk if files ever share a process; the ambiguous-quote path may be unpinned.",
+      "suggested_fix": "Move the end-to-end block to an integration-named test file, and add a finding whose quote appears twice asserting quote_unlocated reason \"ambiguous\".",
+      "evidence": "process.chdir(repo) in beforeEach; `}, 60_000);`; schema diff adds enum [absent, ambiguous].",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-006", "reviewer": "review-testing-practices", "severity": "info",
+      "file": "src/commands/review-plan.test.ts",
+      "quote": "return found.sort((a, b) => a.round.number - b.round.number)[found.length - 1]!;",
+      "problem": "In the plan() helper the local `latest` holds every package that has a plan file, not the latest one; the real pick is made by round number on the last line. Readability only.",
+      "impact": "Misleading name for the next author.",
+      "suggested_fix": "Rename `latest` to `withPlan`.",
+      "evidence": "Helper code in the added describe block.",
+      "confidence": "high"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 3, "info": 3}
+}
+```
+
+## Summary
+
+slice-02: 0 blocker, 0 major, 3 minor, 3 info.
+
+Mutation pass: not run. This dispatch is read-only and forbids running tests, so there is no table; the 5 mutant candidates in F-001 are all unreached (0 of 5 run) and are for the main session. F-002 and F-003 are read from the fixtures, not measured.
+
+Good: the flow 460 tests assert behaviour (recorded findings, readiness item, delta round and fix slice) with real steps and no fixed sleeps; the spawn tests use injected providers, not the network.

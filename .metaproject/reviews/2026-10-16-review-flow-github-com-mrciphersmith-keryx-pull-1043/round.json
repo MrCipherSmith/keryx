@@ -1,0 +1,1538 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "bb0423cab881b5d58d8a052388b985f7b3ae4473",
+    "head": "c144874f7e0d16a6671ec015cac8b4c44bce3b2a"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 118,
+      "endLine": 164
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/task-implementer-input-contract.schema.json",
+      "startLine": 147,
+      "endLine": 147
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/context.md",
+      "startLine": 1,
+      "endLine": 106
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/README.md",
+      "startLine": 1,
+      "endLine": 37
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/fixture-findings.json",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/pr1005-findings.json",
+      "startLine": 1,
+      "endLine": 28
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/pr992-findings.json",
+      "startLine": 1,
+      "endLine": 62
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/validate.ts",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-fixture.raw.md",
+      "startLine": 1,
+      "endLine": 48
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr1005.raw.md",
+      "startLine": 1,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr992-rerun.raw.md",
+      "startLine": 1,
+      "endLine": 11
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr992.raw.md",
+      "startLine": 1,
+      "endLine": 40
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/premise-eval.json",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/validate-fixture.json",
+      "startLine": 1,
+      "endLine": 39
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/validate-pr1005.json",
+      "startLine": 1,
+      "endLine": 29
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/validate-pr992.json",
+      "startLine": 1,
+      "endLine": 44
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 1,
+      "endLine": 349
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/journal.md",
+      "startLine": 1,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/plan.md",
+      "startLine": 1,
+      "endLine": 30
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/modules/gdskills.md",
+      "startLine": 120,
+      "endLine": 120
+    },
+    {
+      "file": ".metaproject/skills/catalog.md",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md",
+      "startLine": 42,
+      "endLine": 42
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 267,
+      "endLine": 268
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 277,
+      "endLine": 278
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 440,
+      "endLine": 440
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 683,
+      "endLine": 683
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1279,
+      "endLine": 1279
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1308,
+      "endLine": 1308
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1325,
+      "endLine": 1325
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+      "startLine": 101,
+      "endLine": 101
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json",
+      "startLine": 147,
+      "endLine": 147
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+      "startLine": 272,
+      "endLine": 275
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-backend/SKILL.md",
+      "startLine": 190,
+      "endLine": 193
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+      "startLine": 86,
+      "endLine": 89
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-core-boundaries/SKILL.md",
+      "startLine": 61,
+      "endLine": 64
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-flow-graph/SKILL.md",
+      "startLine": 86,
+      "endLine": 89
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-frontend-conventions/SKILL.md",
+      "startLine": 110,
+      "endLine": 113
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+      "startLine": 58,
+      "endLine": 61
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+      "startLine": 86,
+      "endLine": 89
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-jev-comments/SKILL.md",
+      "startLine": 160,
+      "endLine": 163
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-jev-contract/SKILL.md",
+      "startLine": 139,
+      "endLine": 142
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-jev-docs/SKILL.md",
+      "startLine": 165,
+      "endLine": 168
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-jev-risk/SKILL.md",
+      "startLine": 134,
+      "endLine": 137
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-jev-rules/SKILL.md",
+      "startLine": 208,
+      "endLine": 211
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-jev-scenarios/SKILL.md",
+      "startLine": 132,
+      "endLine": 135
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-layout/SKILL.md",
+      "startLine": 122,
+      "endLine": 125
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-layout/SKILL.md",
+      "startLine": 153,
+      "endLine": 156
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+      "startLine": 263,
+      "endLine": 266
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 920,
+      "endLine": 941
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 58,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 88,
+      "endLine": 88
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 114,
+      "endLine": 114
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 242,
+      "endLine": 242
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 485,
+      "endLine": 485
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 885,
+      "endLine": 885
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1014,
+      "endLine": 1014
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1067,
+      "endLine": 1067
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1123,
+      "endLine": 1130
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1199,
+      "endLine": 1199
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1314,
+      "endLine": 1319
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1462,
+      "endLine": 1462
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1554,
+      "endLine": 1554
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-performance/SKILL.md",
+      "startLine": 199,
+      "endLine": 202
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+      "startLine": 151,
+      "endLine": 151
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-pr-feedback/SKILL.md",
+      "startLine": 350,
+      "endLine": 350
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-pr-feedback/SKILL.md",
+      "startLine": 368,
+      "endLine": 368
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-pr-feedback/SKILL.md",
+      "startLine": 455,
+      "endLine": 455
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "startLine": 1,
+      "endLine": 180
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+      "startLine": 32,
+      "endLine": 32
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+      "startLine": 173,
+      "endLine": 173
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+      "startLine": 204,
+      "endLine": 207
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+      "startLine": 198,
+      "endLine": 201
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+      "startLine": 31,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+      "startLine": 197,
+      "endLine": 197
+    },
+    {
+      "file": "CHANGELOG.md",
+      "startLine": 5,
+      "endLine": 14
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4743,
+      "endLine": 4743
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4754,
+      "endLine": 4754
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4802,
+      "endLine": 4803
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4892,
+      "endLine": 4892
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 6564,
+      "endLine": 6564
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 6640,
+      "endLine": 6649
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 32,
+      "endLine": 32
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 583,
+      "endLine": 615
+    },
+    {
+      "file": "src/commands/automatic-review.ts",
+      "startLine": 203,
+      "endLine": 203
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 13,
+      "endLine": 14
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 86,
+      "endLine": 86
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 362,
+      "endLine": 441
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 18,
+      "endLine": 20
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 42,
+      "endLine": 43
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 561,
+      "endLine": 627
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 639,
+      "endLine": 639
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "startLine": 16,
+      "endLine": 17
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "startLine": 10,
+      "endLine": 14
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "startLine": 42,
+      "endLine": 42
+    },
+    {
+      "file": "src/commands/review-operator-cli.test.ts",
+      "startLine": 60,
+      "endLine": 142
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 36,
+      "endLine": 36
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 56,
+      "endLine": 62
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 134,
+      "endLine": 153
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 924,
+      "endLine": 933
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 28,
+      "endLine": 28
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 176,
+      "endLine": 176
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 334,
+      "endLine": 334
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 566,
+      "endLine": 566
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 1054,
+      "endLine": 1054
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 1649,
+      "endLine": 1649
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 3612,
+      "endLine": 3626
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4255,
+      "endLine": 4256
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4646,
+      "endLine": 4646
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4651,
+      "endLine": 4652
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4807,
+      "endLine": 4807
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4885,
+      "endLine": 4886
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4890,
+      "endLine": 4890
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5026,
+      "endLine": 5026
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5290,
+      "endLine": 5293
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5356,
+      "endLine": 5356
+    },
+    {
+      "file": "src/commands/routing-corpus.ts",
+      "startLine": 224,
+      "endLine": 225
+    },
+    {
+      "file": "src/commands/routing-corpus.ts",
+      "startLine": 737,
+      "endLine": 749
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 881,
+      "endLine": 881
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "startLine": 40,
+      "endLine": 40
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "startLine": 44,
+      "endLine": 44
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "startLine": 58,
+      "endLine": 58
+    },
+    {
+      "file": "src/flow/review-fixtures.ts",
+      "startLine": 60,
+      "endLine": 61
+    },
+    {
+      "file": "src/flow/review-fixtures.ts",
+      "startLine": 141,
+      "endLine": 141
+    },
+    {
+      "file": "src/flow/review-gate.test.ts",
+      "startLine": 19,
+      "endLine": 20
+    },
+    {
+      "file": "src/flow/review-gate.test.ts",
+      "startLine": 29,
+      "endLine": 29
+    },
+    {
+      "file": "src/flow/review-gate.test.ts",
+      "startLine": 1604,
+      "endLine": 1725
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 3,
+      "endLine": 4
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 257,
+      "endLine": 261
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 311,
+      "endLine": 319
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 336,
+      "endLine": 336
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 365,
+      "endLine": 367
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 401,
+      "endLine": 422
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 502,
+      "endLine": 502
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 505,
+      "endLine": 505
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 512,
+      "endLine": 524
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 672,
+      "endLine": 687
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "startLine": 1438,
+      "endLine": 1440
+    },
+    {
+      "file": "src/gdskills/bundled-eval.test.ts",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": "src/gdskills/bundled-eval.test.ts",
+      "startLine": 120,
+      "endLine": 120
+    },
+    {
+      "file": "src/gdskills/bundled-eval.test.ts",
+      "startLine": 1877,
+      "endLine": 1877
+    },
+    {
+      "file": "src/gdskills/bundled-eval.test.ts",
+      "startLine": 1880,
+      "endLine": 1880
+    },
+    {
+      "file": "src/gdskills/bundled/install-manifest.json",
+      "startLine": 458,
+      "endLine": 458
+    },
+    {
+      "file": "src/gdskills/bundled/install-manifest.json",
+      "startLine": 475,
+      "endLine": 475
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md",
+      "startLine": 42,
+      "endLine": 42
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 267,
+      "endLine": 268
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 277,
+      "endLine": 278
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 440,
+      "endLine": 440
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "startLine": 683,
+      "endLine": 683
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1279,
+      "endLine": 1279
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1308,
+      "endLine": 1308
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1325,
+      "endLine": 1325
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "startLine": 101,
+      "endLine": 101
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+      "startLine": 147,
+      "endLine": 147
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-architecture/SKILL.md",
+      "startLine": 272,
+      "endLine": 275
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-backend/SKILL.md",
+      "startLine": 190,
+      "endLine": 193
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-clean-code/SKILL.md",
+      "startLine": 86,
+      "endLine": 89
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-core-boundaries/SKILL.md",
+      "startLine": 61,
+      "endLine": 64
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-flow-graph/SKILL.md",
+      "startLine": 86,
+      "endLine": 89
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-frontend-conventions/SKILL.md",
+      "startLine": 110,
+      "endLine": 113
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-frontend/SKILL.md",
+      "startLine": 58,
+      "endLine": 61
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-highload/SKILL.md",
+      "startLine": 86,
+      "endLine": 89
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-jev-comments/SKILL.md",
+      "startLine": 160,
+      "endLine": 163
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-jev-contract/SKILL.md",
+      "startLine": 139,
+      "endLine": 142
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-jev-docs/SKILL.md",
+      "startLine": 165,
+      "endLine": 168
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-jev-risk/SKILL.md",
+      "startLine": 134,
+      "endLine": 137
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-jev-rules/SKILL.md",
+      "startLine": 208,
+      "endLine": 211
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-jev-scenarios/SKILL.md",
+      "startLine": 132,
+      "endLine": 135
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-layout/SKILL.md",
+      "startLine": 122,
+      "endLine": 125
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-layout/SKILL.md",
+      "startLine": 153,
+      "endLine": 156
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-logic/SKILL.md",
+      "startLine": 263,
+      "endLine": 266
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 920,
+      "endLine": 941
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 58,
+      "endLine": 58
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 88,
+      "endLine": 88
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 114,
+      "endLine": 114
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 242,
+      "endLine": 242
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 485,
+      "endLine": 485
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 885,
+      "endLine": 885
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1014,
+      "endLine": 1014
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1067,
+      "endLine": 1067
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1123,
+      "endLine": 1130
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1199,
+      "endLine": 1199
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1314,
+      "endLine": 1319
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1462,
+      "endLine": 1462
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1554,
+      "endLine": 1554
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-performance/SKILL.md",
+      "startLine": 199,
+      "endLine": 202
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-pr-contract/SKILL.md",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-pr-contract/SKILL.md",
+      "startLine": 151,
+      "endLine": 151
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "startLine": 350,
+      "endLine": 350
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "startLine": 368,
+      "endLine": 368
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "startLine": 455,
+      "endLine": 455
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "startLine": 1,
+      "endLine": 180
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-regression/SKILL.md",
+      "startLine": 32,
+      "endLine": 32
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-regression/SKILL.md",
+      "startLine": 173,
+      "endLine": 173
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-security-code/SKILL.md",
+      "startLine": 204,
+      "endLine": 207
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-style/SKILL.md",
+      "startLine": 198,
+      "endLine": 201
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md",
+      "startLine": 31,
+      "endLine": 31
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md",
+      "startLine": 197,
+      "endLine": 197
+    },
+    {
+      "file": "src/gdskills/catalog.ts",
+      "startLine": 294,
+      "endLine": 304
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 118,
+      "endLine": 164
+    },
+    {
+      "file": "src/gdskills/model-tier.test.ts",
+      "startLine": 480,
+      "endLine": 487
+    },
+    {
+      "file": "src/gdskills/model-tier.ts",
+      "startLine": 1346,
+      "endLine": 1350
+    },
+    {
+      "file": "src/gdskills/model-tier.ts",
+      "startLine": 1425,
+      "endLine": 1428
+    },
+    {
+      "file": "src/gdskills/review-skills-class-scope.test.ts",
+      "startLine": 35,
+      "endLine": 36
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 56,
+      "endLine": 57
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 77,
+      "endLine": 77
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 129,
+      "endLine": 129
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 132,
+      "endLine": 132
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 134,
+      "endLine": 135
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 138,
+      "endLine": 138
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 155,
+      "endLine": 165
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 174,
+      "endLine": 174
+    },
+    {
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "startLine": 213,
+      "endLine": 213
+    },
+    {
+      "file": "src/gdskills/skill-length-ceilings.ts",
+      "startLine": 109,
+      "endLine": 109
+    },
+    {
+      "file": "src/gdskills/skill-length-ceilings.ts",
+      "startLine": 158,
+      "endLine": 175
+    },
+    {
+      "file": "src/gdskills/skill-length-ceilings.ts",
+      "startLine": 177,
+      "endLine": 178
+    },
+    {
+      "file": "src/gdskills/skill-length-ceilings.ts",
+      "startLine": 180,
+      "endLine": 181
+    },
+    {
+      "file": "src/lib/group-subcommands.ts",
+      "startLine": 190,
+      "endLine": 190
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 76,
+      "endLine": 76
+    },
+    {
+      "file": "src/review/dedupe.test.ts",
+      "startLine": 126,
+      "endLine": 160
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 33,
+      "endLine": 34
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 41,
+      "endLine": 43
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 48,
+      "endLine": 48
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 63,
+      "endLine": 64
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 159,
+      "endLine": 161
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 282,
+      "endLine": 286
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 346,
+      "endLine": 351
+    },
+    {
+      "file": "src/review/dedupe.ts",
+      "startLine": 414,
+      "endLine": 419
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 54,
+      "endLine": 54
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 265,
+      "endLine": 266
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 359,
+      "endLine": 367
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 379,
+      "endLine": 379
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 499,
+      "endLine": 504
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 510,
+      "endLine": 510
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 550,
+      "endLine": 551
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1565,
+      "endLine": 1569
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1897,
+      "endLine": 1922
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 2486,
+      "endLine": 2486
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 2511,
+      "endLine": 2511
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 17,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 44,
+      "endLine": 59
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 63,
+      "endLine": 76
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 82,
+      "endLine": 82
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 91,
+      "endLine": 91
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 93,
+      "endLine": 124
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 151,
+      "endLine": 152
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 160,
+      "endLine": 163
+    },
+    {
+      "file": "src/review/premise-decision.test.ts",
+      "startLine": 1,
+      "endLine": 210
+    },
+    {
+      "file": "src/review/premise-embedded.test.ts",
+      "startLine": 1,
+      "endLine": 38
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "startLine": 1,
+      "endLine": 64
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "startLine": 1,
+      "endLine": 428
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 1,
+      "endLine": 555
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 105,
+      "endLine": 105
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 159,
+      "endLine": 191
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 20,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 37,
+      "endLine": 37
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 113,
+      "endLine": 114
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 188,
+      "endLine": 203
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 332,
+      "endLine": 332
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 347,
+      "endLine": 347
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 6,
+      "endLine": 7
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 383,
+      "endLine": 463
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 563,
+      "endLine": 568
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 694,
+      "endLine": 699
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 883,
+      "endLine": 885
+    },
+    {
+      "file": "src/review/verdict.test.ts",
+      "startLine": 6,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/verdict.test.ts",
+      "startLine": 29,
+      "endLine": 117
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 9,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 62,
+      "endLine": 68
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 124,
+      "endLine": 124
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 139,
+      "endLine": 141
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 205,
+      "endLine": 227
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 245,
+      "endLine": 252
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 256,
+      "endLine": 256
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 267,
+      "endLine": 267
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 275,
+      "endLine": 275
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 285,
+      "endLine": 285
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 288,
+      "endLine": 288
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 291,
+      "endLine": 291
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 314,
+      "endLine": 314
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 326,
+      "endLine": 326
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 331,
+      "endLine": 332
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 344,
+      "endLine": 347
+    },
+    {
+      "file": "src/review/verification.ts",
+      "startLine": 459,
+      "endLine": 459
+    },
+    {
+      "file": "src/trigger/unattended.ts",
+      "startLine": 69,
+      "endLine": 69
+    }
+  ],
+  "carried": [],
+  "mergeBase": "bb0423cab881b5d58d8a052388b985f7b3ae4473"
+}

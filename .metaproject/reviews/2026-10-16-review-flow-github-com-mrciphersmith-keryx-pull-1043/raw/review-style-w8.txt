@@ -1,0 +1,126 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "findings": [
+    {
+      "id": "F-001", "severity": "minor", "confidence": "high",
+      "file": "src/review/dedupe.ts", "line": 197,
+      "problem": "Nested ternary chains: severityRule/canonical selection in mergeCluster (three-way ternary, then the same three-way again for the pool), the `higher` computation (ternary inside ternary), and renderDuplicatesMarkdown (ternaries nested in a template literal). Sites: dedupe.ts:197-198, 243-248, 294-299.",
+      "impact": "Each added rule (this PR added the third) deepens the chain; the three places must be kept in step by hand.",
+      "evidence": "const severityRule = downgraded.length > 0 ? \"premise\" : confirmed.length > 0 ? \"verified\" : \"max\"; const canonical = bestOf(downgraded.length > 0 ? downgraded : confirmed.length > 0 ? confirmed : members);",
+      "suggested_fix": "Pick `{ rule, pool }` once with if/else, and map rule to label/outranked text via a lookup record."
+    },
+    {
+      "id": "F-002", "severity": "minor", "confidence": "high",
+      "file": "src/review/operator-decisions.ts", "line": 839,
+      "problem": "recordPremiseDecision and recordOperatorDecision repeat read-entries, filter `valid || validPremise`, cast, append, write the same {schemaVersion:1,decisions} envelope. `valid` now means 'valid gate decision' only, which its name no longer says beside `validPremise`; the file header still describes only gate-relaxing decisions.",
+      "impact": "A third decision kind or an envelope change must be made twice; the stale header misdescribes the file.",
+      "evidence": "const entries = (await readEntries(packageDir)).filter((entry) => valid(entry) || validPremise(entry)); ... const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...] };",
+      "suggested_fix": "Extract appendDecision(packageDir, entry); rename `valid` to `validGateDecision`; update the header comment to name premise-question records."
+    },
+    {
+      "id": "F-003", "severity": "minor", "confidence": "high",
+      "file": "src/review/premise.ts", "line": 1419,
+      "problem": "Comment on premiseHoldState says 'the later of the two does not matter: they hold the same answer once applied', but the code lets a package decision win over `premise.operator`, so they can differ, and the function is called (readiness, verdict, premise-question) before any decision is applied.",
+      "impact": "A reader assumes order is irrelevant; it is not.",
+      "evidence": "const answer = decided?.answer ?? (isRecord(premise.operator) ? premise.operator.answer : undefined);",
+      "suggested_fix": "State the rule: a decision in the package's decisions file takes precedence; `premise.operator` is the fallback."
+    },
+    {
+      "id": "F-004", "severity": "minor", "confidence": "high",
+      "file": "src/review/premise.ts", "line": 1138,
+      "problem": "A non-object claim becomes `{ finding_id: \"<not an object>\", __invalid: claim }`, which the merge rejects as `unknown-property` with detail 'the claim carried __invalid. A premise judge can only hold or lower...'. The diagnostic names an internal sentinel and a reason untrue of the input; `<not an object>` and `<unnamed>` are bare magic strings.",
+      "impact": "The rendered 'Premise claims discarded' row for a malformed entry misleads the operator.",
+      "evidence": "isRecord(claim) ? { ...claim } : { finding_id: \"<not an object>\", __invalid: claim }",
+      "suggested_fix": "Add a dedicated rejection reason (e.g. malformed-claim) or reject non-objects in parsePremiseClaims naming the index; hoist the placeholders to constants."
+    },
+    {
+      "id": "F-005", "severity": "minor", "confidence": "medium",
+      "file": "src/review/managed.ts", "line": 634,
+      "problem": "parseEmbeddedPremises repeats the shape of parseEmbeddedFindings: fence regex, more-than-one-fence guard, `fence === undefined ? text : embeddedBlockBody(...)`, JSON.parse in try/catch with the same eslint-disable, differing only in marker and wording.",
+      "impact": "Two parsers that must evolve together (fence rules, error wording).",
+      "evidence": "EMBEDDED_PREMISES_FENCE mirrors the findings fence; both use embeddedBlockBody.",
+      "suggested_fix": "Extract a shared parseEmbeddedBlock(text, label, marker) with per-caller messages."
+    },
+    {
+      "id": "F-006", "severity": "minor", "confidence": "medium",
+      "file": "src/review/verdict.ts", "line": 2249,
+      "problem": "applyPremiseClaims copies applyVerifierClaims closely, including the identical `pending`/`subjects` construction (id and reviewer fallback cast to StructuredReviewFinding) and the merge-back-by-position loop.",
+      "impact": "The fallback-id rule lives in two places; the next claim kind adds a third.",
+      "evidence": "const subjects = pending.map((entry) => ({ ...entry.record, id: text(entry.record.id) ?? `${entry.fallbackReviewer}#${entry.index + 1}`, ... }) as unknown as StructuredReviewFinding);",
+      "suggested_fix": "Extract asSubjects(pending) used by both."
+    },
+    {
+      "id": "F-007", "severity": "minor", "confidence": "medium",
+      "file": "src/review/premise-question.ts", "line": 945,
+      "problem": "Local `obj`/`str` re-implement premise.ts `isRecord`/`present` (added by this PR), verdict.ts `object`/`text` and operator-decisions.ts `text`: the record guard is written four times in one flow under four names with slightly different semantics (`str` trims and returns the string, `present` is a guard).",
+      "impact": "Behavioural drift between look-alike guards; naming noise.",
+      "evidence": "const obj = ...; const str = ...; premise.ts: const isRecord / const present",
+      "suggested_fix": "Export isRecord/present from one place and import them."
+    },
+    {
+      "id": "F-008", "severity": "minor", "confidence": "high",
+      "file": "src/review/managed.ts", "line": 494,
+      "problem": "renderScope gains an 11th positional parameter (`premiseBlock`), and the call builds the block inline in a ~200 character line. The `premised.findings.slice(0, deduped.findings.length)` / `.slice(deduped.findings.length)` split depends on the order of `[...internal, ...external]`.",
+      "impact": "Positional growth makes calls unreadable; order-coupled slicing breaks silently when a third source is added.",
+      "evidence": "renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings, renderPremiseMarkdown({...}))",
+      "suggested_fix": "Compute `const premiseBlock = renderPremiseMarkdown(...)` before the call; consider an options object for the trailing parameters; merge internal and external separately or return the partition from mergePremises."
+    },
+    {
+      "id": "F-009", "severity": "minor", "confidence": "high",
+      "file": "src/review/premise.ts", "line": 1356,
+      "problem": "`group.forEach(() => { rejections.push({...identical row...}) })` ignores its argument and pushes N identical rows.",
+      "impact": "Reads as a loop bug; scope.md shows the same row N times.",
+      "evidence": "group.forEach(() => { rejections.push({ finding: key, reason: \"duplicate-claim\", detail: ... }); });",
+      "suggested_fix": "Use a for-of if one row per claim is intended, or push once with the count in the detail."
+    },
+    {
+      "id": "F-010", "severity": "minor", "confidence": "high",
+      "file": "src/review/premise.ts", "line": 1481,
+      "problem": "Magic numbers 160 and 157 in oneLine (width, and width minus the ellipsis).",
+      "impact": "Changing the width needs two edits that must stay 3 apart.",
+      "evidence": "return first.length > 160 ? `${first.slice(0, 157)}...` : first;",
+      "suggested_fix": "const MAX_LINE_CHARS = 160; slice(0, MAX_LINE_CHARS - 3)."
+    },
+    {
+      "id": "F-011", "severity": "info", "confidence": "high",
+      "file": "src/review/premise.ts", "line": 1,
+      "problem": "New file is 555 lines (over 500) with four responsibilities: claim parsing/merge, hold-state and operator-answer application, scope.md rendering, and the rejection taxonomy.",
+      "impact": "Scroll and merge-conflict cost; hold-state functions are consumed by verdict, readiness and premise-question, not by the merge.",
+      "evidence": "wc -l src/review/premise.ts = 555",
+      "suggested_fix": "Move premiseHoldState/awaitingOperator/applyPremiseDecision[s] and renderPremiseMarkdown into their own modules."
+    },
+    {
+      "id": "F-012", "severity": "info", "confidence": "medium",
+      "file": "src/review/verdict.ts", "line": 2174,
+      "problem": "Terminology drift for one concept: `held` (classify state, InterimVerdict.held) vs `awaiting` (premiseHoldState value, awaitingOperator, headline text); readiness treats any `!== \"none\"` as held, including answered ones.",
+      "impact": "Readers must learn that classify's `held` means held-and-unanswered while readiness's `held` includes answered.",
+      "evidence": "classify returns \"held\" only when premiseHoldState(record) === \"awaiting\"; readiness: premiseHoldState(...) !== \"none\".",
+      "suggested_fix": "Use held for the verdict and awaiting for unanswered consistently, e.g. name the classify state `awaiting`."
+    },
+    {
+      "id": "F-013", "severity": "info", "confidence": "low",
+      "file": "src/review/premise-question.ts", "line": 932,
+      "problem": "HeldFinding `severity` and `verdict` are typed `string` though closed unions exist (ReviewFindingSeverity, PremiseVerdict); placeholders \"unknown\" / \"(no problem statement)\" / \"(the judge recorded no question)\" are inline.",
+      "impact": "Weaker types at the card/CLI boundary.",
+      "evidence": "severity: string; verdict: string;",
+      "suggested_fix": "Type them from the unions and hoist the placeholders to constants."
+    }
+  ]
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Slice 08 (src/review: coverage, dedupe, managed, operator-decisions, premise-question, premise, readiness, types, verdict, verification) is consistent in naming and commenting, and each Flow 459 block explains its reason. The recurring issues are small DRY repeats (record guards, load/filter/append, subject mapping, embedded-block parsing), nested ternaries growing in dedupe.ts, one inaccurate comment, and one over-long new file.
+
+## Stats
+- major: 0
+- minor: 10
+- info: 3
+
+## Positive Notes
+Comments give the reason for each rule; rejection reasons are enumerated and rendered; new fields are written only when present, matching the file's convention.

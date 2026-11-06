@@ -1,0 +1,166 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Skill-text pass over slices 03/06/07 of PR #1043. Law 4 is identical everywhere; review-premise, Wave D and the fix-loop text are mostly consistent, with one workable-command gap in review-pr-feedback and several sequencing/contract ambiguities. The code graph radius is empty for skill text, so this is a read of the text and the CLI code it names, not a clean bill for runtime.",
+  "findings": [
+    {
+      "id": "RG-001",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "Rule 7 and Step 9 precondition 3 tell review-pr-feedback to record a premise answer with `keryx review decide-premise --package <dir> --finding <id>`, but this skill has no review package: its only durable record is `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.json`. `findHeldFinding` (src/review/premise-question.ts) reads `<package>/findings.json` and `research-evidence/premises.json`, so a comment id such as C-001 is refused with 'No finding C-001'. There is also no stated route for the judge's claims (`ingest --premises` needs a review round).",
+      "impact": "A `valid` comment that review-premise holds can never have the operator's answer recorded through the prescribed command. Step 9 precondition 3 ('held by review-premise without the operator's answer') cannot be satisfied or checked, so `--fix` either stays refused for that comment or proceeds on an unrecorded verbal answer. The same text is also not covered by the review-orchestrator Wave D recording path, which this rule was copied from.",
+      "suggested_fix": "State where a pr-feedback premise lives (for example a package the skill creates, or a field on the pr-comments record) and give `decide-premise` a way to address a comment, or say the answer is journaled in the flow and the comment is replied to without the CLI. Also say what shape the comments take as the judge's `findings` input (review-finding.schema.json) and how `source: external-comment` is set.",
+      "evidence": "review-pr-feedback/SKILL.md rule 7 (diff slice-03 lines 787) and precondition 3 (line 832); Step 3 'durable record' path at SKILL.md:160; premise-question.ts:30-48 refuses a finding absent from <package>/findings.json. Changed behaviour: review-pr-feedback --fix flow.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md (rule 7)",
+          "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md (Step 9 precondition 3)",
+          ".metaproject/skills/gdskills/review/review-pr-feedback/SKILL.md (installed copy, identical)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'decide-premise' across bundled orchestration and review skills; of 5 uses (review-orchestrator, flow-orchestrator, job-orchestrator, feature-dev, review-pr-feedback) only review-pr-feedback has no review package to pass"
+      }
+    },
+    {
+      "id": "RG-002",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "Wave D asks the operator the held finding's question and records the answer with `decide-premise`, and says the verdict lists held findings, but never says when `ingest --premises` runs. `decide-premise` reads findings.json (written by ingest) and the verdict reads research-evidence/premises.json, which per the skill ingest writes; in Round plan step 9 the early `keryx review verdict` comes before the tail (`ledger build`, `ingest`). The verifier has an explicit 'save to research-evidence/verifications.json before verdict' rule; the premise claims file has none.",
+      "impact": "Following the order literally, the early verdict shows a challenged finding as an ordinary open blocker or major, and a decide-premise run before ingest is refused ('No finding ...'). The operator sees a wrong interim verdict or a failed command; readiness still catches it at the end.",
+      "suggested_fix": "Add to Wave D: save the claims to research-evidence/premises.json (like verifications.json) before `review verdict`, and ask the operator only after `ingest --premises` has written findings.json; or state that the question is asked at the tail.",
+      "evidence": "SKILL.md Wave D bullets 2-3 (slice-03 lines 383-384); Round plan step 9 and 'Early verdict' (line 113); premise-question.ts:33-48; review.ts verdict help lines 4254-4256.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-003",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "Shared law 4 lists 'a sibling doing the same' as a deliberate choice that must be shown wrong before reporting, and law 3 says to report one finding per class listing every site. A defect copied across siblings (an unguarded null path in five handlers) is a sibling doing the same; a sibling carries no stated reason to 'read' or 'show wrong'. The text does not say what happens when the sibling has no reason.",
+      "impact": "A reviewer following law 4 can decline to report a real defect replicated across handlers, including in review-security-code (an unsanitised sink repeated in siblings), where no reason exists to refute. The review-premise skill handles this better ('a signal does not prove the choice right'), but the reviewers carry only the shorter law.",
+      "suggested_fix": "Add to law 4: a sibling counts only when something states a reason (a comment, commit or test); a sibling with no stated reason is evidence of a pattern, not a decision. Change in the one canonical block and propagate (21 copies plus the iron-laws test).",
+      "evidence": "Law 4 text, identical in 21 SKILL.md files; compare review-premise 'The four questions' item 1 wording. Conditional on a reviewer reading 'sibling' literally.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-004",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "Law 4 and review-premise tell the reader to run `git log -L` and `git blame`, while 'How to spawn' says reviewers 'run no command', review-regression says it 'runs no command unless allowed_tools says run-tests', and the payload's `allowed_tools` has only `read-only` and `run-tests`. review-premise's 'run nothing but git log, git blame and git show' fits neither value.",
+      "impact": "A read-only reviewer or the premise judge either breaks the 'no command' contract to follow law 4, or skips the history read the law requires and reports a deliberate choice as a defect. Which one happens depends on the host, and a detection layer that flags reviewer commands could mark the judge's git calls.",
+      "suggested_fix": "Say explicitly that read-only git history commands (log, blame, show) are allowed under `read-only`, in reviewer-input.schema.json and the 'How to spawn' bullet, or move the history read to the orchestrator's context pack.",
+      "evidence": "SKILL.md 'How to spawn' bullet 2 (slice-03 line 88); review-regression/SKILL.md:25; review-premise Iron Laws row 'Read-only' (line 967); law 4 text.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-005",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "The judge's contract is silent on external findings in two places. The verdict table allows `downgraded` for any finding, but src/review/premise.ts:269-270 rejects a downgrade of an external finding ('external-downgrade'); the Iron Laws only say 'held, never dismissed'. The input `source` is one top-level string, while Wave D dispatches round and external findings together, so the judge cannot tell which finding is external.",
+      "impact": "A judge that downgrades a PR comment gets its claim rejected and listed in scope.md, and the finding stays at its original severity with no premise; a mixed batch labelled `round` leads the judge to downgrade externals.",
+      "suggested_fix": "Add 'an external finding is only upheld, challenged or owner-decision, never downgraded' to the verdict table, and say the per-finding `source` field marks externals (or send them as a separate dispatch).",
+      "evidence": "review-premise/SKILL.md Input Contract and Verdicts table (slice-03 lines 922, 944-950); premise.ts:269-270; Wave D bullet 1 'external (PR-comment) findings included'.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-006",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "Step 10b (Wave D) has no plan id: Step 6a publishes ids `step-0`..`step-14` and says steps 8-10 complete only after ingest, so the plan bridge cannot track Wave D and the host does not see it as pending work. Steps 3b, 5c, 9b already have the same shape.",
+      "impact": "Observation: a shell turn can end with Wave D not run while all plan items read completed. What would settle it: whether step-10 stays pending until 10b ends.",
+      "suggested_fix": "Fold 10b into the step-10 plan item or publish a `step-10b` id.",
+      "evidence": "Workflow list and Step 6a text, slice-03 lines 66 and 83.",
+      "confidence": "low",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-007",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "Frontmatter triggers include 'review --premise' and the orchestrator text mentions `keryx review tier --premise`, but the flag table says Wave D is 'not a fan-out flag', so no `--premise` reviewer flag exists on the orchestrator.",
+      "impact": "Observation: a user typing `review --premise` is routed to the skill with no defined payload. What would settle it: whether the router rewrites the phrase to a premise-only run.",
+      "suggested_fix": "Drop the trigger or define what the direct invocation takes as input.",
+      "evidence": "review-premise frontmatter lines 868-872; orchestrator flag table row '(always, Wave D)'.",
+      "confidence": "low",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-008",
+      "severity": "info",
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "line": null,
+      "quote": null,
+      "problem": "Comments at the top of the iron-laws test still say 'the three laws'; the shared block now has four.",
+      "impact": "Cosmetic: a later reader counts three laws in a test that derives four.",
+      "suggested_fix": "Change the comments to 'the shared laws'.",
+      "evidence": "rg 'three laws' src/gdskills/review-skills-iron-laws.test.ts lines 6 and 12.",
+      "confidence": "high",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-009",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "Verified clean: shared law 4 is byte-identical in all 21 reviewers that carry a Shared laws block (architecture, backend, clean-code, core-boundaries, flow-graph, frontend, frontend-conventions, highload, jev-comments/contract/docs/risk/rules/scenarios, layout, logic, orchestrator, performance, pr-contract, regression, security-code, style, testing-practices) in both src/gdskills/bundled/skills/review and .metaproject/skills/gdskills/review; the two trees are identical. review-verifier, review-premise and review-pr-feedback carry none, by design. review-security-code's own law is now correctly called the fifth.",
+      "impact": "No defect: the result of an exact substring count (1 per file) over both trees plus a recursive diff of them.",
+      "suggested_fix": "None.",
+      "evidence": "python substring count of the canonical sentence over both trees; diff -rq of the two review directories printed nothing.",
+      "confidence": "high",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG-010",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": null,
+      "problem": "The 'Everything written to GitHub is brief' section is cut from SKILL.md to one sentence and moved verbatim into SKILL.detail.md; it is unrelated to the premise change (a length-ceiling trade). The pointer's heading exists in SKILL.detail.md, so the reference resolves.",
+      "impact": "Observation: the two-sentence rule for orchestrator PR comments now lives only in the detail file, which hosts load on demand.",
+      "suggested_fix": "None required; mention in the PR description.",
+      "evidence": "slice-03 lines 180-201; SKILL.detail.md added section.",
+      "confidence": "high",
+      "reviewer": "review-regression"
+    }
+  ],
+  "slices": [
+    "slice-03",
+    "slice-06",
+    "slice-07"
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 4,
+    "info": 5
+  }
+}
+```
+
+## Summary
+
+Skill-text pass, slices 03, 06 and 07. Shared law 4 is byte-identical in all 21 reviewers and both skill trees (RG-009). One major: review-pr-feedback prescribes `decide-premise --package` where no package exists (RG-001). Minors: Wave D ordering against ingest/verdict (RG-002), law 4 sibling clause vs law 3 (RG-003), git commands vs the no-command contract (RG-004), external-finding downgrade not stated in the judge's contract (RG-005). Infos: RG-006 to RG-010. The blast radius of a skill-text change is empty and recorded as unresolved, not clean.
+
+Counts: blocker 0, major 1, minor 4, info 5.

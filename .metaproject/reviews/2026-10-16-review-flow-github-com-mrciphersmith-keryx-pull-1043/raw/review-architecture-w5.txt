@@ -1,0 +1,55 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice 05 (gate tests, skill-registry tests, catalog, model-tier, premise schema, ceilings) is structurally sound; two minor and one info observation on enforcement location and duplicated state.",
+  "findings": [
+    {
+      "id": "ARCH-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+      "line": null,
+      "quote": "Findings to fix. Never carries a finding held by review-premise (verdict challenged or owner-decision) until the operator upholds it",
+      "problem": "The rule that a held finding never reaches a fixer is stated only as a schema description (the caller filters held findings out before dispatch). review_feedback items have no premise/held field, so the boundary cannot check the rule; enforcement lives in prose in each caller (flow-orchestrator, job-orchestrator, feature-dev).",
+      "impact": "Each fix-loop orchestrator must re-implement the filter; a caller that forgets it silently implements a challenged finding, the exact failure flow 459 exists to prevent. The gate (findingVerdict) enforces completion, not dispatch.",
+      "suggested_fix": "Name one shared filter (reuse findingVerdict held logic) that fix-loop callers use to build review_feedback, or add an optional premise_verdict field to items so the receiving skill can refuse a held one.",
+      "evidence": "Diff hunk @@127,167 only adds the description; item properties list id, suggested_fix, file, line, severity, message with additionalProperties false.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-002",
+      "severity": "minor",
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "`downgraded` only: the lower severity, also the finding's own.",
+      "problem": "premise.severity / original_severity duplicate the finding's own severity, and premise.operator duplicates disposition (the gate test writes both premise.operator and disposition dismissed-incorrect, while another test records the decision only via recordPremiseDecision). Two writable representations of one fact.",
+      "impact": "Drift risk: a record where premise.severity differs from severity, or operator answer differs from disposition, has no stated winner in the schema; every reader must know the precedence.",
+      "suggested_fix": "State the single source of truth in the schema description (finding.severity wins; premise.operator is the audit trail) and add a consistency check at ingest.",
+      "evidence": "Schema hunk lines for severity/original_severity/operator; review-gate.test.ts 'the operator's answer written onto the record is read the same way'.",
+      "confidence": "low",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-003",
+      "severity": "info",
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "line": null,
+      "quote": "judges the premise of findings raised by other reviewers and can only lower, hold or leave them",
+      "problem": "The EXEMPT registry is hand-copied into review-skills-iron-laws.test.ts and review-skills-class-scope.test.ts (comment says same set and same reasons); this PR extends the pair with a third parallel edit. Pre-existing pattern, extended not introduced.",
+      "impact": "A future delete-only reviewer must be added in two places or one test passes vacuously for it.",
+      "suggested_fix": "Share one exemption module between the two tests, or add a test asserting the two key sets are equal.",
+      "evidence": "Both EXEMPT blocks gained the same review-premise entry in this diff.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+## Architecture Review (slice-05)
+
+Layering is clean: premise is declared in the internal review-finding schema and deliberately kept out of the bundled reviewer-finding schema (the raising reviewer cannot judge its own premise); the model-tier floor is a pure signal in assignTier; the gate reads held state through findingVerdict. No blockers or majors. Findings: 2 minor, 1 info.

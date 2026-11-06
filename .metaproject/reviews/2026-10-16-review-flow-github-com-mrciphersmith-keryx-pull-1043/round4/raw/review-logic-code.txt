@@ -1,0 +1,82 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "scope": "round 4 fix delta (round4/delta-code.diff) at HEAD e9cc33c95; skills priors checked at HEAD",
+  "prior_dispositions": [
+    {
+      "id": "r3-review-logic-code#LG3-001",
+      "disposition": "closed",
+      "evidence": "src/commands/automatic-review.ts:223 PLAIN_SEGMENT /^[A-Za-z0-9._-]+$/ is required of every segment as written and resolved (:340-341) before the fold check; U+017F, U+0131, NFD/NFC e-acute, full-width o and Kelvin spellings are refused (automatic-review.test.ts new 'non-ASCII spelling' test), and the store reader refuses a look-alike entry (src/review/operator-decisions.ts:152-167)."
+    },
+    {
+      "id": "r3-review-logic-skills#LG3-001",
+      "disposition": "closed",
+      "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1127 now renumbers 'a new finding whose display id a carried one already has included' before dispatch; review-premise/SKILL.md:63 says the same."
+    },
+    {
+      "id": "r3-review-logic-skills#LG3-002",
+      "disposition": "closed",
+      "evidence": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md:51 adds the **Premise** field to the Implementation Spec list Step 1 (:42) sends the claims to."
+    },
+    {
+      "id": "r2-review-logic-skills#LG2-003",
+      "disposition": "closed",
+      "evidence": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:65 'For one finding those are' now lists below-minor, not-a-downgrade (missing or equal severity), raise-severity and severity-without-downgrade, matching premise.ts:339-387."
+    },
+    {
+      "id": "r2-review-style-skills#R2-002",
+      "disposition": "closed",
+      "evidence": "Not a review-logic finding (verified for the caller in round 3). `git diff origin/main` on job-orchestrator/SKILL.md no longer touches the arXiv-bound or 'The bound is a ceiling' paragraphs (:1271-1285): main's wrap is restored."
+    }
+  ],
+  "findings": [
+    {
+      "id": "LG4-001",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 739,
+      "quote": "const heldClaims = (parsed?.claims ?? []).filter((claim) => !isMalformed(claim) && isHeldVerdict(claim.verdict));",
+      "problem": "inheritedPremiseClaims counts a stored claim as a hold by its verdict word alone, not by whether it ever held a finding, and it runs on a first ingest as well as a re-ingest. review-orchestrator/SKILL.md:1128 has the orchestrator save the judge's claims to research-evidence/premises.json in the package before ingest. So two things now happen that the delta's own text rules out. (a) A first ingest without --premises over that file applies the claims: previousFindings is undefined, heldClaims merge cleanly, `ok: true`. The challenged finding is held, and the CLI prints 'carried forward ... the held findings still match them' (review.ts:1082). job-orchestrator/SKILL.md:1165, changed in this round, says 'Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer', and review.ts:5306 describes the carry as a re-ingest feature only. (b) A held-verdict claim that the merge rejected (for example `challenged` with no practice_sources, which gives challenged-without-evidence, or held-without-question, self-judgement or unknown-finding) never held anything. The trial merge rejects it again, it lands in `lost`, and the ingest is refused with 'This package holds findings the premise judge held'. That is false: no finding was held, and the earlier ingest's findings.json has no held record.",
+      "impact": "Trigger for (b): ingest 1 with --premises whose only `challenged` claim cites no source, so it is rejected and nothing is held. After that, any ingest of the package without --premises is refused, with a reason that names a hold that does not exist, until the operator passes --premises. Trigger for (a): following review-orchestrator:1128 and then running ingest without --premises holds findings the job-orchestrator text says go to the fixer. Neither case loses data, and (a) fails safe. But the docstring's 'Undefined when nothing was held' (premise.ts:727-728) is not what the code does.",
+      "suggested_fix": "Key the carry on what the previous ingest recorded, not on the claim's verdict word. Return undefined unless previousFindings is an array (an ingest happened). Take the claims that must still land from previousHeld (the records whose hold actually applied), and drop the heldClaims-only branch. Or, if a first ingest is meant to pick up a saved premises.json, say so in job-orchestrator/SKILL.md:1165 and in review.ts:5306, and filter heldClaims to claims the trial merge applies.",
+      "evidence": "src/review/premise.ts:730-758 (previousHeld from findings.json, heldClaims from the verdict only, the early return needs both empty, lost from trial.rejections); src/review/managed.ts:369-374 (runs whenever premiseClaims is undefined, first ingest included); src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1128; src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1165; src/commands/review.ts:1082, :5306.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG4-002",
+      "severity": "minor",
+      "file": "src/review/operator-decisions.ts",
+      "line": 161,
+      "quote": "throw new Error(`${path.basename(packageDir)} holds ${lookalikes.map(...)}, which a case-insensitive filesystem may read as ${OPERATOR_DECISIONS_FILE}. ... remove the look-alike and check the decisions again.`);",
+      "problem": "The new look-alike refusal is thrown from readEntries, so it also escapes readPremiseDecisions inside readReviewRounds (review-gate.ts:514 to :531). That module's documented contract is that a per-package read failure becomes a blocking, named outcome, never an escaping exception (review-gate.ts:550-571). Its two callers swallow what escapes. flow complete's reviewGate turns it into the constant 'review gate could not be evaluated; treated as failed, not skipped' (service.ts:653, :2055), so the file name and the instruction to remove the look-alike never reach the operator. prior-round.ts:890 turns it into `[]`, so one look-alike in any package of a flow silently removes every round of that flow from prior-round source 5 ('no reviewed round in flow ...').",
+      "impact": "Trigger: an entry folding to operator-decisions.json (for example `operator-deciſions.json`) in any package under .metaproject/flows/<flow>/reviews/. flow complete fails with an unexplained constant message, and the next `review start` for that flow does not see its flow rounds. Both fail closed, but the remedy text this fix wrote is lost on both paths. `keryx review verdict`/readiness do show it.",
+      "suggested_fix": "In readReviewRounds, catch the readPremiseDecisions failure for that package and push its message onto `problems` (ingested=false), so the gate names the package and the look-alike. Or have withPremiseHolds return an awaiting hold plus a problem instead of throwing.",
+      "evidence": "src/review/operator-decisions.ts:152-173; src/flow/review-gate.ts:514, :527-535, :550-571; src/flow/service.ts:653, :2040-2056; src/review/prior-round.ts:890.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG4-003",
+      "severity": "info",
+      "file": "src/commands/automatic-review.ts",
+      "line": 223,
+      "quote": "const PLAIN_SEGMENT = /^[A-Za-z0-9._-]+$/;",
+      "problem": "PLAIN_SEGMENT allows a trailing dot, and foldFileName does not strip one. A Win32 path layer drops trailing dots and spaces from a name. So `.metaproject/reviews/<id>/.operator-decisions.lock./x.json` passes every check: plain segments, `.json` extension, no segment folds to an operator-only name. On Windows it may create the real `.operator-decisions.lock` directory, and the operator's next decision write then waits on a lock nobody holds until it goes stale. The decisions file itself is safe, because `operator-decisions.json.` has extname '.' and is refused.",
+      "impact": "Observation, not a verified path. It only matters on Windows, and only if Bun's fs there goes through the Win32 name normalisation without a \\\\?\\ prefix. The effect would be a stall of operator commands, not a forged answer.",
+      "suggested_fix": "Refuse a segment that ends in '.' (for example `/^[A-Za-z0-9._-]*[A-Za-z0-9_-]$/`), or strip trailing dots and spaces in foldFileName.",
+      "evidence": "src/commands/automatic-review.ts:216, :223, :266-268, :327-349; src/review/operator-decisions.ts:141-143, :179-181. To settle it: on Windows under Bun, write `<pkg>/.operator-decisions.lock./x.json` and check whether `<pkg>/.operator-decisions.lock` exists.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## Logic Review (round 4, fix delta)
+
+- Scope: round4/delta-code.diff at HEAD e9cc33c95. Read-only: no tests run. Spec gate skipped because no issue was supplied.
+- Priors: all five attributed to review-logic are **closed** (LG3-001 code, LG3-001/LG3-002 skills, LG2-003). The fifth, R2-002, is review-style's, and its main-wrap restore is verified.
+- Verified sound: the normaliseCarriedPremise refactor is equivalent to the old branches in every case. recordPremiseDecisionAfter keeps the HL2-003 rule that both writes land or neither does, and the vouched value returns only after a successful append. The isReviewPackageDir rewrite is equivalent to the relative-path version. approvesPatchTargets does the escape check before reading segments of the real path. Global ids are minted (managed.ts:304) before the inherited-claims trial, so the RG2-004 subject check keys correctly.
+- New: 0 blocker, 0 major, 2 minor, 1 info.
+  - **LG4-001** (premise.ts:739): inheritedPremiseClaims treats a stored held-verdict claim as a hold by its verdict alone. A claim the merge rejected therefore causes a false refusal. A first ingest over a saved premises.json applies the claims, which contradicts job-orchestrator:1165, a line changed in this round.
+  - **LG4-002** (operator-decisions.ts:161): the look-alike refusal escapes readReviewRounds. flow complete reduces it to a constant 'unevaluable' message, and prior-round detection silently drops every round of the flow.
+  - **LG4-003** (info, automatic-review.ts:223): a trailing-dot segment may alias the lock directory on Windows. Not verified.

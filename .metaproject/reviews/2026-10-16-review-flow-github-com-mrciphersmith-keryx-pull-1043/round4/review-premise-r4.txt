@@ -1,0 +1,99 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r4-review-architecture-code#R4-ARCH-001",
+      "verdict": "upheld",
+      "reasoning": "The header (package-location.ts:2-3) names three readers rather than 'every reader', so the finding overstates its wording, but its closing 'so a change to it is made once' is false: loop.ts:485, review-gate.ts:460, spend.ts:21, arbiter-log.ts:89, autonomous-run.ts:179, review.ts:3615 and prior-round.ts:415/418 still build the same paths by hand. No intent signal against it. Note for the fixer: the second fix option mostly holds already; only the 'made once' clause needs softening."
+    },
+    {
+      "finding_id": "r4-review-clean-code-code#CC4-001",
+      "verdict": "upheld",
+      "reasoning": "premise.ts:241 gives severityAgrees two meanings depending on the verdict, and the :246 branch depends on the :245 return to be reached only for downgraded. A readability defect with no intent signal or practice source against it."
+    },
+    {
+      "finding_id": "r4-review-clean-code-code#CC4-002",
+      "verdict": "upheld",
+      "reasoning": "inheritedPremiseClaims (premise.ts:730-761) has two separate 'lost' rules in loop bodies, plus a refuse closure and an unreadable side variable. Splitting it follows ordinary clean-code practice and the code shows no intent against it. LG4-001/RG4-001 touch the same function, so the extraction can ride with that fix."
+    },
+    {
+      "finding_id": "r4-review-clean-code-skills#CC4-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/review/premise.ts:339-341", "says": "below-minor rejects any claim on an `info` finding: it is about the finding's own severity" },
+        { "ref": "src/review/premise.ts:382-386", "says": "downgrade-below-threshold, a separate reason, rejects a `downgraded` whose target severity is `info` (e.g. major to info)" },
+        { "ref": "src/review/premise.ts:65-87", "says": "PREMISE_REJECTION_REASONS lists below-minor and downgrade-below-threshold as two distinct codes" }
+      ],
+      "reasoning": "Read in parallel with 'of a minor', the tail 'or below minor' in the downgrade clause means a downgrade TO below minor (downgrade-below-threshold), not a claim ON a sub-minor finding (below-minor). The two are different refusals with different codes, so neither clause subsumes the other. The suggested fix would drop the only mention of a major-to-info downgrade from the hand-applied refusal list, which leaves it less complete than the code. At most the wording is ambiguous; it does not state one refusal twice.",
+      "question": "The tail 'or below minor' documents the separate downgrade-below-threshold refusal (a major downgraded to info), not the below-minor one. Keep it, or still drop it as the finding suggests?",
+      "options": [
+        "dismiss — keep the clause: it is the downgrade-below-threshold refusal, not a duplicate",
+        "uphold — drop or reword the clause as the finding suggests"
+      ]
+    },
+    {
+      "finding_id": "r4-review-clean-code-skills#CC4-002",
+      "verdict": "upheld",
+      "reasoning": "Rule 7 (review-pr-feedback SKILL.md:366) records the operator's answer on the Step 7 **Premise** entry (:390) and again in the Stats line (:813). It gives a reason: so a resumed or --fix run carries it. That reason comes from this branch, so it is no evidence of an earlier deliberate choice, and storing one fact twice is the drift the finding describes."
+    },
+    {
+      "finding_id": "r4-review-clean-code-skills#CC4-003",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "bb0423cab (merge-base with origin/main), job-orchestrator SKILL.md arXiv paragraph", "says": "git diff merge-base..HEAD shows no change to the 'Three is the self-fix bound' paragraph: the current wrap, 120-column first line included, is origin/main's text" },
+        { "ref": "5f5604f82", "says": "the round-3 fix put the paragraph back to the origin/main wrap, undoing b8ed54038's rewrap (flow 459 R2-002)" }
+      ],
+      "reasoning": "The finding has two parts. The first, at :1165, stands: 'a first ingest' implies a contrast the section never states, and LG4-001 shows a first ingest can in fact hold over a saved premises.json. The second asks to revert a 'whitespace-only rewrap' of :1273-1285, but that paragraph already matches the merge-base byte for byte. The last round's change was itself the revert to main. Doing the suggested revert would re-introduce a diff against main that has no content change, the very noise the finding objects to. Because the fix is unsound for half the finding, the operator should decide its scope before a fixer applies it.",
+      "question": "The arXiv paragraph (:1273-1285) already matches origin/main; reverting it would add a whitespace-only diff. Should the fix touch only the 'first ingest' line at :1165?",
+      "options": [
+        "dismiss — drop the finding; let the LG4-001 fix settle the :1165 wording and leave the arXiv paragraph as main has it",
+        "uphold — fix the :1165 line (explain or drop 'first', rewrap) and leave the arXiv paragraph alone"
+      ]
+    },
+    {
+      "finding_id": "r4-review-clean-code-skills#CC4-004",
+      "verdict": "upheld",
+      "reasoning": "review-orchestrator SKILL.md:1127 puts the one action the dispatcher must take, renumbering, inside a nested clause ('..., a new finding whose display id a carried one already has included, ...') that reads as a stray word. No intent signal; splitting the bullet is ordinary practice."
+    },
+    {
+      "finding_id": "r4-review-logic-code#LG4-001",
+      "verdict": "upheld",
+      "reasoning": "premise.ts:739 picks out held claims by verdict word alone. :740 lets a first ingest (previousFindings undefined) go through whenever premises.json is present, and managed.ts:369-372 runs this on any ingest without --premises. So both (a) a first ingest applying the saved claims, against job-orchestrator SKILL.md:1165, and (b) a refusal naming a hold that never applied can be reached. The docstring at :728 contradicts the code. No intent signal against it."
+    },
+    {
+      "finding_id": "r4-review-logic-code#LG4-002",
+      "verdict": "upheld",
+      "reasoning": "decisionsStorePath (operator-decisions.ts:161-164) throws. Its caller readEntries is reached from withPremiseHolds (review-gate.ts:527-531), which readReviewRounds calls at :514 with no catch, while the module elsewhere turns per-read failures into a blocking, named outcome (review-gate.ts:548-571). The remedy text never reaches the operator on the gate path. Fails closed but is a real defect; no intent signal for letting it escape."
+    },
+    {
+      "finding_id": "r4-review-regression-code#RG4-001",
+      "verdict": "upheld",
+      "reasoning": "managed.ts:510-514 stores the claims as received, rejected ones included, and premise.ts:748-750 marks any held-verdict claim the trial merge rejects as lost. So a claim that never applied refuses a byte-identical re-ingest, with a message (:759) that names a hold which never existed. It overlaps LG4-001(b) at the same site; duplication is not a premise question."
+    },
+    {
+      "finding_id": "r4-review-style-skills#R4-001",
+      "verdict": "upheld",
+      "reasoning": "review-pr-feedback SKILL.md:454 is one long line among hard-wrapped siblings (:455-456). This branch also unwrapped rule 3 and wrote rule 7 as one line, but a signal the branch introduces is no evidence of a prior choice, and the merge-base wrapped this list. No practice source against keeping a list's items consistently wrapped."
+    }
+  ]
+}
+```
+
+## Summary
+
+- upheld: 9
+- challenged: 2
+- owner-decision: 0
+- downgraded: 0 (every finding is `minor`; none can be downgraded)
+- left alone (below minor): 0
+
+Held findings:
+
+- **r4-review-clean-code-skills#CC4-001**: "The tail 'or below minor' documents the separate downgrade-below-threshold refusal (a major downgraded to info), not the below-minor one. Keep it, or still drop it as the finding suggests?" Options: dismiss (keep the clause) / uphold (drop or reword it). Signals: premise.ts:339-341 (below-minor, on the finding's own severity), premise.ts:382-386 (downgrade-below-threshold, on the downgrade target), premise.ts:65-87 (two distinct reason codes).
+- **r4-review-clean-code-skills#CC4-003**: "The arXiv paragraph (:1273-1285) already matches origin/main; reverting it would add a whitespace-only diff. Should the fix touch only the 'first ingest' line at :1165?" Options: dismiss (drop the finding; LG4-001's fix settles :1165, the paragraph stays as main has it) / uphold (fix :1165 only, leave the paragraph). Signals: git diff bb0423cab..HEAD shows no change to that paragraph; 5f5604f82 restored main's wrap after b8ed54038's rewrap.
+
+History read: git log -L / git diff against merge-base bb0423cab for the job-orchestrator paragraph and git log for package-location.ts. Nothing was executed besides read-only git and file reads.

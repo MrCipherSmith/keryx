@@ -1,0 +1,584 @@
+[
+ {
+  "id": "review-clean-code-w2:F-006",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:1928-1930 still sums every usage_update; unchanged, info-level, depends on adapters not read",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "managed.ts:1227 uses shared dispatchRuns (research.ts:46) so the unknown narrowing is gone; normalizeCoverage still takes a third optional research parameter (managed.ts:1245)",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "open",
+  "evidence": "src/review/locate.ts:62-63 still stacks \"How a finding's line was arrived at.\" above the LocateMethod doc, now describing the wrong type; LocatorRecord (69) has no doc",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:1928 still sums usage_update events; unchanged info",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "partial",
+  "evidence": "completion-gate.test.ts:207 still passes without the pointer branch (pr-7975 is the only fresh package); pointer ignoring is now tested at :316",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "completion-gate.ts:316-320 roots still scanned one after another and all candidates collected before pickPackage; bounded by the cap of 8",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-security-code-w1:SEC-004",
+  "disposition": "open",
+  "evidence": "review-finding.schema.json:219-231 unchanged by design; readiness item quotes-located still blocks complete (info)",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "research.ts:46-62 dispatchRuns accepts any non-empty reviewer string, newlines included; managed.ts:1227 writes it to coverage.md",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "disposition": "open",
+  "evidence": "no spawn-subagent-tool test is in this slice; accumulation, one-sided and partial-save cases are not shown covered",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "partial",
+  "evidence": "same as logic-w3 F-002: completion-gate.test.ts:207 still does not need the pointer branch",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-002",
+  "disposition": "partial",
+  "evidence": "locate.test.ts:446 now asserts kind/candidates for the whitespace ambiguity; the two bound cases are still not asserted",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-architecture-w1:F-004",
+  "disposition": "open",
+  "evidence": "bundled SKILL.md:45 still tells a non-shell orchestrator to append the usage line to the file the reviewer writes; the raw hash covers it",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-architecture-w2:F-005",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:26 still imports review/dispatch-usage; direction accepted, info",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-architecture-w3:F-006",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:26 same import as w2 F-005, accepted, info",
+  "_src": "review-architecture-w1"
+ },
+ {
+  "id": "review-clean-code-w2:F-006",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1927 onUsage still sums every usage_update; no adapter check or comment added (info)",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "src/review/managed.ts:1227 the hand-rolled narrowing moved into dispatchRuns (research.ts:46-64); normalizeCoverage still takes a third optional `research?: unknown` at :1245 and any other status still reads `failed: not run` at :1234",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "open",
+  "evidence": "src/review/locate.ts:62-68 `/** How a finding's `line` was arrived at. */` still stacked above the LocateMethod doc, so LocatorRecord at :70 has no doc of its own",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1927 onUsage still sums every usage_update; no adapter check or comment added (info)",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:207-216 the pointer test still passes with the pointer read removed: pr-7975 is the only in-session package (test 218-224 finds it with no pointer) and pr-7912 is excluded by age; the call only changed to { roots: [sub] }",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-logic-w4:F-004",
+  "disposition": "partial",
+  "evidence": "src/review/coverage.ts:516-519 doc now states the fallback to origin/main..master, but review start/ingest still never record target.base (src/commands/review.ts:1096 passes --base to findPreviousRound only), so a PR on another base is still diffed against main",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-004",
+  "disposition": "partial",
+  "evidence": "src/review/coverage.ts:500 gitTopLevel and :547 diff result are cached per process and resolveBase probes run in Promise.all (prior-round.ts:323); the top-level lookup is still sequential with a fallback at :566 and the cache key ignores a moved base ref",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.ts:316-321 roots still scanned one after another and all candidates collected before pickPackage; unchanged (info)",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "src/review/research.ts:53 dispatchRuns accepts any non-empty reviewer string, newlines included; unchanged (info, names come from the CLI)",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:207-216 the pointer test still passes with the pointer read removed: pr-7975 is the only in-session package (test 218-224 finds it with no pointer) and pr-7912 is excluded by age; the call only changed to { roots: [sub] }",
+  "_src": "review-clean-code-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "open",
+  "evidence": "locate.ts:62-67 still two stacked doc comments (CB-005)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-003",
+  "disposition": "open",
+  "evidence": "retry-eval.ts:42 still JSON.parse(raw) on the unstripped file (CB-008)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-005",
+  "disposition": "partial",
+  "evidence": "schema description now ties locator and quote_unlocated to one check; candidate_lines still has no maxItems (CB-011)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-logic-w2:F-005",
+  "disposition": "partial",
+  "evidence": "spawn-subagent-tool.ts:2328 writes the placeholder when the target is empty or absent, else .partial without telling the parent (CB-001)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "evidence": "completion-gate.test.ts:207-216 not discriminating (CB-004)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-logic-w4:F-001",
+  "disposition": "partial",
+  "evidence": "ledger.ts:19-36 free-text window removed and anchored; sentence-start defect prose and path-qualified inputs still mis-classify (CB-006)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "partial",
+  "evidence": "completion-gate.ts:316-319 still scans every root before pickPackage; roots now capped at 9",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-002",
+  "disposition": "partial",
+  "evidence": "completion-gate.ts:324 closedAt now per chosen root, still any closed package newer than the chosen one (CB-012)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "managed.ts:2738 still writes entry.reviewer unescaped; names come from the CLI-built selected set, unchanged",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "evidence": "completion-gate.test.ts:207-216 (CB-004)",
+  "_src": "review-core-boundaries-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-10",
+  "disposition": "partial",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "open",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-highload-w1:F-003",
+  "disposition": "partial",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-highload-w2:F-005",
+  "disposition": "partial",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-006",
+  "disposition": "partial",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-security-code-w2:SEC-W2-001",
+  "disposition": "partial",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-003",
+  "disposition": "partial",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "_src": "review-highload-w1"
+ },
+ {
+  "id": "review-clean-code-w2:F-006",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts onUsage still adds every usage_update (childUsage.tokens_in += tokensIn); adapters not checked; info",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "managed.ts:1227 uses the typed research.ts dispatchRuns; an unrecognised status still falls to 'failed: not run' at managed.ts:1234",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "open",
+  "evidence": "src/review/locate.ts:62-66 '/** How a finding's `line` was arrived at. */' is still a stacked doc comment, now above LocateMethod's doc, not above LocatorRecord (:69)",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-highload-w1:F-003",
+  "disposition": "partial",
+  "evidence": "dispatch-usage.ts:9-14 comment corrected; USAGE_LINE (:36) still accepts a line anywhere, last wins, rather than only the last non-empty line",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "disposition": "open",
+  "evidence": "onUsage still sums per usage_update; no per-request last-seen tracking; info",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-logic-w2:F-005",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:2328 deliberately keeps an existing result and writes the empty record to .partial (comment :2326-2327); a stale earlier result still reads as current. See new LG-001 for the placeholder case",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "evidence": "completion-gate.test.ts:207-216 unchanged except the call shape; pr-7975 is still the only fresh package, so the test passes without the pointer branch (completion-gate.ts:272-283)",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-006",
+  "disposition": "partial",
+  "evidence": "ledger.ts:45 still runs both patterns through map before find (no short-circuit), though the {0,80} windows are gone",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "completion-gate.ts:316-321 roots still scanned one after another, and every candidate is collected before pickPackage reads the pointer",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-security-code-w2:SEC-W2-001",
+  "disposition": "partial",
+  "evidence": "dispatch-usage.ts:9-14 comment corrected; spawn still saves child-authored KERYX_USAGE lines when the host has no usage",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-003",
+  "disposition": "partial",
+  "evidence": "dispatch-usage.ts:12-14 documents the limitation and that no gate reads usage; no sidecar, and the reviewer's lines are not stripped",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "research.ts:53 dispatchRuns accepts any non-empty reviewer string, and managed.ts:1227 copies it into coverage unchecked",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "evidence": "completion-gate.test.ts:207-216 the pointer still names the only fresh package; no fixture where the pointer and the session filter disagree",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-logic-w1:LG-006",
+  "disposition": "partial",
+  "evidence": "spawn now writes a raw file for empty (:2328) and no-text timeout (:2260) dispatches, so they count; a driver with no raw file at all is still absent from dispatches/unknown (ledger.ts runUsage over `mine` raws)",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-logic-w1:LG-007",
+  "disposition": "open",
+  "evidence": ".metaproject/core/gdskills/contracts/review-finding.schema.json:232 candidate_lines still has no if/then excluding reason absent (both copies identical)",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-logic-w2:F-004",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:2324 still checks `turnResult?.submittedResult === undefined` with status Completed; dead but harmless, info",
+  "_src": "review-logic-w1"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:1927 still sums every usage_update; unchanged. No provider emits more than one per request, so it stays an info observation.",
+  "_src": "review-performance-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-002",
+  "disposition": "partial",
+  "evidence": "History scan is now incremental (completion-gate.ts:141-150 cursor), so the transcript is no longer rescanned. Root scans (scanRoot readdir + manifest read + stat per package, :317) and dirSignature (:341) still run from scratch on every stop, now bounded by 8 roots and 20 continues.",
+  "_src": "review-performance-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "completion-gate.ts:317 still scans roots sequentially and collects every open candidate even when the pointer decides; unchanged and bounded by 8 roots, info only.",
+  "_src": "review-performance-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-005",
+  "disposition": "open",
+  "evidence": "dispatch-usage.ts:85 still has `.replace(/\\s+$/, \"\")`, quadratic on a long whitespace run; restated as PERF-R2-001.",
+  "_src": "review-performance-w1"
+ },
+ {
+  "id": "review-clean-code-w2:F-006",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1923-1929 onUsage still sums every usage_update; adapters not re-checked; info, unchanged",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "src/review/research.ts:46-64 dispatchRuns gives typed runs (fixed); src/review/managed.ts:1234 still maps every status other than complete/incomplete, a typo included, to failed 'not run'",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "open",
+  "evidence": "src/review/locate.ts:62-67 '/** How a finding's `line` was arrived at. */' is still stacked on top of the LocateMethod doc block, not above LocatorRecord (line 69)",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1923-1929 summing unchanged; info",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-logic-w2:F-005",
+  "disposition": "partial",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2328 an empty reply now goes through saveTimedOutPartial: an earlier complete file at the path is kept and the empty record goes to <path>.partial with no note to the parent (src/harness/tool/builtin/spawn-subagent-tool.ts:2329 notes only an error), so the earlier file still reads as current; see REG-R2-001 for the new regression on this path",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:207-216 unchanged: pr-7975 is still the only fresh candidate, so the test passes with the pointer branch (src/review/completion-gate.ts:272-283) removed; the new tests at 301-314 also pass through the named-candidate path",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-006",
+  "disposition": "partial",
+  "evidence": "src/review/ledger.ts:45 still map+find (both patterns always run), but the {0,80} x {0,80} windows the finding costed are gone",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.ts:316-320 roots still scanned one after another, and candidates collected even when the pointer decides; info",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "src/review/managed.ts:1227 reviewer names from dispatchRuns (research.ts:53 checks only for a non-empty string) are still not validated against a name pattern; info, unreachable today",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:207-216 unchanged; no fixture in which the pointer and the session filter disagree",
+  "_src": "review-regression-w1"
+ },
+ {
+  "id": "review-clean-code-w2:F-006",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts onUsage still sums every usage_update (childUsage.tokens_in += tokensIn ?? 0); adapters not changed in this slice. Info only.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "src/review/managed.ts:1227 now reads typed dispatchRuns (src/review/research.ts:46); an unrecognised status still falls through to `failed: not run` at managed.ts:1234.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "partial",
+  "evidence": "src/review/locate.ts:62 `/** How a finding's `line` was arrived at. */` is still an orphan doc comment, now stacked over LocateMethod's doc at :63-66 instead of over UnlocatableKind.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-highload-w1:F-003",
+  "disposition": "partial",
+  "evidence": "src/review/dispatch-usage.ts:9-14 comment corrected (last line wins, a reviewer can write one); the parser still accepts a KERYX_USAGE line anywhere at a line start (:36, :79-83), not only the last non-empty line.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts onUsage sums every usage_update, unchanged; info, no reproducible path.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-logic-w2:F-005",
+  "disposition": "partial",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2328 the empty reply is now recorded, but saveTimedOutPartial (:329-334) writes it to `<target>.partial` when a non-empty file is already there, so an earlier dispatch's result at the same path still reads as current.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:207-216 unchanged: pr-7975 is the only in-session open package, so the test passes with the pointer branch removed; the new tests at :301 and :335 are also decided by the candidate scan (named by id / newest mtime) rather than by the pointer.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-006",
+  "disposition": "open",
+  "evidence": "src/review/ledger.ts:45 still `UNREADABLE_INPUT.map((re) => re.exec(summary)).find(...)` with no summary length cap; info.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.ts:316-320 roots are still scanned sequentially and every root's candidates are collected before pickPackage; info.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-security-code-w2:SEC-W2-001",
+  "disposition": "partial",
+  "evidence": "src/review/dispatch-usage.ts:12-14 comment corrected; but src/harness/tool/builtin/spawn-subagent-tool.ts:2369 still saves `${raw}${usageSuffix()}` with child-authored KERYX_USAGE lines intact, so with childUsage.known false the child's own line is read as the dispatch's usage. Kept at info because no gate reads usage.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-002",
+  "disposition": "partial",
+  "evidence": "src/review/completion-gate.ts:324 closedAt now comes only from the chosen package's root, and roots are harvested only from the session's own commands inside cwd; but a closed review-flow manifest committed by the PR under cwd itself (always a scanned root) still releases the gate when no package is chosen or the chosen one is older. The remaining part is reported as SEC-R2-002.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "src/review/managed.ts:1227-1234 reviewer names (and now notRunReason/executionReason) from research.json are still copied into coverage.md (renderCoverage at :2738) without rejecting newlines; there is still no attacker path (names come from the CLI's selected set), info.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:207-216 unchanged; no test makes the pointer decide against the candidate scan.",
+  "_src": "review-security-code-w1"
+ },
+ {
+  "id": "review-clean-code-w2:F-006",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1924-1927 onUsage still sums every usage_update; unchanged, and still no reproducible double-count path (info)",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "src/review/managed.ts:1227 uses the shared typed dispatchRuns (src/review/research.ts:46) and DispatchRun documents pass-through statuses; normalizeCoverage still takes a third optional `research?: unknown` (line 1245)",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "disposition": "open",
+  "evidence": "src/review/locate.ts:62-63 two stacked doc comments remain above LocateMethod; LocatorRecord (line 69) still has none",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1920-1930 unchanged; info with no reproducible path",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:207-216 same fixture still finds pr-7975 with no pointer (test at 218-224 shows it), so the pointer branch is not exercised",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-006",
+  "disposition": "open",
+  "evidence": "src/review/ledger.ts:45 both patterns are still tried through .map before .find (info)",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.ts:316-320 roots still scanned one after another and every root's candidates collected (info)",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "src/review/research.ts:53-55 and src/review/managed.ts:1227 reviewer names are still accepted unsanitised (info; names are written by the CLI)",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "evidence": "same as review-logic-w3:F-002; src/review/completion-gate.test.ts:207-216 still does not drive the pointer branch",
+  "_src": "review-style-w1"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "state": "open",
+  "evidence": "completion-gate.test.ts:207-216 only had its call adapted to { roots: [sub] }; the fixture is unchanged and still passes without the pointer read (see :218-224). Re-filed as T-R2-001.",
+  "_src": "review-testing-practices-w1"
+ }
+]

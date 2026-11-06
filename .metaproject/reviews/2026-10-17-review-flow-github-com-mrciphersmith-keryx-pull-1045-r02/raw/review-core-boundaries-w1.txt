@@ -1,0 +1,477 @@
+```json keryx:findings
+{
+  "reviewer": "review-core-boundaries",
+  "status": "DONE",
+  "slices": [
+    "slice-01"
+  ],
+  "summary": "Fix slice 01 of PR 1045 round 2 reviewed at head 375279e78. Most attached findings are closed; the pointer-wins test, the locate.ts stacked comment and the retry-eval usage-line parse stay open.",
+  "findings": [
+    {
+      "id": "CB-001",
+      "severity": "minor",
+      "reviewer": "review-core-boundaries",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "const emptySaveNote = emptySaved === undefined || !(\"error\" in emptySaved) ? \"\" :",
+      "problem": "The round's stated spend counts one dispatch per surviving raw file, and the save helpers drop the usage of a dispatch whose file already exists. saveTimedOutPartial (used by the empty-reply exit and the timeout exit) writes to `<target>.partial` whenever the target holds any text, including an earlier empty placeholder, and no reader loads a .partial; the success path (saveChildResult) overwrites the target. So a re-dispatch to the same save_result_to path (which the empty-reply advice itself prescribes) erases the paid first attempt, and a second empty reply records its usage only in the unread .partial. The empty-reply tool output also says nothing when the record went to .partial (it notes only an error), unlike the timeout exit.",
+      "impact": "Token spend in research.json and report.md is a lower bound that still reads as complete (complete: true, unknown: 0) after any retry to the same raw path, so the flow-460 H outcome 'every dispatch's token use lands in the package' does not hold for retried dispatches.",
+      "suggested_fix": "Keep the earlier KERYX_USAGE line when the target exists (or write each attempt to its own raw name), or have the ledger read `<raw>.partial` usage; state the .partial destination in the empty-reply output as the timeout exit does. Otherwise say in the report that retried dispatches are not counted.",
+      "evidence": "spawn-subagent-tool.ts:329-333 saveTimedOutPartial picks `${abs}.partial` when existing.trim() !== \"\"; :2328 writes the empty placeholder through it; :2369 saveChildResult overwrites abs; the ledger loads raw/*.txt only (ledger.ts rawUsage over raws).",
+      "confidence": "medium"
+    },
+    {
+      "id": "CB-002",
+      "severity": "minor",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "if (!isSeparator(text[sep]) || !text.startsWith(REVIEWS, sep + 1)",
+      "problem": "reviewPackagePaths is run over `call.arguments`, which is JSON text. A Windows path in a command is JSON-escaped there (C:\\\\w\\\\.metaproject\\\\reviews\\\\r9): after `.metaproject` comes a backslash pair, so text.startsWith(REVIEWS, sep + 1) sees a backslash and the occurrence is skipped. The unit test passes the raw string with single backslashes, which a tool call never carries. The old regex had the same single-separator limit, so this is not a regression, but the new tracker is documented as covering both separators.",
+      "impact": "On Windows a package named by path in a keryx review command is never recorded as named, so a review opened in an earlier session is not recognised and the gate falls back to the placeholder.",
+      "suggested_fix": "Accept one or two separators (or JSON-decode the arguments' string values before scanning) and add a test that feeds a JSON.stringify'd Windows command.",
+      "evidence": "completion-gate.ts:74; completion-gate.test.ts 'package path matching is linear' asserts only the unescaped Windows string; reviewCall() builds arguments with JSON.stringify.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CB-003",
+      "severity": "minor",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const fresh = Date.parse(pointer.startedAt) >= since;",
+      "problem": "A pointer wins when it was written after THIS session started, whoever wrote it. The active-review pointer is one file per project root, and several sessions share a checkout. A concurrent session that runs `keryx review start` after this one began makes its pointer fresh here, so pickPackage returns that session's package even though this session's own commands name a different one; if that other review then closes, best.mtime < closedAt releases this session's gate too. Flow 460 C (nudge pointing at another PR's package) is fixed for an older pointer and left open for a newer foreign one.",
+      "impact": "A session reviewing PR A is nudged about, and finally stopped on, PR B's package when a second session in the same checkout starts B.",
+      "suggested_fix": "Prefer a package this session's commands name (packageDirs / reviewIds / commands) over a merely fresh pointer, and use the pointer as a tie-breaker only when this session named none.",
+      "evidence": "completion-gate.ts:279-282 returns the pointer's package once fresh; namedBySession is consulted only when the pointer is NOT fresh.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CB-004",
+      "severity": "minor",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/completion-gate.test.ts",
+      "line": null,
+      "quote": "expect(found?.packageDir).toBe(current);",
+      "problem": "The pointer-wins test still passes with the pointer branch of pickPackage deleted: pr-7975 is the only package written this session and is found by the fallback scan, and pr-7912 is already excluded by its age. No test in the file has two eligible packages with the pointer naming the older-mtime one. This restates two round-1 findings (review-logic-w3:F-002, review-testing-practices-w2:T-001); the round-2 edit only changed the call signature.",
+      "impact": "A regression that ignores the pointer, the very behaviour flow 460 C names, stays green.",
+      "suggested_fix": "Write two fresh packages with the newer mtime not named by the pointer, and assert the pointer's package is chosen.",
+      "evidence": "completion-gate.test.ts:207-216; the neighbouring tests (named by id, named by path, older pointer ignored) are also satisfiable by the scanRoot candidates alone.",
+      "confidence": "high"
+    },
+    {
+      "id": "CB-005",
+      "severity": "minor",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/locate.ts",
+      "line": null,
+      "quote": "export type LocateMethod = \"exact\" | \"whitespace-normalised\" | \"substring\";",
+      "problem": "Two doc comments are stacked: `/** How a finding's line was arrived at. */` (line 62) sits directly above LocateMethod's own block, and LocatorRecord, the type that sentence describes, has none. Round 1 raised the same stacking (review-clean-code-w3:CC-2); the diff moved the orphan rather than removing it.",
+      "impact": "Tooling shows only the nearer comment, so the orphaned sentence documents nothing.",
+      "suggested_fix": "Delete line 62, or move it above `export type LocatorRecord`.",
+      "evidence": "locate.ts:62-67 and :69.",
+      "confidence": "high"
+    },
+    {
+      "id": "CB-006",
+      "severity": "minor",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "const INPUT_NAMED = `(?:the\\\\s+|my\\\\s+|its\\\\s+|this\\\\s+|any\\\\s+)?",
+      "problem": "unreadableInputClaim is anchored now, which removes the round-1 false positives, but it still decides by free text in both directions. False positive: a sentence that opens with the input name and a reading verb about defect prose, for example 'The schema could not be loaded when the path has spaces.' or 'The payload was not found; ...' in a review of loader code, matches pattern 2 (OWN_STATEMENT accepts any sentence start). False negative: the real statement 'I could not read .metaproject/reviews/x/pr-context.json' names a path before the input, and INPUT_NAMED allows only an article and the bare name, so a starved reviewer is not caught.",
+      "impact": "A finished review of schema or payload loading code is held incomplete and costs a re-dispatch (recoverable); a reviewer that really could not read its input and names a path is counted as covering its slices.",
+      "suggested_fix": "Prefer a structured signal (status, needs_context, a required inputs_read field) over prose; if prose stays, allow an optional path token before the input name and require the first-person subject for pattern 2.",
+      "evidence": "ledger.ts:20-36; ledger.test.ts:1171-1176 pins only the four phrasings and one defect-prose case.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CB-007",
+      "severity": "info",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "if (!FINISHED.has(String(result.status ?? \"\").toUpperCase()) || open || (typeof stamped === \"string\" && stamped !== fingerprintNow)) continue;",
+      "problem": "prior_dispositions are collected from replies that pass FINISHED/open/fingerprint but not unreadableInputClaim, while the run loop below treats the same reply as unfinished. A reply that states it could not read its payload still contributes dispositions to dispatch.priorDispositions. fixSliceCoverage also needs readBy (which does exclude it), so a fix slice is not covered by it; only the recorded dispositions differ.",
+      "impact": "The report's disposition table can show an answer from a reviewer the ledger counts as incomplete. What settles it: whether priorDispositions is read anywhere without readBy.",
+      "suggested_fix": "Apply the same finished predicate (including unreadableInputClaim) in the dispositionsBy loop.",
+      "evidence": "ledger.ts:480 vs :529.",
+      "confidence": "low"
+    },
+    {
+      "id": "CB-008",
+      "severity": "info",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/retry-eval.ts",
+      "line": null,
+      "quote": "const whole: unknown = JSON.parse(raw);",
+      "problem": "Unchanged since round 1 (review-core-boundaries-w1:F-003): wholeFileResult parses the unstripped file, while parseReviewResult and isEmptyOutput strip the KERYX_USAGE line. A plain-JSON result file saved by spawn_subagent now ends with that line, so JSON.parse throws and the file takes the parseReviewResult fallback; for a result that omits `reviewer` (the case wholeFileResult exists for) that fallback may return none. Callers: retry-eval.ts:70, review-slice.ts:403.",
+      "impact": "A late plain-JSON result without `reviewer` is not collected after a shell dispatch. What settles it: a test that appends a usage line to a reviewer-less JSON object.",
+      "suggested_fix": "Use splitUsage(raw).body in wholeFileResult.",
+      "evidence": "retry-eval.ts:40-45; dispatch-usage.ts splitUsage.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CB-009",
+      "severity": "info",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/dispatch-usage.ts",
+      "line": null,
+      "quote": "const body = raw.replace(USAGE_LINE, \"\").replace(/\\s+$/, \"\");",
+      "problem": "The pattern /\\s+$/ is quadratic on a long whitespace run that is not at the end of the string (each start in the run extends to the run's end, fails `$`, and backtracks). It is reached only when the reply holds a KERYX_USAGE line, and the reply is reviewer text. Not measured here; it needs a whitespace run in the 100k range to matter.",
+      "impact": "A reply padded with a very long internal whitespace run plus a usage line stalls ingest and ledger build.",
+      "suggested_fix": "Use trimEnd().",
+      "evidence": "dispatch-usage.ts:85.",
+      "confidence": "low"
+    },
+    {
+      "id": "CB-010",
+      "severity": "info",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/locate.ts",
+      "line": null,
+      "quote": "const part = (needle[0] as string).trim();",
+      "problem": "The substring pass has no minimum length. A one-line quote that is a short fragment (an identifier, a keyword) and occurs in exactly one line of the file is anchored there with method `substring`, although the reviewer may have meant another site or an older version of the line. It is exact text, so it passes the 'nothing fuzzy' rule, but the header says a confident wrong anchor is worse than an admitted miss. What settles it: how many unique short fragments occur in the recorded rounds.",
+      "impact": "A misquoted fragment can anchor a finding to a different line without a flag.",
+      "suggested_fix": "Require a minimum length (or a minimum share of the line) for the substring method, and keep `method: substring` visible in the report.",
+      "evidence": "locate.ts:235-243.",
+      "confidence": "low"
+    },
+    {
+      "id": "CB-011",
+      "severity": "info",
+      "reviewer": "review-core-boundaries",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"candidate_lines\": { \"type\": \"array\", \"items\": { \"type\": \"integer\", \"minimum\": 1 } }",
+      "problem": "Round 1's review-core-boundaries-w1:F-005 is half-answered. The description now says quote_unlocated and locator come from one result and are recomputed together (the duplicate record is a documented choice). It still says candidate_lines is 'bounded by the scan' while the schema sets no maxItems; the bound is MAX_HITS=2 in locate.ts.",
+      "impact": "A hand-edited or foreign findings.json can carry an unbounded list that the schema accepts.",
+      "suggested_fix": "Add maxItems: 2 to candidate_lines in both schema copies.",
+      "evidence": "schema line 232 in .metaproject/core/... and src/gdskills/contracts/...; locate.ts:133.",
+      "confidence": "high"
+    },
+    {
+      "id": "CB-012",
+      "severity": "info",
+      "reviewer": "review-core-boundaries",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "if (closedAt > 0 && (best === null || best.mtime < closedAt)) return null;",
+      "problem": "Round 1's SEC-002 is narrowed to the chosen package's root, but a closed review-flow package under that root still releases the gate when its manifest mtime is at or after the session start and newer than the chosen package, whether or not this session had anything to do with it (a checkout, pull or tool that touches an unrelated closed manifest in-session qualifies).",
+      "impact": "An unrelated closed package can end the gate early. What settles it: whether a tracked closed package is ever rewritten in a session.",
+      "suggested_fix": "Count a closed package only when this session named it or closed it.",
+      "evidence": "completion-gate.ts:245-247 and :325.",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "review-architecture-w3:F-004",
+      "disposition": "closed",
+      "evidence": "coverage.ts:521-528 comment names the prior-round -> publish -> readiness -> coverage cycle that the lazy import avoids"
+    },
+    {
+      "id": "review-architecture-w3:F-005",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:87-97,158-183: only keryx review calls, their own path:/# managed review: lines, inside cwd"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "disposition": "closed",
+      "evidence": "review-ledger.ts LedgerReportExtras; renderLedgerReport takes 6 params; call site review-ledger.ts:360"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "disposition": "closed",
+      "evidence": "review-ledger.ts:60-65 scopeReviewed sentence now follows the model sentence, before Token spend"
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:2190 failChild shared by timeout, rate-limited, empty-reply and error exits"
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "disposition": "closed",
+      "evidence": "anthropic-provider.ts:947-957 emits one usage_update per request (openai-compat and gemini likewise), so the sum does not double count"
+    },
+    {
+      "id": "review-clean-code-w3:CC-10",
+      "disposition": "closed",
+      "evidence": "ledger.ts:19-47 named constants CLAIM_QUOTE_CHARS, OWN_STATEMENT, CANNOT, INPUT_NAMED; helper takes object"
+    },
+    {
+      "id": "review-clean-code-w3:CC-11",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:222-343 split into scanRoot, pickPackage, displayId, findReviewGateState"
+    },
+    {
+      "id": "review-clean-code-w3:CC-13",
+      "disposition": "closed",
+      "evidence": "research.ts:46 dispatchRuns typed reader used by managed.ts:1227"
+    },
+    {
+      "id": "review-clean-code-w3:CC-2",
+      "disposition": "open",
+      "evidence": "locate.ts:62-67 still two stacked doc comments (CB-005)"
+    },
+    {
+      "id": "review-clean-code-w3:CC-3",
+      "disposition": "closed",
+      "evidence": "coverage.ts readPackageTarget / resolveDiffBase / diffOfTarget split"
+    },
+    {
+      "id": "review-clean-code-w3:CC-4",
+      "disposition": "closed",
+      "evidence": "coverage.ts:658 nominalBase computed once"
+    },
+    {
+      "id": "review-clean-code-w3:CC-7",
+      "disposition": "closed",
+      "evidence": "mutate.ts:359-368 MUTATION_RECORD_FILE and mutationRecordNames shared by packageHasMutationRecord and doneMutantIds"
+    },
+    {
+      "id": "review-clean-code-w3:CC-9",
+      "disposition": "closed",
+      "evidence": "ledger.ts:681 runUsage returns RunUsage | 'unknown' using dispatch-usage types"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-004",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:11-15 states the figure is reported, not proof, and that no gate reads usage; the choice is documented"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-003",
+      "disposition": "open",
+      "evidence": "retry-eval.ts:42 still JSON.parse(raw) on the unstripped file (CB-008)"
+    },
+    {
+      "id": "review-core-boundaries-w1:F-005",
+      "disposition": "partial",
+      "evidence": "schema description now ties locator and quote_unlocated to one check; candidate_lines still has no maxItems (CB-011)"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:65-85 indexOf-based scanner, prefix bounded by MAX_PREFIX_CHARS and floor; 1 MB test"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:51 MAX_SESSION_REVIEW_ROOTS = 8, packages capped at 32"
+    },
+    {
+      "id": "review-highload-w1:F-003",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:11-15 reported figure, accepted because no gate reads it"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:2326-2335 bounded advice, usage line written; retried-dispatch loss is CB-001"
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "disposition": "closed",
+      "evidence": "one usage_update per request in every provider adapter read (anthropic-provider.ts:955)"
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:65-85 no regex over the text"
+    },
+    {
+      "id": "review-highload-w3:F-002",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:51-53 caps; tracker keeps the newest"
+    },
+    {
+      "id": "review-highload-w3:F-004",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:44 USAGE_LINE is [^\\n]* with $, usageOfLine parses by hand"
+    },
+    {
+      "id": "review-highload-w3:F-005",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:279 NaN startedAt is not fresh and needs namedBySession"
+    },
+    {
+      "id": "review-logic-w1:LG-002",
+      "disposition": "closed",
+      "evidence": "cli-reference.md paragraph at the review-complete line now describes quote_unlocated and the remaining refusals"
+    },
+    {
+      "id": "review-logic-w1:LG-005",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:46 '=' is a prefix delimiter; test 'flag text of --package=<dir>' passes"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "disposition": "closed",
+      "evidence": "SKILL.md:245 lists the still-refusing cases (commit not in checkout, no file named, size bound)"
+    },
+    {
+      "id": "review-logic-w2:F-005",
+      "disposition": "partial",
+      "evidence": "spawn-subagent-tool.ts:2328 writes the placeholder when the target is empty or absent, else .partial without telling the parent (CB-001)"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "open",
+      "evidence": "completion-gate.test.ts:207-216 not discriminating (CB-004)"
+    },
+    {
+      "id": "review-logic-w3:F-004",
+      "disposition": "closed",
+      "evidence": "ingest-locator-sha.test.ts comment rewritten for quote_unlocated"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "disposition": "partial",
+      "evidence": "ledger.ts:19-36 free-text window removed and anchored; sentence-start defect prose and path-qualified inputs still mis-classify (CB-006)"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:252 old open package kept when this session's commands name it (namedBySession)"
+    },
+    {
+      "id": "review-logic-w4:F-003",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:158-183 only the session's own keryx review commands name roots"
+    },
+    {
+      "id": "review-logic-w4:F-004",
+      "disposition": "closed",
+      "evidence": "coverage.ts:513-526 doc says recorded target.base else resolveBase candidates"
+    },
+    {
+      "id": "review-logic-w4:F-005",
+      "disposition": "closed",
+      "evidence": "coverage.ts resolveDiffBase returns emptyRangeWarning as an error, so the full set applies"
+    },
+    {
+      "id": "review-logic-w4:F-006",
+      "disposition": "closed",
+      "evidence": "managed.ts:1231 routed-out role reported as 'not dispatched'"
+    },
+    {
+      "id": "review-performance-w3:PERF-001",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:65-85"
+    },
+    {
+      "id": "review-performance-w3:PERF-002",
+      "disposition": "closed",
+      "evidence": "SessionReviewTracker scans only new messages (completion-gate.ts:136-146)"
+    },
+    {
+      "id": "review-performance-w3:PERF-004",
+      "disposition": "closed",
+      "evidence": "gitTopLevel and packageDiffStatsCached use processCache; base probes in prior-round.ts:323 run via Promise.all"
+    },
+    {
+      "id": "review-performance-w3:PERF-006",
+      "disposition": "closed",
+      "evidence": "ledger.ts:32-37 two anchored patterns, no 80-char windows"
+    },
+    {
+      "id": "review-performance-w3:PERF-007",
+      "disposition": "partial",
+      "evidence": "completion-gate.ts:316-319 still scans every root before pickPackage; roots now capped at 9"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-001",
+      "disposition": "closed",
+      "evidence": "retry-eval.ts:82 claimed = readSliceIds(result.slices) with no whole-assignment default"
+    },
+    {
+      "id": "review-regression-w3:REG-W3-002",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:252 and :280 accept an older package or pointer the session's commands name"
+    },
+    {
+      "id": "review-security-code-w1:SEC-001",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:158-183 tool output is read only for the path:/# managed review: lines of replies to keryx review calls, paths inside cwd, ids matched against SAFE_REVIEW_ID"
+    },
+    {
+      "id": "review-security-code-w1:SEC-004",
+      "disposition": "closed",
+      "evidence": "readiness item quotes-located still blocks complete; unchanged by design"
+    },
+    {
+      "id": "review-security-code-w2:SEC-W2-001",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:11-15 documents the reviewer-written line limit"
+    },
+    {
+      "id": "review-security-code-w3:SEC-001",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:65-85"
+    },
+    {
+      "id": "review-security-code-w3:SEC-002",
+      "disposition": "partial",
+      "evidence": "completion-gate.ts:324 closedAt now per chosen root, still any closed package newer than the chosen one (CB-012)"
+    },
+    {
+      "id": "review-security-code-w3:SEC-003",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:11-15"
+    },
+    {
+      "id": "review-security-code-w3:SEC-005",
+      "disposition": "open",
+      "evidence": "managed.ts:2738 still writes entry.reviewer unescaped; names come from the CLI-built selected set, unchanged"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "disposition": "closed",
+      "evidence": "review-ledger.ts:60-65 paragraph order fixed"
+    },
+    {
+      "id": "review-style-w3:F-003",
+      "disposition": "closed",
+      "evidence": "mutate.ts:359-361 one pattern constant per record kind"
+    },
+    {
+      "id": "review-style-w3:F-004",
+      "disposition": "closed",
+      "evidence": "coverage.ts:658 nominalBase"
+    },
+    {
+      "id": "review-style-w3:F-005",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:46 renamed toTokenCount"
+    },
+    {
+      "id": "review-style-w3:F-006",
+      "disposition": "closed",
+      "evidence": "managed.ts:1250 const named = reviewers !== undefined && reviewers.length > 0"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.test.ts:1404-1437 sum over requests, partial timeout line, empty-reply usage"
+    },
+    {
+      "id": "review-testing-practices-w2:T-001",
+      "disposition": "open",
+      "evidence": "completion-gate.test.ts:207-216 (CB-004)"
+    },
+    {
+      "id": "review-testing-practices-w2:T-002",
+      "disposition": "closed",
+      "evidence": "locate.test.ts:70,83,90,97 assert kind and candidates for exact, normalised and both bound cases"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "stats": {
+    "files_reviewed": 17
+  }
+}
+```
+
+Fix slice 01 reviewed at head 375279e78. Dispositions: {'closed': 50, 'open': 5, 'partial': 5}. New findings: {'minor': 6, 'info': 6}. Main residuals: the pointer-wins test does not discriminate the pointer branch (CB-004), retried dispatches lose their token usage (CB-001), a fresh pointer is trusted even when a concurrent session wrote it (CB-003), and the unreadable-input regex still decides by prose (CB-006).

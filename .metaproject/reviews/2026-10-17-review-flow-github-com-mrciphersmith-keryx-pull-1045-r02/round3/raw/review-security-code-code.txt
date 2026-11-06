@@ -1,0 +1,86 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 3 delta 375279e78..17e2e4417 (delta-code.diff). Of 30 prior records owned by review-security-code, 26 are closed and 4 partial: the residue is that a manifest's own reviewId, which a committed package controls, still counts as a review id the session named, and review ids are predictable. The delta adds one minor: in a light round, review-security-code no longer gets a driver for slices that content routing assigns it.",
+  "findings": [
+    {
+      "id": "SEC-R3-001",
+      "severity": "minor",
+      "reviewer": "review-security-code",
+      "file": "src/review/wave-drivers.ts",
+      "line": 33,
+      "quote": "if (manifest !== undefined) for (const reviewer of fixSliceRoles(manifest)) names.add(reviewer);",
+      "problem": "Before this change, packageReviewers added every role a slice was routed to (`for (const entry of manifest.slices) for (const role of entry.roles ?? []) names.add(role)`). It now adds only the required set plus the roles of fix and second-look slices. review plan rewrites the drivers from this set (review-plan.ts writeWaveDrivers) and removes the stale ones. In a light round, requiredReviewers keeps only logic, testing and one conventions reviewer (coverage.ts:397-405), and light qualification is path-only: at most 5 files and 300 lines, outside RISK_PATH_GATES (coverage.ts:106, :146). So slice routing still tags a new slice that spawns a process or builds a git argv for review-security-code (slice-routing.ts:116-117, SECURITY_PRINCIPLE), but that role gets no driver, `review next` never lists it, and no gate notices. The delta kept this union for fix slices only (fixSliceRoster), so the 458 M3 guarantee now holds for fix lines and not for new lines in a light round.",
+      "attack_vector": "A PR author keeps the change within the light limits (<=5 files, <=300 changed lines, no core/flow/layout path) and adds `Bun.spawn([\"sh\",\"-c\", input])` in an ordinary src file. Under `--depth auto` the round is light. Routing marks the slice for review-security-code, but `review slice --package` and `review plan` write no security driver. The round then completes READY without the security reviewer ever reading the injected command line. Before this delta, the driver for that role was written.",
+      "impact": "Security review of process, argv, git and input-derived path code in small PRs now depends on the logic reviewer alone. The routing summary still reports review-security-code for the slice, so the manifest says the code was routed to security review when it was never dispatched.",
+      "suggested_fix": "Count a SECURITY_PRINCIPLE / process-spawn content hit in the light-round risk class, so such a diff is full depth. Or keep the content-routed security role in both the estimate (roleDispatchWaves callers) and the drivers. Either way plan.json and the drivers still agree, and the content rule is not silently dropped.",
+      "evidence": "git log -L packageReviewers (ddd2a91d7) shows the deleted `manifest.slices ... entry.roles` loop; src/review/wave-drivers.ts:21-36 at HEAD; src/review/coverage.ts:21-25,397-405 (light set and limits), :106-108,:146 (path-only risk class); src/review/slice-routing.ts:116-117 (content rules that pick review-security-code); src/commands/review-plan.ts:291 (plan rewrites drivers from packageReviewers).",
+      "confidence": "medium"
+    }
+  ],
+  "needs_context": [],
+  "prior_dispositions": [
+    { "id": "r2-review-security-code-w1:SEC-R2-001", "disposition": "partial", "evidence": "The token match is gone (namesToken and `commands` removed). Ids now come only from explicit argument positions (src/review/completion-gate.ts:216-231) and from the output of an opening command that ran alone (:295, :303-313). But namedBySession still matches the manifest's own `reviewId` (scanRoot :375-376 passes [head.reviewId, name]; pickPackage :393 passes candidate.id = head.reviewId). Review ids are predictable: date + mode + PR URL slug, e.g. this package's 2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045-r02. A PR can commit `.metaproject/reviews/<other-dir>/manifest.json` (draft, review-flow) whose reviewId is the id `keryx review start` will print. Once that id is named, the package is sessionNamed, and when it is newest it is chosen (:394), so the nudge repeats its blockers. Separately, :228 takes the first non-dash word as the positional id, which can be a flag's value (`readiness --flow 460 <id>` names `460`). Fix: match by package directory/basename only, or require head.reviewId === basename." },
+    { "id": "r2-review-security-code-w1:SEC-R2-002", "disposition": "partial", "evidence": "A closed manifest must now be named by this session to release the gate (src/review/completion-gate.ts:437-439), and the test at completion-gate.test.ts:144 pins the unnamed case. The closed entry's ids still include the attacker-controlled manifest reviewId (:370 `ids: [head.reviewId, name]`). A committed closed manifest whose reviewId equals the predictable id of the real package is therefore named. When its checkout mtime is later than the real package's last manifest write, it releases the gate (:439)." },
+    { "id": "r2-review-security-code-w10:SEC-001", "disposition": "closed", "evidence": "Fix slices get fixSliceRoster = finding roster ∪ content roles of their own lines (src/review/round-split.ts:72, applied at :296). The routing check holds a backed fix slice to expectedFixRoles(entry, fix, text) (src/review/routing-check.ts:39). The test at round-split.test.ts:318-320 asserts a spawn fix keeps review-security-code." },
+    { "id": "r2-review-security-code-w10:SEC-002", "disposition": "closed", "evidence": "SECURITY_PROBLEM (src/review/round-split.ts:29-48) now covers shell command/escaping, exec*, spawn*, argv, path escape, `escapes the root|package|…`, symlink, toctou, denial of service, dos, redos, prototype pollution, sql, deserializ*, and `(token|secret|credential|key|data|information|path) leak*`. Content routing on the fix lines (SEC-001) is the backstop." },
+    { "id": "r2-review-security-code-w10:SEC-003", "disposition": "closed", "evidence": "NOT_REVIEW_PACKAGES_ANY_DEPTH was replaced by notReviewPackagesAt(projectDir) (src/review/round-record.ts:18), which is root-anchored like the slicer's exclusion. The light recheck uses notReviewPackagesAt(path.relative(cwd, root)) (src/review/coverage.ts diffOfTarget)." },
+    { "id": "r2-review-security-code-w2:SEC-001", "disposition": "closed", "evidence": ".metaproject/flows/460-2026-10-17-review-gate-consistency/context.md:60 now reads 'the owner-supplied PR #7975 process report (an upload; not committed)'. rg finds no `claude/uploads` path left under the flow directory." },
+    { "id": "r2-review-security-code-w2:SEC-002", "disposition": "closed", "evidence": "docs/docs/cli-reference.md:6680 names the third pass (one-line quote only, as an exact substring of exactly one line), and the `derived` row at :6685 lists the locator methods." },
+    { "id": "r2-review-security-code-w3:SEC-001", "disposition": "closed", "evidence": "screenedAs(oid) matches only the exact obligation id, or an id/global_id ending in `#<oid>` (src/review/ledger.ts:156, :619). The reviewer + bare display id fallback is removed, and review-ledger.test.ts pins a bare F-001 closing neither wave." },
+    { "id": "r2-review-security-code-w3:SEC-002", "disposition": "closed", "evidence": "saveDispatchRecord saves splitUsage(record.text).body (src/harness/tool/builtin/spawn-subagent-tool.ts:360), so usage lines the child wrote never reach save_result_to. Only the harness's ownLine/OTHER lines are written (:361)." },
+    { "id": "r2-review-security-code-w3:SEC-003", "disposition": "closed", "evidence": "A re-dispatch to the same path carries the earlier dispatch's usage as KERYX_USAGE_OTHER (spawn-subagent-tool.ts:350, :359). The ledger counts every dispatch through rawDispatchUsages (src/review/ledger.ts usageTotals(raws.flatMap(rawDispatchUsages)))." },
+    { "id": "r2-review-security-code-w4:SC-001", "disposition": "closed", "evidence": "Output lines are trusted only for a pending call whose invocation ran alone and is start|attach|ingest (src/review/completion-gate.ts:295, :303-305). keryxReviewInvocations splits at ; & | and newline, and counts any other command (:182-203 region). The compound case is pinned by completion-gate.test.ts:348." },
+    { "id": "r2-review-security-code-w5:SEC-R2-001", "disposition": "closed", "evidence": "Same fix as w3:SEC-001: src/review/ledger.ts:619 matches the wave-specific obligation id or a global id ending in `#<oid>`. The bare-id fallback is removed." },
+    { "id": "r2-review-security-code-w5:SEC-R2-002", "disposition": "closed", "evidence": "src/review/locate.ts:131 sets MIN_SUBSTRING_QUOTE_CHARS = 12. A unique substring hit shorter than that is unlocatable (kind absent) rather than derived (locateQuote one-line branch)." },
+    { "id": "r2-review-security-code-w6:SEC-001", "disposition": "closed", "evidence": "src/review/readiness.ts:288 accepts only a FINDING_DISPOSITION_STATES member other than `unknown`. Invalid states are named in the FAIL evidence (invalidNote)." },
+    { "id": "r2-review-security-code-w8:SEC-001", "disposition": "closed", "evidence": "No `<target>.partial` sibling is written any more: every exit goes through saveDispatchRecord to the approved path only. writeRecordFile refuses a path that has become a symlink (src/harness/tool/builtin/spawn-subagent-tool.ts:311-314). A residual lstat-then-write window remains on the already-validated path; it is not a new site." },
+    { "id": "r2-review-security-code-w8:SEC-002", "disposition": "closed", "evidence": "src/review/ledger.ts:619: there is no reviewer + bare id fallback; only the exact obligation id or `<reviewId>#<oid>` matches." },
+    { "id": "r2-review-security-code-w9:SEC-001", "disposition": "partial", "evidence": "resolveDiffBases (src/review/coverage.ts:568-577) measures the recorded base and the default base (origin/main, main, origin/master, master) and keeps the wider diff, so `--base head~1` cannot shrink a PR when a default base resolves. The test at coverage.test.ts:1809 pins this. If no default branch resolves (a repo whose base is develop/trunk with no main/master ref), `fallback` is null (:571, :575), and the recorded base alone is measured, as before. That narrowing still holds there. The baseRefOid check suggested in round 2 was not adopted." },
+    { "id": "review-clean-code-w2:F-006", "disposition": "closed", "evidence": "The adapters were read and the reasoning is recorded at src/harness/tool/builtin/spawn-subagent-tool.ts:1963-1965: one usage_update per provider request. The provider tests pin a single usage_update per stream (anthropic-provider.test.ts:165, openai-provider.test.ts:108, gemini-provider.test.ts:96, openai-compat-provider.ts:1198-1202, fake-provider.test.ts:165)." },
+    { "id": "review-clean-code-w3:CC-13", "disposition": "closed", "evidence": "src/review/managed.ts:1233-1234: only `not-run`/undefined reads as `failed: not run`. Any other status is reported as `unrecognised status \"…\" in the research ledger`. dispatchRuns is typed (src/review/research.ts:62-75)." },
+    { "id": "review-clean-code-w3:CC-2", "disposition": "closed", "evidence": "src/review/locate.ts: the orphan doc comment is removed. LocateMethod keeps its own doc, and LocatorRecord has its doc at :68." },
+    { "id": "review-highload-w1:F-003", "disposition": "closed", "evidence": "splitUsage reads only the trailing block (src/review/dispatch-usage.ts:101-125). A usage line with reply text after it is dropped from the body and states nothing (:113-119)." },
+    { "id": "review-highload-w2:F-003", "disposition": "closed", "evidence": "Same as review-clean-code-w2:F-006: spawn-subagent-tool.ts:1963-1965, and the adapter tests show one usage_update per request." },
+    { "id": "review-logic-w2:F-005", "disposition": "closed", "evidence": "There is no `.partial` sibling. saveDispatchRecord (spawn-subagent-tool.ts:344-362) replaces an empty record with any later one. A non-final record keeps a complete earlier result and adds its own usage as KERYX_USAGE_OTHER. recordSaveNote tells the parent that the earlier result was kept." },
+    { "id": "review-logic-w3:F-002", "disposition": "closed", "evidence": "src/review/completion-gate.test.ts:461-465 ('named nothing: a pointer written this session picks the older package over the newest-mtime fallback') fails if the pointer branch (completion-gate.ts:395-401) is removed, because the newest-mtime fallback would pick pr-newer." },
+    { "id": "review-performance-w3:PERF-006", "disposition": "closed", "evidence": "The UNREADABLE_INPUT regexes are removed. unreadableInputClaim reads the structured `inputs_unreadable` list (src/review/ledger.ts unreadableInputClaim)." },
+    { "id": "review-performance-w3:PERF-007", "disposition": "closed", "evidence": "Roots are scanned concurrently (src/review/completion-gate.ts:432 Promise.all). The candidates are still collected before pickPackage, but the closed-package release (:437) and the session-named choice (:393) now need them." },
+    { "id": "review-security-code-w2:SEC-W2-001", "disposition": "closed", "evidence": "keryx shell strips the child's own usage lines before saving (spawn-subagent-tool.ts:360). On self-writing hosts the remaining exposure is documented as accepted, because no gate reads usage (dispatch-usage.ts header, lines 9-23)." },
+    { "id": "review-security-code-w3:SEC-002", "disposition": "partial", "evidence": "As r2-review-security-code-w1:SEC-R2-002: an unnamed closed manifest no longer releases the gate (completion-gate.ts:437). Naming can still come through the committed manifest's own predictable reviewId (:370)." },
+    { "id": "review-security-code-w3:SEC-005", "disposition": "closed", "evidence": "dispatchRuns drops any run whose reviewer fails REVIEWER_NAME (src/review/research.ts:54, :65). status, notRunReason and executionReason are collapsed to one line (:57), so coverage.md cannot get a forged `reviewer:`/`status:` pair." },
+    { "id": "review-testing-practices-w2:T-001", "disposition": "closed", "evidence": "src/review/completion-gate.test.ts:448-477 now has three cases where the pointer decides against the candidate scan (461: pointer beats newest; 467: pointer picks among named; 473: named beats a fresh foreign pointer)." }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+## Summary
+
+Delta reviewed: 375279e78..17e2e4417, code only (delta-code.diff).
+
+Prior records (30 owned by review-security-code): 26 closed, 4 partial, 0 open, 0 regressed.
+
+- **Partial: completion-gate naming (SEC-R2-001, SEC-R2-002, w3:SEC-002).** Token matching and trust in compound-command output are gone. One gap is left: a manifest's own `reviewId` still counts as "named by this session", and review ids are predictable (date + mode + PR slug). A package committed by the PR, carrying that id, can still be picked as the package under review, or, when closed, release the gate.
+- **Partial: light-round base check (w9:SEC-001).** The wider of the recorded and default bases is now measured. In a repo with no main or master ref, the recorded base alone is still measured.
+
+New in the delta: 1 minor, 0 blocker, 0 major, 0 info.
+
+- **SEC-R3-001 (minor).** `packageReviewers` no longer adds the roles that routing gives a slice. In a light round, which qualifies by path alone, a process-spawn or argv slice routed to review-security-code now gets no driver and no dispatch. Before this delta it got both.
+
+Checked with nothing to report:
+- the spawn_subagent record writer: symlink refusal, no `.partial` sibling, child usage lines stripped;
+- splitUsage reading only the trailing block;
+- the ledger screened match;
+- the locate minimum length;
+- REVIEWER_NAME and one-line fields in coverage.md;
+- git-base `--end-of-options` and the timeout;
+- the root-anchored pathspec;
+- flowPackageDirs. It binds packages by `manifest.flow`, the same checkout trust as the flow's own reviews/. prior-round trust checks still apply to these candidates.
+
+Observation, not raised: readiness item 3 now skips the coverage gate for any package whose manifest says `closed` (readiness.ts:448). Before, a package carrying the coverage.md mark still ran it. This widens the existing info w10:SEC-004 (a plain status field); it has no new attacker path.
+
+Routing audit: graph_used: no (not-relevant; the delta diff was supplied), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg/run), raw_rg_used: no.

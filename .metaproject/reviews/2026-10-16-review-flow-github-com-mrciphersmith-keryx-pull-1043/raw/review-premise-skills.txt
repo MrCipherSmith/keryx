@@ -1,0 +1,273 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "review-architecture-skills#F-001",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: review-orchestrator/SKILL.md:110 says reviewers run no command and lists only orchestrator, verifier and one testing reviewer; review-premise Iron Laws (SKILL.md:112) permit git log/blame/show with no matching dispatch grant or allowed_tools value. No intent signal reconciles them."
+    },
+    {
+      "finding_id": "review-architecture-skills#F-002",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: Wave D (review-orchestrator/SKILL.md:1127) and the premise Input Contract never require global_id, unlike Wave C (:1103); premise.ts:234-240 rejects a claim matching two findings as ambiguous-finding."
+    },
+    {
+      "finding_id": "review-architecture-skills#F-003",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: premise.ts:269-270 rejects external-downgrade; the skill's Verdicts table and Iron Laws never say externals cannot be downgraded."
+    },
+    {
+      "finding_id": "review-architecture-skills#F-004",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: review-pr-feedback rule 7 (SKILL.md:368) defines only the upheld path; no verdict or reply is named for an operator-dismissed comment."
+    },
+    {
+      "finding_id": "review-architecture-skills#F-005",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: Step 6a and Slices item 0 (review-orchestrator/SKILL.md:105,120) publish step-0..step-14 and complete steps 8-10 on ingest; Step 10b (:88) has no plan id."
+    },
+    {
+      "finding_id": "review-architecture-skills#F-006",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: flow-orchestrator/SKILL.md:277 and feature-dev/SKILL.md:42 dispatch review-premise with no package, no source and no validation path; only 'journal the answer'."
+    },
+    {
+      "finding_id": "review-architecture-skills#F-007",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: job-orchestrator/SKILL.md:1279 carries the held rule as a trailing comment and job-orchestrator/feature-dev give no unattended branch, while flow-orchestrator:440 does."
+    },
+    {
+      "finding_id": "review-clean-code-skills#CC-001",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: review-operator.ts:9-10 and requireTerminal refuse non-TTY for decide-premise; review-orchestrator/SKILL.md:47 lists it as an operator terminal command ('never write an operator quote yourself'), yet Wave D (:1129) tells the agent to record the answer itself."
+    },
+    {
+      "finding_id": "review-clean-code-skills#CC-002",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: the Step 8 ingest block (job-orchestrator/SKILL.md:1150-1156) has no --premises and Step 7 (:1141) names no Wave D; only the loop ingest (:1308) carries --premises."
+    },
+    {
+      "finding_id": "review-clean-code-skills#CC-003",
+      "verdict": "upheld",
+      "reasoning": "Same contradiction as review-architecture-skills#F-001, confirmed at review-clean-code/SKILL.md:74 vs :89 and review-orchestrator/SKILL.md:110; no intent signal reconciles them."
+    },
+    {
+      "finding_id": "review-clean-code-skills#CC-004",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: Control 'Waves' (:132) still says A/B/C, Early verdict (:134) runs before Wave D, plan ids stop at step-14 (:105,:120)."
+    },
+    {
+      "finding_id": "review-clean-code-skills#CC-005",
+      "verdict": "upheld",
+      "reasoning": "Core claim confirmed (external downgrade allowed by the table, rejected by premise.ts:269-270; pr-feedback rule 3 vs rule 7). Its last sentence on self-raised findings overreaches (see review-style-skills#F-006), but the main defect stands."
+    },
+    {
+      "finding_id": "review-clean-code-skills#CC-006",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: the paragraph at flow-orchestrator/SKILL.md:277 sits under '### A verification step in the plan is a task' (:257) and names no input shape or sink."
+    },
+    {
+      "finding_id": "review-clean-code-skills#CC-007",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: the held-finding instruction recurs at five sites with differing wording; no intent signal for the duplication."
+    },
+    {
+      "finding_id": "review-core-boundaries-w1#F-002",
+      "verdict": "upheld",
+      "reasoning": "Confirmed at eval/inputs/validate.ts:4 (finding says line 8): absolute import into one local worktree, added in f41a21612. A one-off eval script, but committed and non-reproducible; no signal of intent."
+    },
+    {
+      "finding_id": "review-core-boundaries-w1#F-003",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "f41a21612",
+          "says": "commit 'a premise downgrade needs intent or practice evidence; no rubric re-grades (flow 459 eval)' tightened the skill as the finding's suggested fix asks"
+        },
+        {
+          "ref": ".metaproject/flows/459-2026-10-16-review-premise/eval/README.md:29",
+          "says": "rerun on #992 after the fix is recorded: F-011 now upheld, F-009 downgraded with cited evidence, F-012 held"
+        },
+        {
+          "ref": ".metaproject/flows/459-2026-10-16-review-premise/eval/README.md:37",
+          "says": "strict AC7 not met for F-012; 'whether this hold is a defect or the intended behaviour is the owner's judgement (AC7 is judged)'"
+        }
+      ],
+      "reasoning": "The finding says the three misses were not fixed, followed up or recorded; the README shows the fix commit and a rerun, and leaves the one residual (F-012 held) explicitly to the owner. What remains is premise-eval.json still carrying the pre-rerun summary and T8 being closed without that owner call recorded, which only the owner can settle.",
+      "question": "The eval misses were fixed by f41a21612 and rerun; F-012 is now held, and the README leaves strict AC7 to you. Accept T8 as done on that record, or require premise-eval.json to be refreshed and the AC7 deviation recorded on T8?",
+      "options": [
+        "dismiss: accept T8 as done; the README rerun is the record",
+        "uphold: refresh premise-eval.json with the rerun and record the AC7 decision on T8"
+      ]
+    },
+    {
+      "finding_id": "review-logic-skills#LG-001",
+      "verdict": "upheld",
+      "reasoning": "Same defect as review-clean-code-skills#CC-001, confirmed in review-operator.ts (TTY refusal) and the Hosts table."
+    },
+    {
+      "finding_id": "review-logic-skills#LG-002",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: NEEDS_FIX (job-orchestrator/SKILL.md:1177, recomputed at :1309) counts raw blocker/major and flow-orchestrator Phase 4 (:534) exits only at zero findings; only UNRESOLVED_FINDINGS is narrowed for held findings."
+    },
+    {
+      "finding_id": "review-logic-skills#LG-003",
+      "verdict": "upheld",
+      "reasoning": "Same contradiction as review-architecture-skills#F-001; confirmed in review-orchestrator/SKILL.md:110 and law 4."
+    },
+    {
+      "finding_id": "review-logic-skills#LG-004",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: premise.ts:249 (below-minor) and :269-270 (external-downgrade); the skill does not state either for externals, and rule 7 passes comments regardless of severity."
+    },
+    {
+      "finding_id": "review-logic-skills#LG-005",
+      "verdict": "upheld",
+      "reasoning": "Same gap as review-architecture-skills#F-006; the Input Contract needs ids and severity that an issue does not carry."
+    },
+    {
+      "finding_id": "review-logic-skills#LG-006",
+      "verdict": "upheld",
+      "reasoning": "Same gap as review-clean-code-skills#CC-004; Early verdict (:134) precedes Wave D."
+    },
+    {
+      "finding_id": "review-logic-skills#LG-007",
+      "verdict": "upheld",
+      "reasoning": "review-layout/SKILL.md:122-125 lists 'timelines' categorically with media controls; the cited platform guidance concerns media playback progress, and the 'unless the product decides otherwise' clause does not tell a reviewer how to tell the cases apart. No practice source supports mirroring-exempt non-media timelines."
+    },
+    {
+      "finding_id": "review-regression-skills#RG-001",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: findHeldFinding (premise-question.ts) reads <package>/findings.json, and review-pr-feedback has only the pr-comments durable record (SKILL.md:160), not a review package."
+    },
+    {
+      "finding_id": "review-regression-skills#RG-002",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: Wave D (:1128-1129) never orders ingest --premises before the early verdict or before decide-premise, which needs findings.json."
+    },
+    {
+      "finding_id": "review-regression-skills#RG-003",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:40",
+          "says": "the motivating case counts 'a sibling media control forcing the same direction' as a signal, a sibling with no stated reason"
+        },
+        {
+          "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:176",
+          "says": "Red Flags: 'A sibling doing the same is a signal of intent, against the premise'"
+        },
+        {
+          "ref": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1317",
+          "says": "law 4 requires only that the reviewer can 'show that reason wrong'; a copied null path is shown wrong by its trigger, so law 4 does not stop it being reported"
+        }
+      ],
+      "reasoning": "Treating a sibling as a decision signal is deliberate and is the core of the case this PR exists for. The suggested fix (a sibling counts only with a stated reason) would have discarded the sibling signal in that case. A replicated real defect is still reportable under law 4, because its reason is trivially shown wrong.",
+      "question": "Law 4 treats a sibling doing the same as a decision to be shown wrong, as the motivating RTL case needs. Keep it, or count a sibling only when a comment/commit/test states a reason?",
+      "options": [
+        "dismiss: keep law 4; a sibling is a signal, and a replicated defect is still shown wrong by its trigger",
+        "uphold: narrow law 4 so a reasonless sibling is a pattern, not a decision"
+      ]
+    },
+    {
+      "finding_id": "review-regression-skills#RG-004",
+      "verdict": "upheld",
+      "reasoning": "Same contradiction as review-architecture-skills#F-001; allowed_tools has only read-only and run-tests."
+    },
+    {
+      "finding_id": "review-regression-skills#RG-005",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: external-downgrade rejection (premise.ts:269-270) not stated in the skill, and `source` is a single top-level input while Wave D mixes round and external findings."
+    },
+    {
+      "finding_id": "review-regression-w8#RG8-003",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: readiness.ts:37 adds item 11 premise-decisions; docs/docs/cli-reference.md:4857 says ten-item and SKILL.detail.md:654 says ten items."
+    },
+    {
+      "finding_id": "review-style-skills#F-001",
+      "verdict": "upheld",
+      "reasoning": "Same defect as review-clean-code-skills#CC-002, confirmed at job-orchestrator/SKILL.md:1150."
+    },
+    {
+      "finding_id": "review-style-skills#F-002",
+      "verdict": "upheld",
+      "reasoning": "Same duplication as review-clean-code-skills#CC-007; confirmed."
+    },
+    {
+      "finding_id": "review-style-skills#F-003",
+      "verdict": "upheld",
+      "reasoning": "Same gap as review-architecture-skills#F-006; confirmed."
+    },
+    {
+      "finding_id": "review-style-skills#F-004",
+      "verdict": "upheld",
+      "reasoning": "Same gap as review-architecture-skills#F-005; confirmed."
+    },
+    {
+      "finding_id": "review-style-skills#F-005",
+      "verdict": "upheld",
+      "reasoning": "Confirmed: Iron Laws (review-premise/SKILL.md:111) imply a minor may be shrunk, while the Verdicts table and premise.ts:288 forbid a downgrade below minor."
+    },
+    {
+      "finding_id": "review-style-skills#F-006",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/review/premise.ts:257-259",
+          "says": "self-judgement rejects a claim when the judge name equals the finding's reviewer or any reported_by entry, so the case is coded on purpose"
+        },
+        {
+          "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:66",
+          "says": "`judge` is 'Your own name', any dispatched agent, which can coincide with a reviewer (e.g. a host running the judge as an agent that also reviewed)"
+        },
+        {
+          "ref": "src/gdskills/bundled/skills/review/review-premise/SKILL.md:108",
+          "says": "Iron Law already states it: 'The merge rejects a judge equal to the reporter'"
+        }
+      ],
+      "reasoning": "The finding's premise, that 'findings you raised yourself' cannot exist, is contradicted by the merge: a judge whose name equals a reporter is a real case and is guarded deliberately. The Iron Law row already gives the wording the suggested fix asks for.",
+      "question": "Step 1's 'findings you raised yourself' covers a judge whose name matches a reporter, which the merge guards (self-judgement). Keep the wording, or reword Step 1 anyway?",
+      "options": [
+        "dismiss: keep it; the case exists and the Iron Law already explains it",
+        "uphold: reword Step 1 to 'a finding whose reviewer is your own name'"
+      ]
+    },
+    {
+      "finding_id": "review-style-skills#F-007",
+      "verdict": "upheld",
+      "reasoning": "Same as review-architecture-skills#F-007 plus a step-7 disposition gap for held findings; confirmed at job-orchestrator/SKILL.md:1279."
+    }
+  ]
+}
+```
+
+## Summary
+
+Judged 36 findings (none raised by review-premise, none below minor).
+
+- upheld: 33
+- downgraded: 0
+- challenged: 2
+- owner-decision: 1
+
+### Held findings
+
+- **review-core-boundaries-w1#F-003** (owner-decision): The eval misses were fixed by f41a21612 and rerun; F-012 is now held, and the README leaves strict AC7 to you. Accept T8 as done on that record, or require premise-eval.json to be refreshed and the AC7 deviation recorded on T8?
+  - f41a21612: commit 'a premise downgrade needs intent or practice evidence; no rubric re-grades (flow 459 eval)' tightened the skill as the finding's suggested fix asks
+  - .metaproject/flows/459-2026-10-16-review-premise/eval/README.md:29: rerun on #992 after the fix is recorded: F-011 now upheld, F-009 downgraded with cited evidence, F-012 held
+  - .metaproject/flows/459-2026-10-16-review-premise/eval/README.md:37: strict AC7 not met for F-012; 'whether this hold is a defect or the intended behaviour is the owner's judgement (AC7 is judged)'
+- **review-regression-skills#RG-003** (challenged): Law 4 treats a sibling doing the same as a decision to be shown wrong, as the motivating RTL case needs. Keep it, or count a sibling only when a comment/commit/test states a reason?
+  - src/gdskills/bundled/skills/review/review-premise/SKILL.md:40: the motivating case counts 'a sibling media control forcing the same direction' as a signal, a sibling with no stated reason
+  - src/gdskills/bundled/skills/review/review-premise/SKILL.md:176: Red Flags: 'A sibling doing the same is a signal of intent, against the premise'
+  - src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1317: law 4 requires only that the reviewer can 'show that reason wrong'; a copied null path is shown wrong by its trigger, so law 4 does not stop it being reported
+- **review-style-skills#F-006** (challenged): Step 1's 'findings you raised yourself' covers a judge whose name matches a reporter, which the merge guards (self-judgement). Keep the wording, or reword Step 1 anyway?
+  - src/review/premise.ts:257-259: self-judgement rejects a claim when the judge name equals the finding's reviewer or any reported_by entry, so the case is coded on purpose
+  - src/gdskills/bundled/skills/review/review-premise/SKILL.md:66: `judge` is 'Your own name', any dispatched agent, which can coincide with a reviewer (e.g. a host running the judge as an agent that also reviewed)
+  - src/gdskills/bundled/skills/review/review-premise/SKILL.md:108: Iron Law already states it: 'The merge rejects a judge equal to the reporter'
+
+Several clusters describe one defect from different reviewers and are all upheld: git-in-read-only-reviewers (arch F-001, CC-003, LG-003, RG-004); decide-premise is TTY-only (CC-001, LG-001); round-1 ingest lacks --premises (CC-002, style F-001); external findings cannot be downgraded (arch F-003, CC-005, LG-004, RG-005); Wave D missing from plan ids / early verdict (arch F-005, CC-004, LG-006, style F-004, RG-002); no input or sink for issue-sourced premises (arch F-006, CC-006, LG-005, style F-003).

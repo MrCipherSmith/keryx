@@ -1,0 +1,37 @@
+```json keryx:findings
+{
+  "reviewer": "review-core-boundaries",
+  "status": "DONE",
+  "summary": "slice-02 is documentation, schema-doc, flow bookkeeping and tests. No import direction, core/feature leak or public-surface change. One stale contract sentence and one test-isolation observation.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "CB-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 6674,
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops — nothing",
+      "problem": "The PR adds a third locator step (a one-line quote as an exact substring of exactly one line, method \"substring\") to the schema description, to src/review/locate.ts (LocateMethod) and to the SKILL text, but the reference section 'A finding points at the code it quotes' still says matching stops after the whitespace-collapsed step and is 'nothing fuzzy'.",
+      "impact": "The documented contract of the shared finding locator disagrees with the schema (review-finding.schema.json enum now has \"substring\") that producers validate against; a reviewer author following the doc will not know a one-line partial quote is now placed.",
+      "suggested_fix": "Edit the paragraph to: exact, then whitespace collapsed, then (one-line quotes only) an exact substring of exactly one line, then nothing; mention the substring method beside derived.",
+      "confidence": "high",
+      "evidence": "src/gdskills/contracts/review-finding.schema.json:206 enum includes \"substring\"; src/review/locate.ts:67 LocateMethod includes \"substring\"; the unchanged sentence is at docs/docs/cli-reference.md:6674 at head."
+    },
+    {
+      "id": "CB-002",
+      "severity": "info",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "line": null,
+      "quote": "const git = (...args: string[]): string => {",
+      "problem": "The git helper passes process.env through and sets only author/committer identity; the temp repo still reads the developer's global git config (commit.gpgsign, core.hooksPath). A developer with commit.gpgsign=true would fail at the fixture commit. The helper was moved verbatim from review-plan.test.ts, so this is not new behaviour.",
+      "impact": "Would settle only by running the e2e on a machine with commit.gpgsign=true; no named consumer breaks in CI.",
+      "suggested_fix": "Add GIT_CONFIG_GLOBAL=/dev/null and GIT_CONFIG_NOSYSTEM=1 to the helper env (or pass -c commit.gpgsign=false).",
+      "confidence": "low",
+      "evidence": "slice-02 diff lines 852-856: env is { ...process.env, GIT_AUTHOR_NAME ... }"
+    }
+  ],
+  "needs_context": []
+}
+```
+
+Summary: slice-02 holds docs, the finding-schema description, flow bookkeeping and tests (plan e2e moved into review-plan.e2e.test.ts, an L6 mixed fix/new-in-one-file case, multi-file --premises, ledger screen/merge closure, retry-plan DONE-without-slices). Checked: test imports keep commands -> review direction; both copies of review-finding.schema.json carry the "substring" enum; readiness has 12 items (readiness.ts item 12 quotes-located) and cli-reference says twelve; merged_duplicates exists in filter-stats.ts and the package schema. Findings: 0 blocker, 0 major, 1 minor, 1 info.

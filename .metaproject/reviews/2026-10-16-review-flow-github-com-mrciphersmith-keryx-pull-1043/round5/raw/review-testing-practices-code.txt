@@ -1,0 +1,60 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-testing-practices",
+    "status": "DONE",
+    "summary": "Round 5 fix delta, read-only, nothing executed. premise-input-r4.json lists no review-testing-practices finding; the prior set is T4-001..T4-003 (plus T4-004/T4-005 for completeness). All three requested are closed with a separating fixture; T4-004 and T4-005 are untouched infos. New: 0 blocker, 0 major, 0 minor, 2 info.",
+    "prior_dispositions": [
+      { "id": "T4-001", "disposition": "closed", "evidence": "src/review/premise.test.ts:529-575 new describe(\"inheritedPremiseClaims\"): first ingest -> undefined, rejected claim carried, premises.json gone, unreadable, held finding gone, already-judged exempt; each new helper (heldRecords early return, readStoredClaims both refusals, appliedClaimNames filter) has a case that turns red if removed (read, not run)." },
+      { "id": "T4-002", "disposition": "closed", "evidence": "src/commands/automatic-review.test.ts:277-295: plain.json -> notes-été.json is refused only by hasOnlyPlainSegments(realDir, real) (automatic-review.ts:341); notes.json -> long-s file covers the fold path. The touchesOperatorOnlyName(realDir, real) clause (:345) stays covered by the existing ASCII symlink test." },
+      { "id": "T4-003", "disposition": "closed", "evidence": "src/review/premise-decision.test.ts:129-143: flows/f1/reviews/r1 -> true, nested r1/x -> false, flows/reviews/r1 -> false; the true assertion kills `return false` for the flow clause of isReviewPackageDir (package-location.ts:43-44)." },
+      { "id": "T4-004", "disposition": "open", "evidence": "premise-decision.test.ts foldFileName no-op NFD entry untouched by the delta. Info." },
+      { "id": "T4-005", "disposition": "open", "evidence": "No test for readOperatorDecisions on a missing package directory; delta untouched. Info." }
+    ],
+    "findings": [
+      {
+        "id": "T5-001",
+        "severity": "info",
+        "file": "src/review/premise-decision.test.ts",
+        "line": 140,
+        "problem": "The last isReviewPackageDir case claims a path 'reached by `..`', but path.join(root, '.metaproject', 'flows', '..', '..', 'reviews', 'r1') normalises to <root>/reviews/r1 before the function sees it, so it only re-tests 'a manifest under <root>/reviews, outside .metaproject'. The old `..` guard has no separate case.",
+        "impact": "None today: a valid negative, but its name over-states it.",
+        "suggested_fix": "Rename the case; realpathSync resolves `..` anyway, so the guard is not reachable by this input.",
+        "evidence": "path.join normalises `..` segments.",
+        "confidence": "high",
+        "reviewer": "review-testing-practices",
+        "category": "vacuous-fixture",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T5-002",
+        "severity": "info",
+        "file": "src/review/premise.ts",
+        "line": 241,
+        "problem": "normaliseCarriedPremise was refactored into carriesStraySeverity / severityIsStale (equivalent to the old severityAgrees). The stray-severity strip on a non-downgraded verdict and the stale-severity rewrite have no test added with the refactor (same gap as T3-002).",
+        "impact": "Inverting `stray` or `stale` would not turn the premise tests red (not run).",
+        "suggested_fix": "A carried upheld premise with severity set -> stripped; a carried downgraded premise with severity != finding.severity -> rewritten.",
+        "evidence": "premise.test.ts:212 covers rejection of severity-without-downgrade at ingest, not the carry normalisation.",
+        "confidence": "low",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-branch",
+        "evidence_class": "read"
+      }
+    ],
+    "mutation_table": [],
+    "mutant_candidates": [
+      { "file": "src/review/premise.ts", "anchor": "if (previousHeld.length === 0) return undefined;", "replacement": "", "kind": "behavior" },
+      { "file": "src/commands/automatic-review.ts", "anchor": "hasOnlyPlainSegments(realDir, real) &&", "replacement": "", "kind": "behavior" },
+      { "file": "src/review/premise.ts", "anchor": "const stale = isDowngrade && severityIsStale(premise, finding.severity);", "replacement": "const stale = false;", "kind": "behavior" }
+    ],
+    "stats": {
+      "prior": { "closed": 3, "open": 2, "partial": 0, "regressed": 0 },
+      "new": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+    }
+  }
+}
+```
+
+Summary: the delta closes T4-001..T4-003 with fixtures that separate the new gates (inheritedPremiseClaims branches, real-path plain-segment clause, flow-package branch of isReviewPackageDir). The RG4-001 and LG4-002 (gate and prior-round) tests are sound. Two infos only: a misnamed `..` case and the untested normaliseCarriedPremise refactor branches.

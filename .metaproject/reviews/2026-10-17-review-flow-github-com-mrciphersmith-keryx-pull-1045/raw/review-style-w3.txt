@@ -1,0 +1,105 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Slice slice-04 reads cleanly overall; only minor/info style items: a displaced doc comment, small duplication, one misleading helper name.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/locate.ts",
+      "quote": "/** How a finding's `line` was arrived at. */",
+      "problem": "The new UnlocatableKind doc block was inserted between the existing one-line doc comment for LocatorRecord and the type it documents, so that comment now sits above the UnlocatableKind block and is read as documenting the wrong declaration.",
+      "impact": "Misleading comment placement: LocatorRecord loses its description.",
+      "suggested_fix": "Move the `How a finding's line was arrived at` comment to directly above `export type LocatorRecord`."
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/readiness.ts",
+      "quote": "const listed = new Set([...raw.matchAll(/reviewer:\\s*(\\S+)\\s*\\n\\s*status:\\s*(\\S+)/g)].map((match) => match[1] as string));",
+      "problem": "The coverage.md entry regex is duplicated: the existing `claimed` line in coverageMdCheck and the new `listed` line use the identical literal.",
+      "impact": "Two copies of the format must change together.",
+      "suggested_fix": "Parse once into entries (reviewer, status) and derive both claimed and listed from them."
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/mutate.ts",
+      "quote": "return (await readdir(dir)).some((n) => /^mutation-\\d+\\.json$/.test(n));",
+      "problem": "The mutation record filename pattern is repeated in packageHasMutationRecord and in doneMutantIds directly below it (same regex literal; writeMutationEvidence builds a third from `stem`).",
+      "impact": "A rename of the evidence file shape needs three edits.",
+      "suggested_fix": "Hoist one MUTATION_RECORD_FILE constant and use it in both readers."
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/coverage.ts",
+      "quote": "if (cwd === undefined) return { error: `${UNRESOLVED}: the package is not inside a git work tree (${where(recordedBase ?? (kind === \"pr\" ? undefined : ref))})` };",
+      "problem": "The expression `recordedBase ?? (kind === \"pr\" ? undefined : ref)` is written twice (the head-missing and no-work-tree returns) and again in a different shape in the base branch below.",
+      "impact": "The rule for which base to report can drift between the refusals.",
+      "suggested_fix": "Name it once, e.g. `const reportedBase = recordedBase ?? (kind === \"pr\" ? undefined : ref);`."
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": "src/review/dispatch-usage.ts",
+      "quote": "const count = (value: unknown): number | undefined => (typeof value === \"number\" && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined);",
+      "problem": "`count` is a noun naming a validator/normaliser that returns number|undefined; it reads like a tally.",
+      "impact": "Naming does not state the contract (non-negative finite number, rounded, else undefined).",
+      "suggested_fix": "Rename to `toTokenCount` or `nonNegativeInt`."
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": "src/review/managed.ts",
+      "quote": "if (!(reviewers && reviewers.length > 0)) {",
+      "problem": "A negated compound condition whose positive form `reviewers && reviewers.length > 0` is repeated two lines later (`const selected = reviewers && reviewers.length > 0 ? ...`).",
+      "impact": "Harder to read and duplicates the predicate.",
+      "suggested_fix": "Compute `const named = reviewers !== undefined && reviewers.length > 0;` once and use it for both."
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "confidence": "high",
+      "file": "src/review/ledger.ts",
+      "quote": "                const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);",
+      "problem": "The line is indented 16 extra spaces after the removed `closed` line (edit leftover). Formatter-owned, so info only.",
+      "impact": "Visual noise in the diff; a formatter run fixes it.",
+      "suggested_fix": "Run the project formatter on src/review/ledger.ts."
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/review/coverage.ts",
+      "quote": "const NOT_REVIEW_PACKAGES_ANY_DEPTH = [\".\", \":(exclude,glob)**/.metaproject/reviews/**\", \":(exclude,glob)**/.metaproject/flows/*/reviews/**\"];",
+      "problem": "A near-copy of the existing NOT_REVIEW_PACKAGES pathspec list with different globs; two parallel constants for the same idea, and gitDiffStats still uses the shallow one.",
+      "impact": "Two exclude lists can diverge.",
+      "suggested_fix": "Derive both from one definition or note beside NOT_REVIEW_PACKAGES why gitDiffStats keeps the top-level form."
+    }
+  ]
+}
+```
+
+# Style Review Report (slice-04)
+
+Verdict: APPROVE_WITH_SUGGESTIONS
+
+Naming and comments are mostly consistent with the surrounding files. Findings: 0 blocker, 0 major, 6 minor, 2 info.
+
+- F-001 minor: displaced doc comment in locate.ts
+- F-002 minor: duplicated coverage.md regex in readiness.ts
+- F-003 minor: duplicated mutation filename regex in mutate.ts
+- F-004 minor: repeated base expression in coverage.ts
+- F-005 minor: `count` helper name in dispatch-usage.ts
+- F-006 minor: negated duplicated predicate in managed.ts
+- F-007 info: leftover over-indentation in ledger.ts (formatter-owned)
+- F-008 info: parallel exclude-pathspec constants in coverage.ts

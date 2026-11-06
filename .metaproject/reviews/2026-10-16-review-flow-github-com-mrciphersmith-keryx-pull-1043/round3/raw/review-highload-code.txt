@@ -1,0 +1,37 @@
+```json keryx:findings
+{
+ "reviewer": "review-highload",
+ "status": "DONE",
+ "prior_dispositions": [
+  {"id": "r2-review-highload-code#HL2-001", "disposition": "closed", "evidence": "src/commands/automatic-review.ts:216 OPERATOR_ONLY_NAMES lower-cased (decisions file and lock dir); :250-262 touchesOperatorOnly checks any path segment case-folded, as written and realpath-resolved; :322 re-checks the extension on the real target; dangling symlink resolves to \"\" and is refused (:233-243)."},
+  {"id": "r2-review-highload-code#HL2-002", "disposition": "closed", "evidence": "managed.ts:527 ingest's findings.json write and :1763 recordDispositions both take withOperatorDecisionsLock; operator-decisions.ts:23-27 comment now matches; no other non-test findings.json writer of the package found (managed.ts:1847 is inside the locked recorder)."},
+  {"id": "r2-review-highload-code#HL2-003", "disposition": "closed", "evidence": "operator-decisions.ts:195-203 applyFirst runs before appendDecision inside one lock, a failed append calls undo (restores findings.json); premise-question.ts answerPremiseQuestion returns the undo closure; a failed applyFirst records nothing, so a retry starts clean."}
+ ],
+ "findings": [
+  {
+   "id": "HL3-001",
+   "severity": "info",
+   "file": "src/review/operator-decisions.ts",
+   "line": 197,
+   "problem": "If appendDecision throws and the undo (writeFileAtomic of the saved findings.json) also throws, `await undo?.()` raises first and the original append error is lost; findings.json then keeps the applied answer while no decision is recorded.",
+   "impact": "Needs two consecutive disk write failures in one lock window; the operator sees the undo error, not the cause, and the two files disagree (the state HL2-003 removed).",
+   "suggested_fix": "Wrap undo in try/catch and rethrow the original error (or an AggregateError naming both).",
+   "evidence": "operator-decisions.ts:195-203 `catch (error) { await undo?.(); throw error; }`.",
+   "confidence": "low"
+  },
+  {
+   "id": "HL3-002",
+   "severity": "info",
+   "file": "src/review/premise-question.ts",
+   "line": 205,
+   "problem": "The registry vouch check and the findings.json write happen inside the lock, but recordFinishedRound re-hashes after the lock is released. An ingest or disposition write landing between the two is hashed into the registry record as if it were the answer's own result.",
+   "impact": "Registry then vouches for state the answer did not produce; operator-timed, needs a concurrent writer within milliseconds. Moving the re-record inside the lock would settle it.",
+   "suggested_fix": "Call recordFinishedRound before releasing the decisions lock, or document the window.",
+   "evidence": "premise-question.ts: `if (rerecord) { recordFinishedRound(...) }` runs after `await recordPremiseDecision(...)` returned.",
+   "confidence": "low"
+  }
+ ]
+}
+```
+
+Summary: all three prior review-highload findings (HL2-001/002/003) are closed at HEAD. The delta adds no blocker, major or minor load/concurrency defects; two low-confidence info observations (undo error masking the original, registry re-record outside the lock). The new lock use is non-reentrant but no caller nests it (recordDispositions has one caller; ingest takes it once), and the 5s acquire timeout / 30s stale reclaim bound any wait.

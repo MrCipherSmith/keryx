@@ -1,0 +1,266 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Round-3 style check of the delta 375279e78..17e2e4417. All 25 prior records from review-style are closed or partial (CC-13 partial). Delta adds 5 minor and 4 info style findings; none above minor.",
+  "findings": [
+    {
+      "id": "STY-R3-001",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/managed.ts",
+      "line": 1335,
+      "quote": "function attributionReviewers(input: ManagedReviewInput): string[] {",
+      "problem": "The delta inserted attributionReviewers, refuseUnacceptableRound and isStubReportText between refuseStubReport's doc comment and refuseStubReport. The stub-report doc (lines 1335-1341, 'Flow 460: review ingest of a stub ...') now sits directly above attributionReviewers' own doc comment, so two stacked doc blocks precede attributionReviewers and refuseStubReport (line 1370) has none. Same shape as the closed locate.ts CC-2/STY-001.",
+      "impact": "A reader sees the stub-refusal text on the attribution function; refuseStubReport loses its description.",
+      "suggested_fix": "Move the lines 1335-1341 block to directly above `function refuseStubReport`.",
+      "evidence": "src/review/managed.ts:1335-1347 (two adjacent /** */ blocks) and 1370 (refuseStubReport, undocumented)",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-002",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/coverage.ts",
+      "line": 559,
+      "quote": "return { kind: str(target.kind) ?? \"\", ref: str(target.ref), recordedBase: str(target.base), head: str(target.head), nominalBase: str(target.base) };",
+      "problem": "nominalBase is now computed exactly like recordedBase (both str(target.base)), so the two fields are the same value; the doc comment at 554 still describes nominalBase as a separate 'base a refusal names before git resolves one'. kind and ref are still read and typed in PackageTarget (551) but nothing in the gate reads target.kind or target.ref any more after resolveBase stopped taking them.",
+      "impact": "Two names for one value, and two dead fields, make a reader look for a difference that is not there.",
+      "suggested_fix": "Drop nominalBase and use recordedBase in the three `where(...)` calls and the refusal at 547; remove kind/ref from PackageTarget or note why they stay.",
+      "evidence": "src/review/coverage.ts:547, 551, 554, 559, 582, 584; no remaining read of target.kind/target.ref in coverage.ts",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-003",
+      "severity": "minor",
+      "confidence": "high",
+      "file": "src/review/loop.ts",
+      "line": 489,
+      "quote": "const entry = { name: path.basename(packageDir) };",
+      "problem": "Both package readers that moved to flowPackageDirs keep a throwaway one-field object only so the later `entry.name` lines compile unchanged. A plain `const name = path.basename(packageDir)` says the same without a fake directory entry.",
+      "impact": "Readers look for a Dirent that does not exist; the shim is repeated at two sites.",
+      "suggested_fix": "Replace with `const name = path.basename(packageDir)` and use `name` at the entry.name sites.",
+      "evidence": "src/review/loop.ts:489 (used at sortKey/label fallbacks); src/flow/review-gate.ts:463 (used at 475 and 505)",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-004",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": "src/review/prior-round.ts",
+      "line": 67,
+      "quote": "export { defaultGitRunner, emptyRangeWarning, resolveBase };",
+      "problem": "Symbols moved to git-base.ts are imported and used in prior-round.ts (795, 790) and also re-exported from it; readiness.ts does the same for COVERAGE_MD_MARK (import line 25, use 447, re-export 28). The only importers of the re-exports are tests (second-look.test.ts:12, l6-hardening.test.ts:12 from prior-round; managed.test.ts:2 from readiness); production code already imports from git-base / coverage-md.",
+      "impact": "A second public home for each name; the next move of the symbol has two import paths to keep in step.",
+      "suggested_fix": "Point the three tests at ./git-base and ./coverage-md and delete the re-exports (or comment them as a deliberate compatibility surface).",
+      "evidence": "src/review/prior-round.ts:66-67; src/review/readiness.ts:28; src/review/coverage.ts:4 imports from ./git-base directly",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-005",
+      "severity": "minor",
+      "confidence": "medium",
+      "file": "src/review/completion-gate.ts",
+      "line": 118,
+      "quote": "const SHELL_TOOLS: ReadonlySet<string> = new Set([\"shell_exec\", \"bash\", \"shell\"]);",
+      "problem": "src/commands/approval-cause.ts:54 declares a constant of the same name for the same idea (the shell tools) with a different member set ([\"shell_exec\", \"shell\"], no \"bash\"). Nothing says the difference is intended.",
+      "impact": "Two lists of the shell tool names that can drift; a new shell tool is added to one.",
+      "suggested_fix": "Share one exported list, or comment at each why its set differs.",
+      "evidence": "src/review/completion-gate.ts:118; src/commands/approval-cause.ts:54",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-006",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/commands/review-slice.ts",
+      "line": 319,
+      "quote": "const built = buildSlices({ ...source, regions: parts.other }, { ...sizes, keepLedgers: true });",
+      "problem": "deltaRoundCut repeats `{ ...sizes, keepLedgers: true }` four times (324, 325, 331, 333) and the ledgerOmissions -> omitted-path Set -> filter sequence twice (320-322 and 328-330).",
+      "impact": "A change to how a cut is sized or how ledgers are kept has four edit sites.",
+      "suggested_fix": "Name `const cutOptions = { ...sizes, keepLedgers: true }` and a small `withoutLedgers(regions)` helper.",
+      "evidence": "src/commands/review-slice.ts:319-340",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-007",
+      "severity": "info",
+      "confidence": "low",
+      "file": "src/review/completion-gate.ts",
+      "line": 134,
+      "quote": "function shellCommands(line: string): string[][] {",
+      "problem": "shellCommands is a hand-written shell word splitter of about forty lines with nine decision branches and two inner closures; it is correct to read but near the complexity threshold, and the only test of its edge cases is through keryxReviewInvocations.",
+      "impact": "Harder to review and extend (heredocs, $(...)) than a table of states.",
+      "suggested_fix": "Split the quote handling into a small helper, or note the intended non-coverage (subshells, heredocs) in the doc comment.",
+      "evidence": "src/review/completion-gate.ts:134-175",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-008",
+      "severity": "info",
+      "confidence": "medium",
+      "file": "src/review/ledger.ts",
+      "line": 29,
+      "quote": "export function unreadableInputClaim(result: Pick<ParsedResult, \"inputs_unreadable\" | \"status\" | \"summary\">): string | undefined {",
+      "problem": "The parameter type picks status and summary but the body reads only inputs_unreadable (the doc says it never reads the summary).",
+      "impact": "The signature suggests inputs the function ignores.",
+      "suggested_fix": "Pick<ParsedResult, \"inputs_unreadable\"> only.",
+      "evidence": "src/review/ledger.ts:29-33",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-009",
+      "severity": "info",
+      "confidence": "high",
+      "file": "src/review/wave-drivers.ts",
+      "line": 8,
+      "quote": "import { type SliceManifest } from \"./slice\";",
+      "problem": "An import list holding only a type-specifier; the file's neighbours use `import type { ... }` for type-only imports.",
+      "impact": "Cosmetic; the whole import is erased only under the right compiler flags.",
+      "suggested_fix": "import type { SliceManifest } from \"./slice\";",
+      "evidence": "src/review/wave-drivers.ts:8",
+      "reviewer": "review-style"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "r2-review-style-w1:STY-001",
+      "disposition": "closed",
+      "evidence": "src/review/locate.ts:62-69: the one-line comment is gone from above LocateMethod; LocatorRecord (line 69) now carries its own doc comment."
+    },
+    {
+      "id": "r2-review-style-w1:STY-002",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:335-371: saveTimedOutPartial is replaced by saveDispatchRecord/recordSaveNote, used by every exit (2304 timeout, 2365-2368 empty reply, 2403 final); no timeout-named helper remains."
+    },
+    {
+      "id": "r2-review-style-w2:ST-001",
+      "disposition": "closed",
+      "evidence": "docs/docs/cli-reference.md:6679-6685 now says exact, then whitespace-collapsed, then (one-line quote) exact substring of exactly one line, and lists `substring` among locator methods."
+    },
+    {
+      "id": "r2-review-style-w2:ST-002",
+      "disposition": "closed",
+      "evidence": "src/commands/review-plan.e2e.test.ts:14 imports commitFiles, git, initRepo from ../review/git-fixture.test-helpers; local helper and e-mail literal are gone."
+    },
+    {
+      "id": "r2-review-style-w3:ST-001",
+      "disposition": "closed",
+      "evidence": "src/commands/review.ts:229-231 order is ManagedReviewInput, ManagedReviewMode, PremiseSource."
+    },
+    {
+      "id": "r2-review-style-w3:ST-002",
+      "disposition": "closed",
+      "evidence": "src/commands/review.ts:3645-3657: readPremiseFile returns PremiseSource[]; the double cast is gone, one narrowing `parsed as PremiseSource` remains after parsePremiseClaimSets validated it."
+    },
+    {
+      "id": "r2-review-style-w3:ST-003",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:2304 builds the note with recordSaveNote (366-371, early returns); the four-way ternary chain is gone."
+    },
+    {
+      "id": "r2-review-style-w3:ST-004",
+      "disposition": "closed",
+      "evidence": "src/commands/operator-confirm-review.ts:306 derives the premise-decisions number from READINESS_ITEMS; no hard-coded `Item 11` or `twelve items` remains in src or .metaproject review skills."
+    },
+    {
+      "id": "r2-review-style-w4:ST-002",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:156-160 add namesObligation/holdsKey/mergedFromHas; used at 598, 607-608, 616, 742, 790."
+    },
+    {
+      "id": "r2-review-style-w4:ST-003",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:29, 202-203, 240, 381: the test is displayIdHasHash and the detail text embeds DISPLAY_ID_FORM; one statement of the rule remains in display-id.ts:11-16."
+    },
+    {
+      "id": "r2-review-style-w4:ST-004",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:344-347 uses the isClaimSetList guard (no casts); parsePremiseClaimSets maps parseOnePremiseResult which returns a non-undefined type."
+    },
+    {
+      "id": "r2-review-style-w5:ST-001",
+      "disposition": "closed",
+      "evidence": "src/review/readiness.ts:93, 212, 310: reviewersCheck reads runs through dispatchRuns; `record` is the shared asRecord from research.ts:60-62."
+    },
+    {
+      "id": "r2-review-style-w5:ST-002",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:86-118, 274: secondLookClaimBacked goes through everyChangedLine/walkRegion/inSecondLookHunk (224-226); the hand-rolled line walker is removed."
+    },
+    {
+      "id": "r2-review-style-w5:ST-003",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:29-40: stems listed once (`secur\\w*`, `inject\\w*`, `travers\\w*`), with a doc line stating the rule."
+    },
+    {
+      "id": "r2-review-style-w5:ST-004",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:23 and 211: SECOND_LOOK_ROLES uses FIX_SECURITY_ROLE."
+    },
+    {
+      "id": "r2-review-style-w5:ST-005",
+      "disposition": "closed",
+      "evidence": "src/review/round-split.ts:187-208: partitionRegionsByFix is three lines over splitRegions, with labelLines and cutPieces extracted."
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1963-1965 now documents that every adapter emits one usage_update per provider request, so the sum is the total; still no reproducible double count (info)."
+    },
+    {
+      "id": "review-clean-code-w3:CC-13",
+      "disposition": "partial",
+      "evidence": "src/review/managed.ts:1246 normalizeCoverage still takes `research: unknown` (now required, single caller at 276); typed dispatchRuns is used inside, the argument itself is still untyped."
+    },
+    {
+      "id": "review-clean-code-w3:CC-2",
+      "disposition": "closed",
+      "evidence": "src/review/locate.ts:62-69: single doc comment per declaration."
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "disposition": "closed",
+      "evidence": "Same onUsage block as F-006: spawn-subagent-tool.ts:1963-1970 carries the per-request comment; info with no reproducible path."
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.test.ts:448-481 add tests that drive the pointer branch (pointer written this session picks the package; named both; concurrent pointer loses)."
+    },
+    {
+      "id": "review-performance-w3:PERF-006",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:23-37: the UNREADABLE_INPUT pattern list is removed; unreadableInputClaim reads the structured inputs_unreadable list."
+    },
+    {
+      "id": "review-performance-w3:PERF-007",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:431-432 scan roots with Promise.all; 391 resolves pointers in parallel; candidates are bounded by MAX_SESSION_REVIEW_ROOTS (51)."
+    },
+    {
+      "id": "review-security-code-w3:SEC-005",
+      "disposition": "closed",
+      "evidence": "src/review/research.ts:50-65: REVIEWER_NAME allow-list drops runs with a name that is not a plain id; managed.ts coverage path reads through dispatchRuns."
+    },
+    {
+      "id": "review-testing-practices-w2:T-001",
+      "disposition": "closed",
+      "evidence": "Same evidence as review-logic-w3:F-002: completion-gate.test.ts:448-481."
+    }
+  ]
+}
+```
+
+# Style Review Report (round 3, delta)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+Every review-style finding of round 2 at minor or above is closed at HEAD (w4:ST-001 and other owner-dismissed ids skipped). The refactors (git-base, coverage-md, package-location, dispatchRuns, splitRegions) removed the duplication they targeted.
+
+New in the delta: one stranded doc comment in managed.ts (the same shape as the closed locate.ts one), a dead nominalBase/kind/ref in coverage.ts, a `{ name }` shim in two flow readers, test-only re-exports in prior-round.ts and readiness.ts, and a duplicate SHELL_TOOLS constant; plus four info notes.
+
+## Stats
+- major: 0
+- minor: 5
+- info: 4

@@ -1,0 +1,179 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-testing-practices",
+    "status": "DONE_WITH_CONCERNS",
+    "summary": "Round 3 fix delta (f47ebb0ec..8a9ae3d20). Read-only: no tests or mutations were run, so no mutation table is published and every unpinned-gate note is a reading, info at most. All six round-1 testing findings are closed by named tests; of round-2 T2-001..003, T2-002 closed, T2-003 partial, T2-001 open. New: 1 minor, 4 info; no blocker or major.",
+    "prior_dispositions": [
+      {
+        "id": "review-testing-practices-w459#F-001",
+        "disposition": "closed",
+        "evidence": "src/review/premise-decision.test.ts:423 records dismiss then uphold and asserts latestPremiseDecision, premiseHoldState, computeVerdict and readiness take the later one; src/flow/review-gate.test.ts:1711 pins the gate both orders."
+      },
+      {
+        "id": "review-testing-practices-w459#F-002",
+        "disposition": "closed",
+        "evidence": "ambiguous id: premise-decision.test.ts:332; CLI decline 'no'/'N': review-operator-cli.test.ts:123; verdict-change staleness: operator-confirm-review-tools.test.ts 'a change to the problem or the judge's question' now includes an owner-decision verdictChanged; premises.json fallback removed earlier."
+      },
+      {
+        "id": "review-testing-practices-w459#F-003",
+        "disposition": "closed",
+        "evidence": "src/review/premise-fixtures.ts:106 heldPremise/downgradedPremise carry intent_signals/practice_sources; premise.test.ts:109 asserts mergePremises produces exactly those shapes with no rejection."
+      },
+      {
+        "id": "review-testing-practices-w459#F-004",
+        "disposition": "closed",
+        "evidence": "src/commands/review-premises-cli.test.ts:57,66,75 drive reviewCommand ingest --premises (file, re-ingest, missing file). Residual: stdin '-' not driven (info N-005)."
+      },
+      {
+        "id": "review-testing-practices-w459#F-005",
+        "disposition": "closed",
+        "evidence": "src/review/dedupe.test.ts:140 (confirmed vs downgraded -> severityRule 'premise') and :152 (challenged and owner-decision, both orders, held-with-held)."
+      },
+      {
+        "id": "review-testing-practices-w459#F-006",
+        "disposition": "closed",
+        "evidence": "src/review/premise-embedded.test.ts:11 parses the shipped review-premise SKILL.md example (one keryx:premises block in each of both roots) through parseEmbeddedPremises + mergePremises, asserting no rejections and 3 applied."
+      },
+      {
+        "id": "T2-001",
+        "disposition": "open",
+        "evidence": "src/commands/review.ts:1103 carryPremiseDecisions call (now with { projectRoot: cwd }) is still driven by no command-level test; only direct calls in premise-decision.test.ts and prior-round.test.ts:451. Deleting the call at review.ts:1103 leaves every suite green (read, not run)."
+      },
+      {
+        "id": "T2-002",
+        "disposition": "closed",
+        "evidence": "premise-fixtures.ts:106-140 now producer-valid and premise.test.ts:120 asserts no non-test module imports premise-fixtures."
+      },
+      {
+        "id": "T2-003",
+        "disposition": "partial",
+        "evidence": "readiness.test.ts derives the ordinal from READINESS_ITEMS; src/tui/review-readiness.test.ts:120 still hard-codes toHaveLength(11)."
+      }
+    ],
+    "findings": [
+      {
+        "id": "T3-001",
+        "severity": "minor",
+        "file": "src/review/premise-decision.test.ts",
+        "line": 341,
+        "problem": "The HL2-003 rollback test asserts only that findings.json equals its original after the failed answer. Nothing proves findings.json was rewritten first, so the assertion passes identically if applyFirst never ran or the failure happened before it (an unchanged-state assertion with no positive artifact of the path).",
+        "impact": "Deleting `await undo?.()` in recordPremiseDecision (operator-decisions.ts:196) is only caught if the failing append is reached after the rewrite; the test does not show it, so a refactor that fails earlier keeps it green while the rollback is unpinned.",
+        "suggested_fix": "Wrap writeFileAtomic or spy: assert the file was changed mid-call (e.g. read it from inside a failing decisions append seam, or assert answerPremiseQuestion's applyFirst result), then assert the restore. Mutant: remove the undo call.",
+        "evidence": "premise-decision.test.ts:341-351 asserts only toBe(original); no mid-flight state is observed. Mutation not run (read-only).",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unchanged-state-only",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T3-002",
+        "severity": "info",
+        "file": "src/review/premise.ts",
+        "line": 251,
+        "problem": "normaliseCarriedPremise: the tests drive only original_severity 'blocker' (premise.test.ts:332-350). The strict `<` boundary (a finding restated at the premise's own original_severity) and the non-stale downgraded premise that carries an operator answer (the `if (!stale) return {premise: judgement}` branch) have no fixture.",
+        "impact": "Changing `<` to `<=` keeps a downgrade whose severity equals the original; the schema rejects that shape downstream. Predicted, not run.",
+        "suggested_fix": "Add: finding major, premise {severity minor, original major} -> premise dropped; and a downgraded premise with operator and matching severity -> operator stripped, premise kept.",
+        "evidence": "premise.test.ts downgraded() helper fixes original_severity to blocker; no equal-rank case. Mutation not run.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "fixture-coverage",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T3-003",
+        "severity": "info",
+        "file": "src/commands/automatic-review.ts",
+        "line": 322,
+        "problem": "Three gates added for SEC2-001 have no input that separates them: (a) the extension check on the symlink's real target (:322) needs an in-package link named *.md pointing at a non-data file; the tests use a .json link to the decisions file and one pointing outside the package, both caught by other clauses; (b) a dangling symlink (realTarget -> ''); (c) a bare `--prior` value that is also a directory holding manifest.json (:532).",
+        "impact": "Deleting any of the three leaves automatic-review.test.ts green (predicted from reading, not run).",
+        "suggested_fix": "Add one case each: package/notes.md -> package/run.sh; package/dangling.json -> missing; cwd/x/manifest.json with `--prior x`.",
+        "evidence": "automatic-review.test.ts additions at the delta cover names, case folding, out-of-package and nested --prior only.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T3-004",
+        "severity": "info",
+        "file": "src/review/premise-question.ts",
+        "line": 121,
+        "problem": "The `realPackage.startsWith(realPrevious + sep)` containment guard is exercised only by its equality twin (carry(next, next)). A package inside the previous one cannot pass isReviewPackageDir first, so the guard has no input in the suite and its reachability is unestablished.",
+        "impact": "Dead-or-unpinned guard; deleting it leaves the suite green (predicted).",
+        "suggested_fix": "Either test a reachable shape or drop the clause.",
+        "evidence": "premise-decision.test.ts nested/self cases only.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T3-005",
+        "severity": "info",
+        "file": "src/commands/review-premises-cli.test.ts",
+        "line": 75,
+        "problem": "`--premises -` (stdin) and the registry-update warning path (premise-question.ts:211 registry.warn) have no test; both were added or kept in the delta.",
+        "impact": "A broken stdin read or a swallowed registry warning would not turn a suite red.",
+        "suggested_fix": "One case feeding Bun.stdin; one answerPremiseQuestion with an unwritable registry dir asserting warn is called.",
+        "evidence": "rg over src tests finds no stdin premises case or warn assertion.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-branch",
+        "evidence_class": "read"
+      }
+    ],
+    "mutation_table": [],
+    "mutant_candidates": [
+      {
+        "file": "src/commands/review.ts",
+        "anchor": "carryPremiseDecisions(",
+        "replacement": "[] //",
+        "kind": "behavior"
+      },
+      {
+        "file": "src/review/operator-decisions.ts",
+        "anchor": "await undo?.();",
+        "replacement": "",
+        "kind": "behavior"
+      },
+      {
+        "file": "src/review/premise.ts",
+        "anchor": "severityRank(finding.severity) < severityRank(original)",
+        "replacement": "severityRank(finding.severity) <= severityRank(original)",
+        "kind": "behavior"
+      },
+      {
+        "file": "src/commands/automatic-review.ts",
+        "anchor": "PACKAGE_DATA_EXTENSIONS.has(path.extname(realTarget(resolved)).toLowerCase()) &&",
+        "replacement": "",
+        "kind": "behavior"
+      },
+      {
+        "file": "src/review/premise-question.ts",
+        "anchor": "|| realPackage.startsWith(`${realPrevious}${path.sep}`)",
+        "replacement": "",
+        "kind": "behavior"
+      }
+    ],
+    "stats": {
+      "prior": {
+        "closed": 7,
+        "open": 1,
+        "partial": 1,
+        "regressed": 0
+      },
+      "new": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 1,
+        "info": 4
+      }
+    }
+  }
+}
+```
+
+Summary: all six round-1 testing findings (F-001..F-006) are closed by tests that name them; T2-002 closed, T2-003 partial (tui test still hard-codes 11 items), T2-001 open (the review.ts carry call has no command-level test). New: one minor (rollback test asserts only unchanged state) and four info notes on gates with no separating fixture. No mutations were run (read-only); no regressions.

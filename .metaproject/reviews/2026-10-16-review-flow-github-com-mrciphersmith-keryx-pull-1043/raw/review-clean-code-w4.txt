@@ -1,0 +1,97 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-clean-code",
+    "status": "DONE_WITH_CONCERNS",
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "minor",
+        "file": "src/commands/review-operator.ts",
+        "line": 694,
+        "principle": "Clean Code - Functions B1/B3; SOLID - SRP F1",
+        "problem": "runOperatorCommand now holds a second, unrelated command flow inline: the decide-premise branch (about 19 lines of flag parsing, held-finding lookup, question building, ask and record) sits between the shared --reason check and the waive-mutation/override-reviewers tail. The function body is about 74 non-blank lines and mixes confirm-plan, decide-premise and the two decision kinds, each with its own question and record call.",
+        "impact": "Each new operator command lengthens one function; the early return after the shared reason check is easy to misplace, and the tail's kind logic silently depends on decide-premise having returned first.",
+        "suggested_fix": "Extract decidePremise(packageDir, own, ask, at) (and ideally confirmPlan) as functions returning the exit code, and leave runOperatorCommand a dispatch."
+      },
+      {
+        "id": "F-002",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 564,
+        "principle": "Clean Code - DRY E1/E2",
+        "problem": "The operator answer vocabulary is re-spelled at each site instead of one exported type/constant: the literal union \"uphold\" | \"dismiss\" in PremiseQuestionDecision (src/review/operator-decisions.ts:50), PremisePrepared (operator-confirm-review.ts:564), the tool enum (577), the guard and refusal text (590), review-operator.ts:139, plus \"uphold\"/\"dismiss\" comparisons in src/flow/review-gate.ts premiseGateState. Sites found with keryx ctx rg for uphold / premise-question over src (non-test): operator-decisions.ts, operator-confirm-review.ts, review-operator.ts, review-gate.ts, premise-question.ts, verdict.ts, readiness.ts.",
+        "impact": "Adding or renaming an answer means editing five or more files and the compiler only catches the typed ones; the schema enum, the CLI guard and the gate can drift apart.",
+        "suggested_fix": "Export PREMISE_ANSWERS = [\"uphold\",\"dismiss\"] as const and type PremiseAnswer from operator-decisions.ts; derive the schema enum, the guards and PremisePrepared.answer from it."
+      },
+      {
+        "id": "F-003",
+        "severity": "minor",
+        "file": "src/commands/review-operator.ts",
+        "line": 709,
+        "principle": "Clean Code - Consistent Vocabulary A3",
+        "problem": "The same PremiseQuestionDecision.actor is written two ways: the terminal path records process.env[\"USER\"] ?? \"operator\", the card path (operator-confirm-review.ts:558) records the literal \"operator\". Identical decisions made through the two entrances produce different actor values.",
+        "impact": "Anything that filters or displays by actor sees two spellings of one decision source; the terminal value is also an unverified environment variable.",
+        "suggested_fix": "Use one rule for both (a shared helper, or the literal \"operator\" with confirmedVia carrying the channel)."
+      },
+      {
+        "id": "F-004",
+        "severity": "minor",
+        "file": "src/commands/routing-corpus.ts",
+        "line": 1406,
+        "principle": "Clean Code - Comments C1a (documentation drift)",
+        "problem": "RANK1_FIRST/RANK1_TOTAL are raised 334/337 to 338/341 for the four review-premise positives, but the ratchet's doc comment ends its flow log at flow 335 and has no flow 459 line, although every earlier bump is narrated there and the comment says to state which cases moved. The existing flow-335 line (332/334) also no longer matches the constants.",
+        "impact": "The next person raising the ratchet cannot tell from the comment why the numbers are what they are or which cases are new.",
+        "suggested_fix": "Add 'Flow 459 added review-premise with four positives, all ranking first: 334/337 + 4 = 338/341' to the comment block and reconcile the flow 335 numbers."
+      },
+      {
+        "id": "F-005",
+        "severity": "info",
+        "file": "src/commands/review.ts",
+        "line": 1026,
+        "principle": "Clean Code - Functions (side-effect call, discarded result)",
+        "problem": "readPremises calls parsePremiseClaims(parsed) and discards the result, using it only as a throwing validator, then returns parsed with a cast. The name does not say it validates, and the validated value is not the one returned.",
+        "impact": "No wrong outcome today; a reader may delete the apparently dead call, or change one parse and not the other. Settled by confirming parsePremiseClaims is pure and idempotent (it appears to be).",
+        "suggested_fix": "Name the intent (assertPremiseClaims) or return the parser's typed result instead of casting."
+      },
+      {
+        "id": "F-006",
+        "severity": "info",
+        "file": "src/flow/review-gate.ts",
+        "line": 2310,
+        "principle": "Clean Code - Comments",
+        "problem": "premiseGateState maps any operatorAnswer other than the two known strings (including a corrupt value in premise.operator.answer) to \"awaiting\", while the doc comment describes only none/awaiting/dismissed. The fail-closed behaviour is deliberate but unstated.",
+        "impact": "Not a defect; no reproducible harm path. Stating it would stop a reader treating it as an oversight.",
+        "suggested_fix": "Say in the doc comment that an unrecognised answer is treated as unanswered."
+      }
+    ]
+  }
+}
+```
+
+## Clean Code Review
+
+### Summary
+The slice adds the decide-premise surface (card, terminal command, gate wiring, flags, docs) in the style of the neighbouring operator specs; small helpers (premiseGateState, withPremiseAnswers, parsePremiseStats, readPremises) keep new functions short. Concerns are maintenance cost only: one growing command function, an answer vocabulary spelled in many places, and two documentation drifts.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 4  |  info: 2
+
+### Findings
+#### Naming
+No naming issues found.
+#### Functions
+F-001, F-005 (info).
+#### Comments
+F-004, F-006 (info).
+#### Error Handling
+No error handling issues found.
+#### DRY
+F-002, F-003.
+#### SOLID
+No SOLID violations beyond F-001.
+
+### Clean Areas
+Names, error messages with context, no commented-out code, no constructor I/O, no DI bypass; docs (cli-reference, guide, help text) agree with the code on flags and verdict wording.

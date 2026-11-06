@@ -1,0 +1,3176 @@
+{
+  "v": 1,
+  "round": 2,
+  "source": "local-package",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "found",
+      "detail": "1 round(s): 2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045; chosen 2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045 (dff7a38a1c1c is an ancestor of 375279e781f0)"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": {
+    "reviewId": "2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045",
+    "reviewedHead": "dff7a38a1c1cd7fb3a3c71db16841c9ccd64e7e9",
+    "packagePath": ".metaproject/reviews/2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045"
+  },
+  "mode": "delta",
+  "range": {
+    "base": "dff7a38a1c1cd7fb3a3c71db16841c9ccd64e7e9",
+    "head": "375279e781f043c42373b29e06092a2c4177a82a"
+  },
+  "fixHunks": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 229,
+      "endLine": 229,
+      "findingIds": [
+        "review-security-code-w1:SEC-004"
+      ]
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4849,
+      "endLine": 4849,
+      "findingIds": [
+        "review-logic-w1:LG-002"
+      ]
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 3487,
+      "endLine": 3487,
+      "findingIds": [
+        "review-regression-w3:REG-W3-002",
+        "review-security-code-w1:SEC-001"
+      ]
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 46,
+      "endLine": 57,
+      "findingIds": [
+        "review-clean-code-w1:F-005"
+      ]
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 61,
+      "endLine": 62,
+      "findingIds": [
+        "review-style-w1:F-003"
+      ]
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 191,
+      "endLine": 202,
+      "findingIds": [
+        "review-clean-code-w1:F-004"
+      ]
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 294,
+      "endLine": 294,
+      "findingIds": [
+        "review-logic-w2:F-002"
+      ]
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1908,
+      "endLine": 1909,
+      "findingIds": [
+        "review-security-code-w2:SEC-W2-001"
+      ]
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1924,
+      "endLine": 1925,
+      "findingIds": [
+        "review-clean-code-w2:F-006",
+        "review-highload-w2:F-003",
+        "review-testing-practices-w1:F-003"
+      ]
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2324,
+      "endLine": 2335,
+      "findingIds": [
+        "review-clean-code-w2:F-003",
+        "review-highload-w2:F-001",
+        "review-logic-w2:F-005"
+      ]
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 213,
+      "endLine": 213,
+      "findingIds": [
+        "review-logic-w3:F-002",
+        "review-testing-practices-w2:T-001"
+      ]
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 43,
+      "endLine": 58,
+      "findingIds": [
+        "review-architecture-w3:F-005",
+        "review-highload-w1:F-001",
+        "review-highload-w3:F-001",
+        "review-logic-w1:LG-005",
+        "review-logic-w4:F-003",
+        "review-performance-w3:PERF-001",
+        "review-security-code-w3:SEC-001"
+      ]
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 61,
+      "endLine": 63,
+      "findingIds": [
+        "review-performance-w3:PERF-002",
+        "review-security-code-w3:SEC-002"
+      ]
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 65,
+      "endLine": 163,
+      "findingIds": [
+        "review-clean-code-w3:CC-11",
+        "review-highload-w1:F-002",
+        "review-highload-w3:F-002",
+        "review-highload-w3:F-005",
+        "review-logic-w4:F-002",
+        "review-performance-w3:PERF-007"
+      ]
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 521,
+      "endLine": 524,
+      "findingIds": [
+        "review-clean-code-w3:CC-4",
+        "review-performance-w3:PERF-004"
+      ]
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 529,
+      "endLine": 538,
+      "findingIds": [
+        "review-architecture-w3:F-004",
+        "review-clean-code-w3:CC-3",
+        "review-logic-w4:F-005",
+        "review-style-w3:F-004"
+      ]
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 544,
+      "endLine": 555,
+      "findingIds": [
+        "review-logic-w4:F-004"
+      ]
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 9,
+      "endLine": 16,
+      "findingIds": [
+        "review-core-boundaries-w1:F-004",
+        "review-highload-w3:F-004"
+      ]
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 20,
+      "endLine": 33,
+      "findingIds": [
+        "review-core-boundaries-w1:F-004",
+        "review-highload-w3:F-004",
+        "review-style-w3:F-005"
+      ]
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 40,
+      "endLine": 52,
+      "findingIds": [
+        "review-highload-w1:F-003",
+        "review-security-code-w3:SEC-003"
+      ]
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 89,
+      "endLine": 91,
+      "findingIds": [
+        "review-logic-w3:F-004"
+      ]
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 20,
+      "endLine": 31,
+      "findingIds": [
+        "review-clean-code-w3:CC-10",
+        "review-logic-w4:F-001",
+        "review-performance-w3:PERF-006"
+      ]
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 33,
+      "endLine": 36,
+      "findingIds": [
+        "review-clean-code-w3:CC-10"
+      ]
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 541,
+      "endLine": 541,
+      "findingIds": [
+        "review-clean-code-w3:CC-1",
+        "review-style-w3:F-007"
+      ]
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 630,
+      "endLine": 637,
+      "findingIds": [
+        "review-clean-code-w3:CC-9"
+      ]
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 83,
+      "endLine": 83,
+      "findingIds": [
+        "review-testing-practices-w2:T-002"
+      ]
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 62,
+      "endLine": 68,
+      "findingIds": [
+        "review-clean-code-w3:CC-2"
+      ]
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1224,
+      "endLine": 1224,
+      "findingIds": [
+        "review-clean-code-w3:CC-13"
+      ]
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1227,
+      "endLine": 1228,
+      "findingIds": [
+        "review-style-w3:F-006"
+      ]
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1230,
+      "endLine": 1234,
+      "findingIds": [
+        "review-logic-w4:F-006",
+        "review-security-code-w3:SEC-005"
+      ]
+    },
+    {
+      "file": "src/review/mutate.ts",
+      "startLine": 358,
+      "endLine": 369,
+      "findingIds": [
+        "review-clean-code-w3:CC-7",
+        "review-style-w3:F-003"
+      ]
+    },
+    {
+      "file": "src/review/retry-eval.ts",
+      "startLine": 80,
+      "endLine": 80,
+      "findingIds": [
+        "review-regression-w3:REG-W3-001"
+      ]
+    },
+    {
+      "file": "src/review/retry-eval.ts",
+      "startLine": 82,
+      "endLine": 82,
+      "findingIds": [
+        "review-regression-w3:REG-W3-001"
+      ]
+    }
+  ],
+  "newHunks": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 195,
+      "endLine": 195
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 206,
+      "endLine": 206
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 207,
+      "endLine": 235
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 326,
+      "endLine": 340
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md",
+      "startLine": 21,
+      "endLine": 27
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 654,
+      "endLine": 654
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 294,
+      "endLine": 294
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "startLine": 63,
+      "endLine": 63
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4743,
+      "endLine": 4743
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4888,
+      "endLine": 4888
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 6659,
+      "endLine": 6659
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 32,
+      "endLine": 32
+    },
+    {
+      "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+      "startLine": 254,
+      "endLine": 258
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "startLine": 71,
+      "endLine": 78
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 306,
+      "endLine": 306
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "startLine": 144,
+      "endLine": 183
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "startLine": 436,
+      "endLine": 436
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "startLine": 439,
+      "endLine": 439
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 10,
+      "endLine": 12
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 65,
+      "endLine": 65
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 124,
+      "endLine": 126
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 275,
+      "endLine": 279
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 322,
+      "endLine": 324
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 346,
+      "endLine": 347
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 353,
+      "endLine": 354
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 360,
+      "endLine": 360
+    },
+    {
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "startLine": 1,
+      "endLine": 141
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 182,
+      "endLine": 182
+    },
+    {
+      "file": "src/commands/review-premises-cli.test.ts",
+      "startLine": 66,
+      "endLine": 91
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "startLine": 195,
+      "endLine": 207
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "startLine": 25,
+      "endLine": 25
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "startLine": 99,
+      "endLine": 104
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "startLine": 235,
+      "endLine": 240
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "startLine": 248,
+      "endLine": 248
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "startLine": 252,
+      "endLine": 256
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "startLine": 258,
+      "endLine": 259
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 230,
+      "endLine": 230
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 1043,
+      "endLine": 1044
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 1048,
+      "endLine": 1048
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 1057,
+      "endLine": 1057
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 3625,
+      "endLine": 3626
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 3629,
+      "endLine": 3644
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4838,
+      "endLine": 4838
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4921,
+      "endLine": 4921
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5327,
+      "endLine": 5331
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 654,
+      "endLine": 654
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "startLine": 63,
+      "endLine": 63
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 195,
+      "endLine": 195
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 206,
+      "endLine": 206
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 229,
+      "endLine": 229
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 25,
+      "endLine": 25
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 1384,
+      "endLine": 1462
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 307,
+      "endLine": 312
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2185,
+      "endLine": 2194
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2248,
+      "endLine": 2248
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2257,
+      "endLine": 2260
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2262,
+      "endLine": 2262
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2289,
+      "endLine": 2289
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2296,
+      "endLine": 2299
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2304,
+      "endLine": 2304
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2307,
+      "endLine": 2307
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2339,
+      "endLine": 2339
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2404,
+      "endLine": 2404
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 15,
+      "endLine": 19
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 222,
+      "endLine": 222
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 233,
+      "endLine": 240
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 242,
+      "endLine": 248
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 252,
+      "endLine": 356
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 165,
+      "endLine": 197
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 199,
+      "endLine": 219
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 222,
+      "endLine": 226
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 249,
+      "endLine": 252
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 262,
+      "endLine": 306
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 311,
+      "endLine": 311
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 313,
+      "endLine": 313
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 315,
+      "endLine": 315
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 317,
+      "endLine": 317
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 319,
+      "endLine": 319
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 321,
+      "endLine": 324
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 332,
+      "endLine": 332
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 338,
+      "endLine": 338
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 369,
+      "endLine": 369
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 390,
+      "endLine": 399
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 401,
+      "endLine": 404
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 603,
+      "endLine": 621
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 4,
+      "endLine": 4
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 463,
+      "endLine": 463
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 480,
+      "endLine": 496
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 499,
+      "endLine": 502
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 557,
+      "endLine": 572
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 646,
+      "endLine": 651
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 738,
+      "endLine": 740
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 743,
+      "endLine": 743
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 773,
+      "endLine": 773
+    },
+    {
+      "file": "src/review/dedupe.test.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/review/dedupe.test.ts",
+      "startLine": 292,
+      "endLine": 294
+    },
+    {
+      "file": "src/review/dispatch-check.test.ts",
+      "startLine": 43,
+      "endLine": 54
+    },
+    {
+      "file": "src/review/dispatch-check.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/review/dispatch-check.ts",
+      "startLine": 17,
+      "endLine": 18
+    },
+    {
+      "file": "src/review/dispatch-check.ts",
+      "startLine": 118,
+      "endLine": 131
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 35,
+      "endLine": 38
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 58,
+      "endLine": 59
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 62,
+      "endLine": 62
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 67,
+      "endLine": 67
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 81,
+      "endLine": 82
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 96,
+      "endLine": 98
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 104,
+      "endLine": 104
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 111,
+      "endLine": 112
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 121,
+      "endLine": 125
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 128,
+      "endLine": 133
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 138,
+      "endLine": 138
+    },
+    {
+      "file": "src/review/display-id.ts",
+      "startLine": 1,
+      "endLine": 32
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "startLine": 126,
+      "endLine": 126
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "startLine": 479,
+      "endLine": 479
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "startLine": 482,
+      "endLine": 518
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 116,
+      "endLine": 121
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 173,
+      "endLine": 174
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 288,
+      "endLine": 288
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 327,
+      "endLine": 328
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 426,
+      "endLine": 435
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 438,
+      "endLine": 439
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 481,
+      "endLine": 481
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "startLine": 509,
+      "endLine": 509
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 59,
+      "endLine": 60
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 99,
+      "endLine": 103
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 105,
+      "endLine": 105
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 115,
+      "endLine": 116
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 6,
+      "endLine": 7
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 739,
+      "endLine": 798
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 1101,
+      "endLine": 1128
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 1154,
+      "endLine": 1176
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 38,
+      "endLine": 39
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 42,
+      "endLine": 46
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 136,
+      "endLine": 142
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 603,
+      "endLine": 613
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 619,
+      "endLine": 619
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 624,
+      "endLine": 628
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 647,
+      "endLine": 647
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 655,
+      "endLine": 655
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 681,
+      "endLine": 681
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 686,
+      "endLine": 686
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 734,
+      "endLine": 734
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 778,
+      "endLine": 783
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 785,
+      "endLine": 792
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 794,
+      "endLine": 794
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 798,
+      "endLine": 801
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 805,
+      "endLine": 805
+    },
+    {
+      "file": "src/review/locate-ingest.test.ts",
+      "startLine": 90,
+      "endLine": 102
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 90,
+      "endLine": 90
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 97,
+      "endLine": 97
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 175,
+      "endLine": 208
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 17,
+      "endLine": 19
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 70,
+      "endLine": 70
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 74,
+      "endLine": 74
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 156,
+      "endLine": 172
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 232,
+      "endLine": 244
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 208,
+      "endLine": 271
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 1992,
+      "endLine": 2011
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 11,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 54,
+      "endLine": 54
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 57,
+      "endLine": 57
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 270,
+      "endLine": 270
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 277,
+      "endLine": 280
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 288,
+      "endLine": 293
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 453,
+      "endLine": 453
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 551,
+      "endLine": 551
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 558,
+      "endLine": 561
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 685,
+      "endLine": 693
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1239,
+      "endLine": 1241
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1250,
+      "endLine": 1251
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1255,
+      "endLine": 1255
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1263,
+      "endLine": 1266
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1283,
+      "endLine": 1283
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1320,
+      "endLine": 1320
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1322,
+      "endLine": 1322
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1330,
+      "endLine": 1330
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1332,
+      "endLine": 1348
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 2736,
+      "endLine": 2737
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 2847,
+      "endLine": 2859
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 2874,
+      "endLine": 2883
+    },
+    {
+      "file": "src/review/mutate.ts",
+      "startLine": 346,
+      "endLine": 348
+    },
+    {
+      "file": "src/review/mutate.ts",
+      "startLine": 372,
+      "endLine": 372
+    },
+    {
+      "file": "src/review/mutate.ts",
+      "startLine": 379,
+      "endLine": 379
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "startLine": 306,
+      "endLine": 313
+    },
+    {
+      "file": "src/review/premise.test.ts",
+      "startLine": 315,
+      "endLine": 355
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 175,
+      "endLine": 197
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 319,
+      "endLine": 325
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 336,
+      "endLine": 336
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 338,
+      "endLine": 341
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 345,
+      "endLine": 346
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 371,
+      "endLine": 376
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 490,
+      "endLine": 490
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 499,
+      "endLine": 499
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 504,
+      "endLine": 508
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 512,
+      "endLine": 514
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 517,
+      "endLine": 521
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 524,
+      "endLine": 524
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 538,
+      "endLine": 538
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 560,
+      "endLine": 575
+    },
+    {
+      "file": "src/review/prior-round.ts",
+      "startLine": 321,
+      "endLine": 325
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 16,
+      "endLine": 16
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 639,
+      "endLine": 670
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 24,
+      "endLine": 24
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 122,
+      "endLine": 130
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 133,
+      "endLine": 141
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 186,
+      "endLine": 190
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 282,
+      "endLine": 285
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 287,
+      "endLine": 299
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 406,
+      "endLine": 406
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 416,
+      "endLine": 417
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 426,
+      "endLine": 426
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 8,
+      "endLine": 64
+    },
+    {
+      "file": "src/review/retry-eval.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/retry-eval.ts",
+      "startLine": 49,
+      "endLine": 51
+    },
+    {
+      "file": "src/review/retry-eval.ts",
+      "startLine": 74,
+      "endLine": 74
+    },
+    {
+      "file": "src/review/round-record.ts",
+      "startLine": 12,
+      "endLine": 18
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 17,
+      "endLine": 19
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 52,
+      "endLine": 102
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 127,
+      "endLine": 127
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 129,
+      "endLine": 129
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 133,
+      "endLine": 134
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 139,
+      "endLine": 139
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 142,
+      "endLine": 144
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 150,
+      "endLine": 154
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 156,
+      "endLine": 156
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 203,
+      "endLine": 242
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 244,
+      "endLine": 247
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 251,
+      "endLine": 258
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 260,
+      "endLine": 260
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 263,
+      "endLine": 264
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 266,
+      "endLine": 268
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 271,
+      "endLine": 277
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 282,
+      "endLine": 290
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 482,
+      "endLine": 511
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "startLine": 529,
+      "endLine": 536
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 1,
+      "endLine": 11
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 16,
+      "endLine": 16
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 20,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 23,
+      "endLine": 34
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 37,
+      "endLine": 128
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 161,
+      "endLine": 162
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 164,
+      "endLine": 164
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 168,
+      "endLine": 180
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 182,
+      "endLine": 187
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 193,
+      "endLine": 193
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 199,
+      "endLine": 199
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 215,
+      "endLine": 217
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 219,
+      "endLine": 219
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 224,
+      "endLine": 225
+    },
+    {
+      "file": "src/review/round-split.ts",
+      "startLine": 228,
+      "endLine": 234
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "startLine": 460,
+      "endLine": 460
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "startLine": 462,
+      "endLine": 462
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "startLine": 464,
+      "endLine": 464
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "startLine": 468,
+      "endLine": 475
+    },
+    {
+      "file": "src/review/routing-check.ts",
+      "startLine": 31,
+      "endLine": 33
+    },
+    {
+      "file": "src/review/routing-check.ts",
+      "startLine": 37,
+      "endLine": 37
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 633,
+      "endLine": 633
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 708,
+      "endLine": 708
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 211,
+      "endLine": 211
+    },
+    {
+      "file": "src/review/verdict.ts",
+      "startLine": 215,
+      "endLine": 215
+    }
+  ],
+  "carried": [
+    {
+      "findingId": "review-architecture-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w2:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w2:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w2:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w2:F-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:CC-5",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:CC-6",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:CC-8",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-clean-code-w3:CC-12",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-core-boundaries-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-core-boundaries-w1:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-core-boundaries-w1:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w2:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-highload-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:LG-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:LG-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:LG-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:LG-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:LG-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w2:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w2:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w3:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w3:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w3:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w4:F-007",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w4:F-008",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-performance-w2:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-performance-w3:PERF-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-performance-w3:PERF-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-regression-w3:REG-W3-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w1:SEC-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w1:SEC-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w2:SEC-W2-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w3:SEC-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w1:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:S-2",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:S-3",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:S-4",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w2:S-5",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-style-w3:F-008",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-006",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:T-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:T-004",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:T-005",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:T-006",
+      "disposition": "open"
+    }
+  ],
+  "mergeBase": "8483816bb48e1a99b3ec09e19ad0e83e814356ac",
+  "modeReason": "dff7a38a1c1c is an ancestor of 375279e781f0",
+  "secondLookHunks": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 225,
+      "endLine": 228
+    },
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 230,
+      "endLine": 234
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 20,
+      "endLine": 69
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 71,
+      "endLine": 71
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 246,
+      "endLine": 246
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 254,
+      "endLine": 256
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 262,
+      "endLine": 262
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 270,
+      "endLine": 272
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 408,
+      "endLine": 482
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 533,
+      "endLine": 667
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/journal.md",
+      "startLine": 27,
+      "endLine": 41
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 20,
+      "endLine": 53
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 55,
+      "endLine": 55
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 220,
+      "endLine": 220
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 230,
+      "endLine": 232
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 238,
+      "endLine": 238
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 248,
+      "endLine": 250
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 351,
+      "endLine": 405
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 440,
+      "endLine": 530
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/journal.md",
+      "startLine": 45,
+      "endLine": 55
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 24
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/context.md",
+      "startLine": 1,
+      "endLine": 82
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/description.md",
+      "startLine": 1,
+      "endLine": 34
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 1,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 15,
+      "endLine": 206
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 236,
+      "endLine": 325
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 341,
+      "endLine": 381
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md",
+      "startLine": 1,
+      "endLine": 20
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/plan.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 667,
+      "endLine": 667
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 45,
+      "endLine": 45
+    },
+    {
+      "file": "CHANGELOG.md",
+      "startLine": 5,
+      "endLine": 16
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4857,
+      "endLine": 4857
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5547,
+      "endLine": 5557
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 6684,
+      "endLine": 6688
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 825,
+      "endLine": 825
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "startLine": 438,
+      "endLine": 438
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 60,
+      "endLine": 60
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 63,
+      "endLine": 64
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 207,
+      "endLine": 207
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 342,
+      "endLine": 342
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 667,
+      "endLine": 667
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 45,
+      "endLine": 45
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 225,
+      "endLine": 228
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 230,
+      "endLine": 234
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 24,
+      "endLine": 24
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 574,
+      "endLine": 595
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 1347,
+      "endLine": 1383
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 26,
+      "endLine": 26
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1905,
+      "endLine": 1907
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1923,
+      "endLine": 1923
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1926,
+      "endLine": 1930
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2322,
+      "endLine": 2323
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2336,
+      "endLine": 2338
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2340,
+      "endLine": 2341
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2369,
+      "endLine": 2369
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "startLine": 11,
+      "endLine": 11
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "startLine": 101,
+      "endLine": 101
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 4,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 10,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 114,
+      "endLine": 221
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 171,
+      "endLine": 171
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 193,
+      "endLine": 212
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 214,
+      "endLine": 221
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 223,
+      "endLine": 232
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 241,
+      "endLine": 241
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 249,
+      "endLine": 251
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 357,
+      "endLine": 357
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 41,
+      "endLine": 42
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 59,
+      "endLine": 60
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 164,
+      "endLine": 164
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 198,
+      "endLine": 198
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 220,
+      "endLine": 221
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 229,
+      "endLine": 229
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 233,
+      "endLine": 233
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 236,
+      "endLine": 236
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 244,
+      "endLine": 244
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 253,
+      "endLine": 253
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 258,
+      "endLine": 261
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 307,
+      "endLine": 310
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 312,
+      "endLine": 312
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 314,
+      "endLine": 314
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 316,
+      "endLine": 316
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 318,
+      "endLine": 318
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 320,
+      "endLine": 320
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 326,
+      "endLine": 327
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 2,
+      "endLine": 3
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 535,
+      "endLine": 602
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 622,
+      "endLine": 622
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 462,
+      "endLine": 462
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 464,
+      "endLine": 465
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 467,
+      "endLine": 472
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 475,
+      "endLine": 479
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 497,
+      "endLine": 498
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 503,
+      "endLine": 507
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 513,
+      "endLine": 520
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 525,
+      "endLine": 528
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 539,
+      "endLine": 543
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 556,
+      "endLine": 556
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 594,
+      "endLine": 594
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 737,
+      "endLine": 737
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 744,
+      "endLine": 744
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 749,
+      "endLine": 761
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 1,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 17,
+      "endLine": 19
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 34,
+      "endLine": 34
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 53,
+      "endLine": 57
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 60,
+      "endLine": 61
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 63,
+      "endLine": 66
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 68,
+      "endLine": 80
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 83,
+      "endLine": 95
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 99,
+      "endLine": 103
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 105,
+      "endLine": 110
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 113,
+      "endLine": 115
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 117,
+      "endLine": 120
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 126,
+      "endLine": 127
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 134,
+      "endLine": 137
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 139,
+      "endLine": 139
+    },
+    {
+      "file": "src/review/dispatch.test-helpers.ts",
+      "startLine": 8,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/git-fixture.test-helpers.ts",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 46,
+      "endLine": 49
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 51,
+      "endLine": 58
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 61,
+      "endLine": 81
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 84,
+      "endLine": 84
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 129,
+      "endLine": 130
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 132,
+      "endLine": 134
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 51,
+      "endLine": 51
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 611,
+      "endLine": 612
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 692,
+      "endLine": 693
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 695,
+      "endLine": 695
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 844,
+      "endLine": 845
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 849,
+      "endLine": 849
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 1040,
+      "endLine": 1100
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 1129,
+      "endLine": 1153
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 1177,
+      "endLine": 1185
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 32,
+      "endLine": 32
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 37,
+      "endLine": 37
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 40,
+      "endLine": 41
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 47,
+      "endLine": 48
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 62,
+      "endLine": 63
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 78,
+      "endLine": 79
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 119,
+      "endLine": 120
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 156,
+      "endLine": 157
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 375,
+      "endLine": 377
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 425,
+      "endLine": 427
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 431,
+      "endLine": 435
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 528,
+      "endLine": 529
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 533,
+      "endLine": 533
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 540,
+      "endLine": 540
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 544,
+      "endLine": 545
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 559,
+      "endLine": 559
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 590,
+      "endLine": 590
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 672,
+      "endLine": 680
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 682,
+      "endLine": 685
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 797,
+      "endLine": 797
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 802,
+      "endLine": 802
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 69,
+      "endLine": 70
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 102,
+      "endLine": 102
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 106,
+      "endLine": 106
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 54,
+      "endLine": 61
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 71,
+      "endLine": 71
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 75,
+      "endLine": 75
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 178,
+      "endLine": 179
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 192,
+      "endLine": 192
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 198,
+      "endLine": 198
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 206,
+      "endLine": 206
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 245,
+      "endLine": 245
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 275,
+      "endLine": 281
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 1963,
+      "endLine": 1991
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 2012,
+      "endLine": 2013
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 275,
+      "endLine": 275
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 550,
+      "endLine": 550
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1220,
+      "endLine": 1223
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1225,
+      "endLine": 1226
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1229,
+      "endLine": 1229
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1235,
+      "endLine": 1238
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1245,
+      "endLine": 1245
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1252,
+      "endLine": 1254
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1414,
+      "endLine": 1415
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1443,
+      "endLine": 1450
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1495,
+      "endLine": 1510
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1513,
+      "endLine": 1520
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1532,
+      "endLine": 1536
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1547,
+      "endLine": 1547
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1663,
+      "endLine": 1665
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 2660,
+      "endLine": 2660
+    },
+    {
+      "file": "src/review/mutate.ts",
+      "startLine": 370,
+      "endLine": 371
+    },
+    {
+      "file": "src/review/mutate.ts",
+      "startLine": 373,
+      "endLine": 374
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 14,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 108,
+      "endLine": 108
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 218,
+      "endLine": 244
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 356,
+      "endLine": 357
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 571,
+      "endLine": 638
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 671,
+      "endLine": 671
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 185,
+      "endLine": 185
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 196,
+      "endLine": 196
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 198,
+      "endLine": 201
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 247,
+      "endLine": 273
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 432,
+      "endLine": 432
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "startLine": 65,
+      "endLine": 65
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 93,
+      "endLine": 109
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 130,
+      "endLine": 130
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 532,
+      "endLine": 537
+    }
+  ]
+}

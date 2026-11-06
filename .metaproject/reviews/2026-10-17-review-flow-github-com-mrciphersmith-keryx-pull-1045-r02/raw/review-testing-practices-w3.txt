@@ -1,0 +1,36 @@
+```json keryx:findings
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE",
+  "slices": ["slice-03"],
+  "mutant_candidates": [
+    {"id": "m1", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "(partial.length === 0 && !(\"error\" in partialSaved))", "replacement": "false", "kind": "behavior"},
+    {"id": "m2", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "(typeof value === \"number\" && Number.isFinite(value) ? value : undefined)", "replacement": "(typeof value === \"number\" ? value : undefined)", "kind": "behavior"},
+    {"id": "m3", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "const emptySaveNote = emptySaved === undefined || !(\"error\" in emptySaved) ? \"\" :", "replacement": "const emptySaveNote = true ? \"\" :", "kind": "behavior"}
+  ],
+  "findings": [
+    {
+      "id": "TP-001", "severity": "info", "reviewer": "review-testing-practices",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "(partial.length === 0 && !(\"error\" in partialSaved))",
+      "problem": "The timeout path now suppresses the '[partial result saved ...]' note when the child wrote no text. The test 'a child stopped at its deadline saves its partial text ...' drives that case (`silent`) but asserts only `silent.status` and the saved file, never `silent.output`. By reading, deleting this clause leaves that test green: no assertion separates 'placeholder saved, note suppressed' from 'note printed for a placeholder'.",
+      "impact": "The next edit to the clause is unprotected; the parent model could again be told a 'partial result' was saved when only the placeholder was.",
+      "suggested_fix": "In the `silent` case add `expect(silent.output).not.toContain(\"partial result saved\")`, and in the `partial` case `expect(partial.output).toContain(\"partial result saved to raw/review-logic.txt\")`.",
+      "evidence": "Read of the hunk and of the new tests in spawn-subagent-tool.test.ts. Mutation m1 was NOT run (this reviewer is read-only), so this is a prediction, info at best; running m1 against the nearest suite settles it.",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-002", "severity": "info", "reviewer": "review-testing-practices",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "quote": "expect(await readFile(path.join(root, \"raw/review-style.txt\"), \"utf8\")).toContain('\"status\":\"DONE\"');",
+      "problem": "The comment above says an empty dispatch over an existing complete result 'goes beside it, where no reader picks it up', but the test only checks the original file survived. It never reads the sibling (`raw/review-style.txt.partial`), and the provider reports no usage (`[]`), so the claim that the empty dispatch is still recorded is not pinned. The empty-save error branch (`emptySaveNote`, '[the empty result could NOT be recorded ...]') and the `finiteNumber` guard (NaN/Infinity usage) have no fixture either: every usage fixture holds finite non-negative integers.",
+      "impact": "Three added gates (sibling write, emptySaveNote, finiteNumber) can be removed or weakened with the suite green by reading; the comment reads as coverage the assertions do not give.",
+      "suggested_fix": "Give the second dispatch usage (`[{ inputTokens: 5 }]`) and assert the `.partial` sibling holds the placeholder plus a KERYX_USAGE line; add one `NaN` usage report to the sum test and expect it ignored; make the save target unwritable to reach emptySaveNote.",
+      "evidence": "Read of the three new tests against spawn-subagent-tool.ts (finiteNumber, onUsage, emptySaved). Mutations m2/m3 not run; prediction, info.",
+      "confidence": "medium"
+    }
+  ]
+}
+```
+
+Summary: slice-03 holds one test file (spawn-subagent-tool.test.ts, three new flow 460 tests) plus source, docs and schema changes whose tests live in other slices (the ledger-build hashed-id refusal is pinned at src/commands/review-ledger.test.ts; round-split and premises have their own suites). The mutation pass was not run: this reviewer is read-only and may not run tests, so no result is reported; 3 candidate mutants are listed, 0 of 3 run. The new tests are deterministic (temp dirs, try/finally env restore, the file's usual 250 ms deadline) and assert through the tool's public output and saved file. Two info-level gaps: the empty-text note suppression, and the sibling-write, finiteNumber and emptySaveNote branches, are not separated by any assertion. Counts: blocker 0, major 0, minor 0, info 2.

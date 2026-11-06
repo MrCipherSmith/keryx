@@ -1,0 +1,82 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Second look at slice-08 (review-ledger.ts call sites, spawn-subagent-tool.ts empty/timeout/usage paths, review-finding schema, orchestrator SKILL text). One major: the empty-reply placeholder this PR now writes is treated by saveTimedOutPartial as a complete result, so a re-dispatch's real output is diverted to <target>.partial behind an empty file. Two minors: per-dispatch spend is still lost on re-dispatch and on the rate-limit/error exits while the total reads complete; ledger build prints 'satisfies the completion gate' without the coverage-completeness gate complete runs. One info on the screened-finding fallback match.",
+  "slices": ["slice-08"],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 1 },
+  "findings": [
+    {
+      "id": "LG-001",
+      "reviewer": "review-logic",
+      "severity": "major",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 331,
+      "quote": "const target = existing.trim() === \"\" ? abs :",
+      "problem": "This PR makes the empty-reply exit (line ~2328) and the no-text timeout exit (line ~2260) write NO_TEXT_PLACEHOLDER plus a KERYX_USAGE line into save_result_to. saveTimedOutPartial still decides 'a complete result is already there' by existing.trim() === \"\", so that placeholder file now counts as a complete result. The tool's own advice for an empty read-only child is 're-dispatch it once'. If that re-dispatch times out with real text (possibly a whole REVIEW_RESULT), the text goes to <target>.partial, which no raw reader picks up. raw/<reviewer>.txt keeps the empty placeholder. The tool output also says 'the complete result already at X was kept', which is false. A second empty dispatch is diverted the same way, so its dispatch and usage disappear from the ledger.",
+      "impact": "Before this PR an empty dispatch wrote no file, so a re-dispatch's timed-out partial landed at the raw path the ledger reads. Now that output is hidden: the ledger sees an empty reply, records the reviewer as incomplete or not-run, and drops any findings the partial held. The operator is told a complete result was kept.",
+      "suggested_fix": "In saveTimedOutPartial, treat an existing file as worth protecting only when isEmptyOutput(existing) is false (it already strips the usage line and matches the placeholder). An empty placeholder is then overwritten by any later dispatch. Optionally, have the stopped/BudgetExhausted path (line ~2369, saveChildResult) use the same guard so a non-Completed child never overwrites a complete result.",
+      "evidence": "spawn-subagent-tool.ts:329-334 saveTimedOutPartial uses existing.trim() === \"\". Line ~2328 (empty-reply) and ~2260 (timeout) now write `${NO_TEXT_PLACEHOLDER}${usageSuffix()}` through it. Line ~2268 prints 'the complete result already at ... was kept'. ledger.ts:425-428 isEmptyOutput treats the placeholder as empty. review-ledger.ts loadRaws reads only raw/*.txt, so the .partial file is never read. The advice text 're-dispatch it once' is at line ~2322.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:331",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2260",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2328",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2369"
+        ],
+        "enumeration_method": "keryx ctx rg for saveTimedOutPartial|saveChildResult in spawn-subagent-tool.ts: 3 writers of save_result_to (timeout, empty-reply, normal/stopped), all reaching the one 'is a complete result there' test at :331; :2369 overwrites unconditionally (the non-Completed sibling)"
+      }
+    },
+    {
+      "id": "LG-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 2369,
+      "quote": "await saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`)",
+      "problem": "Token spend is recorded as one KERYX_USAGE line per raw file, and ledger.ts:673 counts one dispatch per raw file. A re-dispatch to the same save_result_to, which the empty-reply advice asks for, either overwrites the file (saveChildResult on a completed retry) or is diverted to .partial (LG-001), so one of the two paid dispatches disappears. The rate-limited exit (failChild('rate-limited'), ~2304) and the thrown-error exit (~2404) still write no file, so their spend and the dispatch itself are missing too. Round 1 named the rate-limit exit, and only the empty-reply exit was fixed. usageTotals then reports complete: true, and the report reads 'token spend: X over N dispatch(es)' with no 'at least'.",
+      "impact": "The review's stated spend (flow criterion H) is silently low and labelled complete on exactly the retry and failure paths that burn tokens. No gate reads it, so the harm is a wrong cost figure only.",
+      "suggested_fix": "Keep spend per dispatch rather than per file: append to the target instead of replacing it, or write a sidecar per dispatch (raw/<reviewer>.usage.jsonl) that the ledger sums. Record a usage-only entry on the rate-limit and error exits when usage is known.",
+      "evidence": "spawn-subagent-tool.ts ~2369 overwrites unconditionally. The rate-limit branch ~2304-2316 and the catch branch ~2404 return without any save. ledger.ts:672-673 says 'Every raw result is one dispatch' and runs usageTotals(raws.map(rawUsage)). dispatch-usage.ts:112 sets complete when every counted usage is known. The round-1 finding at findings.json:716 named the rate-limit return.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "line": 354,
+      "quote": "const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files });",
+      "problem": "ledger build now runs packageCoverageErrors, so its coverage options match complete and readiness. But review complete (managed.ts:871/1013 to packageResearchErrors) also runs coverageGateErrors(packageDir, ledger), the layer/chunk completeness gate, and ledgerBlockers never runs it. The ledger still prints 'READY: ... satisfies the completion gate' (line 204), and ledgerBlockers' new doc comment says 'READY here is what complete accepts'. A package with an unfinished chunk plan or an incomplete layer census is READY in ledger build and refused by complete.",
+      "impact": "This is the same 'one command says ready, the next refuses' shape that flow 460 problem A sets out to remove, now between ledger build and complete. An operator or orchestrator that trusts the READY line runs complete and is refused.",
+      "suggested_fix": "When packageDir is given, have ledgerBlockers also return coverageGateErrors(packageDir, ledger). Otherwise, reword the READY line and the doc comment so they claim only the research, dispatch and coverage checks.",
+      "evidence": "research.ts:131 runs coverageGateErrors in packageResearchErrors, but ledger.ts:803-806 has no call to it. The completeness gate was added in 7e1d30521. This PR rewrote the ledgerBlockers comment to 'READY here is what complete accepts' without adding the gate.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-004",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": 613,
+      "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+      "problem": "The screened list that review-ledger.ts now passes in is matched either by obligation id or by (reviewer, display id). Reviewers often number findings from F-001 in each wave (raw/review-logic-w1.txt and -w2.txt). If ingest received display ids and screened w1's F-001, then w2's F-001, a different finding missing from findings.json, matches the fallback and is closed out-of-scope with w1's screen reason.",
+      "impact": "If this path is reachable, an un-ingested finding is closed silently. Whether ingest can hold two same-reviewer findings with the same display id was not settled. In this repository the canonical ids are obligation-form (<raw stem>:<id>), so the first branch matches.",
+      "suggested_fix": "Prefer the obligation id. Take the (reviewer, display id) fallback only when exactly one raw file of that reviewer carries that display id.",
+      "evidence": "ledger.ts:612-613 has the fallback match. managed.ts:686-691 screenedRecord writes the finding id ingest held. The w1/w2 raw naming is in this package's raw/ directory.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## Logic Review (second look, slice-08)
+
+- blocker: 0 | major: 1 | minor: 2 | info: 1
+- LG-001 (major): the empty-reply placeholder this PR now writes counts as a "complete result" in saveTimedOutPartial. A re-dispatch's real output is diverted to `.partial`, which no reader picks up, and the tool says a complete result was kept.
+- LG-002 (minor): spend is per file, not per dispatch. A re-dispatch overwrites or diverts the earlier dispatch's usage, and the rate-limit and error exits still record none. The total is still labelled complete.
+- LG-003 (minor): ledger build's READY claims to satisfy the completion gate, but it skips coverageGateErrors, which complete runs.
+- LG-004 (info): screened findings fall back to a (reviewer, display id) match, which can collide across waves.
+
+Spec compliance gate: not re-run (second look). The tool calls I used were read-only: the Read tool, keryx ctx rg/run/read and git log/diff/show; no tests, no edits outside this result file.

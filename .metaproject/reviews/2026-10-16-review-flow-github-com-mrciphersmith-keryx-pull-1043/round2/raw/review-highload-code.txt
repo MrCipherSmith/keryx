@@ -1,0 +1,75 @@
+```json keryx:findings
+{
+  "reviewer": "review-highload",
+  "findings": [
+    {
+      "id": "HL2-001",
+      "severity": "minor",
+      "file": "src/commands/automatic-review.ts",
+      "line": 268,
+      "problem": "The new OPERATOR_ONLY_FILES guard compares path.relative(dir, resolved) to \"operator-decisions.json\" case-sensitively, while the extension check beside it is lowercased. On a case-insensitive filesystem (macOS APFS default, Windows) a patch target such as `Operator-Decisions.json` passes the guard and writes the real file.",
+      "impact": "The agent can still write an operator answer without asking, which is what the guard and its test exist to stop. The test only tries the exact-case name. Symlinks inside the package are the same hole.",
+      "suggested_fix": "Compare lowercased, reject any target whose realpath resolves to the file, and add a mixed-case case to the test.",
+      "evidence": "automatic-review.ts:262-270 `!OPERATOR_ONLY_FILES.has(path.relative(dir, resolved))`; automatic-review.test.ts new test uses only the exact-case name.",
+      "confidence": "medium"
+    },
+    {
+      "id": "HL2-002",
+      "severity": "minor",
+      "file": "src/review/premise-question.ts",
+      "line": 125,
+      "problem": "answerPremiseQuestion applies the answer to findings.json inside the operator-decisions lock, and the OPERATOR_DECISIONS_LOCK doc says it serialises findings.json writes. The other findings.json writers (ingest in managed.ts, others) do not take that lock, so that read-modify-write is still unserialised against them.",
+      "impact": "An ingest or other findings.json write overlapping an answer can lose the answer's findings.json update. The decision itself is on disk, so verdict/readiness/gate stay right; the carry to the next round and the published block would read the finding as open. Operator-timed, narrow.",
+      "suggested_fix": "Take the same lock in the other findings.json writers, or correct the comment to say it serialises only the decisions file and the answer's own two writes.",
+      "evidence": "operator-decisions.ts OPERATOR_DECISIONS_LOCK comment; premise-question.ts:124-137 onRecorded; writeFileAtomic of findings.json in managed.ts takes no lock.",
+      "confidence": "medium"
+    },
+    {
+      "id": "HL2-003",
+      "severity": "minor",
+      "file": "src/review/operator-decisions.ts",
+      "line": 166,
+      "problem": "recordPremiseDecision appends the decision, then runs onRecorded. If onRecorded throws (findings.json unreadable or the atomic write fails) the decision is already persisted and the caller sees an error, so the two files disagree and the command/card reports failure for an answer that took effect. A retry appends a second decision.",
+      "impact": "Operator sees a failure but the hold is already lifted for verdict/readiness; findings.json keeps the stale open record until a later answer.",
+      "suggested_fix": "Apply to findings.json first and append the decision last, or catch in answerPremiseQuestion and report 'recorded, findings.json not updated' explicitly.",
+      "evidence": "recordPremiseDecision: `await appendDecision(...); await onRecorded?.(kept);` inside one lock with no rollback.",
+      "confidence": "low"
+    },
+    {
+      "id": "HL2-004",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": 337,
+      "problem": "computeReadiness now calls premiseRecords -> verdictRecords, which re-reads raw reviewer results, verifications, premises and decisions on every readiness computation (TUI panel, publish, publish-guard, cards, CLI), in addition to its own reads of findings.json.",
+      "impact": "Extra file IO per readiness refresh for large raw dirs; not a correctness problem.",
+      "suggested_fix": "Pass the already-read findings.json to the premise view when the package is ingested; fall back to verdictRecords only for an un-ingested package.",
+      "evidence": "readiness.ts:337 `premise: await premiseRecords(packageDir)`; verdict.ts verdictRecords reads findings.json, rawResults(rawDir), verification and premise files.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "review-highload-w4#F-001",
+      "disposition": "closed",
+      "evidence": "src/review/operator-decisions.ts: recordPremiseDecision and recordOperatorDecision both run appendDecision inside withOperatorDecisionsLock (withFileLock on .operator-decisions.lock, 5s timeout, stale reclaim)."
+    },
+    {
+      "id": "review-highload-w8#F-001",
+      "disposition": "closed",
+      "evidence": "src/review/operator-decisions.ts: one shared appendDecision under the per-package lock for both record functions, valid entries of both families kept (validDecision filter). Residual: the findings.json half of an answer is not under a lock other writers take (HL2-002)."
+    },
+    {
+      "id": "review-highload-w8#F-002",
+      "disposition": "closed",
+      "evidence": "Decisions bound to a subject (severity, verdict, problemSha256) via premise.ts latestPremiseDecision/premiseSubjectOf; managed.ts removes premises.json on an ingest without --premises; verdict.ts applyPremiseClaims no longer re-applies the file once findings.json exists."
+    },
+    {
+      "id": "review-highload-w9#HL-001",
+      "disposition": "closed",
+      "evidence": "Same per-package lock as w4#F-001 in operator-decisions.ts. A concurrent two-writer test was not confirmed in premise-decision.test.ts, so coverage is unconfirmed, not a defect."
+    }
+  ]
+}
+```
+
+Summary: all four round-1 review-highload findings are closed (lost update fixed with a per-package lock; stale id-keyed claims fixed by subject binding plus premises.json removal). New delta defects: 0 blocker, 0 major, 3 minor (case-insensitive bypass of the operator-only patch guard; findings.json not covered by the lock other writers use; decision persisted before the findings.json update with no rollback), 1 info (readiness re-reads raw results on every call).

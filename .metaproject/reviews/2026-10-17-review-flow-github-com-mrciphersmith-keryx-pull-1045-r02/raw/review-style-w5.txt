@@ -1,0 +1,110 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "slices": ["slice-06"],
+  "findings": [
+    {
+      "id": "ST-001",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": 173,
+      "title": "dispatchRuns duplicates the dispatch.runs parsing reviewersCheck still does by hand",
+      "problem": "The PR adds dispatchRuns() in research.ts (with its own local `record` copy) and coverageMdCheck uses it, but reviewersCheck in the same file still hand-parses dispatch.runs with the module-level `record` helper. research.ts now also defines a second `record` identical to readiness.ts's. Two readers of the same shape, and two copies of the helper.",
+      "why_it_matters": "DRY: a change to the run shape must be made in two parsers.",
+      "suggested_fix": "Have reviewersCheck read runs through dispatchRuns(ctx.research) and share one `record` helper.",
+      "evidence": "const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record)"
+    },
+    {
+      "id": "ST-002",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 54,
+      "title": "secondLookClaimBacked keeps its own changed-line walker next to the new walkRegion",
+      "problem": "walkRegion/lineInHunk now compute new-side line numbers for changed lines, while secondLookClaimBacked in the same file still walks region.text with its own `let line = region.startLine` loop for the same purpose (with slightly different removed-line handling).",
+      "why_it_matters": "Duplicated line-numbering logic that can drift; two definitions of 'a changed line lies in a hunk' in one file.",
+      "suggested_fix": "Express secondLookClaimBacked through walkRegion/lineInHunk, or note why its semantics differ.",
+      "evidence": "let line = region.startLine;"
+    },
+    {
+      "id": "ST-003",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 23,
+      "title": "SECURITY_PROBLEM alternation has redundant branches",
+      "problem": "`security|secur\\w+` and `injection|inject\\w*` each list a literal that the wildcard branch next to it already matches. Reads as if the literals mattered.",
+      "why_it_matters": "Readability of a dense one-line regex.",
+      "suggested_fix": "Drop the literal branches (`secur\\w*`, `inject\\w*`) or split the regex into a named list of terms.",
+      "evidence": "const SECURITY_PROBLEM = /\\b(security|secur\\w+|injection|inject\\w*"
+    },
+    {
+      "id": "ST-004",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 132,
+      "title": "\"review-security-code\" literal repeated beside the new FIX_SECURITY_ROLE constant",
+      "problem": "The PR introduces FIX_SECURITY_ROLE = \"review-security-code\" but SECOND_LOOK_ROLES still spells the same role name as a literal in the same file.",
+      "why_it_matters": "Duplicated string constant; a rename must be made twice.",
+      "suggested_fix": "Use FIX_SECURITY_ROLE in SECOND_LOOK_ROLES.",
+      "evidence": "export const SECOND_LOOK_ROLES: readonly string[] = [ALWAYS_ROLE, \"review-security-code\"];"
+    },
+    {
+      "id": "ST-005",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": 80,
+      "title": "partitionRegionsByFix is long and branch-heavy, with non-null assertions",
+      "problem": "partitionRegionsByFix (about 50 lines) carries three early-exit branches, a context-labelling loop with a four-way if/else chain, a piece-cutting loop and several `!` assertions. Labelling and piece-cutting could be named functions.",
+      "why_it_matters": "Hard to review the half-and-half context rule; complexity near the 10-branch threshold.",
+      "suggested_fix": "Extract labelContext(lines, kinds) and cutPieces(...) helpers.",
+      "evidence": "else labels[index] = index - before <= Math.ceil((after - before - 1) / 2) ? kinds[before]! : kinds[after]!;"
+    },
+    {
+      "id": "ST-006",
+      "severity": "info",
+      "file": "src/review/round-split.ts",
+      "line": 16,
+      "title": "lineInHunk restates the {file,startLine,endLine} shape inline",
+      "problem": "RoundHunk (exported from round-record.ts) already names this shape, yet lineInHunk's parameter spells it inline, as regionInSecondLook already did.",
+      "why_it_matters": "Minor type duplication.",
+      "suggested_fix": "Use RoundHunk for the parameter type.",
+      "evidence": "function lineInHunk(hunk: { file: string; startLine: number; endLine: number }, file: string, line: number, removed: boolean): boolean {"
+    },
+    {
+      "id": "ST-007",
+      "severity": "info",
+      "file": "src/review/round-record.ts",
+      "line": 37,
+      "title": "NOT_REVIEW_PACKAGES_ANY_DEPTH repeats the exclusion globs of NOT_REVIEW_PACKAGES",
+      "problem": "Two constants list the same two package exclusions, differing only in a `**/` prefix; kept in sync by hand.",
+      "why_it_matters": "A new package location must be added to both.",
+      "suggested_fix": "Derive the any-depth list from one list of package directories.",
+      "evidence": "export const NOT_REVIEW_PACKAGES_ANY_DEPTH = [\".\", \":(exclude,glob)**/.metaproject/reviews/**\""
+    },
+    {
+      "id": "ST-008",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": 193,
+      "title": "Ambiguous pronoun in comment: 'Its git diff is remembered'",
+      "problem": "In reviewersCheck's comment, 'Its git diff is remembered per package and head (./coverage.ts)' follows a sentence about the package and the coverage gate; the referent of 'Its' is unclear.",
+      "why_it_matters": "Comment readability.",
+      "suggested_fix": "Say 'The coverage gate's git diff is remembered per package and head'.",
+      "evidence": "Its git diff is remembered per package and head (./coverage.ts)."
+    },
+    {
+      "id": "ST-009",
+      "severity": "info",
+      "file": "src/review/retry-eval.ts",
+      "line": 435,
+      "title": "Reflowed doc comment of collectLateResults has a ragged overlong line",
+      "problem": "The edit reflowed the JSDoc leaving one line far longer than its neighbours.",
+      "why_it_matters": "Readability only; the formatter does not rewrap comments.",
+      "suggested_fix": "Rewrap the paragraph at the file's usual width.",
+      "evidence": "a reply that names none covers none, as in the ledger. `collected` counts those files that add a slice not yet in `known`. Anything unreadable, malformed"
+    }
+  ]
+}
+```
+
+Style review of slice-06: no major issues. Main themes are DRY leftovers next to new helpers (dispatchRuns/record, walkRegion, FIX_SECURITY_ROLE), one long function (partitionRegionsByFix), and small comment/regex readability points. Counts: major 0, minor 5, info 4.

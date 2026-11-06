@@ -1,0 +1,111 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Round 2 (fix delta c144874f..90f0861ab, skills; HEAD f47ebb0ec adds only an eval fixture). Six of the seven review-logic round-1 findings are closed: there is now one operator-ask path (Wave D), and job-orchestrator, flow-orchestrator and feature-dev all point to it. HELD/OPEN are defined and used in every loop condition. The external, minor and security no-downgrade rules match src/review/premise.ts. The Early verdict and step-10b are handled, and the RTL item is narrowed. LG-003 is only partial. The delta tells every read-only reviewer it may run git log/blame/show, and it deleted the accurate 'a read-only child has no shell'. On keryx shell a read-only child has no shell and no git tool, so the history half of law 4 and premise question 1 still cannot be reached there, and the text now says it can. The delta also adds three smaller gaps: the global_id advice, the incomplete by-hand merge rules, and a second premise check in the pr-feedback --fix handoff.",
+  "findings": [
+    {
+      "id": "LG2-001",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 110,
+      "quote": "Reviewers are read-only: they read the diff and the files and run no command but the read-only history commands `git log`, `git blame` and `git show` (law 4; `review-premise` too).",
+      "problem": "The fix for LG-003/ARCH F-001 chose option (a), giving read-only reviewers git. It did not add the 'where you can run it; otherwise the supplied history' clause both round-1 fixes asked for. It also removed the one true host fact in 9 skills: 'a read-only child has no shell, so run no git command'. On keryx shell a spawn_subagent child in read_only (and in general) mode gets builtinReadOnlyTools plus metaproject tools only. Its policy is shell: deny, and there is no git tool. The skill text now says such a child 'runs git log, git blame and git show', a capability that does not exist on that host. Nothing tells the orchestrator to run the history itself and pass it in context_files.",
+      "impact": "On keryx shell a reviewer or the premise judge meets an override whose reason is only in a commit message or blame. It is told to run git, cannot, and has no fallback. It either skips the check silently or reports the deliberate choice as a defect, which is the incident flow 459 exists to stop. Question 1 of review-premise (intent signals from git log -L / blame) is the part the judge most needs. Before the delta the text at least told the child it had no shell. Now it tells the child it has a capability it lacks, and the orchestrator has no reason to fill the gap.",
+      "suggested_fix": "Make the permission conditional on the host. Read the reason from git log/blame/show where your host gives you a shell. On keryx shell (children have no shell) the orchestrator runs `git log -L`/`git blame` for the cited sites and passes the output in context_files. With neither, say the history was not read and do not report the choice as a defect on that ground. Put the keryx-shell pre-run in Wave D (Step 10b) for review-premise. Restore the 'no shell on keryx shell' fact in the Supplied-text-first sentences rather than deleting it.",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:1003-1004 ('Both native modes lack shell/test execution ... Default mode is read_only (no shell)') and :1686-1699 (child tools = builtinReadOnlyTools + builtinMetaprojectTools in both modes); src/harness/policy/profiles.ts:152 shellChildReadOnlyProfile defaults shell: \"deny\"; no git tool in src/harness/tool/builtin (keryx ctx rg 'git log|git blame' finds only parent-side execFile calls). Delta lines removing 'a read-only child has no shell, so run no git command' in 9 skills.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:110 (How to spawn, 'Reviewers are read-only')",
+          "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json:188 (allowed_tools read-only description)",
+          "src/gdskills/bundled/skills/review/review-premise/SKILL.md Iron Laws row 'Read-only. Run nothing but git log ...'",
+          "Supplied-text-first sentence ('the only git commands a read-only child runs'): review-architecture, review-backend, review-clean-code, review-frontend, review-highload, review-logic, review-performance, review-security-code, review-style (SKILL.md ~line 66-96 each)",
+          "Intro sentence ('runs no command but the read-only git log, git blame and git show'): the 9 above plus review-core-boundaries, review-flow-graph, review-frontend-conventions, review-regression, review-testing-practices",
+          "identical copies under .metaproject/skills/gdskills/review/"
+        ],
+        "enumeration_method": "Diff hunks in round2/delta-skills.diff that add the git clause (14 reviewer skills, orchestrator, schema, premise). Cross-checked with keryx ctx rg 'runs no command|no shell' over both skill trees. The 8 other law-4 reviewers (review-jev-*, review-pr-contract, review-layout) state no command rule and inherit it from the orchestrator line."
+      }
+    },
+    {
+      "id": "LG2-002",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 1127,
+      "quote": "a claim's `finding_id` is the `global_id` whenever reviewer-local ids can collide (two reviewers' `F-001`), or the merge rejects it as `ambiguous-finding`.",
+      "problem": "The mechanism named here is wrong. A global_id is minted as `<reviewId>#<id>` (managed.ts:1653-1655), so two reviewers' F-001 in one package get the same global_id. A claim naming it still matches both and is rejected as ambiguous-finding. Ingest then refuses the package outright for two findings under one key (managed.ts:451-457). Also, Wave D runs before ingest, and ingest is where a round's global_ids are minted (managed.ts:303). So 'each carrying global_id' names a field that only carried findings have at dispatch time. The global_id does disambiguate in one real case: a carried finding sharing a display id with a new one, or a merged_from key.",
+      "impact": "An orchestrator following the text feeds the judge findings with no global_id, or invents keys in another shape. This review's own premise input uses '<reviewer>-<wave>#<id>', which resolves to nothing in mergePremises (unknown-finding). It also believes the global_id fixes a same-package display-id collision that ingest refuses anyway. The cost is lost premise claims (rejected, listed in scope.md) or a wasted re-run. The final state is not wrong.",
+      "suggested_fix": "Say: display ids must be unique within a package (ingest refuses a collision). Give the judge each finding's `id`, and the carried `global_id` for a finding carried from an earlier round. A claim names the global_id when a carried finding shares the display id. Drop the 'two reviewers' F-001' example, or say the orchestrator must renumber before dispatch. Align the review-premise Input Contract `findings` row and its example finding_id.",
+      "evidence": "src/review/managed.ts:303 assignGlobalIds before verifier, :1653 mintGlobalFindingId = `${reviewId}#${id}`, :451-457 findingKeyCollisions throw; src/review/premise.ts:206 claimTargets matches global_id OR id, :291 ambiguous-finding.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG2-003",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "line": 279,
+      "quote": "apply the merge's rules by hand (a `challenged` that cites no signal or source is upheld; an external comment is never downgraded)",
+      "problem": "With no package there is no mergePremises, and the text lists two of its refusals as the whole by-hand set. It leaves out security-downgrade (a review-security-code follow-up), downgrade-below-threshold (a follow-up shaped at the default `minor` can never be downgraded), held-without-question, owner-decision-without-options and self-judgement. review-premise's `source` row repeats the same partial list ('cited challenge, no downgrade of an external'). feature-dev Phase 1 points to it.",
+      "impact": "A follow-up issue from a security finding, downgraded by the judge, is planned at the lower severity. A minor follow-up 'downgraded' to info drops out of the plan. A `challenged` with no question has nothing to ask the operator. The merge refuses every one of these in a packaged round, but the flow path lets them through.",
+      "suggested_fix": "Point the by-hand step at the full rule set: 'apply every refusal PREMISE_REJECTION_REASONS names (src/review/premise.ts), in particular ...'. Or list the rules that apply to a single finding: uncited challenge/downgrade, external or security downgrade, downgrade below minor, held without question, owner-decision with <2 options, self-judgement. Use the same wording in review-premise's source row.",
+      "evidence": "src/review/premise.ts:63-85 PREMISE_REJECTION_REASONS; :320-345 external-downgrade, security-downgrade, downgrade-below-threshold; review-premise/SKILL.md line 65 source row.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG2-004",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": 366,
+      "quote": "An upheld comment is planned and passed in `fix_context.review_feedback`",
+      "problem": "Rule 7 runs review-premise on the valid comments and records the operator's answers on the Step 7 entries. --fix then hands the plan to flow-orchestrator (Step 9 Dispatch). The payload's `request` and `constraints` say nothing about the premise check already being done. flow-orchestrator Phase 1 ('A flow sourced from a finding', line 279) tells it to dispatch review-premise again before freeze on a flow whose source is an external review comment. The double path predates the delta, but the delta rewrote both sites without connecting them.",
+      "impact": "Each comment is judged twice. A second judge can hold a comment the operator already upheld, so the operator is asked again. In a dispatched flow-orchestrator subagent, which cannot reach the operator, the flow stops with the item held even though it already has an answer.",
+      "suggested_fix": "In Step 9's dispatch constraints, add: 'premise: each plan item's comment was premise-checked and answered in rule 7 (see its Premise entry); do not re-run review-premise before freeze'. In flow-orchestrator Phase 1, skip the check when the dispatch says the premise is already recorded.",
+      "evidence": "review-pr-feedback/SKILL.md Step 9 Dispatch payload (lines ~517-528); flow-orchestrator/SKILL.md:277-279.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG2-005",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+      "line": 195,
+      "quote": "\"if\": { \"required\": [\"premise_verdict\"], ... }, \"then\": { \"required\": [\"premise_answer\"] }",
+      "problem": "The contract guard fails open. It fires only when the caller sets premise_verdict, which is optional. A caller that leaves it out passes a held finding through validation. The validator supports if/then (src/gdskills/contracts.ts:503), so the guard does work when the field is present.",
+      "impact": "The guard catches a caller that copies the verdict but forgets the answer. It cannot catch one that drops the verdict. The skill text ('is refused by this contract') claims a bit more than the schema can enforce.",
+      "suggested_fix": "Word it as 'an item that names a held verdict without premise_answer is refused'. The actual guarantee rests on the caller's HELD filter. Settling it for good would need the fixer to cross-check ids against the package's findings.json.",
+      "evidence": "input-contract.schema.json review_feedback.items if/then; src/gdskills/contracts.ts:503-509.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-logic-skills#LG-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1129 Wave D: card in keryx shell; elsewhere the question tool, then the exact decide-premise command for the operator's terminal, 'Never run it yourself ... never write their reason'. flow-orchestrator:442, job-orchestrator:1174, feature-dev:116 and readiness item 11 (SKILL.detail.md:666) point to it. pr-feedback:366 and flow Phase 1 (:279) have no package and run no decide-premise. Bundled and .metaproject copies are identical (diff -rq clean)."},
+    {"id": "review-logic-skills#LG-002", "disposition": "closed", "evidence": "job-orchestrator/SKILL.md:1169-1171 HELD/OPEN/NEEDS_FIX=count(OPEN), :1269 UNRESOLVED=OPEN, :1299 recompute HELD/OPEN, :1314, :1344 HELD branch; flow-orchestrator:536 exit 'not held, and no held finding awaits the operator' (minors included); feature-dev:116 'blocks the cycle until answered'."},
+    {"id": "review-logic-skills#LG-003", "disposition": "partial", "evidence": "The wording is unified: review-orchestrator:110, reviewer-input.schema.json:188, the review-premise Iron Law and 14 reviewer skills all allow git log/blame/show. On keryx shell, though, read-only children have no shell and no git tool (spawn-subagent-tool.ts:1003-1004, profiles.ts:152 shell: deny), so law 4's history half is still out of reach there and nothing supplies it. See LG2-001."},
+    {"id": "review-logic-skills#LG-004", "disposition": "closed", "evidence": "review-premise/SKILL.md:93 'Never for a minor or an external finding' and :113 external/security never downgraded, matching premise.ts:320-345; review-pr-feedback/SKILL.md:366 passes only comments of severity minor or above and says 'never downgraded'."},
+    {"id": "review-logic-skills#LG-005", "disposition": "closed", "evidence": "flow-orchestrator/SKILL.md:277-279 shape the issue/comment as one finding (URL as id) and save the claims in <flow-dir>/premise/<n>.json, with no ingest or decide-premise; review-premise/SKILL.md:65 source row gives the shape and default minor. A caveat on the incomplete by-hand rules is filed as LG2-003."},
+    {"id": "review-logic-skills#LG-006", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:134 Early verdict: held findings are excluded only once premises.json exists, and a verdict before Wave D is called provisional (verdict.ts:220 reads PREMISES_FILE). Step 6a (:105) and Slices step 0 (:120) add step-10b, and 10b is completed only after ingest --premises."},
+    {"id": "review-logic-skills#LG-007", "disposition": "closed", "evidence": "review-layout/SKILL.md:122-125 is narrowed to media playback controls/seek bar, numbers, code and phone numbers, says 'usually deliberate: read its signals (law 4)', and says an event timeline, calendar row or chart axis often does mirror."}
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 3, "info": 1}
+}
+```
+
+## Logic Review (round 2, skills fix delta)
+
+- Scope: round2/delta-skills.diff (bundled copy; .metaproject mirror identical for review/ and orchestration/). Fix head 90f0861ab; worktree HEAD f47ebb0ec adds only an eval fixture. Spec gate: skipped.
+- Prior (review-logic): 6 closed, 1 partial (LG-003), 0 open, 0 regressed.
+- New: 1 major, 3 minor, 1 info.
+  - LG2-001 (major): the git permission is stated for read-only children, but on keryx shell they have no shell or git tool. The delta also deleted the accurate "no shell" fact, so the history half of law 4 and premise question 1 is still out of reach on keryx shell, with nothing to supply it.
+  - LG2-002 (minor): the Wave D global_id advice cannot fix a two-reviewer F-001 collision. global_id is `<reviewId>#<id>`, and ingest refuses that collision anyway. Round findings also have no global_id before ingest.
+  - LG2-003 (minor): flow Phase 1's by-hand merge rules leave out the security, below-minor, question/options and self-judgement refusals.
+  - LG2-004 (minor): pr-feedback --fix hands off to flow-orchestrator, whose Phase 1 runs review-premise again and may ask the operator a second time.
+  - LG2-005 (info): the task-implementer premise guard fails open when premise_verdict is left out.
+- Verified as correct against the code: decide-premise dismiss writes dismissed-incorrect (premise.ts:582); external-, security- and below-threshold downgrades are rejected; verdict.ts reads research-evidence/premises.json; ingest reads --premises before writing it back to the same path; ask_user and review_decide_premise exist; the contract validator supports if/then.
+
+Routing audit: graph_used: no (not-relevant: a skill-text delta checked against named code sites); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no. A few raw sed/grep reads of known files used the keryx:raw marker.

@@ -1,0 +1,97 @@
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "summary": "Round 3 regression check of PR #1045, delta 375279e78..17e2e4417 (round3/delta-code.diff). All 8 review-regression findings at minor or above and all 10 review-regression records in prior-not-closed.json are closed at HEAD. The delta adds no blocker or major. It adds 3 minor findings and 1 info: a retry's partial text is now dropped, `2>&1` breaks the completion gate's trust of its own output, and the 12-character substring floor is not documented.",
+  "findings": [
+    {
+      "id": "RG3-001",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 348,
+      "quote": "if (existing !== undefined && prior !== undefined && !record.final && !isEmptyRecord(existing)) {",
+      "symbol": "saveDispatchRecord",
+      "problem": "saveDispatchRecord (new in this delta) replaced saveTimedOutPartial's `.partial` diversion. Now a non-final record (a timeout or a stopped child with text) that finds any non-empty record at save_result_to keeps the existing body and writes nothing else of the new text. It does not check whether the existing record is final. If an earlier dispatch's PARTIAL text is there (written non-final, its usage marked `partial: true`), a retry's partial text is thrown away completely. recordSaveNote (line 369) then tells the parent that 'the complete result an earlier dispatch saved ... was kept', which is false.",
+      "impact": "Trigger: dispatch 1 of a reviewer times out after writing some text, so raw/<r>-w<n>.txt holds partial A. The parent re-dispatches to the same driver result path, and dispatch 2 also times out or stops, possibly after emitting its whole REVIEW_RESULT block. Outcome: B is written nowhere, the ledger parses A, and the parent is told a complete result is on disk. At 375279e78, B went to `<path>.partial`. No reader picked that file up, but it kept the text on disk for the operator. Now the text is gone.",
+      "suggested_fix": "Divert only for an earlier FINAL record. Record finality in the file (for example, the `partial: true` usage flag, or an explicit marker for non-final saves). Let a non-final record replace an earlier non-final one, or keep it beside the earlier one as `<path>.partial`. Word the note from what was actually there. Add a test: a timeout with text A, then a timeout with text B to the same path, leaves B readable and does not claim a complete result.",
+      "evidence": "spawn-subagent-tool.ts:348 condition, which tests only !record.final and !isEmptyRecord(existing). spawn-subagent-tool.ts:2303 saves a timeout as `saveRecord(partial, { final: false, partial: true })`, and :2407 saves a non-Completed status as final=false. spawn-subagent-tool.ts:369 note text. At 375279e78 (git show), saveTimedOutPartial wrote to `${abs}.partial` when the target was non-blank. harness-robustness.test.ts row 14 tests partial-over-complete and empty-over-anything, but not partial-over-partial.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/harness/tool/builtin/spawn-subagent-tool.ts:348", "src/harness/tool/builtin/spawn-subagent-tool.ts:369"],
+        "enumeration_method": "Every caller of saveRecord in spawn-subagent-tool.ts: timeout (:2303), rate-limited (:2350 area, empty text only), empty reply (:2368, empty text only), and completion (:2407, non-final when status is not Completed). Only the timeout and the non-Completed-with-text paths carry text into the kept branch."
+      }
+    },
+    {
+      "id": "RG3-002",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 165,
+      "quote": "} else if (ch === \";\" || ch === \"&\" || ch === \"|\" || ch === \"\\n\") endCommand();",
+      "symbol": "shellCommands",
+      "problem": "The new shell reader splits a command at every unquoted `&`, including the one in the redirection `2>&1` (and `&>`). So `keryx review start --pr 7 2>&1` reads as two commands: `keryx review start --pr 7 2>` and `1`. keryxReviewInvocations counts the `1` as another command, so `alone` is false (line 200). The tracker then never trusts the `# managed review:` / `path:` lines that start, attach or ingest printed. This defeats the LG-002 fix for its own case: with `cd sub && keryx review start --pr 7 2>&1`, the root `sub` is never learned from the reply.",
+      "impact": "Trigger: a session runs `cd sub && keryx review start --pr <n> 2>&1`. Appending `2>&1` is routine for agents. Later commands name the package only by id (`cd sub && keryx review complete <id> 2>&1`). Outcome: findReviewGateState scans only cwd and never sees the open or closed package under sub. The gate keeps nudging with NO_PACKAGE_BLOCKER until the stall limit, both while the review runs and after it closes. In the plain cwd case the open package is still found by mtime, so the effect is limited to subdirectory packages and to packages from earlier sessions that are named only through output.",
+      "suggested_fix": "In shellCommands, treat an `&` directly after `>` or `<`, or directly before `>`, as part of a redirection and not a separator. Drop redirection words from `args`, or at least do not let them count as other commands. Add a test: `cd sub && keryx review start --pr 7975 2>&1` with the same reply names sub's package.",
+      "evidence": "completion-gate.ts:165 splits on `&`. completion-gate.ts:200 `const alone = found.length === 1 && others === 0`. The tracker queues pendingCalls only when `invocation.alone && OPENING_SUBCOMMANDS.has(...)`, and a call that is not pending has its output lines skipped. completion-gate.test.ts covers `cd sub && keryx review start --pr 7975` (no redirect) and compound lines with `;`/`&&`, but not `2>&1`.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/completion-gate.ts:165", "src/review/completion-gate.ts:200"],
+        "enumeration_method": "shellCommands is the only tokenizer. keryxReviewInvocations is its only caller and feeds both `alone` and `args`, so this is the one site."
+      }
+    },
+    {
+      "id": "RG3-003",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 6680,
+      "quote": "quote only — as an exact substring of exactly one line, then it stops — nothing",
+      "problem": "This delta added MIN_SUBSTRING_QUOTE_CHARS = 12 (locate.ts:131). A one-line quote shorter than 12 characters that is not a whole line is now `unlocatable` (kind absent), even when exactly one line contains it. Neither the CLI reference nor the quote descriptions in the schemas that reviewers are handed mention the floor. All of them still say a one-line quote is placed as an exact substring of exactly one line.",
+      "impact": "Trigger: a reviewer follows the schema and quotes a distinctive fragment under 12 characters, such as an identifier. Outcome: ingest flags the finding quote_unlocated with line null, readiness item quotes-located fails, and the round needs a re-quote or a waiver. The documents promised that such a quote would be placed.",
+      "suggested_fix": "Add 'of at least 12 characters (MIN_SUBSTRING_QUOTE_CHARS); a shorter fragment must be a whole line' to the substring pass in all four places, and keep the copies identical.",
+      "evidence": "locate.ts:131 and :248-250 (the floor and its reason). docs/docs/cli-reference.md:6679-6680. The quote description at src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json:85, the same at .metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json:85, and src/gdskills/contracts/review-finding.schema.json:195. A grep for 'too short|MIN_SUBSTRING|12 char' over the docs, the schemas and the delta-docs.diff finds no mention.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["docs/docs/cli-reference.md:6680", "src/gdskills/contracts/review-finding.schema.json:195", "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json:85", ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json:85"],
+        "enumeration_method": "grep 'as an exact substring of exactly one line' over docs, src/gdskills and .metaproject/skills: these four statements of the matcher order are every hit."
+      }
+    },
+    {
+      "id": "RG3-004",
+      "severity": "info",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "const wider = fallback !== null && fallback.sha !== primary.sha && emptyRangeWarning(fallback, target.head) === undefined ? [fallback.ref] : [];",
+      "symbol": "resolveDiffBases",
+      "problem": "The light recheck now always measures against the default base (origin/main and the other defaults) as well as the recorded --base, and keeps the wider diff. This is a deliberate choice (SEC-001: a recorded base can only widen). It also means a small pull request that targets a non-default branch can never pass the light gate under `--base` alone, because its diff against origin/main includes everything the parent branch carries. Examples are a stacked PR or a release-branch backport.",
+      "impact": "Observation, not a defect: the gate is stricter and nothing breaks. Such rounds must dispatch the full set or record an operator decision. To settle whether this is intended for stacked PRs, run `keryx review complete` on a light round of a 1-file PR whose --base is a feature branch 40 files ahead of main.",
+      "suggested_fix": "If stacked PRs are meant to stay light, use the target's recorded base for a PR whose base came from the forge (not from the operator), or say in the light-round docs that a non-default base always reads at full depth.",
+      "evidence": "coverage.ts resolveDiffBases at HEAD (delta lines 1975-1984). diffOfTarget keeps `widest` over both bases. coverage.test.ts 'a recorded base can only widen the check' (SEC-001).",
+      "confidence": "medium"
+    }
+  ],
+  "needs_context": [],
+  "prior_dispositions": [
+    { "id": "r2-review-regression-w1:REG-R2-001", "disposition": "closed", "evidence": "saveTimedOutPartial is gone. spawn-subagent-tool.ts:348 saveDispatchRecord diverts only when !isEmptyRecord(existing), so a placeholder plus usage line is replaced by a retry's text. The earlier dispatch's usage is carried over as KERYX_USAGE_OTHER (:357-361), and nothing is written to .partial. Tests: spawn-subagent-tool.test.ts 're-dispatch to the same path after an empty reply takes the path' and harness-robustness.test.ts row 14 'an empty placeholder never blocks a retry'." },
+    { "id": "r2-review-regression-w2:RG-001", "disposition": "closed", "evidence": "flow.json AC6 check is `bun test src/review/managed.test.ts src/commands/review-plan.test.ts src/commands/review-plan.e2e.test.ts` (commit 1471bbb4d), and acceptance-criteria.md:21 verify names review-plan.e2e.test.ts." },
+    { "id": "r2-review-regression-w2:RG-002", "disposition": "closed", "evidence": "docs/docs/cli-reference.md:6679-6680 now lists the substring pass, and :6685 says locator.method records exact, whitespace-normalised or substring. The new 12-character floor is filed separately as RG3-003." },
+    { "id": "r2-review-regression-w3:RG-001", "disposition": "closed", "evidence": "Same fix as REG-R2-001: spawn-subagent-tool.ts:348 uses isEmptyRecord (dispatch-usage.ts, the readers' own rule). The kept-result note at :369 is now accurate for a complete result, and the retry test asserts no .partial file and both usages kept." },
+    { "id": "r2-review-regression-w3:RG-002", "disposition": "closed", "evidence": "review.ts:3645-3657 readPremiseFile validates with parsePremiseClaimSets and returns PremiseSource[] (a list is flattened). managed.ts:522 writes one result as its object and several as a list. review-premises-cli.test.ts round-trips `--premises <package premises.json>` after a multi-file ingest." },
+    { "id": "r2-review-regression-w4:REG-001", "disposition": "closed", "evidence": "package-location.ts:61 flowPackageDirs returns the flow's reviews/ plus reviews-root packages whose manifest.flow is bound to the flow. It is used by loop.ts:488, flow/review-gate.ts:462 and governance/spend.ts:23. managed.test.ts asserts that all three readers see the bound round and ignore an unbound standalone package. The remaining flowReviewsRoot callers (prior-round.ts:371, managed.ts:1149, :2961) already scan the reviews root or are the writer." },
+    { "id": "r2-review-regression-w4:REG-002", "disposition": "closed", "evidence": "docs/docs/guides/review-with-a-record.md:647 and :956 show merged_duplicates=0 in the filter_stats line, and :656 and :965 subtract merged_duplicates in the arithmetic sentence." },
+    { "id": "r2-review-regression-w5:RG-001", "disposition": "closed", "evidence": "round-split.ts:65 fixContentRoles (the contentRolesOf rules of slice routing) is united into the fix roster by fixSliceRoster. It is used by classifyDeltaSlices (:296) and by expectedFixRoles (:332), which the routing check holds fix slices to. Tests: round-split.test.ts 'a fix slice whose own line spawns a process gets review-security-code', the narrowedSlices test missing security-code, and the review-plan.e2e.test.ts 'flow 458 M3' driver test." },
+    { "id": "review-clean-code-w2:F-006", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:1963-1965 documents per-request summing. Checked the adapters: gemini-provider.ts pushUsageAndFinish emits once before model_end, openai-compat only on the usage-bearing chunk (:1199), anthropic on message_delta (:955), openai on response.completed (:981)." },
+    { "id": "review-clean-code-w3:CC-13", "disposition": "closed", "evidence": "managed.ts:1233-1234: a status other than complete, incomplete, not-run or absent is now recorded as 'unrecognised status \"<s>\" in the research ledger', not as 'not run'. managed.test.ts 'a status the ledger never writes is named as such'." },
+    { "id": "review-clean-code-w3:CC-2", "disposition": "closed", "evidence": "locate.ts:68 the LocatorRecord doc now sits directly above `export type LocatorRecord` (:69). The stacked findRuns doc block moved down to findRuns." },
+    { "id": "review-highload-w2:F-003", "disposition": "closed", "evidence": "Same as F-006: spawn-subagent-tool.ts:1963-1965 states that each adapter emits one usage_update per request, and the adapter check above confirms it." },
+    { "id": "review-logic-w2:F-005", "disposition": "closed", "evidence": "An empty reply over a complete result keeps the result, adds this dispatch's usage, and the parent is told via recordSaveNote (spawn-subagent-tool.ts:369), with nothing written to .partial. spawn-subagent-tool.test.ts asserts the 'was kept' note, the parsed DONE result, others [undefined], and no .partial file." },
+    { "id": "review-logic-w3:F-002", "disposition": "closed", "evidence": "completion-gate.test.ts:448 describe 'which package the gate is on' uses two fresh packages, with the pointer on the older one. :461 'named nothing' only passes through the pointer branch of pickPackage (completion-gate.ts:389-400)." },
+    { "id": "review-performance-w3:PERF-006", "disposition": "closed", "evidence": "The UNREADABLE_INPUT regex pair is removed from ledger.ts. unreadableInputClaim now reads only the structured inputs_unreadable list (no regex scan of the summary)." },
+    { "id": "review-performance-w3:PERF-007", "disposition": "closed", "evidence": "completion-gate.ts:432 scans the roots with Promise.all and :391 reads the pointers in parallel. Collecting candidates first is now required by design, because session-named candidates win before the pointer (:393-394)." },
+    { "id": "review-security-code-w3:SEC-005", "disposition": "closed", "evidence": "research.ts:54 REVIEWER_NAME and :65 drop a run whose reviewer does not match. Free-text fields are flattened to one line by oneLine. managed.test.ts asserts that a reviewer name with a newline is dropped from coverage." },
+    { "id": "review-testing-practices-w2:T-001", "disposition": "closed", "evidence": "completion-gate.test.ts:448-475 adds fixtures where the pointer and the session's names disagree ('a fresh pointer to a package this session never named loses to the one it named') and where only the pointer decides." }
+  ]
+}
+```
+
+Summary: read-only regression pass over round3/delta-code.diff (375279e78..17e2e4417). Prior: 18 dispositions, all closed (8 review-regression findings at minor or above in new-findings.json and 10 review-regression records in prior-not-closed.json). New: 0 blocker, 0 major, 3 minor, 1 info. RG3-001: a timeout over an earlier partial drops the retry's text and the parent is told a complete result was kept. RG3-002: `2>&1` splits the command, so the gate never trusts keryx's own start/attach/ingest output. RG3-003: the 12-character substring floor is undocumented in the CLI reference and the schemas. RG3-004 (info): a recorded non-default base can never be light. Coverage: I reviewed the delta diff and followed it into its callers (wave-drivers/estimate/ledger roster, flowPackageDirs readers, prior-round dedup, coverageGateErrors, saveRecord callers, adapter usage emitters). No blast-radius set was computed for this delta, so dropped files cannot be stated. Runtime edges outside the code graph (the shell_exec tool name, the history shape) were checked by reading the code. Owner-dismissed ids were not re-raised.

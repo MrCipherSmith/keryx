@@ -1,0 +1,68 @@
+[
+ {
+  "id": "r2-review-clean-code-skills#CC2-003",
+  "disposition": "open",
+  "evidence": "flow-orchestrator/SKILL.md:277 heading paragraph is still followed by 'Then freeze and start' at :279 and the flow freeze block with no heading of its own; the freeze step still reads as the tail of the finding-sourced paragraph",
+  "_src": "review-clean-code-code"
+ },
+ {
+  "id": "review-clean-code-w9#CC-002",
+  "disposition": "partial",
+  "evidence": "src/flow/review-gate.test.ts:1610 still defines a local `heldFinding` wrapper (over shared heldPremise); review-operator-cli.test.ts:65 and operator-confirm-review-tools.test.ts:356 now use the shared heldFinding; verdict.test.ts:32 keeps its own `held` builder over the shared heldFinding. One name, two meanings (shared vs local heldFinding) remains in review-gate.test.ts",
+  "_src": "review-clean-code-code"
+ },
+ {
+  "id": "r2-review-clean-code-skills#CC2-003",
+  "disposition": "open",
+  "evidence": "flow-orchestrator/SKILL.md:277 turned the heading into a bold lead-in, so 'Then freeze and start' (:279-284) is now the tail of '### A verification step in the plan is a task, not a sentence' (:257) and its tasks-gate text, still not a heading of its own",
+  "_src": "review-clean-code-skills"
+ },
+ {
+  "id": "r2-review-logic-skills#LG2-003",
+  "disposition": "partial",
+  "evidence": "flow-orchestrator/SKILL.md:277 and review-pr-feedback/SKILL.md:366 now point at the full rule set, PREMISE_REJECTION_REASONS. The list they defer to, the review-premise/SKILL.md:65 'For one finding those are' row, still leaves out not-a-downgrade (premise.ts:365, :373), raise-severity (:369), severity-without-downgrade (:350) and below-minor (:334). Because callers apply refusals 'as that source row lists them', a by-hand applier accepts a `downgraded` claim with an equal, higher or missing severity.",
+  "_src": "review-logic-skills"
+ },
+ {
+  "id": "r2-review-style-skills#R2-002",
+  "disposition": "partial",
+  "evidence": "Verified for the caller; this is not a review-logic finding. b8ed54038 moved the dry-run, post-mortem and metrics blocks verbatim into job-orchestrator/SKILL.detail.md, and SKILL.md links each one (:1955, :2156, :2197). Against origin/main, the 2.6/Step 7/ingest/HELD paragraphs keep main's hard wrap. Two untouched paragraphs are still re-flowed: the arXiv bound paragraph (:1274-1279) and 'The bound is a ceiling' (:1282-1285).",
+  "_src": "review-logic-skills"
+ },
+ {
+  "id": "r2-review-regression-code#RG2-004",
+  "disposition": "partial",
+  "evidence": "src/review/managed.ts:507-511 now renames research-evidence/premises.json to premises.superseded.json instead of deleting it, so the judge's record survives and can be passed back with --premises. Not done from the suggested fix: the 'print a warning' half and the 'refuse' alternative. The main trigger (Wave D saved the claims, then the ingest ran without --premises) still silently writes findings.json with no premise. Readiness item 11 then passes as 'no finding is held' (readiness.ts:199), and the judge's challenged findings reach the fix loop as ordinary open findings with no message saying so.",
+  "_src": "review-regression-code"
+ },
+ {
+  "id": "r2-review-regression-skills#NEW-2",
+  "disposition": "partial",
+  "evidence": "id is now C-NNN with the URL in a `url` field in both review-premise/SKILL.md (source row) and review-pr-feedback/SKILL.md:366, and the claims are saved to pr-comments/<owner>__<repo>__<n>.premise.json; but the operator's answer for a held comment is still recorded only on the Step 7 entry (SKILL.md:390), not in the durable record or the sidecar.",
+  "_src": "review-regression-skills"
+ },
+ {
+  "id": "r2-review-security-code-code#SEC2-001",
+  "disposition": "partial",
+  "evidence": "(b) closed: automatic-review.ts:305 + :527-538 namesReviewPackage refuses a nested --prior; premise-question.ts:82-96 isReviewPackageDir and :118-121 carry re-validate the source and refuse self/containing packages; :131 needs a held verdict. (a) case variants closed for ASCII (:216/:258 lower-case, nested depth and symlinks handled at :232-262), but U+017F still aliases the file on APFS: see SEC3-001.",
+  "_src": "review-security-code-code"
+ },
+ {
+  "id": "review-security-code-w4#F-001",
+  "disposition": "partial",
+  "evidence": "The named paths are still closed (premise.operator ignored, complete records required). The bypass of the automatic-review guard still has one open alias: automatic-review.ts:258 misses a long-s spelling of the decisions file when it does not exist yet (SEC3-001).",
+  "_src": "review-security-code-code"
+ },
+ {
+  "id": "r2-review-style-skills#R2-004",
+  "disposition": "partial",
+  "evidence": "feature-dev/SKILL.md:42 now says where claims go (flow-dir if a flow exists, else the Implementation Spec under **Premise**), but the Implementation Spec field list (:43-49) has no Premise field; see R3-001",
+  "_src": "review-style-skills"
+ },
+ {
+  "id": "review-style-w8#F-005",
+  "disposition": "open",
+  "evidence": "code finding in src/review/managed.ts, outside the skills delta; not assessed here",
+  "_src": "review-style-skills"
+ }
+]

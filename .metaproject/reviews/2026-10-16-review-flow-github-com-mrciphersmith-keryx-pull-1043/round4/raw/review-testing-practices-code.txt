@@ -1,0 +1,142 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-testing-practices",
+    "status": "DONE_WITH_CONCERNS",
+    "summary": "Round 4 fix delta. Read-only: no suite or mutation was run, so no mutation table is published; every unpinned-gate note is a reading, minor or info at most. Neither round-3 input file lists a review-testing-practices finding by id; the prior set is the T2/T3 series from round3/raw/review-testing-practices-code.txt. Of 8 prior: 3 closed (T3-001, T2-001, T2-003), 5 open or unchanged info (T3-002..T3-005 unchanged by the delta). New: 3 minor, 2 info; no blocker or major.",
+    "prior_dispositions": [
+      {
+        "id": "T3-001",
+        "disposition": "closed",
+        "evidence": "src/review/premise-decision.test.ts:383-391: inode taken before the failed answer, asserted different after (the rewrite happened and was undone), original restored, and the store still holds no answer (premiseHoldState 'awaiting'). Plus new recordPremiseDecisionAfter undo-order test at :395-410."
+      },
+      {
+        "id": "T3-002",
+        "disposition": "open",
+        "evidence": "src/review/premise.test.ts:334 downgraded() still fixes original_severity to 'blocker'; the strict `<` (premise.ts downgradeStillHolds) and the non-stale operator-strip branch have no fixture. The delta refactored the function (equivalent behaviour) without adding a case. Info, unchanged."
+      },
+      {
+        "id": "T3-003",
+        "disposition": "open",
+        "evidence": "src/commands/automatic-review.test.ts additions cover non-ASCII names only. Still no fixture for an in-package *.md link to a non-data file (isData(real)), a dangling link, or a bare --prior directory. Info, unchanged."
+      },
+      {
+        "id": "T3-004",
+        "disposition": "open",
+        "evidence": "src/review/premise-question.ts:102 `realPackage.startsWith(realPrevious + sep)` still has only its equality twin in the suite. Info, unchanged."
+      },
+      {
+        "id": "T3-005",
+        "disposition": "open",
+        "evidence": "No test feeds `--premises -` (stdin) and none asserts registry.warn; the delta moved the warn code into reRecordRegistry (premise-question.ts, end of file) without a test. Info, unchanged."
+      },
+      {
+        "id": "T2-001",
+        "disposition": "closed",
+        "evidence": "src/review/prior-round.test.ts:653 drives `keryx review start` and asserts the stdout line 'premise answers carried from ...' and the carried decision in the new package: deleting the carryPremiseDecisions call in review.ts turns it red (read, not run)."
+      },
+      {
+        "id": "T2-003",
+        "disposition": "closed",
+        "evidence": "src/tui/review-readiness.test.ts:14 memoryItem and :123 derive the item count and ordinal from READINESS_ITEMS (readiness.ts:27); the hard-coded 11 and '10.' are gone."
+      },
+      {
+        "id": "T2-002",
+        "disposition": "closed",
+        "evidence": "Unchanged from round 3 (closed); the delta adds only consumers of premise-fixtures in test files."
+      }
+    ],
+    "findings": [
+      {
+        "id": "T4-001",
+        "severity": "minor",
+        "file": "src/review/premise.ts",
+        "line": 730,
+        "problem": "inheritedPremiseClaims (new exported function, five outcomes) has no direct test and the two CLI tests drive only three: carried forward, refused because a held finding's problem changed, and undefined (upheld claims). No fixture reaches the refusals for a missing or unparseable premises.json (`parsed === undefined`), for a held claim whose finding is gone (the `trial.rejections` loop with the 'already-judged' exemption), or for a previous held record with no key.",
+        "impact": "Deleting the `parsed === undefined` refuse, the `reason !== \"already-judged\"` filter, or the rejections loop leaves review-premises-cli.test.ts green (read, not run). Those are the branches that stop an ingest from silently returning held findings to the fix loop when the claims file is deleted or the report dropped a finding, which is the failure RG2-004 exists to prevent.",
+        "suggested_fix": "Add premise.test.ts cases on inheritedPremiseClaims: stored undefined with a held previous record -> refusal naming PREMISES_FILE is gone; stored garbage -> 'cannot be read'; a held claim for a finding absent from `findings` -> refusal; an already-judged finding -> not lost. Mutants: drop the parsed===undefined refuse; drop the reason filter.",
+        "evidence": "review-premises-cli.test.ts:66-110 (carried, changed, upheld) are the only callers' tests; rg finds no inheritedPremiseClaims in any *.test.ts.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T4-002",
+        "severity": "minor",
+        "file": "src/commands/automatic-review.ts",
+        "line": 341,
+        "problem": "The SEC3-001 gate was split into per-target-and-per-real-path clauses, but the new tests drive only the as-written spelling. The real-path clauses (`hasOnlyPlainSegments(realDir, real)`, and the non-ASCII branch of `touchesOperatorOnlyName(realDir, real)`) have no input that separates them from the as-written clause: that needs an in-package link with a plain name (notes.json) whose target has a non-ASCII or folding name (operator-deciſions.json). The existing symlink test points at the exact ASCII decisions file, caught by other clauses.",
+        "impact": "Deleting `hasOnlyPlainSegments(realDir, real)` leaves the 100 new and old cases green (read, not run); a plain-named link onto a long-s file would then be approved. SEC3-001 was a major, and the clause added for it on the symlink path is the one a link-based bypass needs.",
+        "suggested_fix": "In the symlink test, create the long-s file inside the package, link notes.json to it, assert approvesPatchTargets is false; also link notes.md -> a .sh file (carries T3-003a). Mutant: delete hasOnlyPlainSegments(realDir, real).",
+        "evidence": "automatic-review.test.ts:223-258 (new) pass spellings as written; the symlink test that follows (:259) targets operator-decisions.json.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T4-003",
+        "severity": "minor",
+        "file": "src/review/package-location.ts",
+        "line": 43,
+        "problem": "isReviewPackageDir was rewritten when it moved (path.relative segments with an explicit `!== \"..\"` guard became equality against flowReviewsRoot/flowsRoot) and the flow branch has no test in either direction: every isReviewPackageDir case in the suite is a standalone package or a rejection. A real `.metaproject/flows/<flow>/reviews/<id>` package returning true, and a `flows/../reviews/x` shape returning false, are both unpinned.",
+        "impact": "Deleting the whole flow clause (everything after the standalone `return true`) leaves the suite green (read, not run), and then a flow package is refused as a --prior and as a decision source; the old `..` guard's replacement is likewise unchecked.",
+        "suggested_fix": "Two cases in premise-decision.test.ts next to the nested-directory test: a manifest under flows/f1/reviews/r1 -> true; a manifest under flows/f1/reviews/r1/x and under flows/reviews/r1 -> false. Mutant: `return false` for the flow expression.",
+        "evidence": "premise-decision.test.ts:114,123 are negative; no file under src asserts a true result for a flow package (rg isReviewPackageDir in tests).",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T4-004",
+        "severity": "info",
+        "file": "src/review/premise-decision.test.ts",
+        "line": 690,
+        "problem": "In the foldFileName test the entry `\"operator-decisions.json\".normalize(\"NFD\")` is ASCII and has no decomposition, so it is the plain name again and tests nothing beyond the first element. The adjacent NFC/NFD case (:694) is real (U+0301 + e versus U+00E9).",
+        "impact": "None today; the list reads as covering NFD when it does not.",
+        "suggested_fix": "Drop the no-op entry or use an NFD spelling of a name with an accent.",
+        "evidence": "ASCII strings are NFD-invariant.",
+        "confidence": "high",
+        "reviewer": "review-testing-practices",
+        "category": "vacuous-fixture",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T4-005",
+        "severity": "info",
+        "file": "src/review/operator-decisions.ts",
+        "line": 160,
+        "problem": "decisionsStorePath returns undefined when readdir throws (missing package directory) and when the exact name is absent; the tests cover the look-alike alone and beside the real file, but not a store read on a package directory that does not exist or an empty package. The lookalike-alone test also cannot tell, on a case-insensitive volume, whether the look-alike or the exact-name check refused it.",
+        "impact": "Deleting the readdir catch would turn a missing package directory into a thrown read; no test would say so (predicted).",
+        "suggested_fix": "readOperatorDecisions on a path with no directory -> [].",
+        "evidence": "premise-decision.test.ts:697-717 only.",
+        "confidence": "low",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-branch",
+        "evidence_class": "read"
+      }
+    ],
+    "mutation_table": [],
+    "mutant_candidates": [
+      { "file": "src/review/premise.ts", "anchor": "if (parsed === undefined) return refuse(", "replacement": "if (parsed === undefined) return undefined; if (false) return refuse(", "kind": "behavior" },
+      { "file": "src/review/premise.ts", "anchor": "rejection.reason !== \"already-judged\"", "replacement": "true", "kind": "behavior" },
+      { "file": "src/commands/automatic-review.ts", "anchor": "hasOnlyPlainSegments(realDir, real) &&", "replacement": "", "kind": "behavior" },
+      { "file": "src/commands/automatic-review.ts", "anchor": "!touchesOperatorOnlyName(realDir, real)", "replacement": "true", "kind": "behavior" },
+      { "file": "src/review/package-location.ts", "anchor": "return parent === flowReviewsRoot(root, path.basename(path.dirname(parent))) && path.dirname(path.dirname(parent)) === flowsRoot(root);", "replacement": "return false;", "kind": "behavior" },
+      { "file": "src/review/managed.ts", "anchor": "inherited === undefined && (await pathExists(", "replacement": "(await pathExists(", "kind": "behavior" },
+      { "file": "src/review/operator-decisions.ts", "anchor": "if (lookalikes.length > 0) {", "replacement": "if (false) {", "kind": "behavior" },
+      { "file": "src/review/premise.ts", "anchor": "severityRank(severity) < severityRank(original)", "replacement": "severityRank(severity) <= severityRank(original)", "kind": "behavior" }
+    ],
+    "stats": {
+      "prior": { "closed": 4, "open": 4, "partial": 0, "regressed": 0 },
+      "new": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+    }
+  }
+}
+```
+
+Summary: the delta closes T3-001 (inode and store-empty assertions), T2-001 (command-level carry test in prior-round.test.ts:653) and T2-003 (readiness ordinal derived). T3-002..T3-005 are untouched info items. New: three minors where added gates have no separating fixture (inheritedPremiseClaims refusals, real-path clauses of the SEC3-001 approval gate, the rewritten flow branch of isReviewPackageDir) and two infos. The carried-forward, changed-refused and moved-aside RG2-004 tests, the roundHeld fixture swap (same defaults as the old local builder: major, LY-003, same problem) and the long-s tests are sound. Nothing was executed; mutant_candidates lists 8 mutants, none run.

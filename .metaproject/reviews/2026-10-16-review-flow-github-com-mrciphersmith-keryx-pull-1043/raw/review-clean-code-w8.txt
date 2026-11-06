@@ -1,0 +1,96 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 08 is well documented and consistent with its siblings (verifier merge). No blocker or major. Concerns are maintenance costs: one 190-line merge function, an 11-parameter renderScope, positional index slicing in managed.ts, a misleading rejection message for non-object claims, and repeated record-narrowing helpers.",
+  "findings": [
+    {
+      "id": "CC-1", "severity": "minor", "file": "src/review/premise.ts", "line": 206, "quote": "export function mergePremises<T extends StructuredReviewFinding>(", "repo": null,
+      "problem": "mergePremises is roughly 190 lines and mixes four levels: claim shape validation, finding resolution, severity/evidence rules, then conflict resolution, record rebuild and counting. About twenty reject-and-continue branches sit in one loop body.",
+      "impact": "Each new rejection rule (the flow already added downgrade-below-threshold late) has to be threaded through one long loop; the rules cannot be tested or read in isolation.",
+      "suggested_fix": "Split into resolveClaimTarget, checkVerdictRules and buildPremise helpers returning a rejection or an accepted premise, leaving mergePremises as parse, accept, resolve conflicts, rebuild, count.",
+      "evidence": "Clean Code B1 (function > 40 lines, mixed abstraction).", "confidence": "high", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-2", "severity": "minor", "file": "src/review/managed.ts", "line": 2486, "quote": "  premiseBlock = \"\",", "repo": null,
+      "problem": "renderScope gains an 11th positional parameter (premiseBlock after allFindings), and the call site computes the premise markdown inline as one more positional argument. Parameters beyond the fourth are all optional positionals, so a caller cannot tell them apart.",
+      "impact": "Order mistakes between filterStats/allFindings/premiseBlock compile silently (allFindings and premiseBlock are adjacent defaulted positionals).",
+      "suggested_fix": "Move the optional trailing parameters into one options object { externalReclaims, scopeBScreen, filterStats, allFindings, premiseBlock }.",
+      "evidence": "Clean Code B2 (>= 4 parameters without an options object); the diff worsens an already-long signature.", "confidence": "high", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-3", "severity": "minor", "file": "src/review/managed.ts", "line": 364, "quote": "const premisedInternal = premised.findings.slice(0, deduped.findings.length);", "repo": null,
+      "problem": "Internal and external findings are concatenated, passed through mergePremises, and split again by index arithmetic. Correctness depends on mergePremises preserving length and order, an invariant stated only in premise.ts.",
+      "impact": "If mergePremises ever filters or reorders, external findings are misclassified as internal (or the reverse) with no error, and the findings cap would then be applied to an external comment it may never drop.",
+      "suggested_fix": "Partition by finding.source after the merge instead of by position, or call mergePremises once per group (claims are keyed by finding id).",
+      "evidence": "Clean Code B3 (low-level index arithmetic inside an orchestration function); implicit coupling.", "confidence": "medium", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-4", "severity": "minor", "file": "src/review/premise.ts", "line": 148, "quote": "{ finding_id: \"<not an object>\", __invalid: claim }", "repo": null,
+      "problem": "A non-object claim is smuggled through as { finding_id: \"<not an object>\", __invalid }. The merge then rejects it as unknown-property with the detail 'the claim carried __invalid. A premise judge can only hold or lower; it cannot add a finding...', and the rejection row names the finding \"<not an object>\".",
+      "impact": "The operator reading scope.md is told a judge tried to carry a forbidden property when the real fault was a malformed array entry; the message names an internal sentinel.",
+      "suggested_fix": "Give the sentinel its own rejection reason (for example malformed-claim) with a detail saying the entry was not an object, or reject it in parsePremiseClaims.",
+      "evidence": "Clean Code D2 (error context): the message does not identify what went wrong.", "confidence": "high", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-5", "severity": "minor", "file": "src/review/premise.ts", "line": 366, "quote": "    group.forEach(() => {", "repo": null,
+      "problem": "A forEach that ignores its element is used only to push the same rejection group.length times; it reads as if per-claim data were used. Separately, the premiseHoldState doc (premise.ts:426) says 'the later of the two does not matter' while the code lets the package decision override record.premise.operator, so the order does matter when they disagree.",
+      "impact": "Reader confusion; the comment asserts an equivalence the code does not enforce.",
+      "suggested_fix": "Use a for loop over group.length, and reword the comment to say the package decision wins over premise.operator.",
+      "evidence": "Clean Code C1/C1a (comment states a behaviour the code does not guarantee).", "confidence": "medium", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-6", "severity": "minor", "file": "src/review/premise-question.ts", "line": 22, "quote": "const obj = (value: unknown): Record<string, unknown> | undefined =>", "repo": null,
+      "problem": "The 'narrow unknown to a plain record' helper now exists in four near-identical copies: premise.ts isRecord (123), premise-question.ts obj (22) and the pre-existing verdict.ts object and readiness.ts record, with the same pair for non-empty strings (present / str / text / text). This diff adds two of them.",
+      "impact": "Four copies to keep consistent (array and null handling); a fix in one leaves the others behind.",
+      "suggested_fix": "Export one isRecord/nonEmptyString pair from src/lib/json (or similar) and import it in the new files.",
+      "evidence": "Clean Code E1 (3+ repetitions, listed once). Sites: src/review/premise.ts:123, src/review/premise-question.ts:22, src/review/verdict.ts (object), src/review/readiness.ts (record). Found by reading the slice and its helper definitions.", "confidence": "medium", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-7", "severity": "minor", "file": "src/review/operator-decisions.ts", "line": 118, "quote": "export async function recordPremiseDecision(", "repo": null,
+      "problem": "recordPremiseDecision and recordOperatorDecision repeat the same read-valid-entries, append, write-body sequence, each with an `as Array<OperatorDecision | PremiseQuestionDecision>` cast. Two occurrences, near-identical.",
+      "impact": "A future change to the file envelope (schemaVersion, ordering) has to be made twice; the casts hide that readEntries returns unknown[].",
+      "suggested_fix": "Add one appendDecision(packageDir, entry) helper doing read, filter, append and write, and have both recorders call it; use a type-guard filter instead of the cast.",
+      "evidence": "Clean Code E1 (2 occurrences, note only).", "confidence": "medium", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-8", "severity": "minor", "file": "src/review/dedupe.ts", "line": 414, "quote": "merge.severityRule === \"verified\" ? \"verifier-confirmed severity\" : merge.severityRule === \"premise\" ?", "repo": null,
+      "problem": "The three-way severityRule is selected through chained ternaries at several places: mergeCluster (severityRule and canonical pick), the `higher` filter (nested conditional) and renderDuplicatesMarkdown (two nested ternaries inside a template literal). The new case is added by extending each chain.",
+      "impact": "A fourth rule needs the same edit in each chain; nested ternaries inside a template literal are hard to read.",
+      "suggested_fix": "Table the labels (Record<DuplicateMerge[\"severityRule\"], string>) and the outranked phrasing, and pick the canonical set with one small function.",
+      "evidence": "Clean Code F2 (OCP) and readability; a deliberate extension of the existing verified branch, so minor.", "confidence": "medium", "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-9", "severity": "info", "file": "src/review/premise-question.ts", "line": 30, "quote": "export async function findHeldFinding(packageDir: string, ref: string): Promise<HeldFindingLookup> {", "repo": null,
+      "problem": "findHeldFinding (about 40 lines) resolves the finding, falls back to a claim in premises.json, reads decisions and derives the answered state. HeldFinding.severity and verdict are plain strings although typed unions exist (ReviewFindingSeverity, PremiseVerdict); the claim lookup line also carries trailing whitespace.",
+      "impact": "Callers lose type narrowing on severity/verdict; no wrong outcome I can name.",
+      "suggested_fix": "Type the fields with the existing unions and split the claim fallback into its own function if the function grows.",
+      "evidence": "No call site names a misuse; observation only.", "confidence": "low", "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 8, "info": 1 }
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Slice: slice-08 (src/review/coverage.ts, dedupe.ts, managed.ts, operator-decisions.ts, premise-question.ts, premise.ts, readiness.ts, types.ts, verdict.ts, verification.ts), head c144874f.
+
+### Summary
+Comments are strong and match the code (dedupe header, mergeable() hold note, types.ts docs). The code follows the verifier merge's shape deliberately, so the swallow-on-parse-failure in applyPremiseClaims is a sibling decision and not flagged. Concerns are all maintenance costs.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 8 | info: 1
+
+### Findings
+- Functions: CC-1 (mergePremises size), CC-2 (renderScope 11 params), CC-3 (index slicing), CC-9 (info)
+- Error handling: CC-4 (misleading rejection for non-object claim)
+- Comments: CC-5 (forEach, comment contradicts code)
+- DRY: CC-6 (record/string helpers, 4 sites), CC-7 (two decision writers), CC-8 (severityRule ternaries)
+- Naming: none. SOLID: none.
+
+### Clean Areas
+Names, SOLID (LSP/ISP/DIP), constructors, error swallowing, commented-out code.

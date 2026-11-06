@@ -1,0 +1,79 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-core-boundaries",
+  "summary": "Slice 01 is the contract schemas, flow-459 eval artifacts and flow.json. No core-to-feature import or inverted dependency. Findings concern the premise schema being looser than the merge code, an eval script committed with a machine-absolute path, a failed strict AC7 recorded as done, and generated graph churn.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-core-boundaries",
+      "severity": "minor",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": 29,
+      "quote": "\"required\": [\"verdict\", \"judge\"],",
+      "problem": "The premise object requires only verdict and judge. The description and src/review/premise.ts say a downgraded verdict carries severity and original_severity, and challenged/owner-decision carry question and options, but the schema declares no if/then for them. The premise.severity enum also admits `info`, while premise.ts rejects a downgrade below minor ('downgrade-below-threshold', 'below-minor').",
+      "impact": "Trigger: a hand-written or migrated findings.json with premise {verdict:'downgraded'} and no severity, or {verdict:'challenged'} with no question. Outcome: the record validates against the contract, yet a held finding has nothing to ask the operator and a downgraded one has no severity to adopt. Only premise.ts enforces it; the schema is where external readers and fixture authors look.",
+      "suggested_fix": "Add if/then clauses: verdict=downgraded requires severity and original_severity with severity enum [major, minor]; verdict in (challenged, owner-decision) requires question. Or state in the description that premise.ts is the sole enforcer.",
+      "evidence": "Schema lines 28-31 versus src/review/premise.ts rejects 'below-minor', 'downgrade-below-threshold', 'downgrade-without-evidence'.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-core-boundaries",
+      "severity": "minor",
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/validate.ts",
+      "line": 8,
+      "quote": "import { parsePremiseClaims, mergePremises } from \"/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/src/review/premise\";",
+      "problem": "A committed script imports the premise module by an absolute path inside one developer's local worktree, which exists on no other checkout, on CI, or after the worktree is removed.",
+      "impact": "Trigger: anyone re-running the eval from a clean clone. Outcome: module-not-found at import; the committed eval cannot be reproduced, and the path leaks a local username and worktree name into the repository.",
+      "suggested_fix": "Import relatively (../../../../../src/review/premise) or take the repo root from argv/import.meta.dir.",
+      "evidence": "Line 8 of the validate.ts hunk.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-core-boundaries",
+      "severity": "minor",
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/eval/premise-eval.json",
+      "line": 360,
+      "quote": "\"ac7_strict\": \"not met: 3 of 7 #992/#1005 truth findings downgraded major->minor (never held)\",",
+      "problem": "The eval's own summary records that the strict reading of AC7 (the judge must not dampen confirmed findings from #992/#1005) is not met: F-009, F-011, F-012 were downgraded. flow.json nonetheless marks T8 done/completed, and description.md says the observable is that the judge 'does not silence' confirmed findings. The three misses are not fixed, followed up, or recorded as an owner-accepted deviation anywhere in the slice.",
+      "impact": "Trigger: the premise tier runs on real findings. Outcome: confirmed major findings are shrunk to minor and leave the major gate, with T8 closed on the 'literal' reading only. The record of 3 misses out of 7 is not reflected in the task state.",
+      "suggested_fix": "Record the deviation as an explicit owner decision (disposition reason on T8), or tighten review-premise so a downgrade of a reproduced harm needs a cited intent signal; re-run the pr992 set and replace the numbers.",
+      "evidence": "premise-eval.json summary.misses = [F-009, F-011, F-012]; flow.json T8 disposition 'completed'. judge-pr992-rerun.raw.md exists in the eval directory but premise-eval.json does not cite it, so it is unclear whether a rerun superseded these numbers.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-core-boundaries",
+      "severity": "info",
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "line": 2,
+      "quote": "\"commit\": \"646a846f288a0e4a70f72485f127d1f3b8d7e57b\",",
+      "problem": "Generated gdgraph provenance is carried in the PR diff and pins commit 646a846f, not the PR head c144874f; it replaces a 2026-10-01 value from an unrelated branch.",
+      "impact": "Graph answers are labelled as built at 646a846f while the tree is at c144874f. Observation only: no breaking consumer was named. Settled by rebuilding the graph at head or dropping generated files from this PR.",
+      "suggested_fix": "Rebuild with `keryx gdgraph build` at the final head or exclude generated data from the PR.",
+      "evidence": "Diff hunk for .provenance.json: commit 646a846f, branch feat/review-premise, builtAt 2026-10-16T12:44:31Z.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-005",
+      "reviewer": "review-core-boundaries",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json",
+      "line": 868,
+      "quote": "\"description\": \"Findings to fix. Never carries a finding held by review-premise",
+      "problem": "The same description is added to two copies of the contract (core/gdskills/contracts/task-implementer-input-contract.schema.json and this skill copy). They are identical at head, so nothing diverges; it is a drift risk only.",
+      "impact": "No consumer breaks today; a later edit to one copy that misses the other would diverge. Settled by a guard test that diffs them, if none exists.",
+      "suggested_fix": "Confirm a test pins the two copies identical, or derive one from the other.",
+      "evidence": "diff of the two files at c144874f is empty.",
+      "confidence": "high"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+# review-core-boundaries, slice-01 (PR #1043 at c144874f)
+
+No blocker or major. Minor: premise schema looser than merge code (F-001), absolute local path in a committed eval script (F-002), strict AC7 failure recorded but T8 closed (F-003). Info: stale generated graph provenance (F-004), duplicated contract copies (F-005).

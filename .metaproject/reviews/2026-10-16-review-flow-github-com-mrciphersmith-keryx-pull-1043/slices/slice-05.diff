@@ -1,0 +1,1052 @@
+--- src/flow/review-gate.test.ts
+@@ 1,49 @@
+ // Flow 204 — the review gate (AC5, AC6, AC7 / specification §2, AC-C1..AC-C6).
+ //
+ // Every one of the five conditions has a test that FAILS WITHOUT IT: each one is
+ // exercised from a package that satisfies the other four, so a passing assertion
+ // names exactly one mechanism. That matters more here than usual, because the
+ // property under test is "the gate does not pass on absence" — and a suite whose
+ // fixtures are absent in several ways at once cannot tell which absence was
+ // caught.
+ //
+ // The stale-SHA case is exercised twice: once as a mismatch (the round ran, at
+ // the wrong commit) and once as an unknown head (nothing said which commit the
+ // PR is at). They are different failures with different fixes and the gate must
+ // not collapse them.
+ import { afterEach, expect, mock, test } from "bun:test";
+ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { createFlowService } from "./service";
++import { runOperatorCommand } from "../commands/review-operator";
++import { recordPremiseDecision } from "../review/operator-decisions";
+ import {
+   EXTERNAL_COMMENT_COVERAGE_REVIEWERS,
+   REVIEW_GATE_CONFIG_PATH,
+   REVIEW_GATE_SEVERITY_FLOOR_DEFAULT,
+   REVIEW_ROUND_CAP,
+   blocksAtFloor,
+   findingVerdict,
+   latestFindingStates,
++  parsePremiseStats,
+   parseVerificationStats,
+   prHeadResolutionRemedy,
+   readReviewGateConfig,
+   readReviewRounds,
+   shaMatches,
+   type GateFinding,
+   type PrHeadResolution,
+ } from "./review-gate";
+ import {
+   FIXTURE_PR_HEAD,
+   writeCleanReviewPackage,
+   writePrCommentFixtureState,
+   writeReviewPackage,
+   type ReviewFixtureFinding,
+ } from "./review-fixtures";
+ import type { FlowService, FlowServiceDeps, FlowState, GateOutcome, TrackerAdapter } from "./types";
+ 
+ const PR_URL = "https://github.com/acme/app/pull/7";
+ // Shared with the fixtures so the comment record's `collected_sha` and the PR
+ // head the fake tracker reports cannot drift: condition 4 compares them.
+
+--- src/flow/review-gate.test.ts
+@@ 1584,1725 @@
+   await fresh();
+   const service = createFlowService(makeDeps());
+   const { dir } = await driveToGates(service);
+   const packageDir = await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
+   const manifestPath = path.join(packageDir, "manifest.json");
+   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+   manifest.artifacts = { ...manifest.artifacts, research: "research.json" };
+   await writeFile(manifestPath, JSON.stringify(manifest));
+   const researchPath = path.join(packageDir, "research.json");
+   const ready = { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] };
+   await writeFile(researchPath, JSON.stringify(ready));
+   const clean = await readReviewRounds(ROOT, dir);
+   expect(clean.some(round => round.problems.some(p => p.includes("research")))).toBe(false);
+   await writeFile(researchPath, JSON.stringify({ ...ready, rawReconciled: false }));
+   const dirty = await readReviewRounds(ROOT, dir);
+   expect(dirty.some(round => !round.ingested && round.problems.some(p => p.includes("raw observations")))).toBe(true);
+   await rm(researchPath);
+   const missing = await readReviewRounds(ROOT, dir);
+   expect(missing.some(round => !round.ingested && round.problems.some(p => p.includes("unreadable")))).toBe(true);
+ });
++
++// --- Flow 459: a finding the premise judge held waits for the operator -----------
++
++const HELD_PREMISE = { verdict: "challenged", judge: "review-premise", question: "Should the timeline mirror?", practice_sources: [{ name: "Material", says: "media controls do not mirror" }] };
++const heldFinding = (over: Partial<ReviewFixtureFinding> = {}): ReviewFixtureFinding => ({ id: "LY-003", global_id: "round-1#LY-003", severity: "major", problem: "timeline pinned LTR", premise: HELD_PREMISE, ...over });
++
++test("flow 459 — a held finding with no operator decision fails the gate, at any severity, and is named", async () => {
++  await fresh();
++  const service = createFlowService(makeDeps());
++  const { id, dir } = await driveToGates(service);
++  await writeFile(path.join(ROOT, REVIEW_GATE_CONFIG_PATH), `${JSON.stringify({ completion: { severity_floor: "major" } }, null, 2)}\n`, "utf8");
++  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ severity: "minor" })] });
++
++  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
++
++  expect(gate.status).toBe("fail");
++  expect(conditionDetail(gate, "terminal-dispositions")).toContain("round-1#LY-003");
++  expect(conditionDetail(gate, "terminal-dispositions")).toContain("awaiting an operator decision");
++});
++
++test("flow 459 — a dismiss decision in the package clears the hold and the gate passes", async () => {
++  await fresh();
++  const service = createFlowService(makeDeps());
++  const { id, dir } = await driveToGates(service);
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
++  expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
++
++  await recordPremiseDecision(packageDir, { kind: "premise-question", finding: "round-1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: "2026-10-16T12:00:00Z", actor: "owner" });
++
++  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
++});
++
++test("flow 459 — the decision `keryx review decide-premise` writes clears the hold and the gate passes", async () => {
++  await fresh();
++  const service = createFlowService(makeDeps());
++  const { id, dir } = await driveToGates(service);
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
++  expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
++
++  const code = await runOperatorCommand(
++    "decide-premise",
++    ["--package", packageDir, "--finding", "LY-003", "--answer", "dismiss", "--reason", "platforms do not mirror media controls"],
++    { isTerminal: () => true, ask: async () => "agreed", cwd: ROOT, log: () => undefined },
++  );
++
++  expect(code).toBe(0);
++  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
++});
++
++test("flow 459 — an uphold decision ends the question but not the finding: it still needs a terminal disposition", async () => {
++  await fresh();
++  const service = createFlowService(makeDeps());
++  const { id, dir } = await driveToGates(service);
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
++  await recordPremiseDecision(packageDir, { kind: "premise-question", finding: "LY-003", answer: "uphold", reason: "mirror it", at: "2026-10-16T12:00:00Z", actor: "owner" });
++
++  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
++
++  expect(gate.status).toBe("fail");
++  expect(conditionDetail(gate, "terminal-dispositions")).toContain("no disposition recorded");
++  expect(conditionDetail(gate, "terminal-dispositions")).not.toContain("awaiting an operator decision");
++});
++
++test("flow 459 — the operator's answer written onto the record is read the same way", async () => {
++  await fresh();
++  const service = createFlowService(makeDeps());
++  const { id, dir } = await driveToGates(service);
++  await writeReviewPackage({
++    cwd: ROOT,
++    flowDir: dir,
++    reviewId: "round-1",
++    head: HEAD,
++    findings: [heldFinding({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } }, disposition: { state: "dismissed-incorrect", evidence: "operator owner: kept LTR" } })],
++  });
++
++  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
++});
++
++test("flow 459 — a downgraded finding is not held: its lowered severity is the one the gate applies", async () => {
++  await fresh();
++  const service = createFlowService(makeDeps());
++  const { id, dir } = await driveToGates(service);
++  await writeFile(path.join(ROOT, REVIEW_GATE_CONFIG_PATH), `${JSON.stringify({ completion: { severity_floor: "major" } }, null, 2)}\n`, "utf8");
++  await writeReviewPackage({
++    cwd: ROOT,
++    flowDir: dir,
++    reviewId: "round-1",
++    head: HEAD,
++    findings: [heldFinding({ severity: "minor", premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } })],
++  });
++
++  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
++});
++
++test("flow 459 — findingVerdict: awaiting is not terminal, dismissed is, an unheld premise changes nothing", () => {
++  const base: GateFinding = { id: "F-1", severity: "major", round: "r1" };
++  expect(findingVerdict({ ...base, premise: { verdict: "challenged" } })).toMatchObject({ terminal: false });
++  expect(findingVerdict({ ...base, premise: { verdict: "owner-decision" } })).toMatchObject({ terminal: false });
++  expect(findingVerdict({ ...base, premise: { verdict: "challenged", operatorAnswer: "dismiss" } })).toEqual({ terminal: true, kind: "dismissed" });
++  expect(findingVerdict({ ...base, premise: { verdict: "challenged", operatorAnswer: "uphold" } })).toMatchObject({ terminal: false, reason: "no disposition recorded" });
++  expect(findingVerdict({ ...base, premise: { verdict: "upheld" } })).toMatchObject({ terminal: false, reason: "no disposition recorded" });
++});
++
++test("flow 459 — the premise stats are parsed out of scope.md, and absent when no judge ran", () => {
++  const block = ["## Premise check", "", "premise_claims_received: 3", "premise_claims_applied: 2", "premise_claims_rejected: 1", "premise_held: 1"].join("\n");
++  expect(parsePremiseStats(block)).toEqual({ claimsReceived: 3, claimsApplied: 2, claimsRejected: 1, held: 1 });
++  expect(parsePremiseStats("# Review Scope\n\nverification_mode: annotate\n")).toBeNull();
++});
++
++test("flow 459 — a round's premise stats reach the round record", async () => {
++  await fresh();
++  const service = createFlowService(makeDeps());
++  const { dir } = await driveToGates(service);
++  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
++  const scope = await readFile(path.join(packageDir, "scope.md"), "utf8");
++  await writeFile(path.join(packageDir, "scope.md"), `${scope}\n## Premise check\n\npremise_claims_received: 1\npremise_claims_applied: 1\npremise_claims_rejected: 0\npremise_held: 1\n`, "utf8");
++
++  const rounds = await readReviewRounds(ROOT, dir);
++
++  expect(rounds[0]?.premise).toEqual({ claimsReceived: 1, claimsApplied: 1, claimsRejected: 0, held: 1 });
++  expect(rounds[0]?.findings[0]?.premise?.verdict).toBe("challenged");
++});
+
+--- src/gdskills/bundled-eval.test.ts
+@@ 98,140 @@
+     // `bundledSkillFiles` returns `[]` for a missing root, so every assertion
+     // below would pass vacuously over a renamed directory. The count is the
+     // guard on the guard: 65 from the roadmap, plus `review-layout` and
+     // `reviewer-skill-creator`, both added after a review round measured what
+     // the shipped set could not reach, plus `root-cause`, `fresh-eyes` and
+     // `api-truth` and `deprecation-path` (flow 258) — the debugging stage the
+     // tree had no owner for, the in-flight doubt pass that reads an artifact
+     // without its author's account, the one that settles a dependency call
+     // against the build installed here rather than against recollection, and
+     // the one that walks a published spelling out of the surface without
+     // handing its callers a successful-looking run that does nothing. Plus
+     // `scheduled-tasks` (flow 295): when to propose an operator-confirmed schedule.
+     // Plus `review-jev-rules` (flow 330): an additional, CLI-engine reviewer.
+     // Plus `review-jev-risk` and `review-jev-scenarios` (flow 332): two more
+     // CLI-engine reviewers, same shape. Plus `review-jev-docs` and
+     // `review-jev-comments` (flow 333): two more, dispatched as a `keryx
+     // review jev-docs`/`jev-comments` command rather than an LLM sub-agent.
+     // Plus `review-jev-contract` (flow 335): one more, dispatched as a
+     // `keryx review jev-contract` command rather than an LLM sub-agent.
+     // Plus `review-pr-contract` (flow 446): one more, an LLM reviewer.
++    // Plus `review-premise` (flow 459): a delete-only judge of findings' premises.
+     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
+-    expect(files.length).toBe(79);
++    expect(files.length).toBe(80);
+ 
+     const evaluation = realTree();
+     expect(evaluation.skills).toBe(files.length);
+     expect(evaluation.skillNames.length).toBe(files.length);
+     // Every category the tree ships is represented, so a sweep that silently
+     // walked one subdirectory cannot pass.
+     for (const category of ["orchestration", "planning", "platform", "quality", "review"]) {
+       expect(files.some((file) => file.includes(`${path.sep}${category}${path.sep}`))).toBe(true);
+     }
+   });
+ 
+   test("the sweep reads harness builds, not only SKILL.md", () => {
+     // AC5. The tree shipped 65 `SKILL.md` and 100-odd harness builds; the sweep
+     // used to walk the first set only, so `xref:path` reported clean over 65 of
+     // 167 shipped documents and said nothing about the rest. That is how
+     // `task-implementer` shipped four builds missing their whole reporting
+     // contract with every check green. Flow 257 deleted the builds that were
+     // byte-identical to their SKILL.md, so fewer ship now (the seven gproject-*
+     // skills' codex/cursor builds) — which is why the named files below are
+     // derived from the tree instead of pinned to task-implementer.
+
+--- src/gdskills/bundled-eval.test.ts
+@@ 1857,1900 @@
+     // ratchet executable: raising an entry fails here, and so does lowering
+     // one without actually trimming the skill. The only edit that keeps this
+     // green is trimming the file and recording what is left, in the same
+     // change, which is exactly what `skills-storage-workflow.mdc` requires.
+     //
+     // NO EXCEPTION LIST, because the tree needs none: all 67 shipped skills
+     // sit at exactly their recorded ceiling today. If a future trim genuinely
+     // has to land before its ceiling can be lowered, the exception belongs
+     // HERE, named, with the reason and the task that closes it — never as a
+     // relaxation of the comparison, which would restore the hole this test
+     // exists to close.
+     expect(bundledSkillFiles(path.join(defaultBundledRoot(), "skills")).length).toBe(SKILL_LENGTH_CEILINGS.size);
+     expect(ceilingMismatches(SKILL_LENGTH_CEILINGS)).toEqual([]);
+   });
+ 
+   test("raising a ceiling above what the skill ships is what this now fails on", () => {
+     // Non-vacuity for the assertion above, run through the SAME comparison
+     // rather than restated: `review/review-clean-code` is the entry a review
+     // actually raised (545 -> 1200) while every test stayed green, so that
+     // exact edit is the one this proves is now caught.
+-    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(543);
++    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(538);
+     const raised = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("review/review-clean-code", 1200));
+     expect(raised).toHaveLength(1);
+-    expect(raised[0]).toContain("review/review-clean-code: ships 543 lines, ceiling records 1200");
++    expect(raised[0]).toContain("review/review-clean-code: ships 538 lines, ceiling records 1200");
+     expect(raised[0]).toContain("the ratchet forbids");
+ 
+     // …and a skill that grows past a ceiling nobody touched is the other
+     // direction of the same equality, reported in the words that say what to
+     // do about it.
+     const grown = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/push", 10));
+     expect(grown).toHaveLength(1);
+     expect(grown[0]).toContain("quality/push");
+     expect(grown[0]).toContain("never raise the number");
+ 
+     // An entry for a skill that no longer ships is a ceiling nothing is
+     // measured against, and reads as coverage in the size comparison above.
+     expect(ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/deleted-skill", 1))).toEqual([
+       "quality/deleted-skill: recorded, but no such skill ships",
+     ]);
+   });
+ 
+   test("a defect that exists ONLY in a harness build is found", () => {
+     // The AC5 proof. `build-drift-example/SKILL.md` is clean; the defect lives in
+     // `SKILL.codex.md` alone. A sweep that walks canonical files only reports
+
+--- src/gdskills/model-tier.test.ts
+@@ 460,507 @@
+   });
+ 
+   test("a forced strategy change after the loop cap is deep", () => {
+     expect(assignTier({ forcedStrategyChange: true }).tier).toBe("deep");
+   });
+ 
+   test("few findings and a small diff allow light", () => {
+     expect(assignTier({ findingCount: 3, diffLines: 50 }).tier).toBe("light");
+     expect(assignTier({ findingCount: 4, diffLines: 50 }).tier).toBe("standard");
+     expect(assignTier({ findingCount: 3, diffLines: 51 }).tier).toBe("standard");
+     // One half of the condition is not the condition.
+     expect(assignTier({ findingCount: 1 }).tier).toBe("standard");
+   });
+ 
+   test("verification that runs something is light; verification that only reasons is not", () => {
+     expect(assignTier({ verifierMethod: "execution" }).tier).toBe("light");
+     expect(assignTier({ verifierMethod: "site-check" }).tier).toBe("light");
+     expect(assignTier({ verifierMethod: "reasoning" }).tier).toBe("standard");
+   });
+ 
++  test("the premise judge floors at deep, beating every downgrade (flow 459)", () => {
++    expect(assignTier({ premiseJudge: true })).toEqual({ tier: "deep", reasons: ["base:standard", "floor:premise-judge"] });
++    const out = assignTier({ premiseJudge: true, verifierMethod: "execution", findingCount: 1, diffLines: 5 });
++    expect(out.tier).toBe("deep");
++    expect(out.reasons).toEqual(["base:standard", "light:verifier-execution", "floor:premise-judge"]);
++    expect(assignTier({ premiseJudge: false }).tier).toBe("standard");
++  });
++
+   test("a security finding never runs below standard", () => {
+     const out = assignTier({ verifierMethod: "execution", hasSecurityFinding: true });
+     expect(out.tier).toBe("standard");
+     expect(out.reasons).toContain("floor:security");
+     // …and it is a floor, not a ceiling.
+     expect(assignTier({ scope: "blast-radius", hasSecurityFinding: true }).tier).toBe("deep");
+   });
+ 
+   test("a floor beats a downgrade: a blast-radius round over a tiny diff is still deep", () => {
+     const out = assignTier({ scope: "blast-radius", findingCount: 1, diffLines: 10, verifierMethod: "execution" });
+     expect(out.tier).toBe("deep");
+     expect(out.reasons).toEqual(["base:standard", "light:verifier-execution", "floor:blast-radius"]);
+   });
+ 
+   test("the same signals always produce the same tier and the same audit trail", () => {
+     const signals = {
+       scope: "diff",
+       fixAttempt: 2,
+       findingCount: 2,
+       diffLines: 20,
+
+--- src/gdskills/review-skills-class-scope.test.ts
+@@ 15,56 @@
+ import path from "node:path";
+ 
+ const REVIEW_ROOT = path.join(import.meta.dir, "bundled", "skills", "review");
+ 
+ /**
+  * Reviewers that use the severity vocabulary but must NOT carry the contract,
+  * each with the reason. A name here is a decision, not an oversight — which is
+  * the point of listing them rather than filtering them out silently.
+  */
+ const EXEMPT: Record<string, string> = {
+   "code-ai-review":
+     "legacy opt-in profile (--legacy-profiles); emits a free-prose Russian report with no per-finding severity field, and carries four per-editor SKILL variants that would all have to be kept in step",
+   "code-learned-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
+   "code-mobx-store-review":
+     "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+   "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+   "review-pr-feedback":
+     "reports on other people's findings rather than raising its own into the review pipeline, so it emits no finding that could carry a `class_scope` object. It does enumerate classes — Step 8 requires every plan item to name the shape and every site holding it, with how they were enumerated — but in plan items, under different field names, which this schema-field contract does not reach",
+   "review-verifier":
+     "checks findings raised by other reviewers and can only DELETE — it cannot add a finding, raise a severity, or change a finding's text, enforced in src/review/verification.ts — so it produces no finding whose class it could enumerate; it READS class_scope to check that the named sites exist",
++  "review-premise":
++    "judges the premise of findings raised by other reviewers and can only lower, hold or leave them — it cannot add a finding, raise a severity, or change a finding's text (flow 459) — so it produces no finding whose class it could enumerate; it reads class_scope and the sibling sites as intent evidence",
+ };
+ 
+ /** Markers the contract section must carry. Both, so a passing mention does not count. */
+ const REQUIRED_MARKERS = ["class_scope", "required for `blocker` and `major`"];
+ 
+ function reviewerSkills(): string[] {
+   return readdirSync(REVIEW_ROOT, { withFileTypes: true })
+     .filter((e) => e.isDirectory())
+     .map((e) => e.name)
+     .filter((name) => existsSync(path.join(REVIEW_ROOT, name, "SKILL.md")))
+     .sort();
+ }
+ 
+ /** A reviewer reports findings if its skill uses the severity vocabulary. */
+ function reportsFindings(name: string): boolean {
+   return readFileSync(path.join(REVIEW_ROOT, name, "SKILL.md"), "utf8").includes("blocker");
+ }
+ 
+ describe("the orchestrator collects context and records rounds", () => {
+   // Prose guards are weaker than the schema ones above, and that is stated
+
+--- src/gdskills/review-skills-iron-laws.test.ts
+@@ 36,97 @@
+ const REVIEW_ROOT = path.join(import.meta.dir, "bundled", "skills", "review");
+ const CANONICAL = "review-orchestrator";
+ const SHARED_HEADING = "### Shared laws (every reviewer)";
+ 
+ /**
+  * Reviewers that must NOT carry the laws, each with the reason. Same set and
+  * same reasons as `review-skills-class-scope.test.ts`: a reviewer that has no
+  * findings of its own has nothing for these laws to govern.
+  */
+ const EXEMPT: Record<string, string> = {
+   "code-ai-review":
+     "legacy opt-in profile (--legacy-profiles); emits a free-prose Russian report with no per-finding severity field, and carries four per-editor SKILL variants that would all have to be kept in step",
+   "code-learned-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
+   "code-mobx-store-review":
+     "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+   "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+   "review-pr-feedback":
+     "reports on other people's findings rather than raising its own, so it has no finding of its own for these laws to govern. It applies the same discipline where it does own the output — Step 8 is one plan item per class, never one per occurrence — but over comments and plan items, not over findings",
+   "review-verifier":
+     "checks findings raised by other reviewers and can only DELETE — it cannot add a finding, raise a severity, or change a finding's text, enforced in src/review/verification.ts — so there is no finding of its own to hold to the laws",
++  "review-premise":
++    "judges the premise of findings raised by other reviewers and can only lower, hold or leave them — it cannot add a finding, raise a severity, or change a finding's text (flow 459) — so there is no finding of its own to hold to the laws; law 4 is the question it asks of every finding it judges",
+ };
+ 
+ function read(name: string): string {
+   return readFileSync(path.join(REVIEW_ROOT, name, "SKILL.md"), "utf8");
+ }
+ 
+ function reviewerSkills(): string[] {
+   return readdirSync(REVIEW_ROOT, { withFileTypes: true })
+     .filter((e) => e.isDirectory())
+     .map((e) => e.name)
+     .filter((name) => existsSync(path.join(REVIEW_ROOT, name, "SKILL.md")))
+     .sort();
+ }
+ 
+ /** Whitespace is layout, not meaning: line wrapping must not be part of the contract. */
+ function normalise(text: string): string {
+   return text.replace(/\s+/g, " ").trim();
+ }
+ 
+-/** The three laws, taken from the canonical block. No literal lives in this file. */
++/** The shared laws, taken from the canonical block. No literal lives in this file. */
+ function canonicalLaws(): string[] {
+   const text = read(CANONICAL);
+   const start = text.indexOf(SHARED_HEADING);
+   if (start === -1) return [];
+   const section = text.slice(start + SHARED_HEADING.length);
+   // The contiguous ordered list that opens the section, up to the first blank line.
+   const list = section.match(/^\d+\. [\s\S]*?(?=\n\n)/m);
+   if (list === null) return [];
+   return list[0]
+     .split(/\n(?=\d+\. )/)
+     .map((item) => normalise(item.replace(/^\d+\.\s*/, "")))
+     .filter((item) => item.length > 0);
+ }
+ 
+ describe("the canonical severity rubric exists and is the only one", () => {
+   const orchestrator = read(CANONICAL);
+ 
+   test("the rubric lives in review-orchestrator", () => {
+     expect(orchestrator).toContain("## Severity (canonical)");
+     expect(orchestrator).toMatch(/only severity rubric in the review domain/i);
+
+--- src/gdskills/review-skills-iron-laws.test.ts
+@@ 109,233 @@
+   });
+ 
+   test("the major/minor boundary is stated as a test someone else can apply", () => {
+     const section = orchestrator.slice(orchestrator.indexOf("## Severity (canonical)"));
+     expect(section).toMatch(/trigger/i);
+     expect(section).toMatch(/observable outcome/i);
+     // The boundary is decidable only because it is asked of the FINDING — a test
+     // that required reading the code would be a test only the author can run.
+     expect(section).toMatch(/of the \*\*finding\*\*, not of the code/i);
+   });
+ 
+   test("no reviewer keeps a severity-definition table of its own", () => {
+     // AC1: deleted, not left alongside. Two rubrics in a tree is the same defect
+     // as one rubric nobody follows.
+     const rival = /\|\s*Severity\s*\|\s*(When to use|Meaning)\s*\|/;
+     const offenders = reviewerSkills().filter((name) => rival.test(read(name)));
+     expect(offenders).toEqual([]);
+   });
+ });
+ 
+-describe("the three shared laws are derived from the canonical block", () => {
++describe("the four shared laws are derived from the canonical block", () => {
+   const laws = canonicalLaws();
+ 
+-  test("the canonical block yields exactly three laws", () => {
++  test("the canonical block yields exactly four laws", () => {
+     // If this ever reads 0, every assertion below passes vacuously.
+-    expect(laws.length).toBe(3);
++    // Law 4 (flow 459): a deliberate choice is read before it is called a defect.
++    expect(laws.length).toBe(4);
+   });
+ 
+-  test("the canonical laws still say the three things AC3 named", () => {
++  test("the canonical laws still say the things AC3 (laws 1-3) and flow 459 AC5 (law 4) named", () => {
+     // The semantic floor. One file, so rewording costs one edit here — not
+     // fourteen. Each concept is matched by the term it cannot lose without
+     // becoming a different rule, with the plausible synonyms allowed.
+     const concepts: { name: string; matches: (law: string) => boolean }[] = [
+       {
+         name: "no reproducible path → info",
+         matches: (l) => /reproduc\w*/i.test(l) && /\binfo\b/i.test(l),
+       },
+       {
+         name: "never flag the theoretical",
+         matches: (l) => /theoretic\w*|hypothetic\w*|speculat\w*/i.test(l),
+       },
+       {
+         name: "group repeats into one finding",
+         matches: (l) => /(one finding|once)/i.test(l) && /(site|occurrence|repeat|class)/i.test(l),
+       },
++      {
++        // Flow 459: a timeline pinned LTR on purpose (an explicit override, an
++        // exemption note, a sibling doing the same) was reported as a defect and
++        // fixed against platform practice. The law cannot lose either half.
++        name: "a deliberate choice is read before it is called a defect; a rule is checked against platform practice",
++        matches: (l) =>
++          /deliberate/i.test(l) &&
++          /(override|suppression|exemption)/i.test(l) &&
++          /platform practice/i.test(l) &&
++          /exception/i.test(l),
++      },
+     ];
+     // Every concept is covered, and no two concepts collapse onto the same law —
+     // which is what deleting one law and duplicating another would look like.
+     const claimed = concepts.map((c) => laws.findIndex(c.matches));
+     expect(claimed).not.toContain(-1);
+     expect(new Set(claimed).size).toBe(concepts.length);
+   });
+ 
+-  test("the security-only law is not among the shared three", () => {
++  test("the security-only law is not among the shared four", () => {
+     // AC3: the attack-vector law does not generalise. A style reviewer has no
+     // attacker, and a preamble that reads as noise is a preamble that gets skipped.
+     for (const law of laws) expect(law).not.toMatch(/attack vector/i);
+   });
+ });
+ 
+ describe("every reviewer carries the shared laws", () => {
+   const all = reviewerSkills();
+   const laws = canonicalLaws();
+ 
+   test("the denominator comes from the filesystem and is not empty", () => {
+     expect(all.length).toBeGreaterThan(15);
+   });
+ 
+   test("every exemption names a real skill", () => {
+     // A stale exemption silently covers nothing — or, after a rename, the wrong thing.
+     for (const name of Object.keys(EXEMPT)) expect(all).toContain(name);
+   });
+ 
+   test("no reviewer is missing a law", () => {
+     const missing: string[] = [];
+     for (const name of all) {
+       if (EXEMPT[name] !== undefined) continue;
+       const text = normalise(read(name));
+       for (const [index, law] of laws.entries()) {
+         if (!text.includes(law)) missing.push(`${name}: law ${index + 1}`);
+       }
+     }
+     expect(missing).toEqual([]);
+   });
+ 
+   test("each reviewer states the laws under a heading, not buried in prose", () => {
+     const unheaded = all
+       .filter((name) => EXEMPT[name] === undefined)
+       .filter((name) => !read(name).includes(SHARED_HEADING));
+     expect(unheaded).toEqual([]);
+   });
+ 
+-  test("the fourth law stays in review-security-code and only there", () => {
++  test("the security-specific law stays in review-security-code and only there", () => {
+     const carriers = reviewerSkills().filter((name) =>
+       read(name).includes("### Security-specific law"),
+     );
+     expect(carriers).toEqual(["review-security-code"]);
+     expect(read("review-security-code")).toMatch(/does not generalise/i);
+   });
+ });
+ 
+ describe("one condition, one severity, across the reviewer set (AC2)", () => {
+   const all = reviewerSkills();
+ 
+   test("`@ts-ignore` carries exactly one severity, and it is `minor`", () => {
+     // The known contradiction: `minor` in review-backend, `major` in the deleted
+     // review-strict. Verified by search over the set rather than asserted.
+     const assignments: { skill: string; severity: string }[] = [];
+     for (const name of all) {
+       for (const line of read(name).split("\n")) {
+         if (!line.includes("@ts-ignore")) continue;
+         const severity = line.match(/`(blocker|major|minor|info)`|\*\*(blocker|major|minor|info)\*\*/);
+         if (severity !== null) {
+
+--- src/gdskills/bundled/install-manifest.json
+@@ 438,495 @@
+       "cost": "heavy",
+       "stability": "stable"
+     },
+     "quality-skills": {
+       "kind": "skill",
+       "description": "Quality skills: security, perf, root-cause, testing, commit/push/pr, dependency and migration workflows.",
+       "paths": [
+         "src/gdskills/bundled/skills/quality/**"
+       ],
+       "targets": [
+         "claude",
+         "keryx-shell"
+       ],
+       "dependencies": [],
+       "defaultInstall": true,
+       "cost": "heavy",
+       "stability": "stable"
+     },
+     "review-core-skills": {
+       "kind": "skill",
+-      "description": "Generic (non-stack-specific) review skills: orchestrator, logic, architecture, security, performance, clean-code, highload, regression, core-boundaries, flow-graph, layout, style, testing-practices, verifier, pr-feedback, and the legacy AI/learned/style review profiles.",
++      "description": "Generic (non-stack-specific) review skills: orchestrator, logic, architecture, security, performance, clean-code, highload, regression, core-boundaries, flow-graph, layout, style, testing-practices, verifier, premise, pr-feedback, and the legacy AI/learned/style review profiles.",
+       "paths": [
+         "src/gdskills/bundled/skills/review/review-orchestrator/**",
+         "src/gdskills/bundled/skills/review/review-logic/**",
+         "src/gdskills/bundled/skills/review/review-architecture/**",
+         "src/gdskills/bundled/skills/review/review-security-code/**",
+         "src/gdskills/bundled/skills/review/review-performance/**",
+         "src/gdskills/bundled/skills/review/review-clean-code/**",
+         "src/gdskills/bundled/skills/review/review-highload/**",
+         "src/gdskills/bundled/skills/review/review-regression/**",
+         "src/gdskills/bundled/skills/review/review-pr-contract/**",
+         "src/gdskills/bundled/skills/review/review-core-boundaries/**",
+         "src/gdskills/bundled/skills/review/review-flow-graph/**",
+         "src/gdskills/bundled/skills/review/review-layout/**",
+         "src/gdskills/bundled/skills/review/review-style/**",
+         "src/gdskills/bundled/skills/review/review-testing-practices/**",
+         "src/gdskills/bundled/skills/review/review-verifier/**",
++        "src/gdskills/bundled/skills/review/review-premise/**",
+         "src/gdskills/bundled/skills/review/review-pr-feedback/**",
+         "src/gdskills/bundled/skills/review/code-ai-review/**",
+         "src/gdskills/bundled/skills/review/code-learned-review/**",
+         "src/gdskills/bundled/skills/review/code-style-review/**"
+       ],
+       "targets": [
+         "claude",
+         "keryx-shell"
+       ],
+       "dependencies": [],
+       "defaultInstall": true,
+       "cost": "heavy",
+       "stability": "stable"
+     },
+     "react-review-skills": {
+       "kind": "skill",
+       "description": "React/frontend review skills: review-frontend and review-frontend-conventions.",
+       "paths": [
+         "src/gdskills/bundled/skills/review/review-frontend/**",
+         "src/gdskills/bundled/skills/review/review-frontend-conventions/**"
+
+--- src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json
+@@ 127,167 @@
+           "description": "GitHub issue title for context"
+         },
+         "job_name": {
+           "type": "string",
+           "description": "Job package slug, when the dispatch came from job-orchestrator. Phase 6.1 records its result against this name with `keryx job document <job_name> --type implementation-report --file <path>`; absent, Phase 6.1 skips the file write.",
+           "examples": ["issue-4141--pipeline-validation"]
+         },
+         "context_path": {
+           "type": "string",
+           "description": "Job context document read at the start of Phase 2, e.g. .metaproject/jobs/<job_name>/ai/context.md"
+         }
+       }
+     },
+     "fix_context": {
+       "type": "object",
+       "description": "Present only for fix tasks dispatched from review loop.",
+       "additionalProperties": false,
+       "properties": {
+         "review_feedback": {
+           "type": "array",
++          "description": "Findings to fix. Never carries a finding held by review-premise (verdict challenged or owner-decision) until the operator upholds it with `keryx review decide-premise`; the caller filters held findings out before dispatch.",
+           "items": {
+             "type": "object",
+             "additionalProperties": false,
+             "required": ["file", "severity", "message"],
+             "properties": {
+               "id": {
+                 "type": "string",
+                 "description": "The finding's id in the review package, cited back in the result's `notes` when the fix diverged from `suggested_fix` or the finding did not reproduce"
+               },
+               "suggested_fix": {
+                 "type": "string",
+                 "description": "The reviewer's proposed fix. A hypothesis, not an instruction: SKILL.md 1.3 reproduces the finding first and checks this against the plan's state × event matrix before applying anything"
+               },
+               "file": {
+                 "type": "string",
+                 "description": "File path where the issue was found"
+               },
+               "line": {
+                 "type": "integer",
+                 "description": "Line number (if available)"
+
+--- src/gdskills/catalog.ts
+@@ 274,324 @@
+     "Separate style findings from correctness findings.",
+     "Avoid subjective churn unless it affects maintainability.",
+   ]),
+   skill("review-testing-practices", "review", ["recommended", "full"], "Review test structure, coverage quality, determinism, and repository test conventions.", [
+     "Identify required behavior coverage from the change.",
+     "Check whether tests are meaningful, stable, and scoped.",
+     "Flag brittle waits, over-mocking, missing negative cases, and weak assertions.",
+   ]),
+   // Replaced `review-strict`, which re-read findings and adjusted severity with
+   // no new evidence. Intrinsic self-correction is measured to degrade accuracy
+   // (GPT-4 on GSM8K 95.5 -> 91.5 -> 89.0 across rounds; GPT-3.5 on CommonSenseQA
+   // 75.8 -> 38.1; Huang et al., ICLR 2024, arXiv:2310.01798), so the pass was
+   // removed rather than improved. The replacement verifies by RUNNING something
+   // and can only delete.
+   skill("review-verifier", "review", ["recommended", "full"], "Verify reported findings by executing a check that fails if the finding is real; delete-only.", [
+     "Never verify a finding raised by yourself.",
+     "Run a command or test that fails if the finding is real; record the command and its output.",
+     "Fall back to confirming the class_scope sites exist; reasoning alone is capped at unverifiable.",
+     "Emit one verdict per finding checked; never add a finding, raise a severity, or edit a finding's text.",
+   ]),
++  // Flow 459: a finding can reproduce and still be wrong — a deliberate choice
++  // (an explicit override, an exemption, a sibling doing the same) reported
++  // against platform practice. The verifier asks "does it reproduce"; this
++  // judge asks "is it a defect at all", on the deep tier, and can only lower
++  // or hold a finding for the operator.
++  skill("review-premise", "review", ["recommended", "full"], "Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only.", [
++    "Read the finding's bare claim and the code before the reviewer's argument.",
++    "Ask intent, accepted practice, consistency and fix soundness; cite an intent signal or practice source for challenged.",
++    "Hold challenged and owner-decision findings for the operator with a question; never dismiss one yourself.",
++    "Never add a finding, raise a severity, or edit a finding's text; run nothing beyond git log, blame and show.",
++  ]),
+   skill("review-jev-risk", "review", ["recommended", "full"], "Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency.", [
+     "Score every retained hunk on security, data/migration, public-API, concurrency, and error-handling.",
+     "Emit a finding only above threshold and with no nearby test; severity capped at info/minor.",
+     "Feed a routing hint for review-security-code/review-highload when a hunk crosses threshold on that dimension.",
+   ]),
+   skill("review-jev-scenarios", "review", ["recommended", "full"], "Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario.", [
+     "Discover scenarios from gdwiki user-scenario pages, PRD requirement sections, and README/docs how-to sections.",
+     "Ask only scenarios whose linked code this diff touches.",
+     "Emit the ranked manual-check list, and a minor finding for a likely-affected scenario with no covering test.",
+   ]),
+   skill("review-frontend-conventions", "review", ["recommended", "full"], "Review frontend code against repository-local frontend conventions and agent entrypoints.", [
+     "Load local AGENTS.md/CLAUDE.md and matched frontend rules.",
+     "Check component, state, styling, i18n, error, and Storybook conventions.",
+     "Report concrete convention violations with source references.",
+   ]),
+   skill("review-pr-feedback", "review", ["full"], "Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer.", [
+     "Collect through `keryx review comments collect`; a hand-rolled fetch loses page two and writes no record.",
+     "Give every comment a verdict against the code at the head SHA, with the evidence that settled it.",
+     "Plan by class, one item per shape, each carrying a verifiable acceptance criterion.",
+     "Under --fix, dispatch flow-orchestrator: branch from the reviewed PR's own branch, draft PR, review/fix loop to zero minor-and-above, merge back into it.",
+
+--- src/gdskills/contracts/review-finding.schema.json
+@@ 98,184 @@
+         "evidence": {
+           "type": "string",
+           "minLength": 1,
+           "description": "The command that ran and what it returned, or the search that enumerated the sites. A verdict with nothing behind it is the operation this replaces."
+         },
+         "verifier": {
+           "type": "string",
+           "minLength": 1,
+           "description": "Who checked. Beyond the three properties AC7 names, and present because AC9 is otherwise untraceable after the fact: the merge refuses a claim whose verifier equals the finding's `reviewer`, but a record that does not say who verified cannot be audited for that rule — the same defect as `reviewer` being hardcoded to `review-orchestrator` on all 83 recorded findings."
+         }
+       },
+       "if": {
+         "required": ["method"],
+         "properties": { "method": { "const": "reasoning" } }
+       },
+       "then": {
+         "properties": { "verdict": { "const": "unverifiable" } },
+         "description": "Reasoning alone produces no new evidence, so it can never reach `confirmed` (AC7). It cannot reach `refuted` either, and that extension is deliberate: `refuted` is the only verdict with a destructive consequence, so granting it to the weakest method would reinstate review-strict with the sign flipped. Anything checkable is `site-check` or `execution`; `reasoning` is what is left when nothing was run."
+       }
+     },
++    "premise": {
++      "title": "What the premise judge found when it asked whether this finding's request is right",
++      "description": "Flow 459. Declared HERE and deliberately NOT in the bundled reviewer-finding.schema.json, on the same basis as `verification`: the reviewer that raised a finding is the one actor that may not judge its premise. The verifier asks whether the facts hold; the premise judge asks whether the request is right (an explicit override, an exemption, a sibling doing the same and accepted platform practice are all evidence that a flagged shape is a deliberate choice). `challenged` and `owner-decision` HOLD the finding: it is not an open blocker or major and is not passed to a fixer until the operator answers. The judge is delete-only: it never adds a finding, never raises a severity and never edits the finding's text; `downgraded` carries a strictly lower `severity`, which is then also the finding's own. Absent means nobody judged.",
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["verdict", "judge"],
++      "properties": {
++        "verdict": { "type": "string", "enum": ["upheld", "downgraded", "challenged", "owner-decision"] },
++        "judge": { "type": "string", "minLength": 1 },
++        "model": { "type": "string", "minLength": 1 },
++        "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"], "description": "`downgraded` only: the lower severity, also the finding's own." },
++        "original_severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"], "description": "`downgraded` only: what the reviewer reported." },
++        "intent_signals": {
++          "type": "array",
++          "items": {
++            "type": "object",
++            "additionalProperties": false,
++            "required": ["ref", "says"],
++            "properties": { "ref": { "type": "string", "minLength": 1 }, "says": { "type": "string", "minLength": 1 } }
++          }
++        },
++        "practice_sources": {
++          "type": "array",
++          "items": {
++            "type": "object",
++            "additionalProperties": false,
++            "required": ["name", "says"],
++            "properties": { "name": { "type": "string", "minLength": 1 }, "says": { "type": "string", "minLength": 1 } }
++          }
++        },
++        "reasoning": { "type": "string" },
++        "question": { "type": "string", "minLength": 1, "description": "`challenged` and `owner-decision`: what the operator is asked." },
++        "options": { "type": "array", "minItems": 2, "items": { "type": "string", "minLength": 1 } },
++        "operator": {
++          "type": "object",
++          "additionalProperties": false,
++          "required": ["answer", "reason", "at", "actor"],
++          "description": "The operator's answer once applied to the record (`keryx review decide-premise`).",
++          "properties": {
++            "answer": { "type": "string", "enum": ["uphold", "dismiss"] },
++            "reason": { "type": "string", "minLength": 1 },
++            "at": { "type": "string", "minLength": 1 },
++            "actor": { "type": "string", "minLength": 1 }
++          }
++        }
++      }
++    },
+     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
+     "repo": {
+       "type": ["string", "null"],
+       "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Declared in BOTH this schema and skills/review/review-orchestrator/reviewer-finding.schema.json: this one is additionalProperties:false, so a finding carrying `repo` is rejected here if only the reviewer-side schema knows about it."
+     },
+     "file": { "type": ["string", "null"] },
+     "line": {
+       "title": "Where the finding points — DERIVED when the finding quotes code",
+       "description": "Reported by the reviewer only when there is nothing to quote. When `quote` is present this field is OUTPUT: `review ingest` finds the quote in `file` at the round's head and writes the line the match started on, overwriting whatever the reviewer said and recording both in `locator`. The reason is the failure it replaces — nothing compared a reported line to anything, so a number that had drifted travelled into findings.json, into the report, and into the disposition recorded against it. On a fix round the file has moved under the finding by construction, which is when the reported number is least trustworthy and most acted upon.",
+       "type": ["integer", "null"],
+       "minimum": 1
+     },
+     "quote": {
+       "title": "The code this finding is about, copied verbatim out of `file`",
+       "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
+       "type": ["string", "null"]
+     },
+     "locator": {
+       "title": "How `line` was arrived at",
+       "description": "Present exactly when the finding carries a quote. `derived` means the quote was found and `line` is where; `unlocatable` means it was not, and then `line` is null rather than a number nobody checked. `reported_line` keeps what the reviewer said, so a round can measure how far the claims drifted from the code — which is the only way to know whether deriving them repaired anything or is insurance.",
+
+--- src/gdskills/model-tier.ts
+@@ 1326,1370 @@
+ export interface TierSignals {
+   /** Round scope. `blast-radius` floors the tier at `deep`. */
+   readonly scope?: string | undefined;
+   /** 1-based attempt at the SAME finding. `>= 2` raises one tier. */
+   readonly fixAttempt?: number | undefined;
+   /** A strategy change forced by hitting the loop cap. */
+   readonly forcedStrategyChange?: boolean | undefined;
+   /** Findings in scope for this dispatch. */
+   readonly findingCount?: number | undefined;
+   /** Changed lines in the diff under review. */
+   readonly diffLines?: number | undefined;
+   /** `review-finding.schema.json` verification method for this dispatch. */
+   readonly verifierMethod?: "execution" | "site-check" | "reasoning" | string | undefined;
+   /**
+    * Whether any finding in scope is a security finding. A boolean rather than a
+    * severity, because `review-finding.schema.json` has no security severity —
+    * `severity` is blocker/major/minor/info and the security dimension lives in the
+    * reviewer (`review-security-code`). The caller derives it; this stays pure.
+    */
+   readonly hasSecurityFinding?: boolean | undefined;
++  /**
++   * The dispatch is the premise judge (`review-premise`, flow 459). It reasons about practice and intent rather than
++   * running something, so it floors at `deep`: the opposite of the verifier's execution/site-check downgrade.
++   */
++  readonly premiseJudge?: boolean | undefined;
+ }
+ 
+ /** A tier plus the ordered rule ids that produced it. */
+ export interface TierAssignment {
+   readonly tier: ModelTier;
+   /**
+    * Ordered, stable rule ids — the audit trail recorded on the dispatch
+    * (`model.tier_reasons`). Ids, not prose: they are compared in tests and read
+    * back from old runs, so they must not drift with wording.
+    */
+   readonly reasons: readonly string[];
+ }
+ 
+ /** Findings at or below this count may take `light`, given a small enough diff. */
+ export const LIGHT_MAX_FINDINGS = 3;
+ /** Diff size at or below which `light` is allowed, given few enough findings. */
+ export const LIGHT_MAX_DIFF_LINES = 50;
+ 
+ const TIER_RANK: Readonly<Record<ModelTier, number>> = { light: 0, standard: 1, deep: 2 };
+ 
+
+--- src/gdskills/model-tier.ts
+@@ 1405,1448 @@
+     reasons.push(`light:verifier-${method}`);
+   } else if (
+     typeof signals.findingCount === "number" &&
+     signals.findingCount <= LIGHT_MAX_FINDINGS &&
+     typeof signals.diffLines === "number" &&
+     signals.diffLines <= LIGHT_MAX_DIFF_LINES
+   ) {
+     tier = "light";
+     reasons.push("light:small-scope");
+   }
+ 
+   // 3 - floors.
+   if (signals.scope === "blast-radius") {
+     tier = atLeast(tier, "deep");
+     reasons.push("floor:blast-radius");
+   }
+   if (signals.forcedStrategyChange === true) {
+     tier = atLeast(tier, "deep");
+     reasons.push("floor:forced-strategy-change");
+   }
++  if (signals.premiseJudge === true) {
++    tier = atLeast(tier, "deep");
++    reasons.push("floor:premise-judge");
++  }
+ 
+   // 4 - repeated attempt at the same finding.
+   if (typeof signals.fixAttempt === "number" && signals.fixAttempt >= 2) {
+     const raised = raiseOne(tier);
+     if (raised !== tier) {
+       tier = raised;
+       reasons.push("raise:fix-attempt");
+     } else {
+       reasons.push("raise:fix-attempt-capped");
+     }
+   }
+ 
+   // 5 - security never runs below standard.
+   if (signals.hasSecurityFinding === true) {
+     tier = atLeast(tier, "standard");
+     reasons.push("floor:security");
+   }
+ 
+   return { tier, reasons };
+ }
+
+--- src/gdskills/skill-length-ceilings.ts
+@@ 89,129 @@
+  * states the ratchet this map is bound by: a ceiling may be LOWERED when a
+  * skill is genuinely trimmed, never raised to accommodate growth.
+  *
+  * THE RATCHET IS TESTED, NOT MERELY DESCRIBED (flow 257 T19). "Ceilings only
+  * move down" was prose in three files and an assertion in none: the check
+  * itself compares `lines > ceiling`, so raising any entry here silently
+  * cleared its own finding, and the one test over this map asked only that a
+  * ceiling not sit BELOW the file it bounds — a review raised
+  * `review/review-clean-code` from 545 to 1200 and the whole suite stayed
+  * green. `bundled-eval.test.ts`'s "every recorded ceiling equals the line
+  * count that ships today" pins the equality both directions instead, so the
+  * only edit that keeps the suite green is trimming the skill and recording
+  * what is left.
+  */
+ const CEILINGS_BY_KEY = {
+   "core/reviewer-skill-creator": 279,
+   "orchestration/code-verifier": 339,
+   "orchestration/context-collector": 671,
+   "orchestration/feature-analyzer": 447,
+   "orchestration/feature-dev": 177,
+-  "orchestration/flow-orchestrator": 691,
++  "orchestration/flow-orchestrator": 686,
+   "orchestration/issue-analyzer": 373,
+   "orchestration/job-documenter": 414,
+   "orchestration/job-orchestrator": 2235,
+   "orchestration/task-implementer": 662,
+   "planning/autodoc-analyst": 180,
+   "planning/autodoc-architect": 179,
+   "planning/autodoc-assembler": 145,
+   "planning/autodoc-orchestrator": 342,
+   "planning/autodoc-scanner": 183,
+   "planning/autodoc-writer": 270,
+   "planning/brainstorm": 115,
+   "planning/consistency-checker": 208,
+   "planning/docpack-orchestrator": 172,
+   "planning/docpack-review": 92,
+   "planning/interview": 209,
+   "planning/interviewer": 129,
+   "planning/patterns-researcher": 254,
+   "planning/planner": 208,
+   "planning/prd-creator": 210,
+   "planning/problem-definer": 170,
+
+--- src/gdskills/skill-length-ceilings.ts
+@@ 138,187 @@
+   "quality/changelog": 104,
+   "quality/commit": 87,
+   "quality/db-migrate": 87,
+   "quality/dependency-update": 102,
+   "quality/deploy": 93,
+   "quality/deprecation-path": 268,
+   "quality/fresh-eyes": 190,
+   "quality/metaproject-security": 124,
+   "quality/perf-check": 104,
+   "quality/pr": 95,
+   "quality/pr-issue-documenter": 401,
+   "quality/push": 73,
+   "quality/root-cause": 204,
+   "quality/security-audit": 129,
+   "quality/test-gen": 101,
+   "quality/tests-creator": 360,
+   "review/code-ai-review": 238,
+   "review/code-learned-review": 283,
+   "review/code-mobx-store-review": 301,
+   "review/code-style-review": 208,
+-  "review/review-architecture": 378,
+-  "review/review-backend": 366,
+-  "review/review-clean-code": 543,
+-  "review/review-core-boundaries": 163,
+-  "review/review-flow-graph": 188,
+-  "review/review-frontend": 612,
+-  "review/review-frontend-conventions": 211,
+-  "review/review-highload": 548,
+-  "review/review-jev-comments": 184,
+-  "review/review-jev-contract": 193,
+-  "review/review-jev-docs": 189,
+-  "review/review-jev-risk": 190,
+-  "review/review-jev-rules": 267,
+-  "review/review-jev-scenarios": 187,
+-  "review/review-layout": 238,
+-  "review/review-logic": 370,
+-  "review/review-orchestrator": 1582,
+-  "review/review-performance": 359,
++  "review/review-architecture": 373,
++  "review/review-backend": 361,
++  "review/review-clean-code": 538,
++  "review/review-core-boundaries": 158,
++  "review/review-flow-graph": 183,
++  "review/review-frontend": 607,
++  "review/review-frontend-conventions": 206,
++  "review/review-highload": 543,
++  "review/review-jev-comments": 179,
++  "review/review-jev-contract": 188,
++  "review/review-jev-docs": 184,
++  "review/review-jev-risk": 185,
++  "review/review-jev-rules": 262,
++  "review/review-jev-scenarios": 182,
++  "review/review-layout": 237,
++  "review/review-logic": 365,
++  "review/review-orchestrator": 1572,
++  "review/review-performance": 354,
+   "review/review-pr-contract": 191,
+-  "review/review-pr-feedback": 895,
++  "review/review-pr-feedback": 894,
++  "review/review-premise": 180,
+   "review/review-regression": 214,
+-  "review/review-security-code": 364,
+-  "review/review-style": 358,
++  "review/review-security-code": 359,
++  "review/review-style": 353,
+   "review/review-testing-practices": 293,
+   "review/review-verifier": 299,
+ } satisfies Record<string, number>;
+ 
+ /** `${category}/${name}` -> its recorded ceiling. See the module header. */
+ export const SKILL_LENGTH_CEILINGS: ReadonlyMap<string, number> = new Map(Object.entries(CEILINGS_BY_KEY));

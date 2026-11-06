@@ -1,0 +1,66 @@
+STATUS: DONE
+
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "R2-001", "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md", "line": 277,
+      "quote": "### A flow sourced from a finding: check its premise before freeze",
+      "problem": "The new ### heading ends at line 279, but the next paragraph ('Then freeze and start ... flow freeze / flow start') still belongs to Phase 1 and now reads as part of the premise subsection.",
+      "impact": "A reader or section-extractor that takes the premise subsection gets the freeze/start commands; one that skips it for a non-finding flow skips freeze/start too.",
+      "suggested_fix": "Keep the premise paragraph as a bold lead-in (as before) or move the subsection after the freeze/start block.",
+      "confidence": "medium"
+    },
+    {
+      "id": "R2-002", "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md", "line": 1264,
+      "quote": "The bound is a ceiling, not a target. Repetition ends the loop earlier and **regardless of remaining iterations**",
+      "problem": "The delta re-wraps untouched hard-wrapped paragraphs (the loop bound, 'A finding leaves this loop...', the Gate intro, Step 7 and the --refuted note) into single long lines. The rest of the file is wrapped at about 85 columns.",
+      "impact": "Unrelated churn in the diff and inconsistent wrapping inside one file; it hides the real edits from a reviewer.",
+      "suggested_fix": "Restore the original wrapping and edit only the changed sentences.",
+      "confidence": "high"
+    },
+    {
+      "id": "R2-003", "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md", "line": 93,
+      "quote": "Never for a `minor` or an external finding: hold those with `challenged` or `owner-decision` instead.",
+      "problem": "The Verdicts row lists minor and external, but the Iron Laws row (line ~112) also forbids downgrading a `review-security-code` finding (`security-downgrade`). The two statements of one rule now differ.",
+      "impact": "A judge reading only the table downgrades a security finding and the merge rejects it.",
+      "suggested_fix": "Add 'or a `review-security-code` finding' to the table row, or point the row at the Iron Laws.",
+      "confidence": "high"
+    },
+    {
+      "id": "R2-004", "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md", "line": 42,
+      "quote": "claims in `<flow-dir>/premise/<n>.json`, no `decide-premise`",
+      "problem": "feature-dev has no flow package, yet it points to a `<flow-dir>` path defined only in flow-orchestrator Phase 1 and names no alternative location.",
+      "impact": "A feature-dev run has nowhere defined to save the claims or journal the answer.",
+      "suggested_fix": "Say where feature-dev keeps them (its job folder) or state 'if a flow exists'.",
+      "confidence": "medium"
+    },
+    {
+      "id": "R2-005", "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md", "line": 118,
+      "quote": "a read-only child has no shell",
+      "problem": "The reviewer SKILLs now allow git log/blame/show to a read-only child; other text may still say the child has no shell.",
+      "impact": "Low: possible contradictory wording elsewhere.",
+      "suggested_fix": "Search the reviewers for 'no shell' and align.",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-style-skills#F-001", "disposition": "closed", "evidence": "orchestration/job-orchestrator/SKILL.md:1149 Step 8 ingest now passes --premises; gate table row at :1000"},
+    {"id": "review-style-skills#F-002", "disposition": "closed", "evidence": "full instruction now lives once in review-orchestrator/SKILL.md Wave D; flow-orchestrator:442, job-orchestrator:1174, feature-dev:116 point to it (a short premise_verdict/premise_answer blurb is still repeated in the three)"},
+    {"id": "review-style-skills#F-003", "disposition": "closed", "evidence": "review-premise/SKILL.md:65 (source row) states how issue/comment findings are shaped; flow-orchestrator/SKILL.md:279 and feature-dev:42 use it and say journal, no decide-premise (see R2-004)"},
+    {"id": "review-style-skills#F-004", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:105 and :120 publish step-10b and complete it on ingest --premises"},
+    {"id": "review-style-skills#F-005", "disposition": "closed", "evidence": "review-premise/SKILL.md:93 and :111 say a minor is never downgraded (see R2-003)"}
+  ]
+}
+```
+
+Summary: all five in-scope round-1 style findings are closed (F-006 and F-007 skipped as owner-dismissed). The fix delta adds four minor style defects (a subsection heading that swallows the freeze/start block, unrelated re-wrapping in job-orchestrator, a table/law mismatch on security downgrades, a feature-dev reference to a flow-dir it lacks) and one info.

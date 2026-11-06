@@ -1,0 +1,508 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 62511,
+      "contentHash": "55a837a8bc5b5d408bf11c94d49175ca35fa7191ce0f614b8166f89690106899",
+      "files": [
+        ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+        "docs/docs/cli-reference.md",
+        "src/commands/agent.ts",
+        "src/commands/review-ledger.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts",
+        "src/review/completion-gate.test.ts",
+        "src/review/ingest-locator-sha.test.ts",
+        "src/review/locate.test.ts",
+        "src/review/completion-gate.ts",
+        "src/review/coverage.ts",
+        "src/review/dispatch-usage.ts",
+        "src/review/ledger.ts",
+        "src/review/locate.ts",
+        "src/review/managed.ts",
+        "src/review/mutate.ts",
+        "src/review/retry-eval.ts"
+      ],
+      "domain": ".metaproject, docs [docs], src/commands +4 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "source code: src/commands/agent.ts, src/commands/review-ledger.ts, src/harness/tool/builtin/spawn-subagent-tool.ts (+8)",
+          "agent instructions: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "fix slice: answers 58 prior finding(s) review-architecture-w3:F-004, review-architecture-w3:F-005, review-clean-code-w1:F-004, review-clean-code-w1:F-005, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "review-architecture-w3:F-004",
+        "review-architecture-w3:F-005",
+        "review-clean-code-w1:F-004",
+        "review-clean-code-w1:F-005",
+        "review-clean-code-w2:F-003",
+        "review-clean-code-w2:F-006",
+        "review-clean-code-w3:CC-10",
+        "review-clean-code-w3:CC-11",
+        "review-clean-code-w3:CC-13",
+        "review-clean-code-w3:CC-2",
+        "review-clean-code-w3:CC-3",
+        "review-clean-code-w3:CC-4",
+        "review-clean-code-w3:CC-7",
+        "review-clean-code-w3:CC-9",
+        "review-core-boundaries-w1:F-004",
+        "review-highload-w1:F-001",
+        "review-highload-w1:F-002",
+        "review-highload-w1:F-003",
+        "review-highload-w2:F-001",
+        "review-highload-w2:F-003",
+        "review-highload-w3:F-001",
+        "review-highload-w3:F-002",
+        "review-highload-w3:F-004",
+        "review-highload-w3:F-005",
+        "review-logic-w1:LG-002",
+        "review-logic-w1:LG-005",
+        "review-logic-w2:F-002",
+        "review-logic-w2:F-005",
+        "review-logic-w3:F-002",
+        "review-logic-w3:F-004",
+        "review-logic-w4:F-001",
+        "review-logic-w4:F-002",
+        "review-logic-w4:F-003",
+        "review-logic-w4:F-004",
+        "review-logic-w4:F-005",
+        "review-logic-w4:F-006",
+        "review-performance-w3:PERF-001",
+        "review-performance-w3:PERF-002",
+        "review-performance-w3:PERF-004",
+        "review-performance-w3:PERF-006",
+        "review-performance-w3:PERF-007",
+        "review-regression-w3:REG-W3-001",
+        "review-regression-w3:REG-W3-002",
+        "review-security-code-w1:SEC-001",
+        "review-security-code-w1:SEC-004",
+        "review-security-code-w2:SEC-W2-001",
+        "review-security-code-w3:SEC-001",
+        "review-security-code-w3:SEC-002",
+        "review-security-code-w3:SEC-003",
+        "review-security-code-w3:SEC-005",
+        "review-style-w1:F-003",
+        "review-style-w3:F-003",
+        "review-style-w3:F-004",
+        "review-style-w3:F-005",
+        "review-style-w3:F-006",
+        "review-testing-practices-w1:F-003",
+        "review-testing-practices-w2:T-001",
+        "review-testing-practices-w2:T-002"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 95210,
+      "contentHash": "9478965b94df6aa92fb955c3725e3ed1246a49260cd264c1e0a088e0983571e1",
+      "files": [
+        ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+        "src/commands/agent-review-gate.test.ts",
+        "src/commands/review-ledger.test.ts",
+        "src/commands/review-plan.e2e.test.ts",
+        "src/commands/review-plan.test.ts",
+        "src/commands/review-premises-cli.test.ts",
+        "src/commands/review-slice.test.ts"
+      ],
+      "domain": ".metaproject, .metaproject [docs], docs [docs] +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/review-finding.schema.json, docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, .metaproject/skills/gdskills/review/review-premise/SKILL.md"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 100409,
+      "contentHash": "332c1dc8ad96201084792ca5d90152bad66795420f9f4752ca48109925a44271",
+      "files": [
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review-ledger.ts",
+        "src/commands/review-slice.ts",
+        "src/commands/review.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "src/gdskills/contracts/review-finding.schema.json",
+        "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ],
+      "domain": "src/commands, src/gdskills [docs], src/gdskills +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/gdskills/contracts/review-finding.schema.json",
+          "source code: src/commands/agent.ts, src/commands/operator-confirm-review.ts, src/commands/review-ledger.ts (+3)",
+          "agent instructions: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+          "schema: src/gdskills/contracts/review-finding.schema.json"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 113991,
+      "contentHash": "84bf00482d860e07a39f101e6ff10e7d95ebc01046d8370d12d5cd981972418b",
+      "files": [
+        "src/review/completion-gate.test.ts",
+        "src/review/coverage.test.ts",
+        "src/review/dedupe.test.ts",
+        "src/review/dispatch-check.test.ts",
+        "src/review/filter-stats.test.ts",
+        "src/review/ingest-locator-sha.test.ts",
+        "src/review/ledger.test.ts",
+        "src/review/locate-ingest.test.ts",
+        "src/review/locate.test.ts",
+        "src/review/managed.test.ts",
+        "src/review/premise.test.ts",
+        "src/review/readiness.test.ts",
+        "src/review/round-split.test.ts",
+        "src/review/round-trip.test.ts"
+      ],
+      "domain": "src/review [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 145446,
+      "contentHash": "e58fb97dba46707219dae921f05203946a434f821abc55da2e4f0f2b18dfcbc5",
+      "files": [
+        "src/review/completion-gate.ts",
+        "src/review/coverage.ts",
+        "src/review/dispatch-check.ts",
+        "src/review/dispatch-usage.ts",
+        "src/review/display-id.ts",
+        "src/review/filter-stats.ts",
+        "src/review/ledger.ts",
+        "src/review/locate.ts",
+        "src/review/managed.ts",
+        "src/review/mutate.ts",
+        "src/review/premise.ts",
+        "src/review/prior-round.ts"
+      ],
+      "domain": "src/review",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/completion-gate.ts, src/review/coverage.ts, src/review/dispatch-check.ts (+9)"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 63882,
+      "contentHash": "84d8d2dc4d5de7db5f17fc9afcd52ca883b19b71cd278f8cd1539a196e91fa95",
+      "files": [
+        "src/review/readiness.ts",
+        "src/review/research.ts",
+        "src/review/retry-eval.ts",
+        "src/review/round-record.ts",
+        "src/review/round-split.ts",
+        "src/review/routing-check.ts",
+        "src/review/types.ts",
+        "src/review/verdict.ts"
+      ],
+      "domain": "src/review",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/readiness.ts, src/review/research.ts, src/review/retry-eval.ts (+4)",
+          "schema: src/review/types.ts"
+        ]
+      },
+      "kind": "new"
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 148403,
+      "contentHash": "f0caa8c7c5c2a191dae6eebba683bc02b0e7458b675373bbe0f59433d7412b2f",
+      "files": [
+        ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+        ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+        ".metaproject/flows/458-2026-10-16-review-delta-rounds/journal.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/journal.md",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/acceptance-criteria.md",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/context.md",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/description.md",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/plan.md",
+        ".metaproject/flows/460-2026-10-17-review-gate-consistency/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "CHANGELOG.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "src/commands/review-ledger.test.ts"
+      ],
+      "domain": ".metaproject, .metaproject [docs], . [docs] +2 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 74018,
+      "contentHash": "506f7416bac147e7fb4934daf86421ea5af9400e8da31f628c073daa6754f733",
+      "files": [
+        "src/commands/review-ledger.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/contracts/review-finding.schema.json",
+        "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ],
+      "domain": "src/commands, src/gdskills [docs], src/gdskills +2 more",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/gdskills/contracts/review-finding.schema.json",
+          "source code: src/commands/review-ledger.ts, src/harness/tool/builtin/spawn-subagent-tool.ts",
+          "agent instructions: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "schema: src/gdskills/contracts/review-finding.schema.json",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-09",
+      "path": "slice-09.diff",
+      "bytes": 111836,
+      "contentHash": "6c37d341d48001c02d483f0f017993297ad9713a8681825fb42932e7beaa8baf",
+      "files": [
+        "src/review/active-review.test.ts",
+        "src/review/complete-coverage-gate.test.ts",
+        "src/review/complete-head-gate.test.ts",
+        "src/review/completion-gate.test.ts",
+        "src/review/coverage.test.ts",
+        "src/review/evidence-level.test.ts",
+        "src/review/ingest-locator-sha.test.ts",
+        "src/review/ledger.test.ts",
+        "src/review/locate.test.ts",
+        "src/review/managed.test.ts",
+        "src/review/readiness.test.ts",
+        "src/review/research.test.ts"
+      ],
+      "domain": "src/review [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-10",
+      "path": "slice-10.diff",
+      "bytes": 139980,
+      "contentHash": "a55ff1340f524ca37cc50240f7fe9b10e0876f8d2a25ae818045f12addca3191",
+      "files": [
+        "src/review/completion-gate.ts",
+        "src/review/coverage.ts",
+        "src/review/dispatch-usage.ts",
+        "src/review/dispatch.test-helpers.ts",
+        "src/review/git-fixture.test-helpers.ts",
+        "src/review/ledger.ts",
+        "src/review/locate.ts",
+        "src/review/managed.ts",
+        "src/review/mutate.ts"
+      ],
+      "domain": "src/review",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/completion-gate.ts, src/review/coverage.ts, src/review/dispatch-usage.ts (+6)",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    },
+    {
+      "id": "slice-11",
+      "path": "slice-11.diff",
+      "bytes": 32515,
+      "contentHash": "f3e7ad1c2e1b4f1174dc9fe6d92feac937e2accb2f2764b58183c517c12a7923",
+      "files": [
+        "src/review/readiness.ts",
+        "src/review/research.ts",
+        "src/review/types.ts"
+      ],
+      "domain": "src/review",
+      "split": "file",
+      "roles": [
+        "review-logic",
+        "review-security-code"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/readiness.ts, src/review/research.ts",
+          "schema: src/review/types.ts",
+          "second look: unchanged since round 1, which may have missed something in it"
+        ]
+      },
+      "kind": "second-look"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 11,
+    "bytes": 1088201,
+    "files": 77,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 1
+  },
+  "host": "claude-code"
+}

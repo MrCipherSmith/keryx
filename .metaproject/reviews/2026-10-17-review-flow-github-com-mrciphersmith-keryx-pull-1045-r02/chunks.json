@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 21,
+  "droppedKey": "2030875d09fb8c8d",
+  "fileBytes": {
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/findings.json": 32729,
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/report.md": 49418,
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/scope-src.json": 573055,
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/verifications.json": 1509,
+    "fixtures/routing-shell-pty.ts": 4860,
+    "scripts/benchmark/run-ablation-long.ts": 17715,
+    "scripts/stress/keryx-shell-stress.ts": 38974,
+    "src/acp/server-harness.test-helpers.ts": 3541,
+    "src/cli.ts": 10584,
+    "src/commands/acp.ts": 24208,
+    "src/commands/help.ts": 2179,
+    "src/commands/review-bot.ts": 6943,
+    "src/commands/review-next.ts": 2772,
+    "src/commands/review-operator.ts": 11180,
+    "src/commands/trigger.ts": 44378,
+    "src/flow/review-gate.ts": 95412,
+    "src/governance/spend.ts": 10775,
+    "src/review/autonomous-run.ts": 18993,
+    "src/review/complete-head-gate.ts": 3860,
+    "src/tui/reviews-inspector.ts": 18287,
+    "src/wiki/enrich.ts": 72632
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/findings.json",
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/report.md"
+      ],
+      "bytes": 82147
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/scope-src.json"
+      ],
+      "bytes": 573055
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1000-round2-b2120e39/verifications.json",
+        "scripts/benchmark/run-ablation-long.ts",
+        "scripts/stress/keryx-shell-stress.ts"
+      ],
+      "bytes": 58198
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        "src/flow/review-gate.ts",
+        "src/commands/trigger.ts"
+      ],
+      "bytes": 139790
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        "src/cli.ts",
+        "src/wiki/enrich.ts",
+        "src/review/autonomous-run.ts",
+        "src/review/complete-head-gate.ts",
+        "src/tui/reviews-inspector.ts",
+        "src/commands/review-operator.ts",
+        "src/acp/server-harness.test-helpers.ts",
+        "src/governance/spend.ts"
+      ],
+      "bytes": 149852
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        "src/commands/acp.ts",
+        "src/commands/help.ts",
+        "src/commands/review-next.ts",
+        "src/commands/review-bot.ts",
+        "fixtures/routing-shell-pty.ts"
+      ],
+      "bytes": 40962
+    }
+  ]
+}

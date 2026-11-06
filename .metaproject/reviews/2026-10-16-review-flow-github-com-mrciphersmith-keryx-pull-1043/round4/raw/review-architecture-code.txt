@@ -1,0 +1,49 @@
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "prior_dispositions": [
+    {
+      "id": "r3-review-architecture-code#R3-ARCH-001",
+      "disposition": "closed",
+      "evidence": "src/review/package-location.ts:8-22,31-44 now owns reviewsRoot/flowReviewsRoot/REVIEW_PACKAGE_MANIFEST_GLOBS/isReviewPackageDir; managed.ts:91 re-exports, managed.ts:1119 and :2798 use flowReviewsRoot; prior-round.ts:39,473 uses the globs; premise-question.ts:12 and automatic-review.ts:15 import the predicate from it. The three named encodings are one. Remaining unrelated copies: see R4-ARCH-001."
+    }
+  ],
+  "findings": [
+    {
+      "id": "R4-ARCH-001",
+      "severity": "minor",
+      "file": "src/review/package-location.ts",
+      "line": 1,
+      "problem": "The module header says every reader of the package layout takes it from here so a change is made once, but at least eight production sites still build the same paths by hand: review/loop.ts:485, flow/review-gate.ts:460, governance/spend.ts:21, tui/jev-triage-command.ts:42, tui/conform-source.ts:87, review/arbiter-log.ts:89, review/autonomous-run.ts:179, commands/review.ts:3615 (and the bot/pr-comments dirs at bot/run.ts:118, pr-comments.ts:1607).",
+      "impact": "The single-source claim is false. A move of the reviews root still needs ~10 edits, and the sites that lag diverge from isReviewPackageDir silently (a package accepted by one path, ignored by another).",
+      "suggested_fix": "Either route the flow-scoped sites through flowReviewsRoot and the standalone ones through reviewsRoot in a follow-up, or soften the header to say it covers allocation, prior-round globs and the package check only.",
+      "evidence": "keryx ctx rg '\"reviews\"' src (non-test) lists the sites above; each does path.join(flowsRoot(cwd), flowDir, \"reviews\") or path.join(cwd, \".metaproject\", \"reviews\").",
+      "confidence": "high"
+    },
+    {
+      "id": "R4-ARCH-002",
+      "severity": "info",
+      "file": "src/commands/automatic-review.ts",
+      "line": 14,
+      "problem": "The command-layer approval policy imports foldFileName from review/operator-decisions.ts, a persistence module, so the name-folding rule used to decide what an agent may patch lives in the decisions store. The same alias knowledge is also encoded a second way as PLAIN_SEGMENT (automatic-review.ts ~L221).",
+      "impact": "Low: two mechanisms (fold-and-compare in the store, ASCII allow-list in the policy) must stay consistent; a change to one does not prompt a review of the other.",
+      "suggested_fix": "Optionally move foldFileName and the operator-only name set to a small shared module (e.g. beside package-location) that both the store and the policy import.",
+      "evidence": "operator-decisions.ts:~141 foldFileName export; automatic-review.ts:14,217-224.",
+      "confidence": "medium"
+    },
+    {
+      "id": "R4-ARCH-003",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 91,
+      "problem": "managed.ts keeps `export { reviewsRoot } from \"./package-location\"` while it imports flowReviewsRoot and reviewsRoot from package-location directly; callers now have two import paths for the same symbol (automatic-review uses package-location, others use managed).",
+      "impact": "Cosmetic: the re-export blurs the new owner and invites the old path to persist.",
+      "suggested_fix": "Repoint remaining importers of reviewsRoot from ./managed to ./package-location and drop the re-export.",
+      "evidence": "managed.ts:54,91; automatic-review.ts:15.",
+      "confidence": "medium"
+    }
+  ]
+}
+```
+
+Summary: R3-ARCH-001 (the sole prior architecture finding) is closed; the delta extracts package-location.ts with correct dependency direction (review -> flow/store, no cycle). The premise-question.ts refactor (applyAnswerToFindings / recordPremiseDecisionAfter) and the inherited-premise path in managed.ts keep layering intact. New: 1 minor (overclaimed single source of layout), 2 info.

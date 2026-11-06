@@ -1,0 +1,57 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Round 6 final-fix delta (HEAD 539ba65b7, fix e9fc8e9f6). The redesigned carry (carriedPremiseHolds, premise.ts:746-765; caller managed.ts:369-371) no longer reads research-evidence/premises.json, carries only records the previous findings.json recorded as held, copies only held verdicts, and refuses when a held finding is gone or its severity/verdict/problem changed. Operator-only guarantees hold: normaliseCarriedPremise strips premise.operator (premise.ts:245-247), the gate parses only premise.verdict from findings.json and recomputes hold from the decisions store (review-gate.ts:366, :548), a carried hold only blocks (review-gate.ts:704) and can never dismiss. Both priors closed. New: one minor (packageDirById can bind verify-run records of a different package with the same id) and one info (the carried premise is not re-validated, so a hand-edited hold in findings.json survives a re-ingest).",
+  "prior_dispositions": [
+    {
+      "id": "r4-review-security-code-code#SEC4-001",
+      "disposition": "closed",
+      "evidence": "premises.json is no longer an input to an ingest without --premises: carriedPremiseHolds(findings, previousFindings) takes only findings.json (premise.ts:746; managed.ts:369), and readStoredClaims/appliedClaimNames are removed. A planted research-evidence/premises.json is not applied (review-premises-cli.test.ts SEC5-001 test, delta lines 19-28). The remaining agent-writable carry source is findings.json, raised separately as SEC6-001 (info)."
+    },
+    {
+      "id": "r5-review-security-code-code#SEC5-001",
+      "disposition": "closed",
+      "evidence": "A stored claim the previous merge rejected can no longer be applied: the carry copies record.premise only from previous findings.json records with a held verdict (premise.ts:766-768 heldRecords; :749-758), and mergePremises is called with premiseClaims (undefined here), so no stored claim is re-merged (managed.ts:371). Downgrade/upheld judgements are not carried (premise.test.ts 'only holds are'); a carried hold keeps the current severity and refuses on a severity change (premise.ts:755-756, sameSubject :553-555)."
+    }
+  ],
+  "findings": [
+    {
+      "id": "SEC6-001",
+      "severity": "minor",
+      "file": "src/review/package-location.ts",
+      "line": 205,
+      "quote": "if (existsSync(standalone)) return standalone;",
+      "problem": "packageDirById chooses a package by id with its own precedence (standalone first, then the first flow in readdir order), while ingest writes its package where packagePath decides: under the matched flow when one matches (managed.ts:1115-1116). readVerifications (review.ts:3617) resolves the directory before the flow match is known. When the same review id exists in more than one root (a standalone package and a flow-bound one, or two flows), the verify-run records of a DIFFERENT package are used to promote this ingest's claims to `execution`. The basename check in promoteParentExecutions (verify-run.ts:150) passes because the ids are equal. This breaks the earlier rule that a record of the same finding id in another package does not count (verify-run.ts:142-144).",
+      "impact": "A verifier claim of this ingest can be recorded as executed in the parent on the strength of another package's record, which raises a reasoning-capped claim above `unverifiable` and can change what the gate counts as verified. Needs an id collision, which is plausible because ids are date-slug names (for example 2026-10-16-review-flow-pr exists as a standalone package here). An agent that can write files could also plant records, but in this case no planting is needed.",
+      "suggested_fix": "Resolve the verify-run directory from the ingest's own package path (promote inside createManagedReviewPackage after packagePath, or pass the flow match to readVerifications), or have packageDirById refuse (return undefined, so nothing is promoted) when the id exists in more than one root.",
+      "evidence": "package-location.ts:205-209 (standalone precedence, first flow match); review.ts:3617 call with --review-id only; managed.ts:1109-1122 packagePath picks the flow root on a flow match; verify-run.ts:146-158 trusts any existing record under the given dir whose basename matches.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC6-002",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 754,
+      "quote": "{ ...current, premise: record.premise as ReviewFindingPremise }",
+      "problem": "The carried premise is cast from the previous findings.json and is not re-validated: there is no check for a question, evidence, owner-decision options or a self-judging judge. findings.json is an auto-approvable data patch target in automatic review (automatic-review.ts:327-347). So a hold an agent writes into findings.json by hand is carried through a re-ingest, and the CLI reports it as 'carried forward ... the held findings are unchanged' (review.ts:1083). Before this delta, a re-ingest refused a held record that no stored claim held again (heldFindingsChanged). The kept research-evidence/premises.json is described as 'the record of the claims they came from' (managed.ts:512-515), which is not true for a hold carried from an earlier round or a hand-edited one.",
+      "impact": "Grants no new authority. A findings.json hold already blocks the gate directly. A hold only parks a finding for the operator (review-gate.ts:704): it never dismisses. premise.operator is stripped (premise.ts:245-247), and the gate reads only the verdict (review-gate.ts:366). The worst case is that an agent moves a finding out of the fix loop into the operator's queue, possibly with no question, and the move survives a re-ingest. Recorded because the carry is described as 'validated'.",
+      "suggested_fix": "Before carrying, check that the held premise has the minimum the merge requires (a non-empty question, owner-decision options, a judge that did not raise the finding), and refuse the carry naming the finding otherwise. Reword the managed.ts:512 comment.",
+      "evidence": "premise.ts:749-758 (copy with cast), :238-254 normaliseCarriedPremise strips only operator and severities; mergePremises keeps an already-judged finding as-is (premise.ts:347-349, :484).",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Summary
+
+- Priors: SEC4-001 closed, SEC5-001 closed. The carry no longer reads premises.json, a rejected stored claim can never apply, and only held verdicts carry.
+- Carry check (premise.ts:746-765, managed.ts:369-371): it reads only findings.json and never premises.json. It refuses on a gone or changed held finding, and keeps the current severity, so a security downgrade cannot be carried. The operator answer stays only in the decisions store: operator is stripped, the gate reads only the verdict, and hold is recomputed. No operator-only guarantee is weakened.
+- New: 1 minor (SEC6-001: on a review id collision, packageDirById can bind verify-run records of another package and promote claims to execution). 1 info (SEC6-002: the carried premise is not re-validated, so a hand-edited findings.json hold survives a re-ingest. A hold only blocks, so there is no new authority).
+- Checked and clean: the prior-round skipped-note change only filters the package being started out of the text. The test changes are tests only. The `..`-accepting review-id regex is pre-existing and not raised.

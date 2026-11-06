@@ -1,0 +1,63 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-03 (new): no exploitable injection, auth, secrets, crypto or path-traversal defect in the changed code. Two minor hardening/integrity gaps (the unvalidated `<save_result_to>.partial` sibling now also written on the empty-reply and no-text-timeout paths; the ingest-screened closure matching a bare display id across waves) and one info observation (an unvalidated --base now steers the coverage light recheck).",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+      "problem": "resolveSaveResultPath validates only `save_result_to` itself (realpath of the nearest existing ancestor must stay inside the project root, an existing target must be a regular file). saveTimedOutPartial then writes to `${abs}.partial` whenever the target already has content, and that sibling path is never resolved or checked; writeFile follows a symlink there. This diff adds two new callers of that path: the empty-reply exit (`await saveTimedOutPartial(saveTarget.abs, `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`)`) and the timeout exit with no text (previously skipped when `partial.length === 0`).",
+      "impact": "Attack vector: a write-capable actor inside the project (a general-mode sibling child following injected instructions, or another local process) plants `raw/<reviewer>-wN.txt.partial` as a symlink to a file outside the project root; when the read-only reviewer dispatch for that target ends empty or times out while the target already holds text, the harness writes through the link and clobbers the outside file with the placeholder plus a KERYX_USAGE line (or, on the pre-existing timeout-with-text path, child-authored text). Precondition (planting the link) is not established by this diff, and the new paths write only fixed placeholder content, so this is hardening, not a reachable exploit.",
+      "suggested_fix": "Run the `.partial` target through the same containment check as the primary path before writing (resolveSaveResultPath(root, `${target}.partial`) or an lstat refusing a symlink), or open with O_NOFOLLOW/`flag: 'wx'` semantics; the same lstat check on `abs` right before write would also close the validate-then-write window.",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:266-308 (resolveSaveResultPath checks only `abs`), saveTimedOutPartial at ~line 233 computes `${abs}.partial` and calls saveChildResult -> writeFile with no check; new call sites in the diff at the timeout exit (`partial.length > 0 ? partial : NO_TEXT_PLACEHOLDER`) and the empty-reply exit (`const emptySaved = ...saveTimedOutPartial(...)`).",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC-002",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+      "problem": "The new ingest-screened closure (wired in by review-ledger.ts `screened`/`screenedEvidence`) closes a raw finding `out-of-scope` when a screened entry matches either the obligation id `<raw stem>:<fid>` or, as a fallback, the same reviewer plus the bare reviewer-local id `fid`. Reviewer-local ids restart per wave (every wave has its own F-001), so one screened canonical finding `F-001` by review-logic matches the raw F-001 of every review-logic wave, not only the one ingest actually screened.",
+      "impact": "A raw finding from a different wave that was lost in consolidation (not in findings.json, no disposition) is silently closed out-of-scope with the other finding's screen reason instead of surfacing as an `unresolved` gap, so the ledger's integrity check can pass with a real finding (of any severity, including a security blocker) dropped. No external attacker; the trigger is an ordinary multi-wave round with a bare-id consolidation.",
+      "suggested_fix": "Match on the obligation id or global_id only; when falling back to reviewer + bare id, require the screened entry to be unambiguous for that reviewer (exactly one raw file of that reviewer carries `fid`), otherwise leave the obligation unresolved.",
+      "evidence": "src/review/ledger.ts:612-638 (screenedAs and the out-of-scope push); src/review/managed.ts:686-691 screenedRecord stores `finding.id` as reported in the canonical findings (bare ids when the operator consolidated without a wave prefix); src/commands/review-ledger.ts diff lines adding `screened` / `screenedEvidence` to buildLedger.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "quote": "const base = optionValue(args, \"--base\")?.trim() || undefined;",
+      "problem": "`--base` is now recorded on the managed-review target unvalidated (no assertGitRevision/revisionOperand at record time), and the coverage gate's light recheck (coverage.ts resolveDiffBase/diffOfTarget) diffs against it before any default. resolveBase drops refs starting with `-` and git is invoked with argv, so there is no option or command injection; but whoever starts the review chooses the range the light-set acceptance is measured over.",
+      "impact": "No attack vector stated: an agent passing a near-head --base would shrink the measured diff and let a light dispatch pass the coverage recheck, but readiness item 9 (pr-files, the PR's own file list, recount >3x refused) cross-checks PR targets. What would settle it: whether a range (non-PR) target with a recorded base can reach `review complete` with a light dispatch whose base differs from the operator-intended one.",
+      "suggested_fix": "Validate --base with assertGitRevision at record time, and for PR targets prefer the PR's own base from the tracker over a recorded one (or refuse a recorded base that is not an ancestor-merge-base of the PR base).",
+      "evidence": "src/commands/review.ts diff hunk @@1023 (`target: { kind, ref, ...(base === undefined ? {} : { base }) ... }`); src/review/coverage.ts:543 `const recordedBase = str(target.base);` and resolveDiffBase; src/review/prior-round.ts:321 filters `!ref.startsWith(\"-\")`.",
+      "confidence": "low",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+## Security Review — slice-03 (new)
+
+Scope: the slice-03 diff (agent.ts import rename, operator-confirm-review readiness item description, review-ledger findings/`#` refusal and ingest-screened wiring, review-slice fix/new partition, review.ts --base and repeatable --premises, review-premise and review-orchestrator docs, review-finding schema `substring` locator, spawn-subagent empty/timeout save and failChild refactor plus tests).
+
+Summary: blocker 0, major 0, minor 2, info 1.
+
+- SEC-001 (minor): the `<save_result_to>.partial` sibling is never containment-checked, and this diff routes two more exits (empty reply, timeout with no text) through it.
+- SEC-002 (minor): ingest-screened closure falls back to reviewer + bare display id, which collides across waves and can silently close a lost raw finding out-of-scope.
+- SEC-003 (info): unvalidated --base now steers the coverage light recheck; mitigated for PRs by readiness item pr-files.
+
+Clean areas checked: command injection (git via argv, `-` refs filtered), path traversal on --findings/--premises (operator CLI inputs, not attacker-controlled), the `#` display-id refusal (message echoes ids only), KERYX_USAGE parsing (bounded, non-backtracking, deliberately non-gating per dispatch-usage.ts header, so not reported), secrets/crypto (none touched), operator-card tool schema text (template uses a constant length only).
+
+History: not read with git log/blame beyond the files' current text; the dispatch-usage forging trade-off is documented in that file's header and was treated as a deliberate choice.
