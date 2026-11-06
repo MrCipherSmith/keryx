@@ -83,7 +83,7 @@ export interface RoutingCommandDeps {
   session?: () => { providerId: string; modelId: string } | undefined;
 }
 
-function printRoutingHelp(): void {
+export function printRoutingHelp(): void {
   console.log(
     [
       "Usage: keryx routing <subcommand>",
@@ -608,6 +608,67 @@ async function editRoutingSettings(args: readonly string[], location: RoutingCon
   console.log(JSON.stringify(result, null, 2));
 }
 
+function routingMigrationContext(location: RoutingConfigLocation) {
+  return {
+    cwd: location.cwd,
+    ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }),
+    normalization: { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY },
+  };
+}
+
+async function buildDefaultRoutingV2Plan(location: RoutingConfigLocation): Promise<RoutingV2MigrationPlan> {
+  const context = routingMigrationContext(location);
+    const [project, user] = await Promise.all([loadRoutingConfigRaw("project", location), loadRoutingConfigRaw("user", location)]);
+    if (project.error || user.error) throw new Error("Resolve invalid legacy routing entries before migration.");
+    const projectProposal = proposeRoutingV2Categories(project.table);
+    const userProposal = proposeRoutingV2Categories(user.table, {
+      ...(process.env.KERYX_SUBAGENT_MODEL === undefined ? {} : { subagentModelOverride: process.env.KERYX_SUBAGENT_MODEL }),
+    });
+    const projectCategories = Object.fromEntries(ROUTING_CATEGORIES.filter((category) => project.table[category] !== undefined)
+      .map((category) => [category, projectProposal.categories[category]]));
+    const userCategories = Object.fromEntries(ROUTING_CATEGORIES.filter((category) => user.table[category] !== undefined)
+      .map((category) => [category, userProposal.categories[category]]));
+    return createRoutingV2MigrationPlan({
+      ...context,
+      project: { schemaVersion: 2, categories: projectCategories },
+      user: { schemaVersion: 2, categories: userCategories },
+      unresolved: [...projectProposal.unresolved, ...userProposal.unresolved],
+    });
+}
+
+export type RoutingV2Mode = "v2" | "legacy";
+
+/** Current routing mode for the project/user config at `location`. Never throws. */
+export function routingV2Mode(location: RoutingConfigLocation): RoutingV2Mode {
+  try {
+    return loadActiveRoutingV2(location.cwd, location.userConfigDir) === undefined ? "legacy" : "v2";
+  } catch {
+    return "legacy";
+  }
+}
+
+/**
+ * `/route v2 on|off` from the TUI: the same steps as `routing migrate
+ * --dry-run` + `--apply <plan> --confirm` (on) or `--deactivate --confirm`
+ * (off), without a plan file. Returns a one-line status; throws with the
+ * migration's own message when it cannot proceed.
+ */
+export async function setRoutingV2Active(on: boolean, location: RoutingConfigLocation): Promise<string> {
+  const context = routingMigrationContext(location);
+  if (!on) {
+    const result = await deactivateRoutingV2({ ...context, confirmed: true });
+    return result.status === "already-deactivated" ? "Routing v2 is already off (legacy mode)." : "Routing v2 off — legacy routing is active.";
+  }
+  if (routingV2Mode(location) === "v2") return "Routing v2 is already on.";
+  const override = process.env.KERYX_SUBAGENT_MODEL?.trim();
+  if (override && override !== "inherit") {
+    throw new Error("Resolve and clear KERYX_SUBAGENT_MODEL before activating routing v2.");
+  }
+  const plan = await buildDefaultRoutingV2Plan(location);
+  const result = await applyRoutingV2Migration(plan, { ...context, confirmed: true });
+  return result.status === "already-applied" ? "Routing v2 is already on." : "Routing v2 on — model classes are active.";
+}
+
 async function migrateRouting(args: readonly string[], location: RoutingConfigLocation): Promise<void> {
   const context = {
     cwd: location.cwd,
@@ -638,22 +699,7 @@ async function migrateRouting(args: readonly string[], location: RoutingConfigLo
       }), null, 2));
       return;
     }
-    const [project, user] = await Promise.all([loadRoutingConfigRaw("project", location), loadRoutingConfigRaw("user", location)]);
-    if (project.error || user.error) throw new Error("Resolve invalid legacy routing entries before migration.");
-    const projectProposal = proposeRoutingV2Categories(project.table);
-    const userProposal = proposeRoutingV2Categories(user.table, {
-      ...(process.env.KERYX_SUBAGENT_MODEL === undefined ? {} : { subagentModelOverride: process.env.KERYX_SUBAGENT_MODEL }),
-    });
-    const projectCategories = Object.fromEntries(ROUTING_CATEGORIES.filter((category) => project.table[category] !== undefined)
-      .map((category) => [category, projectProposal.categories[category]]));
-    const userCategories = Object.fromEntries(ROUTING_CATEGORIES.filter((category) => user.table[category] !== undefined)
-      .map((category) => [category, userProposal.categories[category]]));
-    console.log(JSON.stringify(await createRoutingV2MigrationPlan({
-      ...context,
-      project: { schemaVersion: 2, categories: projectCategories },
-      user: { schemaVersion: 2, categories: userCategories },
-      unresolved: [...projectProposal.unresolved, ...userProposal.unresolved],
-    }), null, 2));
+    console.log(JSON.stringify(await buildDefaultRoutingV2Plan(location), null, 2));
     return;
   }
   if ((mode === "--apply" || mode === "--rollback") && file !== undefined && confirmation === "--confirm" && args.length === 3) {

@@ -393,11 +393,6 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
-    // Flow 338 (AC7): the routing classifier — sorts each request into a
-    // category (Jev when connected, else the main model) and routes it to
-    // that category's model (`keryx routing set`). Opt-in, default off.
-    // TUI-only: the per-turn tag and `sb-route` sidebar row are OpenTUI
-    // surfaces, same reasoning as `/guard`.
     name: "/route",
     description: "Opt-in routing classifier: sorts the request into a category and routes it to that model — /route [on|off]",
     modes: AGENT_ONLY,
