@@ -1,6 +1,6 @@
 ---
 Title: Module src/harness/search
-Version: 1.2.0
+Version: 1.3.0
 Type: component
 Status: accepted
 Summary: "`src/harness/search` is the harness-side search layer. It defines the search provider contracts, a registry of six built-in providers, and a controller that runs only the provider the operator explicitly selected. Provider adapters never reach the network directly: every request goes through the sandboxed web transport, and the default factory is the trusted composition root that wires the two together."
@@ -37,9 +37,11 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 
 - **Controller (`controller.ts`)**
   - `SearchProviderController` reads and writes search configuration through `src/lib/search-config`, records which provider is active, and runs the `configure`, `test`, `select`, `search` and `fetchPage` operations.
-  - `fetchPage` delegates to the active descriptor's optional `fetchPage` and answers `no-fetch-provider` when there is none — a direction to the transport, not an error. An ACTIVE provider that refuses a page never falls back to the transport; its refusal is the answer.
+  - `fetchPage` validates the target's SYNTAX at the seam (`parsePublicHttpsUrl`), delegates to the active descriptor's optional `fetchPage`, and answers `no-fetch-provider` when there is none — a direction to the transport, not an error — or `provider-disconnected` when the operator selected a provider that is not connected. An ACTIVE provider that refuses a page never falls back; a provider that never answered (`retryable`) does.
   - It returns descriptors and states rather than rendering them. Its own comment says it deliberately owns no terminal output.
   - Selection is explicit. A non-default provider must be connected before it can be selected or used.
+  - `connect()` is the one "connect" operation (configure → test → activate) the command surfaces call, so the policy cannot drift between the headless shell and the TUI.
+  - A permanent refusal (402, rejected key) is remembered for five minutes, so a dead account is not re-requested on every call; `configure`/`connect` clears it.
 
 - **Composition root (`default-controller.ts`)**
   - `createDefaultSearchProviderController(configDir?)` builds a `SandboxedWebTransport` over the system web worker runner, resolves credentials with `searchCredentialResolver`, and returns the controller. The resolver prefers a credential saved for search and, for DeepSeek only, falls back to the chat-model API key from `src/commands/providers` — one account bills both.
@@ -92,7 +94,7 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 - Keep `index.ts` as the primary consumer-facing surface.
 - Put new shared contracts in `types.ts` before moving them into runtime modules.
 - If a new provider implementation is added, prefer exposing only the factory and type surface unless the provider needs to be part of the stable API.
-- Treat `src/lib` and `src/harness/web` as the current external module dependency surface; avoid widening this module's dependencies without a clear need.
+- Treat `src/lib` and `src/harness/web` as the current external module dependency surface; avoid widening this module's dependencies without a clear need. The one deliberate exception is `src/commands/providers`: DeepSeek's search key is borrowed from the chat-model provider, and that registry is the single source of the env-var name. It is a directory-level cycle (`src/commands` already imports this module), accepted because six other harness modules already import it and `src/lib/import-policy.ts` does not forbid `client → adapter`; the alternative — every caller injecting a resolver — would spread the rule across four surfaces.
 
 ## Reference
 
@@ -147,3 +149,4 @@ The module has four layers: contracts, a registry of provider adapters, a contro
 - 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 1.1.0 — DeepSeek Search added as the sixth provider; credential borrowing from the chat-model key and the `insufficient-balance` reason documented.
 - 1.2.0 — Optional provider page retrieval (`fetchPage`) and the `web_fetch` provider path documented.
+- 1.3.0 — `connect()`, the permanent-refusal breaker, `provider-disconnected`/`retryable` page results and the deliberate `src/commands/providers` edge documented.

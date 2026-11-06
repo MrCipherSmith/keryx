@@ -1,4 +1,5 @@
 import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig, type StoredSearchProvider } from "../../lib/search-config";
+import { parsePublicHttpsUrl } from "../web/web-policy";
 import { DEFAULT_SEARCH_PROVIDER_ID, type ProviderPageResult, type SearchConnectionResult, type SearchProviderDescriptor, type SearchProviderId, type SearchResponse } from "./types";
 import { SearchProviderRegistry } from "./registry";
 
@@ -10,6 +11,15 @@ export type SearchSelectionResult = { ok: true } | { ok: false; reason: "not-con
  * descriptors and states without adding a switch whenever a provider is added.
  */
 export class SearchProviderController {
+  /**
+   * Last permanent refusal per provider. A 402 or a rejected key will refuse
+   * every later call identically, so re-asking turns one operator fix into N
+   * wasted round trips. Cleared by `configure`/`connect` — the operator's
+   * re-test is the action that may have fixed it.
+   */
+  private readonly refusals = new Map<SearchProviderId, { detail: string; at: number }>();
+  private static readonly REFUSAL_TTL_MS = 5 * 60_000;
+
   constructor(private readonly registry: SearchProviderRegistry, private readonly configDir?: string) {}
 
   configurable(): readonly SearchProviderDescriptor[] {
@@ -25,14 +35,43 @@ export class SearchProviderController {
   }
 
   active(): SearchProviderDescriptor | undefined {
-    const active = this.config().activeProviderId as SearchProviderId | undefined;
+    return this.activeFrom(this.config());
+  }
+
+  /** One config read per call: `active()` and `selectable()` used to read it twice. */
+  private activeFrom(config: SearchConfig): SearchProviderDescriptor | undefined {
+    const active = config.activeProviderId as SearchProviderId | undefined;
     if (active === undefined || active === DEFAULT_SEARCH_PROVIDER_ID) {
       return this.registry.get(DEFAULT_SEARCH_PROVIDER_ID);
     }
-    return this.selectable().find((descriptor) => descriptor.id === active);
+    const connected = config.providers?.[active]?.status === "connected";
+    return connected ? this.registry.get(active) : undefined;
+  }
+
+  /**
+   * Connect in one operation: configure, test, and — unless the caller says
+   * otherwise — activate. The policy lives here rather than in each command
+   * surface, so `/search-provider <id>`, the TUI argument path and the wizard
+   * cannot drift apart.
+   */
+  async connect(
+    providerId: SearchProviderId,
+    fields: Record<string, string>,
+    credential?: string,
+    options: { activate?: boolean } = {},
+  ): Promise<{ ok: true; active: boolean; servesPages: boolean } | { ok: false; reason: NonNullable<SearchConnectionResult["reason"]> | "not-configurable" }> {
+    const descriptor = this.registry.get(providerId);
+    if (descriptor === undefined) return { ok: false, reason: "not-configurable" };
+    this.configure(providerId, { ...descriptor.defaults, ...fields }, credential);
+    const tested = await this.test(providerId);
+    if (!tested.ok) return { ok: false, reason: tested.reason ?? "transport-failed" };
+    const activate = options.activate !== false;
+    const selected = activate ? await this.select(providerId) : ({ ok: true } as const);
+    return { ok: true, active: activate && selected.ok, servesPages: descriptor.fetchPage !== undefined };
   }
 
   configure(providerId: SearchProviderId, fields: Record<string, string>, credential?: string): void {
+    this.refusals.delete(providerId);
     const config = this.config();
     const providers = { ...(config.providers ?? {}) };
     providers[providerId] = { fields: { ...fields }, status: "disconnected" };
@@ -99,6 +138,24 @@ export class SearchProviderController {
     return this.runProvider(activeProviderId, stored, query, signal);
   }
 
+  /** A refusal this provider gave moments ago, if it is still fresh. */
+  private freshRefusal(providerId: SearchProviderId): string | undefined {
+    const refused = this.refusals.get(providerId);
+    if (refused === undefined) return undefined;
+    if (Date.now() - refused.at > SearchProviderController.REFUSAL_TTL_MS) {
+      this.refusals.delete(providerId);
+      return undefined;
+    }
+    return refused.detail;
+  }
+
+  /** Record only refusals that cannot clear by waiting: balance and key. */
+  private rememberPermanentRefusal(providerId: SearchProviderId, detail: string | undefined): void {
+    if (detail !== undefined && /insufficient balance|rejected the API key/i.test(detail)) {
+      this.refusals.set(providerId, { detail, at: Date.now() });
+    }
+  }
+
   private async runProvider(
     providerId: SearchProviderId,
     stored: StoredSearchProvider | undefined,
@@ -107,6 +164,10 @@ export class SearchProviderController {
   ): Promise<{ ok: true; value: SearchResponse } | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string }> {
     const descriptor = this.registry.get(providerId);
     if (!descriptor) return { ok: false, reason: "no-active-provider" };
+    const refused = this.freshRefusal(providerId);
+    if (refused !== undefined) {
+      return { ok: false, reason: "search-failed", detail: `${refused} (not retried: this provider refused moments ago; fix it, then /search-provider ${providerId} to re-test)` };
+    }
     try {
       return { ok: true, value: await descriptor.search(stored?.fields ?? {}, query, signal) };
     } catch (error) {
@@ -114,11 +175,9 @@ export class SearchProviderController {
       // collapsing it into a bare `search-failed` is what delivered a
       // DuckDuckGo rate limit to the agent as "search failed. Retry later"
       // - advice that cannot work, because that limit is why it failed.
-      return {
-        ok: false,
-        reason: "search-failed",
-        ...(error instanceof Error && error.message.length > 0 ? { detail: error.message } : {}),
-      };
+      const detail = error instanceof Error && error.message.length > 0 ? error.message : undefined;
+      this.rememberPermanentRefusal(providerId, detail);
+      return { ok: false, reason: "search-failed", ...(detail !== undefined ? { detail } : {}) };
     }
   }
 
@@ -134,17 +193,32 @@ export class SearchProviderController {
    * silently switches engines.
    */
   async fetchPage(url: string, signal?: AbortSignal): Promise<ProviderPageResult> {
-    const descriptor = this.active();
+    // The seam owns the promise every implementation must keep: `web_fetch`
+    // only ever retrieves an absolute public HTTPS URL without credentials.
+    const target = parsePublicHttpsUrl(url);
+    if (!target.ok) return { ok: false, reason: "fetch-failed", detail: target.reason };
+    const config = this.config();
+    const activeProviderId = config.activeProviderId as SearchProviderId | undefined;
+    const descriptor = this.activeFrom(config);
+    // A selected provider that is not connected is not "no capability": the
+    // operator chose an egress that cannot serve, and switching to the
+    // transport silently would hide that.
+    if (descriptor === undefined && activeProviderId !== undefined && activeProviderId !== DEFAULT_SEARCH_PROVIDER_ID) {
+      return { ok: false, reason: "provider-disconnected" };
+    }
     const fetchPage = descriptor?.fetchPage;
     if (descriptor === undefined || fetchPage === undefined) return { ok: false, reason: "no-fetch-provider" };
+    const refused = this.freshRefusal(descriptor.id);
+    if (refused !== undefined) {
+      return { ok: false, reason: "fetch-failed", detail: `${refused} (not retried: this provider refused moments ago; fix it, then /search-provider ${descriptor.id} to re-test)` };
+    }
     try {
-      return await fetchPage.call(descriptor, url, signal);
+      const result = await fetchPage.call(descriptor, url, signal);
+      if (!result.ok && result.reason === "fetch-failed") this.rememberPermanentRefusal(descriptor.id, result.detail);
+      return result;
     } catch (error) {
-      return {
-        ok: false,
-        reason: "fetch-failed",
-        ...(error instanceof Error && error.message.length > 0 ? { detail: error.message } : {}),
-      };
+      const detail = error instanceof Error && error.message.length > 0 ? error.message : undefined;
+      return { ok: false, reason: "fetch-failed", ...(detail !== undefined ? { detail } : {}) };
     }
   }
 

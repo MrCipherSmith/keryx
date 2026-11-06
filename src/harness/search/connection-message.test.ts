@@ -45,10 +45,12 @@ describe("both operator surfaces print the distinct wording", () => {
   const shellSource = readFileSync(join(import.meta.dir, "../../commands/shell.ts"), "utf8");
 
   test("every failure line routes through describeConnectionFailure", () => {
-    // tui-shell.ts has two such lines (the `/search-provider` wizard and the
-    // args-given branch); shell.ts has the agent REPL's one.
-    expect(tuiSource.split("describeConnectionFailure(tested.reason)").length - 1).toBe(2);
-    expect(shellSource.split("describeConnectionFailure(tested.reason)").length - 1).toBe(1);
+    // tui-shell.ts has two such lines (the `/search-provider` wizard, which
+    // still tests directly, and the args-given branch, which now goes through
+    // the controller's `connect`); shell.ts has the agent REPL's one.
+    expect(tuiSource.split("describeConnectionFailure(tested.reason)").length - 1).toBe(1);
+    expect(tuiSource.split("describeConnectionFailure(connected.reason").length - 1).toBe(1);
+    expect(shellSource.split("describeConnectionFailure(connected.reason").length - 1).toBe(1);
   });
 
   test("no surface still hardcodes the old two-way reason ternary", () => {

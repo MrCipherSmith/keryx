@@ -3188,26 +3188,23 @@ export async function runAgentRepl(
           continue;
         }
         const providerId: SearchProviderId = descriptor.id;
-        searchProviderController.configure(providerId, { ...descriptor.defaults, ...args.fields }, args.credential);
-        const tested = await searchProviderController.test(providerId);
-        if (!tested.ok) {
-          const reason = describeConnectionFailure(tested.reason);
+        // One controller operation: configure, test and (unless told otherwise)
+        // activate. A successful test IS the connect gesture, and keeping the
+        // policy in the controller is what stops the two surfaces from drifting.
+        const connected = await searchProviderController.connect(providerId, args.fields, args.credential);
+        if (!connected.ok) {
+          const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason);
           agentIo.onSystem?.(
             `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
           );
           continue;
         }
-        // A successful test IS the connect gesture: making the operator type a
-        // second command to actually use the provider they just connected was
-        // the part of "connect" nobody expected. `/search-connect` still
-        // switches back at any time.
-        const selected = await searchProviderController.select(providerId);
         // A provider that retrieves pages itself also takes over `web_fetch`;
         // saying so is the only warning the operator gets that a tool they did
         // not name just changed hands.
-        const scope = descriptor.fetchPage === undefined ? "" : " (web_search and web_fetch)";
+        const scope = connected.servesPages ? " (web_search and web_fetch)" : "";
         agentIo.onSystem?.(
-          selected.ok
+          connected.active
             ? `Connected '${providerId}' and made it the active search provider${scope}. /search-connect duckduckgo switches back.\n`
             : `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
         );

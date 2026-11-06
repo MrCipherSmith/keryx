@@ -91,6 +91,12 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
       // a page the operator did not ask another service for. A provider that
       // never answered (timeout, 429, 5xx) is a different thing — the transport
       // is the tool's own default path, and nothing is hidden by using it.
+      if (viaProvider.reason === "provider-disconnected") {
+        return {
+          output: "web_fetch: the selected page provider is not connected; run /search-provider <id> to reconnect it, or /search-connect duckduckgo to go back to the sandbox transport",
+          isError: true,
+        };
+      }
       if (viaProvider.reason === "fetch-failed" && viaProvider.retryable !== true) {
         return {
           output: `web_fetch: ${providerDetail(viaProvider.detail)}`,

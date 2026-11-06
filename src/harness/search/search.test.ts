@@ -27,6 +27,9 @@ class FakeTransport implements SandboxedWebTransport {
   /** Staged per-call answers; empty falls back to status/body above. */
   readonly duckduckgoQueue: { status: number; body: string }[] = [];
 
+  /** Staged DeepSeek answers, in request order — no "first call is the test" sentinel. */
+  readonly deepseekQueue: { status: number; body: string }[] = [];
+
   async request(request: SandboxedWebRequest) {
     this.requests.push(request);
     if (request.providerId === "duckduckgo") {
@@ -68,6 +71,16 @@ class FakeTransport implements SandboxedWebTransport {
       };
     }
     if (request.providerId === "deepseek") {
+      const staged = this.deepseekQueue.shift();
+      if (staged !== undefined) {
+        return {
+          ok: staged.status >= 200 && staged.status < 300,
+          status: staged.status,
+          url: request.url,
+          contentType: "application/json",
+          text: staged.body,
+        };
+      }
       if (request.url.endsWith("/tools/fetch")) {
         return {
           ok: true,
@@ -392,7 +405,7 @@ describe("search provider registry", () => {
       [401, /rejected the API key/, false],
       [402, /insufficient balance/, false],
       [403, /security policy/, false],
-      [404, /usable page content/, false],
+      [404, /usable page content/, true],
       [408, /provider unavailable or rate limited/, true],
       [429, /provider unavailable or rate limited/, true],
       [500, /HTTP 500/, true],
@@ -447,24 +460,13 @@ describe("search provider registry", () => {
   test("a refused DeepSeek search reaches the caller as a refusal, never as zero results", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-deepseek-refused-"));
     try {
-      let calls = 0;
-      const transport: SandboxedWebTransport = {
-        async request(request) {
-          calls += 1;
-          // First call is the connection test; every later one is the search.
-          const status = calls === 1 ? 200 : 402;
-          return {
-            ok: status === 200,
-            status,
-            url: request.url,
-            contentType: "application/json",
-            text: status === 200
-              ? JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] })
-              : JSON.stringify({ error: { message: "insufficient balance", param: null, code: "invalid_request_error" } }),
-          };
-        },
-      };
-      const controller = new SearchProviderController(createSearchProviderRegistry(transport, () => "key"), dir);
+      const transport = new FakeTransport();
+      // Explicit order: the connection test answers 200, the search answers 402.
+      transport.deepseekQueue.push(
+        { status: 200, body: JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] }) },
+        { status: 402, body: JSON.stringify({ error: { message: "insufficient balance", param: null, code: "invalid_request_error" } }) },
+      );
+      const controller = new SearchProviderController(createSearchProviderRegistry(transport, () => "key", publicLookup), dir);
       controller.configure("deepseek", {});
       expect(await controller.test("deepseek")).toEqual({ ok: true });
       expect(await controller.select("deepseek")).toEqual({ ok: true });
@@ -500,6 +502,103 @@ describe("search provider registry", () => {
       expect(resolver("brave")).toBeUndefined();
       saveSearchCredential("deepseek", "search-key", dir);
       expect(resolver("deepseek")).toBe("search-key");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("connect is one controller operation: configure, test, activate", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-connect-"));
+    try {
+      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key", publicLookup), dir);
+      expect(await controller.connect("deepseek", {})).toEqual({ ok: true, active: true, servesPages: true });
+      expect(controller.active()?.id).toBe("deepseek");
+      expect(loadSearchConfig(dir).activeProviderId).toBe("deepseek");
+
+      // A failed test never activates, and says why.
+      const failingDir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-connect-fail-"));
+      try {
+        const failing = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => undefined, publicLookup), failingDir);
+        expect(await failing.connect("deepseek", {})).toEqual({ ok: false, reason: "missing-credential" });
+        expect(failing.active()?.id).toBe("duckduckgo");
+        expect(loadSearchConfig(failingDir).activeProviderId).toBeUndefined();
+      } finally {
+        rmSync(failingDir, { recursive: true, force: true });
+      }
+
+      // `activate: false` connects without taking the engine over.
+      const keepDir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-connect-keep-"));
+      try {
+        const keep = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key", publicLookup), keepDir);
+        expect(await keep.connect("deepseek", {}, undefined, { activate: false })).toEqual({ ok: true, active: false, servesPages: true });
+        expect(keep.active()?.id).toBe("duckduckgo");
+      } finally {
+        rmSync(keepDir, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a permanent refusal is not re-requested on every later call", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-breaker-"));
+    try {
+      const transport = new FakeTransport();
+      transport.deepseekQueue.push(
+        { status: 200, body: JSON.stringify({ results: [{ title: "t", url: "https://example.test/ok", summary: "s" }] }) },
+        { status: 402, body: JSON.stringify({ error: { message: "insufficient balance" } }) },
+        { status: 200, body: JSON.stringify({ results: [] }) },
+      );
+      const controller = new SearchProviderController(createSearchProviderRegistry(transport, () => "key", publicLookup), dir);
+      controller.configure("deepseek", {});
+      expect(await controller.test("deepseek")).toEqual({ ok: true });
+      expect(await controller.select("deepseek")).toEqual({ ok: true });
+
+      const first = await controller.search("keryx sandbox");
+      expect(first.ok).toBe(false);
+      expect(first.ok ? "" : first.detail).toContain("insufficient balance");
+      const callsAfterFirst = transport.requests.length;
+
+      const second = await controller.search("keryx sandbox again");
+      expect(second.ok).toBe(false);
+      expect(second.ok ? "" : second.detail).toContain("not retried");
+      // The dead account is not asked again — the operator's re-test is the fix.
+      expect(transport.requests.length).toBe(callsAfterFirst);
+
+      // Re-configuring clears the record, so a fixed account works immediately.
+      controller.configure("deepseek", {});
+      expect(await controller.test("deepseek")).toEqual({ ok: true });
+      expect(await controller.search("after reconnect")).toMatchObject({ ok: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the controller seam refuses a non-public URL before any provider sees it", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-seam-"));
+    try {
+      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key", publicLookup), dir);
+      expect(await controller.fetchPage("http://example.com/a")).toEqual({
+        ok: false,
+        reason: "fetch-failed",
+        detail: "url must be absolute HTTPS without credentials",
+      });
+      expect(await controller.fetchPage("https://user:pass@example.com/a")).toMatchObject({ ok: false, reason: "fetch-failed" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a selected but disconnected provider is reported, not silently swapped for the transport", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-disconnected-fetch-"));
+    try {
+      writeFileSync(searchConfigPath(dir), `${JSON.stringify({
+        schemaVersion: 2,
+        activeProviderId: "deepseek",
+        providers: { deepseek: { fields: {}, status: "disconnected" } },
+      })}\n`);
+      const controller = new SearchProviderController(createSearchProviderRegistry(new FakeTransport(), () => "key", publicLookup), dir);
+      expect(await controller.fetchPage("https://example.com/a")).toEqual({ ok: false, reason: "provider-disconnected" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

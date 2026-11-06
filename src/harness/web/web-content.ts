@@ -104,6 +104,15 @@ function stripMarkup(html: string): string {
  * The only conversion permitted from an untrusted worker body to agent-visible
  * text. It deliberately drops headers and transport diagnostics.
  */
+/**
+ * Markdown reaches a model as text, so stripping every tag would eat autolinks
+ * and code fences. Only executable blocks are removed — the same defence the
+ * HTML path applies, narrowed to what Markdown can carry.
+ */
+function stripScriptAndStyle(markdown: string): string {
+  return markdown.replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ");
+}
+
 export function sanitizeWebContent(
   content: UnsanitizedWebContent,
 ): WebPolicyResult<SanitizedWebContent> {
@@ -111,7 +120,9 @@ export function sanitizeWebContent(
     ? stripMarkup(content.text)
         .replace(/\s+/g, " ")
         .trim()
-    : content.text.trim();
+    : content.contentType.toLowerCase().startsWith("text/markdown")
+      ? stripScriptAndStyle(content.text).trim()
+      : content.text.trim();
   if (isUnsafeExternalInstruction(text)) {
     return { ok: false, reason: "external content contains a likely prompt injection" };
   }

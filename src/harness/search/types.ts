@@ -137,6 +137,8 @@ export type ProviderPageResult =
   | { ok: true; value: ProviderPage }
   /** The active provider does not retrieve pages: the caller falls back to the sandbox transport. */
   | { ok: false; reason: "no-fetch-provider" }
+  /** The operator selected a provider that is not connected: report it, never silently switch egress. */
+  | { ok: false; reason: "provider-disconnected" }
   /**
    * `retryable` marks a provider that never answered or asked us to back off
    * (timeout, 429, 5xx): the caller may serve the page from the sandbox

@@ -153,11 +153,13 @@ function deepseekFetchFailure(response: SandboxedWebResponse): { detail: string;
   if (status === 401) return { detail: "DeepSeek rejected the API key (HTTP 401): replace it with a valid key", retryable: false };
   if (status === 402) return { detail: "DeepSeek refused the fetch for insufficient balance (HTTP 402): top up the account, then retry", retryable: false };
   if (status === 403) return { detail: "the provider's security policy rejected this URL (HTTP 403)", retryable: false };
-  if (status === 404) return { detail: "the provider could not retrieve usable page content (HTTP 404)", retryable: false };
+  // "No usable page content" is the extractor giving up, not a page refusal,
+  // and deepseek.com does not bill it: the transport may still read the page.
+  if (status === 404) return { detail: "the provider could not retrieve usable page content (HTTP 404)", retryable: true };
   // Timeouts, rate limits and 5xx are the provider being unavailable, not the
   // page being refused: the sandbox transport can still serve this URL, so the
   // caller is allowed to fall back instead of failing the tool.
-  if (status === 0) return { detail: `DeepSeek request failed before a response (${response.error ?? "transport-failed"})`, retryable: true };
+  if (status === 0) return { detail: `DeepSeek request failed before a response (${response.error ?? "transport-failed"}); the request may already have been billed`, retryable: true };
   if (status === 408 || status === 429 || status >= 500) return { detail: `DeepSeek fetch failed (HTTP ${status}): provider unavailable or rate limited`, retryable: true };
   return { detail: `DeepSeek fetch failed (HTTP ${status})`, retryable: false };
 }

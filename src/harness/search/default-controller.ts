@@ -24,7 +24,12 @@ const SEARCH_KEY_BORROWED_FROM: Partial<Record<SearchProviderId, string>> = { de
  */
 function savedModelApiKey(providerName: string, env: Record<string, string | undefined>, dir?: string): string | undefined {
   const provider = providerByName(providerName, dir);
-  return provider === undefined ? undefined : providerApiKey(provider, envWithSavedApiKeys(env, dir));
+  if (provider === undefined) return undefined;
+  // An exported key wins over a saved one, so read it BEFORE merging the saved
+  // store: the merge copies process.env and reads auth.json, and on the common
+  // "the key is in the environment" path that work changes nothing.
+  const fromEnv = providerApiKey(provider, env);
+  return fromEnv ?? providerApiKey(provider, envWithSavedApiKeys(env, dir));
 }
 
 /**

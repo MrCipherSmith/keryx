@@ -185,6 +185,42 @@ test("a connected provider's refusal is reported, not silently re-fetched by the
   expect(transportCalls).toBe(0);
 });
 
+test("provider Markdown keeps its text but loses executable blocks", async () => {
+  // Markdown reaches a model as text: every tag cannot be stripped (autolinks,
+  // code fences), so only the executable blocks are removed.
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/plain", body: "" }),
+    pageFetcher: { fetchPage: async (url) => ({ ok: true, value: { providerId: "deepseek", url, title: "", text: "# Title\n\n<script>steal()</script>Keep <https://example.com> and `code`." } }) },
+  });
+  const result = await tool.invoke({ url: "https://example.com/a" });
+  expect(result.isError).toBe(false);
+  expect(result.output).not.toContain("steal()");
+  expect(result.output).toContain("Keep <https://example.com> and `code`");
+});
+
+test("provider branches: an empty title, an empty detail, and the injected clock", async () => {
+  const noTitle = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/plain", body: "" }),
+    now: () => "2026-08-12T00:00:00.000Z",
+    pageFetcher: { fetchPage: async (url) => ({ ok: true, value: { providerId: "deepseek", url, title: "", text: "plain body" } }) },
+  });
+  const ok = await noTitle.invoke({ url: "https://example.com/a" });
+  expect(ok.output).not.toContain("# \n");
+  expect(ok.output).toContain("Retrieved: 2026-08-12T00:00:00.000Z");
+  expect(ok.output).toContain("plain body");
+
+  const noDetail = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/plain", body: "" }),
+    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "fetch-failed" }) },
+  });
+  const failed = await noDetail.invoke({ url: "https://example.com/a" });
+  expect(failed.isError).toBe(true);
+  expect(failed.output).toContain("could not retrieve this page");
+});
+
 test("a provider that never answered falls back to the transport, and says so", async () => {
   // A timeout/429/5xx is the provider being unavailable, not the page being
   // refused: failing the tool there would disable web_fetch for pages the
