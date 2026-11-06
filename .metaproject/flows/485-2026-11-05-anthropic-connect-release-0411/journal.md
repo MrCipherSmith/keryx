@@ -10,3 +10,4 @@
 - 2026-11-05T16:52:04.006Z - task-done: T2: Implement per plan
 - 2026-11-05T16:52:04.326Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-11-05T16:52:12.592Z - ac-confirmed: AC1: bun test src/commands/providers.anthropic.test.ts: зелёный на main d5de38e78 (signed: MrCipherSmith [stated])
+- 2026-11-06T06:21:36.505Z - ac-updated: AC1: "connectionProviderByName("anthropic") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec bun test src/commands/providers.anthropic.test.ts]" -> "connectionProviderByName("anthropic") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]" (AC1 marker had no backticks around the exec command, so the acceptance-kind parser rejects it and breaks src/flow/ac-kinds-corpus.test.ts on main (CI red since bd434000a); same text, command now backticked)
