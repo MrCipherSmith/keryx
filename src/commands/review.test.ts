@@ -1251,6 +1251,24 @@ test("`review tier` discovers the catalogue at runtime when none is supplied", a
   expect(modelBlock().tier_resolution).toBe("session-fallback");
 });
 
+test("`review tier` does not route to Anthropic without a key in the live catalog", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    await writeFile(path.join(ROOT, "routing.config.json"), JSON.stringify({ categories: { review: { kind: "provider-default", providerId: "anthropic" } } }), "utf8");
+    await approveProjectRoutingFile();
+    await reviewCommand(["tier", "--session-provider", "fake", "--session-model", "fake-echo", "--json"]);
+    expect(process.exitCode).toBe(0);
+    expect(modelBlock().provider).not.toBe("anthropic");
+    expect(modelBlock().routed).toBeUndefined();
+    const notices = (JSON.parse(logs.join("\n")) as { notices?: string[] }).notices ?? [];
+    expect(notices.some((notice) => notice.includes("anthropic") && notice.includes("not connected"))).toBe(true);
+  } finally {
+    if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = previousKey;
+  }
+});
+
 test("with nothing to anchor on, `review tier` says inherit and still exits 0", async () => {
   // The operator's standing instruction: an unresolvable tier keeps the caller's
   // OWN model. Never a downgrade, never a failure — and never an empty
