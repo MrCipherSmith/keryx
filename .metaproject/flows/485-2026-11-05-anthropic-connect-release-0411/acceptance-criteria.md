@@ -13,4 +13,4 @@ Rules:
 
 ## Criteria
 
-- AC1: connectionProviderByName("anthropic") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]
+- AC1: connectionProviderByName("anthropic") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts` · sensitive: mutation]
