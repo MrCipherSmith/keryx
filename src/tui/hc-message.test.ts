@@ -348,7 +348,7 @@ describe("buildHerdrCoreSection", () => {
     // the resolved path is for the `keryx report` line only; the delegation line keeps the template form
     expect(text).toContain('a keryx child is `hc run --bg --name <name> keryx "<task>"`');
     expect(text).not.toContain(`${keryxPath} "<task>"`);
-    expect(text).toContain(`\`${keryxPath} report --to @${busName} "<result>"\``);
+    expect(text).toContain(`\`${keryxPath} report --to @${busName} --from <your name> "<result>"\``);
     expect(text).toContain(`bus_send to @${busName};`);
   });
 
