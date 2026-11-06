@@ -9,7 +9,7 @@
 // `Identity` for the precedent this mirrors.
 
 import type { AcKind } from "../flow/ac-kinds";
-import type { FlowCompletionAttempt, GateOutcome, Identity, SignatureConfirmation } from "../flow/types";
+import type { CompletionException, FlowCompletionAttempt, GateOutcome, Identity, SignatureConfirmation } from "../flow/types";
 import type { TriggerRunCost, TriggerRunOutcomeKind, UnattendedDenial } from "../trigger/record";
 
 export type { GateOutcome, Identity };
@@ -169,6 +169,9 @@ export type FlowConfirmations =
             headCommit: string | undefined;
             /** Flow 299: present only when a terminal confirmation token was spent on this completion. */
             confirmation?: SignatureConfirmation | undefined;
+            /** Absent on legacy signatures: never inferred as clean. */
+            cleanCompletion?: boolean;
+            exceptions?: CompletionException[];
           }
         | undefined;
     };

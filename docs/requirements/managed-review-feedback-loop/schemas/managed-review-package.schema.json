@@ -24,20 +24,39 @@
     },
     "mode": {
       "type": "string",
-      "enum": ["attach-review", "review-flow", "ingest"]
+      "enum": [
+        "attach-review",
+        "review-flow",
+        "ingest"
+      ]
     },
     "status": {
       "type": "string",
-      "enum": ["draft", "reviewed", "decided", "learned", "closed"]
+      "enum": [
+        "draft",
+        "reviewed",
+        "decided",
+        "learned",
+        "closed"
+      ]
     },
     "target": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "ref"],
+      "required": [
+        "kind",
+        "ref"
+      ],
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["pr", "issue", "branch", "path", "report"]
+          "enum": [
+            "pr",
+            "issue",
+            "branch",
+            "path",
+            "report"
+          ]
         },
         "ref": {
           "type": "string",
@@ -61,7 +80,10 @@
     "flow": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "path"],
+      "required": [
+        "id",
+        "path"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -124,7 +146,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["reviewer", "status", "reason"],
+        "required": [
+          "reviewer",
+          "status",
+          "reason"
+        ],
         "properties": {
           "reviewer": {
             "type": "string",
@@ -132,7 +158,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["run", "skipped", "failed", "needs_context"]
+            "enum": [
+              "run",
+              "skipped",
+              "failed",
+              "needs_context"
+            ]
           },
           "reason": {
             "type": "string"
@@ -141,34 +172,64 @@
       }
     },
     "repairs": {
-      "description": "Fields `review ingest` supplied rather than the reviewer authoring them. Present only when something was repaired; an absent property means nothing was, which is a different fact from an empty list would be if it were always written. Two fields are repairable and no others — `id` from the finding's position, `problem` from the finding's own title — because both are typing rather than judgement. The record exists so a later reader can tell a statement the reviewer made from one the pipeline carried across: the round that motivated this took three consecutive refusals for mechanical omissions, and repairing them silently would trade one invisible cost for another.",
+      "description": "Fields `review ingest` supplied rather than the reviewer authoring them. Present only when something was repaired; an absent property means nothing was, which is a different fact from an empty list would be if it were always written. Two fields are repairable and no others \u2014 `id` from the finding's position, `problem` from the finding's own title \u2014 because both are typing rather than judgement. The record exists so a later reader can tell a statement the reviewer made from one the pipeline carried across: the round that motivated this took three consecutive refusals for mechanical omissions, and repairing them silently would trade one invisible cost for another.",
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["finding", "field", "source"],
+        "required": [
+          "finding",
+          "field",
+          "source"
+        ],
         "properties": {
-          "finding": { "type": "string", "minLength": 1 },
-          "field": { "type": "string", "enum": ["id", "problem"] },
-          "source": { "type": "string", "minLength": 1 }
+          "finding": {
+            "type": "string",
+            "minLength": 1
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "id",
+              "problem"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
     "report_fields": {
-      "description": "Report fields this package's report is required to carry at `review complete`. Written by every ingest since `evidence-level` was introduced (the report must say `Evidence level: static only — did not run: …` or `Evidence level: ran — …`). Absent means the package predates the field: `complete` then warns instead of refusing.",
+      "description": "Report fields this package's report is required to carry at `review complete`. Written by every ingest since `evidence-level` was introduced (the report must say `Evidence level: static only \u2014 did not run: \u2026` or `Evidence level: ran \u2014 \u2026`). Absent means the package predates the field: `complete` then warns instead of refusing.",
       "type": "array",
       "uniqueItems": true,
-      "items": { "type": "string", "enum": ["evidence-level"] }
+      "items": {
+        "type": "string",
+        "enum": [
+          "evidence-level"
+        ]
+      }
     },
     "cost": {
-      "description": "What the round reported having used. Absent means nobody reported it, which is NOT zero — the same distinction `filter_stats` draws between a count and a stage that never ran. `keryx review complete` divides whichever of these is present by the findings the round retained, so that the price of a fan-out is a number somebody can weigh rather than an argument. Every property is independent: a caller that knows its token counts but not its rates records the tokens alone.",
+      "description": "What the round reported having used. Absent means nobody reported it, which is NOT zero \u2014 the same distinction `filter_stats` draws between a count and a stage that never ran. `keryx review complete` divides whichever of these is present by the findings the round retained, so that the price of a fan-out is a number somebody can weigh rather than an argument. Every property is independent: a caller that knows its token counts but not its rates records the tokens alone.",
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
-        "input_tokens": { "type": "integer", "minimum": 0 },
-        "output_tokens": { "type": "integer", "minimum": 0 },
-        "spent_usd": { "type": "number", "minimum": 0 }
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "spent_usd": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "operatorGate": {
@@ -179,13 +240,28 @@
     "roundRecord": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["roundSha256", "priorFindingsSha256"],
+      "required": [
+        "roundSha256",
+        "priorFindingsSha256"
+      ],
       "description": "Written by `keryx review start|attach` (flow 458) beside round.json: the sha256 of round.json and prior_findings.json as written (slice, ledger build and complete refuse a package whose files no longer match), the target's normalised key (pr:<owner/repo>#<n>, branch:<name> or range:<base>) and the base ref its merge-base was read from, so a later round finds this one however the target is spelled.",
       "properties": {
-        "roundSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "priorFindingsSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "targetKey": { "type": "string", "minLength": 1 },
-        "targetBase": { "type": "string", "minLength": 1 }
+        "roundSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "priorFindingsSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "targetKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetBase": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "readiness_waivers": {
@@ -194,14 +270,77 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["item", "operator_quote", "time"],
+        "required": [
+          "item",
+          "operator_quote",
+          "time"
+        ],
         "properties": {
-          "item": { "type": "string" },
-          "operator_quote": { "type": "string", "minLength": 1 },
-          "time": { "type": "string" },
-          "confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card"] },
-          "pressedBy": { "type": "integer" },
-          "pressedAt": { "type": "string", "minLength": 1 }
+          "item": {
+            "type": "string"
+          },
+          "operator_quote": {
+            "type": "string",
+            "minLength": 1
+          },
+          "time": {
+            "type": "string"
+          },
+          "confirmedVia": {
+            "type": "string",
+            "enum": [
+              "tui-card",
+              "remote-card",
+              "host-question"
+            ]
+          },
+          "pressedBy": {
+            "type": "integer"
+          },
+          "pressedAt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hostQuestion": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "ref",
+              "questionText",
+              "answerText",
+              "time"
+            ],
+            "properties": {
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "enum": [
+                  "claude-code",
+                  "codex",
+                  "keryx-shell",
+                  "helyx-poll",
+                  "other"
+                ]
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "questionText": {
+                "type": "string",
+                "minLength": 1
+              },
+              "answerText": {
+                "type": "string",
+                "minLength": 1
+              },
+              "time": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         }
       }
     },
@@ -209,14 +348,21 @@
       "type": "object",
       "description": "Written by `keryx review start`: when the round began and, when named, the query of the orchestrator's memory stage. The readiness item memory-outside-stage compares the orchestrator's tool log with it.",
       "additionalProperties": false,
-      "required": ["startedAt"],
+      "required": [
+        "startedAt"
+      ],
       "properties": {
-        "startedAt": { "type": "string" },
-        "memoryQuery": { "type": "string", "minLength": 1 }
+        "startedAt": {
+          "type": "string"
+        },
+        "memoryQuery": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "filter_stats": {
-      "description": "What the round filtered (roadmap §5.1). Written by the code that does the filtering, never assembled from scope.md. Every count is an integer or null, and null ALWAYS means the stage did not run — it never means zero. A null count must have a matching row in `not_measured` giving the reason; `keryx review status` refuses a record where the two disagree. `dropped_prefilter` counts diff material (whole files and change blocks) and is deliberately not summed with the finding counts.",
+      "description": "What the round filtered (roadmap \u00a75.1). Written by the code that does the filtering, never assembled from scope.md. Every count is an integer or null, and null ALWAYS means the stage did not run \u2014 it never means zero. A null count must have a matching row in `not_measured` giving the reason; `keryx review status` refuses a record where the two disagree. `dropped_prefilter` counts diff material (whole files and change blocks) and is deliberately not summed with the finding counts.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -235,27 +381,45 @@
           "const": 1
         },
         "total": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "dropped_prefilter": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "dropped_low_confidence": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "dropped_refuted": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "dropped_scope_b": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "dropped_findings_cap": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "merged_duplicates": {
@@ -264,11 +428,17 @@
           "minimum": 0
         },
         "retained": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "dismissed_by_round": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         },
         "by_reason": {
@@ -283,7 +453,10 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["stage", "reason"],
+            "required": [
+              "stage",
+              "reason"
+            ],
             "properties": {
               "stage": {
                 "type": "string",
@@ -306,7 +479,7 @@
       }
     },
     "cross_family_review": {
-      "description": "Which model family reviewed this round, and why (roadmap §5.4). Produced by `keryx providers cross-family --json`, recorded here by `keryx review ingest --cross-family-review <file>`, and read back and checked by `keryx review status` — a later invocation, which is the only kind of reader that catches a field nothing consumes. ABSENT MEANS NOBODY DECIDED and is never read as `single-family`. `mode: cross-family` must name a reviewer family and provider, must differ from `author_family`, and must appear among `candidates`; `mode: single-family` must leave all three reviewer fields null. `keryx review status` exits non-zero on any of those contradictions.",
+      "description": "Which model family reviewed this round, and why (roadmap \u00a75.4). Produced by `keryx providers cross-family --json`, recorded here by `keryx review ingest --cross-family-review <file>`, and read back and checked by `keryx review status` \u2014 a later invocation, which is the only kind of reader that catches a field nothing consumes. ABSENT MEANS NOBODY DECIDED and is never read as `single-family`. `mode: cross-family` must name a reviewer family and provider, must differ from `author_family`, and must appear among `candidates`; `mode: single-family` must leave all three reviewer fields null. `keryx review status` exits non-zero on any of those contradictions.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -327,22 +500,37 @@
         },
         "mode": {
           "type": "string",
-          "enum": ["cross-family", "single-family"]
+          "enum": [
+            "cross-family",
+            "single-family"
+          ]
         },
         "requested": {
           "type": "boolean"
         },
         "author_family": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "reviewer_family": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "reviewer_provider": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "reviewer_model": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "reason": {
           "type": "string",
@@ -353,14 +541,21 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["provider", "model", "family"],
+            "required": [
+              "provider",
+              "model",
+              "family"
+            ],
             "properties": {
               "provider": {
                 "type": "string",
                 "minLength": 1
               },
               "model": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "family": {
                 "type": "string",
@@ -376,6 +571,49 @@
     },
     "updatedAt": {
       "type": "string"
+    },
+    "completionConfirmations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "ref",
+          "questionText",
+          "answerText",
+          "time"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "enum": [
+              "claude-code",
+              "codex",
+              "keryx-shell",
+              "helyx-poll",
+              "other"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "questionText": {
+            "type": "string",
+            "minLength": 1
+          },
+          "answerText": {
+            "type": "string",
+            "minLength": 1
+          },
+          "time": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     }
   }
 }

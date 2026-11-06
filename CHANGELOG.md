@@ -207,6 +207,11 @@ These are Hub-only fixes: upgrade the Hub image to 0.4.3; the CLI is unchanged.
 - **Added:** the Add provider tab lists the providers you can connect. Each row has [Connect], which saves the key or login and checks `/models`, and [Test], which checks a provider without changing anything. A successful Connect returns to the Connected tab and does not switch the session's model.
 - **Removed:** `/provider` is gone. Use `/connect`.
 - **Added:** in Telegram the same modal opens, with Add provider and a [Test] on each row. A provider with a device login can be connected there. A provider that needs a key says to enter it in the shell: a key is never typed into a chat.
+### Operator-accepted flow completion exceptions (#1062)
+
+- **Added:** `flow complete --accept-gate <gate|review:condition> --reason "<why>"` requests fresh operator confirmation by shell card, controlling terminal or existing host-question protocol. Only selected current eligible failures may be accepted; mandatory AC, tasks, ownership, folder and confirmation gates cannot be bypassed.
+- **Added:** attempts, signatures and journal preserve the original failures and operator words; status/list/check-complete and product index distinguish clean closure from completion with exceptions.
+- **Added:** `flow base set` repairs the recorded base with a reason; `flow implemented --fix-of` records subsequent fix-PR lineage. `review complete` supports host-question confirmation bound to head, evidence, dispositions and waivers.
 
 ## [0.3.128] - 2026-10-21
 
