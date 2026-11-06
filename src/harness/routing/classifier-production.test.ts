@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { normalizeRoutingV2Config } from "./config-v2";
-import { DEFAULT_JEV_ROUTING_TARGET } from "./classifier-adapters-v2";
-import { buildRoutingClassifierAdapters, ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "./classifier-production-v2";
+import { normalizeRoutingConfig } from "./config";
+import { DEFAULT_JEV_ROUTING_TARGET } from "./classifier-adapters";
+import { buildRoutingClassifierAdapters, ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "./classifier-production";
 
 test("production classifier registry exposes only implemented adapter ids", () => {
   expect([...ROUTING_CLASSIFIER_ADAPTER_REGISTRY]).toEqual(["jev", "model"]);
@@ -9,7 +9,7 @@ test("production classifier registry exposes only implemented adapter ids", () =
 
 test("production classifier builder checks the actual default JEV target", () => {
   const checked: Array<{ providerId: string; modelId: string }> = [];
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     classifier: {
       chain: [{ adapterId: "jev" }],
@@ -35,7 +35,7 @@ test("production classifier builder checks the actual default JEV target", () =>
 });
 
 test("production classifier builder keeps provider scope and caller policy fail-closed", async () => {
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     providers: { scope: "session-only", allowlist: [], preferSessionProvider: false },
     classifier: {
@@ -69,7 +69,7 @@ test("production JEV adapter pins the service provider and forwards the configur
       structuredOutput: { type: "noul", noul: 0 },
     }, usage: {} }), { status: 200 });
   }) as typeof fetch;
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     classifier: {
       chain: [{ adapterId: "jev", target: { providerId: "openrouter", modelId: "jev-custom" } }],
@@ -90,7 +90,7 @@ test("production JEV adapter pins the service provider and forwards the configur
   await adapter!.classify("review it", { signal: new AbortController().signal });
   expect(bodies).toEqual([expect.objectContaining({ model: "jev-custom" })]);
 
-  const deniedConfig = normalizeRoutingV2Config({ user: {
+  const deniedConfig = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     classifier: {
       chain: [{ adapterId: "jev", target: { providerId: "anthropic", modelId: "jev-custom" } }],

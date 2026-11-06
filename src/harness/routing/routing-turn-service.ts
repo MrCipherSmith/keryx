@@ -1,6 +1,6 @@
-import type { RoutingClassifierAdapter, RoutingClassifierResult } from "./classifier-chain-v2";
-import type { BuildRoutingClassifierAdaptersInput } from "./classifier-production-v2";
-import type { NormalizedRoutingV2Config } from "./config-v2";
+import type { RoutingClassifierAdapter, RoutingClassifierResult } from "./classifier-chain";
+import type { BuildRoutingClassifierAdaptersInput } from "./classifier-production";
+import type { NormalizedRoutingConfig } from "./config";
 import type { ModelProfile } from "./model-profile";
 import { RoutingBudgetLedger } from "./routing-budget";
 import { runProductionRoutingClassification } from "./routing-classifier-service";
@@ -14,17 +14,17 @@ import type { RoutingSnapshot } from "./snapshot";
 import type { FlatPickerProvider } from "./table";
 import type { RoutingJournalLocation } from "./routing-journal";
 
-export interface RoutingTurnClassifierPortsV2 {
+export interface RoutingTurnClassifierPorts {
   readonly adapterInput: Omit<BuildRoutingClassifierAdaptersInput, "config" | "timeoutMs">;
   readonly estimatedCostUsd: (adapter: RoutingClassifierAdapter<string>) => number | null;
   readonly actualCostUsd?: (adapter: RoutingClassifierAdapter<string>) => number | undefined;
 }
 
-export interface RouteTurnV2Input {
+export interface RouteTurnInput {
   readonly task: string;
   /** Trusted, frozen task identity and requirements supplied by the calling surface. */
   readonly request: RoutingRequest;
-  readonly config: NormalizedRoutingV2Config;
+  readonly config: NormalizedRoutingConfig;
   readonly providers: readonly FlatPickerProvider[];
   readonly profiles: Readonly<Record<string, ModelProfile>>;
   readonly snapshotMeta: {
@@ -34,7 +34,7 @@ export interface RouteTurnV2Input {
   };
   /** Surface authority is expressed as facts/policy ports, not presentation dependencies. */
   readonly snapshotPolicy: RoutingSnapshotPolicy;
-  readonly classifier: RoutingTurnClassifierPortsV2;
+  readonly classifier: RoutingTurnClassifierPorts;
   /** Shadow/preview callers may resolve the trusted request without invoking a classifier. */
   readonly classify?: boolean;
   readonly journal?: RoutingJournalLocation & { readonly kind: "preview" | "dispatch" };
@@ -44,7 +44,7 @@ export interface RouteTurnV2Input {
   readonly budget?: RoutingBudgetLedger;
 }
 
-export type RouteTurnV2Result =
+export type RouteTurnResult =
   | { readonly status: "cancelled" }
   | {
     readonly status: "ready";
@@ -60,7 +60,7 @@ export type RouteTurnV2Result =
  * classify -> frozen snapshot -> resolve/journal sequence and of the budget
  * shared by classification and execution.
  */
-export async function routeTurnV2(input: RouteTurnV2Input): Promise<RouteTurnV2Result> {
+export async function routeTurn(input: RouteTurnInput): Promise<RouteTurnResult> {
   const budget = input.budget ?? new RoutingBudgetLedger({
     ...(input.request.requirements.maxEstimatedCostUsd === undefined
       ? {}

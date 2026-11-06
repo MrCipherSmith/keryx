@@ -1719,11 +1719,13 @@ confirmed pick writes immediately to the per-user layer. `t` on the list side
 shows the project file's entries and arms an approval; `y` confirms, any
 other key cancels.
 
-### Routing v2
+### Routing settings and class pools
 
-Routing v2 is opt-in through `keryx routing migrate`. With v2 active,
-the class pools can contain models from multiple providers. Use the revision
-returned by the settings read when writing a layer or class pool. An intervening
+Routing is the default implementation; no activation flag is required. Class
+pools can contain models from multiple providers. The canonical settings key is
+`modelRouting` in the user `auth.json` and the project's `routing.config.json`.
+Project settings require approval of their current content. Use the revision
+returned by the settings read when writing a layer or class pool; an intervening
 edit invalidates that revision and requires a fresh read.
 
 ```sh
@@ -1735,7 +1737,11 @@ keryx routing explain --request <file.json> --json
 keryx routing pilot <observations.json|journal.jsonl>
 ```
 
-`routing settings` reads or replaces an active v2 layer. `routing classes`
+`routing migrate --dry-run` previews conversion of older settings; migration
+does not enable an alternative engine. Older persisted keys are supported for
+compatibility and migration, not as names for the current Routing API.
+
+`routing settings` reads or replaces a Routing layer. `routing classes`
 lists the effective pools or replaces one user pool. `routing explain`
 returns the decision and evidence for an explicit request without executing
 the task. `routing pilot` summarizes recorded preview parity and fallback

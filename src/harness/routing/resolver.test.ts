@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { normalizeRoutingV2Config, validateRoutingV2ConfigLayer, type RoutingV2ConfigLayer } from "./config-v2";
+import { normalizeRoutingConfig, validateRoutingConfigLayer, type RoutingConfigLayer } from "./config";
 import type { RoutingDecision, RoutingReason } from "./decision";
 import type { ModelRef } from "./model-class";
 import { resolveRoutingDecision } from "./resolver";
@@ -41,8 +41,8 @@ function request(patch: Partial<RoutingRequest> = {}): RoutingRequest {
   };
 }
 
-function setup(layer: RoutingV2ConfigLayer, models: readonly RoutingModelFacts[], req = request(), authFailedProviderIds: readonly string[] = []) {
-  const config = normalizeRoutingV2Config({ user: layer });
+function setup(layer: RoutingConfigLayer, models: readonly RoutingModelFacts[], req = request(), authFailedProviderIds: readonly string[] = []) {
+  const config = normalizeRoutingConfig({ user: layer });
   const snapshot = createRoutingSnapshot({
     configDigest: config.configDigest,
     observedAt: "2026-11-04T00:00:00.000Z",
@@ -56,7 +56,7 @@ function setup(layer: RoutingV2ConfigLayer, models: readonly RoutingModelFacts[]
   return { config, snapshot, req };
 }
 
-const expertLayer = (candidates: readonly ModelRef[], fallbackClasses: readonly ("light" | "standard" | "expert" | "frontier")[] = []): RoutingV2ConfigLayer => ({
+const expertLayer = (candidates: readonly ModelRef[], fallbackClasses: readonly ("light" | "standard" | "expert" | "frontier")[] = []): RoutingConfigLayer => ({
   schemaVersion: 2,
   classes: {
     expert: {
@@ -80,7 +80,7 @@ test("absolute class selection does not change with the baseline provider", () =
 
 test("user override beats project configuration and an agent recommendation", () => {
   const chosen = ref("beta", "pinned");
-  const config = normalizeRoutingV2Config({
+  const config = normalizeRoutingConfig({
     user: { schemaVersion: 2, categories: { review: { mode: "class", modelClass: "light" } } },
     project: { schemaVersion: 2, categories: { review: { mode: "class", modelClass: "expert" } } },
   });
@@ -94,7 +94,7 @@ test("user override beats project configuration and an agent recommendation", ()
 test("session-only scope follows a provider switch without rewriting pools", () => {
   const alpha = ref("alpha", "expert");
   const beta = ref("beta", "expert");
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     ...expertLayer([alpha, beta]),
     providers: { scope: "session-only", allowlist: [], preferSessionProvider: false },
   };
@@ -105,7 +105,7 @@ test("session-only scope follows a provider switch without rewriting pools", () 
 
 test("hard gates reject unavailable, unauthorized, incapable, and over-budget models", () => {
   const expert = ref("alpha", "expert");
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     ...expertLayer([expert]),
     execution: { maxAttempts: 3, selectionTimeoutMs: 3_000, maxEstimatedCostUsd: 2, unknownCost: "deny" },
   };
@@ -130,7 +130,7 @@ test("same-class fallback and tie breaking are deterministic", () => {
   const offline = ref("zeta", "offline");
   const a = ref("alpha", "a");
   const b = ref("beta", "b");
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     schemaVersion: 2,
     classes: { expert: { candidates: [offline, b, a].map((target, index) => ({ target, enabled: true, priority: index === 0 ? 100 : 10 })), selection: "priority", fallbackClasses: [] } },
     categories: { review: { mode: "class", modelClass: "expert" } },
@@ -148,7 +148,7 @@ test("same-class fallback and tie breaking are deterministic", () => {
 
 test("class floor blocks a configured downgrade", () => {
   const light = ref("alpha", "light");
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     ...expertLayer([], ["light"]),
     classes: {
       expert: { candidates: [], selection: "priority", fallbackClasses: ["light"] },
@@ -164,7 +164,7 @@ test("class floor blocks a configured downgrade", () => {
 
 test("cross-class fallback records whether it escalated or downgraded", () => {
   const light = ref("alpha", "light");
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     schemaVersion: 2,
     classes: {
       expert: { candidates: [], selection: "priority", fallbackClasses: ["light"] },
@@ -193,36 +193,36 @@ test("model pin remains strict unless it names a fallback class", () => {
 test("normalization replaces classes atomically and rejects duplicate or self fallbacks", () => {
   const one = ref("alpha", "one");
   const two = ref("beta", "two");
-  const config = normalizeRoutingV2Config({
+  const config = normalizeRoutingConfig({
     user: { schemaVersion: 2, classes: { expert: { candidates: [{ target: one, enabled: true, priority: 1 }], selection: "cost", fallbackClasses: [] } } },
     project: { schemaVersion: 2, classes: { expert: { candidates: [{ target: two, enabled: true, priority: 2 }], selection: "latency", fallbackClasses: [] } } },
   });
   expect(config.classes.expert.candidates).toEqual([{ target: two, enabled: true, priority: 2 }]);
   expect(config.classes.expert.selection).toBe("latency");
-  expect(() => normalizeRoutingV2Config({ user: { schemaVersion: 2, classes: { expert: { candidates: [], selection: "priority", fallbackClasses: ["expert"] } } } })).toThrow();
-  expect(() => normalizeRoutingV2Config({ user: { schemaVersion: 2, classes: { expert: { candidates: [{ target: one, enabled: true, priority: 1 }, { target: one, enabled: true, priority: 2 }], selection: "priority", fallbackClasses: [] } } } })).toThrow();
-  const cyclicLayer: RoutingV2ConfigLayer = { schemaVersion: 2, classes: {
+  expect(() => normalizeRoutingConfig({ user: { schemaVersion: 2, classes: { expert: { candidates: [], selection: "priority", fallbackClasses: ["expert"] } } } })).toThrow();
+  expect(() => normalizeRoutingConfig({ user: { schemaVersion: 2, classes: { expert: { candidates: [{ target: one, enabled: true, priority: 1 }, { target: one, enabled: true, priority: 2 }], selection: "priority", fallbackClasses: [] } } } })).toThrow();
+  const cyclicLayer: RoutingConfigLayer = { schemaVersion: 2, classes: {
       expert: { candidates: [], selection: "priority", fallbackClasses: ["standard"] },
       standard: { candidates: [], selection: "priority", fallbackClasses: ["expert"] },
     } };
-  expect(validateRoutingV2ConfigLayer(cyclicLayer).ok).toBeFalse();
-  expect(() => normalizeRoutingV2Config({ user: cyclicLayer })).toThrow(/cycle/);
-  const classifierLayer: RoutingV2ConfigLayer = {
+  expect(validateRoutingConfigLayer(cyclicLayer).ok).toBeFalse();
+  expect(() => normalizeRoutingConfig({ user: cyclicLayer })).toThrow(/cycle/);
+  const classifierLayer: RoutingConfigLayer = {
     schemaVersion: 2,
     classifier: { chain: [{ adapterId: "jev" }], timeoutMs: 1_000, minConfidence: 0.7, onFailure: { mode: "baseline" } },
   };
-  expect(validateRoutingV2ConfigLayer(classifierLayer).ok).toBeFalse();
-  expect(validateRoutingV2ConfigLayer(classifierLayer, { classifierAdapters: new Set(["jev"]) }).ok).toBeTrue();
-  expect(() => normalizeRoutingV2Config({ user: classifierLayer })).toThrow(/registry/);
-  expect(() => normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["model"]) })).toThrow(/not registered/);
-  expect(normalizeRoutingV2Config({ user: classifierLayer }, { classifierAdapters: new Set(["jev"]) }).classifier.chain).toHaveLength(1);
+  expect(validateRoutingConfigLayer(classifierLayer).ok).toBeFalse();
+  expect(validateRoutingConfigLayer(classifierLayer, { classifierAdapters: new Set(["jev"]) }).ok).toBeTrue();
+  expect(() => normalizeRoutingConfig({ user: classifierLayer })).toThrow(/registry/);
+  expect(() => normalizeRoutingConfig({ user: classifierLayer }, { classifierAdapters: new Set(["model"]) })).toThrow(/not registered/);
+  expect(normalizeRoutingConfig({ user: classifierLayer }, { classifierAdapters: new Set(["jev"]) }).classifier.chain).toHaveLength(1);
   const untargetedModel = { ...classifierLayer, classifier: { ...classifierLayer.classifier!, chain: [{ adapterId: "model" }] } };
-  expect(() => normalizeRoutingV2Config({ user: untargetedModel }, { classifierAdapters: new Set(["model"]) })).toThrow(/target is required for model adapter/);
+  expect(() => normalizeRoutingConfig({ user: untargetedModel }, { classifierAdapters: new Set(["model"]) })).toThrow(/target is required for model adapter/);
 });
 
 test("auto waits for classification and applies fallback only after explicit failure", () => {
   const expert = ref("alpha", "expert");
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     ...expertLayer([expert]),
     categories: { review: { mode: "auto" } },
     classifier: { chain: [], timeoutMs: 1_000, minConfidence: 0.7, onFailure: { mode: "class", modelClass: "expert" } },
@@ -267,13 +267,13 @@ test("validation rejects schema drift at every nested boundary", () => {
     { schemaVersion: 2, classifier: { chain: [], timeoutMs: 0, minConfidence: 2, onFailure: { mode: "auto" } } },
     { schemaVersion: 2, execution: { maxAttempts: 11, selectionTimeoutMs: 0, maxEstimatedCostUsd: Number.NaN, unknownCost: "maybe" } },
   ];
-  for (const value of invalid) expect(validateRoutingV2ConfigLayer(value).ok).toBeFalse();
+  for (const value of invalid) expect(validateRoutingConfigLayer(value).ok).toBeFalse();
 });
 
 test("normalization takes immutable copies and decisions include request semantics", () => {
   const expert = ref("alpha", "expert");
   const candidates = [{ target: expert, enabled: true, priority: 1 }];
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     schemaVersion: 2,
     classes: { expert: { candidates, selection: "priority", fallbackClasses: [] } },
     categories: { review: { mode: "class", modelClass: "expert" } },

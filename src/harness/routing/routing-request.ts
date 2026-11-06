@@ -1,6 +1,6 @@
 import type { RoutingCategory } from "./table";
 import type { ModelClass, ModelRef } from "./model-class";
-import type { RoutingAssignmentV2 } from "./config-v2";
+import type { RoutingAssignment } from "./config";
 
 export const ROUTING_CAPABILITIES = ["tools", "vision", "structured-output"] as const;
 export type RoutingCapability = (typeof ROUTING_CAPABILITIES)[number];
@@ -34,7 +34,7 @@ export interface RoutingRequest {
   readonly origin: RoutingOrigin;
   readonly baseline: ModelRef;
   readonly requirements: RoutingRequirements;
-  readonly userOverride?: RoutingAssignmentV2;
+  readonly userOverride?: RoutingAssignment;
   readonly recommendation?: RoutingRecommendation;
   readonly classification?: RoutingClassificationFailure;
 }

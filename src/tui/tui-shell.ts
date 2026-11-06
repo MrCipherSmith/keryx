@@ -202,8 +202,8 @@ import {
 import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
 import type { RoutingCategory } from "../harness/routing/table";
 import type { RoutingCapability } from "../harness/routing/routing-request";
-import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
-import { prepareRoutingCandidate } from "../harness/routing/routing-execution-v2";
+import { createMeteredRoutingProvider } from "../harness/routing/routing-provider";
+import { prepareRoutingCandidate } from "../harness/routing/routing-execution";
 // Flow 346: the EXTERNAL switch's `/external on|off` command + status line —
 // no modal (see the flow's own AC8 scope note); the sidebar row and bare
 // status text are rendered from `external-command.ts`.
@@ -11045,14 +11045,14 @@ export async function launchTuiAgentShell(opts: {
             foregroundOperation.settle(operation);
             if (!foregroundOperation.isDisposed) stopBusy();
             return;
-          } else if (!turnSignal.aborted && routingOutcome?.routingV2 !== undefined) {
-            const routingV2 = routingOutcome.routingV2;
+          } else if (!turnSignal.aborted && routingOutcome?.routingExecution !== undefined) {
+            const routingExecution = routingOutcome.routingExecution;
             const prepared = await prepareRoutingCandidate<AgentDeps>({
-              ...routingV2,
+              ...routingExecution,
               signal: turnSignal,
-              selectionTimeoutMs: Math.max(0, routingV2.selectionDeadline - performance.now()),
+              selectionTimeoutMs: Math.max(0, routingExecution.selectionDeadline - performance.now()),
               prepare: async (target, decisionId, signal) => {
-                const allowed = await routingV2.beforeIo(target, decisionId, { signal });
+                const allowed = await routingExecution.beforeIo(target, decisionId, { signal });
                 if (!allowed.ok) return allowed;
                 if (signal.aborted) return { ok: false, reason: "cancelled" };
                 try {
@@ -11083,17 +11083,17 @@ export async function launchTuiAgentShell(opts: {
                 provider: prepared.value.provider,
                 target: prepared.target,
                 receipt: prepared.receipt,
-                budget: routingV2.budget,
-                selectionTimeoutMs: Math.max(0, routingV2.selectionDeadline - performance.now()),
-                beforeIo: routingV2.beforeIo,
-                estimatedCostUsd: (request) => routingV2.estimatedCostUsd(request, prepared.target),
-                actualCostUsd: ({ request, usage, estimatedCostUsd }) => routingV2.actualCostUsd(
+                budget: routingExecution.budget,
+                selectionTimeoutMs: Math.max(0, routingExecution.selectionDeadline - performance.now()),
+                beforeIo: routingExecution.beforeIo,
+                estimatedCostUsd: (request) => routingExecution.estimatedCostUsd(request, prepared.target),
+                actualCostUsd: ({ request, usage, estimatedCostUsd }) => routingExecution.actualCostUsd(
                   request,
                   prepared.target,
                   usage,
                   estimatedCostUsd,
                 ),
-                journal: routingV2.journal,
+                journal: routingExecution.journal,
               }),
             };
             if (prepared.receipt.previousDecisionId !== undefined) {
@@ -11132,7 +11132,7 @@ export async function launchTuiAgentShell(opts: {
               if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
             }
           } else if (!turnSignal.aborted) {
-            if (routingOutcome?.routingV2 === undefined) {
+            if (routingOutcome?.routingExecution === undefined) {
               io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
             }
           }

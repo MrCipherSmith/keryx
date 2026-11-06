@@ -3,9 +3,8 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
-import type { RoutingV2ConfigLayer } from "../../routing/config-v2";
-import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "../../routing/classifier-production-v2";
-import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../../routing/migration-v2";
+import type { RoutingConfigLayer } from "../../routing/config";
+import { replaceRoutingLayer } from "../../routing/settings";
 import { setModelProfileField } from "../../routing/model-profile";
 import type { FlatPickerProvider } from "../../routing/table";
 import { createSpawnSubagentTool, type SpawnSubagentFleetEvent } from "./spawn-subagent-tool";
@@ -43,7 +42,7 @@ function stubProvider(text = "done", onStream?: () => void): ProviderPort {
 }
 
 async function activeTool(
-  user: RoutingV2ConfigLayer,
+  user: RoutingConfigLayer,
   detected: readonly FlatPickerProvider[] = [{ name: "ollama", models: ["medium", "max"] }],
   providerText = "done",
   profileObservedAt = "2026-11-04T00:00:00.000Z",
@@ -53,8 +52,8 @@ async function activeTool(
     readonly parentBaseUrl?: string;
   } = {},
 ) {
-  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-project-"));
-  const configDir = await mkdtemp(path.join(tmpdir(), "keryx-spawn-v2-config-"));
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-project-"));
+  const configDir = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-config-"));
   roots.push(cwd, configDir);
   await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
   for (const provider of detected) {
@@ -68,9 +67,7 @@ async function activeTool(
       );
     }
   }
-  const normalization = { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY };
-  const plan = await createRoutingV2MigrationPlan({ cwd, configDir, user, normalization });
-  await applyRoutingV2Migration(plan, { confirmed: true, cwd, configDir, normalization });
+  await replaceRoutingLayer("user", { cwd, configDir }, user);
 
   const built: Array<{ providerId: string; modelId: string }> = [];
   const providerBaseUrls: Array<string | undefined> = [];
@@ -121,7 +118,7 @@ const classConfig = {
   },
 };
 
-test("routing v2 category outranks an agent model_class recommendation and keeps child authorization gates", async () => {
+test("routing category outranks an agent model_class recommendation and keeps child authorization gates", async () => {
   const { tool, built, events } = await activeTool({
     schemaVersion: 2,
     classes: classConfig,
@@ -131,9 +128,9 @@ test("routing v2 category outranks an agent model_class recommendation and keeps
 
   expect(result.isError).toBe(false);
   expect(built).toEqual([{ providerId: "ollama", modelId: "medium" }]);
-  expect(result.output).toMatch(/routing v2 [a-f0-9]{64} → ollama\/medium \[user\/none\]/);
+  expect(result.output).toMatch(/routing [a-f0-9]{64} → ollama\/medium \[user\/none\]/);
   const routingLog = events.find(
-    (event) => event.kind === "log" && event.entry.kind === "system" && event.entry.text.startsWith("routing v2 "),
+    (event) => event.kind === "log" && event.entry.kind === "system" && event.entry.text.startsWith("routing "),
   );
   expect(routingLog).toMatchObject({ kind: "log", entry: { kind: "system" } });
   if (routingLog?.kind === "log") {
@@ -141,7 +138,7 @@ test("routing v2 category outranks an agent model_class recommendation and keeps
   }
 });
 
-test("routing v2 auto may use model_class as an agent recommendation without making it a user override", async () => {
+test("routing auto may use model_class as an agent recommendation without making it a user override", async () => {
   const { tool, built, events } = await activeTool({
     schemaVersion: 2,
     classes: classConfig,
@@ -156,7 +153,7 @@ test("routing v2 auto may use model_class as an agent recommendation without mak
   expect(logText).not.toContain("user-override");
 });
 
-test("routing v2 auto uses the shared production classifier path", async () => {
+test("routing auto uses the shared production classifier path", async () => {
   const classifierReply = JSON.stringify({
     category: "subagents",
     modelClass: "frontier",
@@ -186,7 +183,7 @@ test("routing v2 auto uses the shared production classifier path", async () => {
     .toContain("user/classifier -> ollama/max");
 });
 
-test("routing v2 blocks an unverified subagent target before provider construction", async () => {
+test("routing blocks an unverified subagent target before provider construction", async () => {
   const { tool, built } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "ollama", modelId: "missing" } } },
@@ -198,7 +195,7 @@ test("routing v2 blocks an unverified subagent target before provider constructi
   expect(built).toEqual([]);
 });
 
-test("routing v2 does not treat stale picker membership as availability proof", async () => {
+test("routing does not treat stale picker membership as availability proof", async () => {
   const { tool, built } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "ollama", modelId: "max" } } },
@@ -210,7 +207,7 @@ test("routing v2 does not treat stale picker membership as availability proof", 
   expect(built).toEqual([]);
 });
 
-test("routing v2 preserves fresh catalogue availability through the pre-I/O guard", async () => {
+test("routing preserves fresh catalogue availability through the pre-I/O guard", async () => {
   const { tool, built, streamed } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
@@ -225,7 +222,7 @@ test("routing v2 preserves fresh catalogue availability through the pre-I/O guar
   expect(streamed).toEqual([{ providerId: "anthropic", modelId: "reviewer" }]);
 });
 
-test("routing v2 finite budget blocks unknown child cost before provider I/O", async () => {
+test("routing finite budget blocks unknown child cost before provider I/O", async () => {
   const { tool, built, streamed, events } = await activeTool({
     schemaVersion: 2,
     classes: classConfig,
@@ -240,14 +237,14 @@ test("routing v2 finite budget blocks unknown child cost before provider I/O", a
   const result = await tool.invoke({ task: "must be budgeted", mode: "read_only" });
 
   expect(result).toMatchObject({ status: "Denied", isError: true });
-  expect(result.output).toContain("denied by routing v2: cost-unknown");
+  expect(result.output).toContain("denied by routing: cost-unknown");
   expect(built).toEqual([]);
   expect(streamed).toEqual([]);
   expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
     .toContain("blocked (cost-unknown)");
 });
 
-test("routing v2 rechecks current credentials before child provider I/O", async () => {
+test("routing rechecks current credentials before child provider I/O", async () => {
   const { tool, built, streamed } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
@@ -263,7 +260,7 @@ test("routing v2 rechecks current credentials before child provider I/O", async 
   expect(streamed).toEqual([]);
 });
 
-test("routing v2 refuses a child removed by the current provider catalogue before I/O", async () => {
+test("routing refuses a child removed by the current provider catalogue before I/O", async () => {
   const { tool, built, streamed } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },
@@ -284,7 +281,7 @@ test("routing v2 refuses a child removed by the current provider catalogue befor
   expect(streamed).toEqual([]);
 });
 
-test("routing v2 snapshot preserves the child provider authorization gate", async () => {
+test("routing snapshot preserves the child provider authorization gate", async () => {
   const { tool, built } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "mystery", modelId: "x" } } },
@@ -299,7 +296,7 @@ test("routing v2 snapshot preserves the child provider authorization gate", asyn
   expect(built).toEqual([]);
 });
 
-test("routing v2 ignores legacy model_tier without letting it override operator routing", async () => {
+test("routing ignores model_tier without letting it override operator routing", async () => {
   const { tool, built, events } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "ollama", modelId: "max" } } },
@@ -307,13 +304,13 @@ test("routing v2 ignores legacy model_tier without letting it override operator 
   const result = await tool.invoke({ task: "legacy input", mode: "read_only", model_tier: "light" });
 
   expect(result.isError).toBe(false);
-  expect(result.output).toContain("migration: ignored legacy model_tier light because routing v2 is authoritative");
+  expect(result.output).toContain("migration: ignored model_tier light because model routing chooses the child's model");
   expect(built).toEqual([{ providerId: "ollama", modelId: "max" }]);
   expect(events.flatMap((event) => event.kind === "log" ? [event.entry.text] : []).join("\n"))
-    .toContain("ignored legacy model_tier light because routing v2 is authoritative");
+    .toContain("ignored model_tier light because model routing chooses the child's model");
 });
 
-test("routing v2 does not forward a custom parent endpoint to a cross-provider child", async () => {
+test("routing does not forward a custom parent endpoint to a cross-provider child", async () => {
   const { tool, built, providerBaseUrls, described } = await activeTool({
     schemaVersion: 2,
     categories: { subagents: { mode: "model", target: { providerId: "anthropic", modelId: "reviewer" } } },

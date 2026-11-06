@@ -1,4 +1,4 @@
-import type { NormalizedRoutingV2Config } from "./config-v2";
+import type { NormalizedRoutingConfig } from "./config";
 import type { RoutingDecision, RoutingReason } from "./decision";
 import { resolveRoutingDecision } from "./resolver";
 import type { RoutingRequest } from "./routing-request";
@@ -16,7 +16,7 @@ export interface RoutingDecisionReceipt {
 export interface ResolveRoutingForRuntimeInput {
   readonly request: RoutingRequest;
   readonly snapshot: RoutingSnapshot;
-  readonly config: NormalizedRoutingV2Config;
+  readonly config: NormalizedRoutingConfig;
   readonly previousDecisionId?: string;
   readonly fallbackReason?: RoutingReason;
   readonly journal?: RoutingJournalLocation & { readonly kind: "preview" | "dispatch" };
@@ -39,4 +39,13 @@ export function resolveRoutingForRuntime(input: ResolveRoutingForRuntimeInput): 
     ...(input.previousDecisionId !== undefined ? { previousDecisionId: input.previousDecisionId } : {}),
     ...(input.fallbackReason !== undefined ? { fallbackReason: input.fallbackReason } : {}),
   };
+}
+
+/**
+ * Whether a selection receipt id is a routing decision id. Decision ids are the
+ * sha256 hex digest `resolveRoutingDecision` assigns; a selection made outside
+ * routing (a non-routing fallback) carries a random UUID instead.
+ */
+export function isRoutingDecisionId(receiptId: string): boolean {
+  return /^[0-9a-f]{64}$/.test(receiptId);
 }

@@ -1,9 +1,9 @@
 import type { NormalizedError, NormalizedEvent, NormalizedRequest, NormalizedUsage, ProviderDescription, ProviderPort, StreamOptions } from "../provider/types";
-import type { NormalizedRoutingV2Config } from "./config-v2";
+import type { NormalizedRoutingConfig } from "./config";
 import type { RoutingReason } from "./decision";
 import type { ModelRef } from "./model-class";
 import type { RoutingBudgetLedger } from "./routing-budget";
-import { executeRoutingWithFallback, type ExecuteRoutingWithFallbackInput } from "./routing-execution-v2";
+import { executeRoutingWithFallback, type ExecuteRoutingWithFallbackInput } from "./routing-execution";
 import type { RoutingDecisionReceipt } from "./routing-runtime";
 import type { RoutingRequest } from "./routing-request";
 import type { RoutingSnapshot } from "./snapshot";
@@ -12,7 +12,7 @@ import { RoutingFailureRegistry } from "./routing-failure-registry";
 
 export interface RoutingExecutionProviderOptions {
   readonly description: ProviderDescription;
-  readonly config: NormalizedRoutingV2Config;
+  readonly config: NormalizedRoutingConfig;
   readonly budget: RoutingBudgetLedger;
   readonly routeFor: (request: NormalizedRequest, context: { readonly signal: AbortSignal }) => Promise<{ readonly request: RoutingRequest; readonly snapshot: RoutingSnapshot }>;
   readonly providerFor: (target: ModelRef) => ProviderPort;

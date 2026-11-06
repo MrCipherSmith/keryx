@@ -1,5 +1,5 @@
 import { canonicalDigest, type Control } from "../remote-control/protocol";
-import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import type { NormalizedRoutingConfig } from "../harness/routing/config";
 import { modelRefKey, sameModelRef, type ModelRef } from "../harness/routing/model-class";
 import type { RoutingDecision } from "../harness/routing/decision";
 import type { RoutingRequest, RoutingRequirements } from "../harness/routing/routing-request";
@@ -7,33 +7,33 @@ import { createRoutingSnapshot, type RoutingModelFacts, type RoutingSnapshot } f
 import { resolveRoutingDecision } from "../harness/routing/resolver";
 import type { NativeModelBinding } from "./model-identity";
 
-export interface NativeRoutingV2Choice {
+export interface NativeRoutingChoice {
   readonly candidate: Control["RoutingCandidate"];
   readonly binding: NativeModelBinding;
   readonly target: ModelRef;
   readonly parentAllowed: boolean;
 }
 
-export interface NativeRoutingV2Snapshot {
-  readonly choices: readonly NativeRoutingV2Choice[];
-  readonly baseline: NativeRoutingV2Choice;
+export interface NativeRoutingSnapshot {
+  readonly choices: readonly NativeRoutingChoice[];
+  readonly baseline: NativeRoutingChoice;
   readonly snapshot: RoutingSnapshot;
 }
 
-export interface BuildNativeRoutingV2SnapshotOptions {
+export interface BuildNativeRoutingSnapshotOptions {
   readonly sessionConfig: Control["SessionConfig"];
   readonly availability: Control["RoutingAvailability"];
   readonly bindings: readonly NativeModelBinding[];
-  readonly routingConfig: NormalizedRoutingV2Config;
+  readonly routingConfig: NormalizedRoutingConfig;
   readonly allowed?: (providerId: string, modelId: string) => boolean;
   readonly requirements?: RoutingRequirements;
   readonly observedAt?: string;
   readonly authFailedProviderIds?: readonly string[];
   /** Locally observed provider/profile facts; absence remains explicitly unknown. */
-  readonly modelFacts?: NativeRoutingV2FactsProvider;
+  readonly modelFacts?: NativeRoutingFactsProvider;
 }
 
-export type NativeRoutingV2FactsProvider = (
+export type NativeRoutingFactsProvider = (
     target: ModelRef,
     candidate: Control["RoutingCandidate"],
     requirements: RoutingRequirements | undefined,
@@ -59,11 +59,11 @@ function nativeCatalogRevision(availability: Control["RoutingAvailability"]): st
  * one frozen binding list. Actual provider/model identities are facts only;
  * candidate IDs remain the protocol authority used for execution.
  */
-export function buildNativeRoutingV2Snapshot(options: BuildNativeRoutingV2SnapshotOptions): NativeRoutingV2Snapshot {
+export function buildNativeRoutingSnapshot(options: BuildNativeRoutingSnapshotOptions): NativeRoutingSnapshot {
   const bindings = new Map(options.bindings.map((binding) => [bindingKey(binding.providerId, binding.modelId), binding]));
   const pinned = new Set([options.sessionConfig.baselineCandidateId, ...options.sessionConfig.routing.candidateIds]);
   const seenTargets = new Map<string, string>();
-  const choices: NativeRoutingV2Choice[] = [];
+  const choices: NativeRoutingChoice[] = [];
   const models: RoutingModelFacts[] = [];
 
   for (const candidate of options.availability.candidates) {
@@ -123,30 +123,30 @@ export function buildNativeRoutingV2Snapshot(options: BuildNativeRoutingV2Snapsh
   };
 }
 
-export interface ResolveNativeRoutingV2Options extends BuildNativeRoutingV2SnapshotOptions {
+export interface ResolveNativeRoutingOptions extends BuildNativeRoutingSnapshotOptions {
   readonly request: Omit<RoutingRequest, "baseline">;
 }
 
-export interface NativeRoutingV2Resolution {
+export interface NativeRoutingResolution {
   readonly receiptId: string;
   readonly decision: RoutingDecision;
   readonly candidateId?: string;
 }
 
-export interface PreparedNativeRoutingV2 {
-  readonly frozen: NativeRoutingV2Snapshot;
+export interface PreparedNativeRouting {
+  readonly frozen: NativeRoutingSnapshot;
   readonly request: RoutingRequest;
 }
 
 /** Build one immutable native request/snapshot pair without journaling or provider I/O. */
-export function prepareNativeRoutingV2(options: ResolveNativeRoutingV2Options): PreparedNativeRoutingV2 {
-  const frozen = buildNativeRoutingV2Snapshot({ ...options, requirements: options.request.requirements });
+export function prepareNativeRouting(options: ResolveNativeRoutingOptions): PreparedNativeRouting {
+  const frozen = buildNativeRoutingSnapshot({ ...options, requirements: options.request.requirements });
   const request: RoutingRequest = { ...options.request, baseline: frozen.baseline.target };
   return { frozen, request };
 }
 
 /** Translate a decision through the exact frozen tuple that produced its snapshot. */
-export function nativeRoutingV2Resolution(frozen: NativeRoutingV2Snapshot, decision: RoutingDecision): NativeRoutingV2Resolution {
+export function nativeRoutingResolution(frozen: NativeRoutingSnapshot, decision: RoutingDecision): NativeRoutingResolution {
   if (decision.status !== "selected") return { receiptId: decision.decisionId, decision };
   const choice = frozen.choices.find((candidate) => candidate.parentAllowed && sameModelRef(candidate.target, decision.selection));
   if (choice === undefined) throw new Error("native routing decision escaped frozen availability");
@@ -154,8 +154,8 @@ export function nativeRoutingV2Resolution(frozen: NativeRoutingV2Snapshot, decis
 }
 
 /** Pure preview/test convenience; real dispatches journal at their authorized call site. */
-export function resolveNativeRoutingV2(options: ResolveNativeRoutingV2Options): NativeRoutingV2Resolution {
-  const prepared = prepareNativeRoutingV2(options);
+export function resolveNativeRouting(options: ResolveNativeRoutingOptions): NativeRoutingResolution {
+  const prepared = prepareNativeRouting(options);
   const decision = resolveRoutingDecision(prepared.request, prepared.frozen.snapshot, options.routingConfig);
-  return nativeRoutingV2Resolution(prepared.frozen, decision);
+  return nativeRoutingResolution(prepared.frozen, decision);
 }

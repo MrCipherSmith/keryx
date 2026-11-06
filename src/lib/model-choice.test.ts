@@ -10,8 +10,7 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { saveRoutingConfig } from "../harness/routing/config";
-import { approveProjectRouting } from "../harness/routing/trust";
+import { approveProjectRouting, replaceRoutingLayer } from "../harness/routing/settings";
 import {
   MODEL_CHOICE_CATEGORY_TIERS,
   buildModelChoiceBlockInput,
@@ -64,15 +63,15 @@ test("renderModelChoicePolicy: tier words only, no resolved assignments — neve
 
 test("renderModelChoicePolicy: a resolved `model` assignment is named verbatim, an unresolved category is not", () => {
   const line = renderModelChoicePolicy({
-    review: { kind: "model", providerId: "anthropic", modelId: "claude-opus-5" },
+    review: { mode: "model", target: { providerId: "anthropic", modelId: "claude-opus-5" } },
   });
   expect(line).toContain("review=anthropic/claude-opus-5");
   expect(line).not.toContain("planning=");
 });
 
-test("renderModelChoicePolicy: a `provider-default` assignment is named as a provider default, not guessed as a model id", () => {
-  const line = renderModelChoicePolicy({ quick: { kind: "provider-default", providerId: "deepseek" } });
-  expect(line).toContain("quick=deepseek (provider default)");
+test("renderModelChoicePolicy: a class assignment is named as a class, not guessed as a model id", () => {
+  const line = renderModelChoicePolicy({ quick: { mode: "class", modelClass: "light" } });
+  expect(line).toContain("quick=class light");
 });
 
 test("resolveModelChoice: an absent routing.config.json resolves nothing — tier words only", async () => {
@@ -85,11 +84,11 @@ test("resolveModelChoice: an absent routing.config.json resolves nothing — tie
 test("resolveModelChoice: an APPROVED project routing table resolves only the categories this policy addresses", async () => {
   const { cwd, userConfigDir } = await project();
   const table = {
-    review: { kind: "model" as const, providerId: "anthropic", modelId: "claude-opus-5" },
-    coding: { kind: "model" as const, providerId: "anthropic", modelId: "claude-sonnet-5" },
+    review: { mode: "model" as const, target: { providerId: "anthropic", modelId: "claude-opus-5" } },
+    coding: { mode: "model" as const, target: { providerId: "anthropic", modelId: "claude-sonnet-5" } },
   };
-  await saveRoutingConfig("project", { cwd, userConfigDir }, table);
-  await approveProjectRouting(cwd, table, userConfigDir);
+  await replaceRoutingLayer("project", { cwd, configDir: userConfigDir }, { schemaVersion: 2, categories: table });
+  approveProjectRouting({ cwd, configDir: userConfigDir });
 
   const result = await resolveModelChoice(cwd, userConfigDir);
   expect(result.assignments).toEqual({ review: table.review });
@@ -100,11 +99,7 @@ test("resolveModelChoice: an APPROVED project routing table resolves only the ca
 
 test("resolveModelChoice: an UNAPPROVED project routing table resolves nothing, and says so", async () => {
   const { cwd, userConfigDir } = await project();
-  await saveRoutingConfig(
-    "project",
-    { cwd, userConfigDir },
-    { review: { kind: "model", providerId: "anthropic", modelId: "claude-opus-5" } },
-  );
+  await replaceRoutingLayer("project", { cwd, configDir: userConfigDir }, { schemaVersion: 2, categories: { review: { mode: "model", target: { providerId: "anthropic", modelId: "claude-opus-5" } } } });
   // Deliberately no `approveProjectRouting` call.
 
   const result = await resolveModelChoice(cwd, userConfigDir);
@@ -114,11 +109,7 @@ test("resolveModelChoice: an UNAPPROVED project routing table resolves nothing, 
 
 test("resolveModelChoice never reads the operator's personal (user) routing layer into a project's committed doc", async () => {
   const { cwd, userConfigDir } = await project();
-  await saveRoutingConfig(
-    "user",
-    { cwd, userConfigDir },
-    { review: { kind: "model", providerId: "openrouter", modelId: "operators-private-model" } },
-  );
+  await replaceRoutingLayer("user", { cwd, configDir: userConfigDir }, { schemaVersion: 2, categories: { review: { mode: "model", target: { providerId: "openrouter", modelId: "operators-private-model" } } } });
 
   const result = await resolveModelChoice(cwd, userConfigDir);
   expect(result.assignments).toEqual({});
@@ -153,11 +144,7 @@ test("buildModelChoiceBlockInput: disabled config short-circuits before any rout
   const { cwd } = await project();
   await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
   await writeFile(path.join(cwd, ".metaproject", "tasks.config.json"), JSON.stringify({ modelGuidance: { enabled: false } }));
-  await saveRoutingConfig(
-    "project",
-    { cwd },
-    { review: { kind: "model", providerId: "anthropic", modelId: "claude-opus-5" } },
-  );
+  await replaceRoutingLayer("project", { cwd }, { schemaVersion: 2, categories: { review: { mode: "model", target: { providerId: "anthropic", modelId: "claude-opus-5" } } } });
 
   const input = await buildModelChoiceBlockInput(cwd);
   expect(input.enabled).toBe(false);
@@ -166,9 +153,9 @@ test("buildModelChoiceBlockInput: disabled config short-circuits before any rout
 
 test("describeModelChoiceStatus: reports the resolved count out of the addressed categories", async () => {
   const { cwd, userConfigDir } = await project();
-  const table = { review: { kind: "model" as const, providerId: "anthropic", modelId: "claude-opus-5" } };
-  await saveRoutingConfig("project", { cwd, userConfigDir }, table);
-  await approveProjectRouting(cwd, table, userConfigDir);
+  const table = { review: { mode: "model" as const, target: { providerId: "anthropic", modelId: "claude-opus-5" } } };
+  await replaceRoutingLayer("project", { cwd, configDir: userConfigDir }, { schemaVersion: 2, categories: table });
+  approveProjectRouting({ cwd, configDir: userConfigDir });
 
   const status = await describeModelChoiceStatus(cwd, userConfigDir);
   expect(status).toContain("model_choice: enabled");

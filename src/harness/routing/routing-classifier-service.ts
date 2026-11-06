@@ -1,11 +1,11 @@
-import { buildRoutingClassifierAdapters, type BuildRoutingClassifierAdaptersInput } from "./classifier-production-v2";
+import { buildRoutingClassifierAdapters, type BuildRoutingClassifierAdaptersInput } from "./classifier-production";
 import {
   runRoutingClassifierChain,
   type RoutingClassifierAdapter,
   type RoutingClassifierResult,
-} from "./classifier-chain-v2";
-import type { NormalizedRoutingV2Config } from "./config-v2";
-import { routingV2Digest } from "./config-v2";
+} from "./classifier-chain";
+import type { NormalizedRoutingConfig } from "./config";
+import { routingDigest } from "./config";
 import type { RoutingBudgetLedger } from "./routing-budget";
 import { applyRoutingClassificationResult } from "./routing-classification-runtime";
 import type { RoutingRequest } from "./routing-request";
@@ -17,7 +17,7 @@ export type RoutingClassificationServiceResult =
 export interface RunRoutingClassificationInput {
   readonly task: string;
   readonly request: RoutingRequest;
-  readonly config: NormalizedRoutingV2Config;
+  readonly config: NormalizedRoutingConfig;
   readonly adapters: readonly RoutingClassifierAdapter<string>[];
   readonly budget: RoutingBudgetLedger;
   readonly estimatedCostUsd: (adapter: RoutingClassifierAdapter<string>) => number | null;
@@ -54,7 +54,7 @@ export async function runRoutingClassification(input: RunRoutingClassificationIn
       receiptVersion: 1,
       requestId: input.request.requestId,
       configDigest: input.config.configDigest,
-      requirementsDigest: routingV2Digest(input.request.requirements),
+      requirementsDigest: routingDigest(input.request.requirements),
     },
     ...(input.signal === undefined ? {} : { signal: input.signal }),
   });

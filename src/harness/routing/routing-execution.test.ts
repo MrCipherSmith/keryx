@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { normalizeRoutingV2Config, type RoutingV2ConfigLayer } from "./config-v2";
+import { normalizeRoutingConfig, type RoutingConfigLayer } from "./config";
 import type { ModelRef } from "./model-class";
-import { executeRoutingWithFallback, prepareRoutingCandidate } from "./routing-execution-v2";
+import { executeRoutingWithFallback, prepareRoutingCandidate } from "./routing-execution";
 import { resolveRoutingForRuntime } from "./routing-runtime";
 import type { RoutingRequest } from "./routing-request";
 import { createRoutingSnapshot, type RoutingModelFacts } from "./snapshot";
@@ -17,13 +17,13 @@ function facts(target: ModelRef): RoutingModelFacts {
 }
 
 function setup(selectionTimeoutMs = 3_000) {
-  const layer: RoutingV2ConfigLayer = {
+  const layer: RoutingConfigLayer = {
     schemaVersion: 2,
     classes: { expert: { candidates: [{ target: first, enabled: true, priority: 2 }, { target: second, enabled: true, priority: 1 }], selection: "priority", fallbackClasses: [] } },
     categories: { coding: { mode: "class", modelClass: "expert" } },
     execution: { maxAttempts: 3, selectionTimeoutMs, maxEstimatedCostUsd: null, unknownCost: "allow" },
   };
-  const config = normalizeRoutingV2Config({ user: layer });
+  const config = normalizeRoutingConfig({ user: layer });
   const request: RoutingRequest = { requestId: "run", category: "coding", origin: "operator", baseline: first, requirements: { capabilities: [], inputTokensRequired: 10, outputTokensReserved: 10 } };
   const snapshot = createRoutingSnapshot({
     configDigest: config.configDigest,

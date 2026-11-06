@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ProviderFactory } from "../provider/single-turn";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../provider/types";
-import { runRoutingClassifierChain } from "./classifier-chain-v2";
-import { jevRoutingClassifierAdapter, mainModelRoutingClassifierAdapter } from "./classifier-adapters-v2";
+import { runRoutingClassifierChain } from "./classifier-chain";
+import { jevRoutingClassifierAdapter, mainModelRoutingClassifierAdapter } from "./classifier-adapters";
 
 function factoryReplying(reply: string): ProviderFactory {
   return (): ProviderPort => ({
@@ -16,7 +16,7 @@ function factoryReplying(reply: string): ProviderFactory {
 
 const fallback = { mode: "baseline" as const };
 
-test("main-model v2 adapter returns all strict classification fields", async () => {
+test("main-model adapter returns all strict classification fields", async () => {
   const adapter = mainModelRoutingClassifierAdapter("model", { providerId: "stub", modelId: "m", env: {}, providerFactory: factoryReplying(JSON.stringify({
     category: "coding", modelClass: "expert", confidence: 0.9, reasonCode: "implementation", requiredCapabilities: ["tools"],
   })) });
@@ -32,7 +32,7 @@ test("strict chain rejects extra model fields instead of accepting partial legac
   expect(result).toMatchObject({ status: "fallback", reason: "classifier-failed", trace: [{ adapterId: "model", outcome: "invalid" }] });
 });
 
-test("Jev v2 adapter maps category, class, confidence, and required capabilities", async () => {
+test("Jev adapter maps category, class, confidence, and required capabilities", async () => {
   const fetchFn = (async () => new Response(JSON.stringify({ answers: {
     category: { type: "choice", choice: "review" }, modelClass: { type: "choice", choice: "frontier" }, confidence: { type: "noul", noul: 0.88 },
     tools: { type: "noul", noul: 0.8 }, vision: { type: "noul", noul: 0.1 }, structuredOutput: { type: "noul", noul: 0.6 },

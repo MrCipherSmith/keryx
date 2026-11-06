@@ -120,7 +120,7 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
           code: "REVIEWER_INPUT_ROUTING_REFUSED",
           reviewer,
           path: "$.model.dispatchable",
-          message: "routing v2 did not authorize a model target; obtain an operator-approved routing decision before dispatch",
+          message: "routing did not authorize a model target; obtain an operator-approved routing decision before dispatch",
         });
       }
       for (const field of PATH_FIELDS) {

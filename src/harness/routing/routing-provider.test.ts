@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort } from "../provider/types";
-import { normalizeRoutingV2Config } from "./config-v2";
+import { normalizeRoutingConfig } from "./config";
 import type { ModelRef } from "./model-class";
 import { RoutingBudgetLedger } from "./routing-budget";
-import { createMeteredRoutingProvider, createRoutingExecutionProvider } from "./routing-provider-v2";
+import { createMeteredRoutingProvider, createRoutingExecutionProvider } from "./routing-provider";
 import type { RoutingRequest } from "./routing-request";
 import { createRoutingSnapshot, type RoutingModelFacts } from "./snapshot";
 import { resolveRoutingForRuntime } from "./routing-runtime";
@@ -11,7 +11,7 @@ import { resolveRoutingForRuntime } from "./routing-runtime";
 const first = { providerId: "alpha", modelId: "expert-a" };
 const second = { providerId: "beta", modelId: "expert-b" };
 const description: ProviderDescription = {
-  descriptor: { providerId: "routing-v2" },
+  descriptor: { providerId: "routing-test" },
   capabilities: { streaming: true, toolCalls: true, parallelToolCalls: true, structuredOutput: true, reasoningMetadata: true, promptCaching: false, vision: true, tokenCounting: true, modelListing: false },
 };
 
@@ -20,7 +20,7 @@ function facts(target: ModelRef): RoutingModelFacts {
 }
 
 function setup(selectionTimeoutMs = 100) {
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     classes: { expert: { candidates: [{ target: first, enabled: true, priority: 2 }, { target: second, enabled: true, priority: 1 }], selection: "priority", fallbackClasses: [] } },
     categories: { coding: { mode: "class", modelClass: "expert" } },

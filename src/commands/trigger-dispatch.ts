@@ -62,9 +62,9 @@ import { ensureScratchParent } from "./unattended-scratch";
 import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import {
   cachedRoutingProviders,
-  resolveUnattendedRoutingV2,
+  resolveUnattendedRouting,
   routedUnattendedProvider,
-  type UnattendedRoutingV2Deps,
+  type UnattendedRoutingDeps,
 } from "../harness/routing/unattended-adapter";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir, keryxLocksDir } from "../lib/maintenance-lock";
@@ -102,7 +102,7 @@ export interface HealthGateResult {
   readonly detail: string;
 }
 
-export interface DispatchDeps extends UnattendedRoutingV2Deps {
+export interface DispatchDeps extends UnattendedRoutingDeps {
   readonly service: FlowService;
   /** Build the provider for the entry. Default: `makeProvider` with saved API keys; a missing credential or unknown usage reporting is refused. */
   readonly makeProvider?: (dispatch: TriggerDispatch) => ProviderPort | { readonly error: string; readonly code?: DispatchRefusalCode };
@@ -245,7 +245,7 @@ export function providerHasUsableCredential(
 
 function routingDecisionFailure(decision: Exclude<RoutingDecision, { readonly status: "selected" }>): string {
   const reason = decision.status === "blocked" ? decision.reason : decision.status;
-  return `routing v2 refused the explicit unattended provider/model pin: ${reason} (decision ${decision.decisionId})`;
+  return `routing refused the explicit unattended provider/model pin: ${reason} (decision ${decision.decisionId})`;
 }
 
 /** Default provider construction: fails closed on a missing credential and on unknown usage reporting. */
@@ -747,7 +747,7 @@ async function dispatchLocked(
       toolNames: routingTools.map((tool) => tool.definition.name),
     }),
   };
-  const routing = await resolveUnattendedRoutingV2(
+  const routing = await resolveUnattendedRouting(
     projectRoot,
     dispatch,
     `unattended:${runId}:flow-next`,
@@ -1101,11 +1101,13 @@ function closingReason(input: {
   dispatch: TriggerDispatch;
   commitNote: string;
 }): string {
+  // A stop the dispatcher itself caused comes first: aborting a metered turn also
+  // leaves its last response unpriced, which is a consequence, not the cause.
+  if (input.timedOut) return `timed out after ${input.dispatch.maxSeconds}s (dispatch.maxSeconds)`;
+  if (input.spendStopped) return "spend cap reached — the run was stopped at its remaining allowance";
   if (input.usageMissing) {
     return "the provider sent a response without token usage — it cannot be priced, so the run was stopped and charged its whole reservation";
   }
-  if (input.spendStopped) return "spend cap reached — the run was stopped at its remaining allowance";
-  if (input.timedOut) return `timed out after ${input.dispatch.maxSeconds}s (dispatch.maxSeconds)`;
   if (input.crashed !== undefined) return `the agent run threw: ${input.crashed}`;
   if (input.providerError !== undefined) return `provider error: ${input.providerError}`;
   if (input.terminal !== undefined) return `the turn stopped unattended (${input.terminal})`;

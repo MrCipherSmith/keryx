@@ -1,4 +1,4 @@
-import type { RoutingClassifierResult } from "./classifier-chain-v2";
+import type { RoutingClassifierResult } from "./classifier-chain";
 import type { RoutingRequest } from "./routing-request";
 
 export type ApplyRoutingClassificationResult =

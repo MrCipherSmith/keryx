@@ -13,31 +13,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pinsModel, reviewCommand, runReviewers, setTierRankHostForTests } from "./review";
-import type { DispatchModelDecision, TierRankAgent, TierRankCache } from "../gdskills/model-tier";
+import { reviewCommand, runReviewers } from "./review";
 import type { StructuredReviewFinding } from "../review/types";
 import { readyResearchFixture } from "../review/research.test-helpers";
-import { loadRoutingConfigRaw } from "../harness/routing/config";
-import { approveProjectRouting } from "../harness/routing/trust";
-import { applyRoutingV2Migration, createRoutingV2MigrationPlan } from "../harness/routing/migration-v2";
-import type { RoutingV2ConfigLayer } from "../harness/routing/config-v2";
+import { replaceRoutingLayer } from "../harness/routing/settings";
+import type { RoutingConfigLayer } from "../harness/routing/config";
 import { setModelProfileField } from "../harness/routing/model-profile";
 
 const ORIGINAL_CWD = process.cwd();
-const refusingAgent: TierRankAgent = async () => {
-  throw new Error("no provider in this test");
-};
-function memoryRankCache(): TierRankCache {
-  const store = new Map<string, readonly string[]>();
-  return {
-    async get(key) {
-      return store.get(key);
-    },
-    async set(key, order) {
-      store.set(key, order);
-    },
-  };
-}
 let ROOT = "";
 let errors: string[] = [];
 let logs: string[] = [];
@@ -57,10 +40,6 @@ beforeEach(async () => {
   // what the tier tests below assert.
   delete process.env.KERYX_SESSION_PROVIDER;
   delete process.env.KERYX_SESSION_MODEL;
-  // Flow 358: `review tier` may ask the ranking agent. No test here reaches a provider
-  // or the real cache file: the default agent refuses, and a test that wants an answer
-  // installs its own.
-  setTierRankHostForTests(() => ({ agent: refusingAgent, cache: memoryRankCache(), prices: () => ({}) }));
   errors = [];
   logs = [];
   console.error = (...args: unknown[]) => {
@@ -73,7 +52,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  setTierRankHostForTests(undefined);
   console.error = realError;
   console.log = realLog;
   if (REAL_XDG === undefined) {
@@ -947,12 +925,11 @@ function modelBlock(): Record<string, unknown> {
   return (JSON.parse(logs.join("\n")) as { model: Record<string, unknown> }).model;
 }
 
-async function activateRoutingV2(user: RoutingV2ConfigLayer): Promise<void> {
-  const plan = await createRoutingV2MigrationPlan({ cwd: ROOT, user });
-  await applyRoutingV2Migration(plan, { confirmed: true, cwd: ROOT });
+async function configureUserRouting(user: RoutingConfigLayer): Promise<void> {
+  await replaceRoutingLayer("user", { cwd: ROOT }, user);
 }
 
-async function tierV2(...extra: string[]): Promise<void> {
+async function tierRouted(...extra: string[]): Promise<void> {
   await setModelProfileField("ollama", "llama3.1:latest", { field: "contextLength", value: 100_000 });
   await setModelProfileField("ollama", "llama3.2", { field: "contextLength", value: 100_000 });
   await writeFile(path.join(ROOT, "catalog.json"), JSON.stringify([
@@ -977,8 +954,8 @@ test("`review tier` floors a blast-radius round at deep and names the rule that 
   expect(out).toContain("tier: deep");
   expect(out).toContain("light:small-scope");
   expect(out).toContain("floor:blast-radius");
-  expect(out).toContain("model: demo-large");
-  expect(out).toContain("tier_resolution: discovered");
+  // The tier is a report: without a routable credential routing authorizes no target.
+  expect(out).toContain("model: none — routing did not authorize a dispatch target");
 });
 
 test("`review tier --premise` gives the review-premise judge the deep tier, even over a light verifier method", async () => {
@@ -988,7 +965,6 @@ test("`review tier --premise` gives the review-premise judge the deep tier, even
   const model = modelBlock();
   expect(model.tier).toBe("deep");
   expect(model.tier_reasons).toContain("floor:premise-judge");
-  expect(model.model).toBe("demo-large");
 });
 
 test("`review tier --json` prints the model block a dispatch document carries", async () => {
@@ -997,28 +973,24 @@ test("`review tier --json` prints the model block a dispatch document carries", 
   expect(process.exitCode).toBe(0);
   const model = modelBlock();
   expect(model.tier).toBe("light");
-  expect(model.tier_reasons).toEqual(["base:standard", "light:small-scope", "resolve:picked-below"]);
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-mini");
-  expect(model.tier_resolution).toBe("discovered");
-  expect((model.model_discovery as { candidates: string[] }).candidates).toEqual([
-    "demo-large",
-    "demo-medium",
-    "demo-mini",
-  ]);
+  expect(model.tier_reasons).toEqual(expect.arrayContaining(["base:standard", "light:small-scope"]));
+  // The relative tier never ranks candidates; only a routing receipt selects a target.
+  expect(model.dispatchable).toBe(false);
+  expect(model.provider).toBeUndefined();
+  expect(JSON.parse(logs.join("\n")).routing.decision.status).toBe("blocked");
 });
 
-test("routing v2 review category is the canonical selection, not the legacy relative tier", async () => {
-  await activateRoutingV2({
+test("the routing review category is the canonical selection, not the relative tier", async () => {
+  await configureUserRouting({
     schemaVersion: 2,
     categories: { review: { mode: "model", target: { providerId: "ollama", modelId: "llama3.2" } } },
   });
-  await tierV2("--findings", "2", "--diff-lines", "20", "--json");
+  await tierRouted("--findings", "2", "--diff-lines", "20", "--json");
 
   expect(process.exitCode).toBe(0);
   const parsed = JSON.parse(logs.join("\n")) as {
     model: Record<string, unknown>;
-    routing_v2: { decision: { status: string; assignmentSource: string; selection: { providerId: string; modelId: string } } };
+    routing: { decision: { status: string; assignmentSource: string; selection: { providerId: string; modelId: string } } };
   };
   expect(parsed.model).toMatchObject({
     provider: "ollama",
@@ -1026,28 +998,28 @@ test("routing v2 review category is the canonical selection, not the legacy rela
     routed: true,
     model_discovery: { candidates: [] },
   });
-  expect(parsed.routing_v2.decision).toMatchObject({
+  expect(parsed.routing.decision).toMatchObject({
     status: "selected",
     assignmentSource: "user",
     selection: { providerId: "ollama", modelId: "llama3.2" },
   });
 });
 
-test("routing v2 review reports an unauthorized target without dispatching or failing the total tier query", async () => {
-  await activateRoutingV2({
+test("routing review reports an unauthorized target without dispatching or failing the total tier query", async () => {
+  await configureUserRouting({
     schemaVersion: 2,
     categories: { review: { mode: "model", target: { providerId: "other", modelId: "unlisted" } } },
   });
-  await tierV2("--findings", "2", "--diff-lines", "20", "--json");
+  await tierRouted("--findings", "2", "--diff-lines", "20", "--json");
 
   expect(process.exitCode).toBe(0);
   expect(errors).toEqual([]);
   const parsed = JSON.parse(logs.join("\n")) as {
     model: Record<string, unknown>;
-    routing_v2: { decision: { status: string; reason: string } };
+    routing: { decision: { status: string; reason: string } };
     notices: string[];
   };
-  expect(parsed.routing_v2.decision).toMatchObject({ status: "blocked", reason: "candidate-unverified" });
+  expect(parsed.routing.decision).toMatchObject({ status: "blocked", reason: "candidate-unverified" });
   expect(parsed.model).toMatchObject({ routed: false, dispatchable: false });
   expect(parsed.model).not.toHaveProperty("provider");
   expect(parsed.model).not.toHaveProperty("model");
@@ -1060,508 +1032,7 @@ test("`review tier` never runs a security finding below standard, even when veri
 
   const model = modelBlock();
   expect(model.tier).toBe("standard");
-  expect(model.tier_reasons).toEqual([
-    "base:standard",
-    "light:verifier-execution",
-    "floor:security",
-    "resolve:session-is-standard",
-  ]);
-  // `standard` IS the session's model, and ranking worked — which is a different
-  // fact from having fallen back to it. Neither pins the id: the session's own
-  // model is what `inherit` already means, and a literal only goes stale.
-  expect(model.inherit).toBe(true);
-  expect(model.model).toBeUndefined();
-  expect(model.tier_resolution).toBe("session-ranked");
-  expect((model.model_discovery as { session_rank: number | null }).session_rank).not.toBeNull();
-});
-
-// Flow 358 — `review tier` shows the agent fallback and treats only a moved pick as a pin.
-// `acme-sol/terra/luna` carry no size word the resolver knows, so the ranking is refused
-// and the tier is the one situation that reaches the agent.
-const UNRANKABLE = JSON.stringify([{ name: "acme", models: ["acme-sol", "acme-terra", "acme-luna"] }]);
-
-async function tierUnrankable(...extra: string[]): Promise<void> {
-  await writeFile(path.join(ROOT, "catalog.json"), UNRANKABLE, "utf8");
-  await reviewCommand([
-    "tier",
-    "--session-provider",
-    "acme",
-    "--session-model",
-    "acme-terra",
-    "--catalog",
-    "catalog.json",
-    ...extra,
-  ]);
-}
-
-const SOL_FIRST = JSON.stringify({ order: ["acme-sol", "acme-terra", "acme-luna"] });
-
-test("flow 358 AC6: `review tier` prints tier_resolution: agent-ranked and names the model the agent picked", async () => {
-  let asked = 0;
-  setTierRankHostForTests(() => ({
-    agent: async () => {
-      asked += 1;
-      return SOL_FIRST;
-    },
-    cache: memoryRankCache(),
-    prices: () => ({}),
-  }));
-  await tierUnrankable("--scope", "blast-radius");
-
-  expect(process.exitCode).toBe(0);
-  const out = logs.join("\n");
-  expect(asked).toBe(1);
-  expect(out).toContain("tier: deep");
-  expect(out).toContain("tier_resolution: agent-ranked");
-  expect(out).toContain("resolve:agent-picked-above");
-  expect(out).toContain("model: acme-sol");
-});
-
-test("flow 358: the --json block of an agent-ranked answer pins the picked model", async () => {
-  setTierRankHostForTests(() => ({ agent: async () => SOL_FIRST, cache: memoryRankCache(), prices: () => ({}) }));
-  await tierUnrankable("--scope", "blast-radius", "--json");
-
-  const model = modelBlock();
-  expect(model.tier_resolution).toBe("agent-ranked");
-  expect(model.provider).toBe("acme");
-  expect(model.model).toBe("acme-sol");
-  expect(model.inherit).toBeUndefined();
-});
-
-test("flow 358: a failing agent leaves `review tier` on the session model, exit 0, and not agent-ranked", async () => {
-  await tierUnrankable("--scope", "blast-radius", "--json");
-
-  expect(process.exitCode).toBe(0);
-  const model = modelBlock();
-  expect(model.tier_resolution).not.toBe("agent-ranked");
-  expect(model.inherit).toBe(true);
-  expect(model.model).toBeUndefined();
-});
-
-test("flow 358: a host that cannot even be built falls back to the deterministic decision", async () => {
-  setTierRankHostForTests(() => {
-    throw new Error("no config dir");
-  });
-  await tierUnrankable("--scope", "blast-radius", "--json");
-
-  expect(process.exitCode).toBe(0);
-  expect(modelBlock().tier_resolution).toBe("session-fallback");
-});
-
-test("flow 358: a settled tier asks the agent zero times", async () => {
-  let asked = 0;
-  setTierRankHostForTests(() => ({
-    agent: async () => {
-      asked += 1;
-      return "{}";
-    },
-    cache: memoryRankCache(),
-    prices: () => ({}),
-  }));
-  await tier("--scope", "blast-radius", "--json");
-  expect(asked).toBe(0);
-  expect(modelBlock().tier_resolution).toBe("discovered");
-});
-
-test("flow 358: pinsModel counts an agent pick as a pin and an agent that kept the session as none", () => {
-  const discovery = { provider: "acme", candidates: [], ranked: [], session_rank: null, fallback_reason: null };
-  const base: DispatchModelDecision = {
-    tier: "deep",
-    tier_reasons: ["base:standard", "resolve:agent-picked-above"],
-    provider: "acme",
-    model: "acme-sol",
-    tier_resolution: "agent-ranked",
-    model_discovery: discovery,
-  };
-  expect(pinsModel(base)).toBe(true);
-  expect(pinsModel({ ...base, tier_reasons: ["base:standard", "resolve:agent-picked-below"] })).toBe(true);
-  expect(pinsModel({ ...base, tier_reasons: ["base:standard", "resolve:agent-kept-session"] })).toBe(false);
-  expect(
-    pinsModel({ ...base, tier_reasons: ["base:standard", "resolve:agent-failed"], tier_resolution: "session-fallback" }),
-  ).toBe(false);
-});
-
-async function persistShellSelection(provider: string, model: string): Promise<void> {
-  const dir = path.join(ROOT, "xdg", "keryx");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, "auth.json"), JSON.stringify({ provider, model }), "utf8");
-}
-
-/** Flow 305 AC11 — a project `routing.config.json` applies only once approved. Test helper that reads what was just written and approves exactly that content, mirroring `keryx routing trust`. */
-async function approveProjectRoutingFile(): Promise<void> {
-  const raw = await loadRoutingConfigRaw("project", { cwd: ROOT });
-  const result = await approveProjectRouting(ROOT, raw.table);
-  if (!result.ok) throw new Error(result.error);
-}
-
-test("`review tier` does not pin the model `keryx shell` last persisted — that is not the caller's session", async () => {
-  // Observed: an orchestrator in Claude Code got `provider: deepseek`,
-  // `model: deepseek-flash` because auth.json still held a `keryx shell` choice.
-  await persistShellSelection("demo", "demo-medium");
-  await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
-  await reviewCommand(["tier", "--findings", "1", "--diff-lines", "5", "--catalog", "catalog.json"]);
-
-  expect(process.exitCode).toBe(0);
-  const out = logs.join("\n");
-  expect(out).toContain("session_source: none");
-  expect(out).toContain("model: inherit — dispatch on a lighter model your own runtime offers");
-  expect(out).not.toContain("demo-mini");
-});
-
-test("`review tier --from-shell-config` opts back into the persisted selection", async () => {
-  await persistShellSelection("demo", "demo-medium");
-  await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
-  await reviewCommand(["tier", "--from-shell-config", "--scope", "blast-radius", "--catalog", "catalog.json", "--json"]);
-
-  const model = modelBlock();
-  expect(model.model).toBe("demo-large");
-  expect(model.tier_resolution).toBe("discovered");
-});
-
-test("`review tier` takes the session from KERYX_SESSION_PROVIDER/KERYX_SESSION_MODEL a host exports", async () => {
-  process.env.KERYX_SESSION_PROVIDER = "demo";
-  process.env.KERYX_SESSION_MODEL = "demo-medium";
-  try {
-    await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
-    await reviewCommand(["tier", "--scope", "blast-radius", "--catalog", "catalog.json"]);
-    const out = logs.join("\n");
-    expect(out).toContain("session_source: environment");
-    expect(out).toContain("model: demo-large");
-  } finally {
-    delete process.env.KERYX_SESSION_PROVIDER;
-    delete process.env.KERYX_SESSION_MODEL;
-  }
-});
-
-test("`review tier` discovers the catalogue at runtime when none is supplied", async () => {
-  // No `--catalog`: this drives the real `detectProviders()` wire. `fake` is
-  // always offered, so the candidate list proves detection ran — and `fake-echo`
-  // carries no size marker, so the honest answer is the session's own model.
-  await reviewCommand(["tier", "--session-provider", "fake", "--session-model", "fake-echo", "--json"]);
-
-  expect(process.exitCode).toBe(0);
-  const discovery = modelBlock().model_discovery as {
-    candidates: string[];
-    session_rank: number | null;
-    fallback_reason: string | null;
-  };
-  expect(discovery.candidates).toContain("fake-echo");
-  expect(discovery.session_rank).toBeNull();
-  expect(discovery.fallback_reason).toContain("no size marker");
-  expect(modelBlock().tier_resolution).toBe("session-fallback");
-});
-
-test("`review tier` does not route to Anthropic without a key in the live catalog", async () => {
-  const previousKey = process.env.ANTHROPIC_API_KEY;
-  delete process.env.ANTHROPIC_API_KEY;
-  try {
-    await writeFile(path.join(ROOT, "routing.config.json"), JSON.stringify({ categories: { review: { kind: "provider-default", providerId: "anthropic" } } }), "utf8");
-    await approveProjectRoutingFile();
-    await reviewCommand(["tier", "--session-provider", "fake", "--session-model", "fake-echo", "--json"]);
-    expect(process.exitCode).toBe(0);
-    expect(modelBlock().provider).not.toBe("anthropic");
-    expect(modelBlock().routed).toBeUndefined();
-    const notices = (JSON.parse(logs.join("\n")) as { notices?: string[] }).notices ?? [];
-    expect(notices.some((notice) => notice.includes("anthropic") && notice.includes("not connected"))).toBe(true);
-  } finally {
-    if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = previousKey;
-  }
-});
-
-test("with nothing to anchor on, `review tier` says inherit and still exits 0", async () => {
-  // The operator's standing instruction: an unresolvable tier keeps the caller's
-  // OWN model. Never a downgrade, never a failure — and never an empty
-  // `provider`/`model` pair, which would be a schema-invalid dispatch that still
-  // looks like an answer.
-  await reviewCommand(["tier", "--scope", "blast-radius", "--json"]);
-
-  expect(process.exitCode).toBe(0);
-  const model = modelBlock();
-  expect(model.tier).toBe("deep");
-  expect(model.inherit).toBe(true);
-  expect(model.provider).toBeUndefined();
-  expect(model.model).toBeUndefined();
-  expect(model.tier_resolution).toBe("session-fallback");
-});
-
-// ---------------------------------------------------------------------------
-// Flow 305 (Flow A), AC5 — `review tier` resolves the `review` routing
-// category ahead of its own live-detection ranking.
-// ---------------------------------------------------------------------------
-
-test("flow 305 AC5: with an EMPTY routing table, `review tier` output is byte-identical to pre-Flow-A (no routing.config.json, no per-user entry anywhere in this test project)", async () => {
-  await tier("--scope", "blast-radius", "--findings", "1", "--diff-lines", "12");
-
-  expect(process.exitCode).toBe(0);
-  const out = logs.join("\n");
-  // The exact same assertions the pre-existing "floors a blast-radius round"
-  // test above makes — proving this flow changed nothing when nothing is
-  // configured.
-  expect(out).toContain("tier: deep");
-  expect(out).toContain("light:small-scope");
-  expect(out).toContain("floor:blast-radius");
-  expect(out).toContain("model: demo-large");
-  expect(out).toContain("tier_resolution: discovered");
-});
-
-test("flow 305 AC5: an explicit per-project `review` routing entry REPLACES the tier-ranked provider/model", async () => {
-  // "demo"/"demo-large" — a CONNECTED provider/model (AC10: it is in the
-  // `--catalog` fixture `tier()` always passes), distinct from what tier
-  // ranking alone would pick for these signals ("demo-mini", per the
-  // pre-existing `review tier --json` test above) — so the assertion below
-  // still proves the OVERRIDE took effect, not an accidental agreement.
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile(); // AC11: a project layer only applies once approved
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  expect(process.exitCode).toBe(0);
-  const model = modelBlock();
-  // The tier itself is unaffected — routing decides WHICH model, not the tier
-  // arithmetic (PRD §Non-goals: this design sits one level above `assignTier`).
-  expect(model.tier).toBe("light");
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-large");
-  expect(model.routed).toBe(true);
-});
-
-test("flow 305 AC5: a per-user `review` routing entry also wins over the tier-ranked model (the same layer `keryx routing set` writes to by default)", async () => {
-  const dir = path.join(ROOT, "xdg", "keryx");
-  await mkdir(dir, { recursive: true });
-  // Merged, not overwritten — same shape `persistShellSelection` already uses
-  // for `provider`/`model` in this file's own auth.json.
-  await writeFile(
-    path.join(dir, "auth.json"),
-    JSON.stringify({ routing: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
-    "utf8",
-  );
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-large");
-});
-
-test("flow 305 AC5: a per-project entry wins over a per-user entry for the same category (PRD §5 precedence)", async () => {
-  const dir = path.join(ROOT, "xdg", "keryx");
-  await mkdir(dir, { recursive: true });
-  await writeFile(
-    path.join(dir, "auth.json"),
-    JSON.stringify({ routing: { review: { kind: "model", providerId: "demo", modelId: "demo-medium" } } }),
-    "utf8",
-  );
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-large");
-});
-
-test("flow 305 AC5: routing an UNRELATED category (not `review`) never changes review tier's own model", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { quick: { kind: "model", providerId: "anthropic", modelId: "claude-routed" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-mini");
-});
-
-// ---------------------------------------------------------------------------
-// Flow 305 review findings — AC10 (connected fallback), AC11 (project
-// trust), item 3 (malformed config surfaced), item 4 (provider-default parity).
-// ---------------------------------------------------------------------------
-
-test("flow 305 AC10: a `review` routing entry naming a provider the catalog never reported falls through to the session model, with a notice", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    // "anthropic" is NOT in `tier()`'s `--catalog` fixture (only "demo" is).
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  expect(process.exitCode).toBe(0);
-  const model = modelBlock();
-  expect(model.routed).toBeUndefined();
-  // Falls through to the ORDINARY tier-discovered answer (unaffected by the
-  // rejected routing entry) — not "inherit": these signals already rank
-  // "demo-mini" from the connected catalog on their own, same as the
-  // pre-existing `review tier --json` test with no routing configured at all.
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-mini");
-  const notices = (JSON.parse(logs.join("\n")) as { notices?: string[] }).notices ?? [];
-  expect(notices.some((n) => n.includes("anthropic/claude-x") && n.includes("not connected"))).toBe(true);
-});
-
-test("flow 305 AC10: a `review` routing entry naming a MODEL the connected provider does not list falls through too", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    // "demo" is connected, but "demo-huge" is not one of its reported models.
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-huge" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  expect(model.routed).toBeUndefined();
-  const notices = (JSON.parse(logs.join("\n")) as { notices?: string[] }).notices ?? [];
-  expect(notices.some((n) => n.includes("demo/demo-huge") && n.includes("not connected"))).toBe(true);
-});
-
-test("flow 305 item 3: a malformed routing.config.json is surfaced as a notice, non-fatal — `review tier` still runs", async () => {
-  await writeFile(path.join(ROOT, "routing.config.json"), "not json at all", "utf8");
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  expect(process.exitCode).toBe(0); // non-fatal
-  const parsed = JSON.parse(logs.join("\n")) as { notices?: string[] };
-  expect(parsed.notices?.some((n) => n.includes("routing.config.json"))).toBe(true);
-});
-
-test("flow 305 item 4: a `provider-default` `review` assignment resolves via resolveProviderDefaultModelId, same as subagents", async () => {
-  // "ollama"'s documented default is `llama3.1:latest`
-  // (`provider-default.ts`'s `OLLAMA_DEFAULT_MODEL_ID`). Its own catalog
-  // fixture here (not `tier()`'s "demo" one) is what makes it "connected"
-  // for AC10's provider-only check on a `provider-default` assignment.
-  await writeFile(path.join(ROOT, "catalog.json"), JSON.stringify([{ name: "ollama", models: ["llama3.1:latest"] }]), "utf8");
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "provider-default", providerId: "ollama" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  await reviewCommand([
-    "tier",
-    "--session-provider",
-    "demo",
-    "--session-model",
-    "demo-medium",
-    "--catalog",
-    "catalog.json",
-    "--findings",
-    "2",
-    "--diff-lines",
-    "20",
-    "--json",
-  ]);
-
-  expect(process.exitCode).toBe(0);
-  const model = modelBlock();
-  expect(model.provider).toBe("ollama");
-  expect(model.model).toBe("llama3.1:latest");
-  expect(model.routed).toBe(true);
-});
-
-test("flow 305 item 4: an UNRESOLVABLE `provider-default` (not a real registered provider) is inert, same as a `session-default`", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "provider-default", providerId: "demo" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  // "demo" is connected (AC10 passes) but is not a real registered provider,
-  // so `resolveProviderDefaultModelId` returns `undefined` and the
-  // assignment is inert.
-  expect(model.routed).toBeUndefined();
-});
-
-// ---------------------------------------------------------------------------
-// Flow 305 AC11 — project routing.config.json trust: unapproved -> ignored,
-// approve -> applies, edit-after-approval -> voids approval.
-// ---------------------------------------------------------------------------
-
-test("flow 305 AC11: an UNAPPROVED routing.config.json is ignored, with a visible notice, in `review tier` output", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
-    "utf8",
-  );
-  // No approveProjectRoutingFile() call — the file is written but never trusted.
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  expect(process.exitCode).toBe(0);
-  const model = modelBlock();
-  expect(model.routed).toBeUndefined();
-  expect(model.model).toBe("demo-mini"); // the ordinary tier-ranked answer, unaffected
-  const parsed = JSON.parse(logs.join("\n")) as { notices?: string[] };
-  expect(parsed.notices?.some((n) => n.includes("unapproved") && n.includes("keryx routing trust"))).toBe(true);
-});
-
-test("flow 305 AC11: approving the file applies it", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  expect(model.routed).toBe(true);
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-large");
-});
-
-test("flow 305 AC11: editing the file after approval VOIDS the approval — the edited entries are ignored until re-approved", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  // Now change what the file actually says.
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-medium" } } }),
-    "utf8",
-  );
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  expect(model.routed).toBeUndefined();
-  expect(model.model).toBe("demo-mini"); // fell back — the edited content is unapproved
-  const parsed = JSON.parse(logs.join("\n")) as { notices?: string[] };
-  expect(parsed.notices?.some((n) => n.includes("unapproved"))).toBe(true);
-});
-
-test("flow 305 AC11: a pure reformat (whitespace, key order) after approval does NOT void it", async () => {
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    JSON.stringify({ categories: { review: { kind: "model", providerId: "demo", modelId: "demo-large" } } }),
-    "utf8",
-  );
-  await approveProjectRoutingFile();
-  // Same content, reformatted: different key order, extra whitespace.
-  await writeFile(
-    path.join(ROOT, "routing.config.json"),
-    `{\n  "categories": {\n    "review": { "modelId": "demo-large", "kind": "model", "providerId": "demo" }\n  }\n}\n`,
-    "utf8",
-  );
-  await tier("--findings", "2", "--diff-lines", "20", "--json");
-
-  const model = modelBlock();
-  expect(model.routed).toBe(true);
-  expect(model.provider).toBe("demo");
-  expect(model.model).toBe("demo-large");
+  expect(model.tier_reasons).toEqual(expect.arrayContaining(["base:standard", "light:verifier-execution", "floor:security"]));
 });
 
 test("`review tier` refuses an unrecognised --verifier rather than silently defaulting", async () => {

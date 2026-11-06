@@ -1,4 +1,4 @@
-import { routingV2Digest, type ModelClassConfigV2, type NormalizedRoutingV2Config, type RoutingAssignmentV2, type RoutingCandidateV2 } from "./config-v2";
+import { routingDigest, type ModelClassConfig, type NormalizedRoutingConfig, type RoutingAssignment, type RoutingCandidate } from "./config";
 import type { RoutingAssignmentSource, RoutingDecision, RoutingExclusion, RoutingFallbackReason, RoutingReason } from "./decision";
 import { compareModelClasses, isModelClass, modelRefKey, sameModelRef, type ModelClass, type ModelRef } from "./model-class";
 import { ROUTING_CAPABILITIES, type RoutingRequest } from "./routing-request";
@@ -6,16 +6,16 @@ import { isVerifiedRoutingSnapshot, type RoutingModelFacts, type RoutingSnapshot
 import { isRoutingCategory } from "./table";
 
 interface AssignmentResolution {
-  readonly assignment: RoutingAssignmentV2;
+  readonly assignment: RoutingAssignment;
   readonly source: RoutingAssignmentSource;
   readonly recommendationSource: RoutingDecision["recommendationSource"];
   readonly classifierReceiptId?: string;
 }
 
 interface CandidateWithClass {
-  readonly config: RoutingCandidateV2;
+  readonly config: RoutingCandidate;
   readonly modelClass: ModelClass;
-  readonly classConfig: ModelClassConfigV2;
+  readonly classConfig: ModelClassConfig;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -34,7 +34,7 @@ function validModelRef(value: unknown): value is ModelRef {
     && typeof value.modelId === "string" && value.modelId.length > 0;
 }
 
-function validAssignment(value: unknown): value is RoutingAssignmentV2 {
+function validAssignment(value: unknown): value is RoutingAssignment {
   if (!isRecord(value)) return false;
   if (value.mode === "auto") return hasOnlyKeys(value, ["mode"]);
   if (value.mode === "baseline") return hasOnlyKeys(value, ["mode", "fallbackClass"]) && (value.fallbackClass === undefined || isModelClass(value.fallbackClass));
@@ -87,7 +87,7 @@ function validFacts(facts: RoutingModelFacts): boolean {
     && (facts.observedLatencyMs === null || (Number.isFinite(facts.observedLatencyMs) && facts.observedLatencyMs >= 0));
 }
 
-function assignmentFor(request: RoutingRequest, config: NormalizedRoutingV2Config): AssignmentResolution {
+function assignmentFor(request: RoutingRequest, config: NormalizedRoutingConfig): AssignmentResolution {
   const configured = request.userOverride ?? config.categories[request.category];
   const source = request.userOverride !== undefined ? "user-override" : config.categorySources[request.category];
   if (configured.mode !== "auto") {
@@ -123,7 +123,7 @@ function assignmentFor(request: RoutingRequest, config: NormalizedRoutingV2Confi
 function commonDecision(
   request: RoutingRequest,
   snapshot: RoutingSnapshot,
-  config: NormalizedRoutingV2Config,
+  config: NormalizedRoutingConfig,
   resolved: AssignmentResolution,
   exclusions: readonly RoutingExclusion[],
   requestedClass?: ModelClass,
@@ -134,7 +134,7 @@ function commonDecision(
     : "invalid-snapshot";
   return {
     schemaVersion: 2 as const,
-    decisionId: routingV2Digest({ request, snapshotDigest, configDigest: config.configDigest, resolved, exclusions }),
+    decisionId: routingDigest({ request, snapshotDigest, configDigest: config.configDigest, resolved, exclusions }),
     requestId: request.requestId,
     ...(request.parentDecisionId !== undefined ? { parentDecisionId: request.parentDecisionId } : {}),
     configDigest: config.configDigest,
@@ -148,13 +148,13 @@ function commonDecision(
   };
 }
 
-function providerAllowed(ref: ModelRef, request: RoutingRequest, config: NormalizedRoutingV2Config): boolean {
+function providerAllowed(ref: ModelRef, request: RoutingRequest, config: NormalizedRoutingConfig): boolean {
   if (config.providers.scope === "all-connected") return true;
   if (config.providers.scope === "session-only") return ref.providerId === request.baseline.providerId;
   return config.providers.allowlist.includes(ref.providerId);
 }
 
-function effectiveCostLimit(request: RoutingRequest, config: NormalizedRoutingV2Config): number | undefined {
+function effectiveCostLimit(request: RoutingRequest, config: NormalizedRoutingConfig): number | undefined {
   const limits = [request.requirements.maxEstimatedCostUsd, config.execution.maxEstimatedCostUsd]
     .filter((value): value is number => value !== undefined && value !== null);
   return limits.length === 0 ? undefined : Math.min(...limits);
@@ -165,7 +165,7 @@ function candidateRejection(
   facts: RoutingModelFacts | undefined,
   authFailedProviderIds: ReadonlySet<string>,
   request: RoutingRequest,
-  config: NormalizedRoutingV2Config,
+  config: NormalizedRoutingConfig,
 ): RoutingReason | undefined {
   if (!providerAllowed(candidate, request, config)) return "provider-scope-conflict";
   if (authFailedProviderIds.has(candidate.providerId)) return "auth-failed";
@@ -173,11 +173,15 @@ function candidateRejection(
   if (!facts.policyAllowed || !facts.parentAllowed) return "policy-denied";
   if (!facts.credentialsAvailable) return "credentials-missing";
   if (facts.availability === "unavailable") return "model-unavailable";
-  if (facts.availability === "unknown") return "candidate-unverified";
+  // Unknown availability cannot justify switching models; the baseline is the model
+  // the caller already runs on (or explicitly pinned), so keeping it needs no proof.
+  if (facts.availability === "unknown" && !sameModelRef(candidate, request.baseline)) return "candidate-unverified";
   if (facts.cooldown) return "cooldown";
   if (request.requirements.capabilities.some((capability) => !facts.capabilities.includes(capability))) return "capability-missing";
   const requiredContext = request.requirements.inputTokensRequired + request.requirements.outputTokensReserved;
-  if (requiredContext > 0 && (facts.contextLength === null || facts.contextLength < requiredContext)) return "context-insufficient";
+  // An unknown context length cannot justify switching to another model, but the
+  // baseline is the model the caller already runs on: keeping it needs no proof.
+  if (requiredContext > 0 && (facts.contextLength === null ? !sameModelRef(candidate, request.baseline) : facts.contextLength < requiredContext)) return "context-insufficient";
   const costLimit = effectiveCostLimit(request, config);
   if (facts.estimatedCostUsd === null && (costLimit !== undefined || config.execution.unknownCost === "deny")) return "cost-unknown";
   if (facts.estimatedCostUsd !== null && (!Number.isFinite(facts.estimatedCostUsd) || facts.estimatedCostUsd < 0)) return "cost-unknown";
@@ -185,16 +189,16 @@ function candidateRejection(
   return undefined;
 }
 
-function strongestMembership(ref: ModelRef, config: NormalizedRoutingV2Config): ModelClass | undefined {
+function strongestMembership(ref: ModelRef, config: NormalizedRoutingConfig): ModelClass | undefined {
   let strongest: ModelClass | undefined;
-  for (const [modelClass, classConfig] of Object.entries(config.classes) as Array<[ModelClass, ModelClassConfigV2]>) {
+  for (const [modelClass, classConfig] of Object.entries(config.classes) as Array<[ModelClass, ModelClassConfig]>) {
     if (!classConfig.candidates.some((candidate) => candidate.enabled && sameModelRef(candidate.target, ref))) continue;
     if (strongest === undefined || compareModelClasses(modelClass, strongest) > 0) strongest = modelClass;
   }
   return strongest;
 }
 
-function minimumClassRejection(ref: ModelRef, request: RoutingRequest, config: NormalizedRoutingV2Config): RoutingReason | undefined {
+function minimumClassRejection(ref: ModelRef, request: RoutingRequest, config: NormalizedRoutingConfig): RoutingReason | undefined {
   const minimum = request.requirements.minimumClass;
   if (minimum === undefined) return undefined;
   const membership = strongestMembership(ref, config);
@@ -223,12 +227,12 @@ function compareCandidates(left: CandidateWithClass, right: CandidateWithClass, 
   return modelRefKey(left.config.target).localeCompare(modelRefKey(right.config.target));
 }
 
-function classCandidates(modelClass: ModelClass, config: NormalizedRoutingV2Config): CandidateWithClass[] {
+function classCandidates(modelClass: ModelClass, config: NormalizedRoutingConfig): CandidateWithClass[] {
   const classConfig = config.classes[modelClass];
   return classConfig.candidates.map((candidate) => ({ config: candidate, modelClass, classConfig }));
 }
 
-export function resolveRoutingDecision(request: RoutingRequest, snapshot: RoutingSnapshot, config: NormalizedRoutingV2Config): RoutingDecision {
+export function resolveRoutingDecision(request: RoutingRequest, snapshot: RoutingSnapshot, config: NormalizedRoutingConfig): RoutingDecision {
   const invalidResolution: AssignmentResolution = { assignment: { mode: "baseline" }, source: "builtin", recommendationSource: "none" };
   if (!validRequest(request)) {
     return { ...commonDecision(request, snapshot, config, invalidResolution, []), status: "blocked", reason: "config-invalid" };
@@ -236,7 +240,7 @@ export function resolveRoutingDecision(request: RoutingRequest, snapshot: Routin
   const resolved = assignmentFor(request, config);
   const exclusions: RoutingExclusion[] = [];
   const { configDigest, ...configBody } = config;
-  if (routingV2Digest(configBody) !== configDigest
+  if (routingDigest(configBody) !== configDigest
     || !isVerifiedRoutingSnapshot(snapshot)
     || snapshot.configDigest !== config.configDigest
     || !validModelRef(snapshot.baseline) || !sameModelRef(snapshot.baseline, request.baseline)

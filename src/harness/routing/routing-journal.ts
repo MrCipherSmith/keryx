@@ -1,7 +1,8 @@
 import path from "node:path";
 import { appendPrivateRecord, ensureKeryxSubdir } from "../../lib/config-dir";
 import { redactSensitiveText } from "../../security/service";
-import { routingV2Digest } from "./config-v2";
+import { routingDigest } from "./config";
+import { adoptLegacyRoutingJournal } from "./legacy-migration";
 import type { RoutingDecision, RoutingReason } from "./decision";
 
 export interface RoutingJournalLocation {
@@ -32,7 +33,7 @@ function safeDecision(event: Extract<RoutingJournalEvent, { decision: RoutingDec
   const selection = decision.status === "selected" ? decision.selection : undefined;
   return {
     kind: event.kind,
-    requestId: routingV2Digest(decision.requestId),
+    requestId: routingDigest(decision.requestId),
     decisionId: decision.decisionId,
     configDigest: decision.configDigest,
     snapshotDigest: decision.snapshotDigest,
@@ -66,8 +67,9 @@ function safeDecision(event: Extract<RoutingJournalEvent, { decision: RoutingDec
 
 /** Append one owner-only record without following a pre-existing journal symlink. */
 export function appendRoutingJournal(location: RoutingJournalLocation, event: RoutingJournalEvent): void {
-  const root = ensureKeryxSubdir(["routing-v2", "journal"], location.configDir);
-  const filename = `${routingV2Digest(path.resolve(location.cwd))}.jsonl`;
+  const root = ensureKeryxSubdir(["routing", "journal"], location.configDir);
+  const filename = `${routingDigest(path.resolve(location.cwd))}.jsonl`;
+  adoptLegacyRoutingJournal(location.configDir, filename, path.join(root, filename));
   const payload = event.kind === "attempt" ? {
     kind: event.kind,
     decisionId: event.decisionId,
