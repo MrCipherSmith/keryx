@@ -81,6 +81,13 @@ export interface ApprovalGateInput {
    * unchanged; `undefined` behaves exactly like `false`.
    */
   publishLease?: boolean;
+  /**
+   * An `hc run` starts an agent this session has not granted (`hcAgentLaunchOf`, flow 486): another agent runs
+   * outside keryx's limits. Same shape as {@link publishLease}: asks in every mode, `auto` and `trust` included,
+   * only ever escalates, never denies. Computed at the `executeCall` shell branch from the session's grant set.
+   * Optional; `undefined` behaves like `false`.
+   */
+  hcAgentLaunch?: boolean;
 }
 
 export type ApprovalGateDecision = "auto" | "ask" | "deny";
@@ -122,7 +129,7 @@ export type ApprovalGateDecision = "auto" | "ask" | "deny";
  *     any action is skipped under it.
  */
 export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateDecision {
-  const { mode, risk, destructive, credentials, sacReviewConfirmation, readOnly, publishLease } = input;
+  const { mode, risk, destructive, credentials, sacReviewConfirmation, readOnly, publishLease, hcAgentLaunch } = input;
 
   if (risk === "read") {
     return "auto";
@@ -132,7 +139,7 @@ export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateD
     return "deny";
   }
 
-  if (credentials || sacReviewConfirmation || publishLease) {
+  if (credentials || sacReviewConfirmation || publishLease || hcAgentLaunch) {
     return "ask";
   }
 

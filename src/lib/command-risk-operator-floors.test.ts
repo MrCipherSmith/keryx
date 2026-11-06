@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { touchesAgentCredentials, touchesHumanConfirmation, touchesOperatorDecision, touchesSacConfirmReview } from "./command-risk";
+import { hcAgentLaunchOf, touchesAgentCredentials, touchesHcDialogControl, touchesHumanConfirmation, touchesOperatorDecision, touchesSacConfirmReview } from "./command-risk";
 
 describe("SAC confirm-review floor is decided on parsed words (review-security-code-w12:F-001)", () => {
   const spellings: Array<[string, string]> = [
@@ -201,4 +201,101 @@ describe("an expansion after a literal non-operator command path does not ask", 
       expect(touchesHumanConfirmation(command), command).toBe(true);
     }
   });
+});
+
+describe("hc dialog control is a human-confirmation floor (flow 486 AC3)", () => {
+  for (const command of [
+    "hc keys t7 enter",
+    "/usr/local/bin/hc keys t7 enter",
+    "hc --json keys t7 enter",
+    "hc send t7 ok --force",
+    "hc send --force t7 ok",
+    "hc send t7 --force ok",
+    "hc send --force=true t7 ok",
+    "hc send t7 ok --for''ce",
+    "hc send t7 ok --forc\\e",
+    "HC_TERMINAL_ID=t3 hc send t7 hello",
+    "HC_TERMINAL_ID='t3' hc ls",
+    "env HC_TERMINAL_ID=t3 hc send t7 hello",
+    "env -u X HC_TERMINAL_ID=t3 /opt/bin/hc read t7",
+    "sudo env HC_TERMINAL_ID=t3 hc wait t7",
+    `sh -c "hc keys t7 enter"`,
+    `bash -c 'HC_TERMINAL_ID=t3 hc send t7 hi'`,
+    `sh -c "sh -c 'hc send t7 ok --force'"`,
+    "echo ok; hc keys t7 enter",
+    "true && hc send t7 ok --force",
+    "nohup hc keys t7 y &",
+    `hc 'keys' t7 enter`,
+    `h''c keys t7 enter`,
+    "hc $'\\x6beys' t7 enter",
+  ]) {
+    test(command, () => {
+      expect(touchesHcDialogControl(command)).toBe(true);
+      expect(touchesHumanConfirmation(command)).toBe(true);
+    });
+  }
+  for (const command of [
+    "hc send t7 hello",
+    "hc send t7 'about the --force flag'",
+    "hc read t7",
+    "hc wait t7",
+    "hc interrupt t7",
+    "hc ls",
+    "hc run cargo test",
+    "hc run --bg --name w claude 'task'",
+    "grep hc README.md",
+    "echo hc keys",
+    "ls keys",
+    "git log --force",
+    "env FOO=1 ls",
+  ]) {
+    test(`no match: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(false);
+    });
+  }
+});
+
+describe("hcAgentLaunchOf (flow 486 AC4)", () => {
+  const launches: Array<[string, string]> = [
+    ["hc run claude", "claude"],
+    ["hc run keryx shell", "keryx"],
+    ["hc run codex 'fix it'", "codex"],
+    ["hc run opencode", "opencode"],
+    ["hc run gemini", "gemini"],
+    ["hc run agy", "agy"],
+    ["hc run /usr/local/bin/claude", "claude"],
+    ["/opt/bin/hc run ~/.local/bin/codex", "codex"],
+    [`hc run --bg --name x --cwd y claude "task"`, "claude"],
+    ["hc run --name x --label a=b --parent t1 --timeout 5 --on m1 opencode", "opencode"],
+    ["hc run --rm --keep --no-parent --outlive-parent --no-notify --json gemini", "gemini"],
+    ["hc run -- env X=1 claude", "claude"],
+    ["hc run env X=1 /bin/claude -p hi", "claude"],
+    ["hc run --bg -- sudo -u me claude", "claude"],
+    [`hc run sh -c "claude --resume"`, "claude"],
+    [`hc run -- bash -c 'env A=1 codex'`, "codex"],
+    ["hc run bun src/cli.ts shell", "keryx"],
+    ["hc run npx keryx shell", "keryx"],
+    [`sh -c "hc run --bg claude"`, "claude"],
+    ["HC_FOO=1 hc run claude", "claude"],
+    ["cd /tmp && hc run --bg codex", "codex"],
+    ["hc --json run claude", "claude"],
+    ["hc run CLAUDE", "claude"],
+  ];
+  for (const [command, agent] of launches) {
+    test(command, () => expect(hcAgentLaunchOf(command)).toBe(agent));
+  }
+  for (const command of [
+    "hc run cargo test",
+    "hc run --bg --name claude cargo build",
+    "hc run -- env X=1 cargo test",
+    "hc run bun test",
+    "hc run",
+    "hc send t7 claude",
+    "hc read claude",
+    "echo hc run claude",
+    "claude",
+    "hc run --cwd claude ls",
+  ]) {
+    test(`undefined: ${command}`, () => expect(hcAgentLaunchOf(command)).toBeUndefined());
+  }
 });

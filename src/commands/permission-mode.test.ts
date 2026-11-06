@@ -391,3 +391,30 @@ test("resolveQuestionAnswerer: only auto hands a question to the model; trust is
     ["auto", "model"],
   ]);
 });
+
+// --- hcAgentLaunch (flow 486 AC4): an escalating floor like publishLease.
+
+test("hcAgentLaunch is a hard floor no mode lifts, including auto and trust, and never denies on its own", () => {
+  for (const mode of PERMISSION_MODES) {
+    for (const risk of ["shell", "destructive"] as const) {
+      expect(
+        resolveApprovalDecision({
+          mode,
+          risk,
+          destructive: false,
+          credentials: false,
+          sacReviewConfirmation: false,
+          readOnly: false,
+          hcAgentLaunch: true,
+        }),
+      ).toBe("ask");
+    }
+  }
+});
+
+test("hcAgentLaunch false or omitted changes nothing; readOnly still denies", () => {
+  const base = { risk: "shell", destructive: false, credentials: false, sacReviewConfirmation: false } as const;
+  expect(resolveApprovalDecision({ ...base, mode: "auto", readOnly: false, hcAgentLaunch: false })).toBe("auto");
+  expect(resolveApprovalDecision({ ...base, mode: "trust", readOnly: false })).toBe("auto");
+  expect(resolveApprovalDecision({ ...base, mode: "auto", readOnly: true, hcAgentLaunch: true })).toBe("deny");
+});

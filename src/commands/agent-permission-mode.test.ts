@@ -1451,3 +1451,40 @@ test("agent-message cannot use auto mode as human authorization", async () => {
   expect(asked).toBe(1);
   expect(ran()).toBe(false);
 });
+
+test("flow 486 AC4: hc run of an agent asks in every mode once per agent per session; a denial grants nothing", async () => {
+  for (const mode of ["ask", "trust", "auto"] as const) {
+    const { tool } = fakeTool("shell_exec", "shell");
+    const asked: { agent: string | undefined; cause: string | undefined }[] = [];
+    let answer = false;
+    const io: AgentIO = {
+      write: () => {},
+      permissionMode: () => mode,
+      requestApproval: async (_t, _i, meta) => {
+        asked.push({ agent: meta?.hcLaunch, cause: meta?.cause });
+        return answer;
+      },
+    };
+    const run = async (command: string): Promise<void> => {
+      await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+    };
+    await run("hc run --bg claude 'task'"); // denied: nothing granted
+    await run("hc run --bg claude 'task'"); // asks again
+    answer = true;
+    await run("hc run --bg claude 'task'"); // approved
+    await run("hc run -- env X=1 claude"); // granted: no launch ask
+    await run("hc run --bg codex"); // another agent asks again
+    await run("hc run cargo test"); // not an agent launch
+    const launchAsks = asked.filter((a) => a.agent !== undefined);
+    expect(launchAsks.map((a) => a.agent)).toEqual(["claude", "claude", "claude", "codex"]);
+    expect(launchAsks.every((a) => a.cause === "hc-launch")).toBe(true);
+    if (mode !== "ask") expect(asked).toHaveLength(4);
+  }
+});
+
+test("flow 486 AC4: with no approver an hc agent launch is refused", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto" };
+  await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command: "hc run claude" }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+  expect(ran()).toBe(false);
+});

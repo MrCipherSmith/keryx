@@ -26,7 +26,7 @@ import type { ApprovalCause } from "./approval-cause";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { tracePhase } from "../lib/phase-trace";
 import { reviewPublishRefusal } from "../review/publish-guard";
-import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
+import { hcAgentLaunchesOf, isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { isTrustRoutineCommand, isTrustRoutineTool, recordBunfigBaseline } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, resolveQuestionAnswerer, type PermissionMode } from "./permission-mode";
@@ -212,6 +212,12 @@ export interface ApprovalMeta {
    * attach to it.
    */
   publishLeaseDetail?: string;
+  /**
+   * Flow 486: the agent(s) an `hc run` in this shell command starts that this session has not granted yet
+   * (`hcAgentLaunchesOf`), comma-joined. A floor like {@link publishLease}: no mode, saved rule or session pattern
+   * answers it, and it is never remembered. An approval adds the agent to the session's grant set; a denial does not.
+   */
+  hcLaunch?: string;
   /**
    * Untrusted external content — a `web_fetch` / `web_search` / `search_tool` /
    * `use_tool` result — is already in this turn's history, and the call being
@@ -457,6 +463,12 @@ export interface AgentIO {
    * answer adds an entry; the model cannot.
    */
   trustedMcpTools?: Map<string, string>;
+  /**
+   * Flow 486: agents (`claude`, `codex`, `keryx`, …) the operator approved to start through `hc run` in this shell
+   * session. Session state, never persisted, filled only by a validated approval. Absent: `executeCall` creates it on
+   * first use, so a surface that predates it still gets the floor (and asks again after every restart).
+   */
+  hcLaunchGrants?: Set<string>;
   /**
    * Flow 396: whether the operator's `trustedMcpTools` grants may skip the prompt for this call.
    * A turn that came from Telegram returns `false`: an MCP `use_tool` always asks there, even for a
@@ -4613,6 +4625,7 @@ async function runAgentTurnCore(
             undefined,
             untrustedContentSeen,
             reviewRun,
+            io.mcpGrantsApply?.() === false ? undefined : (io.hcLaunchGrants ??= new Set<string>()),
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -5757,6 +5770,8 @@ async function executeCallUnbounded(
   untrustedContentSeen = false,
   // Set only for a turn that belongs to an automatic review (./automatic-review.ts).
   review?: AutomaticReviewRun,
+  // Flow 486: the session's `hc run` agent grants; absent (a Telegram turn) means every launch asks and none is recorded.
+  hcLaunchGrants?: Set<string>,
 ): Promise<InteractiveToolResult> {
   const mark = (name: string): void => {
     if (stage !== undefined) stage.current = name;
@@ -5918,6 +5933,10 @@ async function executeCallUnbounded(
     // ONLY here — `isPublishCommand` knows nothing about the bus, and
     // `busLeases` is consulted nowhere else in this function.
     const publishLease = isPublishCommand(command) && (busLeases?.appliesToMe("git-publish") ?? false);
+    // Flow 486: `hc run <agent>` starts another agent outside keryx's limits. Asks in every mode until the operator
+    // has approved that agent in this session. Inspects the command line only: a script that calls hc is not seen.
+    const hcPending = hcAgentLaunchesOf(command).filter((agent) => hcLaunchGrants?.has(agent) !== true);
+    const hcLaunch = hcPending.length > 0 ? hcPending.join(", ") : undefined;
     const publishLeaseHolder = publishLease ? busLeases?.heldBy?.("git-publish") : undefined;
     const rawDecision = resolveApprovalDecision({
       mode,
@@ -5927,6 +5946,7 @@ async function executeCallUnbounded(
       sacReviewConfirmation,
       readOnly: isReadOnly,
       publishLease,
+      hcAgentLaunch: hcLaunch !== undefined,
     });
     const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
     // The untrusted-content latch must not stall a long trust-mode review on routine local commands.
@@ -5948,6 +5968,7 @@ async function executeCallUnbounded(
       !credentials &&
       !sacReviewConfirmation &&
       !publishLease &&
+      hcLaunch === undefined &&
       !isReadOnly &&
       !untrustedOrigin &&
       !gated.hookAsked &&
@@ -6003,6 +6024,7 @@ async function executeCallUnbounded(
               ...(publishLease && publishLeaseHolder !== undefined
                 ? { publishLeaseDetail: `held by @${publishLeaseHolder.name} — "${publishLeaseHolder.reason}"` }
                 : {}),
+              ...(hcLaunch !== undefined ? { hcLaunch } : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedGate ? { untrustedOrigin: true } : {}),
               cause: classifyApprovalCause({
@@ -6010,6 +6032,7 @@ async function executeCallUnbounded(
                 credentials,
                 confirmation: sacReviewConfirmation,
                 publishLease,
+                hcLaunch: hcLaunch !== undefined,
                 hookAsk: gated.hookAsked,
                 untrusted: untrustedGate,
                 shell: true,
@@ -6027,6 +6050,8 @@ async function executeCallUnbounded(
       if (!isApprovalFor(response, fingerprint)) {
         return { output: denialOutput(untrustedGate ? untrustedDenial : "command not approved by the user; not executed"), isError: true };
       }
+      // An approval grants these agents for the rest of the session; a denial returned above and grants nothing.
+      for (const agent of hcPending) hcLaunchGrants?.add(agent);
       if (
         mcpFqn !== undefined &&
         currentMcpFingerprint !== undefined &&

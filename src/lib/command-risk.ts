@@ -999,7 +999,85 @@ export function touchesSchedulerControl(command: string): boolean {
  * included; no answer is remembered, and a pattern for any of them is refused.
  */
 export function touchesHumanConfirmation(command: string): boolean {
-  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command) || touchesReviewPublish(command) || touchesOperatorDecision(command);
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command) || touchesReviewPublish(command) || touchesOperatorDecision(command) || touchesHcDialogControl(command);
+}
+
+/**
+ * `hc` (herdr's terminal CLI) can answer another terminal's dialog: `hc keys <t> enter` presses the keys, and `hc send
+ * <t> <text> --force` types into a program that is blocked on a dialog. An agent that does either approves its own (or
+ * a peer's) confirmation, so both sit in the human-confirmation floor with the other families here. Naming a terminal
+ * id by assignment (`HC_TERMINAL_ID=t1 hc send …`, also through `env`) makes hc believe the caller is that terminal;
+ * it is matched on the RAW words, because `stripAssignments`/`peelWrappers` drop the assignment before a visitor sees
+ * the command. `hc send` without `--force`, `hc read`, `hc wait`, `hc interrupt` (it stops a program, it cannot approve
+ * a dialog) and `hc run` do not match here (`hc run` has its own floor, {@link hcAgentLaunchOf}).
+ *
+ * HONEST LIMIT: these inspect the command line. A script that calls hc, or a variable-built command, is not covered.
+ */
+export function touchesHcDialogControl(command: string): boolean {
+  return anySimpleCommand(command, (words, _expands, rawWords) => {
+    if (baseName(words[0]) !== "hc") return false;
+    if (rawWords.some((w) => /^HC_TERMINAL_ID=/i.test(w))) return true;
+    const rest = words.slice(1);
+    const subAt = rest.findIndex((w) => !w.startsWith("-"));
+    if (subAt < 0) return false;
+    const sub = rest[subAt]!.toLowerCase();
+    if (sub === "keys") return true;
+    return sub === "send" && rest.slice(subAt + 1).some((w) => w === "--force" || w.startsWith("--force="));
+  });
+}
+
+/** Agents whose launch through `hc run` hands another agent a terminal outside keryx's limits. */
+const HC_LAUNCHABLE_AGENTS: ReadonlySet<string> = new Set(["keryx", "claude", "codex", "opencode", "gemini", "agy"]);
+/** `hc run` options that take the next word as their value (`hc run --help`). */
+const HC_RUN_VALUE_OPTIONS: ReadonlySet<string> = new Set(["--name", "--cwd", "--on", "--label", "--parent", "--timeout"]);
+
+/** The agents every `hc run` in the line starts, in order of appearance, without repeats. Pure. */
+export function hcAgentLaunchesOf(command: string): string[] {
+  const found: string[] = [];
+  collectHcLaunches(command, found, 0);
+  return found;
+}
+
+function collectHcLaunches(command: string, found: string[], depth: number): void {
+  anySimpleCommand(command, (words) => {
+    if (baseName(words[0]) !== "hc") return false;
+    const rest = words.slice(1);
+    const subAt = rest.findIndex((w) => !w.startsWith("-"));
+    if (subAt < 0 || rest[subAt]!.toLowerCase() !== "run") return false;
+    let i = subAt + 1;
+    for (; i < rest.length; i += 1) {
+      const w = rest[i]!;
+      if (w === "--") {
+        i += 1;
+        break;
+      }
+      if (!w.startsWith("-")) break;
+      if (HC_RUN_VALUE_OPTIONS.has(w)) i += 1;
+    }
+    collectAgentsOfProgram(rest.slice(i), found, depth);
+    return false;
+  });
+}
+
+/** The agent a program word list starts (through wrappers and `sh -c`), pushed onto `found`. */
+function collectAgentsOfProgram(program: readonly string[], found: string[], depth: number): void {
+  const peeled = peelWrappers(program);
+  if (peeled.inner !== undefined) {
+    if (depth >= MAX_SHELL_NESTING) return;
+    for (const seg of segmentsOfBothSpellings(peeled.inner)) collectAgentsOfProgram(seg.words, found, depth + 1);
+    return;
+  }
+  let name = baseName(peeled.words[0]);
+  if (JS_RUNNERS.has(name)) {
+    const entry = peeled.words.findIndex((w, k) => k > 0 && !w.startsWith("-") && !["run", "x", "exec"].includes(w));
+    name = entry < 0 ? name : KERYX_ENTRY_NAMES.has(baseName(peeled.words[entry])) ? "keryx" : name;
+  }
+  if (HC_LAUNCHABLE_AGENTS.has(name) && !found.includes(name)) found.push(name);
+}
+
+/** The first agent an `hc run` in the line starts (`claude`, `keryx`, …), or undefined when it starts none. Pure. */
+export function hcAgentLaunchOf(command: string): string | undefined {
+  return hcAgentLaunchesOf(command)[0];
 }
 
 const COVERAGE_WAIVER_FLAG = "--waive";
@@ -1121,7 +1199,11 @@ function wordExpansions(raw: string): boolean[] {
 }
 
 /** Run `visit` over every simple command, descending into `bash -c`/`eval` bodies and any word that is itself a command line. */
-function anySimpleCommand(command: string, visit: (words: string[], expands: readonly boolean[]) => boolean, depth = 0): boolean {
+function anySimpleCommand(
+  command: string,
+  visit: (words: string[], expands: readonly boolean[], rawWords: readonly string[]) => boolean,
+  depth = 0,
+): boolean {
   for (const seg of segmentsOfBothSpellings(command)) {
     const words = seg.words.map(unescapeWord);
     const peeled = peelWrappers(words);
@@ -1129,9 +1211,9 @@ function anySimpleCommand(command: string, visit: (words: string[], expands: rea
     // Should the two cuts ever disagree, every word is judged by its text (the wider reading).
     const all = cut.length === words.length ? cut : words.map(wordIsOpaque);
     const expands = all.slice(all.length - peeled.words.length);
-    if (visit(peeled.words, expands)) return true;
+    if (visit(peeled.words, expands, words)) return true;
     // A terminal driver runs the rest of its line as a program (`script -q /dev/null keryx review …`, `unbuffer keryx …`).
-    if (TERMINAL_DRIVERS.has(baseName(peeled.words[0])) && peeled.words.some((_w, i) => i > 0 && visit(peeled.words.slice(i), expands.slice(i)))) return true;
+    if (TERMINAL_DRIVERS.has(baseName(peeled.words[0])) && peeled.words.some((_w, i) => i > 0 && visit(peeled.words.slice(i), expands.slice(i), words))) return true;
     if (depth < MAX_SHELL_NESTING) {
       if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, depth + 1)) return true;
       if (words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, depth + 1))) return true;
