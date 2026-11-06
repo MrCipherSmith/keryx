@@ -349,7 +349,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
-import { frameSubmittedLine, HC_UNPARSED_HEADER, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
+import { frameSubmittedLine, HC_PASTED_HEADER, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -431,7 +431,7 @@ import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { createAgentHostStatus } from "./agent-host-status";
 import { createHerdrCoreReporter, createStatusWriter, type HerdrCoreAttention } from "./herdr-core-status";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
-import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
+import { setChoicePasteSink, shellApprovedOnceLine, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
@@ -1827,6 +1827,8 @@ export async function pickShellApproval(
   hookAsk = false,
   // Flow 426 (AC5): the one-line cause of this prompt, shown above the command.
   cause?: ApprovalCause,
+  // The agent an `hc run` starts (`ApprovalMeta.hcLaunch`), named in the cause line.
+  hcLaunch?: string,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1891,7 +1893,7 @@ export async function pickShellApproval(
           : "Allow shell command?",
     // Untruncated: `showComposerChoice` renders this in a scrollable, ctrl+o-
     // focusable box (its own defensive char cap), not a single collapsed line.
-    subtitle: cause !== undefined ? `${approvalCauseLine(cause)}\n${command}` : command,
+    subtitle: cause !== undefined ? `${approvalCauseLine(cause, hcLaunch)}\n${command}` : command,
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options,
@@ -6420,7 +6422,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
-          content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta)))}`,
+          content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta), meta?.hcLaunch))}`,
         }),
       );
     };
@@ -6856,6 +6858,7 @@ export async function launchTuiAgentShell(opts: {
           // hook asked about this specific call.
           ev.hookAsk || ev.untrustedOrigin,
           causeOfMeta(tool, meta),
+          meta?.hcLaunch,
         ),
       );
       input.focus();
@@ -6901,7 +6904,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `av${uid++}`,
-          content: otui.t`${roleChunk(otui, "ok", "approved (once)")}`,
+          content: otui.t`${roleChunk(otui, "ok", shellApprovedOnceLine(process.env))}`,
         }),
       );
       setMainAgent("running", "shell");
@@ -11163,7 +11166,7 @@ export async function launchTuiAgentShell(opts: {
         // history stores that framed text); every other line is passed as typed. A
         // Telegram line is the operator's own words and is never framed.
         const modelLine = source === undefined
-          ? agentShaped && !looksLikeHcMessage(line) ? `${HC_UNPARSED_HEADER}\n\n${line}` : frameSubmittedLine(line)
+          ? agentShaped && !looksLikeHcMessage(line) ? `${HC_PASTED_HEADER}\n\n${line}` : frameSubmittedLine(line)
           : line;
         void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
         signal: turnSignal,
@@ -11651,6 +11654,17 @@ export async function launchTuiAgentShell(opts: {
     chrome.onSubmit((line) => {
       runLine(line);
     });
+    // Text pasted into an open dialog (herdr-core types a child's report that way) never answers it; it is
+    // queued the way a busy agent-shaped line is, framed as text of unknown authorship (HC_PASTED_HEADER).
+    // An idle shell would start a turn at once, with a picker still open: hold the text until the choice closes.
+    setChoicePasteSink(
+      chrome.dock,
+      (text) => {
+        const line = text.trim();
+        if (line.length > 0) runLine(line, "agent-message");
+      },
+      () => !chrome.isBusy(),
+    );
 
     // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen
     // any more, and the submit handler above exists: only now may herdr-core see `idle` (it types a

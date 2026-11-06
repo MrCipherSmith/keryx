@@ -174,6 +174,50 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
     );
 }
 
+type PasteEvent = {
+  bytes: Uint8Array;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+};
+
+function onPaste(r: Renderer, handler: (event: PasteEvent) => void): () => void {
+  const input = (r as unknown as {
+    _internalKeyInput: {
+      onInternal: (e: string, h: (p: PasteEvent) => void) => void;
+      offInternal: (e: string, h: (p: PasteEvent) => void) => void;
+    };
+  })._internalKeyInput;
+  input.onInternal("paste", handler);
+  return () => input.offInternal("paste", handler);
+}
+
+/** Receives text that was pasted into an open choice's list step. */
+export type ChoicePasteSink = (text: string) => void;
+
+/** One sink per dock, so the call sites that open a choice never have to know about paste. */
+const pasteSinks = new WeakMap<object, { sink: ChoicePasteSink; shouldHold: () => boolean }>();
+
+/**
+ * Register (or, with `undefined`, remove) the place where text pasted into an open choice on `dock` goes.
+ * A paste into the list step can never answer the dialog: it restarts the accept delay, swallows the next
+ * Enter, and lands here. Without a sink the text is dropped and the dialog says so. When `shouldHold()` is true
+ * at paste time (an idle shell, where delivery would start a turn) the text is kept and delivered once the
+ * choice closes, however it closes.
+ */
+export function setChoicePasteSink(dock: object, sink: ChoicePasteSink | undefined, shouldHold: () => boolean = () => false): void {
+  if (sink === undefined) {
+    pasteSinks.delete(dock);
+  } else {
+    pasteSinks.set(dock, { sink, shouldHold });
+  }
+}
+
+/** The transcript line of a keyboard shell approval "once"; under herdr-core the author of the keystrokes is unverified. */
+export function shellApprovedOnceLine(env: Readonly<Record<string, string | undefined>>): string {
+  const underHc = (env["HC_TERMINAL_ID"] ?? "").trim().length > 0;
+  return underHc ? "approved (once) · author unverified: this terminal runs under herdr-core" : "approved (once)";
+}
+
 /** The slice of a renderable that handing the keyboard back reads. */
 type FocusTarget = {
   focus(): void;
@@ -400,6 +444,10 @@ function presentComposerChoice(
     const openedAt = Date.now();
     const acceptDelayMs = resolveAcceptDelay(request);
     let lastTypedAt = 0;
+    /** A paste reached the list step: the next Enter, whatever the gap, is part of it and answers nothing. */
+    let pasteArmed = false;
+    let pasteNotice: string | undefined;
+    const heldPastes: string[] = [];
     request.onOpen?.();
     const theme = getTheme();
 
@@ -420,7 +468,7 @@ function presentComposerChoice(
     });
     dock.add(title);
     const paintTitle = (): void => {
-      const hint = textStep === undefined ? listHint : "Enter send · Esc back";
+      const hint = textStep !== undefined ? "Enter send · Esc back" : pasteNotice !== undefined ? `${listHint} · ${pasteNotice}` : listHint;
       title.content = otui.t`${boldChunk(otui, request.title)} ${dimChunk(otui, hint)}`;
     };
 
@@ -700,6 +748,14 @@ function presentComposerChoice(
     function cleanup(): void {
       closed = true;
       unsub();
+      unsubPaste();
+      if (heldPastes.length > 0) {
+        const held = heldPastes.join("\n");
+        heldPastes.length = 0;
+        const registered = pasteSinks.get(dock);
+        // after the dock is free again, so the delivery cannot start a turn into a still-open choice
+        queueMicrotask(() => registered?.sink(held));
+      }
       request.signal?.removeEventListener("abort", onAbort);
       const mounted = [
         title,
@@ -766,6 +822,7 @@ function presentComposerChoice(
         return;
       }
       if (key.name === "escape") {
+        pasteArmed = false;
         finish(request.cancelId, "escape");
         key.preventDefault();
         key.stopPropagation();
@@ -822,6 +879,14 @@ function presentComposerChoice(
         return;
       }
       if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
+        if (pasteArmed) {
+          // The Enter that ends a paste: swallowed whatever the gap, once. A later, deliberate Enter answers.
+          pasteArmed = false;
+          debugEvent("choice.enter-ignored", { title: request.title, afterPaste: true });
+          key.preventDefault();
+          key.stopPropagation();
+          return;
+        }
         const now = Date.now();
         if (now - openedAt < acceptDelayMs || now - lastTypedAt < acceptDelayMs) {
           // Swallowed, not forwarded: it must not reach the composer either.
@@ -842,7 +907,37 @@ function presentComposerChoice(
         key.stopPropagation();
       }
     };
+    const onPasteEvent = (event: PasteEvent): void => {
+      // the text step: a paste belongs to its input, which has the focus
+      if (settled || textStep !== undefined) {
+        return;
+      }
+      lastTypedAt = Date.now();
+      pasteArmed = true;
+      event.preventDefault();
+      event.stopPropagation();
+      const text = new TextDecoder().decode(event.bytes);
+      const registered = pasteSinks.get(dock);
+      const sink = registered?.sink;
+      // the pasted text is never logged: only its size
+      debugEvent("choice.paste", { title: request.title, chars: text.length, sink: sink !== undefined });
+      if (sink === undefined) {
+        pasteNotice = "paste dropped";
+        paintTitle();
+        return;
+      }
+      if (registered !== undefined && registered.shouldHold()) {
+        heldPastes.push(text);
+        pasteNotice = "paste held";
+        paintTitle();
+        return;
+      }
+      pasteNotice = "paste queued";
+      paintTitle();
+      sink(text);
+    };
     const unsub = onKeypress(r, onKey);
+    const unsubPaste = onPaste(r, onPasteEvent);
     if (request.signal !== undefined) {
       request.signal.addEventListener("abort", onAbort, { once: true });
     }

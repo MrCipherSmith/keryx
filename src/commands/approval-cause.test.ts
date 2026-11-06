@@ -100,3 +100,12 @@ test("flow 486 hc-launch: an hc agent launch names hc-launch and the line names 
   expect(approvalCauseLine("hc-launch", "claude")).toContain("outside keryx's limits");
   expect(approvalCauseLine("hc-launch")).toContain("another agent outside keryx's limits");
 });
+
+test("the Telegram relay names the agent an hc run starts", () => {
+  const text = describeApprovalForTopic("shell_exec", JSON.stringify({ command: "hc run --bg claude x" }), {
+    cause: "hc-launch",
+    hcLaunch: "claude",
+  });
+  expect(text).toContain(approvalCauseLine("hc-launch", "claude"));
+  expect(text).toContain("starts claude as another agent");
+});
