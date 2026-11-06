@@ -493,14 +493,16 @@ function History({ record, outcomes, liveRef, query, messages }: {
         <h2>{t("history")}</h2>
         <span>{record.agentProfileId}</span>
       </header>
-      {query.hasNextPage && (
+      {(query.hasNextPage || (query.data?.pages.length ?? 0) > 1) && (
         <div className="session-history-pages">
           <Button
             variant="secondary"
-            disabled={query.isFetchingNextPage}
-            onClick={() => void query.fetchNextPage()}
+            aria-disabled={!query.hasNextPage || query.isFetching}
+            onClick={() => {
+              if (query.hasNextPage && !query.isFetching) void query.fetchNextPage();
+            }}
           >
-            {t("olderMessages")}
+            {t(query.hasNextPage ? "olderMessages" : "noOlderMessages")}
           </Button>
         </div>
       )}

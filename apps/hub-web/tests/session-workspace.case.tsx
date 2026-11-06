@@ -150,8 +150,11 @@ test("history opens at the latest page, then prepends earlier messages with expl
   const history = screen.getByRole("region", { name: "History" });
   expect(await within(history).findByText("Reply from agent")).toBeVisible();
   expect(within(history).queryByText("First message")).not.toBeInTheDocument();
-  fireEvent.click(within(history).getByRole("button", { name: "Older messages" }));
+  const older = within(history).getByRole("button", { name: "Older messages" });
+  older.focus();
+  fireEvent.click(older);
   expect(await within(history).findByText("First message")).toBeVisible();
+  expect(within(history).getByRole("button", { name: "No older messages" })).toHaveFocus();
   expect(within(history).getByText("First message")).toBeVisible();
   expect(within(history).getByText("Human")).toBeVisible();
   fireEvent.click(within(history).getByRole("button", { name: "Open run" }));

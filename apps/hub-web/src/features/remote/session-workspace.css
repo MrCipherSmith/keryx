@@ -511,3 +511,8 @@
   .composer-send-icon { display: block; }
   .composer-command-actions .hub-button { min-width: 44px; min-height: 44px; }
 }
+
+.session-history-pages [aria-disabled="true"] {
+  opacity: 0.65;
+  cursor: default;
+}

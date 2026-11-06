@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Markdown } from "../../components/Markdown";
 import { pendingAssistantText } from "./session-timeline";
@@ -44,53 +45,65 @@ export function SessionRunContext({ record, control, mode, conversation, message
       encodeURIComponent(record.activeRunId ?? ""),
     !!record.activeRunId,
   );
-  if (!record.activeRunId) {
-    if (mode === "attention") return null;
-    return (
-      <div className="session-run-empty">
-        <EmptyState>
-          <p>{copy.noActiveRun}</p>
-          <p>{copy.noActiveRunHint}</p>
-        </EmptyState>
-        <Button
-          variant="ghost"
-          onClick={() =>
-            hub.navigate({
-              tab: "runs",
-              sessionId: undefined,
-              runId: undefined,
-            })
-          }
-        >
-          {copy.openRuns}
-        </Button>
-      </div>
-    );
-  }
+  const lastRun = useRef<RunRecord | undefined>(undefined);
+  useEffect(() => {
+    if (query.data?.runId === record.activeRunId) lastRun.current = query.data;
+  }, [query.data, record.activeRunId]);
+  const live = Boolean(record.activeRunId);
+  const historyBehind = (messages?.at(-1)?.historyCursor ?? 0) < record.historyCursor;
+  const run = live ? query.data : historyBehind ? lastRun.current : undefined;
   return (
-    <div className="session-run-context">
-      <Feedback query={query} />
-      {query.data && (
-        <LoadedRun
-          key={query.data.runId}
-          run={query.data}
-          record={record}
-          control={control}
-          mode={mode}
-          conversation={conversation}
-          messages={messages}
-        />
+    <>
+      {!live && mode !== "attention" && (
+        <div className="session-run-empty">
+          <EmptyState>
+            <p>{copy.noActiveRun}</p>
+            <p>{copy.noActiveRunHint}</p>
+          </EmptyState>
+          <Button
+            variant="ghost"
+            onClick={() =>
+              hub.navigate({
+                tab: "runs",
+                sessionId: undefined,
+                runId: undefined,
+              })
+            }
+          >
+            {copy.openRuns}
+          </Button>
+        </div>
       )}
-    </div>
+      <div className="session-run-context">
+        {live && <Feedback query={query} />}
+        {run && (
+          <LoadedRun
+            key={run.runId}
+            run={run}
+            record={record}
+            control={control}
+            mode={mode}
+            conversation={conversation}
+            messages={messages}
+            readOnly={!live}
+          />
+        )}
+      </div>
+    </>
   );
 }
-function LoadedRun({ run, record, control, mode, conversation, messages }: Props & { run: RunRecord }) {
+
+function LoadedRun({ run, record, control, mode, conversation, messages, readOnly }: Props & { run: RunRecord; readOnly: boolean }) {
   const hub = useHub();
   const { t, i18n } = useTranslation("remote");
   const copy = sessionRunCopy[i18n.language.startsWith("ru") ? "ru" : "en"];
   const { timeline, query } = useRunTimeline(run);
   const cancel = useRemoteAction();
   const reply = pendingAssistantText(run.runId, timeline.events, messages ?? []);
+  // Keep only already visible text when the run has ended but history has not caught up.
+  if (readOnly) return conversation && reply
+    ? createPortal(<div className="session-live"><Markdown content={reply} /></div>, conversation)
+    : null;
   const toolLog = timeline.events.flatMap(event => event.kind === "log" && event.stream !== "assistant" ? [event] : []);
   const terminal = ["succeeded", "failed", "cancelled", "rejected", "lost", "unknown"].includes(run.state);
   const safe =

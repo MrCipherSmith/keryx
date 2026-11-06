@@ -1,4 +1,4 @@
-export default { composerKeyboardHint: "Enter — отправить · Shift+Enter — новая строка", newAssistantReply: "Новый ответ Keryx (сообщение {{cursor}}).", olderMessages: "Ранние сообщения",
+export default { composerKeyboardHint: "Enter — отправить · Shift+Enter — новая строка", newAssistantReply: "Новый ответ Keryx (сообщение {{cursor}}).", noOlderMessages: "Более ранних сообщений нет", olderMessages: "Ранние сообщения",
   sessionOpeningScope: "Проверьте, что на машине разрешены выбранная рабочая копия и профиль агента.", sessionOpeningRecovery: "Перед повторным открытием этой копии восстановите незавершённый запуск на машине.",
   messagePlaceholder: "Напишите сообщение…",
   searchCommands: "Поиск команд Keryx", noCommandsFound: "Подходящих команд нет.",
