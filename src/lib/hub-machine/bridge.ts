@@ -434,27 +434,23 @@ export class MachineBridge {
         this.flushingOutbox = true;
         let pending = false;
         try {
-            for (const cursor of this.ledger!.cursors()) {
-                const events = this.ledger!.unsentEvents(cursor.stream);
-                for (const item of events) {
-                    const frame = cursor.stream.startsWith('session:') ? this.envelope('session-event', item.payload as Control['SessionEvent']) : this.envelope('run-event', item.payload as FrameOf<'run-event'>['payload']);
-                    try {
-                        this.send(frame);
-                    }
-                    catch (cause) {
-                        if (cause instanceof MachineError && ['quota-exceeded', 'machine-offline'].includes(cause.code)) {
-                            pending = true;
-                            break;
-                        }
-                        throw cause;
-                    }
-                    this.ledger!.markSent(cursor.stream, item.seq);
+            const batchSize = 500;
+            const events = this.ledger!.unsentEvents(batchSize);
+            for (const { stream, seq, payload } of events) {
+                const frame = stream.startsWith('session:') ? this.envelope('session-event', payload as Control['SessionEvent']) : this.envelope('run-event', payload as FrameOf<'run-event'>['payload']);
+                try {
+                    this.send(frame);
                 }
-                if (events.length === 500)
-                    pending = true;
-                if (pending)
-                    break;
+                catch (cause) {
+                    if (cause instanceof MachineError && ['quota-exceeded', 'machine-offline'].includes(cause.code)) {
+                        pending = true;
+                        break;
+                    }
+                    throw cause;
+                }
+                this.ledger!.markSent(stream, seq);
             }
+            pending ||= events.length === batchSize;
         }
         catch (cause) {
             this.notice(cause);
@@ -501,8 +497,8 @@ export class MachineBridge {
             return;
         }
         if (frame.type === 'run-event-ack') {
-            this.flushOutbox();
             this.ledger!.ackEvents(`run:${frame.payload.runId}`, frame.payload.localSeq);
+            this.flushOutbox();
             const run = this.runs.get(frame.payload.runId);
             if (run?.terminalSeq && frame.payload.localSeq >= run.terminalSeq && !run.publishing) {
                 run.publishing = true;

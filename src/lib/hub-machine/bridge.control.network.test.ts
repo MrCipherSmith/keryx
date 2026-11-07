@@ -1,11 +1,42 @@
-import {expect,test} from 'bun:test';
+import {expect,spyOn,test} from 'bun:test';
 import {writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {bridgeHarness,wait} from './bridge.test-support';
 import {success} from '../../hub/remote-v2/fixture.test-support';
-import {okReply} from '../../commands/agent.test-helpers';
+import {okReply,scriptedProvider} from '../../commands/agent.test-helpers';
+import {MachineLedger} from './ledger';
 
 const h=bridgeHarness();
+
+test('Stop reaches the native runtime during streaming without scanning acknowledged history', async () => {
+ const provider = scriptedProvider([]);
+ let abortObserved = false;
+ provider.provider.stream = (_request, options) => (async function* () {
+  try {
+   for (let sequence = 0; !options.signal?.aborted; sequence++) {
+    yield {kind:'text_delta', attemptId:options.attemptId, sequence, text:'Streaming. '};
+    await Bun.sleep(8);
+   }
+  } finally {
+   abortObserved = options.signal?.aborted === true;
+  }
+ })();
+ const machine = await h.machine({provider});
+ const session = machine.session;
+ const lease = (await session.claim()).lease;
+ const historyScan = spyOn(MachineLedger.prototype, 'cursors');
+ try {
+  const turn = await session.turn(lease, 'Stream until interrupted');
+  const runId = turn.runId!;
+  await wait(() => session.events(runId), events => events.filter(event => event.kind === 'log' && event.stream === 'assistant').length >= 24);
+  expect((await session.cancel(lease, runId)).status).toBe(200);
+  await session.waitRun(runId, run => run.state === 'cancelled');
+  expect(abortObserved).toBe(true);
+  expect(historyScan).not.toHaveBeenCalled();
+ } finally {
+  historyScan.mockRestore();
+ }
+});
 
 test('R11.1 a start-turn message refused after its pool claim ends failed, releases only its own slot and leaves the session not busy',async()=>{
  const m=await h.machine({scripts:[okReply]});const s=m.session;const lease=(await s.claim()).lease;
