@@ -1,4 +1,5 @@
 import {expect,test} from 'bun:test';
+import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {bridgeHarness,wait,allowAll,newFilePatch,gated} from './bridge.test-support';
@@ -34,6 +35,48 @@ test('R1.2 a session released by the local owner is taken over, resumed and cont
 const alive=(pid:number|undefined)=>{if(pid===undefined)return false;try{process.kill(pid,0);return true;}catch{return false;}};
 /** Retries a session mutation that re-reads its pins while Hub still applies the previous accepted operation or a version moved under it. */
 async function settled(attempt:()=>Promise<Response>){let response!:Response;await wait(async()=>{response=await attempt();if(response.status!==409)return true;const body=await response.clone().json() as {error:{code:string;message:string}};return body.error.code!=='stale-version'&&!body.error.message.includes('waiting for machine application');},v=>v);return response;}
+test('closing an idle session frees the same checkout for a new session and the original can resume when it is free',async()=>{
+ const m=await h.machine({base:socketBase,scripts:[okReply,okReply,okReply]});
+ const first=m.session;const owner=await h.owner(m.state,m.bridge);
+ const firstLease=(await first.claim()).lease;
+ const run=await first.turn(firstLease,'Remember the first conversation');
+ await first.waitRun(run.runId!,v=>v.state==='succeeded');
+ const nativeId=(await owner.inspect(first.sessionId)).sessions[0]!.nativeSessionId;
+ const close=async(s:typeof first,lease:Control['ControllerLease'])=>{
+  const receipt=await success<Control['SessionOperationReceipt']>(await settled(async()=>s.post('/close',{expectedSessionVersion:(await s.read()).version,controller:s.binding(lease),mode:'when-idle'})));
+  return wait(()=>s.operation<Control['SessionOperationReceipt']>(receipt.operationId),v=>v.status==='applied');
+ };
+ await close(first,firstLease);
+ expect((await owner.inspect(first.sessionId)).sessions[0]).toMatchObject({checkoutOwned:false,session:{state:'closed'}});
+
+ const machineId=m.state.machine.machineId;
+ const {inventory}=await h.get<{inventory:{inventoryVersion:number;checkouts:Array<{checkoutId:string;headSha:string}>}}>(`/hub/v2/machines/${machineId}`);
+ const checkout=inventory.checkouts[0]!;
+ const created=await success<Control['SessionOperationReceipt']>(await h.post(`/hub/v2/projects/${h.hub().project.id}/sessions`,{
+  machineId,checkoutId:checkout.checkoutId,agentProfileId:'fixture',expectedInventoryVersion:inventory.inventoryVersion,
+  expectedHeadSha:checkout.headSha,capabilityDigest:m.digest,policyDigest:m.digest,title:'Second conversation on the same checkout',
+ }));
+ expect(created.sessionId).not.toBe(first.sessionId);
+ const second=h.sessionHandle(created.sessionId,m.catalogue.catalogueDigest);
+ await wait(second.read,v=>v.state==='idle');
+ expect((await owner.inspect(second.sessionId)).sessions[0]).toMatchObject({checkoutOwned:true,session:{checkoutId:checkout.checkoutId}});
+ const secondLease=(await second.claim()).lease;
+ const secondRun=await second.turn(secondLease,'Start a separate conversation');
+ await second.waitRun(secondRun.runId!,v=>v.state==='succeeded');
+ await close(second,secondLease);
+
+ const resumed=await success<Control['SessionOperationReceipt']>(await settled(async()=>{
+  const current=await first.read();
+  return first.post('/resume',{expectedSessionVersion:current.version,controller:first.binding(firstLease),expectedHistoryVersion:current.historyVersion,expectedWorkspaceBaseline:current.workspaceBaseline});
+ }));
+ await wait(()=>first.operation<Control['SessionOperationReceipt']>(resumed.operationId),v=>v.status==='applied');
+ expect((await owner.inspect(first.sessionId)).sessions[0]).toMatchObject({nativeSessionId:nativeId,checkoutOwned:true});
+ const final=await first.turn(firstLease,'Continue the original conversation');
+ await first.waitRun(final.runId!,v=>v.state==='succeeded');
+ expect(JSON.stringify(m.provider.requests[2])).toContain('Remember the first conversation');
+ expect(JSON.stringify(m.provider.requests[2])).not.toContain('Start a separate conversation');
+ expect(m.bridge.connected).toBe(true);
+},40000);
 test('R1.3 cancel-and-close while busy settles only after measured cessation, seals the queue, keeps same-holder renewal and resume reauthorizes the retained item once',async()=>{
  const m=await h.machine({approve:allowAll,scripts:[callRound('busy-sleep','shell_exec',JSON.stringify({command:'sleep 30'})),okReply]});const s=m.session;
  let lease=(await s.claim()).lease;const turn=await s.turn(lease,'Busy with a supervised sleep');await s.waitRun(turn.runId!,v=>v.state==='running');
@@ -60,6 +103,7 @@ test('R1.3 cancel-and-close while busy settles only after measured cessation, se
 const closeCommand=async()=>(await h.hubCommands()).find(c=>c.envelope.kind==='close-session');
 test('R1.3 close when-idle while busy is recorded pending, seals the queue and closes at the turn boundary before any queued work is admitted',async()=>{
  const m=await h.machine({scripts:[okReply,okReply]});const s=m.session;const release=gated(m.provider);
+ const checkoutLease=path.join(m.state.cwd,'.git','keryx-machine-lease.json');
  const lease=(await s.claim()).lease;const turn=await s.turn(lease,'Busy until the test releases it');await s.waitRun(turn.runId!,v=>v.state==='running');
  const queued=await s.turn(lease,'Queued before the close');expect(queued.status).toBe('queued');await wait(s.queue,v=>v.items.some(i=>i.operationId===queued.operationId&&i.state==='queued'));
  try{
@@ -67,10 +111,10 @@ test('R1.3 close when-idle while busy is recorded pending, seals the queue and c
   // The machine records the close as admitted while the turn still runs: it is neither refused nor reported applied early.
   expect((await wait(closeCommand,v=>v?.receipt!==undefined))!.receipt!.status).toBe('admitted');
   await Bun.sleep(300);expect((await s.run(turn.runId!)).state).toBe('running');expect((await s.operation<Control['SessionOperationReceipt']>(close.operationId)).status).toBe('pending');
-  expect((await s.read()).state).toBe('busy');expect((await s.message(lease,'After the close request')).status).toBe(409);
+  expect((await s.read()).state).toBe('busy');expect(existsSync(checkoutLease)).toBe(true);expect((await s.message(lease,'After the close request')).status).toBe(409);
   expect((await s.queue()).items.find(i=>i.operationId===queued.operationId)?.state).toBe('queued');
   release();
-  await s.waitRun(turn.runId!,v=>v.state==='succeeded');const closed=await wait(s.read,v=>v.state==='closed');expect(closed.activeRunId).toBeNull();
+  await s.waitRun(turn.runId!,v=>v.state==='succeeded');const closed=await wait(s.read,v=>v.state==='closed');expect(closed.activeRunId).toBeNull();expect(existsSync(checkoutLease)).toBe(false);
   expect((await wait(()=>s.operation<Control['SessionOperationReceipt']>(close.operationId),v=>v.status!=='pending')).status).toBe('applied');expect((await closeCommand())!.status).toBe('applied');
   // The queued item was never admitted: it is suspended for an explicit later reauthorization and the model saw only the first turn.
   expect((await wait(s.queue,v=>v.items.some(i=>i.operationId===queued.operationId&&i.state==='suspended'))).items.filter(i=>i.state==='queued'||i.state==='admitted')).toEqual([]);
