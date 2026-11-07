@@ -167,7 +167,7 @@ export class MachineConnection {
         this.socket!.send(raw);
     }
     get currentEpoch(): number { return this.epoch; }
-    async request(route: string, body?: unknown, idempotencyKey?: string): Promise<unknown> {
+    async request(route: string, body?: unknown, idempotencyKey?: string, onHeaders?: (headers: Headers) => void): Promise<unknown> {
         if (idempotencyKey !== undefined && !/^[A-Za-z0-9:._-]{1,200}$/.test(idempotencyKey))
             throw new MachineError('invalid-idempotency-key');
         if (!route.startsWith('/hub/v2/') || route.includes('..') || (route.includes('?') && !/^\/hub\/v2\/machines\/[A-Za-z0-9._:-]+\/recovery\?after=\d+$/.test(route)))
@@ -191,6 +191,7 @@ export class MachineConnection {
         const parsed = parseClosedJson(await readBoundedResponse(response, LIMITS.eventPageBytes), LIMITS.eventPageBytes);
         if (!parsed.ok)
             throw new MachineError(parsed.error.code);
+        onHeaders?.(response.headers);
         return parsed.value;
     }
     async authorize(commandId: string, request: Control['AuthorizeCommand'], authorizedBy: string): Promise<Control['AuthorizationGrant']> {

@@ -140,9 +140,12 @@ function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
   const m = machines.data?.machines.find(
     (m) => m.machineId === draft.machineId,
   );
-  const c = m?.inventory?.checkouts.find(
-    (c) => c.projectId === hub.projectId && c.checkoutId === draft.checkoutId,
-  );
+  const checkouts = m?.inventory?.checkouts.filter(c => c.projectId === hub.projectId) ?? [];
+  const c = checkouts.find(c => c.checkoutId === draft.checkoutId);
+  const blockedCheckouts = checkouts.filter(c => !c.available || c.busy);
+  const checkoutReason = (checkout: (typeof checkouts)[number]) =>
+    checkout.busy ? t("busy") : t("sessionLaunchReasons." + (checkout.agentProfiles[0]?.reason ?? "checkout-unavailable"),
+      { defaultValue: t("sessionLaunchReasons.checkout-unavailable") });
   const profile = c?.agentProfiles.find((p) => p.profileId === draft.profileId);
   const flows = useQuery({
     queryKey: [hub.scopeKey, hub.projectId, "flows"],
@@ -230,19 +233,24 @@ function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
           }
         >
           <option value="">{t("choose")}</option>
-          {m?.inventory?.checkouts
-            .filter((c) => c.projectId === hub.projectId)
-            .map((c) => (
+          {checkouts.map((c) => (
               <option
                 key={c.checkoutId}
                 value={c.checkoutId}
                 disabled={!c.available || c.busy}
               >
-                {c.label}{!c.clean && ` · ${t("dirty")}`}{c.busy && ` · ${t("busy")}`}
+                {c.label}{c.available && !c.clean && ` · ${t("dirty")}`}
+                {(!c.available || c.busy) && ` · ${checkoutReason(c)}`}
               </option>
             ))}
         </Select>
       </Field>
+      {m?.inventory && checkouts.length === 0 && <Notice>{t("sessionLaunchNoCheckouts")}</Notice>}
+      {blockedCheckouts.length > 0 && <ul className="space-y-1 text-sm text-slate-500 break-words">
+        {blockedCheckouts.map(checkout => <li key={checkout.checkoutId}>
+          {checkout.label}: {checkoutReason(checkout)}
+        </li>)}
+      </ul>}
       {c?.available && !c.busy && !c.clean && <Notice>{t("sessionLaunchDirtyCheckout")}</Notice>}
       <Field label={t("profile")}>
         <Select
@@ -258,11 +266,17 @@ function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
                 p.adapter !== "keryx-native-v1" || p.readiness !== "ready"
               }
             >
-              {p.profileId} · {p.readiness} · {p.reason}
+              {p.profileId}{p.readiness !== "ready" && ` · ${t("sessionLaunchReasons." + p.reason,
+                { defaultValue: t("sessionLaunchReasons.adapter-unsupported") })}`}
             </option>
           ))}
         </Select>
       </Field>
+      {c?.available && !c.busy && c.agentProfiles.filter(p => p.readiness !== "ready").map(p =>
+        <p key={p.profileId} className="text-sm text-slate-500 break-words">
+          {p.profileId}: {t("sessionLaunchReasons." + p.reason, { defaultValue: t("sessionLaunchReasons.adapter-unsupported") })}
+        </p>
+      )}
       <Field label={t("title")}>
         <Input
           value={draft.title}

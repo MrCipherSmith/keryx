@@ -1,7 +1,7 @@
 {
   "protocolVersion": 2,
   "ajv": "8.20.0",
-  "machineSchemaSha256": "1e1c2cbd33110b25229b012296e5688637e879f7c8c69bcaa7d56ee76e2bdfca",
+  "machineSchemaSha256": "be6d384ef51261f3e5a08306c999af97bd00c7fac8fcd7b04755abadbd094661",
   "controlSchemaSha256": "b235475c3071e925d8fe71f918f4c176cc1ad687606e6df1b68765e9ecc23f2b",
-  "validatorsSha256": "830a74ac22b28b5c7c0db8f93377de2fe8daebd50f6f7b1c89aa292aac425574"
+  "validatorsSha256": "08763f1188f3919180db65af85df6e58d5ac8d54a9ec9d0a0f31d0c1abc2f30d"
 }

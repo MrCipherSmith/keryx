@@ -411,6 +411,32 @@ test("a checkout with existing changes can start a session and explains where re
   fireEvent.click(submit);
   await waitFor(() => expect(window.location.search).toContain("session=s2"));
 });
+test("the launch form names checkout and profile blockers beside their fields", async () => {
+  serveCreate([]);
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    if (String(url).endsWith("/machines?projectId=p")) {
+      const inventory = machineFixture.inventory!;
+      const c = inventory.checkouts[0]!;
+      return Response.json({ machines: [{
+        ...machineFixture, inventory: { ...inventory, checkouts: [
+          { ...c, available: false, clean: false, checkoutId: "too-large", label: "Oversized",
+            agentProfiles: c.agentProfiles.map(p => ({ ...p, readiness: "setup-required", reason: "checkout-too-large" })) },
+          { ...c, agentProfiles: c.agentProfiles.map(p => ({ ...p, readiness: "setup-required", reason: "local-policy" })) },
+        ] },
+      }] });
+    }
+    return original(url, init);
+  });
+  useDraftStore.getState().put("remote-create:2:p", launchDraft);
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByRole("option", { name: /Oversized · Working copy exceeds/ })).toBeDisabled();
+  expect(screen.getByRole("listitem")).toHaveTextContent("2 GiB or 50,000 entries");
+  expect(screen.getByRole("option", { name: /The local policy does not allow this profile/ })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+});
+
 test("an empty title is named as the remaining requirement", async () => {
   useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, title: "" });
   show();

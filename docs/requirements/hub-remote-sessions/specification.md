@@ -145,6 +145,12 @@ Session commands/events, controller generations, configuration snapshots and ad-
 
 ## 14. Normative companion manifest
 
+The inventory profile reason vocabulary includes three checkout blockers: snapshot
+quota, active Git operation, and unsupported workspace files. The Hub advertises
+support in the authenticated recovery response header
+`Keryx-Checkout-Blocker-Reasons: 1`. Machines use `checkout-unavailable`
+when the header is absent, so older Hubs can still accept the entire inventory.
+
 These exact companion bytes are part of the reviewed contract. The implementation agent must check them against this pinned main document. A changed normative companion requires an explicit updated specification decision. JSON schema bytes are available in the exact readable schema blocks; runtime authorization/state/byte checks remain additional requirements.
 
 | Companion | SHA256 | Hub document |
@@ -152,6 +158,6 @@ These exact companion bytes are part of the reviewed contract. The implementatio
 | protocol.md | `0500239b2e1943547bf25a1d743df0b405df1d0b860720a8a92ca92f4ad58515` | specs/hub-remote-sessions/protocol.md |
 | security.md | `d09adec21c67527e51181fc9acc08c3f7d8e29320d5576ccc732c594ab8b7a0d` | specs/hub-remote-sessions/security.md |
 | session-runtime.md | `55d3c2c5e80967f52b19536865ced5a12d80911adf61357ce0f24716003c6c76` | specs/hub-remote-sessions/session-runtime.md |
-| schemas/machine-protocol.schema.json | `1e1c2cbd33110b25229b012296e5688637e879f7c8c69bcaa7d56ee76e2bdfca` | Exact JSON block in specs/hub-remote-sessions/schemas.md |
+| schemas/machine-protocol.schema.json | `be6d384ef51261f3e5a08306c999af97bd00c7fac8fcd7b04755abadbd094661` | Exact JSON block in specs/hub-remote-sessions/schemas.md |
 | schemas/control-api.schema.json | `b235475c3071e925d8fe71f918f4c176cc1ad687606e6df1b68765e9ecc23f2b` | Exact JSON block in specs/hub-remote-sessions/schemas.md |
-| schemas.md | `d31307f5ae39cb93eab899fe9133491a7a013645ea3f29dc2ed95c4682be3a48` | specs/hub-remote-sessions/schemas.md |
+| schemas.md | `0f6a9d21757ed5856999a5af36fd05318e6470a7aa2ee817b5e35d578964e961` | specs/hub-remote-sessions/schemas.md |

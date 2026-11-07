@@ -328,7 +328,9 @@ export function createRemoteControl(ports: RemotePorts) {
       let count = 0, bytes = 2048;
       for (; count < Math.max(runs.length, sessions.length); count++) { const size = Buffer.byteLength(JSON.stringify(runs[count] ?? null)) + Buffer.byteLength(JSON.stringify(sessions[count] ?? null)) + 2; if (bytes + size > LIMITS.eventPageBytes) break; bytes += size; }
       const cursor = after + count;
-      return json(control("RecoveryPage", { runs:runs.slice(0,count), sessions:sessions.slice(0,count), cursor, hasMore: Math.max(all.length,allSessions.length) > cursor, hubSequence: m.hubSequence }));
+      const response = json(control("RecoveryPage", { runs:runs.slice(0,count), sessions:sessions.slice(0,count), cursor, hasMore: Math.max(all.length,allSessions.length) > cursor, hubSequence: m.hubSequence }));
+      response.headers.set("Keryx-Checkout-Blocker-Reasons", "1");
+      return response;
     }
     if (request.method !== "POST") fail(405, "method-not-allowed", "Unsupported machine method");
     const key = mutationKey(request);

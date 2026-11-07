@@ -416,7 +416,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "7978813308655ec691435e6392805c4c061fca2d8c5104e1ecd3eea9e8be4eca",
+          "sha256": "069d88c444da424612f0da0041eae04c05827e3320ec4c61ce4aa99e3d27b2f7",
           "anchor": "line:1"
         },
         {
@@ -516,7 +516,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "7978813308655ec691435e6392805c4c061fca2d8c5104e1ecd3eea9e8be4eca",
+          "sha256": "069d88c444da424612f0da0041eae04c05827e3320ec4c61ce4aa99e3d27b2f7",
           "anchor": "line:1"
         },
         {
@@ -573,7 +573,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "7978813308655ec691435e6392805c4c061fca2d8c5104e1ecd3eea9e8be4eca",
+          "sha256": "069d88c444da424612f0da0041eae04c05827e3320ec4c61ce4aa99e3d27b2f7",
           "anchor": "line:1"
         },
         {
@@ -3467,7 +3467,7 @@
         },
         {
           "path": "src/lib/hub-machine/bridge.ts",
-          "sha256": "7978813308655ec691435e6392805c4c061fca2d8c5104e1ecd3eea9e8be4eca",
+          "sha256": "069d88c444da424612f0da0041eae04c05827e3320ec4c61ce4aa99e3d27b2f7",
           "anchor": "line:1"
         },
         {
@@ -5515,7 +5515,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -5544,7 +5544,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -5573,7 +5573,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -5690,7 +5690,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -5731,7 +5731,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -5765,7 +5765,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -5794,7 +5794,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -5823,7 +5823,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -5854,7 +5854,7 @@
       "proofIds": [],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -6644,7 +6644,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -6673,7 +6673,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -6702,7 +6702,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "review/governance inspection"
       }
     },
@@ -6798,7 +6798,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Unknown ownership, ambiguous external edits, quota-limited provenance checks or a restarted uncertain executor require reconciliation/refusal"
       }
     },
@@ -6832,7 +6832,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Unknown ownership, ambiguous external edits, quota-limited provenance checks or a restarted uncertain executor require reconciliation/refusal"
       }
     },
@@ -7739,7 +7739,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -7780,7 +7780,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -7821,7 +7821,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -7876,7 +7876,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -7905,7 +7905,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -7934,7 +7934,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -7963,7 +7963,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8013,7 +8013,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8042,7 +8042,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8071,7 +8071,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8100,7 +8100,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8129,7 +8129,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8158,7 +8158,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8269,7 +8269,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8303,7 +8303,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -8332,7 +8332,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Security-local setup and unimplemented vendor adapters are explicit capability boundaries"
       }
     },
@@ -10521,7 +10521,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "message queue edit/remove"
       }
     },
@@ -11672,7 +11672,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "message queue edit/remove"
       }
     },
@@ -11727,7 +11727,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "message queue edit/remove"
       }
     },
@@ -11748,7 +11748,7 @@
       ],
       "scopeReference": {
         "path": "docs/requirements/hub-remote-sessions/specification.md",
-        "sha256": "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",
+        "sha256": "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",
         "anchor": "Pure terminal display functions are client concerns."
       }
     },
@@ -12753,7 +12753,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6bcb56c272857612d0fc0eb1b12c1c5949ae5c8e29e4a146007bbf655a01b477"
+      "receiptDigest": "0213bbff763b9494960ab6346282c4cd0834bc4adbebc42675191d0cfb13775f"
     },
     {
       "variantId": "goal.-workspace",
@@ -12777,7 +12777,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5938ce088d6000b71866176885aedd6192378108f3eff0891346fdc8ad5236f8"
+      "receiptDigest": "f96b6c91b09d7ca9d870292927ef277fb9aa0281f1b43d216be49e1122ede057"
     },
     {
       "variantId": "sessions.picker",
@@ -12785,7 +12785,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "02103c512c30dce075404521f2f0293169f7eb76a1eeef311e95d84e13e44e67"
+      "receiptDigest": "12814a101cebeeff1da3f236265d416bfd98ced7aaa6755d0c640ee035e310a3"
     },
     {
       "variantId": "sessions.open",
@@ -12793,7 +12793,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c3075b6bdf97d8b19a4323ba53fce7cec6f1697ed3bde94d4e70f9a5321c63cf"
+      "receiptDigest": "1bd188ab678921787f67f2f34d594884b76e53157e9e9df283d11a2e1e4293de"
     },
     {
       "variantId": "sessions.resume",
@@ -12801,7 +12801,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "eb0cde3dce42e794d1bfe4be909a4653bddab1d0d2b64f7106a5faaf5ac05c5e"
+      "receiptDigest": "2d8279c541156f039b92cfddd7330e22491c8bd947d52c5d095a82fb32d90702"
     },
     {
       "variantId": "sessions.fork",
@@ -12809,7 +12809,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d666fc10545297998313cd6cc31260825b9d07d600fd03fb59b0e06054751972"
+      "receiptDigest": "526b99086b8da9bf819bdeaef62e86b79cd35e813e3cf4a8476e6d9e7191eab2"
     },
     {
       "variantId": "status.default",
@@ -12857,7 +12857,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "45b5a2c81a3cf42a0025b72cc6b6d9dfd83867a2f83078f7c3b2b80c1c441d63"
+      "receiptDigest": "301efdf3a494e458afeabc9a5a976743c18912a1c4216b8ebb3a078b97450a60"
     },
     {
       "variantId": "setup.init",
@@ -12865,7 +12865,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "8bba20e1aec95d7dd3907f3c06c0c267ee23103654d281b0b59a43c1b85c1a2d"
+      "receiptDigest": "54a51fed4df47b2688258df6ad3ebf4f934fec0aa39e81a575e660c19e610212"
     },
     {
       "variantId": "setup.refresh",
@@ -12873,7 +12873,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "849b9342339fe18e849a8dac5a144f79977cd064f597a21d5b5ebfb99bdfec81"
+      "receiptDigest": "05f6196061e8ecefc4776ad1f7e6f880a5adf09e288f6ea56dff6f6050c19099"
     },
     {
       "variantId": "setup.repair",
@@ -12881,7 +12881,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "caf8f041dcd58682188bb40953eb9c30c7c0f505beeef1ac1a9acc785b4c104b"
+      "receiptDigest": "abe946fd019e73115d67418a7caf8e717887433762af2fd27b3c8740faa011a6"
     },
     {
       "variantId": "ac.cached",
@@ -14121,7 +14121,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "53e46362d0c73ca689fb107b6b09302860e6922f689222ffa6caae4c8ad53516"
+      "receiptDigest": "ba4380c264ce7bf83ee63e26108e7a2b0a9270398dfc0c922a08c6c7e636f848"
     },
     {
       "variantId": "interrupt.default",

@@ -149,7 +149,7 @@ export async function checkNativeCommandCoverage(options: {
         const exposed = catalogue.entries.find(entry => entry.commandName === row.handlerName);
         if (exposed?.availability === "available" && exposed.mutationClass !== "read") add("boundary-handler-advertised", id, "A boundary cannot hide a mutating handler that is advertised as remotely available.");
         if (needsFrozenSpecReference(row) && (row.scopeReference?.path !== "docs/requirements/hub-remote-sessions/specification.md"
-          || row.scopeReference.sha256 !== "7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2"
+          || row.scopeReference.sha256 !== "f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49"
           || await source(row.scopeReference) === undefined)) add("invalid-scope-reference", id, "A scope boundary needs the exact frozen normative source subject.");
         continue;
       }
