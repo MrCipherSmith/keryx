@@ -178,7 +178,7 @@ import { renderGroupedNamedHelp } from "../standard/service";
 // shell, so both dispatch into the same rule instead of growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import { runTasksCommand } from "../tui/tasks-command";
-import { frameSubmittedLine, herdrCoreSectionFromEnv, looksLikeHcMessage } from "../tui/hc-message";
+import { frameSubmittedLine, herdrCoreSectionFromEnv, keyboardApprovalLine, looksLikeHcMessage } from "../tui/hc-message";
 import { formatUsageLine } from "../tui/usage-format";
 import {
   type AgentDeps,
@@ -2034,7 +2034,7 @@ export async function runAgentRepl(
         out(`\n${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
         if (!approved) {
           return false;
         }
@@ -2062,7 +2062,7 @@ export async function runAgentRepl(
         out(`\n${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
         if (!approved) {
           return false;
         }
@@ -2097,7 +2097,7 @@ export async function runAgentRepl(
         out(`${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
         if (!approved) {
           return false;
         }
@@ -2170,11 +2170,11 @@ export async function runAgentRepl(
         }
         out(
           stored.length > 0
-            ? style.green(`approved · remembered “${stored}”\n`)
-            : style.yellow("approved once · pattern cannot be remembered\n"),
+            ? style.green(`${keyboardApprovalLine(`approved · remembered “${stored}”`, process.env)}\n`)
+            : style.yellow(`${keyboardApprovalLine("approved once · pattern cannot be remembered", process.env)}\n`),
         );
       } else {
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
       }
       if (!approved) {
         return false;

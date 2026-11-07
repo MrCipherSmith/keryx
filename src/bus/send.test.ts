@@ -361,6 +361,42 @@ describe("external origin sends", () => {
     expect((refused as Error).message).toContain("per-recipient limit");
   });
 
+  test("a full ceiling for one recipient does not refuse a report to another, and the refusal says when to retry", async () => {
+    const root = await seeded();
+    await writePresence(root, presence(LIVE_TWIN, "docs", NOW - 2_000));
+    for (let i = 0; i < EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(
+        root,
+        input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: `child-${i}`, origin: "external" } }),
+      );
+    }
+    const refused = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: "one-more", origin: "external" } }),
+    ).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+    // every counted report is stamped NOW, so the oldest leaves the window a full minute later
+    expect((refused as Error).message).toContain("retry in 60 s");
+    const other = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@docs", from: { instanceId: randomUUID(), name: "one-more", origin: "external" } }),
+    );
+    expect(other.resolvedTo).toEqual([LIVE_TWIN]);
+  });
+
+  test("the retry hint counts down to the oldest counted report leaving the window", async () => {
+    const root = await seeded();
+    await writePresence(root, presence(LIVE, "release", NOW + 60_000)); // stays live while the test clock moves
+    let now = NOW;
+    for (let i = 0; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() }, now: () => now }));
+      now += 5_000;
+    }
+    now = NOW + 30_000; // the first report is 30 s old
+    const refused = await sendMessage(root, input({ origin: "external", toLabel: "@release", from, now: () => now })).catch((error: unknown) => error);
+    expect((refused as Error).message).toContain("retry in 30 s");
+  });
+
   test("@all and non-notice kinds are refused", async () => {
     const root = await seeded();
     for (const overrides of [{ toLabel: "@all" }, { kind: "question", toLabel: "@release" }]) {

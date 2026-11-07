@@ -117,7 +117,7 @@ function resolveAcceptDelay(request: ComposerChoiceRequest): number {
 
 import { getTheme } from "./theme";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
-import { containsNode, modalHides, modalFocusFallback } from "./modal-host";
+import { containsNode, modalHides, modalFocusFallback, modalOwnsKeys } from "./modal-host";
 import { debugEvent } from "./debug-log";
 
 type OpenTui = typeof import("@opentui/core");
@@ -205,6 +205,32 @@ export type ChoicePasteSink = (text: string, afterClose?: boolean) => void;
  */
 export type ChoicePasteDecision = "deliver" | "hold" | "drop";
 
+/**
+ * What to do with a paste, from the three facts that decide it. A modal open behind the dialog drops the paste
+ * only when that modal is taking typed text (a secret could be meant for it); behind a read-only modal such as
+ * /status the text is an ordinary report and goes the usual way: now when the shell is busy, held when idle.
+ */
+export function decideChoicePaste(input: { modalOverDock: boolean; modalTakesText: boolean; busy: boolean }): ChoicePasteDecision {
+  if (input.modalOverDock && input.modalTakesText) return "drop";
+  return input.busy ? "deliver" : "hold";
+}
+
+/** Where the keyboard was when each open choice mounted: the field a paste typed at the dialog was most likely meant for. */
+const choiceOrigin = new WeakMap<object, FocusTarget | null>();
+
+/**
+ * The paste decision for the choice open on `dock`. A modal "takes text" when it says it owns every key (the
+ * hand-built secret field) or when the node that held the keyboard before the choice opened is a text input
+ * inside it. Both are signals the modal host and the renderer already expose; a read-only modal has neither.
+ */
+export function choicePasteDecision(otui: OpenTui, r: Renderer, dock: object, busy: boolean): ChoicePasteDecision {
+  const modalOverDock = modalHides(r, dock);
+  const origin = choiceOrigin.get(dock) ?? null;
+  const originIsInput =
+    origin !== null && !modalHides(r, origin) && (origin instanceof otui.InputRenderable || origin instanceof otui.TextareaRenderable);
+  return decideChoicePaste({ modalOverDock, modalTakesText: modalOwnsKeys(r) || originIsInput, busy });
+}
+
 /** One sink per dock, so the call sites that open a choice never have to know about paste. */
 const pasteSinks = new WeakMap<object, { sink: ChoicePasteSink; decide: () => ChoicePasteDecision }>();
 
@@ -217,9 +243,31 @@ const pasteSinks = new WeakMap<object, { sink: ChoicePasteSink; decide: () => Ch
 export function setChoicePasteSink(dock: object, sink: ChoicePasteSink | undefined, decide: () => ChoicePasteDecision = () => "deliver"): void {
   if (sink === undefined) {
     pasteSinks.delete(dock);
+    heldForDock.delete(dock);
   } else {
     pasteSinks.set(dock, { sink, decide });
   }
+}
+
+/** Text held by choices that already closed and not yet delivered, per dock (see {@link flushHeld}). */
+const heldForDock = new WeakMap<object, string>();
+
+/**
+ * Deliver what closed choices held, on a later task. If another choice has the dock by then (a queued one
+ * mounted right after the lock was released) the text stays held for that choice's close: handing it over now
+ * would start a turn under an open picker. After the sink was removed (shutdown) nothing is delivered.
+ */
+function flushHeld(dock: object): void {
+  const text = heldForDock.get(dock);
+  if (text === undefined) return;
+  const sink = pasteSinks.get(dock)?.sink;
+  if (sink === undefined) {
+    heldForDock.delete(dock);
+    return;
+  }
+  if (dockBusy(dock)) return;
+  heldForDock.delete(dock);
+  sink(text, true);
 }
 
 /** Held pastes are bounded: a flood of them must not grow without limit nor become one huge turn. */
@@ -227,11 +275,14 @@ const MAX_HELD_PASTES = 8;
 const MAX_HELD_CHARS = 16_384;
 
 /** Control characters other than tab and newline: an escape sequence in a pasted report must not reach the transcript or the model. */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const CONTROL_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f]/g;
 
 /** The pasted bytes as text the way OpenTUI's own paste handlers read them, with escape and control sequences removed. */
 function pastedText(otui: OpenTui, bytes: Uint8Array): string {
-  return otui.stripAnsiSequences(otui.decodePasteBytes(bytes)).replace(CONTROL_CHARS, "");
+  // Line breaks first: a bare CR is a control character too, and would otherwise be stripped and glue two lines.
+  const text = otui.decodePasteBytes(bytes).replace(/\r\n?/g, "\n");
+  return otui.stripAnsiSequences(text).replace(CONTROL_CHARS, "");
 }
 
 /** The slice of a renderable that handing the keyboard back reads. */
@@ -415,9 +466,12 @@ export async function showComposerChoiceDetailed(
     if (held !== undefined) {
       // Text pasted while an idle shell showed this choice. Delivered on a later task: the lock is released and
       // the code awaiting the choice (a picker applying its pick) has run, so a turn it starts sees that state.
-      const text = held;
-      setTimeout(() => pasteSinks.get(dock)?.sink(text, true), 0);
+      const before = heldForDock.get(dock);
+      const joined = before === undefined ? held : `${before}\n${held}`;
+      heldForDock.set(dock, joined.slice(0, MAX_HELD_CHARS));
     }
+    // Also when this choice held nothing: it may be the one a previous choice's text was waiting behind.
+    if (heldForDock.has(dock)) setTimeout(() => flushHeld(dock), 0);
   }
 }
 
@@ -445,6 +499,7 @@ function presentComposerChoice(
     // Read before anything below can move it: `onOpen` may blur the composer (the shell approval does), and the
     // options list takes the keyboard at the end. `cleanup` hands it back (see `handBackFocus`).
     const previousFocus = focusedNode(r);
+    choiceOrigin.set(dock, previousFocus);
     const ownEnabled = request.ownAnswer !== undefined;
     const options = request.options.map((o) => ({
       ...o,
@@ -778,6 +833,7 @@ function presentComposerChoice(
 
     function cleanup(): void {
       closed = true;
+      choiceOrigin.delete(dock);
       unsub();
       unsubPaste();
       if (heldPastes.length > 0) {

@@ -21,7 +21,7 @@
 
 import { randomUUID } from "node:crypto";
 import { BusRefusal } from "./errors";
-import { appendEvent, countRecent } from "./log";
+import { appendEvent, countRecent, recentEvents } from "./log";
 import { isBusId } from "./paths";
 import { classifyPresence, listPresence, type PresenceClassifyOptions } from "./presence";
 import type { BusEvent, BusEventKind, BusSender } from "./schema";
@@ -56,6 +56,13 @@ export const EXTERNAL_RATE_LIMIT_PER_MINUTE = 5;
  */
 export const EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE = 15;
 const RATE_WINDOW_MS = 60_000;
+
+/** " (retry in N s)": when the oldest counted report leaves the window and one more would fit. */
+function retryHint(counted: readonly BusEvent[], now: () => number): string {
+  const oldest = Math.min(...counted.map((event) => Date.parse(event.ts)));
+  const seconds = Math.max(1, Math.ceil((oldest + RATE_WINDOW_MS - now()) / 1000));
+  return `; retry in ${seconds} s`;
+}
 
 export interface SendInput {
   /** `@<name>` or `@all`. Always the event's display label, even when `toInstanceId` is set. */
@@ -218,20 +225,22 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
             );
           }
         } else if (from.origin === "external") {
-          const recent = await countRecent(root, { origin: "external", sinceMs: RATE_WINDOW_MS, now, fromName: from.name });
-          if (recent >= EXTERNAL_RATE_LIMIT_PER_MINUTE) {
+          // One read of the log for both limits (they run under the append lock, on every report).
+          const window = await recentEvents(root, { origin: "external", sinceMs: RATE_WINDOW_MS, now });
+          const byName = window.filter((event) => event.from.name === from.name);
+          if (byName.length >= EXTERNAL_RATE_LIMIT_PER_MINUTE) {
             throw new BusRefusal(
               "rate-limited",
-              `per-sender-name limit: ${recent} reports from "${from.name}" in the last minute; the limit is ${EXTERNAL_RATE_LIMIT_PER_MINUTE} per sender name`,
+              `per-sender-name limit: ${byName.length} reports from "${from.name}" in the last minute; the limit is ${EXTERNAL_RATE_LIMIT_PER_MINUTE} per sender name${retryHint(byName, now)}`,
             );
           }
           for (const target of to) {
             if (target === "*") continue;
-            const toRecipient = await countRecent(root, { origin: "external", sinceMs: RATE_WINDOW_MS, now, toInstanceId: target });
-            if (toRecipient >= EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE) {
+            const toRecipient = window.filter((event) => event.to.includes(target));
+            if (toRecipient.length >= EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE) {
               throw new BusRefusal(
                 "rate-limited",
-                `per-recipient limit: ${toRecipient} external reports to ${input.toLabel} in the last minute from all senders; the limit is ${EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE} per recipient`,
+                `per-recipient limit: ${toRecipient.length} external reports to ${input.toLabel} in the last minute from all senders; the limit is ${EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE} per recipient${retryHint(toRecipient, now)}`,
               );
             }
           }

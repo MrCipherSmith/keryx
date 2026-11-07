@@ -503,12 +503,13 @@ describe("wiring (source audit)", () => {
     }
   });
 
-  test("the paste sink holds through the drain queue and drops while a modal is open", () => {
+  test("the paste sink holds through the drain queue and takes its decision from choicePasteDecision", () => {
     const sink = tuiSource.slice(tuiSource.indexOf("setChoicePasteSink(\n      chrome.dock,"));
     const head = sink.slice(0, 1400);
     expect(head).toContain("turnLoop.enqueue(line, summarizeSubmittedLine(line), undefined, \"agent-message\")");
     expect(head).toContain("drainSites.onLeaseRelease()");
-    expect(head).toContain("modalHides(r, chrome.dock) ? \"drop\"");
+    // the drop-or-hold decision itself is pinned behaviourally in composer-choice.test.ts
+    expect(head).toContain("choicePasteDecision(otui, r, chrome.dock, chrome.isBusy())");
   });
 
   test("all three keyboard shell approval lines go through the unverified-author helper", () => {

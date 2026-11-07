@@ -279,7 +279,7 @@ import {
   openSessionInfo,
 } from "./session-info";
 import { smallActionButton } from "./action-button";
-import { formatModalFooter, modalHides, openModal, type ModalChrome, type ModalFooterAction, type ModalHandle } from "./modal-host";
+import { formatModalFooter, openModal, type ModalChrome, type ModalFooterAction, type ModalHandle } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
 import { openSetupModal } from "./setup-modal";
 import { ownKeryxPrefix, runSetupSteps } from "./setup-run";
@@ -431,7 +431,7 @@ import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { createAgentHostStatus } from "./agent-host-status";
 import { createHerdrCoreReporter, createStatusWriter, type HerdrCoreAttention } from "./herdr-core-status";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
-import { setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
+import { choicePasteDecision, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
@@ -11674,8 +11674,8 @@ export async function launchTuiAgentShell(opts: {
         }
         runLine(line, "agent-message");
       },
-      // A modal open behind the dialog (a token entry, say) may be the paste's real target: never to the model.
-      () => (modalHides(r, chrome.dock) ? "drop" : chrome.isBusy() ? "deliver" : "hold"),
+      // A modal taking typed text behind the dialog (a token entry, say) may be the paste's real target: never to the model.
+      () => choicePasteDecision(otui, r, chrome.dock, chrome.isBusy()),
     );
 
     // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen

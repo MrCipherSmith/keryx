@@ -310,6 +310,15 @@ export function modalHides(renderer: Renderer, node: unknown): boolean {
   return state !== undefined && state.open && !containsNode(state.backdrop, node);
 }
 
+/**
+ * True while the open modal's tab body takes every key itself (a hand-built secret field, see
+ * {@link OpenModalInput.ownsKeys}). Text pasted at a dialog over such a modal may be meant for that field.
+ */
+export function modalOwnsKeys(renderer: Renderer): boolean {
+  const state = hosts.get(renderer);
+  return state !== undefined && state.open && state.input?.ownsKeys?.() === true;
+}
+
 function resolveInitialTab(tabs: readonly ModalTab[], initialTab: string | undefined): string {
   const first = tabs[0];
   if (first === undefined) {

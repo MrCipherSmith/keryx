@@ -538,34 +538,42 @@ export async function cursorAtStart(root: string): Promise<BusCursor> {
 }
 
 /**
- * Events from `origin` with a timestamp in the last `sinceMs`, counted over the
- * current segment and the newest rotated one (a minute of messages cannot span
- * more than one rotation at the D-12 rates). Used for the rate limits: the
- * clone-wide CLI limit (no `instanceId`) and the per-instance operator limit
- * (`instanceId` set to the sender's own id).
+ * Events from `origin` with a timestamp in the last `sinceMs`, read ONCE over the current segment and the
+ * newest rotated one (a minute of messages cannot span more than one rotation at the D-12 rates). Callers
+ * that need several counts under one lock (the external report limits) filter this list instead of
+ * reading the log once per count.
+ */
+export async function recentEvents(
+  root: string,
+  options: { origin: BusOrigin; sinceMs: number; now?: () => number },
+): Promise<BusEvent[]> {
+  const since = (options.now ?? Date.now)() - options.sinceMs;
+  const rotated = await listRotatedSegments(root);
+  const files = [eventsPath(root)];
+  if (rotated.length > 0) files.unshift(rotatedSegmentPath(root, rotated[rotated.length - 1] as number));
+  const recent: BusEvent[] = [];
+  for (const file of files) {
+    const read = await readSegment(file, 0);
+    for (const event of read?.events ?? []) {
+      if (event.from.origin === options.origin && Date.parse(event.ts) >= since) recent.push(event);
+    }
+  }
+  return recent;
+}
+
+/**
+ * How many of `origin`'s events in the last `sinceMs` match. Used for the rate limits: the clone-wide CLI
+ * limit (no `instanceId`) and the per-instance operator limit (`instanceId` set to the sender's own id).
  */
 export async function countRecent(
   root: string,
   options: { origin: BusOrigin; sinceMs: number; now?: () => number; instanceId?: string; fromName?: string; toInstanceId?: string },
 ): Promise<number> {
-  const since = (options.now ?? Date.now)() - options.sinceMs;
-  const rotated = await listRotatedSegments(root);
-  const files = [eventsPath(root)];
-  if (rotated.length > 0) files.unshift(rotatedSegmentPath(root, rotated[rotated.length - 1] as number));
-  let count = 0;
-  for (const file of files) {
-    const read = await readSegment(file, 0);
-    for (const event of read?.events ?? []) {
-      if (
-        event.from.origin === options.origin &&
-        (options.instanceId === undefined || event.from.instanceId === options.instanceId) &&
-        (options.fromName === undefined || event.from.name === options.fromName) &&
-        (options.toInstanceId === undefined || event.to.includes(options.toInstanceId)) &&
-        Date.parse(event.ts) >= since
-      ) {
-        count += 1;
-      }
-    }
-  }
-  return count;
+  const events = await recentEvents(root, options);
+  return events.filter(
+    (event) =>
+      (options.instanceId === undefined || event.from.instanceId === options.instanceId) &&
+      (options.fromName === undefined || event.from.name === options.fromName) &&
+      (options.toInstanceId === undefined || event.to.includes(options.toInstanceId)),
+  ).length;
 }
