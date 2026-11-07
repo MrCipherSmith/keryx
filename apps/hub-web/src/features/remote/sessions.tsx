@@ -9,6 +9,7 @@ import { formatDate } from "../../i18n/format";
 import { Markdown } from "../../components/Markdown";
 import { SessionWorkspace, useWorkspaceCopy } from "./session-workspace";
 import { useTranslation } from "react-i18next";
+import type { MessageDeliveries, MessageDelivery } from "../../../../../src/remote-control/message-delivery";
 import type { MachineSummary } from "../../../../../src/remote-control/protocol";
 import type { Control } from "../../api/remote";
 import { remoteProject } from "../../api/remote";
@@ -37,11 +38,11 @@ import {
   useController,
   useOperator,
 } from "./shared";
-import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
+import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft, type MessageDraft } from "./work";
 import { ForkSession } from "./fork";
 import { SessionTranscript } from "./session-transcript";
 import { Settings } from "./settings";
-import { historyQueryKey, mergeTimeline, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
+import { historyQueryKey, mergeTimeline, messageDeliveriesKey, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
 export function SessionsView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
@@ -330,6 +331,7 @@ export function SessionSurface({
   onNewSession?: () => void;
 }) {
   const { t } = useTranslation("remote");
+  const hub = useHub();
   const control = useController(record);
   const action = useRemoteAction();
   const path = sessionPath(record.projectId, record.sessionId);
@@ -337,6 +339,17 @@ export function SessionSurface({
   // invocation time for display and the history cursor at invocation for placement; the first report
   // of an operation fixes both, later reports only refresh the outcome.
   const [conversation, setConversation] = useState<HTMLDivElement | null>(null);
+  const restoreDraftRef = useRef<(text: string) => boolean>(null);
+  const draftText = useDraftStore(state =>
+    (state.drafts[messageDraftKey(hub.scopeKey, record.projectId, record.sessionId)] as MessageDraft | undefined)?.text ?? "");
+  const deliveryQuery = useQuery({
+    queryKey: messageDeliveriesKey(hub.scopeKey, record.projectId, record.sessionId),
+    queryFn: ({ signal }) => remoteGet<MessageDeliveries>(path + "/message-deliveries", signal),
+    retry: false,
+    refetchInterval: query => query.state.data?.deliveries?.some(item => item.status === "hub-accepted" && !item.queued) ? 1500 : false,
+  });
+  const deliveries = deliveryQuery.data?.deliveries ?? [];
+  const restoreText = (value: string) => restoreDraftRef.current?.(value) === true;
   const history = useSessionHistory(record);
   const messages = useMemo(() => {
     const loaded = new Map<string, Control["SessionMessage"]>();
@@ -344,6 +357,13 @@ export function SessionSurface({
       for (const message of page.messages) loaded.set(message.messageId, message);
     return [...loaded.values()].sort((a, b) => a.historyCursor - b.historyCursor);
   }, [history.data]);
+  const observedTurns = new Set(messages.flatMap(message => message.role === "human" && message.runId && message.turnId
+    ? [JSON.stringify([message.runId, message.turnId])] : []));
+  const awaitingMachine = deliveries.some(item => !item.queued &&
+    !(item.runId && (item.runId === record.activeRunId ||
+      item.turnId && observedTurns.has(JSON.stringify([item.runId, item.turnId])))) &&
+    (item.status === "hub-accepted" ||
+      item.status === "machine-started" && record.activeRunId === null && item.afterCursor >= record.historyCursor));
   const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
   const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
     setOutcomes(previous => {
@@ -373,11 +393,13 @@ export function SessionSurface({
       openingRejected={!!openingError}
       record={record}
       control={control}
-      history={<History record={record} outcomes={outcomes} liveRef={setConversation} query={history} messages={messages} />}
+      history={<History record={record} outcomes={outcomes} liveRef={setConversation} query={history} messages={messages}
+        deliveries={deliveries} draftText={draftText} restoreText={restoreText} deliveryQuery={deliveryQuery} />}
       conversation={conversation}
       messages={messages}
       composer={
-        <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
+        <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome}
+          awaitingMachine={awaitingMachine} restoreDraftRef={restoreDraftRef} />
       }
       queue={<QueueControls record={record} control={control} />}
       settings={<Settings record={record} control={control} />}
@@ -463,12 +485,16 @@ function useSessionHistory(record: Control["SessionRecord"]) {
   });
 }
 
-function History({ record, outcomes, liveRef, query, messages }: {
+function History({ record, outcomes, liveRef, query, messages, deliveries, draftText, restoreText, deliveryQuery }: {
   record: Control["SessionRecord"];
   outcomes: CommandEntry[];
   liveRef: (element: HTMLDivElement | null) => void;
   query: ReturnType<typeof useSessionHistory>;
   messages: Control["SessionMessage"][];
+  deliveries: MessageDelivery[];
+  draftText: string;
+  deliveryQuery: { error: unknown; data?: MessageDeliveries; refetch: () => unknown };
+  restoreText: (text: string) => boolean;
 }) {
   const { t } = useTranslation("remote");
   const announcedCursor = useRef<number | null>(null);
@@ -485,7 +511,7 @@ function History({ record, outcomes, liveRef, query, messages }: {
       break;
     }
   }, [messages, query.data, t]);
-  const timeline = mergeTimeline(messages, outcomes);
+  const timeline = mergeTimeline(messages, outcomes, deliveries);
   return (
     <section className="session-transcript" aria-label={t("history")}>
       <p role="status" aria-atomic="true" className="sr-only">{announcement}</p>
@@ -508,12 +534,17 @@ function History({ record, outcomes, liveRef, query, messages }: {
       )}
       <SessionTranscript entries={timeline} renderEntry={entry => entry.kind === "outcome"
         ? <OutcomeItem record={record} item={entry.item} />
-        : <MessageItem message={entry.message} />}>
+        : entry.kind === "delivery"
+          ? <DeliveryItem delivery={entry.delivery} draftText={draftText} restoreText={restoreText} />
+          : <MessageItem message={entry.message} delivery={entry.delivery} />}>
         <Feedback query={query} />
+        {deliveryQuery.error != null && !deliveryQuery.data && (
+          <Notice>{t("chatDeliveryUnavailable")} <Button variant="secondary" onClick={() => void deliveryQuery.refetch()}>{t("common:retry")}</Button></Notice>
+        )}
         {query.data?.pages.some((page) => page.gap) && (
           <Notice>{t("gap")}</Notice>
         )}
-        {query.data && !messages.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
+        {query.data && !timeline.length && <EmptyState>{t("empty")}</EmptyState>}
         <div ref={liveRef} tabIndex={-1} />
       </SessionTranscript>
     </section>
@@ -548,7 +579,7 @@ function OutcomeItem({ record, item, ...props }: React.ComponentPropsWithRef<"li
     </li>
   );
 }
-function MessageItem({ message, ...props }: React.ComponentPropsWithRef<"li"> & { message: Control["SessionMessage"] }) {
+function MessageItem({ message, delivery, ...props }: React.ComponentPropsWithRef<"li"> & { message: Control["SessionMessage"]; delivery?: MessageDelivery }) {
   const { i18n } = useTranslation("remote");
   const hub = useHub();
   const words = useWorkspaceCopy();
@@ -567,6 +598,7 @@ function MessageItem({ message, ...props }: React.ComponentPropsWithRef<"li"> & 
             ? <details><summary>{words.role[message.role]}</summary><pre>{message.text}</pre></details>
             : <pre>{message.text}</pre>}
         </div>
+        {delivery && <DeliveryStatus delivery={delivery} />}
         {message.role === "assistant" && message.runId && (
           <Button
             variant="ghost"
@@ -578,4 +610,55 @@ function MessageItem({ message, ...props }: React.ComponentPropsWithRef<"li"> & 
       </div>
     </li>
   );
+}
+
+
+function DeliveryStatus({ delivery }: { delivery: MessageDelivery }) {
+  const { t } = useTranslation("remote");
+  return <p className="session-delivery-status" data-state={delivery.status} role="status">
+    {t("chatDeliveryStates." + delivery.status)}
+    {delivery.queued && <> · {t("receiptStatuses.queued")}</>}
+  </p>;
+}
+
+function DeliveryItem({ delivery, draftText, restoreText, ...props }: React.ComponentPropsWithRef<"li"> & {
+  delivery: MessageDelivery;
+  draftText: string;
+  restoreText: (text: string) => boolean;
+}) {
+  const { t, i18n } = useTranslation("remote");
+  const words = useWorkspaceCopy();
+  const [feedback, setFeedback] = useState("");
+  const hasDraft = !!draftText;
+  const hasDifferentDraft = hasDraft && draftText !== delivery.text;
+  const canRestore = delivery.status === "machine-rejected" || delivery.status === "not-delivered";
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(delivery.text);
+      setFeedback(t("chatTextCopied"));
+    } catch {
+      setFeedback(t("chatCopyFailed"));
+    }
+  }
+  return <li {...props} className="session-message human" data-delivery-run={delivery.runId ?? undefined}>
+    <span className="session-avatar" aria-hidden="true">H</span>
+    <div>
+      <div className="session-message-header">
+        <strong>{words.role.human}</strong>
+        <time dateTime={delivery.submittedAt}>{formatDate(delivery.submittedAt, i18n.language)}</time>
+      </div>
+      <div className="session-message-content"><pre>{delivery.text}</pre></div>
+      <DeliveryStatus delivery={delivery} />
+      {canRestore && <div className="session-delivery-actions">
+        {delivery.reason && <p>{t("chatDeliveryReasons." + delivery.reason, { defaultValue: "" })}</p>}
+        <Button variant="secondary" disabled={hasDraft} onClick={() => {
+          setFeedback(t(restoreText(delivery.text) ? "chatTextRestored" : "chatRestoreBlocked"));
+        }}>{t("chatRestoreText")}</Button>
+        {(hasDifferentDraft || feedback === t("chatRestoreBlocked")) &&
+          <Button variant="ghost" onClick={() => void copy()}>{t("chatCopyOriginal")}</Button>}
+        {hasDifferentDraft && <p>{t("chatRestoreBlocked")}</p>}
+        <p role="status">{feedback}</p>
+      </div>}
+    </div>
+  </li>;
 }

@@ -1,9 +1,10 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useImperativeHandle, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp } from "lucide-react";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
-import type { CommandOutcomeListener } from "./session-timeline";
+import { messageDeliveriesKey, type CommandOutcomeListener } from "./session-timeline";
+import type { MessageDeliveries } from "../../../../../src/remote-control/message-delivery";
 import { ApiError, errorMessage, getClientScope, getJson } from "../../api/client";
 import {NativeAttemptPicker,useNativeWorkSelection} from "../managed-work/native-selection";
 import { remoteGet, remoteProject } from "../../api/remote";
@@ -77,15 +78,20 @@ export function MessageComposer({
   record,
   control,
   onCommandOutcome,
+  awaitingMachine = false,
+  restoreDraftRef,
 }: {
   record: Control["SessionRecord"];
   control: Controller;
   onCommandOutcome?: CommandOutcomeListener;
+  awaitingMachine?: boolean;
+  restoreDraftRef?: Ref<(text: string) => boolean>;
 }) {
   const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
   const [focusToken, setFocusToken] = useState(0);
   const [commandShortcut, setCommandShortcut] = useState<ChatCommandShortcut>();
   const commandsId = useId();
+  const editor = useRef<HTMLTextAreaElement>(null);
   const commandTrigger = useRef<HTMLButtonElement>(null);
   const commandOpener = useRef<HTMLButtonElement | null>(null);
   // Set while the catalogue was opened by '/' and nothing has been done in it yet (no key other than Escape, no
@@ -184,6 +190,13 @@ export function MessageComposer({
   const sessionVersion = canProve && turnProof.data === true ? record.version : verifiedVersion;
   const stale = !!draft.text && !draft.prepared &&
     (sessionVersion !== record.version || draft.configVersion !== record.config.configVersion);
+  useImperativeHandle(restoreDraftRef, () => (text: string) => {
+    const current = useDraftStore.getState().drafts[draftKey] as MessageDraft | undefined;
+    if ((current ?? draft).text.length) return false;
+    editText(text);
+    editor.current?.focus();
+    return true;
+  });
   const waitingForReply = mode !== "managed" && draft.busyPolicy === "reject" &&
     (record.activeRunId !== null || record.state === "busy" || record.state === "paused");
   const selected = eligible.find((f) => f.id === draft.flowId);
@@ -355,6 +368,17 @@ export function MessageComposer({
         setSendError(new ApiError(400, "message-rejected", "Message was not accepted"));
         return;
       }
+      // Keep a known acceptance visible even if the read-model refresh failed.
+      // An authoritative row may already be newer than the POST receipt.
+      queryClient.setQueryData<MessageDeliveries>(messageDeliveriesKey(hub.scopeKey, record.projectId, record.sessionId), previous => {
+        if (previous?.deliveries?.some(item => item.operationId === receipt.operationId)) return previous;
+        return { deliveries: [...(previous?.deliveries ?? []), {
+          operationId: receipt.operationId, submittedAt: new Date().toISOString(),
+          afterCursor: attempt.before?.historyCursor ?? record.historyCursor,
+          text: attempt.body.text, runId: receipt.runId ?? null, turnId: receipt.turnId ?? null,
+          status: "hub-accepted", queued: false, reason: null,
+        }] };
+      });
       const latestDraft = useDraftStore.getState().drafts[draftKey];
       if (latestDraft === original.submitted) {
         store.put(draftKey, { ...original.submitted, text: "", prepared: false });
@@ -382,7 +406,7 @@ export function MessageComposer({
   function submit() {
     if (openDraftCommand()) return;
     const assoc=association();
-    if(nativeOperation||nativePending.error||delivery.operation||delivery.storageError||waitingForReply)return;
+    if(nativeOperation||nativePending.error||delivery.operation||delivery.storageError||waitingForReply||awaitingMachine)return;
     if(draft.prepared)return;
     if(!control.binding||!control.active||stale||!assoc||!draft.text.trim()) {setValidation(t('required'));return;}
     if(mode==='managed'&&!managed.hint){setValidation(workT('staleAttempt'));return;}
@@ -398,7 +422,7 @@ export function MessageComposer({
   }
 
   const canSend = record.state !== "opening" && record.state !== "recovery-required" && record.state !== "closed" &&
-    control.active && !stale && !waitingForReply && !delivery.operation && !delivery.storageError && !action.isPending && !nativeOperation && !nativePending.error &&
+    control.active && !stale && !waitingForReply && !awaitingMachine && !delivery.operation && !delivery.storageError && !action.isPending && !nativeOperation && !nativePending.error &&
     (mode !== "managed" || managed.valid) && !!draft.text.trim() && !!association();
 
   return (
@@ -410,7 +434,7 @@ export function MessageComposer({
       )}
       <span id={commandsId + "-hint"} className="sr-only">{t("commandsHint")}</span>
       <Field label={<span className="sr-only">{t("message")}</span>}>
-        <Textarea aria-describedby={commandsId + "-hint"}
+        <Textarea ref={editor} aria-describedby={commandsId + "-hint"}
           value={draft.text}
           rows={2}
           placeholder={t("messagePlaceholder")}
@@ -448,11 +472,6 @@ export function MessageComposer({
         >
           <span aria-hidden="true">/</span>
         </Button>
-        {chatCommandShortcuts.map(shortcut => (
-          <Button key={shortcut} variant="secondary" onClick={(event) => openCommandShortcut(shortcut, event.currentTarget)}>
-            {shortcut}
-          </Button>
-        ))}
         <Button className="composer-send" aria-label={t("send")} disabled={!canSend} onClick={submit}>
           <ArrowUp className="composer-send-icon" size={20} aria-hidden="true" />
           <span className="composer-send-label">{t("send")}</span>
@@ -469,12 +488,21 @@ export function MessageComposer({
           closeCommands();
           if (field && !draft.text) { editText("/"); field.focus(); }
         }}>
+          <div className="composer-command-actions">
+            {chatCommandShortcuts.map(shortcut => (
+              <Button key={shortcut} variant="ghost" onClick={() => openCommandShortcut(shortcut, commandTrigger.current)}>
+                {shortcut}
+              </Button>
+            ))}
+          </div>
           <Commands record={record} control={control} onOutcome={onCommandOutcome}
             visible={commands === "open"} focusToken={focusToken} initialSearch={commandShortcut} />
         </div>
       )}
-      <details open={!association()} className="composer-work-context">
-        <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>
+      <details open={!association() || mode === "managed" && !managed.valid} className="composer-work-context">
+        <summary>{mode === "flow" && selected ? t("chatFlowContext", { title: selected.title })
+          : mode === "ad-hoc" && association() ? t("chatWithoutFlow")
+            : t("chatWorkContext")}</summary>
       <div className="composer-controls">
         <Field label={t("workMode")}>
           <Select
@@ -513,7 +541,6 @@ export function MessageComposer({
           </Definition>
         </details>
       )}
-      </details>
       {mode === "flow" ? (
         <>
           {selected && !draft.criteriaDigest && (
@@ -536,6 +563,28 @@ export function MessageComposer({
         </label>
       ) : <Notice>{t("adHocUnavailable")}</Notice>}
       {mode==='managed' && <><NativeAttemptPicker value={managed} locked={!!nativeOperation}/>{!association()&&<p className="composer-hint">{workT("nativeConsentRequired")}</p>}</>}
+      <div className="composer-footer">
+        <details>
+          <summary>{t("chatOptions")}</summary>
+          <Field label={t("busyPolicy")} hint={t("busyPolicyHelp")}>
+          <Select
+            value={draft.busyPolicy}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                busyPolicy: e.target.value === "enqueue" ? "enqueue" : "reject",
+              })
+            }
+          >
+            <option value="reject">{t("reject")}</option>
+            <option value="enqueue">{t("enqueue")}</option>
+          </Select>
+          </Field>
+          <p className="composer-hint">{t("secretWarning")}</p>
+          {mode === "managed" && action.data?.status === "admitted" && <ActionFeedback action={action} />}
+        </details>
+      </div>
+      </details>
       {nativePending.error&&<Notice tone="error">{workT("pendingStorageError")}</Notice>}
       {nativeOperation && <Notice>{workT(nativeOperation.phase==='sending'?"pending":"nativeOutcomeUnknown")}<p>{workT("operation")}: <code>{nativeOperation.operationId}</code></p><p>{workT("managedAttempt")}: <code>{nativeOperation.hint.attemptId}</code> · v{nativeOperation.hint.attemptVersion}</p>{nativeOperation.phase==='unknown'&&<Button variant="secondary" disabled={!managed.operator||!control.active||action.isPending} onClick={()=>sendNative(nativeOperation,undefined,true)}>{workT("retryOriginalMessage")}</Button>}</Notice>}
       {delivery.storageError && <Notice tone="error">{t("chatStorageError")}</Notice>}
@@ -548,7 +597,8 @@ export function MessageComposer({
           </Button>
         </Notice>
       )}
-      {waitingForReply && draft.text && !delivery.operation && <p role="status" className="composer-hint">{t("chatWaitingToSend")}</p>}
+      {awaitingMachine && draft.text && !delivery.operation && <p role="status" className="composer-hint">{t("chatAwaitingMachine")}</p>}
+      {waitingForReply && !awaitingMachine && draft.text && !delivery.operation && <p role="status" className="composer-hint">{t("chatWaitingToSend")}</p>}
       {checkingTurn && !delivery.operation && <p role="status" className="composer-hint">{t("chatCheckingPreviousTurn")}</p>}
       {stale && !checkingTurn && !delivery.operation && (
         <Notice>
@@ -575,30 +625,7 @@ export function MessageComposer({
         ? t("chatMessageRejected") : sendError instanceof ApiError && sendError.code === "chat-storage"
           ? t("chatStorageError") : errorMessage(sendError)} {t("chatDraftKept")}</Notice>}
       {mode === "managed" && action.data?.status !== "admitted" && <ActionFeedback action={action} />}
-      {mode !== "managed" && !delivery.operation && !sendError && action.data?.status === "queued" &&
-        <Notice>{t("receiptStatuses.queued")}</Notice>}
       <p className="composer-keyboard-hint">{t("composerKeyboardHint")}</p>
-      <div className="composer-footer">
-        <details>
-          <summary>{t("chatOptions")}</summary>
-          <Field label={t("busyPolicy")} hint={t("busyPolicyHelp")}>
-          <Select
-            value={draft.busyPolicy}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                busyPolicy: e.target.value === "enqueue" ? "enqueue" : "reject",
-              })
-            }
-          >
-            <option value="reject">{t("reject")}</option>
-            <option value="enqueue">{t("enqueue")}</option>
-          </Select>
-          </Field>
-          <p className="composer-hint">{t("secretWarning")}</p>
-          {mode === "managed" && action.data?.status === "admitted" && <ActionFeedback action={action} />}
-        </details>
-      </div>
     </Panel>
   );
 }

@@ -335,7 +335,7 @@ test("a stale Flow can be cleared from the select, which re-enables Create sessi
   show();
   fireEvent.click(await screen.findByRole("button", { name: "New session" }));
   await screen.findByText(/selected Flow is no longer in progress/);
-  const select = screen.getByLabelText("Session Flow (optional)");
+  const select = screen.getByLabelText("Flow for the first message (optional)");
   expect(select).toHaveValue("gone");
   expect(screen.getByRole("option", { name: "gone · no longer in progress" })).toBeDisabled();
   expect(screen.queryByLabelText("First message (draft)")).toBeNull();
@@ -368,7 +368,7 @@ test("creating a session with a Flow seeds the new session's composer with the p
   useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, flowId: "f1", firstMessage: "Start with the parser" });
   show();
   fireEvent.click(await screen.findByRole("button", { name: "New session" }));
-  await waitFor(() => expect(screen.getByLabelText("Session Flow (optional)")).toHaveValue("f1"));
+  await waitFor(() => expect(screen.getByLabelText("Flow for the first message (optional)")).toHaveValue("f1"));
   await waitFor(() => expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   const key = messageDraftKey(2, "p", "s2");
@@ -478,15 +478,18 @@ test("provider, model and routing shortcuts open the typed catalogue from the ch
   ] as const;
   let search: HTMLElement | undefined;
   for (const [shortcut, commandName] of shortcuts) {
+    expect(screen.queryByRole("button", { name: shortcut })).not.toBeInTheDocument();
+    fireEvent.click(toggle());
     const opener = screen.getByRole("button", { name: shortcut });
     fireEvent.click(opener);
     search = await screen.findByLabelText("Search Keryx commands");
     expect(search).toHaveValue(shortcut);
     expect(await screen.findByRole("option", { name: `${commandName} · available` })).toBeInTheDocument();
     fireEvent.keyDown(search, { key: "Escape" });
-    expect(opener).toHaveFocus();
+    expect(toggle()).toHaveFocus();
   }
 
+  fireEvent.click(toggle());
   fireEvent.click(screen.getByRole("button", { name: "/connect" }));
   fireEvent.change(screen.getByLabelText("Command"), { target: { value: "connect.select" } });
   const invoke = screen.getByRole("button", { name: "Invoke command" });
@@ -592,7 +595,7 @@ test("a chosen Flow that cannot be checked stays visible in the select and can b
   show();
   fireEvent.click(await screen.findByRole("button", { name: "New session" }));
   expect(await screen.findByText(/Flows could not be loaded/)).toBeVisible();
-  const select = screen.getByLabelText("Session Flow (optional)") as HTMLSelectElement;
+  const select = screen.getByLabelText("Flow for the first message (optional)") as HTMLSelectElement;
   expect(select).toHaveValue("f1");
   expect(screen.getByRole("option", { name: "f1 · not checked yet" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();

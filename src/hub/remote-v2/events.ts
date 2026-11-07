@@ -1,3 +1,4 @@
+import { observeMessageDelivery } from "./message-delivery";
 import {observeClosureReceipt,settleClosure} from './closure';
 import {applicationObserved} from './application-proof';
 import {releaseQueuedAttempt} from './queue-retry';
@@ -55,6 +56,12 @@ export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, eve
     const selected = projection?.candidates.find((candidate) => candidate.candidateId === event.snapshot.effectiveCandidateId);
     if (canonicalDigest(event.snapshot.config) !== canonicalDigest(run.snapshot.config) || event.snapshot.configDigest !== canonicalDigest(event.snapshot.config) || !selected?.available || ![event.snapshot.config.baselineCandidateId, ...event.snapshot.config.routing.candidateIds].includes(selected.candidateId)) fail(409, "stale-reference", "Native turn snapshot differs from pinned permitted configuration");
     run.requestedSnapshot ??= run.snapshot; run.snapshot = event.snapshot; run.turnOrdinal = event.turnOrdinal; repo.put("remote_run", run.runId, run, { projectId: run.projectId, machineId: m.machineId, sessionId: run.sessionId, runId: run.runId });
+    const command = repo.get<StoredCommand>("remote_command", run.commandId);
+    const operation = command && repo.get<OperationRecord>("remote_operation", command.operationId);
+    if (operation?.messageDelivery) {
+      observeMessageDelivery(operation, { status: "machine-started", runId: event.runId, turnId: event.turnId, queued: false, reason: null });
+      repo.put("remote_operation", operation.id, operation);
+    }
   } else if (event.kind === "selection-receipt") {
     const receipt = event.receipt, run = repo.get<RunRow>("remote_run", receipt.runId);
     const projection = repo.get<Projection>("remote_projection", projectionKey(m.machineId, event.projectId, event.checkoutId, row.record.agentProfileId));
@@ -107,6 +114,17 @@ export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, eve
   else if (event.kind === "queue-changed") {
     const operation = resolveEventOperation(repo, m.machineId, event.projectId, event.sessionId, event.item.operationId);
     const item = { ...event.item, operationId: operation.id };
+    if (operation.messageDelivery && item.kind === "message") {
+      if (item.state === "queued" || item.state === "suspended") {
+        observeMessageDelivery(operation, { queued: true, queueItemId: item.queueItemId });
+      } else if (item.state === "removed" || item.state === "rejected") {
+        observeMessageDelivery(operation, {
+          status: item.state === "removed" ? "queue-removed" : "machine-rejected",
+          queued: false, queueItemId: item.queueItemId,
+        });
+      }
+      repo.put("remote_operation", operation.id, operation);
+    }
     const accepted = row.pending && repo.get<StoredCommand>("remote_command", row.pending.commandId);
     if (accepted && accepted.operationId === operation.id && "target" in accepted.envelope && accepted.envelope.target.scope==="session") { accepted.status = "admitted"; repo.put("remote_command", accepted.envelope.commandId, accepted, { machineId: m.machineId, projectId: event.projectId, sessionId: event.sessionId, seq: accepted.envelope.hubSequence }); }
     const existing = repo.get<QueueRow>("remote_queue", item.queueItemId);
@@ -194,6 +212,11 @@ export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: Fr
       run.terminalAt ??= new Date().toISOString();
       // SessionRecord is updated only by its separate actual native projection.
     }
+    if (event.state === "failed" || event.state === "rejected") {
+      const command = repo.get<StoredCommand>("remote_command", run.commandId);
+      const receipt = command?.receipt as ReceiptPayload | undefined;
+      if (command && receipt?.status === "not-applied") observeMessageReceipt(repo, command, receipt, run);
+    }
   } else if (event.kind === "log") {
     // The machine's per-run quota counts the bytes it sends; Hub counts the same bytes, so both agree at the exact boundary whatever the mask below does.
     logBytes = Buffer.byteLength(event.text);
@@ -230,10 +253,10 @@ function knownNonApplication(p: ReceiptPayload): boolean {
  * does. A FIFO admission of a queued item is the exception: its refusal does not reject the still-queued logical operation.
  */
 function failRejectedDelivery(repo: RemoteRepository, command: StoredCommand, p: ReceiptPayload): void {
-  if (p.status !== "rejected" || p.errorCode === null) return;
+  if (p.status !== "rejected") return;
   if (repo.all<QueueRow>("remote_queue", { sessionId: p.sessionId }).some((queued) => queued.admissionCommandId === p.commandId)) return;
   const operation = repo.get<OperationRecord>("remote_operation", command.operationId);
-  if (!operation) return;
+  if (!operation || p.errorCode === null) return;
   operation.status = 409; operation.deliveryFailure = { error: { code: p.errorCode, message: "The machine refused this operation before starting it; nothing was applied" } };
   repo.put("remote_operation", operation.id, operation);
 }
@@ -250,6 +273,30 @@ function endRefusedRun(repo: RemoteRepository, command: StoredCommand, p: Receip
   endRun(repo, run, "rejected"); command.capacityReleased = true;
   failRejectedDelivery(repo, command, p);
 }
+/** A failed FIFO attempt is not a failure of the original queued message. */
+function observeMessageReceipt(repo: RemoteRepository, command: StoredCommand, receipt: ReceiptPayload, updatedRun?: RunRow): void {
+  if (command.envelope.kind !== "start-turn" && command.envelope.kind !== "submit-message") return;
+  if (receipt.status !== "rejected" && receipt.status !== "not-applied" && receipt.status !== "unknown") return;
+  const operation = repo.get<OperationRecord>("remote_operation", command.operationId);
+  if (!operation?.messageDelivery || operation.messageDelivery.queueItemId ||
+      operation.messageDelivery.status === "machine-started") return;
+  const runId = commandRunId(command.envelope);
+  const run = updatedRun ?? (runId ? repo.get<RunRow>("remote_run", runId) : undefined);
+  // A generic not-applied from a run is also emitted when classifier cessation
+  // is unknown. Require its exact terminal non-admission evidence first.
+  const runRefused = run && run.commandId === command.envelope.commandId && !run.nativeIdentity &&
+    (run.state === "failed" || run.state === "rejected");
+  const rejected = receipt.status === "rejected" ||
+    receipt.status === "not-applied" && knownNonApplication(receipt) && (!runId || runRefused);
+  const unconfirmed = !rejected;
+  const reason = unconfirmed ? "recovery-required" : receipt.errorCode ?? "machine-rejected";
+  observeMessageDelivery(operation, { status: rejected ? "machine-rejected" : "unconfirmed", queued: false, reason });
+  operation.status = 409;
+  operation.deliveryFailure = { error: { code: reason, message: rejected
+    ? "The machine refused the message before starting it" : "The machine has not confirmed whether the message started" } };
+  repo.put("remote_operation", operation.id, operation);
+}
+
 export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, frame: FrameOf<"command-receipt"> | FrameOf<"session-command-receipt">,authorityValid?:(authority:StoredCommand["authority"],projectId:string)=>boolean): void {
   const p = frame.payload; const command = repo.get<StoredCommand>("remote_command", p.commandId);
   if (!command || command.machineId !== machine.machineId || p.hubSequence !== command.envelope.hubSequence) fail(403, "scope-denied", "Command receipt ownership denied");
@@ -260,6 +307,7 @@ export function commandReceipt(repo: RemoteRepository, machine: MachineRecord, f
   const digest = command.frameType === "command" && "runId" in command.envelope ? runCommandDigest(command.envelope) : "target" in command.envelope ? sessionCommandDigest(command.envelope) : null;
   if (digest !== command.envelope.commandDigest) fail(409, "payload-conflict", "Stored command integrity changed");
   if (command.receipt && canonicalDigest(command.receipt) !== canonicalDigest(p) && ["applied", "rejected", "not-applied"].includes((command.receipt as {status:string}).status)) fail(409, "payload-conflict", "Terminal command receipt changed");
+  observeMessageReceipt(repo, command, p);
   releaseQueuedAttempt(repo,command,frame,authorityValid?.(command.authority,command.projectId)===true);
   if (knownNonApplication(p) && command.status !== "admitted" && command.status !== "applied") {
     const row = repo.get<SessionRow>("remote_session", targetSession);

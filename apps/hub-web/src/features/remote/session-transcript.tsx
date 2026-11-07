@@ -14,6 +14,7 @@ const RenderEntry = createContext<(entry: TimelineEntry) => ReactNode>(() => nul
 
 function toMessage({ id, entry }: EntryView): ThreadMessageLike {
   if (entry.kind === 'outcome') return { id, role: 'system', content: '/' + entry.item.outcome.commandName };
+  if (entry.kind === 'delivery') return { id, role: 'user', content: entry.delivery.text, createdAt: new Date(entry.delivery.submittedAt) };
   const { role, text, createdAt } = entry.message;
   return {
     id,
@@ -44,7 +45,9 @@ export function SessionTranscript({
 }) {
   const views = useMemo(() => entries.map(entry => ({
     entry,
-    id: entry.kind === 'message' ? 'message:' + entry.message.messageId : 'command:' + entry.item.outcome.operationId,
+    id: entry.kind === 'outcome' ? 'command:' + entry.item.outcome.operationId
+      : entry.kind === 'delivery' ? 'delivery:' + entry.delivery.operationId
+        : entry.delivery ? 'delivery:' + entry.delivery.operationId : 'message:' + entry.message.messageId,
   })), [entries]);
   const indexed = useMemo(() => new Map(views.map(view => [view.id, view.entry])), [views]);
   const runtime = useExternalStoreRuntime({
