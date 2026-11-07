@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.14] - 2026-11-07
+
+### Fixed
+- **Stop during streamed Team Hub replies ([#1145](https://github.com/MrCipherSmith/keryx/pull/1145)).** The machine executor sends and acknowledges only outstanding events instead of scanning and rewriting acknowledged history during streaming. This keeps cancellation responsive on long replies while retaining durable event order and replay.
+
+### Upgrade notes
+- Update the machine executor to pick up the Stop fix. Team Hub 0.4.13 can use the updated executor.
+
 ## [0.4.13] - 2026-11-07
 
 ### Changed
