@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.13] - 2026-11-07
+
+### Changed
+- **Team Hub chat ([#1144](https://github.com/MrCipherSmith/keryx/pull/1144)).** Chat shows when Hub accepts a message, when the machine starts it and when the machine refuses it. The sender can restore refused text or copy it while keeping a newer draft. The composer keeps one entry point for commands and groups settings under work context. The optional Flow at session creation applies to the first message, and later turns can use a different Flow.
+
+### Fixed
+- **Consecutive sends and draft recovery ([#1144](https://github.com/MrCipherSmith/keryx/pull/1144)).** Follow-up messages use verified session updates without a manual version refresh. A lost acknowledgement can be retried after reloading with the original request identity. Late confirmation from the machine reconciles the original receipt, including queued work. Chat keeps keyboard focus when confirming work context.
+
 ## [0.4.12] - 2026-11-07
 
 ### Added
