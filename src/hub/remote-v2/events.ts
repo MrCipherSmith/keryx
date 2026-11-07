@@ -9,6 +9,7 @@ import type { RemoteRepository } from "./storage";
 import type { ApprovalRow, MachineRecord, OperationRecord, Projection, QueueRow, RunRow, SessionRow, StoredCommand } from "./model";
 import { commandRunId, control, endRun, projectionKey, saveSession } from "./guards";
 import { redact } from "./results";
+import { addReportedUsage } from "./chat-usage";
 import type { ConfirmationRow, CommandConfirmationRow } from "./config";
 type ReceiptPayload = FrameOf<"command-receipt">["payload"] | FrameOf<"session-command-receipt">["payload"];
 export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, event: Control["SessionEvent"]): number {
@@ -201,12 +202,14 @@ export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: Fr
     if (known.some((event) => event.localSeq >= raw.fromSeq && event.localSeq <= raw.toSeq && event.kind !== "log")) fail(409, "replay-gap", "Critical events cannot be covered by a log gap");
   } else if (raw.localSeq !== run.lastLocalSeq + 1) fail(409, "replay-gap", "Contiguous durable event replay required");
   const event = structuredClone(raw); let logBytes: number | undefined;
+  if (event.kind === "log-gap") run.chatUsageGap = true;
   if (event.kind === "state") {
     if (terminal.has(run.state) && event.state !== run.state) return terminalConflict(repo,m,run,raw);
     if (event.state !== run.state && !transitions[run.state].has(event.state)) fail(409, "stale-reference", "Run transition needs actual lifecycle evidence");
     if (run.nativeIdentity && canonicalDigest(event.nativeIdentity) !== canonicalDigest(run.nativeIdentity)) fail(409, "stale-reference", "Native owner identity changed or disappeared");
     if (event.nativeIdentity) { if (event.nativeIdentity.sessionId !== run.sessionId || event.nativeIdentity.turnId !== run.turnId) fail(409, "stale-reference", "Native identity mismatch"); run.nativeIdentity = event.nativeIdentity; }
     run.state = event.state; run.version++; run.observedAt = event.observedAt;
+    if (event.state === "running") run.chatStartedAt ??= event.observedAt;
     if (terminal.has(run.state)) {
       repo.releaseRunCapacity(run.runId);
       run.terminalAt ??= new Date().toISOString();
@@ -223,6 +226,7 @@ export function ingestRunEvent(repo: RemoteRepository, m: MachineRecord, raw: Fr
     if (logBytes > LIMITS.logChunkBytes) fail(413, "quota-exceeded", "Log chunk exceeds quota");
     if (repo.runLogBytes(run.runId) + logBytes > LIMITS.runLogBytes) fail(413, "quota-exceeded", "Run log storage full; explicit log gap required");
     event.text = redact(event.text);
+    if (event.stream === "tool-summary") addReportedUsage(run, event.text);
   } else if (event.kind === "approval-request") {
     const deadline = Date.parse(event.expiresAt);
     if (!Number.isFinite(deadline) || deadline > Date.now() + 300000) fail(400, "approval-expired", "Approval deadline invalid");

@@ -638,6 +638,47 @@ otuiTest("hand-back: a choice refused because the dock is busy never moves the k
   h.destroy();
 });
 
+otuiTest("a remote choice only answers the mounted prompt once, while a local answer or abort retires it", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const controller = new AbortController();
+  function open() {
+    const ready = Promise.withResolvers<(id: string) => boolean>();
+    const answer = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+      title: "Allow shell command?",
+      cancelId: "deny",
+      options: ALLOW_DENY,
+      onSelectReady: ready.resolve,
+      signal: controller.signal,
+    });
+    return { choose: ready.promise, answer };
+  }
+  try {
+    const first = open();
+    const chooseFirst = await first.choose;
+    expect(chooseFirst("remember")).toBe(false);
+    expect(chooseFirst("once")).toBe(true);
+    expect(chooseFirst("deny")).toBe(false);
+    expect(await first.answer).toBe("once");
+
+    const second = open();
+    const chooseSecond = await second.choose;
+    expect(chooseFirst("once")).toBe(false);
+    h.mockInput.pressEscape();
+    expect(await second.answer).toBe("deny");
+    expect(chooseSecond("once")).toBe(false);
+
+    const third = open();
+    const chooseThird = await third.choose;
+    controller.abort();
+    expect(chooseThird("once")).toBe(false);
+    expect(await third.answer).toBe("deny");
+  } finally {
+    controller.abort();
+    h.destroy();
+  }
+});
+
 otuiTest("hand-back: a field focused while the choice is open keeps the keyboard when the choice closes", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui);

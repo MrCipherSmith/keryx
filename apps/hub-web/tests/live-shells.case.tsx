@@ -31,6 +31,7 @@ let operations: Map<string, LiveShellDelivery>;
 let claims: string[];
 let owner: string | null;
 let stops: { key: string; turnId: string }[];
+let chatOperations: Array<{ route: string; payload: unknown }>;
 
 beforeEach(async () => {
   resetClient();
@@ -49,6 +50,7 @@ beforeEach(async () => {
   claims = [];
   owner = null;
   stops = [];
+  chatOperations = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = new URL(String(input), "https://hub.invalid");
     const path = url.pathname;
@@ -98,6 +100,19 @@ beforeEach(async () => {
       }
       return Response.json({ operationId });
     }
+    const route = path.slice((listPath + "/shell/").length);
+    if (route === "invoke" || route === "select-model" || route === "answer-approval") {
+      if (owner !== body.clientId) return Response.json({ error: { code: "controller-conflict" } }, { status: 409 });
+      const key = new Headers(init?.headers).get("Idempotency-Key")!;
+      const operationId = "operation-" + key;
+      chatOperations.push({ route, payload: body });
+      const output = route === "invoke" ? "Command output from terminal" : undefined;
+      detail.delivery = { id: operationId, kind: route, status: "applied", ...(output ? { output } : {}) };
+      operations.set(operationId, detail.delivery);
+      if (route === "select-model" && detail.context?.model) detail.context.model.currentId = "next-model";
+      if (route === "answer-approval" && detail.context) delete detail.context.approval;
+      return Response.json({ operationId });
+    }
     return Response.json({}, { status: 404 });
   });
 });
@@ -108,7 +123,7 @@ async function openWithControl() {
   expect(await screen.findByText("Already said in the terminal")).toBeInTheDocument();
   expect(screen.getByText("Previously answered here")).toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Claim control" }));
-  await screen.findByRole("button", { name: "Release control" });
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Claim control" })).not.toBeInTheDocument());
   return screen.getByRole("textbox", { name: "Message" });
 }
 
@@ -119,6 +134,7 @@ test("connects to the existing terminal history and releases only the browser on
   expect(await screen.findByText("From Hub", { selector: "pre" })).toBeInTheDocument();
   await waitFor(() => expect(composer).toHaveValue(""));
   expect(reads).toContain("operation-" + sends[0]);
+  fireEvent.click(screen.getByLabelText("Session actions"));
   fireEvent.click(screen.getByRole("button", { name: "Disconnect from shell" }));
   expect(await screen.findByRole("button", { name: "Connect to Terminal conversation" })).toBeInTheDocument();
   expect(releases).toBe(1);
@@ -174,10 +190,11 @@ test("another browser using the same operator can read history and claim after r
   expect(browser.getByRole("button", { name: "Claim control" })).toBeDisabled();
   fireEvent.change(browser.getByRole("textbox", { name: "Message" }), { target: { value: "Keep in other browser" } });
   expect(browser.getByRole("button", { name: "Send message" })).toBeDisabled();
+  fireEvent.click(screen.getAllByLabelText("Session actions")[0]);
   fireEvent.click(screen.getByRole("button", { name: "Release control" }));
   await waitFor(() => expect(browser.getByRole("button", { name: "Claim control" })).toBeEnabled(), { timeout: 2_500 });
   fireEvent.click(browser.getByRole("button", { name: "Claim control" }));
-  expect(await browser.findByRole("button", { name: "Release control" })).toBeInTheDocument();
+  await waitFor(() => expect(browser.queryByRole("button", { name: "Claim control" })).not.toBeInTheDocument());
   expect(browser.getByRole("button", { name: "Send message" })).toBeEnabled();
   expect(claims).toHaveLength(2);
   expect(claims[0]).not.toBe(claims[1]);
@@ -194,4 +211,49 @@ test("retries a lost Stop receipt for the original turn even when the shell has 
     { key: expect.any(String), turnId: "turn-A" },
     { key: stops[0]?.key, turnId: "turn-A" },
   ]);
+});
+
+test("slash commands return output to history, models change on acknowledgement and usage shows measured counts", async () => {
+  const usage = { tokensIn: 1234, tokensOut: 24, cacheRead: 200, cacheWrite: 10, activeMs: 3500 };
+  detail.context = {
+    model: { currentId: "current-model", candidates: [
+      { id: "current-model", label: "Provider / current" },
+      { id: "next-model", label: "Provider / next" },
+    ] },
+    commands: [{ name: "status", description: "Show terminal status" }],
+    usage: { turn: usage, session: usage },
+  };
+  const composer = await openWithControl();
+  fireEvent.keyDown(composer, { key: "/" });
+  expect(screen.getByRole("searchbox", { name: "Search Keryx commands" })).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: /\/status/ }));
+  expect(await within(screen.getByRole("region", { name: "History" })).findByText("Command output from terminal")).toBeVisible();
+  expect(composer).toHaveValue("");
+  const model = screen.getByRole("combobox", { name: "Model" });
+  fireEvent.change(model, { target: { value: "next-model" } });
+  await waitFor(() => expect(model).toHaveValue("next-model"));
+  fireEvent.click(screen.getByText("Usage"));
+  expect(screen.getAllByText("1,234")).toHaveLength(2);
+  expect(screen.getAllByText("3.5 s")).toHaveLength(2);
+  expect(chatOperations).toEqual([
+    { route: "invoke", payload: { clientId: expect.any(String), name: "status" } },
+    { route: "select-model", payload: { clientId: expect.any(String), candidateId: "next-model" } },
+  ]);
+});
+
+test("the pending shell approval sits above the composer and answers the exact question", async () => {
+  detail.context = { phase: "waiting-input", approval: {
+    id: "approval-A", tool: "shell_exec", summary: "pwd", reason: "Command execution needs approval", canAnswer: true,
+  } };
+  detail.shell = { ...shell, busy: true, stopTurnId: "turn-A" };
+  const composer = await openWithControl();
+  const dock = composer.closest(".chat-dock") as HTMLElement;
+  expect(within(dock).getByText("Command execution needs approval")).toBeVisible();
+  const approve = within(dock).getByRole("button", { name: "Allow once" });
+  expect(approve.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(approve);
+  await waitFor(() => expect(within(dock).queryByRole("button", { name: "Allow once" })).not.toBeInTheDocument());
+  expect(chatOperations).toEqual([{
+    route: "answer-approval", payload: { clientId: expect.any(String), approvalId: "approval-A", decision: "allow" },
+  }]);
 });

@@ -73,6 +73,8 @@ export interface ComposerChoiceRequest {
   signal?: AbortSignal;
   /** Called once the menu is mounted, before it takes keyboard focus. */
   onOpen?: () => void;
+  /** A second surface can select a displayed option while this exact dock is open. */
+  onSelectReady?: (select: (id: string) => boolean) => void;
   /**
    * Enter is ignored for this long after the menu mounts, and for this long
    * after the last printable key reached the menu. A dialog that pops up while
@@ -1058,6 +1060,11 @@ function presentComposerChoice(
       selected: options[selected]?.id,
       scrollableSubtitle: hasScrollableSubtitle,
       acceptDelayMs,
+    });
+    request.onSelectReady?.((id) => {
+      if (settled || request.signal?.aborted || !request.options.some((option) => option.id === id)) return false;
+      finish(id, "remote");
+      return true;
     });
   });
 }

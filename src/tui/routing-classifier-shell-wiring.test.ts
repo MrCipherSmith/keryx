@@ -48,7 +48,7 @@ test("a turn routes when routing is on, the turn is the operator's own, and the 
 });
 
 test("an explicit /model or /connect pick changes the baseline without pinning routing off", () => {
-  const switchToAt = SOURCE.indexOf("const switchTo = async (ns: TuiSelection): Promise<void> => {", FN_START);
+  const switchToAt = SOURCE.indexOf("const switchTo = async (ns: TuiSelection", FN_START);
   expect(switchToAt).toBeGreaterThan(FN_START);
   const nextConstAt = SOURCE.indexOf("const switchTo", switchToAt + 1) > -1 ? SOURCE.indexOf("const switchTo", switchToAt + 1) : SOURCE.length;
   const body = SOURCE.slice(switchToAt, Math.min(switchToAt + 2000, nextConstAt));

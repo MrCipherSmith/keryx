@@ -27,8 +27,13 @@ test('a production profile publishes exactly the catalogue its bridge-composed h
   mkdirSync(path.join(cwd,'.metaproject'),{recursive:true});writeFileSync(path.join(cwd,'.metaproject','index.md'),'# Fixture\n');expect(git('init','-q').exitCode).toBe(0);git('add','.');expect(git('commit','-qm','fixture').exitCode).toBe(0);
   // A configured local endpoint the profile may name; no request reaches it, nothing here runs a turn.
   saveShellConfig({provider:'ollama',model:'fixture-model',baseUrl:'http://127.0.0.1:9'},configDir);const candidateId=canonicalDigest(['ollama','fixture-model']);
-  const resolved=await resolveProductionMachineProfile({projectId:'p',checkoutId:'c',cwd,profileId:'remote-read-only'},{configDir,allowedCandidateIds:[candidateId]});
+  const { encodeLocalModelCandidate } = await import('./model-candidates');
+  const alternate = encodeLocalModelCandidate('ollama', 'fixture/second')!;
+  const unrelated = encodeLocalModelCandidate('different-provider', 'fixture/other')!;
+  const resolved=await resolveProductionMachineProfile({projectId:'p',checkoutId:'c',cwd,profileId:'remote-read-only'},{configDir,allowedCandidateIds:[candidateId,alternate,unrelated]});
   if(!resolved.ok)throw new Error(resolved.error.code);const profile=resolved.value;const runtime=await profile.createRuntime('session');if(!runtime.ok)throw new Error(runtime.error.code);
+  expect(profile.routing.candidates.map(candidate => candidate.candidateId)).toEqual([candidateId, alternate]);
+  expect(runtime.value.modelBindings()).toContainEqual(expect.objectContaining({ actualProviderId: 'ollama', actualModelId: 'fixture/second' }));
   // The host exactly as the machine bridge composes it (bridge.ts materializeRecord): a lifecycle port and the owned rewind workspace.
   const workspace=createOwnedWorkspace(cwd);const refused={ok:false as const,error:{code:'authorization-not-applied',message:'authorization-not-applied'}};
   host=await createSessionHost({cwd,dataDir:path.join(root,'data'),configDir,runtime:runtime.value,inspectionMode:'hub-remote',lifecycle:{apply:async()=>refused,list:async()=>refused,open:async()=>refused},

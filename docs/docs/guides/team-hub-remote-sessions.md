@@ -146,6 +146,7 @@ The two profiles:
 | Flag | Meaning |
 |---|---|
 | `--candidate current` | Allow the provider and model that `keryx shell` last saved. This is the only accepted value. |
+| `--models model-a,model-b` | Optionally allow up to 15 more models from the same saved provider. Hub operators can select these models in chat. |
 | `--ad-hoc allow\|deny` | Whether a session may do work that is not tied to a Flow. |
 | `--max-runs 1\|2` | How many runs this machine may have active at once. |
 
@@ -195,9 +196,16 @@ In the interactive `keryx shell` terminal UI, at the root of that checkout, run:
 Sharing requires exactly one matching enrolled checkout. The terminal reports
 when it connects. In the Hub, select the mapped project, open **Sessions**,
 select the shell under **Running shells**, and choose **Claim control** to write.
-New messages go into that same shell and use its conversation history. Prompts
-from the browser use the shell's existing policy, and tool approvals stay in the
-terminal. Select **Stop response** to stop the current turn.
+New messages go into that same shell and use its conversation history. The chat
+toolbar offers `/` for `/help`, `/status`, `/usage`, and `/models`, a model
+picker for the active provider, and measured turn and session usage. Changing
+the model in Hub applies to that shell session. Select **Stop response** to stop
+the current turn.
+
+Eligible shell commands and small, fully visible patches requested by a
+Hub-started turn can be allowed once or denied above the message field. The
+terminal and Hub resolve the same question. When a question requires the
+terminal, the chat tells you where to answer.
 
 The browser receives up to the last 100 completed text messages, within a 256 KiB
 history limit. While a turn is running, the browser shows its status and displays

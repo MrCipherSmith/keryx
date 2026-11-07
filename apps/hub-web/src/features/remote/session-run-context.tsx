@@ -14,6 +14,7 @@ import { useRemoteAction, useRemoteQuery } from "../../api/remote-hooks";
 import { useHub } from "../../app/hub-context";
 import { Button, EmptyState, Notice, Panel } from "../../components/ui";
 import { ApprovalCard } from "./runs";
+import { ChatAction } from "./chat-composer";
 import {
   ActionFeedback,
   Definition,
@@ -31,10 +32,12 @@ type Props = {
   control: Controller;
   mode: SessionRunMode;
   conversation?: HTMLDivElement | null;
+  approvalDock?: HTMLDivElement | null;
+  stopDock?: HTMLSpanElement | null;
   messages?: Control["SessionMessage"][];
 };
 /** Mount one instance per workspace; changing mode preserves its bounded event accumulator. */
-export function SessionRunContext({ record, control, mode, conversation, messages }: Props) {
+export function SessionRunContext({ record, control, mode, conversation, approvalDock, stopDock, messages }: Props) {
   const hub = useHub();
   const { i18n } = useTranslation();
   const copy = sessionRunCopy[i18n.language.startsWith("ru") ? "ru" : "en"];
@@ -84,6 +87,8 @@ export function SessionRunContext({ record, control, mode, conversation, message
             control={control}
             mode={mode}
             conversation={conversation}
+            approvalDock={approvalDock}
+            stopDock={stopDock}
             messages={messages}
             readOnly={!live}
           />
@@ -93,7 +98,7 @@ export function SessionRunContext({ record, control, mode, conversation, message
   );
 }
 
-function LoadedRun({ run, record, control, mode, conversation, messages, readOnly }: Props & { run: RunRecord; readOnly: boolean }) {
+function LoadedRun({ run, record, control, mode, conversation, approvalDock, stopDock, messages, readOnly }: Props & { run: RunRecord; readOnly: boolean }) {
   const hub = useHub();
   const { t, i18n } = useTranslation("remote");
   const copy = sessionRunCopy[i18n.language.startsWith("ru") ? "ru" : "en"];
@@ -136,14 +141,33 @@ function LoadedRun({ run, record, control, mode, conversation, messages, readOnl
       (event): event is Extract<FrameOf<"run-event">["payload"], { kind: "approval-outcome" }> =>
         event.kind === "approval-outcome" && event.approvalId === approval.approvalId,
     );
-    const waiting = approval.status === "waiting" && !outcome;
-    return <div key={approval.approvalId} data-chat-approval={waiting ? "waiting" : undefined} tabIndex={waiting ? -1 : undefined}>
-      <ApprovalCard approval={approval} run={run} session={record} control={control} safe={safe} outcome={outcome} />
+    const pending = !outcome && ["waiting", "recorded", "delivered"].includes(approval.status) && run.state === "waiting-approval";
+    const card = <div key={approval.approvalId} data-chat-approval={pending ? "waiting" : undefined} tabIndex={pending ? -1 : undefined}>
+      <ApprovalCard approval={approval} run={run} session={record} control={control} safe={safe} outcome={outcome} compact={pending && !!approvalDock} />
     </div>;
+    return { pending, card };
   });
-  if (mode === "attention") return <>{approvalCards}</>;
+  const stop = !terminal && <ChatAction kind="stop" label={t("chatStop")}
+    disabled={!run.connected || !control.active || timeline.conflict || timeline.overflow || cancel.isPending || cancel.isSuccess || !!run.cancelRequested}
+    onClick={() => {
+      if (!control.binding) return;
+      cancel.mutate({
+        path: remoteProject(run.projectId) + "/runs/" + encodeURIComponent(run.runId) + "/cancel",
+        body: {
+          expectedRunVersion: run.version,
+          expectedSessionVersion: record.version,
+          reason: t("cancel"),
+          controller: control.binding,
+        } satisfies Control["CancelRequest"],
+      });
+    }} />;
+  if (mode === "attention") return <>{approvalCards.map(item => item.card)}</>;
+  const activeCards = approvalCards.filter(item => item.pending).map(item => item.card);
+  const historyCards = approvalCards.filter(item => !approvalDock || !item.pending).map(item => item.card);
   return (
     <>
+      {approvalDock && activeCards.length > 0 && createPortal(activeCards, approvalDock)}
+      {stopDock && stop && createPortal(stop, stopDock)}
       {conversation ? createPortal(
         <div className="session-live">
           {reply && <Markdown content={reply} />}
@@ -151,26 +175,15 @@ function LoadedRun({ run, record, control, mode, conversation, messages, readOnl
             <span role="status">{run.cancelRequested || cancel.isSuccess
               ? t("receiptStatuses.requested")
               : t("states." + run.state, { defaultValue: run.state })}</span>
-            <Button variant="secondary" disabled={!run.connected || !control.active || timeline.conflict || timeline.overflow || cancel.isPending || cancel.isSuccess || !!run.cancelRequested} onClick={() => {
-              if (!control.binding) return;
-              cancel.mutate({
-                path: remoteProject(run.projectId) + "/runs/" + encodeURIComponent(run.runId) + "/cancel",
-                body: {
-                  expectedRunVersion: run.version,
-                  expectedSessionVersion: record.version,
-                  reason: t("cancel"),
-                  controller: control.binding,
-                } satisfies Control["CancelRequest"],
-              });
-            }}>{t("cancel")}</Button>
+            {!stopDock && stop}
           </div>}
           <ActionFeedback action={cancel} />
           {toolLog.length > 0 && <details className="session-tool-log">
             <summary>{t("output")}</summary>
             {toolLog.map(event => <pre key={event.localSeq}>{event.text}</pre>)}
           </details>}
-          {approvalCards}
-        </div>, conversation) : approvalCards}
+          {historyCards}
+        </div>, conversation) : historyCards}
       {mode === "context" && (
         <>
           <Panel title={copy.currentRun}>

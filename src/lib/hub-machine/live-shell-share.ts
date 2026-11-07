@@ -2,7 +2,16 @@ import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import type { NormalizedMessage } from "../../harness/provider/types";
 import { HISTORY_SECRET_PLACEHOLDER, qualifyingHistory } from "../../remote/history";
-import { liveShellLimits, type LiveShellCommand, type LiveShellMessage, type LiveShellUpdate } from "../../remote-control/live-shell";
+import {
+  canShowExactApproval,
+  liveShellContextHeader,
+  liveShellLimits,
+  type LiveShellCommand,
+  type LiveShellContext,
+  type LiveShellDecision,
+  type LiveShellMessage,
+  type LiveShellUpdate,
+} from "../../remote-control/live-shell";
 import { parseClosedJson } from "../../remote-control/protocol";
 import { looksLikeSecret, redactSensitiveText } from "../../security/service";
 import { keryxConfigDir } from "../config-dir";
@@ -19,6 +28,10 @@ export interface LiveShellHost {
   submit(text: string): boolean;
   stop(turnId: string): boolean;
   notice(text: string): void;
+  inspect?(): LiveShellContext;
+  invoke?(name: string): { output?: string } | false | Promise<{ output?: string } | false>;
+  selectModel?(candidateId: string): boolean | Promise<boolean>;
+  answerApproval?(approvalId: string, decision: LiveShellDecision): boolean;
 }
 
 type Registration = {
@@ -47,11 +60,47 @@ function registrationFor(cwd: string, shellId: string): Registration {
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const turnIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const operationIdPattern = /^[0-9a-f]{64}$/;
+const commandNamePattern = /^[a-z][a-z0-9-]{0,63}$/;
+const candidateIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const pollMs = 1500;
 const fullRefreshMs = 10_000;
 const requestTimeoutMs = 4000;
+
+function sharedText(input: string, max: number): string {
+  const safe = looksLikeSecret(input) ? HISTORY_SECRET_PLACEHOLDER : redactSensitiveText(input);
+  // eslint-disable-next-line no-control-regex -- preserve whitespace but remove terminal control bytes from shared text
+  const text = safe.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/gu, "");
+  const encoded = encoder.encode(text);
+  return encoded.length > max
+    ? `${decoder.decode(encoded.subarray(0, max - 8)).replace(/\ufffd$/u, "")}…`
+    : text;
+}
+
+function sharedContext(context: LiveShellContext): LiveShellContext {
+  const { commands, model, approval } = context;
+  const safe: LiveShellContext = { ...context };
+  if (commands) safe.commands = commands.slice(0, liveShellLimits.commandCount).map(entry => ({
+    name: entry.name,
+    description: sharedText(entry.description, liveShellLimits.descriptionBytes),
+  }));
+  if (model) safe.model = { ...model, candidates: model.candidates.slice(0, liveShellLimits.candidateCount).map(entry => ({
+    id: entry.id,
+    label: sharedText(entry.label, liveShellLimits.descriptionBytes),
+  })) };
+  if (approval) {
+    const tool = sharedText(approval.tool, liveShellLimits.titleBytes);
+    const summary = sharedText(approval.summary, liveShellLimits.approvalSummaryBytes);
+    const reason = sharedText(approval.reason, liveShellLimits.descriptionBytes);
+    safe.approval = {
+      ...approval, tool, summary, reason,
+      canAnswer: approval.canAnswer && canShowExactApproval(summary) &&
+        tool === approval.tool && summary === approval.summary && reason === approval.reason,
+    };
+  }
+  return safe;
+}
 
 export function liveShellHistory(history: readonly NormalizedMessage[], turnRunning: boolean): LiveShellMessage[] {
   const items = qualifyingHistory(history.slice(-1000), { turnRunning });
@@ -59,15 +108,9 @@ export function liveShellHistory(history: readonly NormalizedMessage[], turnRunn
   let bytes = 2;
   for (let i = items.length - 1; i >= 0 && result.length < liveShellLimits.messages; i--) {
     const item = items[i]!;
-    const safe = looksLikeSecret(item.text) ? HISTORY_SECRET_PLACEHOLDER : redactSensitiveText(item.text);
-    // eslint-disable-next-line no-control-regex -- preserve whitespace but remove terminal control bytes from shared text
-    const text = safe.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/gu, "");
+    const text = sharedText(item.text, liveShellLimits.messageBytes);
     if (text.trim().length === 0) continue;
-    const encoded = encoder.encode(text);
-    const bounded = encoded.length > liveShellLimits.messageBytes
-      ? `${decoder.decode(encoded.subarray(0, liveShellLimits.messageBytes - 8)).replace(/\ufffd$/u, "")}…`
-      : text;
-    const message: LiveShellMessage = { role: item.role === "agent" ? "assistant" : "user", text: bounded };
+    const message: LiveShellMessage = { role: item.role === "agent" ? "assistant" : "user", text };
     bytes += Buffer.byteLength(JSON.stringify(message)) + 1;
     if (bytes > liveShellLimits.historyBytes) break;
     result.push(message);
@@ -75,18 +118,30 @@ export function liveShellHistory(history: readonly NormalizedMessage[], turnRunn
   return result.reverse();
 }
 
-function replyCommand(value: unknown): LiveShellCommand | null {
+function replyCommand(value: unknown, supportsContext: boolean): LiveShellCommand | null {
   if (value === null || typeof value !== "object" || !Object.hasOwn(value, "command")) throw new MachineError("invalid-live-shell-reply");
   const command = (value as { command: unknown }).command;
   if (command === null) return null;
-  if (typeof command !== "object") throw new MachineError("invalid-live-shell-reply");
+  if (typeof command !== "object" || Array.isArray(command)) throw new MachineError("invalid-live-shell-reply");
   const fields = command as Record<string, unknown>;
   if (typeof fields.id === "string" && operationIdPattern.test(fields.id)) {
     if (fields.kind === "message" && typeof fields.text === "string" && fields.text.trim() && Buffer.byteLength(fields.text) <= liveShellLimits.messageBytes) {
       return { id: fields.id, kind: "message", text: fields.text };
     }
-    if (fields.kind === "stop" && typeof fields.turnId === "string" && turnIdPattern.test(fields.turnId)) {
+    if (fields.kind === "stop" && typeof fields.turnId === "string" && uuidPattern.test(fields.turnId)) {
       return { id: fields.id, kind: "stop", turnId: fields.turnId };
+    }
+    if (supportsContext) {
+      if (fields.kind === "invoke" && typeof fields.name === "string" && commandNamePattern.test(fields.name)) {
+        return { id: fields.id, kind: "invoke", name: fields.name };
+      }
+      if (fields.kind === "select-model" && typeof fields.candidateId === "string" && candidateIdPattern.test(fields.candidateId)) {
+        return { id: fields.id, kind: "select-model", candidateId: fields.candidateId };
+      }
+      if (fields.kind === "answer-approval" && typeof fields.approvalId === "string" &&
+          uuidPattern.test(fields.approvalId) && (fields.decision === "allow" || fields.decision === "deny")) {
+        return { id: fields.id, kind: "answer-approval", approvalId: fields.approvalId, decision: fields.decision };
+      }
     }
   }
   throw new MachineError("invalid-live-shell-reply");
@@ -97,12 +152,15 @@ type Ack = NonNullable<LiveShellUpdate["ack"]>;
 /** A short-lived remote projection of one native shell, with a fresh identity for every opt-in. */
 export class LiveShellShare {
   readonly #sessionId: string;
-  readonly #seen = new Map<string, Ack["status"]>();
+  readonly #seen = new Map<string, Ack>();
+  readonly #outputs: Ack[] = [];
   #active = true;
   #connected = false;
+  #supportsContext = false;
   #timer: ReturnType<typeof setTimeout> | undefined;
   #inFlight: Promise<void> | undefined;
   #closing: Promise<void> | undefined;
+  #applying = false;
   #ack: Ack | undefined;
   #lastHistory = "";
   #lastFullAt = 0;
@@ -159,11 +217,15 @@ export class LiveShellShare {
     const snapshot = JSON.stringify(messages);
     const now = Date.now();
     const publish = snapshot !== this.#lastHistory || now - this.#lastFullAt >= fullRefreshMs;
+    const ack = this.#ack;
+    const context = this.#supportsContext ? this.host.inspect?.() : undefined;
+    const wireAck = ack && !this.#supportsContext ? { id: ack.id, status: ack.status } : ack;
     const update: LiveShellUpdate = {
       projectId, checkoutId, title: `Keryx shell · ${this.#sessionId.slice(0, 8)}`, busy: this.host.isBusy(),
       ...(turnId !== undefined ? { turnId } : {}),
       ...(publish ? { messages } : {}),
-      ...(this.#ack !== undefined ? { ack: this.#ack } : {}),
+      ...(context !== undefined ? { context: sharedContext(context) } : {}),
+      ...(wireAck !== undefined ? { ack: wireAck } : {}),
     };
     const response = await fetch(url, {
       method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(update),
@@ -171,6 +233,11 @@ export class LiveShellShare {
     });
     if (!response.ok) {
       await response.body?.cancel();
+      // A downgraded Hub rejects the extra fields. An intermittent network
+      // error does not drop capability or discard an undelivered result.
+      if (response.status === 400 && (context !== undefined || wireAck?.output !== undefined)) {
+        this.#supportsContext = false;
+      }
       if ([401, 403, 404, 410].includes(response.status) && this.active) {
         this.host.notice(`◇ Hub sharing ended (HTTP ${response.status}).`);
         void this.close();
@@ -181,33 +248,79 @@ export class LiveShellShare {
     const maxReplyBytes = liveShellLimits.updateBytes;
     const parsed = parseClosedJson(await readBoundedResponse(response, maxReplyBytes), maxReplyBytes);
     if (!parsed.ok) throw new MachineError("invalid-live-shell-reply");
-    const command = replyCommand(parsed.value);
+    const supportsContext = response.headers.get(liveShellContextHeader) === "1";
+    const command = replyCommand(parsed.value, supportsContext);
     if (!this.active) {
       void this.close();
       return;
     }
     if (!this.#connected) this.host.notice("◇ This shell is available in Team Hub. Use /remote-control hub off to disconnect it.");
     this.#connected = true;
+    this.#supportsContext = supportsContext;
     this.#lastFailure = undefined;
     if (publish) {
       this.#lastHistory = snapshot;
       this.#lastFullAt = now;
     }
-    this.#ack = command === null ? undefined : { id: command.id, status: this.#apply(command) };
+    if (this.#ack === ack) this.#ack = undefined;
+    if (command !== null) this.#accept(command);
   }
 
-  #apply(command: LiveShellCommand): Ack["status"] {
+  #accept(command: LiveShellCommand): void {
     const known = this.#seen.get(command.id);
-    if (known !== undefined) return known;
+    if (known !== undefined) {
+      this.#ack = known;
+      return;
+    }
+    // A model change can wait on provider setup. Keep heartbeats and lease
+    // checks flowing, but allow only one local operation in flight.
+    if (this.#applying) return;
     // Never evict ids during this opt-in: an unconfirmed command must not run twice.
-    if (this.#seen.size >= 10_000) return "rejected";
-    this.#seen.set(command.id, "rejected");
-    const applied = command.kind === "message"
-      ? !this.host.isBusy() && this.host.submit(command.text)
-      : this.host.turnId() === command.turnId && this.host.stop(command.turnId);
-    if (!applied) return "rejected";
-    this.#seen.set(command.id, "applied");
-    return "applied";
+    if (this.#seen.size >= 10_000) {
+      this.#ack = { id: command.id, status: "rejected" };
+      return;
+    }
+    this.#applying = true;
+    const ack: Ack = { id: command.id, status: "rejected" };
+    void this.#apply(command).then(result => {
+      if (result === false) return;
+      ack.status = "applied";
+      if (result.output !== undefined) {
+        ack.output = sharedText(result.output, liveShellLimits.outputBytes);
+        this.#outputs.push(ack);
+        if (this.#outputs.length > liveShellLimits.outputCount) {
+          const oldest = this.#outputs.shift();
+          if (oldest) delete oldest.output;
+        }
+      }
+    }).catch(() => {
+      ack.status = "rejected";
+    }).finally(() => {
+      this.#seen.set(command.id, ack);
+      this.#ack = ack;
+      this.#applying = false;
+    });
+  }
+
+  async #apply(command: LiveShellCommand): Promise<{ output?: string } | false> {
+    switch (command.kind) {
+      case "message":
+        return !this.host.isBusy() && this.host.submit(command.text) ? {} : false;
+      case "stop":
+        return this.host.turnId() === command.turnId && this.host.stop(command.turnId) ? {} : false;
+      case "invoke":
+        if (this.host.isBusy() || !this.host.inspect?.().commands?.some(entry => entry.name === command.name)) return false;
+        return await this.host.invoke?.(command.name) ?? false;
+      case "select-model":
+        if (this.host.isBusy() || !this.host.inspect?.().model?.candidates.some(entry => entry.id === command.candidateId)) return false;
+        return await this.host.selectModel?.(command.candidateId) ? {} : false;
+      case "answer-approval": {
+        const context = this.host.inspect?.();
+        const approval = context && sharedContext(context).approval;
+        return approval?.id === command.approvalId && approval.canAnswer &&
+          this.host.answerApproval?.(command.approvalId, command.decision) ? {} : false;
+      }
+    }
   }
 
   async #detach(): Promise<void> {

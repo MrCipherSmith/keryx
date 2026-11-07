@@ -1,3 +1,4 @@
+import { readSessionChatUsage } from "./chat-usage";
 import { readMessageDeliveries } from "./message-delivery";
 import { runEventPage } from "./retention";
 import { releasedControllerAlias } from "./controller-recovery";
@@ -28,7 +29,7 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies, c
     if (p[2] === "runs") {
       const all = store.remote.all<RunRow>("remote_run", { projectId });
       const exposed = (run: RunRow) => {
-        const { commandDigest, commandId, nativeIdentity, ...safe } = run;
+        const { commandDigest, commandId, nativeIdentity, chatTokens, chatStartedAt, chatUsageGap, ...safe } = run;
         const approvals = store.remote.all<ApprovalRow>("remote_approval_projection", { runId: run.runId }).map((question) => ({ approvalId: question.approvalId, runId: question.runId, sessionId: question.sessionId, turnId: question.turnId, actionFingerprint: question.actionFingerprint, policyDigest: question.policyDigest, expiresAt: question.expiresAt, summary: question.summary, localRequired: question.localRequired, status: question.status, ...(question.decision ? { decision: question.decision } : {}) }));
         const reconciliationReceipts = store.remote.all<ReconciliationRow>("remote_reconciliation", { runId: run.runId }).map((record) => record.receipt).filter((receipt) => (receipt.expectedRunVersion === run.version || (run.state === "lost" && run.reconciliationId === receipt.reconciliationId && receipt.expectedRunVersion + 1 === run.version)) && Date.now() - Date.parse(receipt.receivedAt) <= 30000 && receipt.observation !== "unknown");
         return { ...safe, approvals, reconciliationReceipts, connected: deps.online(run.machineId) };
@@ -42,6 +43,7 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies, c
     if (!p[3]) { const sessions = store.remote.all<SessionRow>("remote_session", { projectId }).map((row) => row.record).slice(after, after + 100); return json(control("SessionPage", { sessions, cursor: after + sessions.length, hasMore: sessions.length === 100 })); }
     const row = session(store.remote, projectId, p[3]); const suffix = p[4];
     if (!suffix) return json(row.record);
+    if (suffix === "usage" && !p[5]) return json(readSessionChatUsage(store.remote, row));
     if (suffix === "message-deliveries" && !p[5]) return json(readMessageDeliveries(store.remote, projectId, row.record.sessionId, auth.actor.id));
     if (suffix === "operations" && p[5]) { const release = releasedControllerAlias(store.remote, row, p[5]); if (release) return json(release); const operation = store.remote.get<OperationRecord>("remote_operation", p[5]); if (!operation || operation.projectId !== projectId || (operation.sessionId && operation.sessionId !== row.record.sessionId)) fail(404, "not-found", "Operation not found"); return json(operation.deliveryFailure ?? operation.response,operation.status); }
     if (suffix === "controller-claims" && p[5] && p.length === 6) {

@@ -65,50 +65,52 @@ export function SessionsView() {
         onNewSession={() => { setCreate(true); setFocusForm(true); hub.navigate({ tab: "sessions", sessionId: undefined }); }}
       />
     );
-  return (
-    <div className="space-y-5">
-      <PageHeading
-        title={t("sessions")}
-        description={t("description")}
-        action={
-          <Button onClick={() => { setFocusForm(false); setCreate(!create); }}>{t("newSession")}</Button>
-        }
-      />
-      {create && <CreateSession focusOnOpen={focusForm} />}
-      {hub.projectId && <LiveShells key={hub.scopeKey + ":" + hub.projectId} projectId={hub.projectId} />}
-      <Feedback query={sessions} />
-      {sessions.data?.sessions.length === 0 && (
-        <EmptyState>{t("empty")}</EmptyState>
-      )}
-      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        {sessions.data?.sessions.map((s) => (
-          <Panel
-            key={s.sessionId}
-            title={s.title}
-            description={t("states." + s.state, { defaultValue: s.state })}
+  const before = <>
+    <PageHeading
+      title={t("sessions")}
+      description={t("description")}
+      action={<Button onClick={() => { setFocusForm(false); setCreate(!create); }}>{t("newSession")}</Button>}
+    />
+    {create && <CreateSession focusOnOpen={focusForm} />}
+  </>;
+  const after = <>
+    <Feedback query={sessions} />
+    {sessions.data?.sessions.length === 0 && (
+      <EmptyState>{t("empty")}</EmptyState>
+    )}
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+      {sessions.data?.sessions.map((s) => (
+        <Panel
+          key={s.sessionId}
+          title={s.title}
+          description={t("states." + s.state, { defaultValue: s.state })}
+        >
+          <dl className="space-y-3">
+            <Definition label={t("machine")}>
+              {machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId}
+            </Definition>
+            <Definition label={t("checkout")}>{s.checkoutId}</Definition>
+            <Definition label={t("controller")}>
+              {s.controller?.actorId ?? "—"}
+            </Definition>
+          </dl>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              hub.navigate({ tab: "sessions", sessionId: s.sessionId })
+            }
           >
-            <dl className="space-y-3">
-              <Definition label={t("machine")}>
-                {machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId}
-              </Definition>
-              <Definition label={t("checkout")}>{s.checkoutId}</Definition>
-              <Definition label={t("controller")}>
-                {s.controller?.actorId ?? "—"}
-              </Definition>
-            </dl>
-            <Button
-              variant="secondary"
-              onClick={() =>
-                hub.navigate({ tab: "sessions", sessionId: s.sessionId })
-              }
-            >
-              {t("details")}
-            </Button>
-          </Panel>
-        ))}
-      </div>
+            {t("details")}
+          </Button>
+        </Panel>
+      ))}
     </div>
-  );
+  </>;
+  return <div className="space-y-5">
+    {hub.projectId
+      ? <LiveShells key={hub.scopeKey + ":" + hub.projectId} projectId={hub.projectId} before={before} after={after} />
+      : <>{before}{after}</>}
+  </div>;
 }
 /** The first launch requirement that is not met, in the order the operator should fix them. */
 function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowsState, flowGone }: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowsState: "ready" | "loading" | "failed"; flowGone: boolean }) {
@@ -408,9 +410,9 @@ export function SessionSurface({
         deliveries={deliveries} observedOperationIds={observedOperationIds} draftText={draftText} restoreText={restoreText} deliveryQuery={deliveryQuery} />}
       conversation={conversation}
       messages={messages}
-      composer={
+      composer={slots =>
         <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome}
-          awaitingMachine={awaitingMachine} restoreDraftRef={restoreDraftRef} />
+          awaitingMachine={awaitingMachine} restoreDraftRef={restoreDraftRef} slots={slots} />
       }
       queue={<QueueControls record={record} control={control} />}
       settings={<Settings record={record} control={control} />}

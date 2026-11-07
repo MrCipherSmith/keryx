@@ -253,9 +253,9 @@ describe("busLeases threaded into AgentDeps (flow 275 T6/T8 contract, specificat
     const joinBlock = source.slice(assignIdx, joinEnd);
     expect(joinBlock).toContain("busLeases: busLeasesFromClient(joined),");
 
-    const switchIdx = source.indexOf("const switchTo = async (ns: TuiSelection): Promise<void> => {");
+    const switchIdx = source.indexOf("const switchTo = async (ns: TuiSelection");
     expect(switchIdx).toBeGreaterThan(0);
-    const switchBlock = source.slice(switchIdx, switchIdx + 1100);
+    const switchBlock = source.slice(switchIdx, source.indexOf("liveDeps = deps;", switchIdx));
     expect(switchBlock).toContain("deps.busLeases !== undefined ? { busLeases: deps.busLeases } : {}");
   });
 

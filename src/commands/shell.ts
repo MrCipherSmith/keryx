@@ -4133,6 +4133,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // doc comment. Optional so every existing caller (tests) that predates
       // the bus is unaffected.
       bus?: { client: () => BusClient | undefined },
+      options?: { deferCallerExport: true },
     ): Promise<AgentDeps> => {
       const trace = startShellStartupTrace("shell.make-agent-deps");
       try {
@@ -4148,7 +4149,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // locally right below, not threaded in from the caller.
         const getSessionDir = (): string | undefined => getSlateSession()?.dir;
         // Rebuilt on launch and on every `/model` switch, so this is the live session.
-        exportCallerSession(sel.provider, sel.model);
+        // A Hub model selection commits only if its original session still owns the idle shell.
+        if (options?.deferCallerExport !== true) exportCallerSession(sel.provider, sel.model);
         const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
         // flow 268: resolved fresh on every `makeAgentDeps` call (launch,
         // `/model`, `/connect`) — same lifecycle as `agentProvider` above. `{}`

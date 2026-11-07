@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, useImperativeHandle, type Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp } from "lucide-react";
+import { ChatAction, ChatComposerFrame, ChatToolbar } from "./chat-composer";
+import type { SessionComposerSlots } from "./session-workspace";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
 import { messageDeliveriesKey, type CommandOutcomeListener } from "./session-timeline";
@@ -80,12 +81,14 @@ export function MessageComposer({
   onCommandOutcome,
   awaitingMachine = false,
   restoreDraftRef,
+  slots,
 }: {
   record: Control["SessionRecord"];
   control: Controller;
   onCommandOutcome?: CommandOutcomeListener;
   awaitingMachine?: boolean;
   restoreDraftRef?: Ref<(text: string) => boolean>;
+  slots?: SessionComposerSlots;
 }) {
   const [commands, setCommands] = useState<"unopened" | "open" | "closed">("unopened");
   const [focusToken, setFocusToken] = useState(0);
@@ -433,7 +436,7 @@ export function MessageComposer({
     (mode !== "managed" || managed.valid) && !!draft.text.trim() && !!association();
 
   return (
-    <Panel title={t("message")}>
+    <ChatComposerFrame title={t("message")}>
       {record.state === "opening" || record.state === "recovery-required" ? (
         <Notice>{t(record.state === "opening" ? "sessionNotOpen" : "sessionNeedsRecovery")}</Notice>
       ) : control.claimPending ? <Notice>{t("controlApplying")}</Notice> : !control.active && !record.controller && (
@@ -467,7 +470,7 @@ export function MessageComposer({
           onChange={(e) => editText(e.target.value)}
         />
       </Field>
-      <div className="composer-command-actions">
+      <ChatToolbar model={slots?.model} usage={slots?.usage} commands={
         <Button
           ref={commandTrigger}
           variant="secondary"
@@ -479,13 +482,13 @@ export function MessageComposer({
         >
           <span aria-hidden="true">/</span>
         </Button>
-        <Button className="composer-send" aria-label={t("send")} disabled={!canSend} onClick={submit}>
-          <ArrowUp className="composer-send-icon" size={20} aria-hidden="true" />
-          <span className="composer-send-label">{t("send")}</span>
-        </Button>
-      </div>
+      } action={<>
+        <span className="chat-stop-slot" ref={slots?.stopTargetRef} />
+        {(!slots || !record.activeRunId || canSend) &&
+          <ChatAction kind="send" label={t("send")} disabled={!canSend} onClick={submit} />}
+      </>} />
       {commands !== "unopened" && (
-        <div id={commandsId} hidden={commands !== "open"}
+        <div className="chat-native-command-picker" id={commandsId} hidden={commands !== "open"}
           onPointerDownCapture={() => { slashOpened.current = null; }}
           onChangeCapture={() => { slashOpened.current = null; }}
           onKeyDown={(event) => {
@@ -503,7 +506,8 @@ export function MessageComposer({
             ))}
           </div>
           <Commands record={record} control={control} onOutcome={onCommandOutcome}
-            visible={commands === "open"} focusToken={focusToken} initialSearch={commandShortcut} />
+            visible={commands === "open"} focusToken={focusToken} initialSearch={commandShortcut}
+            confirmationTarget={slots?.approvalDock} />
         </div>
       )}
       <details open={contextOpen} onToggle={event => setContextOpen(event.currentTarget.open)} className="composer-work-context">
@@ -633,7 +637,7 @@ export function MessageComposer({
           ? t("chatStorageError") : errorMessage(sendError)} {t("chatDraftKept")}</Notice>}
       {mode === "managed" && action.data?.status !== "admitted" && <ActionFeedback action={action} />}
       <p className="composer-keyboard-hint">{t("composerKeyboardHint")}</p>
-    </Panel>
+    </ChatComposerFrame>
   );
 }
 export function QueueControls({

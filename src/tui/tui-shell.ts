@@ -1,4 +1,5 @@
 import { executePlanCommand } from "../session/commands/plan-command";
+import { createHash } from "node:crypto";
 import { applyRuntimeSwitchToSlate } from "../session/runtime-switch";
 import { requestSessionInterrupt } from "../session/commands/session-control";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
@@ -93,6 +94,10 @@ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import type { LiveShellShare } from "../lib/hub-machine/live-shell-share";
+import { liveShellLimits, type LiveShellContext, type LiveShellDecision, type LiveShellUsage } from "../remote-control/live-shell";
+import { looksLikeSecret, redactSensitiveText } from "../security/service";
+import { SHELL_TOOL_NAMES } from "../lib/shell-tool-names";
+import { exportCallerSession } from "../lib/caller-session";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
@@ -436,7 +441,7 @@ import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { createAgentHostStatus } from "./agent-host-status";
 import { createHerdrCoreReporter, createStatusWriter, type HerdrCoreAttention } from "./herdr-core-status";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
-import { choicePasteDecision, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
+import { choicePasteDecision, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceRequest, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
@@ -1812,7 +1817,11 @@ export async function pickShellApproval(
   loadContext: ApprovalContextLoader,
   destructive = false,
   credentials = false,
-  ui: { onOpen?: () => void; signal?: AbortSignal } = {},
+  ui: {
+    onOpen?: () => void;
+    onSelectReady?: NonNullable<ComposerChoiceRequest["onSelectReady"]>;
+    signal?: AbortSignal;
+  } = {},
   // Flow 275 T7 (specification §4.4): a peer's `git-publish` pause lease
   // applies to this command (`ShellApprovalEval.publishLease`,
   // `../commands/shell-approval.ts`). Positional and defaulted like
@@ -1904,6 +1913,7 @@ export async function pickShellApproval(
     cancelId: "deny",
     options,
     ...(ui.onOpen !== undefined ? { onOpen: ui.onOpen } : {}),
+    ...(ui.onSelectReady !== undefined ? { onSelectReady: ui.onSelectReady } : {}),
     ...(ui.signal !== undefined ? { signal: ui.signal } : {}),
   });
   if (id === "once" || id === "always-exact" || id === "always-prefix" || id === "deny") {
@@ -4490,6 +4500,7 @@ export async function launchTuiAgentShell(opts: {
     sel: TuiSelection,
     getSlateSession: () => SlateSessionRef | undefined,
     bus?: { client: () => BusClient | undefined },
+    options?: { deferCallerExport: true },
   ) => Promise<AgentDeps>;
   /** Static, trusted provider capability facts used by routing before model I/O. */
   describeProvider?: (providerId: string, modelId: string) => ProviderDescription;
@@ -5012,7 +5023,7 @@ export async function launchTuiAgentShell(opts: {
     // queue, the session stores) that setup has not built yet.
     const turnFooter = { tokensIn: 0, tokensOut: 0, costUsd: undefined as number | undefined };
     // Flow 483: per-turn + session usage (tokens, cache, cost, active time) for the footer and /status Usage.
-    const usageTracker = createUsageTracker();
+    let usageTracker = createUsageTracker();
     let usageTurnOpen = false;
     chrome.setUsageSource(() => formatUsageFooter(usageTracker.snapshot()));
     let contextTotal = 0;
@@ -6409,6 +6420,9 @@ export async function launchTuiAgentShell(opts: {
     };
     // Flow 426 (AC6): while an approval is pending, the queue says the queued messages wait for it.
     let pendingApprovalCall: string | undefined;
+    type HubApproval = NonNullable<LiveShellContext["approval"]>;
+    const terminalApprovals = new Set<HubApproval>();
+    let hubApprovalDock: { prompt: HubApproval; answer: (decision: LiveShellDecision) => boolean } | undefined;
     const queueWait = (): QueueWait =>
       pendingApprovalCall !== undefined ? { kind: "approval", call: pendingApprovalCall } : { kind: "turn" };
     const trackApproval =
@@ -6416,10 +6430,16 @@ export async function launchTuiAgentShell(opts: {
       async (tool, inputJson, meta) => {
         const before = pendingApprovalCall;
         pendingApprovalCall = describePendingCall(tool, inputJson);
+        const localApproval: HubApproval = {
+          id: crypto.randomUUID(), tool, summary: "The terminal is waiting for an approval.",
+          reason: approvalCauseLine(causeOfMeta(tool, meta)), canAnswer: false,
+        };
+        terminalApprovals.add(localApproval);
         if (turnLoop.queue.length > 0) paintMainQueue();
         try {
           return await inner(tool, inputJson, meta);
         } finally {
+          terminalApprovals.delete(localApproval);
           pendingApprovalCall = before;
           if (turnLoop.queue.length > 0) paintMainQueue();
         }
@@ -6442,6 +6462,37 @@ export async function launchTuiAgentShell(opts: {
     };
     const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
       const dockSignal = race?.signal ?? foregroundOperation.signal;
+      const hubControls = (summary: string, allowOption: string, eligible: boolean) => {
+        const turnId = currentHubTurn();
+        let presented: typeof hubApprovalDock;
+        // Share decisions only when Hub can show the entire, unchanged action.
+        const canAnswer = eligible && race === undefined && turnId !== undefined &&
+          meta?.alwaysAsk !== true && meta?.untrustedOrigin !== true &&
+          summary.trim().length > 0 && Buffer.byteLength(summary) <= liveShellLimits.approvalSummaryBytes &&
+          !/[\p{Cc}\p{Cf}]/u.test(summary.replace(/[\r\n\t]/g, "")) &&
+          !looksLikeSecret(summary) && redactSensitiveText(summary) === summary;
+        return {
+          onSelectReady: (select: (id: string) => boolean) => {
+            const share = hubShare;
+            if (!canAnswer || share?.active !== true) return;
+            presented = {
+              prompt: {
+                id: crypto.randomUUID(), tool, summary,
+                reason: approvalCauseLine(causeOfMeta(tool, meta)), canAnswer: true,
+              },
+              answer: (decision) => {
+                if (hubShare !== share || !share.active || destroyed || !sessionLease.canPersist() ||
+                    dockSignal.aborted || currentHubTurn() !== turnId || hubApprovalDock !== presented) return false;
+                return select(decision === "allow" ? allowOption : "deny");
+              },
+            };
+            hubApprovalDock = presented;
+          },
+          close: () => {
+            if (hubApprovalDock === presented) hubApprovalDock = undefined;
+          },
+        };
+      };
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
         // the call outright — this says why the operator is being asked.
@@ -6554,7 +6605,8 @@ export async function launchTuiAgentShell(opts: {
         // (`classifyDiffLine`) is the SAME pure function `renderDiff` uses in
         // the readline shell and in markdown diff-block rendering, so all
         // three surfaces color a patch identically and cannot drift.
-        for (const line of extractPatchText(inputJson).split(/\r?\n/)) {
+        const patch = extractPatchText(inputJson);
+        for (const line of patch.split(/\r?\n/)) {
           const kind = classifyDiffLine(line);
           const rendered =
             kind === "add" ? roleChunk(otui, "ok", line)
@@ -6583,6 +6635,7 @@ export async function launchTuiAgentShell(opts: {
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval", { kind: "permission", text: "apply_patch: review the diff" });
         addCauseLine(tool, meta);
+        const hub = hubControls(patch, "allow", meta !== undefined && !meta.destructive && !meta.credentials && !meta.publishLease);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: "Approve apply_patch?",
@@ -6592,13 +6645,14 @@ export async function launchTuiAgentShell(opts: {
               chrome.blurComposer();
               race?.opened();
             },
+            onSelectReady: hub.onSelectReady,
             signal: dockSignal,
             options: [
               { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
               { id: "deny", label: "Deny", description: "Do not write anything" },
             ],
           }),
-        );
+        ).finally(hub.close);
         input.focus();
       if (race?.topicWon() === true) return false;
         setMainAgent("running", id === "allow" ? "write" : "denied");
@@ -6847,6 +6901,9 @@ export async function launchTuiAgentShell(opts: {
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       addCauseLine(tool, meta);
+      const hub = hubControls(cmd, "once", SHELL_TOOL_NAMES.has(tool) && meta !== undefined &&
+        !destructive && !ev.credentials && !ev.sacReviewConfirmation && !ev.publishLease &&
+        ev.hcLaunch === undefined);
       const choice = await chrome.withOverlay(() =>
         pickShellApproval(
           otui,
@@ -6861,6 +6918,7 @@ export async function launchTuiAgentShell(opts: {
               chrome.blurComposer();
               race?.opened();
             },
+            onSelectReady: hub.onSelectReady,
             signal: dockSignal,
           },
           // Flow 275 T7 (specification §4.4): never offer to remember while a
@@ -6874,7 +6932,7 @@ export async function launchTuiAgentShell(opts: {
           causeOfMeta(tool, meta),
           meta?.hcLaunch,
         ),
-      );
+      ).finally(hub.close);
       input.focus();
       if (race?.topicWon() === true) return false;
 
@@ -7415,6 +7473,8 @@ export async function launchTuiAgentShell(opts: {
 
     const invalidateForegroundSession = (): void => {
       foregroundOperation.invalidateSession();
+      usageTracker = createUsageTracker();
+      usageTurnOpen = false;
       io.resetStream();
       blockIo.resetReasoningLiveState();
       // Not `forceHandoff.clear()`: a forced line has already been taken out of
@@ -9039,14 +9099,20 @@ export async function launchTuiAgentShell(opts: {
       sbModelV.content = otui.t`${dimChunk(otui, label)}`;
       chrome.setStatus(label);
     };
-    const switchTo = async (ns: TuiSelection): Promise<void> => {
+    const switchTo = async (ns: TuiSelection, stillAllowed?: () => boolean): Promise<boolean> => {
+      if (stillAllowed === undefined) currentSel = ns;
+      const next = await opts.makeAgentDeps(
+        ns, liveSlateSession, busClientRef, stillAllowed !== undefined ? { deferCallerExport: true } : undefined,
+      );
+      if (stillAllowed !== undefined && !stillAllowed()) return false;
+      if (stillAllowed !== undefined) exportCallerSession(ns.provider, ns.model);
       currentSel = ns;
       // Flow 411: `/model` and `/connect` change the fallback baseline;
       // enabled category routing still applies to subsequent operator turns.
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
       deps = {
-        ...(await opts.makeAgentDeps(ns, liveSlateSession, busClientRef)),
+        ...next,
         onContextCompaction,
         // Flow 274 T7: a rebuild must not drop the bus-delivery wiring that
         // `opts.makeAgentDeps` itself knows nothing about (it is attached
@@ -9058,13 +9124,16 @@ export async function launchTuiAgentShell(opts: {
         ...(deps.busLeases !== undefined ? { busLeases: deps.busLeases } : {}),
       };
       liveDeps = deps; // F-002: keep onDestroy's ref pointed at the current deps
-      saveShellConfig(
-        ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
-      );
+      if (stillAllowed === undefined) {
+        saveShellConfig(
+          ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
+        );
+      }
       updateModelLabels();
       void balancePanel.setProvider(ns.provider);
       input.focus();
       chrome.showToast(`Switched to ${ns.provider}/${ns.model}`);
+      return true;
     };
 
     // Side workers while main is busy (automatic — no special slash command).
@@ -11527,6 +11596,61 @@ export async function launchTuiAgentShell(opts: {
       forceHandoff.isAwaitingSettlement ||
       turnLoop.queue.length > 0 ||
       leaseView()?.held() === true;
+    const hubShellBusy = (): boolean => shellIsBusy() || chrome.overlayActive() || turnLoop.drain.workInFlight();
+    // Hub calls a closed set of read-only commands. Message input still bypasses shell slash routing.
+    const hubCommands = [
+      { name: "help", description: "Show commands available in this connected shell" },
+      { name: "status", description: "Show shell session status and usage" },
+      { name: "usage", description: "Show token counts and active time" },
+      { name: "models", description: "List models for the active provider" },
+    ];
+    let hubModels: { provider: string; baseUrl: string | undefined; models: string[] } | undefined;
+    const hubModelId = (provider: string, model: string): string =>
+      createHash("sha256").update(JSON.stringify([provider, model])).digest("hex");
+    const hubModelChoices = (): Array<{ id: string; label: string; model: string }> => {
+      const { provider, model, baseUrl } = currentSel;
+      if (hubModels?.provider !== provider || hubModels.baseUrl !== baseUrl) {
+        // The shell's model picker owns provider discovery. Reuse it once per selected endpoint,
+        // outside the poll, so credentials and endpoints stay on this machine.
+        const cache = { provider, baseUrl, models: [] as string[] };
+        hubModels = cache;
+        void (async () => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const target = detected.find((candidate) => candidate.name === provider);
+          if (target === undefined) return;
+          const resolved = await modelsForPicker(baseUrl === undefined ? target : { ...target, baseUrl });
+          cache.models = resolved.models;
+        })().catch(() => undefined);
+      }
+      return [...new Set([model, ...hubModels.models])]
+        .slice(0, liveShellLimits.candidateCount)
+        .map((candidate) => ({
+          id: hubModelId(provider, candidate),
+          label: `${provider} / ${candidate}`,
+          model: candidate,
+        }));
+    };
+    const hubUsage = ({ tokensIn, tokensOut, cacheRead, cacheWrite, activeMs }: LiveShellUsage): LiveShellUsage =>
+      ({ tokensIn, tokensOut, cacheRead, cacheWrite, activeMs });
+    const inspectHubShell = (): LiveShellContext => {
+      const usage = usageTracker.snapshot();
+      const approval = hubApprovalDock?.prompt ?? terminalApprovals.values().next().value;
+      const phase = approval !== undefined || (chrome.isBusy() && busyPhase.startsWith("waiting for your"))
+        ? "waiting-input"
+        : chrome.isBusy() && (busyPhase.startsWith("thinking") || busyPhase === "waiting for model")
+          ? "thinking"
+          : hubShellBusy() ? "working" : undefined;
+      return {
+        commands: hubCommands,
+        model: {
+          currentId: hubModelId(currentSel.provider, currentSel.model),
+          candidates: hubModelChoices().map(({ id, label }) => ({ id, label })),
+        },
+        ...(usage.turnRunning || usage.turns > 0 ? { usage: { turn: hubUsage(usage.turn), session: hubUsage(usage.session) } } : {}),
+        ...(approval !== undefined ? { approval } : {}),
+        ...(phase !== undefined ? { phase } : {}),
+      };
+    };
     const handleHubShare = async (action: HubShareAction): Promise<void> => {
       const notice = (message: string): void => { if (!destroyed) io.onSystem?.(`${message}\n`); };
       if (action === "usage") { notice(hubShareUsage); return; }
@@ -11549,10 +11673,11 @@ export async function launchTuiAgentShell(opts: {
       try {
         const transport = await import("../lib/hub-machine/live-shell-share");
         if (pending.signal.aborted || destroyed || !sessionLease.canPersist()) return;
-        hubShare = transport.LiveShellShare.open(sessionCwd, {
+        hubModels = undefined;
+        const share = transport.LiveShellShare.open(sessionCwd, {
           sessionId: () => liveSession.summary.id,
           history: nativeHistory,
-          isBusy: () => shellIsBusy() || chrome.overlayActive() || turnLoop.drain.workInFlight(),
+          isBusy: hubShellBusy,
           turnId: currentHubTurn,
           submit: (text) => {
             if (destroyed || !sessionLease.canPersist()) return false;
@@ -11560,9 +11685,55 @@ export async function launchTuiAgentShell(opts: {
             return true;
           },
           stop: (turnId) => sessionLease.canPersist() && currentHubTurn() === turnId && foregroundOperation.cancel("stop requested in Team Hub"),
+          inspect: inspectHubShell,
+          invoke: (name) => {
+            if (!share.active || destroyed || !sessionLease.canPersist() || hubShellBusy()) return false;
+            switch (name) {
+              case "help":
+                return { output: hubCommands.map((command) => `/${command.name} · ${command.description}`).join("\n") };
+              case "status":
+                return {
+                  output: `Model: ${currentSel.provider}/${currentSel.model}\n` +
+                    `Queued: ${turnLoop.queue.length}\n\n${formatUsageTable(usageTracker.snapshot())}`,
+                };
+              case "usage":
+                return { output: formatUsageTable(usageTracker.snapshot()) };
+              case "models":
+                return { output: hubModelChoices().map((model) => model.label).join("\n") };
+              default:
+                return false;
+            }
+          },
+          selectModel: async (id) => {
+            const before = currentSel;
+            const stillAllowed = () => hubShare === share && share.active && !destroyed &&
+              sessionLease.canPersist() && !hubShellBusy() && currentSel === before;
+            if (!stillAllowed()) return false;
+            const next = hubModelChoices().find((candidate) => candidate.id === id);
+            if (next === undefined) return false;
+            if (next.model === before.model) return true;
+            if (!await switchTo({ ...before, model: next.model }, stillAllowed)) return false;
+            const switchedHistory = history;
+            try {
+              await applyRuntimeSwitchToSlate({
+                slateSession: liveSlateSession(),
+                history: switchedHistory,
+                onHistoryChange: (kind) => {
+                  if (history === switchedHistory && sessionLease.canPersist()) io.onHistoryChange?.(kind);
+                },
+                runtime: { provider: before.provider, model: next.model },
+              });
+            } catch {
+              // The selected runtime already changed, as in the terminal's model picker.
+            }
+            return true;
+          },
+          answerApproval: (id, decision) =>
+            hubApprovalDock?.prompt.id === id && hubApprovalDock.answer(decision),
           notice,
         });
-        hubShare.start();
+        hubShare = share;
+        share.start();
         notice("◇ Connecting to Team Hub and sharing this shell's recent messages…");
       } catch {
         if (!pending.signal.aborted) notice("◇ Hub sharing requires exactly one enrolled working copy for this folder and valid machine credentials.");

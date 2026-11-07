@@ -10,6 +10,7 @@ import { wireModelIdentity } from '../../session/model-identity';
 import { assembleNativeSessionRuntime } from '../../session/native-runtime-production';
 import type { NativeSessionRuntime } from '../../session/native-runtime';
 import type { CheckoutMapping } from './config';
+import { decodeLocalModelCandidate } from './model-candidates';
 import { MachineError, type MachineResult } from './errors';
 export interface MachineProfile {
     profileId: string;
@@ -42,20 +43,30 @@ export async function resolveProductionMachineProfile(mapping: CheckoutMapping, 
     const candidateId = canonicalDigest([saved.provider, saved.model]);
     if (!options.allowedCandidateIds.includes(candidateId))
         return fail('local-policy');
+    const providerId = saved.provider, modelId = saved.model;
+    const additional = [...new Set(options.allowedCandidateIds)].flatMap(id => {
+        const model = decodeLocalModelCandidate(providerId, id);
+        return model && model !== modelId ? [{ id, model }] : [];
+    });
     const policyDigest = canonicalDigest(policy);
-    const capabilityDigest = canonicalDigest({ adapter: 'keryx-native-v1', profileId: mapping.profileId, candidateId, tools: ['read_file', 'search_code', 'list_dir', 'hub_context', 'hub_flows', 'hub_flow', 'apply_patch', 'shell_exec'], maxToolCalls: 64, maxRounds: 16 });
+    const capabilityDigest = canonicalDigest({ adapter: 'keryx-native-v1', profileId: mapping.profileId, candidateId,
+        ...(additional.length ? { additional: additional.map(candidate => candidate.id).sort() } : {}), tools: ['read_file', 'search_code', 'list_dir', 'hub_context', 'hub_flows', 'hub_flow', 'apply_patch', 'shell_exec'], maxToolCalls: 64, maxRounds: 16 });
     // Hub validates every CommandInvoke against this catalogue and the host against its own, so they must be one catalogue: the production
     // assembly always spawns owned Git (native-runtime-production.ts) and the bridge always gives its hosts the owned rewind workspace (bridge.ts).
     const catalogue = createMachineCommandCatalogue(capabilityDigest, [], { ownedRewind: true });
     // A partial registry must remain visible as a release/setup gap, never silently executable.
     if (catalogueImplementationGaps(catalogue).length > 0)
         return fail('adapter-unsupported');
-    const routing = createLocalMachineRouting(saved.provider, saved.model, policyDigest, capabilityDigest);
-    const providerId = saved.provider, modelId = saved.model;
+    const routing = createLocalMachineRouting(providerId, modelId, policyDigest, capabilityDigest);
+    const baseline = routing.candidates[0]!;
+    routing.candidates.push(...additional.map(({ id, model }) => ({
+        ...baseline, candidateId: id, ...wireModelIdentity(providerId, model),
+    })));
     return { ok: true, value: { profileId: mapping.profileId, policyDigest, capabilityDigest, catalogue, routing,
             async createRuntime(sessionId) {
                 const result = await assembleNativeSessionRuntime({ cwd: mapping.cwd, configDir: options.configDir, sessionId, profile: policy, providerId, modelId,
-                    allowedTools: ['read_file', 'search_code', 'list_dir', 'hub_context', 'hub_flows', 'hub_flow', 'apply_patch', 'shell_exec', 'shell_task_output', 'shell_task_wait', 'shell_task_kill'], maxToolCalls: 64, maxRounds: 16, availability: routing });
+                    allowedTools: ['read_file', 'search_code', 'list_dir', 'hub_context', 'hub_flows', 'hub_flow', 'apply_patch', 'shell_exec', 'shell_task_output', 'shell_task_wait', 'shell_task_kill'], maxToolCalls: 64, maxRounds: 16, availability: routing,
+                    modelBindings: additional.map(({ model }) => ({ ...wireModelIdentity(providerId, model), actualProviderId: providerId, actualModelId: model })) });
                 return result.ok ? result : { ok: false, error: new MachineError(result.error.code) };
             }
         } };
