@@ -34,7 +34,7 @@ export function acquireCheckoutLease(cwd: string, owner: {
         closeSync(fd);
     }
     const assertOwnership=()=>{let descriptor:number|undefined;try{descriptor=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW);const stat=fstatSync(descriptor);if(!stat.isFile()||stat.size!==Buffer.byteLength(bytes)||readFileSync(descriptor,'utf8')!==bytes)throw new MachineError('lease-owner-mismatch');}catch(cause){throw new MachineError('lease-owner-mismatch',{cause});}finally{if(descriptor!==undefined)closeSync(descriptor);}};
-    return {get nonce(){return nonce;},assertOwnership,reacquire(){
+    return {get nonce(){return nonce;},get released(){return released;},assertOwnership,reacquire(){
      if(!released)throw new MachineError('lease-owner-mismatch');const next=randomUUID(),nextBytes=JSON.stringify({...owner,nonce:next,cwd:canonical});let descriptor:number;
      try{descriptor=openSync(file,'wx',0o600);}catch(cause){if((cause as NodeJS.ErrnoException).code==='EEXIST')throw new MachineError('checkout-busy',{cause});throw cause;}
      try{writeFileSync(descriptor,nextBytes);fsyncSync(descriptor);}finally{closeSync(descriptor);}nonce=next;bytes=nextBytes;released=false;

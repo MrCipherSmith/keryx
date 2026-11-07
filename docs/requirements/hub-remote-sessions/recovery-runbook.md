@@ -70,7 +70,7 @@ When those hold, the host stops every job the native session owns and waits for 
 
 Both go to Hub through the existing session event stream. No human operation, run or operation receipt is created on anyone's behalf. Hub accepts the release only as a causally closed, expired, never-run or known-terminal session with no uncertain work. After that, a human takes over normally in Hub with `mode: takeover` and the release receipt id. Resuming the closed conversation afterwards goes through the ordinary resume flow and its own checks; this recovery does not change them.
 
-Developer changes in the checkout, the conversation history and the audit history are not touched. The checkout lease stays with this `serve` process, exactly as it does after an ordinary close, so a later resume can use it.
+Developer changes in the checkout, the conversation history and the audit history are not touched. This local recovery keeps the checkout lease with the `serve` process for the controller handoff and a later resume. An ordinary close releases the checkout lease.
 
 The command prints the released result: `stopped: true`, the measured closed `session`, and the released `controller` receipt.
 
