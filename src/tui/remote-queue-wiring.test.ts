@@ -504,7 +504,8 @@ test("flow 399 T-2: tui-shell.ts still feeds the session entry and the history i
 test("flow 397 T-1: both session replacements stop the remote immediately before liveSession changes", () => {
   const source = readFileSync(SHELL_SOURCE, "utf8");
   const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
-  expect(code).toMatch(/const stopRemoteForSessionSwitch = \(\): void => \{\s*void hubShare\?\.close\(\);\s*remoteQueue\.stopRemoteForSessionSwitch\(\);\s*\};/);
+  expect(code).toMatch(/const stopRemoteForSessionSwitch = \(\): void => \{\s*void closeHubShare\(\);\s*remoteQueue\.stopRemoteForSessionSwitch\(\);\s*\};/);
+  expect(code).toMatch(/const closeHubShare = \(\) => \{\s*startingHubShare\?\.abort\(\);\s*startingHubShare = undefined;\s*return hubShare\?\.close\(\);\s*\};/);
   // Every assignment of the live session from an opened handle is a session replacement.
   expect(shellOccurrences(source, "liveSession = opened.handle;")).toBe(2);
   // Each is directly preceded by the stop call (applyOpened, startNewSession).
