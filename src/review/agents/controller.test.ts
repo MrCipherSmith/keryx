@@ -13,9 +13,41 @@ async function waitUntil(predicate: () => boolean | Promise<boolean>, timeoutMs 
   const deadline = Date.now() + timeoutMs;
   while (!(await predicate())) { if (Date.now() >= deadline) throw new Error("condition timed out"); await Bun.sleep(10); }
 }
-function adapter(execute: (request: ReviewAgentAdapterRequest, context: ReviewAgentAdapterContext) => Promise<unknown>): ReviewAgentAdapter {
+function rawAdapter(execute: (request: ReviewAgentAdapterRequest, context: ReviewAgentAdapterContext) => Promise<unknown>): ReviewAgentAdapter {
   return { id: "fake", capabilities: { readOnlyEnforced: true, resultPersistence: true, cancellation: true, hierarchy: true }, execute: async (request, context) => ({ content: await execute(request, context) }), cancel: async () => undefined };
 }
+function adapter(execute: (request: ReviewAgentAdapterRequest, context: ReviewAgentAdapterContext) => Promise<unknown>): ReviewAgentAdapter {
+  return rawAdapter(async (request, context) => ({ ...reviewResult(), summary: JSON.stringify(await execute(request, context)) }));
+}
+function reviewResult() {
+  return { reviewer: "review-worker", status: "DONE", summary: "Reviewed", findings: [], stats: { blocker: 0, major: 0, minor: 0, info: 0 } };
+}
+
+for (const [name, content] of Object.entries({
+  null: null,
+  missingFieldsInText: '```REVIEW_RESULT\n{"status":"DONE"}\n```',
+  invalidFindingsInText: JSON.stringify({ ...reviewResult(), findings: [{ severity: "critical" }] }),
+  invalidStatsInText: JSON.stringify({ ...reviewResult(), stats: {} }),
+  unclosedFence: "```REVIEW_RESULT\n" + JSON.stringify(reviewResult()),
+  prose: "Everything looks fine",
+  malformed: '```REVIEW_RESULT\n{"status":\n```',
+  missingFields: { status: "DONE" },
+  invalidStatus: { ...reviewResult(), status: "SUCCESS" },
+  invalidFindings: { ...reviewResult(), findings: [{ id: "F1", severity: "critical" }] },
+  invalidStats: { ...reviewResult(), stats: { blocker: -1, major: 0, minor: 0, info: 0 } },
+})) {
+  test(`invalid REVIEW_RESULT (${name}) fails without persisting a result`, async () => {
+    const runtime = await controller({ adapter: rawAdapter(async () => content) });
+    const admitted = await runtime.spawn({ taskId: "invalid", attempt: 1, entity: "review-worker", role: "worker", adapterId: "fake" });
+    if (!admitted.ok) throw new Error("admission failed");
+    const result = await runtime.wait(admitted.dispatchId);
+    expect(result.status).toBe("failed");
+    expect(result.resultId).toBeUndefined();
+    expect(result.error).toContain("invalid_review_result");
+    expect(await runtime.result(admitted.dispatchId)).toBeUndefined();
+  });
+}
+
 async function controller(options: { adapter: ReviewAgentAdapter; maxConcurrency?: number; maxLaunches?: number; maxDepth?: number; cancelCleanupTimeoutMs?: number; authorize?: (operation: string) => boolean | Promise<boolean>; clock?: () => Date }): Promise<ReviewAgentController> {
   return ReviewAgentController.create({ storageDir: await tempRoot(), ownerId: "test-owner", runId: "run-1", revision: "deadbeef", config: createLargeReviewConfig({ allowedAdapters: ["fake"], allowedSkills: ["review-logic"], runCeilings: { initialConcurrency: options.maxConcurrency ?? 12, maxActiveDescendants: options.maxConcurrency ?? 32, maxLaunches: options.maxLaunches ?? 512, maxDepth: options.maxDepth ?? 2 } }), adapters: [options.adapter], authority: { authorize: async ({ operation }) => options.authorize?.(operation) ?? true }, entityPolicies: testEntityPolicies, ...(options.cancelCleanupTimeoutMs === undefined ? {} : { cancelCleanupTimeoutMs: options.cancelCleanupTimeoutMs }), ...(options.clock === undefined ? {} : { clock: options.clock }) });
 }
@@ -103,8 +135,8 @@ test("full result IDs remain distinct for two executions of the same skill", asy
   const [ar, br] = await Promise.all([runtime.wait(a.dispatchId), runtime.wait(b.dispatchId)]);
   expect(ar.resultId).toBeDefined(); expect(br.resultId).toBeDefined(); expect(ar.resultId).not.toBe(br.resultId);
   if (ar.resultId === undefined) throw new Error("result missing");
-  expect((await runtime.result(a.dispatchId))?.content).toEqual({ evidence: ["slice-a"] });
-  expect((await runtime.result(b.dispatchId))?.content).toEqual({ evidence: ["slice-b"] });
+  expect((await runtime.result(a.dispatchId))?.content).toEqual({ ...reviewResult(), summary: JSON.stringify({ evidence: ["slice-a"] }) });
+  expect((await runtime.result(b.dispatchId))?.content).toEqual({ ...reviewResult(), summary: JSON.stringify({ evidence: ["slice-b"] }) });
   expect(await runtime.recordCoverage({ scopeId: "slice-a", aspect: "logic", dispatchId: a.dispatchId, status: "result" })).toBe(false);
   expect(await runtime.recordCoverage({ scopeId: "made-up", aspect: "logic", dispatchId: a.dispatchId, status: "result", resultId: ar.resultId, evidence: ["x"] })).toBe(false);
   expect(await runtime.recordCoverage({ scopeId: "slice-a", aspect: "logic", dispatchId: a.dispatchId, status: "result", resultId: ar.resultId, evidence: ["finding-1"] })).toBe(true);
@@ -176,7 +208,7 @@ test("mutable reopen reconciles orphaned work before pumping durable queued assi
     execute: async (request) => {
       calls.push(request.taskId);
       if (request.taskId === "first") { firstStarted.resolve(); return { content: await firstGate.promise }; }
-      return { content: "done" };
+      return { content: reviewResult() };
     },
     cancel: async () => undefined,
     reconcile: async () => "cancelled",
@@ -338,7 +370,7 @@ test("unresolved children and generals continue to consume their capacity ceilin
       await waitUntil(async () => (await context.controller.status(first.dispatchId))?.status === "running");
       await context.controller.cancel(first.dispatchId, "stop");
       secondChild = await context.controller.spawn({ taskId: "leaf-2", attempt: 1, entity: "review-worker", role: "worker", adapterId: "fake", scopeIds: ["scope"] });
-      return { content: "done" };
+      return { content: reviewResult() };
     },
     cancel: async () => { throw new Error("kill failed"); },
   };
@@ -433,3 +465,31 @@ test("plan supersession cannot reset run-scoped wave and dynamic-child authority
     assignments: [{ taskId: "general", entity: "review-coordinator", role: "coordinator", scopeIds: ["scope"], waveId: "wave-2", coverage: [], delegatedCoverage: [{ scopeId: "scope", aspect: "logic" }], allowDynamicChildren: false }],
   })).rejects.toThrow("Dynamic-child authority");
 });
+
+for (const [name, content, status] of [
+  ["object", reviewResult(), "completed"],
+  ["JSON", JSON.stringify(reviewResult()), "completed"],
+  ["fenced", "Result:\n```REVIEW_RESULT\n" + JSON.stringify(reviewResult()) + "\n```", "completed"],
+  ["jsonFence", "```json\n" + JSON.stringify(reviewResult()) + "\n```", "completed"],
+  ["concerns", { ...reviewResult(), status: "DONE_WITH_CONCERNS" }, "completed"],
+  ["blocked", { ...reviewResult(), status: "BLOCKED" }, "blocked"],
+  ["context", { ...reviewResult(), status: "NEEDS_CONTEXT" }, "blocked"],
+  ["unreadable", { ...reviewResult(), inputs_unreadable: ["payload"] }, "blocked"],
+  ["missingContext", { ...reviewResult(), needs_context: ["source"] }, "blocked"],
+] as const) {
+  test(`valid REVIEW_RESULT (${name}) reaches ${status} without publishing blocked results`, async () => {
+    const runtime = await controller({ adapter: rawAdapter(async () => content) });
+    const admitted = await runtime.spawn({ taskId: "valid", attempt: 1, entity: "review-worker", role: "worker", adapterId: "fake" });
+    if (!admitted.ok) throw new Error("admission failed");
+    const result = await runtime.wait(admitted.dispatchId);
+    expect(result.status).toBe(status);
+    if (status === "completed") {
+      expect(result.resultId).toBeDefined();
+      expect((await runtime.result(admitted.dispatchId))?.content).toEqual(content);
+    } else {
+      expect(result.resultId).toBeUndefined();
+      expect(result.error).toBe("review_result_blocked");
+      expect(await runtime.result(admitted.dispatchId)).toBeUndefined();
+    }
+  });
+}

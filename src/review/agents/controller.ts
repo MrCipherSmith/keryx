@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { reviewAgentResultStatus } from "./result-validation";
 import { createLargeReviewConfig, validateReviewAgentConfig } from "./config";
 import { createReviewAgentDeadline, reviewAgentsAbortableDelay, startReviewAgentLeaseHeartbeat, type ReviewAgentDeadline, type ReviewAgentLeaseHeartbeat } from "./lifecycle";
 import { acquireReviewAgentControllerLease, createReviewAgentState, mutateReviewAgentState, readReviewAgentState } from "./store";
@@ -555,6 +556,11 @@ export class ReviewAgentController {
         if (terminal(current)) return;
         if (this.cancelIfAssignmentElapsed(state, current)) return;
         this.finishActiveSegment(state, current); this.releaseReservation(state, current);
+        const resultStatus = reviewAgentResultStatus(output.content);
+        if (resultStatus === "blocked") {
+          current.status = "blocked"; current.error = "review_result_blocked";
+          current.updatedAt = nowIso(this.clock); return;
+        }
         const resultId = this.id();
         const stored: ReviewAgentStoredResult = {
           resultId, dispatchId, runId: state.runId, taskId: current.taskId, attempt: current.attempt,
@@ -564,7 +570,7 @@ export class ReviewAgentController {
           ...(output.usage === undefined ? {} : { usage: clone(output.usage) }),
           ...(output.metadata === undefined ? {} : { metadata: clone(output.metadata) }),
         };
-        state.results[resultId] = stored; current.resultId = resultId; current.status = "completed"; current.updatedAt = nowIso(this.clock);
+        state.results[resultId] = stored; current.resultId = resultId; current.status = resultStatus; current.updatedAt = nowIso(this.clock);
       });
     } catch (error) {
       await this.modify((state) => {

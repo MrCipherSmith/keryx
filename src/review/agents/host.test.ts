@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
-import { callRound, okReply, scriptedProvider } from "../../commands/agent.test-helpers";
+import { callRound, scriptedProvider } from "../../commands/agent.test-helpers";
 import { buildInteractiveAgentTools } from "../../commands/interactive-agent-tools";
 import { createDefaultSearchProviderController } from "../../harness/search";
 import { createMetaprojectAdapter } from "../../harness/tool/metaproject-adapter";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import { createReviewAgentHost, type ReviewAgentHostOptions } from "../../commands/review-agents-runtime/host";
+
+const reviewResult = {
+  reviewer: "review-worker", status: "DONE", summary: "Reviewed", findings: [],
+  stats: { blocker: 0, major: 0, minor: 0, info: 0 },
+};
+const okReply: import("../../commands/agent.test-helpers").Script = [{ kind: "text_delta", text: JSON.stringify(reviewResult) }, { kind: "model_end" }];
 
 const fakeExternalGeneralHostFactory: NonNullable<ReviewAgentHostOptions["externalGeneralHostFactory"]> = async (options) => ({
   adapter: {
@@ -24,7 +30,7 @@ const fakeExternalGeneralHostFactory: NonNullable<ReviewAgentHostOptions["extern
       }) as { ok: boolean; dispatchId?: string; message?: string };
       if (!admission.ok || admission.dispatchId === undefined) throw new Error(admission.message ?? "test child was refused");
       await controller.wait(admission.dispatchId);
-      return { content: { child: await controller.result(admission.dispatchId) } };
+      return { content: { ...reviewResult, summary: JSON.stringify({ child: await controller.result(admission.dispatchId) }) } };
     },
     async cancel() {},
     async reconcile() { return "unknown" as const; },

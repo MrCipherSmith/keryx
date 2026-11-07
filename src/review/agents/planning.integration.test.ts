@@ -10,6 +10,11 @@ import {
   type ReviewAgentEntityPolicyResolver,
 } from "./index";
 
+const reviewResult = {
+  reviewer: "review-worker", status: "DONE", summary: "Reviewed", findings: [],
+  stats: { blocker: 0, major: 0, minor: 0, info: 0 },
+};
+
 const roots: string[] = [];
 afterAll(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
@@ -73,9 +78,9 @@ test("registered plan bounds dynamic general children and invalidates their old 
           scopeIds: ["slice-checkout"],
         });
         dynamicDispatchId = child.dispatchId;
-        return { content: { child: child.dispatchId } };
+        return { content: { ...reviewResult, summary: JSON.stringify({ child: child.dispatchId }) } };
       }
-      return { content: { evidenceIds: ["logic-check-1"] } };
+      return { content: { ...reviewResult, summary: JSON.stringify({ evidenceIds: ["logic-check-1"] }) } };
     },
   };
   const controller = await ReviewAgentController.create({
