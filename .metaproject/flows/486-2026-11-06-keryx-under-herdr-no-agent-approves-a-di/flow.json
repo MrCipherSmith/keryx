@@ -9,17 +9,52 @@
   "id": "486",
   "slug": "keryx-under-herdr-no-agent-approves-a-di",
   "title": "Keryx under herdr: no agent approves a dialog by accident; hc delegation is a conscious choice",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-06T22:23:44.020Z",
-  "updatedAt": "2026-11-06T22:52:39.644Z",
+  "updatedAt": "2026-11-07T00:46:44.138Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-07T00:46:12.858Z"
+    },
+    "AC2": {
+      "at": "2026-11-07T00:46:13.067Z"
+    },
+    "AC3": {
+      "at": "2026-11-07T00:46:13.268Z"
+    },
+    "AC4": {
+      "at": "2026-11-07T00:46:13.469Z"
+    },
+    "AC5": {
+      "at": "2026-11-07T00:46:13.680Z"
+    },
+    "AC6": {
+      "at": "2026-11-07T00:46:13.893Z"
+    },
+    "AC7": {
+      "at": "2026-11-07T00:46:14.099Z"
+    },
+    "AC8": {
+      "at": "2026-11-07T00:46:14.298Z"
+    },
+    "AC9": {
+      "at": "2026-11-07T00:46:14.498Z"
+    },
+    "AC11": {
+      "at": "2026-11-07T00:46:14.705Z"
+    },
+    "AC10": {
+      "at": "2026-11-07T00:46:44.138Z",
+      "note": "Rechecked on the final code (7390d6889) with a dev keryx in ask mode under hc: hc send --force with a report left the dialog open, showed paste queued and created no file; the next Enter approved, the file appeared, the line read approved (once) with author unverified, and the report arrived from unknown agent. The real Claude child report was checked earlier on this branch and its delivery path was not changed since except for the external latch, which has tests."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1140"
   },
   "baseBranch": "main",
   "owner": {
@@ -85,7 +120,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -93,7 +128,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -188,6 +224,96 @@
     {
       "id": "T11",
       "title": "Fix the three defects the live stand found: grant lifetime, remember options, transcript mark",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "R1 fix lane A: approval floors, hc parsing, external latch",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "R1 fix lane B: dialog, grants per session, prompt, template",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "R1 fix lane C: report CLI surface, marks, limits, tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "R2 fix lane A: floors read commands, not prose",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "R2 fix lane B: dialog, bus limits, lint",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "R3 fix: last floor spellings, paste focus at paste time",
       "kind": "implement",
       "status": "done",
       "dependsOn": [],
@@ -319,6 +445,131 @@
       "at": "2026-11-06T22:52:39.644Z",
       "event": "task-done",
       "detail": "T10: Live stand: force send, Enter and a real Claude child's report"
+    },
+    {
+      "at": "2026-11-06T23:18:49.328Z",
+      "event": "task-added",
+      "detail": "T12: R1 fix lane A: approval floors, hc parsing, external latch"
+    },
+    {
+      "at": "2026-11-06T23:18:49.548Z",
+      "event": "task-added",
+      "detail": "T13: R1 fix lane B: dialog, grants per session, prompt, template"
+    },
+    {
+      "at": "2026-11-06T23:18:49.773Z",
+      "event": "task-added",
+      "detail": "T14: R1 fix lane C: report CLI surface, marks, limits, tests"
+    },
+    {
+      "at": "2026-11-06T23:38:24.406Z",
+      "event": "task-done",
+      "detail": "T12: R1 fix lane A: approval floors, hc parsing, external latch"
+    },
+    {
+      "at": "2026-11-06T23:38:24.606Z",
+      "event": "task-done",
+      "detail": "T13: R1 fix lane B: dialog, grants per session, prompt, template"
+    },
+    {
+      "at": "2026-11-06T23:38:24.806Z",
+      "event": "task-done",
+      "detail": "T14: R1 fix lane C: report CLI surface, marks, limits, tests"
+    },
+    {
+      "at": "2026-11-06T23:59:20.017Z",
+      "event": "task-added",
+      "detail": "T15: R2 fix lane A: floors read commands, not prose"
+    },
+    {
+      "at": "2026-11-06T23:59:20.212Z",
+      "event": "task-added",
+      "detail": "T16: R2 fix lane B: dialog, bus limits, lint"
+    },
+    {
+      "at": "2026-11-07T00:12:42.133Z",
+      "event": "task-done",
+      "detail": "T15: R2 fix lane A: floors read commands, not prose"
+    },
+    {
+      "at": "2026-11-07T00:12:42.340Z",
+      "event": "task-done",
+      "detail": "T16: R2 fix lane B: dialog, bus limits, lint"
+    },
+    {
+      "at": "2026-11-07T00:28:37.158Z",
+      "event": "task-added",
+      "detail": "T17: R3 fix: last floor spellings, paste focus at paste time"
+    },
+    {
+      "at": "2026-11-07T00:40:32.323Z",
+      "event": "task-done",
+      "detail": "T17: R3 fix: last floor spellings, paste focus at paste time"
+    },
+    {
+      "at": "2026-11-07T00:46:09.791Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-07T00:46:12.440Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1140"
+    },
+    {
+      "at": "2026-11-07T00:46:12.859Z",
+      "event": "ac-confirmed",
+      "detail": "AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.067Z",
+      "event": "ac-confirmed",
+      "detail": "AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.268Z",
+      "event": "ac-confirmed",
+      "detail": "AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.469Z",
+      "event": "ac-confirmed",
+      "detail": "AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.680Z",
+      "event": "ac-confirmed",
+      "detail": "AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.893Z",
+      "event": "ac-confirmed",
+      "detail": "AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.099Z",
+      "event": "ac-confirmed",
+      "detail": "AC7 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC8 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.498Z",
+      "event": "ac-confirmed",
+      "detail": "AC9 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.705Z",
+      "event": "ac-confirmed",
+      "detail": "AC11 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:44.138Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Rechecked on the final code (7390d6889) with a dev keryx in ask mode under hc: hc send --force with a report left the dialog open, showed paste queued and created no file; the next Enter approved, the file appeared, the line read approved (once) with author unverified, and the report arrived from unknown agent. The real Claude child report was checked earlier on this branch and its delivery path was not changed since except for the external latch, which has tests. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -369,5 +620,128 @@
       "kind": "exec",
       "check": "bun run typecheck"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-07T00:46:12.858Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.067Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.268Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.469Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.680Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.893Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.099Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.298Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.498Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.705Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:44.138Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    }
+  ]
 }

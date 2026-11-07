@@ -35,3 +35,28 @@
 
 - Live stand, second pass (dev build, gpt-6.1-sol parent, real claude children): launch dialog names claude and offers only allow once or deny, in trust mode. Approved; the child ran git log and sent keryx report; parent showed "@kid487a (external, unverified) notice: commits: 0" and answered "not independently verified". A second launch of claude in a later turn was auto-approved under trust with no ask. Not exercised live: hc keys and --force floors from an agent (unit tests only); Codex and OpenCode parents, which are not keryx code.
 - 2026-11-06T22:52:39.644Z - task-done: T10: Live stand: force send, Enter and a real Claude child's report
+- 2026-11-06T23:18:49.328Z - task-added: T12: R1 fix lane A: approval floors, hc parsing, external latch
+- 2026-11-06T23:18:49.548Z - task-added: T13: R1 fix lane B: dialog, grants per session, prompt, template
+- 2026-11-06T23:18:49.773Z - task-added: T14: R1 fix lane C: report CLI surface, marks, limits, tests
+- 2026-11-06T23:38:24.406Z - task-done: T12: R1 fix lane A: approval floors, hc parsing, external latch
+- 2026-11-06T23:38:24.606Z - task-done: T13: R1 fix lane B: dialog, grants per session, prompt, template
+- 2026-11-06T23:38:24.806Z - task-done: T14: R1 fix lane C: report CLI surface, marks, limits, tests
+- 2026-11-06T23:59:20.017Z - task-added: T15: R2 fix lane A: floors read commands, not prose
+- 2026-11-06T23:59:20.212Z - task-added: T16: R2 fix lane B: dialog, bus limits, lint
+- 2026-11-07T00:12:42.133Z - task-done: T15: R2 fix lane A: floors read commands, not prose
+- 2026-11-07T00:12:42.340Z - task-done: T16: R2 fix lane B: dialog, bus limits, lint
+- 2026-11-07T00:28:37.158Z - task-added: T17: R3 fix: last floor spellings, paste focus at paste time
+- 2026-11-07T00:40:32.323Z - task-done: T17: R3 fix: last floor spellings, paste focus at paste time
+- 2026-11-07T00:46:09.791Z - task-done: T4: Self-review and prepare draft PR
+- 2026-11-07T00:46:12.440Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1140
+- 2026-11-07T00:46:12.859Z - ac-confirmed: AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:13.067Z - ac-confirmed: AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:13.268Z - ac-confirmed: AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:13.469Z - ac-confirmed: AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:13.680Z - ac-confirmed: AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:13.893Z - ac-confirmed: AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:14.099Z - ac-confirmed: AC7 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:14.298Z - ac-confirmed: AC8 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:14.498Z - ac-confirmed: AC9 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:14.705Z - ac-confirmed: AC11 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-07T00:46:44.138Z - ac-confirmed: AC10: Rechecked on the final code (7390d6889) with a dev keryx in ask mode under hc: hc send --force with a report left the dialog open, showed paste queued and created no file; the next Enter approved, the file appeared, the line read approved (once) with author unverified, and the report arrived from unknown agent. The real Claude child report was checked earlier on this branch and its delivery path was not changed since except for the external latch, which has tests. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
