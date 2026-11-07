@@ -92,7 +92,7 @@ import {
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
-import { hubShareUsage, LiveShellShare, parseHubShareCommand, type HubShareAction } from "../remote/live-shell-share";
+import { hubShareUsage, LiveShellShare, parseHubShareCommand, type HubShareAction } from "../lib/hub-machine/live-shell-share";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";

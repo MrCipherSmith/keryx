@@ -9,7 +9,7 @@
 
 import { parseHistoryArgs } from "../remote/history";
 import { historyArgsOf } from "../remote/history-host";
-import { hubShareUsage, parseHubShareCommand } from "../remote/live-shell-share";
+import { hubShareUsage, parseHubShareCommand } from "../lib/hub-machine/live-shell-share";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { waitingCardsText } from "./operator-confirmations";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";

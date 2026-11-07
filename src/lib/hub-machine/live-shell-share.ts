@@ -1,15 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
-import type { NormalizedMessage } from "../harness/provider/types";
-import { keryxConfigDir } from "../lib/config-dir";
-import { hubAccessHeaders } from "../lib/hub-machine/access";
-import { readBoundedResponse } from "../lib/hub-machine/client";
-import { listEnrollments, readMachineSecret } from "../lib/hub-machine/config";
-import { MachineError, machineFailure } from "../lib/hub-machine/errors";
-import { liveShellLimits, type LiveShellCommand, type LiveShellMessage, type LiveShellUpdate } from "../remote-control/live-shell";
-import { parseClosedJson } from "../remote-control/protocol";
-import { looksLikeSecret, redactSensitiveText } from "../security/service";
-import { HISTORY_SECRET_PLACEHOLDER, qualifyingHistory } from "./history";
+import type { NormalizedMessage } from "../../harness/provider/types";
+import { HISTORY_SECRET_PLACEHOLDER, qualifyingHistory } from "../../remote/history";
+import { liveShellLimits, type LiveShellCommand, type LiveShellMessage, type LiveShellUpdate } from "../../remote-control/live-shell";
+import { parseClosedJson } from "../../remote-control/protocol";
+import { looksLikeSecret, redactSensitiveText } from "../../security/service";
+import { keryxConfigDir } from "../config-dir";
+import { hubAccessHeaders } from "./access";
+import { readBoundedResponse } from "./client";
+import { listEnrollments, readMachineSecret } from "./config";
+import { MachineError, machineFailure } from "./errors";
 
 export const hubShareUsage = "Usage: /remote-control hub on|off|status";
 export type HubShareAction = "on" | "off" | "status" | "usage";

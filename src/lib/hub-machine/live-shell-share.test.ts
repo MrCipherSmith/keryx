@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { randomBytes, randomUUID } from "node:crypto";
-import type { NormalizedMessage } from "../harness/provider/types";
-import type { LiveShellCommand, LiveShellUpdate } from "../remote-control/live-shell";
+import type { NormalizedMessage } from "../../harness/provider/types";
+import type { LiveShellCommand, LiveShellUpdate } from "../../remote-control/live-shell";
 import { liveShellHistory, LiveShellShare, parseHubShareCommand } from "./live-shell-share";
 
 const previous: NormalizedMessage[] = [
