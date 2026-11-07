@@ -12857,7 +12857,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "68a18bfc2e6c2bb4b7c3551b6b02b2ec2960f3412138884da3c5b4b05594eb14"
+      "receiptDigest": "45b5a2c81a3cf42a0025b72cc6b6d9dfd83867a2f83078f7c3b2b80c1c441d63"
     },
     {
       "variantId": "setup.init",
@@ -12865,7 +12865,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "54a51fed4df47b2688258df6ad3ebf4f934fec0aa39e81a575e660c19e610212"
+      "receiptDigest": "8bba20e1aec95d7dd3907f3c06c0c267ee23103654d281b0b59a43c1b85c1a2d"
     },
     {
       "variantId": "setup.refresh",
@@ -12873,7 +12873,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "05f6196061e8ecefc4776ad1f7e6f880a5adf09e288f6ea56dff6f6050c19099"
+      "receiptDigest": "849b9342339fe18e849a8dac5a144f79977cd064f597a21d5b5ebfb99bdfec81"
     },
     {
       "variantId": "setup.repair",
@@ -12881,7 +12881,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "abe946fd019e73115d67418a7caf8e717887433762af2fd27b3c8740faa011a6"
+      "receiptDigest": "caf8f041dcd58682188bb40953eb9c30c7c0f505beeef1ac1a9acc785b4c104b"
     },
     {
       "variantId": "ac.cached",
@@ -14217,7 +14217,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d1f1c2aa3c8a357b8ffc7681a7cb1e1124c61d23767c45b307103e87e3ebae9f"
+      "receiptDigest": "e2715b7af943e64e4285f1a644b5ee348f7b1bad897a964a78c5ad0e32f60c7f"
     },
     {
       "variantId": "bus.-name-text",

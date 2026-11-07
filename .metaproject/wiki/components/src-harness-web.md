@@ -1,6 +1,6 @@
 ---
 Title: Module src/harness/web
-Version: 1.0.0
+Version: 1.1.0
 Type: component
 Status: accepted
 Summary: "`src/harness/web` is the harness's remote-web boundary. Web access goes through `SandboxedWebTransport`, which validates public HTTPS targets and every redirect hop, runs each network request in a sandboxed worker behind an injected `WebWorkerRunner`, and returns only sanitized, size-limited text or a typed failure."
@@ -42,6 +42,8 @@ Local search is a separate branch. The `local-search` capability admits only pla
 
 **Limits.** `WEB_MAX_REDIRECTS` (3) and `WEB_MAX_TEXT_BYTES` (128,000) are exported from `sandboxed-web-transport.ts`. The byte cap is applied to the decoded body in `fetchRaw`. The worker applies its own `maxBytes` of 128,000, written as a literal in `web-worker-runner.ts` and not imported from the constant, so the two values appear to have to be kept in step by hand.
 
+**Large pages are cut, not failed.** A text body over `maxBytes` is truncated at the budget and returned with `truncated: true` (the worker emits exactly one answer and stops the download); the transport carries that flag onto `SanitizedWebContent`, and `web_fetch` tells the model only the first part is shown. An oversized JSON body is the exception: half a JSON document cannot be parsed, so it still fails, now with `response exceeds size limit` rather than the generic transport timeout. Before this, every page over 128 KB failed as `request failed or timed out` — `bun.com/blog` (330 KB) and GitHub Releases (533 KB) among them.
+
 ## Main flows
 
 ### Flow: page fetch through `fetchPage`
@@ -49,7 +51,7 @@ Local search is a separate branch. The `local-search` capability admits only pla
 1. The caller builds a `WebPageRequest` with a URL and a provider ID.
 2. `fetchRaw` parses the URL with `parsePublicHttpsUrl` and runs `validatePublicTarget` against the injected lookup.
 3. `SandboxedWebTransport` calls `WebWorkerRunner.run`. The worker returns a status, content type, body and optional `location`.
-4. On a 3xx response the loop re-validates the `location` and continues, failing with "too many redirects" past the cap. On a final response the content type must be readable text and the body within `WEB_MAX_TEXT_BYTES`.
+4. On a 3xx response the loop re-validates the `location` and continues, failing with "too many redirects" past the cap. On a final response the content type must be readable text and the body within `WEB_MAX_TEXT_BYTES` unless the worker marked it truncated.
 5. `fetchPage` requires a 2xx status and passes the body to `sanitizeWebContent`, which returns the untrusted-content envelope or a prompt-injection rejection.
 
 ### Flow: search provider request through `request`
@@ -66,6 +68,8 @@ Local search is a separate branch. The `local-search` capability admits only pla
 4. A non-zero exit or unparseable stdout becomes a failure result. Otherwise the parsed `WebPolicyResult` is returned.
 
 ## Changelog
+
+- 1.1.0 — Large text pages are truncated at the byte budget and flagged instead of failing the whole fetch; an oversized JSON body reports `response exceeds size limit`.
 
 - 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 

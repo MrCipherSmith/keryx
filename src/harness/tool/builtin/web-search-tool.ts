@@ -35,6 +35,11 @@ function render(response: SearchResponse): string | undefined {
     }
     lines.push(`[${result.providerId}] ${redactSensitiveText(result.title)}`);
     lines.push(redactSensitiveText(result.canonicalUrl));
+    // Without this the model is asked for "three links with dates" and cannot
+    // see the dates the provider actually reported.
+    if (result.publicationDate !== undefined && result.publicationDate.length > 0) {
+      lines.push(`Published: ${publicationDateText(result.publicationDate)}`);
+    }
     if (result.snippet.length > 0) lines.push(redactSensitiveText(result.snippet));
     lines.push("");
   }
@@ -42,6 +47,11 @@ function render(response: SearchResponse): string | undefined {
   if (withheld > 0 && withheld === response.results.length) return undefined;
   if (withheld > 0) lines.push(`${withheld} result${withheld === 1 ? "" : "s"} withheld: likely prompt injection.`);
   return lines.join("\n").trim();
+}
+
+/** A date the model can read: date-only when it is an ISO timestamp, else as given. */
+function publicationDateText(value: string): string {
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : value;
 }
 
 /** Test-only/logging seam; `webSearchTool`'s second parameter. */

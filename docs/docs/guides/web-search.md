@@ -69,8 +69,16 @@ Three things to know:
   the result is marked untrusted for the rest of the turn.
 
 Search results are read into `snippet` from DeepSeek's `summary` field, which is
-the long form written for a model. Publication dates are kept when the provider
-reports them.
+the long form written for a model. Publication dates are shown with each result
+as `Published: YYYY-MM-DD` when the provider reports them.
+
+## Reading the page
+
+`web_fetch` returns readable text, not markup. A page longer than 128 KB is not
+an error: keryx keeps the first 128 KB and says so, because a model reads the
+beginning of a page and a failed fetch teaches it nothing. JSON responses (the
+remote search and fetch APIs) are never cut — half a JSON document is not a
+smaller document, so an oversized JSON body stays an error.
 
 ## Switching back to DuckDuckGo
 

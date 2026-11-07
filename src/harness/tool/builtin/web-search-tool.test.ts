@@ -183,3 +183,24 @@ test("web_search refuses a query carrying secret-shaped content BEFORE any provi
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("web_search shows the publication date the provider reported", async () => {
+  const result = (title: string, date?: string) => ({
+    title,
+    snippet: "snippet",
+    canonicalUrl: `https://example.com/${title}`,
+    providerId: "deepseek" as const,
+    provenance: { source: "search-provider" as const, providerId: "deepseek" as const, rawResultCount: 2 },
+    ...(date !== undefined ? { publicationDate: date } : {}),
+  });
+  const tool = webSearchTool({
+    search: async () => ({
+      ok: true,
+      value: { query: "bun 1.5", providerId: "deepseek", results: [result("dated", "2026-07-09T16:00:00+00:00"), result("undated")] },
+    }),
+  });
+  const output = (await tool.invoke({ query: "bun 1.5" })).output;
+  // The model was asked for "three links with dates" and could not see any.
+  expect(output).toContain("Published: 2026-07-09");
+  expect(output.match(/Published:/g)?.length).toBe(1);
+});

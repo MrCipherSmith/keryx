@@ -314,3 +314,27 @@ test("provider Markdown is scanned for prompt injection and redacted like scrape
   expect(result.output).not.toContain(token);
   expect(result.output).toContain("[REDACTED:secret]");
 });
+
+test("a truncated page is read, and says so", async () => {
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner: worker({ status: 200, contentType: "text/plain", body: "first part of a long page", truncated: true }),
+  });
+  const result = await tool.invoke({ url: "https://example.com/docs" });
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("first part of a long page");
+  expect(result.output).toContain("128 KB");
+});
+
+test("a failed fallback does not claim the transport served the page", async () => {
+  const tool = webFetchTool({
+    lookup: publicLookup,
+    runner: { run: async () => ({ ok: false, reason: "request failed or timed out" }) },
+    pageFetcher: { fetchPage: async () => ({ ok: false, reason: "provider-disconnected" }) },
+  });
+  const result = await tool.invoke({ url: "https://example.com/docs" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("the selected page provider is not connected");
+  expect(result.output).toContain("sandbox transport also failed");
+  expect(result.output).not.toContain("this page was served");
+});
