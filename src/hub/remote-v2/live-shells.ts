@@ -9,11 +9,11 @@ import {
   type LiveShellUpdate,
 } from "../../remote-control/live-shell";
 import type { FrameOf } from "../../remote-control/protocol";
-import { redactSensitiveText } from "../../security/redact";
 import { fail, sha256 } from "../domain";
 import { operator, scoped } from "./guards";
 import type { RemotePorts } from "./index";
 import type { HumanAuthority, MachineRecord, SessionRow } from "./model";
+import { redact } from "./results";
 
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const operationIdPattern = /^[0-9a-f]{64}$/;
@@ -42,7 +42,7 @@ function parseUpdate(value: unknown): LiveShellUpdate {
   const raw = record(value, ["projectId", "checkoutId", "title", "busy", "turnId", "messages", "ack"]);
   const projectId = identifier(raw.projectId, bindingId);
   const checkoutId = identifier(raw.checkoutId, bindingId);
-  const title = redactSensitiveText(text(raw.title, limits.titleBytes)).trim();
+  const title = redact(text(raw.title, limits.titleBytes)).trim();
   const busy = raw.busy;
   if (!title || typeof busy !== "boolean" || (!busy && raw.turnId !== undefined)) {
     fail(400, "invalid-arguments", "Invalid live shell status");
@@ -59,7 +59,7 @@ function parseUpdate(value: unknown): LiveShellUpdate {
       if (message.role !== "user" && message.role !== "assistant") {
         fail(400, "invalid-arguments", "Invalid live shell message role");
       }
-      const safe = redactSensitiveText(text(message.text, limits.messageBytes));
+      const safe = redact(text(message.text, limits.messageBytes));
       bytes += Buffer.byteLength(safe);
       if (bytes > limits.historyBytes) fail(413, "quota-exceeded", "Live shell history exceeds quota");
       return { role: message.role, text: safe };

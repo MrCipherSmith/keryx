@@ -31,7 +31,7 @@ await include("src/hub", productionSource);
 await include("src/hub/remote-v2", productionSource);
 await include("src/hub/work", productionSource);
 // Hub uses the neutral validator boundary, never the native host/tool runtime.
-await include("src/remote-control", name => ["protocol.ts", "owned-controls.ts"].includes(name));
+await include("src/remote-control", name => ["protocol.ts", "owned-controls.ts", "live-shell.ts"].includes(name));
 await include("src/remote-control/generated", name => ["validators.js", "validators.d.ts", "types.ts", "manifest.json"].includes(name));
 async function includeTree(directory: string) {
   for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
