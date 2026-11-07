@@ -92,6 +92,7 @@ import {
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { hubShareUsage, LiveShellShare, parseHubShareCommand, type HubShareAction } from "../lib/hub-machine/live-shell-share";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
@@ -393,6 +394,7 @@ import {
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
   withTurnScopedIo,
+  type ForegroundOperationToken,
   type TurnScopedIo,
 } from "./foreground-operation";
 import {
@@ -4624,6 +4626,7 @@ export async function launchTuiAgentShell(opts: {
   // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
   // topic) on every exit path.
   let remoteBridge: RemoteBridge | undefined;
+  let hubShare: LiveShellShare | undefined;
   // A device login started from the topic (flow 471); ended when remote control goes off or the shell closes.
   let remoteDeviceLogin: RemoteDeviceLogin | undefined;
   // `/connect` in the topic asks for the connected providers and then for the Add list; each would
@@ -4761,6 +4764,7 @@ export async function launchTuiAgentShell(opts: {
         stopProjectContextFeed?.();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
+        void hubShare?.close();
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
         // Flow 415: retain ownership until final history + Slate outbox commit.
@@ -7297,6 +7301,15 @@ export async function launchTuiAgentShell(opts: {
       onAutoApproved: autoApprovedFor(true),
       mcpGrantsApply: () => false,
     };
+    const hubTurnIo: TurnScopedIo = {
+      requestApproval: trackApproval(async (tool, input, meta) =>
+        meta === undefined ? false : requestApprovalLocally(tool, input, { ...meta, hookAsk: true })),
+      permissionMode: () => "ask",
+      mcpGrantsApply: () => false,
+    };
+    let hubTurn: { token: ForegroundOperationToken; id: string } | undefined;
+    const currentHubTurn = (): string | undefined =>
+      hubTurn !== undefined && foregroundOperation.accepts(hubTurn.token) ? hubTurn.id : undefined;
 
     // Definite assignment: every control-flow path calls `applyOpened` before
     // paint/save; `!` satisfies TS2454 (assignments inside nested closures are
@@ -7304,6 +7317,7 @@ export async function launchTuiAgentShell(opts: {
     let liveSession!: SessionHandle;
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
+    const nativeHistory = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
     // Flow 399: the live session was opened with `-r`/`-c`/`/resume` (not started fresh). The
     // topic's automatic history restore reads it when remote control creates a new topic.
     let sessionResumed = false;
@@ -7385,7 +7399,10 @@ export async function launchTuiAgentShell(opts: {
     // Flow 376: a topic belongs to the session it was registered for. Switching the live
     // session (`/new`, `/resume`, the startup picker) turns remote control off first, so the
     // history interval closes on the session that opened it. A no-op while it is off.
-    const stopRemoteForSessionSwitch = (): void => remoteQueue.stopRemoteForSessionSwitch();
+    const stopRemoteForSessionSwitch = (): void => {
+      void hubShare?.close();
+      remoteQueue.stopRemoteForSessionSwitch();
+    };
 
     const invalidateForegroundSession = (): void => {
       foregroundOperation.invalidateSession();
@@ -7869,6 +7886,7 @@ export async function launchTuiAgentShell(opts: {
       // Flow 271 R3-1: detach the ref itself, not only this variable. A turn or
       // a `/goal --auto` loop that is already running holds the same object,
       // and every slate write through a detached ref refuses.
+      void hubShare?.close();
       detachSlateSession(slateSession);
       slateSession = undefined;
       if (sessionPersistTimer !== undefined) {
@@ -9511,20 +9529,27 @@ export async function launchTuiAgentShell(opts: {
       // counter/cap (specification §5.3).
       origin: "operator" | "task-notification" | "bus-message" | "agent-message" = "operator",
       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
-      source?: typeof TG_SOURCE,
+      source?: typeof TG_SOURCE | "hub",
       skipSlashRouting = false,
     ): void => {
       if (line.length === 0 && origin === "operator") {
         return;
       }
-      // AC14 (flow 268): a new turn — of any kind this function dispatches,
-      // not only the main agent turn — supersedes whatever next-step
-      // suggestion request was still in flight from the PREVIOUS one.
+      // AC14 (flow 268): a new turn supersedes the previous next-step suggestion.
       suggestionGate.cancel("new turn started");
+      const fromHub = source === "hub";
+      if (fromHub) skipSlashRouting = true;
+      if (source === undefined && origin === "operator" && !skipSlashRouting) {
+        const action = parseHubShareCommand(line);
+        if (action !== undefined) {
+          handleHubShare(action);
+          return;
+        }
+      }
       // Flow 481: another agent's line (herdr-core typed it), not the operator's. A Telegram line is
       // the operator's whatever its shape. Decided once: the busy branch and the wiki-enrich route below
       // both read it.
-      const agentShaped = source !== TG_SOURCE && (origin === "agent-message" || looksLikeHcMessage(line));
+      const agentShaped = source === undefined && (origin === "agent-message" || looksLikeHcMessage(line));
 
       if (origin === "operator" && !agentShaped) {
         // A human is here: the auto-wake budget starts over.
@@ -9538,6 +9563,7 @@ export async function launchTuiAgentShell(opts: {
       // "In progress" is the chrome's own spinner state, which `startBusy` /
       // `stopBusy` below are the only things that move.
       if (chrome.isBusy()) {
+        if (fromHub) return;
         // Agent-origin text, including edited slash text, is never a shell control.
         if (agentShaped) {
           const position = turnLoop.enqueue(line, displayLine, source, "agent-message");
@@ -10648,6 +10674,7 @@ export async function launchTuiAgentShell(opts: {
       // this point by their own wake sites' `isIdle` ("not held"); this is a
       // defensive no-op for either, never an empty-line turn or a queue push.
       if (leaseView()?.held() === true) {
+        if (fromHub) return;
         if (origin === "operator" || origin === "agent-message") {
           const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? "agent-message" : undefined);
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position}.\n`);
@@ -10666,7 +10693,7 @@ export async function launchTuiAgentShell(opts: {
         line: echoLine,
         fullWidth: true,
         // Flow 376: a line from the Telegram topic says so (`tg ❯ ...`).
-        ...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : hcEcho !== undefined ? { marker: hcEcho.marker } : {}),
+        ...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : fromHub ? { marker: "hub ❯" } : hcEcho !== undefined ? { marker: hcEcho.marker } : {}),
       });
       chrome.registerUserPrompt(userEcho, echoLine, hcEcho?.marker);
       transcript.add(
@@ -10873,9 +10900,10 @@ export async function launchTuiAgentShell(opts: {
       sessions.clear();
       deps.resetSubagentBudget?.();
       const operation = foregroundOperation.begin();
+      hubTurn = { token: operation, id: crypto.randomUUID() };
       // Flow 376: a turn that came from Telegram has its reply, its approvals and its run
       // time limit handled by the bridge; every other turn resets that state.
-      remoteQueue.turnStarted(source);
+      remoteQueue.turnStarted(source === TG_SOURCE ? source : undefined);
       // The bridge says whether it took the line as a Telegram turn (it does not when remote control is off).
       const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;
       // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
@@ -11159,7 +11187,7 @@ export async function launchTuiAgentShell(opts: {
         guardCollector.reset(line);
         syncArchive();
         rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
-        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {});
+        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : fromHub ? hubTurnIo : {});
         // Captured now, while `operation` is still the active one — `.signal`
         // throws once `foregroundOperation.settle(operation)` below clears it,
         // and by the time the guard's own deferred continuation (further down)
@@ -11490,6 +11518,42 @@ export async function launchTuiAgentShell(opts: {
       forceHandoff.isAwaitingSettlement ||
       turnLoop.queue.length > 0 ||
       leaseView()?.held() === true;
+    const handleHubShare = (action: HubShareAction): void => {
+      const notice = (message: string): void => { if (!destroyed) io.onSystem?.(`${message}\n`); };
+      if (action === "usage") { notice(hubShareUsage); return; }
+      if (action === "off") {
+        void hubShare?.close();
+        notice("◇ Hub sharing is off. This shell is still running.");
+        return;
+      }
+      if (action === "status" || hubShare?.active === true) {
+        notice(hubShare?.connected === true ? "◇ Hub sharing is on." : hubShare?.active === true ? "◇ Connecting to Team Hub…" : "◇ Hub sharing is off.");
+        return;
+      }
+      if (!sessionLease.canPersist()) {
+        notice("◇ This shell no longer owns the session. Reopen it before sharing with Team Hub.");
+        return;
+      }
+      try {
+        hubShare = LiveShellShare.open(sessionCwd, {
+          sessionId: () => liveSession.summary.id,
+          history: nativeHistory,
+          isBusy: () => shellIsBusy() || chrome.overlayActive() || turnLoop.drain.workInFlight(),
+          turnId: currentHubTurn,
+          submit: (text) => {
+            if (destroyed || !sessionLease.canPersist()) return false;
+            runLine(text, "operator", "hub");
+            return true;
+          },
+          stop: (turnId) => sessionLease.canPersist() && currentHubTurn() === turnId && foregroundOperation.cancel("stop requested in Team Hub"),
+          notice,
+        });
+        hubShare.start();
+        notice("◇ Connecting to Team Hub and sharing this shell's recent messages…");
+      } catch {
+        notice("◇ Hub sharing requires exactly one enrolled working copy for this folder and valid machine credentials.");
+      }
+    };
     remoteBridge = new RemoteBridge({
       host: {
         sessionId: () => liveSession.summary.id,
@@ -11630,7 +11694,7 @@ export async function launchTuiAgentShell(opts: {
         },
         // Flow 399: the whole conversation (the archive keeps what compaction removed from the
         // context), and whether this session was resumed, for the automatic restore.
-        history: () => (archive.length > 0 ? archive : history),
+        history: nativeHistory,
         sessionResumed: () => sessionResumed,
       },
     });
@@ -11703,6 +11767,7 @@ export async function launchTuiAgentShell(opts: {
     // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
     // Idempotent: the destroy hook above usually started it already.
     await remoteBridge?.disable();
+    await hubShare?.close();
     // review r1 F9: leave the bus before releasing the lease (specification
     // §5.4's order) — idempotent either way, the exit paths above usually
     // did both already.

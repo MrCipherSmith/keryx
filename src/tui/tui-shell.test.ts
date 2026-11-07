@@ -2974,7 +2974,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
 
   test("flow 396: only the facade of a turn the bridge took as a Telegram turn carries the Telegram hooks", () => {
     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
-    expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
+    expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : fromHub ? hubTurnIo : {})");
     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
     // Flow 419: the shell's io still decides locally (`requestApprovalLocally` is the inner call, the dock is the
     // decider); the wrapper only also posts the question to the topic, and must not read the bridge-wide flag.

@@ -23,6 +23,8 @@ It is:
 
 - a way to run a Keryx session on a machine you enrolled, from the Hub web UI,
   including from a phone;
+- a way to connect to a running Keryx terminal session that the person at the
+  machine explicitly shared;
 - the native Keryx agent, with the machine's own hooks, command guards and
   containment, run without a terminal UI;
 - limited to checkouts and profiles you allow **on the machine**. The Hub cannot
@@ -31,7 +33,6 @@ It is:
 It is not:
 
 - a remote shell or a browser terminal;
-- a way to attach to a `keryx shell` that is already open;
 - a runner for Codex, Claude or OpenCode. The native Keryx agent is the only
   executor;
 - a Git publisher. It does not commit, push, merge or accept a Flow for you.
@@ -50,8 +51,7 @@ It is not:
 - **A provider and model saved by `keryx shell`.** Run `keryx shell` once, connect
   a provider with `/connect` and pick a model. The `fake` provider is refused.
 - **A checkout that is a Keryx project.** It must be a Git working copy with a
-  `.metaproject/index.md` (`keryx init` creates it). For the first session it
-  must be clean: no uncommitted, staged or untracked files.
+  `.metaproject/index.md` (`keryx init` creates it).
 - **An OS sandbox for the `remote-restricted` profile.** macOS has one built in.
   Linux needs `bwrap` (bubblewrap) on `PATH`. See [Platform support](../limitations.md#platform-support).
 - **`keryx serve` set up once**, because it hosts the connection to the Hub. The
@@ -183,12 +183,36 @@ A profile that is not ready says why:
 | `adapter-unsupported` | The native session runtime could not be set up on this build, for example because a command in its catalogue has no implementation. Run `keryx hub machine readiness`. |
 | `checkout-unavailable` | The checkout path cannot be read as a Git working copy. |
 
+## Connect to a running shell
+
+Keep `keryx serve` running with the machine enrolled and the checkout allowed.
+In the interactive `keryx shell` terminal UI, at the root of that checkout, run:
+
+```text
+/remote-control hub on
+```
+
+Sharing requires exactly one matching enrolled checkout. The terminal reports
+when it connects. In the Hub, select the mapped project, open **Sessions**,
+select the shell under **Running shells**, and choose **Claim control** to write.
+New messages go into that same shell and use its conversation history. Prompts
+from the browser use the shell's existing policy, and tool approvals stay in the
+terminal. Select **Stop response** to stop the current turn.
+
+The browser receives up to the last 100 completed text messages, within a 256 KiB
+history limit. While a turn is running, the browser shows its status and displays
+the response after completion. Sharing makes this history visible to people with
+read access to the mapped project. Disconnecting from the browser leaves the
+shell running. Use `/remote-control hub status` to check sharing and
+`/remote-control hub off` to remove the shell and its shared history from the
+Hub. Exiting the shell or switching its conversation also ends sharing.
+
 ## 3. Start a session from the web
 
 1. Open **Sessions** and click **New session**.
 2. Choose the **Machine**, **Checkout** and **Agent profile**, give it a **Title**
    and click **Create session**. Machines that are offline, revoked or waiting
-   for recovery, checkouts that are dirty or busy, and profiles that are not
+   for recovery, checkouts that are busy, and profiles that are not
    ready cannot be selected. The Hub never picks the first online machine for you.
 3. Open the session and click **Claim control**. Only the tab that holds control
    can send commands; every other tab is an observer. The tab renews control while
@@ -208,8 +232,12 @@ A profile that is not ready says why:
 
 How the machine treats the checkout:
 
-- The first session needs a clean checkout at the HEAD the Hub showed. The machine
-  checks this itself and refuses a stale or dirty start.
+- A new session starts at the HEAD shown in Hub and uses the files already on
+  the machine, including staged, unstaged and untracked changes. The machine
+  checks the checkout before opening the session. Starting a session preserves
+  the working files and the Git index.
+- If the checkout already had changes, the session's file and check results stay
+  on the machine. This also applies when resuming the session.
 - Later turns carry on from the session's own uncommitted changes. If someone
   else edits the checkout during a run, the run is marked for reconciliation and
   its result is not published automatically.
@@ -400,15 +428,18 @@ not revoke the machine in the Hub; do that in the web UI. It refuses with
   real provider trials are pending owner verification.
 - **macOS and Linux, one Hub process.** Windows is not supported. There is no
   multi-instance or multi-tenant Hub.
-- **Only the native Keryx agent runs.** No Codex, Claude or OpenCode adapter, no
-  arbitrary terminal, and no attaching to a session that is already open.
+- **Only the native Keryx agent runs.** There is no Codex, Claude or OpenCode
+  adapter or arbitrary terminal. Live sharing requires the Keryx terminal UI.
 - **No provider secrets, permission-floor or trust changes from the web.** A
   profile cannot be widened remotely. A confirmation that needs the machine's own
   terminal cannot be answered in the web.
 - **The web UI is basic.** There is a message box, history, queue and command
   forms, not a polished chat.
-- **The first session needs a clean checkout.** Keryx will not stash, reset or
-  clean for you, and a checkout leased by another Keryx process or Hub is refused.
+- **Headless checkout limits.** Starting a new headless session requires a
+  workspace snapshot within 10,000 entries and 20 MiB. A headless session
+  cannot take over another serve checkout lease. The same Hub also prevents
+  its interactive and headless sessions from claiming the same mapped checkout.
+  Forking requires a separate clean checkout.
 - **Results are review-only.** There is no Git delivery, and nothing is accepted
   without a person.
 - **Stopping is not instant.** A revoked approval grant can still apply for up to

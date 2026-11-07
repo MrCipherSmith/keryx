@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,33 @@ afterEach(() => { for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true }); });
 function file() { const d = mkdtempSync(path.join(tmpdir(), 'machine-ledger-')); dirs.push(d); return path.join(d, 'control.sqlite'); }
 const command = { hubId: 'hub-a', commandId: 'command-a', digest: 'a'.repeat(64), runId: 'run-a', checkoutId: 'checkout-a' };
+test('local-only results fence old writers and preserve the fence after reopening', () => {
+    const f = file();
+    const version = () => {
+        const db = new Database(f, { readonly: true });
+        try {
+            return db.query<{ value: string }, []>("SELECT value FROM machine_meta WHERE key='version'").get()?.value;
+        }
+        finally {
+            db.close();
+        }
+    };
+    let ledger = new MachineLedger(f);
+    expect(version()).toBe('7');
+    ledger.keepSessionResultsLocal('edited-session');
+    ledger.keepSessionResultsLocal('edited-session');
+    expect(version()).toBe('8');
+    ledger.close();
+    ledger = new MachineLedger(f);
+    try {
+        expect(version()).toBe('8');
+        expect(ledger.sessionResultsStayLocal('edited-session')).toBe(true);
+        expect(ledger.sessionResultsStayLocal('other-session')).toBe(false);
+    }
+    finally {
+        ledger.close();
+    }
+});
 test('SQLite command claim survives restart and conflicts on changed payload', () => {
     const f = file();
     let l = new MachineLedger(f);

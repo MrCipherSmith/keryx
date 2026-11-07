@@ -531,16 +531,15 @@ describe("wiring (source audit)", () => {
 
   test("a Telegram line is the operator's: its tg mark wins and it is never framed", () => {
     expect(tuiSource).toContain("const hcEcho = source === undefined ? hcTranscriptEcho(line, agentShaped) : undefined;");
-    expect(tuiSource).toContain("...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : hcEcho !== undefined ?");
+    expect(tuiSource).toContain('...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : fromHub ? { marker: "hub ❯" } : hcEcho !== undefined ?');
     expect(tuiSource).toContain("const modelLine = source === undefined");
     expect(tuiSource).toContain(": line;");
   });
 
   test("an agent-shaped line skips the operator-only routes: the wiki-enrich picker and the busy dialog", () => {
     // One definition of "agent-shaped", read at both sites.
-    const definition = 'const agentShaped = source !== TG_SOURCE && (origin === "agent-message" || looksLikeHcMessage(line));';
+    const definition = 'const agentShaped = source === undefined && (origin === "agent-message" || looksLikeHcMessage(line));';
     expect(tuiSource.split(definition).length).toBe(2);
-    expect(tuiSource.split('source !== TG_SOURCE && (origin === "agent-message" || looksLikeHcMessage(line))').length).toBe(2);
     expect(tuiSource).toContain("if (source === undefined && !agentShaped && isWikiEnrichIntent(line)) {");
     const defined = tuiSource.indexOf(definition);
     const busy = tuiSource.indexOf("if (chrome.isBusy()) {");

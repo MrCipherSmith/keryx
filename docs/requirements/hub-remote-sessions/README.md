@@ -20,6 +20,17 @@ A shared persistent SessionHost owns conversation, command execution, routing, q
 - [Implementation journal](journal.md)
 - [Normative headless session and future web chat contract](session-runtime.md)
 
-Scope: macOS/Linux, one Hub process, multiple paired machines and explicit checkouts; native Keryx executor as the first coding adapter. The currently empty-tool serve assembly must be completed as part of implementation. Codex/Claude execution adapters, OpenCode, arbitrary terminals, attaching existing desktop sessions, automatic Git delivery and hosted multi-tenant service are future work.
+## Checkout and live terminal updates
+
+The frozen specification records the original clean-start contract. The current
+[protocol](protocol.md) and [security policy](security.md) cover new headless
+sessions that preserve existing edits and keep file and check results local.
+Forking still requires a separate clean working copy.
+
+Operators can share a running native Keryx terminal session with the Hub using
+`/remote-control hub on`. See the [operator guide](../../docs/guides/team-hub-remote-sessions.md#connect-to-a-running-shell)
+for the local opt-in, supported clients, history limits, and disconnect behavior.
+
+Scope: macOS/Linux, one Hub process, multiple paired machines and explicit checkouts; native Keryx executor as the first coding adapter. The currently empty-tool serve assembly must be completed as part of implementation. Codex/Claude execution adapters, OpenCode, arbitrary terminals, automatic Git delivery and hosted multi-tenant service are future work.
 
 Related: [existing Hub](../team-hub-prototype/README.md), [MCP](../hub-mcp/README.md), [context watch](../hub-context-watch/README.md), [distribution](../team-hub-prototype/distribution-notes.md).

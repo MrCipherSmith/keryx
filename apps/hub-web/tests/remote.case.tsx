@@ -389,6 +389,28 @@ test("creating a session without a Flow writes no message draft", async () => {
   await waitFor(() => expect(window.location.search).toContain("session=s2"));
   expect(useDraftStore.getState().drafts[messageDraftKey(2, "p", "s2")]).toBeUndefined();
 });
+test("a checkout with existing changes can start a session and explains where results stay", async () => {
+  serveCreate([]);
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    if (String(url).endsWith("/machines?projectId=p")) {
+      const inventory = machineFixture.inventory!;
+      return Response.json({ machines: [{
+        ...machineFixture, inventory: { ...inventory, checkouts: inventory.checkouts.map(c => ({ ...c, clean: false })) },
+      }] });
+    }
+    return original(url, init);
+  });
+  useDraftStore.getState().put("remote-create:2:p", launchDraft);
+  show();
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
+  expect(await screen.findByRole("option", { name: /Main · / })).toBeEnabled();
+  expect(screen.getByText(/File changes and check results stay on this machine/)).toBeVisible();
+  const submit = screen.getByRole("button", { name: "Create session" });
+  expect(submit).toBeEnabled();
+  fireEvent.click(submit);
+  await waitFor(() => expect(window.location.search).toContain("session=s2"));
+});
 test("an empty title is named as the remaining requirement", async () => {
   useDraftStore.getState().put("remote-create:2:p", { ...launchDraft, title: "" });
   show();
