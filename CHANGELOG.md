@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.4.19] - 2026-11-07
+
+### Added
+- **Continue a terminal conversation in Team Hub ([#1149](https://github.com/MrCipherSmith/keryx/pull/1149)).** In an enrolled checkout, use `/remote-control hub on` in the full-screen Keryx shell, then connect and claim control in the project's Sessions view. Hub mirrors recent completed messages and sends follow-ups to the same running agent. `/remote-control hub off` removes access and leaves the terminal running. Tool approvals remain in the terminal.
+- **Start a Team Hub session in a modified checkout ([#1149](https://github.com/MrCipherSmith/keryx/pull/1149)).** New headless sessions preserve staged, unstaged and untracked changes. Full-file revisions and check results for a session that started with existing edits stay on the machine. Forking still requires a separate clean checkout.
+
+### Upgrade notes
+- Upgrade Team Hub and the machine executor together. Live sharing requires a shell running this version and a locally allowed checkout. The machine ledger marks sessions whose results must stay local, and older executors refuse that ledger after the first such session.
+
 ## [0.4.18] - 2026-11-07
 
 ### Changed
