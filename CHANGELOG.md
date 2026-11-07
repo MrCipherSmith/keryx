@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.17] - 2026-11-07
+
+### Fixed
+- **Mobile Team Hub session settings ([#1148](https://github.com/MrCipherSmith/keryx/pull/1148)).** Long controller identifiers wrap without pushing settings off-screen. Model privacy and cost appear below the selector, where the details can wrap. The routing, versions and fork panels stay within the viewport.
+
+### Upgrade notes
+- Update Team Hub to pick up the layout fix. The existing machine executor works with this release.
+
 ## [0.4.16] - 2026-11-07
 
 ### Fixed
