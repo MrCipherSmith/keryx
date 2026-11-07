@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { NormalizedMessage } from "../../harness/provider/types";
 import type { LiveShellCommand, LiveShellUpdate } from "../../remote-control/live-shell";
-import { liveShellHistory, LiveShellShare, parseHubShareCommand } from "./live-shell-share";
+import { liveShellHistory, LiveShellShare } from "./live-shell-share";
 
 const previous: NormalizedMessage[] = [
   { role: "user", content: "Original terminal question" },
@@ -11,14 +11,6 @@ const previous: NormalizedMessage[] = [
   { role: "assistant", content: "Original terminal answer" },
 ];
 const operationId = (): string => randomBytes(32).toString("hex");
-
-test("Hub sharing is an explicit local subcommand and keeps Telegram topic syntax", () => {
-  expect(parseHubShareCommand("/remote-control hub on")).toBe("on");
-  expect(parseHubShareCommand("/remote-control hub off")).toBe("off");
-  expect(parseHubShareCommand("/remote-control hub status")).toBe("status");
-  expect(parseHubShareCommand("/remote-control hub attach")).toBe("usage");
-  expect(parseHubShareCommand("/remote-control hub")).toBeUndefined();
-});
 
 test("shares only human-facing history, redacts secrets, and excludes an unfinished assistant message", () => {
   const secret = "-----BEGIN PRIVATE KEY-----";

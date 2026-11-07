@@ -9,7 +9,6 @@
 
 import { parseHistoryArgs } from "../remote/history";
 import { historyArgsOf } from "../remote/history-host";
-import { hubShareUsage, parseHubShareCommand } from "../lib/hub-machine/live-shell-share";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { waitingCardsText } from "./operator-confirmations";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
@@ -22,6 +21,16 @@ type OpenTui = typeof import("@opentui/core");
 
 export const REMOTE_CONTROL_COMMAND = "/remote-control";
 export const REMOTE_CONTROL_SUMMARY = "Mirror this session into a Telegram topic: /remote-control [name|off|status]";
+export const hubShareUsage = "Usage: /remote-control hub on|off|status";
+export type HubShareAction = "on" | "off" | "status" | "usage";
+
+export function parseHubShareCommand(line: string): HubShareAction | undefined {
+  const [command, target, action, ...extra] = line.trim().split(/\s+/);
+  // Keep `/remote-control hub` available as a Telegram topic name.
+  if (command !== REMOTE_CONTROL_COMMAND || target !== "hub" || action === undefined) return;
+  if (extra.length === 0 && (action === "on" || action === "off" || action === "status")) return action;
+  return "usage";
+}
 
 /** The label a line from Telegram carries in the transcript echo and the queue. */
 export const TG_LABEL = TG_SOURCE;

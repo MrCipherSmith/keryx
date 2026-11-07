@@ -92,7 +92,7 @@ import {
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
-import { hubShareUsage, LiveShellShare, parseHubShareCommand, type HubShareAction } from "../lib/hub-machine/live-shell-share";
+import type { LiveShellShare } from "../lib/hub-machine/live-shell-share";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
@@ -111,10 +111,13 @@ import {
   isHistoryCommand,
   isRemoteControlCommand,
   commandEchoText,
+  hubShareUsage,
   labelTelegramLine,
   mountRemotePanel,
   openRemoteControl,
+  parseHubShareCommand,
   parseRemoteControlArgs,
+  type HubShareAction,
   type RemotePanelHandle,
   TG_ECHO_MARKER,
 } from "./remote-control-surface";
@@ -4627,6 +4630,12 @@ export async function launchTuiAgentShell(opts: {
   // topic) on every exit path.
   let remoteBridge: RemoteBridge | undefined;
   let hubShare: LiveShellShare | undefined;
+  let startingHubShare: AbortController | undefined;
+  const closeHubShare = () => {
+    startingHubShare?.abort();
+    startingHubShare = undefined;
+    return hubShare?.close();
+  };
   // A device login started from the topic (flow 471); ended when remote control goes off or the shell closes.
   let remoteDeviceLogin: RemoteDeviceLogin | undefined;
   // `/connect` in the topic asks for the connected providers and then for the Add list; each would
@@ -4764,7 +4773,7 @@ export async function launchTuiAgentShell(opts: {
         stopProjectContextFeed?.();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
-        void hubShare?.close();
+        void closeHubShare();
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
         // Flow 415: retain ownership until final history + Slate outbox commit.
@@ -7400,7 +7409,7 @@ export async function launchTuiAgentShell(opts: {
     // session (`/new`, `/resume`, the startup picker) turns remote control off first, so the
     // history interval closes on the session that opened it. A no-op while it is off.
     const stopRemoteForSessionSwitch = (): void => {
-      void hubShare?.close();
+      void closeHubShare();
       remoteQueue.stopRemoteForSessionSwitch();
     };
 
@@ -7886,7 +7895,7 @@ export async function launchTuiAgentShell(opts: {
       // Flow 271 R3-1: detach the ref itself, not only this variable. A turn or
       // a `/goal --auto` loop that is already running holds the same object,
       // and every slate write through a detached ref refuses.
-      void hubShare?.close();
+      void closeHubShare();
       detachSlateSession(slateSession);
       slateSession = undefined;
       if (sessionPersistTimer !== undefined) {
@@ -9542,7 +9551,7 @@ export async function launchTuiAgentShell(opts: {
       if (source === undefined && origin === "operator" && !skipSlashRouting) {
         const action = parseHubShareCommand(line);
         if (action !== undefined) {
-          handleHubShare(action);
+          void handleHubShare(action);
           return;
         }
       }
@@ -11518,24 +11527,29 @@ export async function launchTuiAgentShell(opts: {
       forceHandoff.isAwaitingSettlement ||
       turnLoop.queue.length > 0 ||
       leaseView()?.held() === true;
-    const handleHubShare = (action: HubShareAction): void => {
+    const handleHubShare = async (action: HubShareAction): Promise<void> => {
       const notice = (message: string): void => { if (!destroyed) io.onSystem?.(`${message}\n`); };
       if (action === "usage") { notice(hubShareUsage); return; }
       if (action === "off") {
-        void hubShare?.close();
+        void closeHubShare();
         notice("◇ Hub sharing is off. This shell is still running.");
         return;
       }
-      if (action === "status" || hubShare?.active === true) {
-        notice(hubShare?.connected === true ? "◇ Hub sharing is on." : hubShare?.active === true ? "◇ Connecting to Team Hub…" : "◇ Hub sharing is off.");
+      const connecting = startingHubShare !== undefined || hubShare?.active === true;
+      if (action === "status" || connecting) {
+        notice(hubShare?.connected === true ? "◇ Hub sharing is on." : connecting ? "◇ Connecting to Team Hub…" : "◇ Hub sharing is off.");
         return;
       }
       if (!sessionLease.canPersist()) {
         notice("◇ This shell no longer owns the session. Reopen it before sharing with Team Hub.");
         return;
       }
+      const pending = new AbortController();
+      startingHubShare = pending;
       try {
-        hubShare = LiveShellShare.open(sessionCwd, {
+        const transport = await import("../lib/hub-machine/live-shell-share");
+        if (pending.signal.aborted || destroyed || !sessionLease.canPersist()) return;
+        hubShare = transport.LiveShellShare.open(sessionCwd, {
           sessionId: () => liveSession.summary.id,
           history: nativeHistory,
           isBusy: () => shellIsBusy() || chrome.overlayActive() || turnLoop.drain.workInFlight(),
@@ -11551,7 +11565,9 @@ export async function launchTuiAgentShell(opts: {
         hubShare.start();
         notice("◇ Connecting to Team Hub and sharing this shell's recent messages…");
       } catch {
-        notice("◇ Hub sharing requires exactly one enrolled working copy for this folder and valid machine credentials.");
+        if (!pending.signal.aborted) notice("◇ Hub sharing requires exactly one enrolled working copy for this folder and valid machine credentials.");
+      } finally {
+        if (startingHubShare === pending) startingHubShare = undefined;
       }
     };
     remoteBridge = new RemoteBridge({
@@ -11767,7 +11783,7 @@ export async function launchTuiAgentShell(opts: {
     // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
     // Idempotent: the destroy hook above usually started it already.
     await remoteBridge?.disable();
-    await hubShare?.close();
+    await closeHubShare();
     // review r1 F9: leave the bus before releasing the lease (specification
     // §5.4's order) — idempotent either way, the exit paths above usually
     // did both already.

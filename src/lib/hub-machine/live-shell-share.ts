@@ -11,17 +11,6 @@ import { readBoundedResponse } from "./client";
 import { listEnrollments, readMachineSecret } from "./config";
 import { MachineError, machineFailure } from "./errors";
 
-export const hubShareUsage = "Usage: /remote-control hub on|off|status";
-export type HubShareAction = "on" | "off" | "status" | "usage";
-
-export function parseHubShareCommand(line: string): HubShareAction | undefined {
-  const [command, target, action, ...extra] = line.trim().split(/\s+/);
-  // Keep `/remote-control hub` available as a Telegram topic name.
-  if (command !== "/remote-control" || target !== "hub" || action === undefined) return;
-  if (extra.length === 0 && (action === "on" || action === "off" || action === "status")) return action;
-  return "usage";
-}
-
 export interface LiveShellHost {
   sessionId(): string;
   isBusy(): boolean;

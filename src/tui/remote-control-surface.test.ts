@@ -35,6 +35,7 @@ import {
   isRemoteControlCommand,
   labelTelegramLine,
   mountRemotePanel,
+  parseHubShareCommand,
   parseRemoteControlArgs,
   presentRemoteControl,
   projectPostureLine,
@@ -49,6 +50,15 @@ const otuiTest = test.skipIf(OTUI === undefined);
 const OFF: RemoteStatus = { state: "off", events: [] };
 const ON: RemoteStatus = { state: "on", name: "keryx-demo", heartbeatAgeMs: 12_000, events: [] };
 const OFFLINE: RemoteStatus = { state: "offline", name: "keryx-demo", events: [] };
+
+test("Hub sharing is an explicit local subcommand and keeps Telegram topic syntax", () => {
+  expect(parseHubShareCommand("/remote-control hub on")).toBe("on");
+  expect(parseHubShareCommand("/remote-control hub off")).toBe("off");
+  expect(parseHubShareCommand("/remote-control hub status")).toBe("status");
+  expect(parseHubShareCommand("/remote-control hub attach")).toBe("usage");
+  expect(parseHubShareCommand("/remote-control hub")).toBeUndefined();
+  expect(parseRemoteControlArgs("/remote-control hub")).toMatchObject({ action: "on", name: "hub" });
+});
 
 function events(count: number): RemoteEvent[] {
   return Array.from({ length: count }, (_, i) => ({ at: Date.UTC(2026, 9, 1, 10, 0, i), kind: "line" as const, text: `Telegram: line ${i}` }));
