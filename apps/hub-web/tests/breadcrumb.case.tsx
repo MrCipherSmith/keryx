@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { beforeEach, expect, test, vi } from "vitest";
@@ -34,6 +35,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
   setAuthLossHandler(() => undefined);
   resetClient();
+  localStorage.removeItem("keryx.hub.rail");
   queryClient.clear();
   useDraftStore.getState().clearAll();
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -94,7 +96,7 @@ test("mobile navigation Escape returns focus to the opening button", async () =>
   fireEvent.click(opener);
   const nav = screen.getByRole("navigation");
   await waitFor(() => expect(nav.contains(document.activeElement)).toBe(true));
-  // The rail toggle is display:none below 1024px; focus must not land on it.
+  // The desktop rail toggle is outside mobile navigation.
   expect(document.activeElement!.classList).not.toContain(
     "desktop-rail-toggle",
   );
@@ -104,6 +106,39 @@ test("mobile navigation Escape returns focus to the opening button", async () =>
 });
 
 const css = parseCssRules(readFileSync("src/styles.css", "utf8"));
+
+test("the 60 px rail is available whenever desktop navigation is visible", () => {
+  const toggle = css.find((rule) =>
+    rule.selector === ".desktop-rail-toggle" && rule.decls.get("display") === "grid",
+  );
+  const rail = css.find((rule) => rule.selector === ".rail-collapsed .sidebar");
+  expect(toggle?.media).toEqual(["@media (min-width:768px)"]);
+  expect(rail?.media).toEqual(toggle?.media);
+  expect(rail?.decls.get("width")).toBe("60px");
+});
+
+test("the sidebar toggle preserves the chosen width across routes and reloads", async () => {
+  await act(() => i18n.changeLanguage("en"));
+  navigate({ projectId: null, tab: "overview" }, true);
+  const view = render(<App />);
+  const collapse = await screen.findByRole("button", { name: "Collapse menu" });
+  expect(collapse.closest(".sidebar-brand")).not.toBeNull();
+  fireEvent.click(collapse);
+  const expand = screen.getByRole("button", { name: "Expand menu" });
+  expect(expand).toHaveAttribute("aria-expanded", "false");
+  expect(expand.closest(".app-shell")).toHaveClass("rail-collapsed");
+
+  fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Flows" }));
+  await screen.findByRole("heading", { name: "All Flows" });
+  expect(screen.getByRole("button", { name: "Expand menu" })).toBe(expand);
+  view.unmount();
+  render(<App />);
+  const saved = await screen.findByRole("button", { name: "Expand menu" });
+  expect(saved.closest(".app-shell")).toHaveClass("rail-collapsed");
+  fireEvent.click(saved);
+  expect(screen.getByRole("button", { name: "Collapse menu" }).closest(".app-shell"))
+    .not.toHaveClass("rail-collapsed");
+});
 
 test("collapsed rail keeps an icon-only Sign out reachable", async () => {
   await act(() => i18n.changeLanguage("en"));
