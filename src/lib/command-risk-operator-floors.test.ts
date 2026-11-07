@@ -326,6 +326,9 @@ const hiddenBySyntax = (hc: string): string[] => [
   `function f { ${hc}; }; f`,
   `time ${hc}`,
   `2>/dev/null ${hc}`,
+  `&>/dev/null ${hc}`,
+  `X=1 >/dev/null ${hc}`,
+  `f(){ ${hc}; }; f`,
   `sh -c 'if true; then ${hc}; fi'`,
 ];
 
@@ -400,14 +403,17 @@ describe("flow 486 review: words the shell has yet to expand", () => {
     '"$HC" keys t7 enter',
     "$(which hc) keys t7 enter",
     "`which hc` send t7 ok --force",
-    "$HC send t7 ok",
+    "$HC send t7 ok --force",
     "hc send t7 ok $FLAGS",
     "hc send $T ok",
+    "hc send t7 $(echo --force)",
+    "hc send t7 pre$X",
+    "$HC run hc keys t7 enter",
     "env $HC --json keys t7 enter",
   ]) {
     test(command, () => expect(touchesHcDialogControl(command)).toBe(true));
   }
-  for (const command of ["$PY $SCRIPT", "$HC read t7", "hc '$v' t7", "hc read $T", "hc wait $T", "$EDITOR notes", "hc send t7 '$literal'", "hc run $CMD"]) {
+  for (const command of ["$PY $SCRIPT", "$HC send t7 ok", "$HC read t7", "hc '$v' t7", "hc read $T", "hc wait $T", "$EDITOR notes", "hc send t7 '$literal'", "hc run $CMD"]) {
     test(`no match: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(false));
   }
 
@@ -478,7 +484,7 @@ describe("flow 486 review: launch detection", () => {
     expect(hcAgentLaunchesOf("hc run claude; hc run claude")).toEqual(["claude"]);
   });
   test("a quoted argument that reads like a command line asks but records no grant", () => {
-    for (const command of ["echo 'hc run claude'", `git commit -m "hc run claude"`, "hc send t7 'hc run claude'"]) {
+    for (const command of ["echo 'hc run claude'", `git commit -m "hc run claude"`]) {
       expect(hcAgentLaunchesOf(command)).toEqual(["claude"]);
       expect(hcGrantableLaunchesOf(command)).toEqual([]);
     }
@@ -495,5 +501,240 @@ describe("flow 486 review: launch detection", () => {
   test("past the nesting limit the launch is unknown, not silently absent", () => {
     expect(hcAgentLaunchesOf("hc run eval eval eval claude")).toEqual(["claude"]);
     expect(hcAgentLaunchesOf("hc run eval eval eval eval eval eval claude")).toEqual([HC_UNKNOWN_AGENT]);
+  });
+});
+
+// Flow 486 review round 2: a floor that asks on ordinary commands teaches the operator to wave its prompts through.
+describe("flow 486 review r2: prose in an argument stays prose", () => {
+  for (const command of [
+    `git commit -m "docs: hc keys and hc run claude; if ok then hc keys t7 enter"`,
+    `git commit -m 'docs: hc keys and hc run claude; if ok then hc keys t7 enter'`,
+    "git commit -m 'docs: explain `hc keys t7 enter` and `hc run claude`'",
+    "git commit -m 'fix the `hc send t7 ok --force` floor'",
+    `git commit -m "docs: (hc keys t7 enter) and (hc run claude)"`,
+    `git commit -m 'see (hc keys t7 enter) & hc run claude & done'`,
+    `git commit -m "a & hc keys t7 enter & hc run claude"`,
+    `git commit -m 'if hc keys t7 enter fails, try hc run claude'`,
+    `git commit -m 'then hc run claude'`,
+    `git commit -m '! hc keys t7 enter'`,
+    `git commit -m '2>/dev/null hc keys t7 enter'`,
+    `git commit -m '> hc keys t7 enter'`,
+    `git commit -m "$STATUS keys t7 enter"`,
+    `git commit -m "$STATUS run $IMAGE"`,
+    "git commit -m 'docs: explain `keryx review publish`'",
+    `git commit -m 'if keryx review publish fails, retry'`,
+    `git commit -m 'see (keryx learn accept)'`,
+    `git commit -m 'run keryx hub machine pair & more'`,
+    "keryx ctx rg 'the `keryx review publish` step' docs",
+    `keryx ctx rg "hc run claude" src`,
+    `keryx ctx rg "hc keys t7 enter" src`,
+    `keryx ctx rg 'keryx review publish' docs`,
+    "hc send t7 'hc run claude'",
+    "hc send t7 'hc keys t7 enter'",
+    `hc send t7 "hc keys t7 enter; hc run claude"`,
+  ]) {
+    test(`no ask: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(false);
+      expect(touchesHumanConfirmation(command)).toBe(false);
+      expect(hcAgentLaunchesOf(command)).toEqual([]);
+    });
+  }
+  for (const command of [
+    "sh -c 'hc keys t7 enter'",
+    "sh -c 'if true; then hc keys t7 enter; fi'",
+    "bash -c '(hc keys t7 enter)'",
+    `eval "hc keys t7 enter"`,
+    "env X=1 hc keys t7 enter",
+    "script -qfc 'if true; then hc keys t7 enter; fi' /dev/null",
+    "tmux new '(hc keys t7 enter)'",
+    "git commit -m \"see `hc keys t7 enter`\"",
+    `git commit -m "see $(hc keys t7 enter)"`,
+    `echo x; git commit -m "$(hc keys t7 enter)"`,
+    // Nothing in a word that IS a command line says it is not one, and the walker read it before this flow.
+    `git commit -m "hc keys t7 enter"`,
+    `git commit -m "fine; hc keys t7 enter"`,
+    "echo 'keryx review publish'",
+    // hc send pastes and presses enter: only hc's own floors take its message for text, the operator families read on.
+    "hc send t7 'keryx review publish'",
+  ]) {
+    test(`asks: ${command}`, () => expect(touchesHumanConfirmation(command)).toBe(true));
+  }
+  test("a real launch next to prose is still read, and a real body still records a grant", () => {
+    expect(hcAgentLaunchesOf(`git commit -m 'about hc run codex & more'; hc run claude`)).toEqual(["claude"]);
+    expect(hcGrantableLaunchesOf(`sh -c 'if true; then hc run claude; fi'`)).toEqual(["claude"]);
+  });
+  test("a real launch after a search is still read", () => {
+    expect(hcAgentLaunchesOf(`keryx ctx rg "x" src; hc run claude`)).toEqual(["claude"]);
+  });
+});
+
+describe("flow 486 review r2: a heredoc line is no grant", () => {
+  test("no grant, wherever the heredoc stands", () => {
+    for (const command of [
+      "cat <<EOF\nhc run claude\nEOF",
+      "cat <<EOF\nhc run claude",
+      "cat <<'EOF'\nhc run claude\nEOF",
+      `cat <<"EOF"\nhc run claude\nEOF`,
+      "cat <<-EOF\n\thc run claude\n\tEOF",
+      "cat <<\\EOF\nhc run claude\nEOF",
+      `git commit -m "$(cat <<'EOF'\nhc run claude\nEOF\n)"`,
+      "cat <<A <<B\nhc run claude\nA\nhc run claude\nB",
+    ]) {
+      expect(hcGrantableLaunchesOf(command), command).toEqual([]);
+    }
+  });
+  test("a heredoc may feed a shell, so it still asks", () => {
+    expect(hcAgentLaunchesOf("sh <<EOF\nhc run claude\nEOF")).toEqual(["claude"]);
+  });
+  test("a launch after the heredoc is granted; a here-string has no body", () => {
+    expect(hcGrantableLaunchesOf("cat <<EOF\nhc run claude\nEOF\nhc run codex")).toEqual(["codex"]);
+    expect(hcGrantableLaunchesOf("cat <<< x\nhc run codex")).toEqual(["codex"]);
+  });
+  test("a here-string keeps its word: `sh <<<` runs it", () => {
+    expect(touchesHcDialogControl("sh <<< 'hc keys t7 enter'")).toBe(true);
+  });
+});
+
+describe("flow 486 review r2: an expanded head is hc only where something says so", () => {
+  for (const command of [
+    "$DOCKER run $IMAGE",
+    "$NPM run $SCRIPT",
+    '$NPM run "$TARGET"',
+    "$NPM run build:$ENV",
+    '"$PM" exec $BIN',
+    "$KUBECTL exec $POD -- ls",
+    "$ROOT/bin/docker run $IMAGE",
+    "$(npm bin)/vitest run $FILE",
+    "$ROOT/bin/mailer send a b",
+    "$ROOT/bin/redis-cli keys x",
+    "$ROOT/bin/docker run claude",
+    "$GIT send x",
+    "$PY $SCRIPT",
+    "$HC run $(which claude)",
+    "$HC run $AGENT",
+    "$HC run env X=1 $AGENT",
+    "$HC run npx $PKG",
+    "$HC run node ~/x/cli.js",
+    "HC_TERMINAL_ID=t3 $ROOT/bin/ls",
+    "$HC run '$AGENT'",
+  ]) {
+    test(`no ask: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(false);
+      expect(touchesHumanConfirmation(command)).toBe(false);
+      expect(hcAgentLaunchesOf(command)).toEqual([]);
+    });
+  }
+  for (const command of ["$HC keys t7 enter", "hc $v t7 enter", "$ROOT/bin/hc keys t7 enter", "$ROOT/$NAME keys t7 enter", "${HC:-hc} keys t7 enter"]) {
+    test(`asks: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(true));
+  }
+  test("a named agent under an expanded head asks and records no grant", () => {
+    expect(hcAgentLaunchesOf("$HC run claude")).toEqual(["claude"]);
+    expect(hcGrantableLaunchesOf("$HC run claude")).toEqual([]);
+  });
+  test("an expanded program under a literal hc stays unknown", () => {
+    expect(hcAgentLaunchesOf("hc run $(which claude)")).toEqual([HC_UNKNOWN_AGENT]);
+    expect(hcGrantableLaunchesOf("hc run $(which claude)")).toEqual([]);
+  });
+});
+
+describe("flow 486 review r2: an expansion after hc send counts only where it can be the flag", () => {
+  for (const command of [
+    `hc send t3 "build ok: $STATUS"`,
+    `hc send t3 "done at $(date)"`,
+    `hc send t3 "cost is $5"`,
+    `hc send t3 "see \`date\`"`,
+    `hc send t7 "$(cat report.md)"`,
+    `hc send "$PARENT" "done"`,
+    `hc send t7 "done in $PWD"`,
+    `for f in a b; do hc send t7 "$f"; done`,
+    // A quoted expansion is a message, deliberately: the flag built into a variable on purpose is evasion, a stated limit.
+    `F=--force; hc send t7 "$F"`,
+  ]) {
+    test(`no ask: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(false);
+      expect(touchesHumanConfirmation(command)).toBe(false);
+    });
+  }
+  for (const command of ["hc send t7 ok $FLAGS", "hc send $T ok", "hc send t7 $(echo --force)", "hc send t7 `echo --force`", `hc send "$T" ok --force`, `hc send t7 "$(date)" $X`]) {
+    test(`asks: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(true);
+      expect(touchesHumanConfirmation(command)).toBe(true);
+    });
+  }
+});
+
+describe("flow 486 review r2: a script run by a runtime is read through its path", () => {
+  const launches: Array<[string, string]> = [
+    ["hc run node ~/x/claude-code/cli.js", "claude"],
+    ["hc run node ./node_modules/@openai/codex/bin/codex.js", "codex"],
+    ["hc run node ./node_modules/@anthropic-ai/claude-code/cli.mjs", "claude"],
+    ["hc run node ./node_modules/@google/gemini-cli/bin/run.cjs", "gemini"],
+    ["hc run tsx ./opencode/src/main.ts", "opencode"],
+    ["hc run ./node_modules/@openai/codex/bin/codex.js", "codex"],
+    ["hc run ~/x/claude-code/cli.js", "claude"],
+    ["hc run node ~/keryx/dist/cli.js", "keryx"],
+    ["hc run bun src/cli.ts shell", "keryx"],
+    ["hc run bun ./src/cli.ts shell", "keryx"],
+    ["hc run bunx npm:claude", "claude"],
+    ["hc run deno run -A npm:codex", "codex"],
+    ["hc run npx -p @openai/codex@latest other-bin", "codex"],
+    ["hc run npx -p typescript -p @openai/codex tsc", "codex"],
+  ];
+  for (const [command, agent] of launches) {
+    test(command, () => {
+      expect(hcAgentLaunchesOf(command)).toContain(agent);
+      expect(hcGrantableLaunchesOf(command)).toContain(agent);
+    });
+  }
+  for (const command of ["hc run node ~/x/cli.js", "hc run node cli.js", "hc run bun cli.ts", "hc run ./cli.js", "hc run bun /other/src/cli.ts", "hc run tsx x/cli.mjs"]) {
+    test(`generic entry is unknown, never keryx: ${command}`, () => {
+      expect(hcAgentLaunchesOf(command)).toEqual([HC_UNKNOWN_AGENT]);
+      expect(hcGrantableLaunchesOf(command)).toEqual([]);
+    });
+  }
+  for (const command of ["hc run node server.js", "hc run ./keryx/test.sh", "hc run ./claude/build", "hc run npx @scope/cli"]) {
+    test(`an ordinary program: ${command}`, () => expect(hcAgentLaunchesOf(command)).toEqual([]));
+  }
+});
+
+describe("flow 486 review r2: a redirection hides nothing", () => {
+  for (const command of [
+    "&>/dev/null hc keys t7 enter",
+    "&> /dev/null hc keys t7 enter",
+    "X=1 >/dev/null hc keys t7 enter",
+    "hc 2>/dev/null keys t7 enter",
+    "hc > /dev/null keys t7 enter",
+    "hc >/dev/null keys t7 enter",
+    "hc>/dev/null keys t7 enter",
+    `hc > "a b" keys t7 enter`,
+    "hc 2>&1 keys t7 enter",
+    "hc </dev/null keys t7 enter",
+    "hc send t7 ok >/dev/null --force",
+    "f(){ hc keys t7 enter; }; f",
+    "{ hc keys t7 enter;}",
+  ]) {
+    test(command, () => expect(touchesHcDialogControl(command)).toBe(true));
+  }
+  for (const command of ["hc 2>/dev/null run claude", "hc run >/tmp/out claude", "hc run 2>&1 claude", "&>/dev/null hc run claude"]) {
+    test(command, () => expect(hcAgentLaunchesOf(command)).toEqual(["claude"]));
+  }
+  for (const command of ["hc send t7 '>' ok", "hc send t7 'a > b'", "hc read t7 >/tmp/keys", "ls >keys", "hc read t7 2>/dev/null", "cat <(ls) keys"]) {
+    test(`no match: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(false));
+  }
+  test("a quoted `>` hides no flag", () => {
+    expect(touchesHcDialogControl("hc send t7 '>' --force")).toBe(true);
+  });
+  test("the same spellings reach the other families", () => {
+    expect(touchesHumanConfirmation(">/dev/null keryx flow confirm 7")).toBe(true);
+    expect(touchesHumanConfirmation("keryx 2>/dev/null flow confirm 7")).toBe(true);
+    expect(touchesHumanConfirmation("&>/dev/null keryx review publish")).toBe(true);
+  });
+});
+
+describe("flow 486 review r2: gates that survived deletion", () => {
+  test("a separator only the expanded `$'…'` spelling shows", () => {
+    // As written the `\\'` closes the quote early and the rest reads as quoted; bash ends the word there and runs hc.
+    expect(touchesHcDialogControl("echo $'\\'' & hc keys t7 enter")).toBe(true);
+    expect(hcAgentLaunchesOf("echo $'\\'' & hc run claude")).toEqual(["claude"]);
   });
 });

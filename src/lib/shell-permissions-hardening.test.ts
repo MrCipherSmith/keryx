@@ -133,6 +133,9 @@ test("B3: no prefix grant for interpreters, wrappers, or runtimes", () => {
     "git status",
     "find . -name x",
     "cd /tmp",
+    "hc read t7",
+    "hc send t7 hi",
+    "hc run cargo test",
   ]) {
     const s = suggestShellPatterns(cmd);
     expect(`${cmd}: offerPrefix=${s.offerPrefix}`).toBe(`${cmd}: offerPrefix=false`);
@@ -280,4 +283,9 @@ test("keryx * is rejected as a bare wildcard grant (like git *, bash *, etc.)", 
   // A narrower pattern that constrains the subcommand stays offerable.
   expect(validateShellPattern("keryx wiki *").ok).toBe(true);
   expect(validateShellPattern("keryx flow status").ok).toBe(true);
+});
+
+test("B3: no `Always allow hc *` is offered: hc run and hc exec start any program (flow 486)", () => {
+  expect(suggestShellPatterns("hc read t7").offerPrefix).toBe(false);
+  expect(validateShellPattern("hc *").ok).toBe(false);
 });

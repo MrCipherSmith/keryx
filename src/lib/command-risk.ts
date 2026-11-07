@@ -26,7 +26,7 @@
 // Determinism: pure string analysis. No clock, RNG, filesystem, env, or network.
 
 import { optionValues } from "./args";
-import { commandWord, splitSegments, splitWords, stripAssignments, structuralCommands } from "./shell-syntax";
+import { commandWord, splitSegments, splitWords, stripAssignments, stripHeredocBodies, structuralCommands, withoutRedirections } from "./shell-syntax";
 import type { Segment } from "./shell-syntax";
 
 /** Risk class of a concrete command string. */
@@ -1008,43 +1008,70 @@ export function touchesHumanConfirmation(command: string): boolean {
  * a peer's) confirmation, so both sit in the human-confirmation floor with the other families here. Naming a terminal
  * id by assignment makes hc believe the caller is that terminal; that is decided on the WHOLE line (an assignment
  * anywhere, plus hc anywhere: `export HC_TERMINAL_ID=t1; hc send …`, `HC_TERMINAL_ID=t1 sh -c 'hc ls'`), on the raw
- * words, because `stripAssignments`/`peelWrappers` drop the assignment before a visitor sees the command. A word the
- * shell has yet to expand may be any of this: `hc $v …`, `$HC keys …`, `hc send t7 "$x"`. `hc send` without `--force`,
- * `hc read`, `hc wait`, `hc interrupt` (it stops a program, it cannot approve a dialog) and `hc run` of anything but hc
- * do not match here (`hc run` has its own floor, {@link hcAgentLaunchesOf}).
+ * words, because `stripAssignments`/`peelWrappers` drop the assignment before a visitor sees the command. `hc send`
+ * without `--force`, `hc read`, `hc wait`, `hc interrupt` (it stops a program, it cannot approve a dialog) and `hc run` of
+ * anything but hc do not match here (`hc run` has its own floor, {@link hcAgentLaunchesOf}).
  *
- * HONEST LIMIT: these inspect the command line. A script that calls hc is not covered.
+ * A word the shell has yet to expand may be any of this, where it can stand: the verb (`hc $v …`), the head (`$HC keys
+ * …`, unless its last path part is literally another program, `$ROOT/bin/docker`), and an UNQUOTED word after `hc send`,
+ * which can split into the flag (`hc send t7 ok $FLAGS`, `hc send $T ok`, `hc send t7 $(echo --force)`). A QUOTED expansion
+ * after `hc send` is taken as the message (`hc send t3 "done at $(date)"`, `hc send "$PARENT" "done"`), deliberately: asking
+ * on every report teaches the operator to wave these prompts through.
+ *
+ * HONEST LIMIT: these inspect the command line, and only as far as it can be read. Not caught: a script that calls hc; a
+ * whole command held in a variable (`c='hc keys t7 enter'; $c`, `eval "$c"`), only a split head or verb is covered; a
+ * variable built on purpose to hold the flag and then quoted (`F=--force; hc send t7 "$F"`), which is evasion this floor
+ * does not stop; a runner the walker does not read through (`find -exec`, `watch`, `xargs -I`). `hc send` pastes its text
+ * and presses enter, so a message sent to a terminal that sits at a shell prompt runs there; the text is not read as a
+ * command here. `$REDIS_CLI keys '*'` asks, because its head and verb read exactly like `$HC keys`.
  */
 export function touchesHcDialogControl(command: string): boolean {
   let assignsIdentity = false;
   let runsHc = false;
-  const controls = anySimpleCommand(command, (words, expands, rawWords) => {
+  const controls = anySimpleCommand(command, (words, expands, rawWords, reading) => {
     assignsIdentity ||= rawWords.some((w) => HC_TERMINAL_ASSIGNMENT.test(w));
-    const headExpands = expands[0] === true;
-    if (!headExpands && baseName(words[0]) !== "hc") return false;
+    const live = liveExpansions(expands, reading);
+    if (!mayBeHc(words[0], live[0])) return false;
     runsHc = true;
-    return hcWordsControlDialog(words, expands, headExpands);
-  });
+    return hcWordsControlDialog(words, live, baseName(words[0]) !== "hc");
+  }, { argumentsAreText: isHcSend });
   return controls || (assignsIdentity && runsHc);
 }
 
 const HC_TERMINAL_ASSIGNMENT = /^HC_TERMINAL_ID\+?=/i;
 
+/** The head is hc, or an expansion that may be: a head whose last path part is literal text names that program instead. */
+function mayBeHc(head: string | undefined, expansion: WordExpansion | undefined): boolean {
+  const base = baseName(head);
+  return base === "hc" || (isExpanded(expansion) && wordIsOpaque(base));
+}
+
+/** Inside a plain argument nothing is about to expand: `git commit -m "$STATUS keys ready"` is prose, whatever `$STATUS` holds. */
+function liveExpansions(expands: readonly WordExpansion[], reading: WordReading): readonly WordExpansion[] {
+  return reading === "command" ? expands : expands.map(() => false);
+}
+
+/** `hc send`: its words after the verb are a terminal and a message, not a command line. */
+function isHcSend(words: readonly string[]): boolean {
+  if (baseName(words[0]) !== "hc") return false;
+  return words.slice(1).find((w) => !w.startsWith("-"))?.toLowerCase() === "send";
+}
+
 /** Do these words, whose head is hc or an expansion that may be hc, press a key or force text into a terminal? */
-function hcWordsControlDialog(words: readonly string[], expands: readonly boolean[], headExpands: boolean): boolean {
+function hcWordsControlDialog(words: readonly string[], expands: readonly WordExpansion[], headExpands: boolean): boolean {
   const rest = words.slice(1);
   const restExpands = expands.slice(1);
   const subAt = rest.findIndex((w) => !w.startsWith("-"));
   if (subAt < 0) return false;
   // `$PY $SCRIPT` is not caught, as in `hasOpaqueCommandPath`: with both unknown nothing says this is hc.
-  if (restExpands[subAt] === true) return !headExpands;
+  if (isExpanded(restExpands[subAt])) return !headExpands;
   const sub = rest[subAt]!.toLowerCase();
   if (sub === "keys") return true;
   if (sub === "send") {
-    if (headExpands || restExpands.slice(subAt + 1).some(Boolean)) return true;
+    if (restExpands.slice(subAt + 1).includes("bare")) return true;
     return rest.slice(subAt + 1).some((w) => w === "--force" || w.startsWith("--force="));
   }
-  if (!HC_PROGRAM_VERBS.has(sub) || headExpands) return false;
+  if (!HC_PROGRAM_VERBS.has(sub)) return false;
   const at = hcRunProgramAt(rest, subAt);
   const peeled = peelWrappers(rest.slice(at));
   if (baseName(peeled.words[0]) !== "hc") return false;
@@ -1087,11 +1114,12 @@ export function hcAgentLaunchesOf(command: string): string[] {
 /**
  * The agents an approved {@link hcAgentLaunchesOf} may record as granted: those the command itself starts, read from its
  * own segments and `sh -c` bodies. `echo 'hc run claude'` asks, but its approval grants nothing, and
- * {@link HC_UNKNOWN_AGENT} is never here. Pure.
+ * {@link HC_UNKNOWN_AGENT} is never here, and neither is a line of a heredoc: it is usually text, and when it is not
+ * (`sh <<EOF`) the launch simply asks again. Pure.
  */
 export function hcGrantableLaunchesOf(command: string): string[] {
   const found: string[] = [];
-  collectHcLaunches(command, found, false);
+  collectHcLaunches(stripHeredocBodies(command), found, false);
   return found;
 }
 
@@ -1108,23 +1136,26 @@ function hcRunProgramAt(rest: readonly string[], subAt: number): number {
 }
 
 function collectHcLaunches(command: string, found: string[], wide: boolean): void {
-  const visit = (words: string[], expands: readonly boolean[]): boolean => {
-    if (baseName(words[0]) !== "hc" && !(wide && expands[0] === true)) return false;
+  const visit = (words: string[], expands: readonly WordExpansion[], _rawWords: readonly string[], reading: WordReading): boolean => {
+    const live = liveExpansions(expands, reading);
+    const headExpands = baseName(words[0]) !== "hc";
+    if (headExpands && !(wide && mayBeHc(words[0], live[0]))) return false;
     const rest = words.slice(1);
     const subAt = rest.findIndex((w) => !w.startsWith("-"));
     if (subAt < 0 || !HC_PROGRAM_VERBS.has(rest[subAt]!.toLowerCase())) return false;
     const at = hcRunProgramAt(rest, subAt);
-    collectAgentsOfProgram(rest.slice(at), expands.slice(1 + at), found, 0, wide, wide);
+    // Under an expanded head only a named agent says this is hc: `$DOCKER run $IMAGE` reports nothing, `$HC run claude` does.
+    collectAgentsOfProgram(rest.slice(at), live.slice(1 + at), found, 0, wide && !headExpands, wide);
     return false;
   };
-  anySimpleCommand(command, visit, 0, wide);
+  anySimpleCommand(command, visit, { followArguments: wide, argumentsAreText: isHcSend });
 }
 
 /**
  * The agents a program word list starts, through wrappers, `sh -c`, JS runners and (`scanDriver`) terminal drivers,
  * pushed onto `found`. {@link HC_UNKNOWN_AGENT} is pushed only under `wide`, the reading the floor asks on.
  */
-function collectAgentsOfProgram(program: readonly string[], expands: readonly boolean[], found: string[], depth: number, wide: boolean, scanDriver: boolean): void {
+function collectAgentsOfProgram(program: readonly string[], expands: readonly WordExpansion[], found: string[], depth: number, wide: boolean, scanDriver: boolean): void {
   const add = (agent: string | undefined): void => {
     if (agent !== undefined && !found.includes(agent) && (wide || agent !== HC_UNKNOWN_AGENT)) found.push(agent);
   };
@@ -1133,18 +1164,18 @@ function collectAgentsOfProgram(program: readonly string[], expands: readonly bo
   const body = peeled.inner ?? (/\s/.test(words[0] ?? "") ? words[0] : undefined);
   if (body !== undefined) {
     if (depth >= MAX_SHELL_NESTING) return add(HC_UNKNOWN_AGENT);
-    for (const seg of walkedSegments(body)) collectAgentsOfProgram(seg.words, expansionsOf(seg), found, depth + 1, wide, scanDriver);
+    for (const seg of walkedSegments(body)) collectAgentsOfProgram(seg.words, wordExpansions(seg.raw), found, depth + 1, wide, scanDriver);
     return;
   }
   if (words.length === 0) return;
   const wordExpands = expands.slice(expands.length - words.length);
-  if (wordExpands[0] === true) return add(HC_UNKNOWN_AGENT);
+  if (isExpanded(wordExpands[0])) return add(HC_UNKNOWN_AGENT);
   const name = baseName(words[0]);
   if (HC_LAUNCH_RUNNERS.has(name)) {
-    for (const at of runnerEntries(words)) add(wordExpands[at] === true ? HC_UNKNOWN_AGENT : agentOfEntry(words[at]!));
+    for (const at of runnerEntries(words)) add(isExpanded(wordExpands[at]) ? HC_UNKNOWN_AGENT : agentOfEntry(words[at]!, true));
     return;
   }
-  add(agentOfEntry(words[0]!));
+  add(agentOfEntry(words[0]!, false));
   if (!scanDriver || !TERMINAL_DRIVERS.has(name)) return;
   // A terminal driver runs part of its line as a program; which part depends on the driver, so every suffix is read.
   // Each is read once, without scanning a driver inside it: a later suffix already covers what that would find.
@@ -1169,12 +1200,32 @@ function runnerEntries(words: readonly string[]): number[] {
   return entries;
 }
 
-/** The agent a program word or package spec names (`claude`, `/usr/bin/codex`, `npm:@openai/codex@latest`), if any. */
-function agentOfEntry(word: string): string | undefined {
+/** The extensions of a script a JS runtime runs: `codex.js` names the same thing as `codex`. */
+const SCRIPT_EXTENSION = /\.(?:[cm]?js|ts)$/;
+
+function agentOfPathPart(part: string): string | undefined {
+  return HC_AGENT_PACKAGES.get(part) ?? (HC_LAUNCHABLE_AGENTS.has(part) ? part : undefined);
+}
+
+/**
+ * The agent a program word or package spec names (`claude`, `/usr/bin/codex`, `npm:@openai/codex@latest`), if any. A script
+ * or a runner's entry is read through every path part, the deepest first (`node x/claude-code/cli.js`, `node
+ * node_modules/@openai/codex/bin/codex.js`); a plain executable by its own name, so `hc run ./keryx/test.sh` in a checkout
+ * called keryx stays an ordinary program. `cli.*` names nobody by itself: it is keryx only as this repository's own
+ * relative entry (`bun src/cli.ts`, how keryx is run from a checkout), else {@link HC_UNKNOWN_AGENT}, which a keryx grant
+ * does not cover.
+ */
+function agentOfEntry(word: string, viaRunner: boolean): string | undefined {
   const spec = word.toLowerCase().replace(/^--package=/, "").replace(/^npm:/, "").replace(/(?<=.)@[^/]*$/, "");
-  const base = baseName(spec);
-  if (KERYX_ENTRY_NAMES.has(base)) return "keryx";
-  return HC_AGENT_PACKAGES.get(base) ?? (HC_LAUNCHABLE_AGENTS.has(base) ? base : undefined);
+  const isScript = SCRIPT_EXTENSION.test(spec);
+  const parts = spec.split("/").map((part) => part.replace(SCRIPT_EXTENSION, ""));
+  const read = viaRunner || isScript ? parts : parts.slice(-1);
+  for (let i = read.length - 1; i >= 0; i -= 1) {
+    const agent = agentOfPathPart(read[i]!);
+    if (agent !== undefined) return agent;
+  }
+  if (!isScript || parts[parts.length - 1] !== "cli") return undefined;
+  return spec.replace(/^\.\//, "") === "src/cli.ts" ? "keryx" : HC_UNKNOWN_AGENT;
 }
 
 /** The first agent an `hc run` in the line starts (`claude`, `keryx`, …), or undefined when it starts none. Pure. */
@@ -1249,16 +1300,26 @@ function opaqueArgs(args: readonly string[]): boolean {
 }
 
 /**
- * For each word {@link splitWords} cuts from `raw`, whether the shell still rewrites it: a `$` or a backtick outside
- * single quotes, or a `{` outside any quotes, none of them backslash-escaped. Text in single quotes is literal. Cut on
- * exactly the boundaries `splitWords` uses, so the result lines up with its words.
+ * Whether the shell still rewrites a word, and how: `bare` has a `$`, a backtick or a `{` outside any quotes, so it can split
+ * into several words or be a flag; `quoted` has only a `$` or a backtick inside double quotes, so it stays one word; `false`
+ * is literal, which is all of single-quoted text.
  */
-function wordExpansions(raw: string): boolean[] {
-  const result: boolean[] = [];
+type WordExpansion = false | "quoted" | "bare";
+
+function isExpanded(expansion: WordExpansion | undefined): boolean {
+  return expansion === "quoted" || expansion === "bare";
+}
+
+/**
+ * For each word {@link splitWords} cuts from `raw`, its {@link WordExpansion}. A backslash-escaped character does not
+ * count. Cut on exactly the boundaries `splitWords` uses, so the result lines up with its words.
+ */
+function wordExpansions(raw: string): WordExpansion[] {
+  const result: WordExpansion[] = [];
   let quote: '"' | "'" | undefined;
   let started = false;
   let length = 0;
-  let expands = false;
+  let expands: WordExpansion = false;
   let escaped = false;
   const push = (): void => {
     if (started || length > 0) result.push(expands);
@@ -1277,7 +1338,7 @@ function wordExpansions(raw: string): boolean[] {
       if (ch === quote) quote = undefined;
       else {
         length += 1;
-        if (quote === '"' && (ch === "$" || ch === "`")) expands = true;
+        if (quote === '"' && (ch === "$" || ch === "`") && expands === false) expands = "quoted";
       }
       continue;
     }
@@ -1292,7 +1353,7 @@ function wordExpansions(raw: string): boolean[] {
       if (length > 0 || started) push();
       continue;
     }
-    if (!escaped && (ch === "$" || ch === "`" || ch === "{")) expands = true;
+    if (!escaped && (ch === "$" || ch === "`" || ch === "{")) expands = "bare";
     escaped = !escaped && ch === "\\";
     length += 1;
   }
@@ -1301,10 +1362,11 @@ function wordExpansions(raw: string): boolean[] {
 }
 
 /**
- * The segments the walker reads: {@link segmentsOfBothSpellings} first, then what shell syntax hid inside them
- * (`if x; then cmd; fi`, `(cmd)`, `{ cmd; }`, `! cmd`, `a & cmd`, `$(cmd)`, backticks), see {@link structuralCommands}.
- * Strictly additive: every family keeps its reading of the line as written, because an opaque word such as
- * `$(which keryx)` means something there that cutting it open would lose.
+ * The segments the walker reads off a command line: {@link segmentsOfBothSpellings} first, then what shell syntax hid
+ * inside them (`if x; then cmd; fi`, `(cmd)`, `{ cmd; }`, `! cmd`, `a & cmd`, `$(cmd)`, backticks), see
+ * {@link structuralCommands}, all with their redirections dropped (`>x cmd`, `cmd 2>x verb`). Additive: every family keeps
+ * its reading of the line as written, because an opaque word such as `$(which keryx)` means something there that cutting
+ * it open would lose.
  */
 function walkedSegments(raw: string): Segment[] {
   const segments = segmentsOfBothSpellings(raw);
@@ -1315,37 +1377,62 @@ function walkedSegments(raw: string): Segment[] {
     seen.add(piece);
     segments.push(...splitSegments(piece));
   }
-  return segments;
+  return segments.map(segmentWithoutRedirections);
 }
 
-/** For each word of `seg`, whether the shell has yet to expand it. Should the two cuts ever disagree, every word is judged by its text (the wider reading). */
-function expansionsOf(seg: Segment): boolean[] {
-  const cut = wordExpansions(seg.raw);
-  return cut.length === seg.words.length ? cut : seg.words.map(wordIsOpaque);
+function segmentWithoutRedirections(seg: Segment): Segment {
+  const raw = withoutRedirections(seg.raw);
+  return raw === seg.raw ? seg : { ...seg, raw, words: splitWords(raw) };
+}
+
+/**
+ * How a piece of text came to be read as a command. `command`: the line itself, a real `sh -c`/`eval` body, or a terminal
+ * driver's command string, so all of shell syntax applies. `argument`: an ordinary argument that happens to read like a
+ * command line (`git commit -m "hc run claude"`), cut at separators and nothing more, so prose stays prose: a backtick,
+ * a parenthesis, an `&` or a leading `if` in a sentence is not syntax. A real substitution in a double-quoted argument
+ * is live and is opened at the `command` level, so nothing that runs is lost.
+ */
+type WordReading = "command" | "argument";
+
+interface WalkOptions {
+  /** Also read any word that is itself a command line. Default true. */
+  readonly followArguments?: boolean;
+  /** This command's arguments are text it handles, never a command line to read (see {@link searchesText}). */
+  readonly argumentsAreText?: (words: readonly string[]) => boolean;
+}
+
+/** `keryx ctx rg <pattern>`: a search pattern that names a command is the opposite of running it. */
+function searchesText(words: readonly string[]): boolean {
+  const args = keryxArgs(words);
+  return args?.[0]?.toLowerCase() === "ctx" && args[1]?.toLowerCase() === "rg";
 }
 
 /**
  * Run `visit` over every simple command, descending into `bash -c`/`eval` bodies and, with `followArguments`, any word
- * that is itself a command line.
+ * that is itself a command line. The fourth `visit` argument says which {@link WordReading} produced the words.
  */
 function anySimpleCommand(
   command: string,
-  visit: (words: string[], expands: readonly boolean[], rawWords: readonly string[]) => boolean,
+  visit: (words: string[], expands: readonly WordExpansion[], rawWords: readonly string[], reading: WordReading) => boolean,
+  options: WalkOptions = {},
   depth = 0,
-  followArguments = true,
+  reading: WordReading = "command",
 ): boolean {
-  for (const seg of walkedSegments(command)) {
+  const segments = reading === "command" ? walkedSegments(command) : segmentsOfBothSpellings(command);
+  for (const seg of segments) {
     const words = seg.words.map(unescapeWord);
     const peeled = peelWrappers(words);
-    const all = expansionsOf(seg);
+    const all = wordExpansions(seg.raw);
     const expands = all.slice(all.length - peeled.words.length);
-    if (visit(peeled.words, expands, words)) return true;
+    if (visit(peeled.words, expands, words, reading)) return true;
+    const isDriver = TERMINAL_DRIVERS.has(baseName(peeled.words[0]));
     // A terminal driver runs the rest of its line as a program (`script -q /dev/null keryx review …`, `unbuffer keryx …`).
-    if (TERMINAL_DRIVERS.has(baseName(peeled.words[0])) && peeled.words.some((_w, i) => i > 0 && visit(peeled.words.slice(i), expands.slice(i), words))) return true;
-    if (depth < MAX_SHELL_NESTING) {
-      if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, depth + 1, followArguments)) return true;
-      if (followArguments && words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, depth + 1, followArguments))) return true;
-    }
+    if (isDriver && peeled.words.some((_w, i) => i > 0 && visit(peeled.words.slice(i), expands.slice(i), words, reading))) return true;
+    if (depth >= MAX_SHELL_NESTING) continue;
+    if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, options, depth + 1, "command")) return true;
+    if (options.followArguments === false || searchesText(peeled.words) || options.argumentsAreText?.(peeled.words) === true) continue;
+    const argumentReading = isDriver ? "command" : "argument";
+    if (words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, options, depth + 1, argumentReading))) return true;
   }
   return false;
 }
@@ -1473,7 +1560,7 @@ function startsOperatorPath(literal: readonly string[]): boolean {
  * single-quoted word is literal. A head that is itself an expansion (`$K …`) may stand for any part of the path, so it
  * counts beside any expanded path word and a literal operator word, and `$PY $SCRIPT` is not caught.
  */
-function hasOpaqueCommandPath(args: readonly string[], expands: readonly boolean[], headExpands: boolean): boolean {
+function hasOpaqueCommandPath(args: readonly string[], expands: readonly WordExpansion[], headExpands: boolean): boolean {
   const firstFlag = args.findIndex((w) => w.startsWith("-"));
   const pathLength = Math.min(firstFlag < 0 ? args.length : firstFlag, MAX_COMMAND_PATH);
   if (headExpands) {
@@ -1481,7 +1568,7 @@ function hasOpaqueCommandPath(args: readonly string[], expands: readonly boolean
   }
   const literal: string[] = [];
   for (let i = 0; i < pathLength; i++) {
-    if (expands[i] === true) return startsOperatorPath(literal);
+    if (isExpanded(expands[i])) return startsOperatorPath(literal);
     literal.push(args[i]!.toLowerCase());
     if (!startsOperatorPath(literal)) return false;
   }
@@ -1523,7 +1610,7 @@ export function touchesOperatorDecision(raw: string): boolean {
     if (lower[0] === "ctx" && lower[1] === "rg") return false;
     // keryxArgs takes a head with `$`, a backtick or `{` for keryx; a single-quoted one is literal text, not an expansion.
     const headOpaque = wordIsOpaque(words[0]!);
-    if ((!headOpaque || expands[0] === true) && hasOpaqueCommandPath(args, expands.slice(words.length - args.length), headOpaque)) return true;
+    if ((!headOpaque || isExpanded(expands[0])) && hasOpaqueCommandPath(args, expands.slice(words.length - args.length), headOpaque)) return true;
     const learn = lower.indexOf("learn");
     if (learn >= 0) {
       const rest = args.slice(learn + 1);

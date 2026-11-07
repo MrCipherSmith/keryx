@@ -67,6 +67,8 @@ const PREFIX_BANNED: ReadonlySet<string> = new Set([
   // tools whose flags execute arbitrary commands
   "git", "find", "awk", "gawk", "sed", "vim", "vi", "ex", "emacs", "gdb", "lldb",
   "at", "batch", "crontab", "tmux", "screen", "osascript", "open", "tee", "cd",
+  // herdr's terminal CLI: `hc run` and `hc exec` start any program outside the sandbox
+  "hc",
   // keryx itself (and any renamed/forked binary) — if the binary can run
   // arbitrary subcommands, a bare `<binary> *` grant is arbitrary execution
   "keryx",
