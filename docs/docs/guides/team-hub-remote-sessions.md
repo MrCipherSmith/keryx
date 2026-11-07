@@ -181,7 +181,10 @@ A profile that is not ready says why:
 | `local-policy` | The checkout has no `.metaproject/index.md`, the profile name is unknown, or the saved provider and model are not in the policy. Fix it and run `configure`. |
 | `containment-missing` | `remote-restricted` needs an OS sandbox; install `bwrap` on Linux. |
 | `adapter-unsupported` | The native session runtime could not be set up on this build, for example because a command in its catalogue has no implementation. Run `keryx hub machine readiness`. |
-| `checkout-unavailable` | The checkout path cannot be read as a Git working copy. |
+| `checkout-unavailable` | The machine could not inspect the checkout. Check the path and Git on the machine. |
+| `checkout-too-large` | The snapshot exceeds 2 GiB or 50,000 entries. Use a smaller working copy. |
+| `checkout-git-operation` | Finish or abort the Git operation before starting a session. |
+| `checkout-unsupported-files` | The checkout contains an unsupported file type or a path that resolves outside it. |
 
 ## Connect to a running shell
 
@@ -436,7 +439,9 @@ not revoke the machine in the Hub; do that in the web UI. It refuses with
 - **The web UI is basic.** There is a message box, history, queue and command
   forms, not a polished chat.
 - **Headless checkout limits.** Starting a new headless session requires a
-  workspace snapshot within 10,000 entries and 20 MiB. A headless session
+  workspace snapshot within 50,000 entries and 2 GiB, including tracked and
+  non-ignored untracked files. Uncommitted changes are allowed; a session
+  started on a dirty checkout keeps file results on the machine. A headless session
   cannot take over another serve checkout lease. The same Hub also prevents
   its interactive and headless sessions from claiming the same mapped checkout.
   Forking requires a separate clean checkout.

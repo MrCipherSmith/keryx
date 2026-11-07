@@ -370,7 +370,10 @@ Status: planned, normative companion to [protocol.md](protocol.md). These are ex
                             "provider-setup",
                             "containment-missing",
                             "adapter-unsupported",
-                            "checkout-unavailable"
+                            "checkout-unavailable",
+                            "checkout-too-large",
+                            "checkout-git-operation",
+                            "checkout-unsupported-files"
                           ]
                         },
                         "capabilityDigest": {

@@ -6,7 +6,7 @@ import { parsePatchTargets } from '../patch-risk';
 import { safeHubPath } from '../../hub/git-delivery';
 import { canonicalDigest, type Control, type ProtocolResult } from '../../remote-control/protocol';
 import { redactSensitiveText } from '../../security/redact';
-import { SNAPSHOT_QUOTA, captureBaseline, verifyBaseline, type WorkspaceBaseline } from './checkout-lease';
+import { assertSnapshotQuota, captureBaseline, verifyBaseline, type WorkspaceBaseline } from './checkout-lease';
 import { MachineError, machineFailure } from './errors';
 import { isMetaprojectManagedPath } from '../metaproject-gitignore';
 import type { EffectRefusal } from '../../session/host-types';
@@ -130,8 +130,8 @@ export function createOwnedWorkspace(cwd: string, assertOwnership: () => void = 
                         throw new MachineError('invalid-arguments');
                     // A patch that could take the snapshot over its quota is refused now; afterwards its write could not be measured.
                     const growth = patchGrowthBound(input.patch), usage = current.usage;
-                    if (growth !== undefined && usage !== undefined && (usage.bytes + growth > SNAPSHOT_QUOTA.bytes || usage.entries + targets.filter(target => !(target.path in current.files)).length > SNAPSHOT_QUOTA.entries))
-                        throw new MachineError('quota-exceeded');
+                    if (growth !== undefined && usage !== undefined)
+                        assertSnapshotQuota(usage.bytes + growth, usage.entries + targets.filter(target => !Object.hasOwn(current.files, target.path)).length);
                 }
                 if (toolName === 'rewind_restore') {
                     if (input.workspaceBaseline !== owned.digest || typeof input.previewDigest !== 'string' || !/^[a-f0-9]{64}$/.test(input.previewDigest) || !Number.isSafeInteger(input.snapshotSeq) || Number(input.snapshotSeq) < 0 || !Array.isArray(input.paths) || input.paths.length < 1 || input.paths.length > 5000)

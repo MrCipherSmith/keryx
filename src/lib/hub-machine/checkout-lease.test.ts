@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { acquireCheckoutLease, captureBaseline, observeCheckout, verifyBaseline } from './checkout-lease';
+import { acquireCheckoutLease, assertSnapshotQuota, captureBaseline, observeCheckout, verifyBaseline, SNAPSHOT_QUOTA } from './checkout-lease';
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true }); });
@@ -78,4 +78,10 @@ test('a checkout observation sees HEAD, cleanliness and an active Git operation 
     expect(committed).toEqual({ head: captureBaseline(cwd, { requireClean: true }).head, clean: true, operation: false });
     writeFileSync(path.join(cwd, '.git', 'MERGE_HEAD'), `${committed.head}\n`);
     expect(observeCheckout(cwd)).toEqual({ ...committed, operation: true });
+});
+
+test('snapshot limits accept the exact byte and entry bounds and reject an excess in either', () => {
+    expect(() => assertSnapshotQuota(SNAPSHOT_QUOTA.bytes, SNAPSHOT_QUOTA.entries)).not.toThrow();
+    expect(() => assertSnapshotQuota(SNAPSHOT_QUOTA.bytes + 1, 1)).toThrow('quota-exceeded');
+    expect(() => assertSnapshotQuota(1, SNAPSHOT_QUOTA.entries + 1)).toThrow('quota-exceeded');
 });

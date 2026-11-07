@@ -1,8 +1,8 @@
 import { withoutGitDiscoveryOverrides } from '../git-env';
-import { MachineError } from './errors';
+import { MachineError, machineFailure } from './errors';
 import { isMetaprojectManagedPath } from '../metaproject-gitignore';
-import { createHash, randomUUID } from 'node:crypto';
-import { constants, closeSync, fstatSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID, type Hash } from 'node:crypto';
+import { constants, closeSync, fstatSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, readlinkSync, readSync, realpathSync, unlinkSync, writeFileSync, type Stats } from 'node:fs';
 import path from 'node:path';
 function git(cwd: string, args: string[]): Buffer { const r = Bun.spawnSync(['git', '--no-optional-locks', '-C', cwd, ...args],{env:withoutGitDiscoveryOverrides(process.env)}); if (r.exitCode !== 0)
     throw new MachineError('invalid-checkout'); return Buffer.from(r.stdout); }
@@ -67,7 +67,11 @@ export interface WorkspaceBaseline {
     matchesCommit?: boolean;
 }
 /** The bounded provenance snapshot: beyond either limit a capture refuses with quota-exceeded. */
-export const SNAPSHOT_QUOTA={bytes:20*1024*1024,entries:10000} as const;
+export const SNAPSHOT_QUOTA={bytes:2*1024*1024*1024,entries:50_000} as const;
+export function assertSnapshotQuota(bytes: number, entries: number): void {
+    if (bytes > SNAPSHOT_QUOTA.bytes || entries > SNAPSHOT_QUOTA.entries)
+        throw new MachineError('quota-exceeded');
+}
 const GIT_OPERATION_MARKERS = ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-apply', 'rebase-merge', 'index.lock'];
 const gitOperationActive = (cwd: string): boolean => { const admin = git(cwd, ['rev-parse', '--absolute-git-dir']).toString().trim(); return GIT_OPERATION_MARKERS.some(p => existsSync(path.join(admin, p))); };
 // Keryx's own runtime data (the paths `keryx init` ignores) is never a foreign change, ignore block present or not; tracked files always stay observed.
@@ -93,12 +97,84 @@ function committedObjects(cwd: string, head: string): Map<string, CommittedObjec
     }
     return objects;
 }
-function matchesBlob(object: CommittedObject | undefined, mode: string, bytes: Buffer): boolean {
+function gitBlobHasher(object: CommittedObject | undefined, mode: string, size: number): Hash | undefined {
     if (object?.mode !== mode)
-        return false;
-    const hash = createHash(object.id.length === 40 ? 'sha1' : 'sha256');
-    return hash.update(`blob ${bytes.length}\0`).update(bytes).digest('hex') === object.id;
+        return undefined;
+    return createHash(object.id.length === 40 ? 'sha1' : 'sha256').update(`blob ${size}\0`);
 }
+type SnapshotPath = { name: string; file: string; stat?: Stats };
+
+function* snapshotPaths(cwd: string, untracked: string[]): Generator<SnapshotPath, number> {
+    const root = realpathSync(cwd);
+    const tracked = git(cwd, ['ls-files', '-z', '--cached']).toString().split('\0').filter(Boolean);
+    const names = [...new Set([...tracked, ...untracked])].sort();
+    assertSnapshotQuota(0, names.length);
+    let bytes = 0;
+    for (const name of names) {
+        if (name.split('/').includes('..') || path.isAbsolute(name))
+            throw new MachineError('unsafe-workspace-path');
+        const file = path.join(root, name);
+        if (!existsSync(file)) {
+            yield { name, file };
+            continue;
+        }
+        if (!realpathSync(file).startsWith(root + path.sep))
+            throw new MachineError('unsafe-workspace-path');
+        const stat = lstatSync(file);
+        if (stat.isFile()) {
+            bytes += stat.size;
+            assertSnapshotQuota(bytes, names.length);
+        } else if (!stat.isSymbolicLink()) {
+            throw new MachineError('unsupported-workspace-file');
+        }
+        yield { name, file, stat };
+    }
+    return bytes;
+}
+
+/** Same path and quota checks as capture, without reading or hashing workspace file contents. */
+export function inspectCheckout(cwd: string): { head: string; clean: boolean; blocker?: string } {
+    const head = currentCheckoutHead(cwd);
+    const untracked = untrackedNames(cwd);
+    const clean = untracked.length === 0 && !trackedChanges(cwd);
+    try {
+        if (gitOperationActive(cwd))
+            return { head, clean, blocker: 'git-operation-active' };
+        for (const _ of snapshotPaths(cwd, untracked)) { /* validate paths and usage */ }
+        return { head, clean };
+    } catch (cause) {
+        return { head, clean, blocker: machineFailure(cause).code };
+    }
+}
+
+function sameFile(before: Stats, after: Stats): boolean {
+    return before.dev === after.dev && before.ino === after.ino && before.mode === after.mode
+        && before.size === after.size && before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs;
+}
+
+function hashFile(file: string, stat: Stats, buffer: Buffer, blob?: Hash): string {
+    const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+        if (!sameFile(stat, fstatSync(fd)))
+            throw new MachineError('workspace-conflict');
+        const hash = createHash('sha256');
+        for (let remaining = stat.size; remaining > 0;) {
+            const read = readSync(fd, buffer, 0, Math.min(remaining, buffer.length), null);
+            if (read === 0)
+                throw new MachineError('workspace-conflict');
+            const chunk = buffer.subarray(0, read);
+            hash.update(chunk);
+            blob?.update(chunk);
+            remaining -= read;
+        }
+        if (!sameFile(stat, fstatSync(fd)))
+            throw new MachineError('workspace-conflict');
+        return hash.digest('hex');
+    } finally {
+        closeSync(fd);
+    }
+}
+
 export function captureBaseline(cwd: string, options: {
     requireClean: boolean;
     verifyCommitContents?: boolean;
@@ -109,45 +185,42 @@ export function captureBaseline(cwd: string, options: {
     const untracked = untrackedNames(cwd);
     if (options.requireClean && (trackedChanges(cwd) || untracked.length))
         throw new MachineError('checkout-dirty');
-    const names = [...git(cwd, ['ls-files', '-z', '--cached']).toString().split('\0').filter(Boolean), ...untracked];
     // Git status can hide working bytes via index flags and clean/smudge filters. Full-file upload needs the raw bytes.
     const committed = options.verifyCommitContents && untracked.length === 0 ? committedObjects(cwd, head) : undefined;
     let matchesCommit = committed !== undefined;
     const entries: unknown[] = [];
-    const files:WorkspaceBaseline['files']={};
-    let total = 0;
-    for (const name of [...new Set(names)].sort()) {
-        if (name.split('/').includes('..') || path.isAbsolute(name))
-            throw new MachineError('unsafe-workspace-path');
-        const file = path.join(cwd, name);
-        if (!existsSync(file)) {
+    const files: WorkspaceBaseline['files'] = {};
+    const buffer = Buffer.allocUnsafe(1024 * 1024);
+    const paths = snapshotPaths(cwd, untracked);
+    let next = paths.next();
+    for (; !next.done; next = paths.next()) {
+        const { name, file, stat } = next.value;
+        if (!stat) {
             entries.push([name, 'deleted']);
             matchesCommit = false;
             continue;
         }
-        const resolved = realpathSync(file);
-        if (!resolved.startsWith(realpathSync(cwd) + path.sep))
-            throw new MachineError('unsafe-workspace-path');
-        const stat = lstatSync(file);
+        const object = matchesCommit ? committed?.get(name) : undefined;
+        const mode = stat.mode & 0o777;
         if (stat.isSymbolicLink()) {
-            const link = readlinkSync(file, {encoding:'buffer'});
+            const link = readlinkSync(file, { encoding: 'buffer' });
             const target = link.toString();
-            entries.push([name, 'symlink', target]);files[name]={mode:stat.mode&0o777,hash:'symlink',symlink:target};
+            entries.push([name, 'symlink', target]);
+            files[name] = { mode, hash: 'symlink', symlink: target };
             if (matchesCommit)
-                matchesCommit = matchesBlob(committed!.get(name), '120000', link);
+                matchesCommit = object !== undefined && gitBlobHasher(object, '120000', link.length)?.update(link).digest('hex') === object.id;
             continue;
         }
-        if (!stat.isFile())
-            throw new MachineError('unsupported-workspace-file');
-        total += stat.size;
-        if (total > SNAPSHOT_QUOTA.bytes || entries.length >= SNAPSHOT_QUOTA.entries)
-            throw new MachineError('quota-exceeded');
-        const bytes = readFileSync(file);
-        const hash=createHash('sha256').update(bytes).digest('hex');files[name]={mode:stat.mode&0o777,hash};entries.push([name,stat.mode&0o777,hash]);
+        const blob = gitBlobHasher(object, stat.mode & 0o111 ? '100755' : '100644', stat.size);
+        const hash = hashFile(file, stat, buffer, blob);
+        files[name] = { mode, hash };
+        entries.push([name, mode, hash]);
         if (matchesCommit)
-            matchesCommit = matchesBlob(committed!.get(name), stat.mode & 0o111 ? '100755' : '100644', bytes);
+            matchesCommit = blob !== undefined && blob.digest('hex') === object?.id;
     }
-    const index=git(cwd,['diff','--cached','--binary']);return {head,files,usage:{bytes:total,entries:entries.length},indexDigest:createHash('sha256').update(index).digest('hex'),digest:createHash('sha256').update(JSON.stringify([head,index.toString(),entries])).digest('hex'),
-        ...(options.verifyCommitContents ? {matchesCommit: matchesCommit && committed?.size === entries.length && index.length === 0} : {})};
+    const index = git(cwd, ['diff', '--cached', '--binary']);
+    return { head, files, usage: { bytes: next.value, entries: entries.length }, indexDigest: createHash('sha256').update(index).digest('hex'),
+        digest: createHash('sha256').update(JSON.stringify([head, index.toString(), entries])).digest('hex'),
+        ...(options.verifyCommitContents ? { matchesCommit: matchesCommit && committed?.size === entries.length && index.length === 0 } : {}) };
 }
 export function verifyBaseline(cwd: string, baseline: WorkspaceBaseline): boolean { const actual = captureBaseline(cwd, { requireClean: false }); return actual.head === baseline.head && actual.digest === baseline.digest; }

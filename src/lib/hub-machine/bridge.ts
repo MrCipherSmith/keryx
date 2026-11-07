@@ -11,7 +11,7 @@ import type { SessionLeaseOwner } from '../../session/lease';
 import { redactSensitiveText } from '../../security/redact';
 import { hiddenInCard } from '../card-safe';
 import { acquireMachineDaemon, loadEnrollment, machineStateDir, readMachineSecret, type MachineEnrollment, type CheckoutMapping } from './config';
-import { captureBaseline, verifyBaseline, acquireCheckoutLease, currentCheckoutHead, observeCheckout, releaseRecoveredCheckoutLease } from './checkout-lease';
+import { captureBaseline, verifyBaseline, acquireCheckoutLease, currentCheckoutHead, inspectCheckout, releaseRecoveredCheckoutLease } from './checkout-lease';
 import { MachineConnection, readSessionSelectionAuthority, readSessionInspectionAuthority, readSessionActionAuthority, readScopedHubFlows, verifyScopedFlowAssociation, type GrantApplication } from './client';
 import { createOwnedWorkspace, validateOwnedEffectPaths, type OwnedWorkspace } from './workspace';
 import { readAllRecovery, verifyReconciliationReceipt } from './recovery';
@@ -139,7 +139,8 @@ export class MachineBridge {
     private outboxTimer: ReturnType<typeof setTimeout> | undefined;
     private retentionTimer: ReturnType<typeof setInterval> | undefined;
     private inventoryTimer: ReturnType<typeof setInterval> | undefined;
-    /** What the last complete inventory publication measured (observeCheckout per mapping) and published; undefined forces the next one. */
+    private checkoutBlockerReasons = false;
+    /** What the last complete inventory publication measured (inspectCheckout per mapping) and published; undefined forces the next one. */
     private inventoryObserved: string | undefined;
     private inventoryContent: string | undefined;
     private flushingOutbox = false;
@@ -213,7 +214,9 @@ export class MachineBridge {
                 host.setConnected(false); this.scheduleReconnect(); } });
         await this.connection.connect();
         // Recovery is observational. Any uncertain local start remains blocked and is never replayed as an effect.
-        const recovered = await readAllRecovery(cursor => this.connection!.request(`/hub/v2/machines/${e.machineId}/recovery?after=${cursor}`));
+        this.checkoutBlockerReasons = false;
+        const recovered = await readAllRecovery(cursor => this.connection!.request(`/hub/v2/machines/${e.machineId}/recovery?after=${cursor}`,
+            undefined, undefined, headers => { this.checkoutBlockerReasons = headers.get('Keryx-Checkout-Blocker-Reasons') === '1'; }));
         for (const run of recovered.runs)
             this.ledger!.reconcileCursor(`run:${run.runId}`, run.lastLocalSeq);
         for (const session of recovered.sessions)
@@ -308,15 +311,6 @@ export class MachineBridge {
             type: T;
         }>;
     }
-    /** The inventory-visible state of every mapped checkout, measured without reading content; an unobservable one is its error code. */
-    private observeCheckouts(): string {
-        return canonicalDigest(this.options.enrollment.mappings.map(m => { try {
-            return observeCheckout(m.cwd);
-        }
-        catch (cause) {
-            return { unobservable: machineFailure(cause).code };
-        } }));
-    }
     /**
      * Re-measures the mapped checkouts while connected, at a bounded cadence and at session create/close and run-end boundaries,
      * and publishes the complete projection again only when what Hub sees changed (a commit, a dirtied or cleaned checkout), at
@@ -326,8 +320,7 @@ export class MachineBridge {
         if (!this.ready || this.stopped || !this.connection?.connected)
             return;
         try {
-            if (this.observeCheckouts() !== this.inventoryObserved)
-                this.publishInventory(false);
+            this.publishInventory(false);
         }
         catch (cause) {
             // A publication cut short (a full send buffer) is repeated whole at the next re-measure; Hub accepts the identical replay.
@@ -355,30 +348,36 @@ export class MachineBridge {
     }
     /** `force`: every (re)connect publishes the complete projection, changed or not. */
     private publishInventory(force = true): void {
-        const observed = this.observeCheckouts();
-        this.inventoryObserved = undefined;
-        const checkouts: FrameOf<'inventory'>['payload']['checkouts'] = [];
-        for (const m of this.options.enrollment.mappings) {
-            const profile = this.profiles.get(m.checkoutId);
-            let headSha = '0'.repeat(40), clean = false, available = true;
+        const checkouts: FrameOf<'inventory'>['payload']['checkouts'] = this.options.enrollment.mappings.map(mapping => {
+            const { checkoutId, projectId, profileId } = mapping;
+            const profile = this.profiles.get(checkoutId);
+            let observation: ReturnType<typeof inspectCheckout>;
             try {
-                const b = captureBaseline(m.cwd, { requireClean: true });
-                headSha = b.head;
-                clean = true;
+                observation = inspectCheckout(mapping.cwd);
+            } catch (cause) {
+                observation = { head: '0'.repeat(40), clean: false, blocker: machineFailure(cause).code };
             }
-            catch (cause) {
-                const failure = machineFailure(cause);
-                // Report existing edits without hiding the checkout or its profile.
-                if (failure.code === 'checkout-dirty')
-                    headSha = currentCheckoutHead(m.cwd);
-                else {
-                    available = false;
-                    this.errors.set(m.checkoutId, failure.code);
-                }
-            }
-            const reason = this.errors.get(m.checkoutId);
-            checkouts.push({ projectId: m.projectId, checkoutId: m.checkoutId, localBindingId: canonicalDigest([this.options.enrollment.hubId, m.checkoutId]), label: m.checkoutId, headSha, clean, available, busy: false, agentProfiles: [{ profileId: m.profileId, adapter: 'keryx-native-v1', readiness: profile && available ? 'ready' : 'setup-required', reason: profile && available ? 'none' : reason === 'containment-missing' ? 'containment-missing' : reason === 'local-policy' ? 'local-policy' : reason === 'provider-setup' ? 'provider-setup' : available ? 'adapter-unsupported' : 'checkout-unavailable', capabilityDigest: profile?.capabilityDigest ?? canonicalDigest([]), policyDigest: profile?.policyDigest ?? canonicalDigest(this.options.policy) }] });
-        }
+            const available = observation.blocker === undefined;
+            const ready = profile !== undefined && available;
+            const setup = this.errors.get(checkoutId);
+            const reason = !available && !this.checkoutBlockerReasons ? 'checkout-unavailable'
+                : observation.blocker === 'quota-exceeded' ? 'checkout-too-large'
+                : observation.blocker === 'git-operation-active' ? 'checkout-git-operation'
+                : observation.blocker === 'unsafe-workspace-path' || observation.blocker === 'unsupported-workspace-file' ? 'checkout-unsupported-files'
+                : !available ? 'checkout-unavailable'
+                : ready ? 'none'
+                : setup === 'containment-missing' || setup === 'local-policy' || setup === 'provider-setup' ? setup
+                : 'adapter-unsupported';
+            return { projectId, checkoutId, localBindingId: canonicalDigest([this.options.enrollment.hubId, checkoutId]),
+                label: checkoutId, headSha: observation.head, clean: observation.clean, available, busy: false,
+                agentProfiles: [{ profileId, adapter: 'keryx-native-v1', readiness: ready ? 'ready' : 'setup-required',
+                    reason, capabilityDigest: profile?.capabilityDigest ?? canonicalDigest([]),
+                    policyDigest: profile?.policyDigest ?? canonicalDigest(this.options.policy) }] };
+        });
+        const observed = canonicalDigest(checkouts);
+        if (!force && observed === this.inventoryObserved)
+            return;
+        this.inventoryObserved = undefined;
         const pages: UnversionedCapabilityPage[] = [];
         for (const m of this.options.enrollment.mappings) {
             const p = this.profiles.get(m.checkoutId);

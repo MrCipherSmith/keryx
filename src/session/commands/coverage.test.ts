@@ -60,7 +60,7 @@ test("Telegram remote control is a capability boundary only with the frozen spec
  f.inventory.variants[0]={...boundary};expect((await checkNativeCommandCoverage({...f,registryNames:["remote-control"]})).blockers.map(row=>row.code)).toContain("invalid-scope-reference");
  const spec=path.join(f.cwd,"docs/requirements/hub-remote-sessions");await mkdir(spec,{recursive:true});
  await writeFile(path.join(spec,"specification.md"),await Bun.file(new URL("../../../docs/requirements/hub-remote-sessions/specification.md",import.meta.url).pathname).text());
- f.inventory.variants[0]={...boundary,scopeReference:{path:"docs/requirements/hub-remote-sessions/specification.md",sha256:"7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2",anchor:"unimplemented vendor adapters are explicit capability boundaries"}};
+ f.inventory.variants[0]={...boundary,scopeReference:{path:"docs/requirements/hub-remote-sessions/specification.md",sha256:"f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49",anchor:"unimplemented vendor adapters are explicit capability boundaries"}};
  expect(await checkNativeCommandCoverage({...f,registryNames:["remote-control"]})).toMatchObject({ready:true,blockers:[]});
 });
 
@@ -73,7 +73,7 @@ test("a receipt whose headless form is a frozen queue operation binds that opera
   expect((await checkNativeCommandCoverage({...f,receipts:[forged],registryNames:["example"]})).blockers.map(row=>row.code)).toEqual(["tampered-receipt"]);
 });
 
-const SPEC={path:"docs/requirements/hub-remote-sessions/specification.md",sha256:"7827a1827565992e61b85d43e5e73763303b3aa9590973e6484b8c0edb1834e2"};
+const SPEC={path:"docs/requirements/hub-remote-sessions/specification.md",sha256:"f303715254fb5b0c21d7dc902aed062be0e683dd2b673f54d658c6f557b1bc49"};
 async function withFrozenSpec(cwd:string){const spec=path.join(cwd,"docs/requirements/hub-remote-sessions");await mkdir(spec,{recursive:true});
  await writeFile(path.join(spec,"specification.md"),await Bun.file(new URL("../../../docs/requirements/hub-remote-sessions/specification.md",import.meta.url).pathname).text());}
 function audited(f:Awaited<ReturnType<typeof fixture>>,commandName:string,id:string,row:Partial<NativeCoverageInventory["variants"][number]>){

@@ -16,7 +16,7 @@ const source = "docs/requirements/hub-remote-sessions/schemas";
 const machineBytes = readFileSync(join(source, "machine-protocol.schema.json"), "utf8");
 const controlBytes = readFileSync(join(source, "control-api.schema.json"), "utf8");
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
-if (digest(machineBytes) !== "1e1c2cbd33110b25229b012296e5688637e879f7c8c69bcaa7d56ee76e2bdfca" || digest(controlBytes) !== "b235475c3071e925d8fe71f918f4c176cc1ad687606e6df1b68765e9ecc23f2b") throw new Error("Frozen protocol schema drift requires explicit contract decision");
+if (digest(machineBytes) !== "be6d384ef51261f3e5a08306c999af97bd00c7fac8fcd7b04755abadbd094661" || digest(controlBytes) !== "b235475c3071e925d8fe71f918f4c176cc1ad687606e6df1b68765e9ecc23f2b") throw new Error("Frozen protocol schema drift requires explicit contract decision");
 const machine = JSON.parse(machineBytes) as Schema; const control = JSON.parse(controlBytes) as Schema;
 if (JSON.stringify(machine.$defs) !== JSON.stringify(control.$defs)) throw new Error("Duplicated protocol definitions differ");
 function ts(s: Schema): string {

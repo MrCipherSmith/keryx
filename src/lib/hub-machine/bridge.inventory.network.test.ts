@@ -1,5 +1,5 @@
 import {expect,test} from 'bun:test';
-import {readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {readFileSync,rmSync,truncateSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {allowAll,bridgeHarness,git,newFilePatch,wait} from './bridge.test-support';
 import {callRound,okReply,scriptedProvider} from '../../commands/agent.test-helpers';
@@ -8,6 +8,7 @@ import type {Control} from '../../remote-control/protocol';
 import type {MachineBridge} from './bridge';
 import {machineStateDir} from './config';
 import {MachineLedger} from './ledger';
+import {SNAPSHOT_QUOTA} from './checkout-lease';
 
 const {get,post,hub,local,startBridge,machine,sessionHandle}=bridgeHarness();
 type Checkout={checkoutId:string;headSha:string;clean:boolean;available:boolean;agentProfiles:Array<{readiness:string;reason:string}>};
@@ -115,3 +116,24 @@ test('a run that dirties its checkout republishes the inventory at its run-end b
  const next=await s.turn(lease,'A next turn on the same session',{busyPolicy:'reject'});await s.waitRun(next.runId!,v=>v.state==='succeeded');
  await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null);expect((await read()).inventory!.inventoryVersion).toBe(after.inventoryVersion);
 },40000);
+
+test('inventory reports the actual blocker and recovers when a still-dirty checkout shrinks', async () => {
+ const state = await local();
+ const file = path.join(state.cwd, 'large.bin');
+ writeFileSync(file, '');
+ truncateSync(file, SNAPSHOT_QUOTA.bytes + 1);
+ const started = await startBridge(state, { inventoryIntervalMs: 200 }, scriptedProvider([]));
+ const read = () => get<MachineView>(`/hub/v2/machines/${state.machine.machineId}`);
+ const blocked = await wait(read, v => v.inventory?.checkouts[0]?.agentProfiles[0]?.reason === 'checkout-too-large');
+ expect(blocked.inventory!.checkouts[0]).toMatchObject({ clean: false, available: false });
+ truncateSync(file, 21 * 1024 * 1024);
+ const ready = await wait(read, v => v.inventory?.checkouts[0]?.available === true);
+ expect(ready.inventory!.checkouts[0]).toMatchObject({ clean: false, agentProfiles: [{ readiness: 'ready', reason: 'none' }] });
+ expect(ready.inventory!.inventoryVersion).toBeGreaterThan(blocked.inventory!.inventoryVersion);
+ const created = await success<Control['SessionOperationReceipt']>(await post(`/hub/v2/projects/${hub().project.id}/sessions`, {
+  machineId: state.machine.machineId, checkoutId: 'checkout', agentProfileId: 'fixture',
+  expectedInventoryVersion: ready.inventory!.inventoryVersion, expectedHeadSha: ready.inventory!.checkouts[0]!.headSha,
+  capabilityDigest: started.digest, policyDigest: started.digest, title: 'Larger dirty checkout',
+ }));
+ await wait(sessionHandle(created.sessionId, started.catalogue.catalogueDigest).read, v => v.state === 'idle');
+}, 40000);

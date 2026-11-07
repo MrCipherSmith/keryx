@@ -61,13 +61,10 @@ test('R9.1 a failed run publishes its owned change as a labeled partial result a
  expect((await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null)).state).toBe('idle');
 });
 const outside=mkdtempSync(path.join(tmpdir(),'result-outside-'));process.on('exit',()=>rmSync(outside,{recursive:true,force:true}));
-const SNAPSHOT_QUOTA=20*1024*1024;
 for(const [label,target,seed,code] of [
  ['an ignored path','ignored.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'.gitignore'),'ignored.txt\n');},'unsupported-ignored-path'],
  ['a path outside the checkout','../escaped.txt',()=>{},'unsafe-workspace-path'],
  ['a path through an ignored local symlink','linked/escaped.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'.gitignore'),'linked\n');symlinkSync(outside,path.join(cwd,'linked'));},'unsafe-workspace-path'],
- // The patch itself is small; the checkout snapshot it would produce exceeds the 20 MiB snapshot quota, so it is refused before anything is written.
- ['a file that would take the checkout snapshot over its quota','over-quota.txt',(cwd:string)=>{writeFileSync(path.join(cwd,'large.bin'),Buffer.alloc(SNAPSHOT_QUOTA-8,1));},'quota-exceeded'],
 ] as const)
 test(`R9.1 an owned patch to ${label} is refused before any write, the run ends truthfully, nothing is uploaded and the session stays usable`,async()=>{
  const m=await h.machine({approve:allowAll,seed,scripts:[callRound('unsafe','apply_patch',newFilePatch(target,'escaped')),okReply,okReply]});const s=m.session;const lease=(await s.claim()).lease;
@@ -79,7 +76,7 @@ test(`R9.1 an owned patch to ${label} is refused before any write, the run ends 
  // The published result is the run's actual change set: empty, since nothing was written.
  expect((await hubAggregate()).revisions.find(r=>r.id===run.result!.revisionId)!.files).toEqual([]);
  const ledger=h.ledger(m.state);try{expect(ledger.pendingResults()).toEqual([]);}finally{ledger.close();}
- for(const file of [path.join(m.state.root,'escaped.txt'),path.join(outside,'escaped.txt'),path.join(m.state.cwd,'ignored.txt'),path.join(m.state.cwd,'over-quota.txt')])expect(await Bun.file(file).exists()).toBe(false);
+ for(const file of [path.join(m.state.root,'escaped.txt'),path.join(outside,'escaped.txt'),path.join(m.state.cwd,'ignored.txt')])expect(await Bun.file(file).exists()).toBe(false);
  const idle=await wait(s.read,v=>v.state==='idle'&&v.activeRunId===null);
  const next=await s.turn(lease,'A later ordinary turn',{current:idle});expect((await s.waitRun(next.runId!,v=>['succeeded','failed','cancelled','unknown'].includes(v.state))).state).toBe('succeeded');expect(m.provider.requests).toHaveLength(3);
 },40000);

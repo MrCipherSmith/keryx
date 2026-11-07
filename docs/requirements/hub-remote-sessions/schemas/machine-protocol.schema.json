@@ -362,7 +362,10 @@
                             "provider-setup",
                             "containment-missing",
                             "adapter-unsupported",
-                            "checkout-unavailable"
+                            "checkout-unavailable",
+                            "checkout-too-large",
+                            "checkout-git-operation",
+                            "checkout-unsupported-files"
                           ]
                         },
                         "capabilityDigest": {
