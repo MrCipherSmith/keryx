@@ -1,4 +1,5 @@
 export default { composerKeyboardHint: "Enter — отправить · Shift+Enter — новая строка", newAssistantReply: "Новый ответ Keryx (сообщение {{cursor}}).", noOlderMessages: "Более ранних сообщений нет", olderMessages: "Ранние сообщения",
+  baselineModelDetails: "Приватность: {{privacy}} · Стоимость: {{cost}}",
   sessionOpeningScope: "Проверьте, что на машине разрешены выбранная рабочая копия и профиль агента.", sessionOpeningRecovery: "Перед повторным открытием этой копии восстановите незавершённый запуск на машине.",
   chatDeliveryStates: {"hub-accepted": "Hub принял", "machine-started": "Машина запустила", "machine-rejected": "Машина отклонила", "not-delivered": "Не доставлено на машину", "queue-removed": "Удалено из очереди", "unconfirmed": "Доставка на машину не подтверждена"},
   chatDeliveryAnnouncement: "Доставка сообщения. {{status}}.",
