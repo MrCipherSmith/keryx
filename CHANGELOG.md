@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.4.21] - 2026-11-08
+
+### Added
+- **Dedicated Team Hub chat pages ([#1153](https://github.com/MrCipherSmith/keryx/pull/1153)).** Managed sessions and connected shells open on their own URLs with a consistent Back to sessions action. A connected shell's URL restores the same conversation after reload or browser navigation. Returning to the list from the shell chat releases browser control and keeps the terminal running.
+
 ## [0.4.20] - 2026-11-08
 
 ### Added
