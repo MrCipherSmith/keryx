@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.4.18] - 2026-11-07
+
+### Changed
+- **Unified Routing ([#1139](https://github.com/MrCipherSmith/keryx/pull/1139)).** Routing is the primary runtime with canonical `modelRouting` settings, CLI help and a status summary. Legacy settings have an explicit migration path; there is no separate legacy runtime or on/off toggle. `model_class` is an optional subagent recommendation; legacy `model_tier` is accepted with a warning and ignored.
+
+### Fixed
+- Invalid personal routing settings no longer hide approved project model assignments in generated documentation.
+- Review preserves routing configuration warnings, including notices explaining why unapproved project settings were ignored.
+- Live Codex model discovery retains freshness information so detected models are not incorrectly treated as unverified.
+
+### Upgrade notes
+- Use the explicit routing migration for legacy settings and review the canonical configuration before saving it. Project routing still requires approval; migration does not bypass the trust gate.
+
 ## [0.4.17] - 2026-11-07
 
 ### Fixed
