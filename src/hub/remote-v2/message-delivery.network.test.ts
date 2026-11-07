@@ -26,21 +26,50 @@ async function submitMessage(f: Fixture, text: string) {
     busyPolicy: "reject",
     association: { mode: "ad-hoc", profileConsentVersion: 1 },
   };
-  const receipt = await success<Control["TurnReceipt"]>(await f.call(`${session.path}/messages`, {
-    method: "POST", cookie: f.cookie, body,
-  }));
+  const key = crypto.randomUUID();
+  const post = () => f.call(`${session.path}/messages`, { method: "POST", cookie: f.cookie, body, key });
+  const receipt = await success<Control["TurnReceipt"]>(await post());
   const command = (await session.peer.next("command")).payload as FrameOf<"command">["payload"];
   if (command.kind !== "start-turn") throw new Error("Expected native start-turn command");
   const read = async (cookie = f.cookie) => (await success<MessageDeliveries>(
     await f.call(`${session.path}/message-deliveries`, { cookie }),
   )).deliveries;
-  return { session, receipt, command, read, body };
+  return { session, receipt, command, read, body, post };
+}
+
+async function emitTurnAdmission(f: Fixture, { session, command }: Pick<Awaited<ReturnType<typeof submitMessage>>, "session" | "command">,
+  seq = session.session.sessionEventCursor + 1) {
+  session.peer.send("session-event", {
+    sessionId: session.session.sessionId,
+    projectId: f.project.id,
+    checkoutId: session.session.checkoutId,
+    sessionEventSeq: seq,
+    observedAt: new Date().toISOString(),
+    kind: "turn-admitted",
+    runId: command.runId,
+    turnId: command.turnId,
+    turnOrdinal: command.body.turnOrdinal,
+    snapshot: command.body.snapshot,
+    association: command.body.request.association,
+  });
+  await session.peer.next("session-event-ack");
+}
+
+function expireDeliveredCommand(f: Fixture, expiresAt: string) {
+  const store = openHubStore(f.dataDir);
+  try {
+    // Cross the actual command's deadline without sleeping for the configured timeout.
+    store.writeTransaction((_state, repo) => expirePendingCommands(repo, Date.parse(expiresAt) + 1));
+  } finally {
+    store.close();
+  }
 }
 
 test("only the sending actor sees the accepted message before native admission", async () => {
   const f = hub = await fixture();
   const text = "Message awaiting admission";
-  const { session, receipt, command, read } = await submitMessage(f, text);
+  const submitted = await submitMessage(f, text);
+  const { session, receipt, command, read } = submitted;
   expect(await read()).toMatchObject([{
     operationId: receipt.operationId, text, status: "hub-accepted", queued: false, reason: null,
     runId: receipt.runId, turnId: receipt.turnId, afterCursor: session.session.historyCursor,
@@ -51,20 +80,7 @@ test("only the sending actor sees the accepted message before native admission",
     .toBe(session.session.sessionId);
   expect(await read(reviewer)).toEqual([]);
 
-  session.peer.send("session-event", {
-    sessionId: session.session.sessionId,
-    projectId: f.project.id,
-    checkoutId: session.session.checkoutId,
-    sessionEventSeq: session.session.sessionEventCursor + 1,
-    observedAt: new Date().toISOString(),
-    kind: "turn-admitted",
-    runId: command.runId,
-    turnId: command.turnId,
-    turnOrdinal: command.body.turnOrdinal,
-    snapshot: command.body.snapshot,
-    association: command.body.request.association,
-  });
-  await session.peer.next("session-event-ack");
+  await emitTurnAdmission(f, submitted);
 
   expect(await read()).toMatchObject([{
     operationId: receipt.operationId, status: "machine-started", queued: false, reason: null,
@@ -137,8 +153,7 @@ test.each([
   expect(await read()).toMatchObject([{ operationId: receipt.operationId, status, text, reason }]);
 });
 
-test("queued message delivery follows native admission, edit and removal", async () => {
-  const f = hub = await fixture();
+async function submitQueuedMessage(f: Fixture, text: string) {
   const { session, receipt, read, body } = await submitMessage(f, "Active turn");
   const emit = async (seq: number, event: object) => {
     session.peer.send("session-event", {
@@ -155,22 +170,38 @@ test("queued message delivery follows native admission, edit and removal", async
   } satisfies Control["SessionRecord"];
   await emit(seq, { kind: "session-state", session: busy });
 
-  const text = "Pending native queue admission";
-  const queued = await success<Control["TurnReceipt"]>(await f.call(`${session.path}/messages`, {
-    method: "POST", cookie: f.cookie, body: { ...body, expectedSessionVersion: busyVersion, text, busyPolicy: "enqueue" },
-  }));
-  expect(queued).toMatchObject({ status: "queued", queueItemId: null, runId: null, turnId: null });
-  await session.peer.next("session-command");
+  const key = crypto.randomUUID();
+  const postQueued = () => f.call(`${session.path}/messages`, {
+    method: "POST", cookie: f.cookie, key,
+    body: { ...body, expectedSessionVersion: busyVersion, text, busyPolicy: "enqueue" },
+  });
+  const queued = await success<Control["TurnReceipt"]>(await postQueued());
+  const queueCommand = (await session.peer.next("session-command")).payload as FrameOf<"session-command">["payload"];
   const pending = async () => (await read()).find(item => item.operationId === queued.operationId);
-  expect(await pending()).toMatchObject({ status: "hub-accepted", queued: false, text });
-
   const item: Control["QueueItem"] = {
     queueItemId: "actual-native-queue-item", version: 1, kind: "message", operationId: queued.operationId,
     state: "queued", position: 0, text, commandName: null,
     expectedConfigVersion: body.expectedConfigVersion, replacesOperationId: null,
   };
+  return { body, busy, busyVersion, emit, item, pending, postQueued, queueCommand, queued, seq, session };
+}
+
+test("queued message delivery follows native admission, edit and removal", async () => {
+  const f = hub = await fixture();
+  const text = "Pending native queue admission";
+  const { body, busy, busyVersion, emit, item, pending, postQueued, queueCommand, queued, seq, session } =
+    await submitQueuedMessage(f, text);
+  expect(queued).toMatchObject({ status: "queued", queueItemId: null, runId: null, turnId: null });
+  expect(await pending()).toMatchObject({ status: "hub-accepted", queued: false, text });
+  expireDeliveredCommand(f, queueCommand.expiresAt);
+  expect(await pending()).toMatchObject({ status: "unconfirmed", queued: false, reason: "recovery-required" });
+  expect((await postQueued()).status).toBe(409);
+
   await emit(seq + 1, { kind: "queue-changed", queueVersion: 1, item });
-  expect(await pending()).toMatchObject({ status: "hub-accepted", queued: true, text, runId: null, turnId: null });
+  expect(await pending()).toMatchObject({ status: "hub-accepted", queued: true, reason: null, text, runId: null, turnId: null });
+  expect(await success<Control["TurnReceipt"]>(await postQueued())).toMatchObject({
+    operationId: queued.operationId, status: "queued", queueItemId: item.queueItemId, runId: null, turnId: null,
+  });
 
   await emit(seq + 2, { kind: "session-state", session: {
     ...busy, version: busyVersion + 1, queueVersion: 1, sessionEventCursor: seq + 2,
@@ -207,20 +238,63 @@ test("queued message delivery follows native admission, edit and removal", async
   expect(await pending()).toMatchObject({ status: "queue-removed", queued: false, text: editedText });
 });
 
+test("late admission of a queued turn clears the stale error for the original message key", async () => {
+  const f = hub = await fixture();
+  const { busy, busyVersion, emit, item, pending, postQueued, queued, seq, session } =
+    await submitQueuedMessage(f, "Queued message admitted after timeout");
+  await emit(seq + 1, { kind: "queue-changed", queueVersion: 1, item });
+  await emit(seq + 2, { kind: "session-state", session: {
+    ...busy, version: busyVersion + 1, queueVersion: 1, sessionEventCursor: seq + 2,
+  } });
+  await emit(seq + 3, { kind: "session-state", session: {
+    ...busy, version: busyVersion + 2, queueVersion: 1, sessionEventCursor: seq + 3,
+    state: "idle", activeRunId: null, activeTurnId: null,
+  } });
+
+  const command = (await session.peer.next("command")).payload as FrameOf<"command">["payload"];
+  if (command.kind !== "start-turn") throw new Error("Expected native start-turn command");
+  expireDeliveredCommand(f, command.expiresAt);
+  expect(await pending()).toMatchObject({ status: "hub-accepted", queued: true });
+  expect((await postQueued()).status).toBe(409);
+
+  await emitTurnAdmission(f, { session, command }, seq + 4);
+  expect(await pending()).toMatchObject({ status: "machine-started", queued: false, reason: null });
+  expect(await success<Control["TurnReceipt"]>(await postQueued())).toMatchObject({
+    operationId: queued.operationId, status: "admitted", runId: command.runId, turnId: command.turnId,
+  });
+});
+
 test("a delivered command with no native proof remains unconfirmed after expiry", async () => {
   const f = hub = await fixture();
   const text = "Delivered without an application receipt";
   const { receipt, command, read } = await submitMessage(f, text);
-  const store = openHubStore(f.dataDir);
-  try {
-    // Cross the actual command's deadline without sleeping for the configured timeout.
-    store.writeTransaction((_state, repo) => expirePendingCommands(repo, Date.parse(command.expiresAt) + 1));
-  } finally {
-    store.close();
-  }
+  expireDeliveredCommand(f, command.expiresAt);
 
   expect(await read()).toMatchObject([{
     operationId: receipt.operationId, status: "unconfirmed", text, queued: false,
     reason: "recovery-required", runId: command.runId, turnId: command.turnId,
   }]);
+});
+
+test("late native turn admission clears the stale failure for exact HTTP replay", async () => {
+  const f = hub = await fixture();
+  const submitted = await submitMessage(f, "Message admitted after timeout");
+  const { session, command, receipt, post, read } = submitted;
+  for (const [index, state] of ["received", "starting"].entries()) {
+    session.peer.send("run-event", {
+      runId: command.runId, turnId: command.turnId, sessionId: session.session.sessionId,
+      projectId: f.project.id, checkoutId: session.session.checkoutId, localSeq: index + 1,
+      observedAt: new Date().toISOString(), kind: "state", state, reasonCode: "none",
+    });
+    await session.peer.next("run-event-ack");
+  }
+  expireDeliveredCommand(f, command.expiresAt);
+  expect(await read()).toMatchObject([{ operationId: receipt.operationId, status: "unconfirmed" }]);
+  expect((await post()).status).toBe(409);
+
+  await emitTurnAdmission(f, submitted);
+  expect(await read()).toMatchObject([{ operationId: receipt.operationId, status: "machine-started", reason: null }]);
+  expect(await success<Control["TurnReceipt"]>(await post())).toMatchObject({
+    operationId: receipt.operationId, status: "admitted", runId: receipt.runId, turnId: receipt.turnId,
+  });
 });

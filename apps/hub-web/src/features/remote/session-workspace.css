@@ -536,4 +536,4 @@
   font-size: 12px;
   color: var(--hub-muted);
 }
-.session-delivery-actions > p:empty { display: none; }
+.session-delivery-actions > p:empty:not([role="status"]) { display: none; }

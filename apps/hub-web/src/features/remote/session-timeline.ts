@@ -35,6 +35,17 @@ export function latestHistoryCursor(data: InfiniteData<Control["HistoryPage"]> |
   return latest;
 }
 
+const turnKey = (run: string | null, turn: string | null) => run && turn ? JSON.stringify([run, turn]) : null;
+
+export function observedDeliveries(messages: Control["SessionMessage"][], deliveries: MessageDelivery[]) {
+  const turns = new Set(messages.filter(message => message.role === "human")
+    .map(message => turnKey(message.runId, message.turnId)).filter(key => key !== null));
+  return deliveries.filter(item => {
+    const key = turnKey(item.runId, item.turnId);
+    return key !== null && turns.has(key);
+  }).map(item => item.operationId);
+}
+
 /**
  * Interleave command outcomes with messages by the Hub's message order. An outcome goes after the
  * last message whose `historyCursor` is at or below its `anchor`; outcomes with the same anchor keep
@@ -42,8 +53,8 @@ export function latestHistoryCursor(data: InfiniteData<Control["HistoryPage"]> |
  */
 export function mergeTimeline(
   ordered: Control["SessionMessage"][], outcomes: CommandEntry[], deliveries: MessageDelivery[] = [],
+  observedOperationIds: ReadonlySet<string> = new Set(),
 ): TimelineEntry[] {
-  const turnKey = (run: string | null, turn: string | null) => run && turn ? JSON.stringify([run, turn]) : null;
   const indexed = new Map(deliveries.flatMap(delivery => {
     const key = turnKey(delivery.runId, delivery.turnId);
     return key ? [[key, delivery] as const] : [];
@@ -60,6 +71,7 @@ export function mergeTimeline(
   const byAnchor: { anchor: number; entry: TimelineEntry }[] = [
     ...outcomes.map(item => ({ anchor: item.anchor, entry: { kind: "outcome" as const, item } })),
     ...deliveries.filter(delivery => !matched.has(delivery.operationId) &&
+      !observedOperationIds.has(delivery.operationId) &&
       (delivery.status !== "machine-started" || delivery.afterCursor + 1 >= (ordered[0]?.historyCursor ?? 0)))
       .map(delivery => ({ anchor: delivery.afterCursor, entry: { kind: "delivery" as const, delivery } })),
   ].sort((a, b) => a.anchor - b.anchor);

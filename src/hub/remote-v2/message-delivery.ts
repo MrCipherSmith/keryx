@@ -21,6 +21,21 @@ export function observeMessageDelivery(operation: OperationRecord, change: Parti
   operation.messageDelivery = { ...previous, ...change };
 }
 
+/** Positive machine evidence supersedes a temporary recovery error for the exact original operation. */
+export function confirmMessageDelivery(operation: OperationRecord, change: Parameters<typeof observeMessageDelivery>[1]): void {
+  const wasUnconfirmed = operation.messageDelivery?.status === "unconfirmed";
+  observeMessageDelivery(operation, change);
+  if ((!wasUnconfirmed && change.status !== "machine-started") ||
+      operation.deliveryFailure?.error.code !== "recovery-required") return;
+  const receipt = validateControl("TurnReceipt", operation.response);
+  if (!receipt.ok) return;
+  if (receipt.value.status === "queued" && change.queued && change.queueItemId) {
+    operation.response = { ...receipt.value, queueItemId: change.queueItemId };
+  }
+  operation.status = 200;
+  delete operation.deliveryFailure;
+}
+
 export function readMessageDeliveries(repo: RemoteRepository, projectId: string, sessionId: string, actorId: string): MessageDeliveries {
   const deliveries: MessageDelivery[] = [];
   let bytes = 2048;

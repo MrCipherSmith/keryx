@@ -251,6 +251,12 @@ export function MessageComposer({
       };
     return null;
   }
+  const contextRequired = !association() || mode === "managed" && !managed.valid;
+  const [contextOpen, setContextOpen] = useState(contextRequired);
+  useEffect(() => {
+    if (contextRequired) setContextOpen(true);
+  }, [contextRequired]);
+
   function sendNative(original:NativeSubmission, submittedDraft?:typeof draft, previouslyUncertain=false){
     const generation=getClientScope();
     if(!nativePending.put({...original,phase:'sending'}))return;
@@ -372,12 +378,13 @@ export function MessageComposer({
       // An authoritative row may already be newer than the POST receipt.
       queryClient.setQueryData<MessageDeliveries>(messageDeliveriesKey(hub.scopeKey, record.projectId, record.sessionId), previous => {
         if (previous?.deliveries?.some(item => item.operationId === receipt.operationId)) return previous;
-        return { deliveries: [...(previous?.deliveries ?? []), {
+        const accepted: MessageDeliveries["deliveries"][number] = {
           operationId: receipt.operationId, submittedAt: new Date().toISOString(),
           afterCursor: attempt.before?.historyCursor ?? record.historyCursor,
           text: attempt.body.text, runId: receipt.runId ?? null, turnId: receipt.turnId ?? null,
           status: "hub-accepted", queued: false, reason: null,
-        }] };
+        };
+        return { deliveries: [...(previous?.deliveries ?? []), accepted].slice(-60) };
       });
       const latestDraft = useDraftStore.getState().drafts[draftKey];
       if (latestDraft === original.submitted) {
@@ -499,7 +506,7 @@ export function MessageComposer({
             visible={commands === "open"} focusToken={focusToken} initialSearch={commandShortcut} />
         </div>
       )}
-      <details open={!association() || mode === "managed" && !managed.valid} className="composer-work-context">
+      <details open={contextOpen} onToggle={event => setContextOpen(event.currentTarget.open)} className="composer-work-context">
         <summary>{mode === "flow" && selected ? t("chatFlowContext", { title: selected.title })
           : mode === "ad-hoc" && association() ? t("chatWithoutFlow")
             : t("chatWorkContext")}</summary>

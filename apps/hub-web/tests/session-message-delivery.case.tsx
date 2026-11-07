@@ -43,6 +43,7 @@ let messages: Control["SessionMessage"][];
 let sessionEvents: Control["SessionEvent"][];
 let runState: RunRecord["state"];
 let deliveryStatus: MessageDelivery["status"];
+let postReceipt: Control["TurnReceipt"];
 let failedDeliveryReads: number;
 let deliveryUnavailable: boolean;
 
@@ -55,6 +56,7 @@ beforeEach(async () => {
   sessionEvents = [];
   runState = "dispatching";
   deliveryStatus = "hub-accepted";
+  postReceipt = receipt;
   failedDeliveryReads = 0;
   deliveryUnavailable = false;
   sent.length = 0;
@@ -74,11 +76,11 @@ beforeEach(async () => {
     if (path.endsWith("/queue")) return Response.json({ items: [], queueVersion: 0, cursor: 0, hasMore: false });
     if (path.endsWith("/history?before=latest")) return Response.json({
       messages, cursor: messages[0]?.historyCursor ?? 0, historyVersion: record.historyVersion,
-      hasMore: false, retainedFromCursor: 0, gap: false,
+      hasMore: (messages[0]?.historyCursor ?? 0) > 1, retainedFromCursor: 0, gap: false,
     });
     if (path.endsWith("/messages") && init?.method === "POST") {
       sent.push(JSON.parse(String(init.body)) as Control["MessageSubmit"]);
-      return Response.json(receipt);
+      return Response.json(postReceipt);
     }
     if (path.endsWith("/message-deliveries")) {
       if (deliveryUnavailable) {
@@ -100,12 +102,18 @@ beforeEach(async () => {
   });
 });
 
-async function sendOriginal() {
+async function sendOriginal(busyPolicy: Control["MessageSubmit"]["busyPolicy"] = "reject") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   renderHub(<SessionDetail sessionId="s" />, context, client);
   fireEvent.click(await screen.findByRole("button", { name: "Claim control" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Release control" })).toBeEnabled());
   fireEvent.click(await screen.findByLabelText("Send messages in this session without a Flow."));
+  if (busyPolicy === "enqueue") {
+    fireEvent.click(screen.getByText("Without Flow"));
+    const options = screen.getByText("Message options");
+    fireEvent.click(options);
+    fireEvent.change(within(options.parentElement!).getByLabelText("When busy"), { target: { value: busyPolicy } });
+  }
   const composer = screen.getByLabelText("Message");
   fireEvent.change(composer, { target: { value: original } });
   const send = screen.getByRole("button", { name: "Send message" });
@@ -174,7 +182,7 @@ test("machine rejection leaves the exact original recoverable without replacing 
   expect(sent).toHaveLength(1);
 });
 
-test("a delivery read outage preserves Hub acceptance and exact native history unblocks the next send", async () => {
+test("native history keeps the next send unblocked after the confirmed message leaves the latest page during a delivery outage", async () => {
   deliveryUnavailable = true;
   const { client, composer, history } = await sendOriginal();
   expect(failedDeliveryReads).toBeGreaterThan(0);
@@ -205,5 +213,34 @@ test("a delivery read outage preserves Hub acceptance and exact native history u
   expect(history.getAllByText(/Inspect\s+the parser/)).toHaveLength(1);
   expect(composer).toHaveValue(newer);
   await waitFor(() => expect(send).toBeEnabled());
+
+  // The bounded latest page no longer includes the exact human message already observed above.
+  messages = [{ ...message, messageId: "latest-after-rollover", historyCursor: 2,
+    role: "assistant", text: "Latest after history rollover" }];
+  record = { ...record, historyCursor: 2, historyVersion: 3 };
+  await invalidateFromMachine(client, "history");
+
+  expect(await history.findByText("Latest after history rollover")).toBeVisible();
+  expect(history.queryByText(/Inspect\s+the parser/)).not.toBeInTheDocument();
+  expect(history.queryByText(/Accepted by Hub/)).not.toBeInTheDocument();
+  expect(composer).toHaveValue(newer);
+  expect(send).toBeEnabled();
+  expect(sent).toHaveLength(1);
+});
+
+test("a queued receipt does not block composing another queued message during a delivery read outage", async () => {
+  deliveryUnavailable = true;
+  record = { ...record, state: "busy", activeRunId: run.runId, activeTurnId: run.turnId, nextTurnOrdinal: 2 };
+  runState = "running";
+  postReceipt = { ...receipt, status: "queued", runId: null, turnId: null, turnOrdinal: null };
+
+  const { composer, history } = await sendOriginal("enqueue");
+  expect(failedDeliveryReads).toBeGreaterThan(0);
+  expect(sent[0]?.busyPolicy).toBe("enqueue");
+  expect(await history.findByText("Accepted by Hub", { exact: true })).toBeVisible();
+  fireEvent.change(composer, { target: { value: newer } });
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled());
+  expect(composer).toHaveValue(newer);
   expect(sent).toHaveLength(1);
 });

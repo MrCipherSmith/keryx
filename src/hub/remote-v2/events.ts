@@ -1,4 +1,4 @@
-import { observeMessageDelivery } from "./message-delivery";
+import { confirmMessageDelivery, observeMessageDelivery } from "./message-delivery";
 import {observeClosureReceipt,settleClosure} from './closure';
 import {applicationObserved} from './application-proof';
 import {releaseQueuedAttempt} from './queue-retry';
@@ -59,7 +59,7 @@ export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, eve
     const command = repo.get<StoredCommand>("remote_command", run.commandId);
     const operation = command && repo.get<OperationRecord>("remote_operation", command.operationId);
     if (operation?.messageDelivery) {
-      observeMessageDelivery(operation, { status: "machine-started", runId: event.runId, turnId: event.turnId, queued: false, reason: null });
+      confirmMessageDelivery(operation, { status: "machine-started", runId: event.runId, turnId: event.turnId, queued: false, reason: null });
       repo.put("remote_operation", operation.id, operation);
     }
   } else if (event.kind === "selection-receipt") {
@@ -116,7 +116,7 @@ export function ingestSessionEvent(repo: RemoteRepository, m: MachineRecord, eve
     const item = { ...event.item, operationId: operation.id };
     if (operation.messageDelivery && item.kind === "message") {
       if (item.state === "queued" || item.state === "suspended") {
-        observeMessageDelivery(operation, { queued: true, queueItemId: item.queueItemId });
+        confirmMessageDelivery(operation, { status: "hub-accepted", queued: true, queueItemId: item.queueItemId, reason: null });
       } else if (item.state === "removed" || item.state === "rejected") {
         observeMessageDelivery(operation, {
           status: item.state === "removed" ? "queue-removed" : "machine-rejected",

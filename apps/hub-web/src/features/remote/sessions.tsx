@@ -42,7 +42,7 @@ import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraf
 import { ForkSession } from "./fork";
 import { SessionTranscript } from "./session-transcript";
 import { Settings } from "./settings";
-import { historyQueryKey, mergeTimeline, messageDeliveriesKey, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
+import { historyQueryKey, mergeTimeline, messageDeliveriesKey, observedDeliveries, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
 export function SessionsView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
@@ -323,6 +323,8 @@ export function SessionDetail({ sessionId, onNewSession }: { sessionId: string; 
     </div>
   );
 }
+const emptyDeliveryProofs: readonly string[] = [];
+
 export function SessionSurface({
   record,
   onNewSession,
@@ -357,11 +359,19 @@ export function SessionSurface({
       for (const message of page.messages) loaded.set(message.messageId, message);
     return [...loaded.values()].sort((a, b) => a.historyCursor - b.historyCursor);
   }, [history.data]);
-  const observedTurns = new Set(messages.flatMap(message => message.role === "human" && message.runId && message.turnId
-    ? [JSON.stringify([message.runId, message.turnId])] : []));
-  const awaitingMachine = deliveries.some(item => !item.queued &&
-    !(item.runId && (item.runId === record.activeRunId ||
-      item.turnId && observedTurns.has(JSON.stringify([item.runId, item.turnId])))) &&
+  const [deliveryProofs, setDeliveryProofs] = useDraft(
+    messageDraftKey(hub.scopeKey, record.projectId, record.sessionId) + ":history-proof",
+    emptyDeliveryProofs,
+  );
+  const currentProofs = useMemo(() => observedDeliveries(messages, deliveries), [messages, deliveries]);
+  const observedOperationIds = useMemo(() => new Set([...deliveryProofs, ...currentProofs]), [deliveryProofs, currentProofs]);
+  useEffect(() => {
+    if (currentProofs.some(id => !deliveryProofs.includes(id))) {
+      setDeliveryProofs(Array.from(observedOperationIds).slice(-120));
+    }
+  }, [currentProofs, deliveryProofs, observedOperationIds, setDeliveryProofs]);
+  const awaitingMachine = deliveries.some(item => item.runId && !item.queued &&
+    item.runId !== record.activeRunId && !observedOperationIds.has(item.operationId) &&
     (item.status === "hub-accepted" ||
       item.status === "machine-started" && record.activeRunId === null && item.afterCursor >= record.historyCursor));
   const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
@@ -394,7 +404,7 @@ export function SessionSurface({
       record={record}
       control={control}
       history={<History record={record} outcomes={outcomes} liveRef={setConversation} query={history} messages={messages}
-        deliveries={deliveries} draftText={draftText} restoreText={restoreText} deliveryQuery={deliveryQuery} />}
+        deliveries={deliveries} observedOperationIds={observedOperationIds} draftText={draftText} restoreText={restoreText} deliveryQuery={deliveryQuery} />}
       conversation={conversation}
       messages={messages}
       composer={
@@ -485,13 +495,14 @@ function useSessionHistory(record: Control["SessionRecord"]) {
   });
 }
 
-function History({ record, outcomes, liveRef, query, messages, deliveries, draftText, restoreText, deliveryQuery }: {
+function History({ record, outcomes, liveRef, query, messages, deliveries, observedOperationIds, draftText, restoreText, deliveryQuery }: {
   record: Control["SessionRecord"];
   outcomes: CommandEntry[];
   liveRef: (element: HTMLDivElement | null) => void;
   query: ReturnType<typeof useSessionHistory>;
   messages: Control["SessionMessage"][];
   deliveries: MessageDelivery[];
+  observedOperationIds: ReadonlySet<string>;
   draftText: string;
   deliveryQuery: { error: unknown; data?: MessageDeliveries; refetch: () => unknown };
   restoreText: (text: string) => boolean;
@@ -511,10 +522,30 @@ function History({ record, outcomes, liveRef, query, messages, deliveries, draft
       break;
     }
   }, [messages, query.data, t]);
-  const timeline = mergeTimeline(messages, outcomes, deliveries);
+  const timeline = useMemo(() => mergeTimeline(messages, outcomes, deliveries, observedOperationIds),
+    [messages, outcomes, deliveries, observedOperationIds]);
+  const announcedDeliveries = useRef(new Map<string, string>());
+  const [deliveryAnnouncement, setDeliveryAnnouncement] = useState({ sequence: 0, text: "" });
+  useEffect(() => {
+    let status: MessageDelivery["status"] | undefined;
+    for (const entry of timeline) {
+      if (entry.kind === "outcome" || !entry.delivery) continue;
+      const item = entry.delivery;
+      if (announcedDeliveries.current.get(item.operationId) === item.status) continue;
+      announcedDeliveries.current.set(item.operationId, item.status);
+      status = item.status;
+    }
+    if (status) {
+      const text = t("chatDeliveryAnnouncement", { status: t("chatDeliveryStates." + status) });
+      setDeliveryAnnouncement(previous => ({ sequence: previous.sequence + 1, text }));
+    }
+  }, [timeline, t]);
   return (
     <section className="session-transcript" aria-label={t("history")}>
       <p role="status" aria-atomic="true" className="sr-only">{announcement}</p>
+      <p role="status" aria-atomic="true" className="sr-only">
+        <span key={deliveryAnnouncement.sequence}>{deliveryAnnouncement.text}</span>
+      </p>
       <header className="session-transcript-header">
         <h2>{t("history")}</h2>
         <span>{record.agentProfileId}</span>
@@ -615,7 +646,7 @@ function MessageItem({ message, delivery, ...props }: React.ComponentPropsWithRe
 
 function DeliveryStatus({ delivery }: { delivery: MessageDelivery }) {
   const { t } = useTranslation("remote");
-  return <p className="session-delivery-status" data-state={delivery.status} role="status">
+  return <p className="session-delivery-status" data-state={delivery.status}>
     {t("chatDeliveryStates." + delivery.status)}
     {delivery.queued && <> · {t("receiptStatuses.queued")}</>}
   </p>;
@@ -657,7 +688,7 @@ function DeliveryItem({ delivery, draftText, restoreText, ...props }: React.Comp
         {(hasDifferentDraft || feedback === t("chatRestoreBlocked")) &&
           <Button variant="ghost" onClick={() => void copy()}>{t("chatCopyOriginal")}</Button>}
         {hasDifferentDraft && <p>{t("chatRestoreBlocked")}</p>}
-        <p role="status">{feedback}</p>
+        <p role="status" className={feedback ? undefined : "sr-only"}>{feedback}</p>
       </div>}
     </div>
   </li>;
