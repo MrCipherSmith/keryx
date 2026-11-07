@@ -135,6 +135,11 @@
       "detail": "AC1: bun test src/commands/providers.anthropic.test.ts: зелёный на main d5de38e78 (signed: MrCipherSmith [stated])"
     },
     {
+      "at": "2026-11-05T21:29:29.664Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec bun test src/commands/providers.anthropic.test.ts]\" -> \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]\" (Repair malformed exec marker responsible for PR1134 corpus CI failure; command and criterion meaning unchanged)"
+    },
+    {
       "at": "2026-11-06T06:21:36.505Z",
       "event": "ac-updated",
       "detail": "AC1: \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec bun test src/commands/providers.anthropic.test.ts]\" -> \"connectionProviderByName(\"anthropic\") возвращает ANTHROPIC_PICKER, и тесты src/commands/providers.anthropic.test.ts проходят в main d5de38e78 [verify: exec `bun test src/commands/providers.anthropic.test.ts`]\" (AC1 marker had no backticks around the exec command, so the acceptance-kind parser rejects it and breaks src/flow/ac-kinds-corpus.test.ts on main (CI red since bd434000a); same text, command now backticked)"

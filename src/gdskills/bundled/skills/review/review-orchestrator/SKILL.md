@@ -1,6 +1,6 @@
 ---
 name: review-orchestrator
-description: 'Use when: a code review is requested and the user does not name a specialized reviewer — "review", "code review", "review this PR", "review --all". Dispatches the relevant specialized reviewers in parallel and consolidates their findings into one unified report, and owns the fan-out flags "--all", "--project-conventions" and "--legacy-profiles". NOT for: running a single specialized reviewer — invoke it directly by name instead, which is also how a flag that names one domain reaches its reviewer.'
+description: 'Use when: a code review is requested and the user does not name a specialized reviewer — "review", "code review", "review this PR", "review --all". Dispatches the relevant specialized reviewers in parallel and consolidates their findings into one unified report, and owns the fan-out flags "--all", "--project-conventions", "--legacy-profiles" and the explicit hierarchical opt-in "--hierarchical". NOT for: running a single specialized reviewer — invoke it directly by name instead, which is also how a flag that names one domain reaches its reviewer.'
 triggers:
   - "review"
   - "ревью"
@@ -11,9 +11,10 @@ triggers:
   - "review --all"
   - "review --project-conventions"
   - "review --legacy-profiles"
+  - "review --hierarchical"
 metadata:
   author: "MrCipherSmith"
-  version: "1.11.0"
+  version: "1.14.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -23,8 +24,8 @@ license: "MIT"
 **You are the orchestrator. Run the round yourself, inline, in the main session that loaded this skill; never hand the whole round to one subagent.** This skill routes: it detects scope, dispatches specialized reviewers, and consolidates their findings into one report sorted by severity. The reviewers do the reviewing.
 
 ## Preflight — before Step 0, in this order
-
-1. **Can it spawn?** The round needs a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. A host with no spawn tool at all (Codex and other AGENTS.md hosts) does not stop here and does not review alone: it runs the round through the autonomous runner, `keryx review run --autonomous --target pr --ref <pull request URL>` (no pull request: `--target branch --ref <base> [--head <commit>]`), and relays its verdict and exit code (see "Hosts"). Only a session that has spent the depth budget (a nested subagent) stops; its whole output is this line, with no tool calls and no review of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
+**Engine selection fails closed.** The legacy flat path is the default. `--hierarchical` is the only hierarchical opt-in and requires all seven exact host tools: `review_agents_start`, `review_agents_plan`, `review_agents_spawn`, `review_agents_status`, `review_agents_wait`, `review_agents_result`, `review_agents_cancel`. If any is absent, stop before useful work with `STATUS: BLOCKED hierarchical_capability_unavailable — missing <names>`; never silently fall back to legacy or the autonomous runner. If all are present, follow `SKILL.detail.md` § "Review agents — explicit hierarchical path"; its start-result capability check may still refuse the selected adapter.
+1. **Can it spawn?** Without `--hierarchical`, the round needs a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. A host with no spawn tool at all (Codex and other AGENTS.md hosts) does not stop here and does not review alone: it runs the round through the autonomous runner, `keryx review run --autonomous --target pr --ref <pull request URL>` (no pull request: `--target branch --ref <base> [--head <commit>]`), and relays its verdict and exit code (see "Hosts"). Only a session that has spent the depth budget (a nested subagent) stops; its whole output is this line, with no tool calls and no review of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 2. **Is a round needed?** List the files with `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths. A diff where EVERY file is prose or machine-written data ends here with one line, `round not needed: <reason>`, and no reviewer. Prose is exactly: README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT at the top level; and under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow's `journal.md`, a file with extension md, rst or adoc whose name holds a lowercase letter (an all-uppercase name such as AGENT or WARP is steering by convention). Machine-written data is a file under `coverage/` or `__generated__/` with extension lcov, info or map only; json, txt, html and md there are code. Steering is code wherever it sits, `docs/` included: a directory (singular or plural) named agent, skill, command, rule, prompt, instruction, persona, steering or hook, any path segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`), a file name starting with SKILL, AGENT, CLAUDE, GEMINI, QWEN, CODEX, WARP, CRUSH, JULES, KNOWLEDGE, GUIDELINES, CONVENTIONS or copilot-instructions, ending in .local, .override, .instructions, .prompt, .agent or .chatmode before the extension, or containing prompt, instruction or system. A flow's `description.md`, `acceptance-criteria.md` and `tasks/` are gate inputs, so they are code. Every other file counts as code too, including lockfiles, committed `dist/` output, CI, auth, migrations, config JSON, and any path with `..`, a backslash, a leading `./` or `//`. `classifyRoundNeed` in `src/review/round-need.ts` is the tested reference of this rule; the host executes this text, and nothing in the CLI calls the function yet. `--all`, an explicit reviewer list or a gating round forces a round.
 3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same change. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
 4. **PR state, shown before dispatch.** On a PR target read its state (merged, approved, CI) and tell the operator the risk that it merges before the round ends: a verdict ready at minute 55 and held to minute 119 lost the race to the merge. Depth and the estimate need the package and the slice manifest, so they come later: after `review scope`, `review start` and `review slice`, before the first reviewer starts ("Round plan" steps 5-6; `SKILL.detail.md` § "Preflight 4").
@@ -139,7 +140,6 @@ A reviewer starts in the project root and reads project files; a path outside th
 - **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and the `review_complete` card has been answered (an agent never runs `keryx review complete`; that command is for a human in a terminal). `completed` means `keryx review readiness` passed, or each failing item but `premise-decisions` (answered per finding, never waived) is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then call `review_complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
 
 ---
-
 ## Step 12 — the `keryx:findings` block
 
 The prose report is for a human. **`keryx review ingest` reads the fenced block,
@@ -199,7 +199,7 @@ which of its inputs were recovered and which were never written down.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `flags` | string[] | no | One or more of: `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--code-ai`, `--learned`, `--code-style`, `--mobx-store`, `--verify`, `--all` |
+| `flags` | string[] | no | One or more of: `--hierarchical`, `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--code-ai`, `--learned`, `--code-style`, `--mobx-store`, `--verify`, `--all`. `--hierarchical` selects the capability-gated hierarchical engine; absence keeps the legacy path. |
 | `path` | string | no | File or directory path to review (e.g., `src/stores/`, `src/components/UserCard.tsx`). Activates **path mode** — reviews the files at this path directly, not a git diff. |
 | `commit_range` | string | no | Explicit commit hash or range (e.g., `abc123..HEAD`). Overrides merge-base detection. Ignored in path mode. |
 | `issue_url` | string | no | GitHub issue or task URL. If provided, Stage 1 gate checks spec compliance before dispatching reviewers. |

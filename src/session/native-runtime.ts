@@ -36,6 +36,8 @@ import { createMeteredRoutingProvider } from "../harness/routing/routing-provide
 import type { NativeRoutingBudgetStore } from "./native-routing-budget";
 import { loadRouting } from "../harness/routing/settings";
 import { isRoutingDecisionId } from "../harness/routing/routing-runtime";
+import { createReviewAgentHost } from "../commands/review-agents-runtime/host";
+import { keryxConfigDir } from "../lib/config-dir";
 
 export type NativeSessionServices = ReturnType<typeof createNativeSessionServices>;
 export type NativeServicesFactoryContext = Pick<NativeSessionServicesOptions, "cwd" | "configDir" | "jobs" | "identity" | "sessionState" | "routingAvailability" | "searchController">;
@@ -51,6 +53,8 @@ const processGroupAlive = (pid: number): boolean => { try { process.kill(-pid, 0
 export interface NativeRuntimeOptions {
   cwd: string;
   configDir?: string;
+  /** Test seam for verifying Review agents session ownership and shutdown. */
+  reviewAgentsHostFactory?: typeof createReviewAgentHost;
   servicesFactory?: (context: NativeServicesFactoryContext) => NativeSessionServices | Promise<NativeSessionServices>;
   provider: ProviderPort;
   providerId: string;
@@ -230,9 +234,28 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
       return result;
     },
   });
+  let reviewAgentsTools: readonly InteractiveTool[] = [];
+  let reviewAgentsHost: ReturnType<typeof createReviewAgentHost> | undefined;
+  let reviewAgentsSessionOpen = true;
+  try {
+    reviewAgentsHost = (options.reviewAgentsHostFactory ?? createReviewAgentHost)({ projectRoot: options.cwd, configDir: keryxConfigDir(options.configDir) });
+    reviewAgentsTools = reviewAgentsHost.tools({
+      get provider() { return providerFor(selected.providerId, selected.modelId); },
+      get providerId() { return selected.providerId; },
+      get modelId() { return selected.modelId; },
+      io: () => ({
+        requestApproval: approve,
+        permissionMode: () => "ask",
+      }),
+      authorizeReviewAgentAction: ({ signal }) => reviewAgentsSessionOpen && signal?.aborted !== true,
+    });
+  } catch {
+    // A plain repository or incomplete agent catalog does not advertise V3.
+  }
   const tools = [...buildInteractiveAgentTools({ cwd: options.cwd, metaprojectPort: createMetaprojectAdapter(options.cwd),
     searchController, spawnTool: spawn, jobRegistry: jobs,
     getSessionDir: () => sessionDir, askUser: (request) => (sessionAskUser ?? options.askUser ?? (async () => ASK_USER_NO_HOST))(request),
+    ...(reviewAgentsTools.length === 0 ? {} : { reviewAgents: { tools: reviewAgentsTools } }),
     ...(options.allowSubagents === true ? {} : { denyTools: ["spawn_subagent"] }),
   }), ...canonicalProjectTools(() => projectContext)].filter((tool) => options.allowedTools === undefined || options.allowedTools.includes(tool.definition.name)).map(wrapTool);
   return {
@@ -429,6 +452,9 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
         await Promise.race([Promise.allSettled(ownedChildren), new Promise<void>(resolve => { timeout = setTimeout(resolve, 1000); })]); if (timeout !== undefined) clearTimeout(timeout);
       }
       const childRemainder = [...children].filter(([,owner]) => matches(owner) || owner === undefined).map((_,index) => `native-child-${index}`);
+      if (wholeSession) reviewAgentsSessionOpen = false;
+      const reviewAgentsStop = wholeSession ? await reviewAgentsHost?.close() : undefined;
+      if (reviewAgentsStop !== undefined && !reviewAgentsStop.stopped) childRemainder.push("review-agents-controller");
       return { status: remainingTaskIds.length === 0 && childRemainder.length === 0 ? "stopped" : "unknown", remainingTaskIds: [...remainingTaskIds,...childRemainder] };
     },
   };

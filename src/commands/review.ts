@@ -61,6 +61,8 @@ import { printImportHelp, runImportReviewers } from "../review/import-reviewers"
 import { runJevRules } from "./review-jev-rules";
 import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { RUN_HELP, runReviewRun } from "./review-run";
+import { runReviewAgents, type ReviewAgentCliFactory } from "./review-agents";
+import { runReviewAgentsServeCommand } from "./review-agents-serve";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
@@ -77,7 +79,7 @@ import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layer
 import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
 import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
 import { detectTestCommand, writeTestsToRun } from "../review/tests-to-run";
-import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
+import { createGdgraphService, gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
@@ -181,7 +183,6 @@ import {
   changedExportsOf,
   renderDegradationPayloadBrief,
 } from "../review/degradation-payload";
-import { loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
 import { withLiveCodexModels } from "./live-codex-models";
 import { detectProviders } from "./select";
@@ -671,6 +672,8 @@ export interface ReviewCommandSeams {
   priorRound?: Partial<Omit<PriorRoundDeps, "cwd" | "forced" | "excludeReviewId">>;
   /** Test seam: a pull request's own base ref for `start|attach|ingest` of a PR target. Default: `gh pr view` (see ghPrBase). */
   prBase?: (ref: string) => Promise<string | undefined>;
+  /** Live Review agents host binding. Omitted means fail-closed: no adapter or authority is invented by the CLI. */
+  reviewAgentsFactory?: ReviewAgentCliFactory;
 }
 
 /** At most this long is spent asking gh for a pull request's base; a slower answer is no answer. */
@@ -843,6 +846,17 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     // flow 424: one unattended review of a pull request (the review-autonomous profile).
     if (command === "run") {
       await runReviewRun(args.slice(1));
+      return;
+    }
+    // Review agents remains hidden from the stable help until a shell/session host
+    // supplies live adapters and authority. The command itself is fail-closed.
+    if (command === "agents") {
+      if (args[1] === "serve") {
+        const code = await runReviewAgentsServeCommand(args.slice(2));
+        if (code !== 0) process.exitCode = code;
+        return;
+      }
+      await runReviewAgents(args.slice(1), seams?.reviewAgentsFactory);
       return;
     }
     // flow 343: the Jev EDIT GUARD — see `review-jev-edit-guard.ts` for
@@ -4367,7 +4381,7 @@ async function runBlastRadius(args: string[]): Promise<void> {
   const packageOption = optionValue(args, "--package");
   let graph: GraphData;
   if (packageOption === undefined) {
-    graph = await loadGraph(cwd);
+    graph = await createGdgraphService().loadGraph(cwd);
   } else {
     const packageDir = resolvePackageDir(args, cwd);
     const layers = await ensurePackageLayers(packageDir);
@@ -5173,6 +5187,29 @@ ${reviewHelpSection("learn")}
 `);
 }
 
+function printReviewAgentHelp(): void {
+  console.log(`keryx review agents
+
+Usage:
+  keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+                        --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
+  keryx review agents start --run-dir <dir> --run-id <id> --revision <git-revision> --config <json>
+  keryx review agents plan --run-dir <dir> --payload <json>
+  keryx review agents capabilities --run-dir <dir> [--adapter <id>]
+  keryx review agents status --run-dir <dir> [--dispatch <id>]
+  keryx review agents spawn --run-dir <dir> --payload <json>
+  keryx review agents wait --run-dir <dir> --dispatch <id>
+  keryx review agents cancel --run-dir <dir> [--dispatch <id>] --reason <text>
+  keryx review agents result --run-dir <dir> --dispatch <id>
+
+\`serve\` is the foreground owner for ordinary terminal, Codex CLI and Claude Code clients. It prints an explicit
+Unix-socket connection handshake; export exactly the three KERYX_REVIEW_AGENTS_ROOT_* values into the controlling
+harness. The bearer grants the host ceiling selected by these startup flags, so keep it out of logs and child-agent
+environments. Root commands fail closed without that complete environment. Descendant agents use their separate,
+run-scoped bridge grant and cannot combine it with the root environment.
+`);
+}
+
 /**
  * The help a `keryx review <subcommand> --help` question is answered with.
  *
@@ -5184,6 +5221,7 @@ ${reviewHelpSection("learn")}
  * subcommand, mutating or not; a subcommand with no entry gets the group help.
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["agents", printReviewAgentHelp],
   ["start", printStartHelp],
   ["ingest", printIngestHelp],
   ["mutate", printMutateHelp],
@@ -5342,6 +5380,9 @@ function reviewHelpText(): string {
   return `keryx review
 
 Usage:
+  keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+                        --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
+  keryx review agents <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
                       [--automatic] [--no-prior-round | --prior <package|reviewId>]

@@ -99,6 +99,15 @@ function reportMcpProblems(runtime: McpRuntime): void {
     console.error(`keryx mcp: ${problem.file} ${problem.message}`);
   }
 }
+export function formatReviewAgentShutdownWarning(result: Awaited<ReturnType<ReturnType<typeof createReviewAgentHost>["close"]>>, surface: "tui" | "readline"): string | undefined {
+  if (result.stopped) return undefined;
+  const runs = result.activeRunIds.length === 0 ? "unknown runs" : result.activeRunIds.join(", ");
+  return `keryx: Review agents ${surface} shutdown is unconfirmed; external work may still be running (${runs}). Durable run evidence was preserved.`;
+}
+function reportReviewAgentShutdown(result: Awaited<ReturnType<ReturnType<typeof createReviewAgentHost>["close"]>>, surface: "tui" | "readline"): void {
+  const warning = formatReviewAgentShutdownWarning(result, surface);
+  if (warning !== undefined) console.error(warning);
+}
 import { emitBackgroundJob } from "../tui/job-bridge";
 import { emitSubagentFleet } from "../tui/subagent-bridge";
 import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
@@ -123,6 +132,8 @@ import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
 import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { createReviewAgentHost } from "./review-agents-runtime/host";
+import { keryxConfigDir } from "../lib/config-dir";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
@@ -1786,6 +1797,7 @@ export async function runAgentRepl(
    * for any caller (tests) that omits it.
    */
   orient?: string,
+  bindReviewAgentIo?: (io: AgentIO) => void,
 ): Promise<void> {
   const out =
     rich.write ??
@@ -2230,6 +2242,7 @@ export async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
+  bindReviewAgentIo?.(agentIo);
   agentIo.trustedMcpTools = new Map<string, string>();
   // The live catalog's current definition fingerprint, read fresh on every
   // call: a grant holds only while the tool's definition still matches it.
@@ -4093,6 +4106,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // `makeAgentDeps` for the same reason as the registry above — a `/model`
     // rebuild must not change the marker nudges already in history carry.
     const controlNonce = generateControlNonce();
+    let reviewAgentsHost: ReturnType<typeof createReviewAgentHost> | undefined;
+    let reviewAgentsSessionOpen = true;
+    try { reviewAgentsHost = createReviewAgentHost({ projectRoot: cwd, configDir: keryxConfigDir(runtime.cacheDir) }); }
+    catch { /* Plain/incomplete projects do not advertise Review agents tools. */ }
     // Session-scoped, and LAZY.
     //
     // Session-scoped for the reason spelled out above for the registry:
@@ -4152,6 +4169,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // A Hub model selection commits only if its original session still owns the idle shell.
         if (options?.deferCallerExport !== true) exportCallerSession(sel.provider, sel.model);
         const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
+        const getReviewAgentIo = (bus as ({ reviewAgentsIo?: () => AgentIO | undefined }) | undefined)?.reviewAgentsIo;
+        const reviewAgentsTools = reviewAgentsHost === undefined || getReviewAgentIo === undefined ? [] : reviewAgentsHost.tools({
+          provider: agentProvider, providerId: sel.provider, modelId: sel.model, io: getReviewAgentIo,
+          authorizeReviewAgentAction: ({ signal }) => reviewAgentsSessionOpen && signal?.aborted !== true && bus?.client()?.leaseView().held() !== true,
+        });
         // flow 268: resolved fresh on every `makeAgentDeps` call (launch,
         // `/model`, `/connect`) — same lifecycle as `agentProvider` above. `{}`
         // for a native adapter with no OpenAI-compatible registry entry.
@@ -4303,6 +4325,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
                 return loaded.ok ? loaded.value.allowedUserIds : undefined;
               },
             },
+            ...(reviewAgentsTools.length === 0 ? {} : { reviewAgents: { tools: reviewAgentsTools } }),
           }),
           // The EXISTING runtime, never a new one. `/mcp` is a read-only
           // view; opening it must not be the thing that spawns every
@@ -4506,6 +4529,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     }
     // else: optional dep absent / init failed → fall through to the readline shell.
     } finally {
+      reviewAgentsSessionOpen = false;
+      const reviewAgentsStop = await reviewAgentsHost?.close();
+      if (reviewAgentsStop !== undefined) reportReviewAgentShutdown(reviewAgentsStop, "tui");
       // The chat TUI's bus client and lease (flow 273 T6, flow 271, AC7).
       // Idempotent: `runShell` usually released both already on its own
       // return. Bus first, so a peer never sees presence outlive the lease.
@@ -4771,6 +4797,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // every `slateSession` reassignment (see its own body below); the
       // getter here reads the box BY REFERENCE, never a snapshot.
       const slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined };
+      let readlineReviewIo: AgentIO | undefined;
+      let readlineReviewAgentHost: ReturnType<typeof createReviewAgentHost> | undefined;
+      let readlineReviewAgentOpen = true;
+      try { readlineReviewAgentHost = createReviewAgentHost({ projectRoot: agentCwd, configDir: keryxConfigDir(runtime.cacheDir) }); }
+      catch { /* Plain/incomplete projects do not advertise Review agents tools. */ }
       // Same reset-per-turn wiring as the TUI's makeAgentDeps (own spawn_subagent instance).
       let resetSubagentBudget: (() => void) | undefined;
       const spawnTool = createSpawnSubagentTool({
@@ -4813,6 +4844,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
           mcp: mcpRuntime,
+          ...(readlineReviewAgentHost === undefined ? {} : { reviewAgents: { tools: readlineReviewAgentHost.tools({
+            provider: agentProvider, providerId: provider, modelId: model, io: () => readlineReviewIo,
+            authorizeReviewAgentAction: ({ signal }) => readlineReviewAgentOpen && signal?.aborted !== true && busBox.current?.leaseView().held() !== true,
+          }) } }),
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
           // review r1 F2 (AC9): NO `bus` option here. `busBox` (declared
           // above) is always still empty at THIS point — the join itself
@@ -4919,7 +4954,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }
         let endReason = "normal";
         try {
-          await runAgentRepl(replLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal, ...(readlineInitialPrompt !== undefined ? { initialPrompt: readlineInitialPrompt } : {}) }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+          await runAgentRepl(replLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal, ...(readlineInitialPrompt !== undefined ? { initialPrompt: readlineInitialPrompt } : {}) }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient, (agentIo) => { readlineReviewIo = agentIo; });
         } catch (cause) {
           endReason = "error";
           throw cause;
@@ -4931,6 +4966,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
                 // Best-effort; a SessionEnd hook failure must never mask the real outcome.
               });
           }
+          readlineReviewAgentOpen = false;
+          const reviewAgentsStop = await readlineReviewAgentHost?.close();
+          if (reviewAgentsStop !== undefined) reportReviewAgentShutdown(reviewAgentsStop, "readline");
         }
       };
       try {

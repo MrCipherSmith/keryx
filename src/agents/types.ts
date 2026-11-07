@@ -19,6 +19,22 @@ export type OutputContract = "subagent-result";
 /** Whether the compiled dispatch requests worktree isolation. Default `"none"`. */
 export type IsolationMode = "none" | "worktree";
 
+/** Definition schema versions accepted by the catalogue. V1 remains readable; V2 adds delegation metadata. */
+export type AgentSchemaVersion = 1 | 2;
+
+/** Whether an agent is a leaf worker or may coordinate bounded child work. */
+export type AgentExecutionKind = "worker" | "orchestrator";
+
+/** Static definitions use their declared tools; parent scope requests the parent's effective tool surface. */
+export type AgentToolScope = "static" | "parent";
+
+/** Declarative delegation ceiling. Runtime admission may only narrow these values. */
+export interface AgentDelegation {
+  readonly allowed_entities: readonly string[];
+  readonly max_depth: number;
+  readonly max_children: number;
+}
+
 /** Provenance kind for a definition (`origin.kind`). */
 export type OriginKind = "authored" | "generated" | "imported" | "learned";
 
@@ -40,8 +56,8 @@ export interface AgentOrigin {
  * schema's defaults itself.
  */
 export interface AgentDefinition {
-  /** Frozen at `1`. Omitted from a definition authored before this field existed. */
-  readonly schema_version?: 1;
+  /** Omitted definitions are legacy V1. V2 carries the orchestration fields below. */
+  readonly schema_version?: AgentSchemaVersion;
   readonly name: string;
   readonly description: string;
   readonly role: string;
@@ -52,6 +68,12 @@ export interface AgentDefinition {
   readonly stacks: readonly string[];
   readonly output_contract: OutputContract;
   readonly isolation: IsolationMode;
+  /** Defaults to `worker` when a V1 definition is built or directly compiled. */
+  readonly execution_kind?: AgentExecutionKind;
+  /** Defaults to `static`; `parent` is valid only for an orchestrator. */
+  readonly tool_scope?: AgentToolScope;
+  /** Defaults to a leaf ceiling (`[]`, depth 0, children 0). */
+  readonly delegation?: AgentDelegation;
   readonly origin?: AgentOrigin;
   /** Markdown body: the persona's operating instructions (no baseline text — compiler-injected). */
   readonly body: string;

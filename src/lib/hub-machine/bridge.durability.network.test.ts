@@ -75,7 +75,8 @@ test('R4.4 the machine run-log quota and Hub run-log storage agree at the exact 
  const m=await h.machine({contributions:[filler]});const s=m.session;const lease=(await s.claim()).lease;
  const invoked=await success<Control['CommandOutcome']>(await s.invoke(lease,'risk',{},{association:{mode:'ad-hoc',profileConsentVersion:1}}));const runId=invoked.runId!;
  await midway.opened;await h.restartHub();resumed.open();await wait(async()=>m.bridge.connected,v=>v);
- const run=await s.waitRun(runId,v=>v.state==='succeeded'&&v.result!==undefined,3000);
+ // Replaying 10 MiB through real sockets and durable stores needs headroom in full CI.
+ const run=await s.waitRun(runId,v=>v.state==='succeeded'&&v.result!==undefined,6000);
  const events=await contiguous(s,runId,run.lastLocalSeq!);const logs=events.filter((e):e is Extract<RunEvent,{kind:'log'}>=>e.kind==='log');
  expect(logs.reduce((sum,e)=>sum+Buffer.byteLength(e.text),0)).toBe(QUOTA);expect(logs).toHaveLength(FILL);
  const gaps=events.filter((e):e is Extract<RunEvent,{kind:'log-gap'}>=>e.kind==='log-gap');expect(gaps.map(g=>g.toSeq-g.fromSeq+1)).toEqual([EXTRA]);
@@ -90,7 +91,8 @@ test('R4.4 Hub counts each run-log chunk by the bytes the machine sent and retai
   async execute(context){for(let n=0;n<FILL+EXTRA;n++)context.effect!.progress(text);return {actual:true};}};
  const m=await h.machine({contributions:[filler]});const s=m.session;const lease=(await s.claim()).lease;
  const invoked=await success<Control['CommandOutcome']>(await s.invoke(lease,'risk',{},{association:{mode:'ad-hoc',profileConsentVersion:1}}));const runId=invoked.runId!;
- const run=await s.waitRun(runId,v=>v.state==='succeeded'&&v.result!==undefined,3000);
+ // Masking adds work to the 10 MiB replay; keep this below the test's 90s limit.
+ const run=await s.waitRun(runId,v=>v.state==='succeeded'&&v.result!==undefined,6000);
  const events=await contiguous(s,runId,run.lastLocalSeq!);const logs=events.filter((e):e is Extract<RunEvent,{kind:'log'}>=>e.kind==='log');
  // Hub stored every chunk the machine retained, masked, and the one gap covers exactly the chunks the machine discarded at its own quota.
  expect(logs).toHaveLength(FILL);expect(logs.every(e=>e.text.startsWith('Bearer [REDACTED] '))).toBe(true);

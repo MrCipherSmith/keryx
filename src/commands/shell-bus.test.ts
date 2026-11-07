@@ -887,7 +887,8 @@ describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", ()
     expect(toolsIdx).toBeGreaterThan(0);
     const toolsBlock = agentModeBranch.slice(toolsIdx, agentModeBranch.indexOf("}),", toolsIdx));
     expect(toolsBlock).not.toContain("bus:");
-    expect(toolsBlock).not.toContain("busBox.current");
+    // Live authority may consult the bus; only the premature bus tool option is forbidden.
+    expect(toolsBlock).not.toMatch(/\bbus\s*:/);
     expect(agentModeBranch).toContain("busJoined: busBox.current !== undefined,");
   });
 });

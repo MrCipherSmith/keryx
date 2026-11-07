@@ -53,6 +53,8 @@ let hostCalls: string[] = [];
 function deps(answer: boolean): ScheduleSlashDeps {
   return {
     cwd: root,
+    // Model an operator terminal independently of the test runner's environment.
+    env: {},
     defaults: () => ({ provider: "anthropic", model: "claude-x" }),
     print: (line) => void printed.push(line),
     confirm: async (card) => {
@@ -96,6 +98,15 @@ afterEach(async () => {
 });
 
 describe("AC6: /schedule", () => {
+  test("an agent shell is refused before confirmation or installation", async () => {
+    expect(await runScheduleSlashCommand(LINE, { ...deps(true), env: { KERYX_TOOL_CALL: "1" } })).toBe(false);
+    expect(printed.join("\n")).toContain("refused");
+    expect(cards).toEqual([]);
+    expect(hostCalls).toEqual([]);
+    expect(existsSync(scheduleStorePath(root))).toBe(false);
+    expect(await readdir(unitDir)).toEqual([]);
+  });
+
   test("shows ONE card with every required element; declining writes no config and installs nothing", async () => {
     const created = await runScheduleSlashCommand(LINE, deps(false));
     expect(created).toBe(false);

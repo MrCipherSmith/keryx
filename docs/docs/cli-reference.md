@@ -4990,6 +4990,16 @@ review's own commands without a prompt — see
 [Automatic review](guides/permission-modes.md#automatic-review).
 
 ```text
+keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+                      --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
+keryx review agents start --run-dir <dir> --run-id <id> --revision <git-revision> --config <json>
+keryx review agents plan --run-dir <dir> --payload <json>
+keryx review agents capabilities --run-dir <dir> [--adapter <id>]
+keryx review agents status --run-dir <dir> [--dispatch <id>]
+keryx review agents spawn --run-dir <dir> --payload <json>
+keryx review agents wait --run-dir <dir> --dispatch <id>
+keryx review agents cancel --run-dir <dir> [--dispatch <id>] --reason <text>
+keryx review agents result --run-dir <dir> --dispatch <id>
 keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                     [--reviewers a,b] [--report <path>] [--automatic]
 keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--style] [--with-role <role>]
@@ -5082,6 +5092,13 @@ keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [
 keryx review readiness <review-id-or-path> [--json]
 keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
 ```
+
+Review V3 uses one foreground owner process for ordinary terminals and external harnesses. `serve` prints an explicit
+Unix-socket handshake containing `KERYX_REVIEW_AGENTS_ROOT_SOCKET`, `KERYX_REVIEW_AGENTS_ROOT_TOKEN`, and
+`KERYX_REVIEW_AGENTS_ROOT_RUNS_ROOT`; export all three only into the controlling Codex CLI, Claude Code, or other harness.
+The bearer grants the fixed host ceiling selected at `serve` startup, so do not persist it in configuration, logs, or
+child-agent environments. Root commands fail closed on a partial environment. Descendant agents receive a different,
+run-scoped bridge grant and cannot combine it with the root environment.
 
 The operator-only steps here (`confirm-plan`, `waive-mutation`, `override-reviewers`, `decide-premise`, `chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal, except that the first four also accept a host question (below); plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8). Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
 

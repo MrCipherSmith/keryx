@@ -3,6 +3,7 @@
   "$id": "keryx://schemas/agent-platform/agent-definition.schema.json",
   "title": "Keryx agent definition",
   "description": "Canonical, harness-neutral agent-persona definition. The frontmatter of a .metaproject/agents/<name>.md file. Compiled into keryx-shell spawn_subagent dispatch inputs or into a host-native subagent file; never executed directly.",
+  "$comment": "The self-delegation invariant (delegation.allowed_entities must not contain this same object's name) is semantic-only because standard JSON Schema cannot compare sibling data values. Keryx enforces it in src/agents/schema.ts.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,8 +18,8 @@
   "properties": {
     "schema_version": {
       "type": "integer",
-      "const": 1,
-      "description": "Frozen schema version for this definition shape."
+      "enum": [1, 2],
+      "description": "Definition shape version. V1 remains readable as a leaf worker; V2 declares execution, tool-scope, and delegation constraints."
     },
     "name": {
       "type": "string",
@@ -78,6 +79,41 @@
       "default": "none",
       "description": "Whether the compiled dispatch requests worktree isolation on targets that support it (keryx-shell: src/harness/child/isolation.ts)."
     },
+    "execution_kind": {
+      "type": "string",
+      "enum": ["worker", "orchestrator"],
+      "description": "V2 execution role. Workers are leaves; orchestrators may delegate within the declared ceiling. V1 defaults to worker."
+    },
+    "tool_scope": {
+      "type": "string",
+      "enum": ["static", "parent"],
+      "description": "V2 tool source. Parent scope requests the parent's effective tool surface and is valid only for orchestrators; host authority may always narrow it."
+    },
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed_entities", "max_depth", "max_children"],
+      "properties": {
+        "allowed_entities": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+          "uniqueItems": true,
+          "description": "Agent entity names this definition may dispatch. Runtime admission also checks each resolved target and the review-run allowlist."
+        },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Additional entity levels this instance may create. Review V3 supports general-to-leaf delegation only."
+        },
+        "max_children": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 512,
+          "description": "Lifetime child launches this instance may request, including retries; the review-run ceiling may be lower."
+        }
+      }
+    },
     "origin": {
       "type": "object",
       "additionalProperties": false,
@@ -101,5 +137,79 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema_version": { "const": 2 } },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "required": ["execution_kind", "tool_scope", "delegation"]
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "properties": { "schema_version": { "const": 2 } },
+          "required": ["schema_version"]
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            { "required": ["execution_kind"] },
+            { "required": ["tool_scope"] },
+            { "required": ["delegation"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "execution_kind": { "const": "worker" } },
+        "required": ["execution_kind"]
+      },
+      "then": {
+        "properties": {
+          "tool_scope": { "const": "static" },
+          "tools": { "not": { "contains": { "const": "spawn_subagent" } } },
+          "delegation": {
+            "properties": {
+              "allowed_entities": { "maxItems": 0 },
+              "max_depth": { "const": 0 },
+              "max_children": { "const": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "execution_kind": { "const": "orchestrator" },
+          "delegation": {
+            "anyOf": [
+              { "properties": { "allowed_entities": { "minItems": 1 } }, "required": ["allowed_entities"] },
+              { "properties": { "max_depth": { "minimum": 1 } }, "required": ["max_depth"] },
+              { "properties": { "max_children": { "minimum": 1 } }, "required": ["max_children"] }
+            ]
+          }
+        },
+        "required": ["execution_kind", "delegation"]
+      },
+      "then": {
+        "properties": {
+          "tools": { "contains": { "const": "spawn_subagent" } },
+          "delegation": {
+            "properties": {
+              "allowed_entities": { "minItems": 1 },
+              "max_depth": { "minimum": 1 },
+              "max_children": { "minimum": 1 }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
