@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.4.16] - 2026-11-07
+
+### Fixed
+- **Team Hub navigation ([#1147](https://github.com/MrCipherSmith/keryx/pull/1147)).** Collapse the main sidebar to a 60 px icon rail on every desktop layout, including narrower tablet windows. Team Hub remembers the choice between sections and page loads. On phones, the navigation drawer keeps its text labels.
+- **Team Hub session control ([#1147](https://github.com/MrCipherSmith/keryx/pull/1147)).** The chat retries temporary renewal failures while the current control lease remains valid. Send a follow-up or close the session after a long answer using the same control lease.
+
+### Upgrade notes
+- Update Team Hub to pick up the navigation and session control fixes. Team Hub 0.4.16 works with the 0.4.15 machine executor.
+
 ## [0.4.15] - 2026-11-07
 
 ### Fixed
