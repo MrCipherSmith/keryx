@@ -7,7 +7,7 @@ import {
   type JevQuestions,
 } from "../decision/jev-client";
 import { redactSensitiveText } from "../../security/service";
-import type { RoutingClassifierAdapter } from "./classifier-chain-v2";
+import type { RoutingClassifierAdapter } from "./classifier-chain";
 import { MODEL_CLASSES } from "./model-class";
 import { ROUTING_CAPABILITIES } from "./routing-request";
 import { ROUTING_CATEGORIES } from "./table";

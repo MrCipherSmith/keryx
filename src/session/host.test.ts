@@ -16,6 +16,11 @@ import type { SessionHostOptions, SessionWorkspacePort } from "./host-types";
 import { superviseSpawnedProcess } from "../harness/tool/builtin/background-job-registry";
 import { tasksIntegrationsCommands } from "./commands/tasks-integrations";
 import { readFileSync, readdirSync } from "node:fs";
+import { NativeRoutingBudgetStore } from "./native-routing-budget";
+import { normalizeRoutingConfig } from "../harness/routing/config";
+import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
+import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
+import { buildCatalogRoutingSnapshot } from "../harness/routing/snapshot-adapter";
 
 const digest = "a".repeat(64);
 const roots: string[] = [];
@@ -30,12 +35,12 @@ function record(): Control["SessionRecord"] {
     capabilities: { literalText: true, attachments: false, attachmentReason: "typed-artifact-contract-required", commandCatalogue: true, modelRouting: true },
   };
 }
-async function fixture(scripts = [okReply], autoApprove = true, opening = false, now?: () => number, authorizeAction: NonNullable<SessionHostOptions["authorizeAction"]> = async () => true, commandContributions?: NativeCommandContribution[], projectContext?: SessionProjectReadPort, analysis?: NativeRuntimeOptions["analysis"], localOptions: { spawner?: NativeRuntimeOptions["spawner"]; authorizeInspection?: SessionHostOptions["authorizeInspection"]; authorizeOwnedControl?: SessionHostOptions["authorizeOwnedControl"]; privateControlDir?: boolean; allowSubagents?: boolean; providerId?: string; lifecycle?: SessionHostOptions["lifecycle"]; availability?: NativeRuntimeOptions["availability"]; classify?: NativeRuntimeOptions["classify"]; resolveProvider?: NativeRuntimeOptions["resolveProvider"]; onApprove?: () => void; routingEnabled?: boolean; authorizeSelection?: SessionHostOptions["authorizeSelection"] } = {}) {
+async function fixture(scripts = [okReply], autoApprove = true, opening = false, now?: () => number, authorizeAction: NonNullable<SessionHostOptions["authorizeAction"]> = async () => true, commandContributions?: NativeCommandContribution[], projectContext?: SessionProjectReadPort, analysis?: NativeRuntimeOptions["analysis"], localOptions: { spawner?: NativeRuntimeOptions["spawner"]; authorizeInspection?: SessionHostOptions["authorizeInspection"]; authorizeOwnedControl?: SessionHostOptions["authorizeOwnedControl"]; privateControlDir?: boolean; allowSubagents?: boolean; providerId?: string; lifecycle?: SessionHostOptions["lifecycle"]; availability?: NativeRuntimeOptions["availability"]; classify?: NativeRuntimeOptions["classify"]; resolveProvider?: NativeRuntimeOptions["resolveProvider"]; onApprove?: () => void; routingEnabled?: boolean; authorizeSelection?: SessionHostOptions["authorizeSelection"]; routingBudgetStore?: NativeRoutingBudgetStore } = {}) {
   const root = await mkdtemp(join(tmpdir(), "keryx-native-host-")); roots.push(root);
   const cwd = join(root, "checkout");
   const init = Bun.spawn(["git", "init", cwd], { stdout: "ignore", stderr: "pipe" }); expect(await init.exited).toBe(0);
   const provider = scriptedProvider(scripts);
-  const runtime = createNativeSessionRuntime({ cwd, ...(localOptions.availability === undefined ? {} : { availability: localOptions.availability }), ...(localOptions.classify === undefined ? {} : { classify: localOptions.classify }), ...(localOptions.resolveProvider === undefined ? {} : { resolveProvider: localOptions.resolveProvider }), ...(localOptions.allowSubagents ? { allowSubagents: true } : {}), provider: provider.provider, providerId: localOptions.providerId ?? "scripted", modelId: "m", ...(localOptions.spawner === undefined ? {} : { spawner: localOptions.spawner }), ...(analysis === undefined ? {} : { analysis }), ...(commandContributions === undefined ? {} : { commandContributions }), ...(autoApprove ? { approve: async (_name: string, _input: string, meta?: { fingerprint: string }) => { localOptions.onApprove?.(); return { approved: true, ...(meta === undefined ? {} : { fingerprint: meta.fingerprint }) }; } } : {}) });
+  const runtime = createNativeSessionRuntime({ cwd, ...(localOptions.availability === undefined ? {} : { availability: localOptions.availability }), ...(localOptions.classify === undefined ? {} : { classify: localOptions.classify }), ...(localOptions.routingBudgetStore === undefined ? {} : { routingBudgetStore: localOptions.routingBudgetStore }), ...(localOptions.resolveProvider === undefined ? {} : { resolveProvider: localOptions.resolveProvider }), ...(localOptions.allowSubagents ? { allowSubagents: true } : {}), provider: provider.provider, providerId: localOptions.providerId ?? "scripted", modelId: "m", ...(localOptions.spawner === undefined ? {} : { spawner: localOptions.spawner }), ...(analysis === undefined ? {} : { analysis }), ...(commandContributions === undefined ? {} : { commandContributions }), ...(autoApprove ? { approve: async (_name: string, _input: string, meta?: { fingerprint: string }) => { localOptions.onApprove?.(); return { approved: true, ...(meta === undefined ? {} : { fingerprint: meta.fingerprint }) }; } } : {}) });
   const workspace: SessionWorkspacePort = { verify: async () => ({ ok: true, baseline: digest }), checkpoint: async () => ({ ok: true, baseline: digest }) };
   const initial = record(); initial.config.routing.enabled = localOptions.routingEnabled === true; if (localOptions.providerId !== undefined) { initial.config.baselineCandidateId = `${localOptions.providerId}:m`; initial.config.routing.candidateIds = [`${localOptions.providerId}:m`]; initial.config.routing.fallbackCandidateId = `${localOptions.providerId}:m`; }
   const host = await createSessionHost({ cwd, dataDir: join(root, "state"), record: { ...initial, state: opening ? "opening" : "idle" }, runtime,
@@ -1242,10 +1247,30 @@ test("same-millisecond authenticated renewal may acknowledge equal expiry withou
   } finally { await host.dispose(); }
 });
 
+/**
+ * A classifier stand-in that behaves like the routing classifier: it resolves the
+ * session model through the real resolver and publishes the selected receipt's
+ * budget context to the runtime's store, so execution is metered against it.
+ */
+function routedSelection(store: NativeRoutingBudgetStore, journalDir: string): { readonly candidateId: string; readonly selectionReceiptId: string } {
+  const target = { providerId: "scripted", modelId: "m" };
+  const config = normalizeRoutingConfig({});
+  const request = { requestId: `host-test:${Math.random()}`, category: "default" as const, origin: "native-session" as const, baseline: target,
+    requirements: { capabilities: [] as const, inputTokensRequired: 0, outputTokensReserved: 0 } };
+  const snapshot = buildCatalogRoutingSnapshot({ configDigest: config.configDigest, observedAt: new Date().toISOString(), policyRevision: "p", capabilityRevision: "c",
+    baseline: target, providers: [{ name: "scripted", models: ["m"] }], profiles: {}, request,
+    policy: { credentialsAvailable: () => true, policyAllowed: () => true, parentAllowed: () => true, capabilities: () => [], cooldown: () => false, observedLatencyMs: () => null, availability: () => "available" } });
+  const receipt = resolveRoutingForRuntime({ request, snapshot, config });
+  if (receipt.decision.status !== "selected") throw new Error(`fixture routing did not select: ${receipt.decision.status}`);
+  store.publish(receipt.receiptId, { target, receipt, config, budget: new RoutingBudgetLedger({ configUsd: null, unknownCost: "allow" }), journal: { cwd: journalDir, configDir: journalDir }, estimatedCostUsd: () => 0 });
+  return { candidateId: "scripted:m", selectionReceiptId: receipt.receiptId };
+}
+
 test("duplicate original work during selection shares one private classification and rejects changed replay", async () => {
   let classifications = 0; let began!: () => void; let release!: () => void; const started = new Promise<void>((resolve) => { began = resolve; }); const held = new Promise<void>((resolve) => { release = resolve; });
-  const { host, provider } = await fixture([okReply], true, false, undefined, async () => true, undefined, undefined, undefined, { routingEnabled: true,
-    classify: async () => { classifications++; began(); await held; return "scripted:m"; } });
+  const store = new NativeRoutingBudgetStore(); const journalDir = await mkdtemp(join(tmpdir(), "keryx-host-routing-")); roots.push(journalDir);
+  const { host, provider } = await fixture([okReply], true, false, undefined, async () => true, undefined, undefined, undefined, { routingEnabled: true, routingBudgetStore: store,
+    classify: async () => { classifications++; began(); await held; return routedSelection(store, journalDir); } });
   let first: Promise<unknown> | undefined; let duplicate: Promise<unknown> | undefined;
   try { first = message(host, "same-selection", "Same immutable work"); await started; duplicate = message(host, "same-selection", "Same immutable work");
     expect((await message(host, "same-selection", "Different changed replay")).status).toBe("rejected"); expect(classifications).toBe(1);
@@ -1255,9 +1280,9 @@ test("duplicate original work during selection shares one private classification
 
 
 test("queued classification survives transient admission authority loss without reclassifying or replacing its logical receipt", async () => {
-  let classifications = 0; let unavailable = true;
-  const { host, provider, root } = await fixture([okReply], true, false, undefined, async () => true, undefined, undefined, undefined, { routingEnabled: true,
-    classify: async () => { classifications++; return "scripted:m"; },
+  let classifications = 0; let unavailable = true; const store = new NativeRoutingBudgetStore(); const journalDir = await mkdtemp(join(tmpdir(), "keryx-host-routing-")); roots.push(journalDir);
+  const { host, provider, root } = await fixture([okReply], true, false, undefined, async () => true, undefined, undefined, undefined, { routingEnabled: true, routingBudgetStore: store,
+    classify: async () => { classifications++; return routedSelection(store, journalDir); },
     authorizeSelection: async (action) => action.phase === "admission" && unavailable ? { status: "temporarily-unavailable" as const } : { status: "valid" as const } });
   try {
     const row = await host.inspect();
@@ -1634,3 +1659,21 @@ test("every command outcome the host sends satisfies the result check Hub applie
     expect((await host.inspect()).state).toBe("idle");
   } finally { await host.dispose(); }
 });
+
+for (const routingDecision of ["classified", "classifier-fallback"] as const) {
+  test(`a routing-selected ${routingDecision} execution without its budget context fails closed before any provider call`, async () => {
+    const store = new NativeRoutingBudgetStore(); const journalDir = await mkdtemp(join(tmpdir(), "keryx-host-routing-")); roots.push(journalDir);
+    // A real routing receipt id, but its budget context is consumed before admission (never reaching execution).
+    const { host, provider } = await fixture([okReply], true, false, undefined, async () => true, undefined, undefined, undefined, { routingEnabled: true, routingBudgetStore: store,
+      classify: async () => {
+        const selection = routedSelection(store, journalDir);
+        store.take(selection.selectionReceiptId);
+        return routingDecision === "classified" ? selection : { ...selection, classifierFallback: true as const };
+      } });
+    try {
+      await message(host, `missing-context-${routingDecision}`, "Run without its routing budget");
+      await idle(host);
+      expect(provider.requests).toHaveLength(0);
+    } finally { await host.dispose(); }
+  });
+}

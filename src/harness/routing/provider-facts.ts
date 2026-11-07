@@ -1,5 +1,5 @@
 import type { ProviderDescription } from "../provider/types";
-import { routingV2Digest } from "./config-v2";
+import { routingDigest } from "./config";
 import { modelRefKey, type ModelRef } from "./model-class";
 import type { RoutingCapability } from "./routing-request";
 
@@ -32,7 +32,7 @@ export function inspectProviderRoutingFacts(
     revisionRows.push({ target, descriptor: description?.descriptor ?? null, capabilities: description?.capabilities ?? null });
   }
   return Object.freeze({
-    capabilityRevision: routingV2Digest(revisionRows),
+    capabilityRevision: routingDigest(revisionRows),
     capabilities(target: ModelRef) {
       return capabilities.get(modelRefKey(target)) ?? [];
     },
@@ -41,7 +41,7 @@ export function inspectProviderRoutingFacts(
 
 /** Stable revision over the actual allow/deny facts supplied to a snapshot. */
 export function routingPolicyRevision(targets: readonly ModelRef[], facts: (target: ModelRef) => unknown): string {
-  return routingV2Digest([...targets]
+  return routingDigest([...targets]
     .sort((left, right) => modelRefKey(left).localeCompare(modelRefKey(right)))
     .map((target) => ({ target, facts: facts(target) })));
 }

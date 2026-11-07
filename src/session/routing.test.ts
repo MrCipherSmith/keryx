@@ -13,19 +13,19 @@ test("session routing preserves legacy fallback for ordinary classifier failures
   expect(await routing.select("task", config)).toMatchObject({ effectiveCandidateId: candidate.candidateId, routingDecision: "classifier-fallback", fallbackReason: "classifier-failed" });
 });
 
-test("session routing propagates an active v2 fatal classifier failure", async () => {
-  const fatal = Object.assign(new Error("routing-v2-config-invalid"), { fatal: true });
+test("session routing propagates a fatal classifier failure", async () => {
+  const fatal = Object.assign(new Error("routing-config-invalid"), { fatal: true });
   const routing = createSessionRouting({ config, availability, classify: async () => { throw fatal; }, fatalClassificationError: (cause) => cause === fatal });
   await expect(routing.select("task", config)).rejects.toBe(fatal);
 });
 
-test("session routing preserves a canonical v2 receipt supplied by the classifier", async () => {
+test("session routing preserves a canonical routing receipt supplied by the classifier", async () => {
   const receipt = "b".repeat(64);
   const routing = createSessionRouting({ config, availability, classify: async () => ({ candidateId: candidate.candidateId, selectionReceiptId: receipt }) });
   expect((await routing.select("task", config)).selectionReceiptId).toBe(receipt);
 });
 
-test("session routing preserves a receipt when v2 selects the separately authorized baseline", async () => {
+test("session routing preserves a receipt when routing selects the separately authorized baseline", async () => {
   const receipt = "c".repeat(64);
   const alternate = { ...candidate, candidateId: "alternate", modelId: "alternate" };
   const baselineSeparate: Control["SessionConfig"] = { ...config,

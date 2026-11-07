@@ -8,7 +8,6 @@
 // jev-client`.
 
 import {
-  classifyTurn,
   CLASSIFY_TURN_TIMEOUT_MS,
   type ClassifyTurnResult,
 } from "../harness/decision/classify-turn";
@@ -16,55 +15,33 @@ import type { TaskClassifierUsage } from "../harness/decision/classifier";
 import {
   connectedPredicateFrom,
   describeAssignment,
-  describeRejectionNotice,
-  resolveCategoryDetailed,
-  ROUTING_CATEGORIES,
-  sessionDerivationModels,
   type CategoryAssignment,
   type FlatPickerProvider,
   type RoutingCategory,
-  type RoutingTable,
-} from "../harness/routing/table";
-import { loadRoutingConfig, type RoutingConfigLocation } from "../harness/routing/config";
-import { deriveDefaultTable } from "../harness/routing/derive-default-table";
-import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
+  } from "../harness/routing/table";
 import { selectClassifierModel } from "../harness/routing/classifier-model";
 import { hasCredential, type ProviderFactory } from "../harness/provider/single-turn";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { redactSensitiveText } from "../security/service";
-import { resolveJevClassifierCredential } from "../harness/decision/jev-classifier";
 import { resolveExternalSetting } from "../lib/external-switch";
 import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../lib/external-providers";
-import { availablePredicateFromProfiles, loadModelProfiles, profileKey } from "../harness/routing/model-profile";
-import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
-import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
-import { routingV2Digest } from "../harness/routing/config-v2";
+import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
+import { loadRouting } from "../harness/routing/settings";
+import type { NormalizedRoutingConfig } from "../harness/routing/config";
+import { routingDigest } from "../harness/routing/config";
 import { estimateModelCostUsd } from "../harness/routing/snapshot-adapter";
 import type { RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
-import type { RoutingAssignmentV2 } from "../harness/routing/config-v2";
+import type { RoutingAssignment } from "../harness/routing/config";
 import type { RoutingRequirements } from "../harness/routing/routing-request";
 import type { RoutingCapability } from "../harness/routing/routing-request";
 import type { RoutingBudgetLedger } from "../harness/routing/routing-budget";
-import { routeTurnV2 } from "../harness/routing/routing-turn-service-v2";
+import { routeTurn } from "../harness/routing/routing-turn-service";
 import type { RoutingSnapshot } from "../harness/routing/snapshot";
 import type { RoutingRequest } from "../harness/routing/routing-request";
 import type { NormalizedRequest, NormalizedUsage, ProviderDescription } from "../harness/provider/types";
 import { estimateRequestTokens } from "../harness/provider/context-guard";
-import { DEFAULT_JEV_ROUTING_TARGET } from "../harness/routing/classifier-adapters-v2";
+import { DEFAULT_JEV_ROUTING_TARGET } from "../harness/routing/classifier-adapters";
 import { randomUUID } from "node:crypto";
-
-/**
- * The interactive turn's candidate vocabulary: every catalogue category
- * (PRD §4) EXCEPT `"default"` — picking `"default"` would mean "use the
- * session's own model", which is exactly what happens when nothing routes
- * at all, so it is never a useful classifier answer. Deliberately wider
- * than `WIRED_ROUTING_CATEGORIES` (`table.ts`) — that set tracks which
- * categories a call site ALREADY consults the table for (`review`,
- * `subagents`, flow 305); this flow's classifier is the first caller that
- * needs the full catalogue as its own candidate list for an interactive
- * turn, independent of that narrower "wired" bookkeeping.
- */
-const TURN_CLASSIFIER_CATEGORIES: readonly RoutingCategory[] = ROUTING_CATEGORIES.filter((c) => c !== "default");
 
 export interface RoutingClassifierTurnOptions {
   readonly enabled: boolean;
@@ -106,11 +83,11 @@ export interface RoutingClassifierTurnResult {
   readonly fallbackReason?: string;
   /** `undefined` when the resolved assignment is `session-default` — nothing to route to, the session's own model applies unchanged. */
   readonly routed?: { readonly providerId: string; readonly modelId: string };
-  /** v2 resolver denial is terminal; callers must not silently run the baseline. */
+  /** Routing denial is terminal; callers must not silently run the baseline. */
   readonly blockTurn?: boolean;
-  /** Frozen v2 inputs consumed by the execution ProviderPort wrapper. */
-  readonly routingV2?: {
-    readonly config: NormalizedRoutingV2Config;
+  /** Frozen routing inputs consumed by the execution ProviderPort wrapper. */
+  readonly routingExecution?: {
+    readonly config: NormalizedRoutingConfig;
     readonly request: RoutingRequest;
     readonly snapshot: RoutingSnapshot;
     readonly budget: RoutingBudgetLedger;
@@ -174,7 +151,7 @@ async function loadTurnProviders(
   }
 }
 
-function legacyAssignment(assignment: RoutingAssignmentV2): CategoryAssignment {
+function categoryAssignmentFor(assignment: RoutingAssignment): CategoryAssignment {
   if (assignment.mode === "model") return { kind: "model", providerId: assignment.target.providerId, modelId: assignment.target.modelId };
   return { kind: "session-default" };
 }
@@ -191,7 +168,7 @@ function catalogCapabilityFacts(
   providers: readonly FlatPickerProvider[],
   baseline: { readonly providerId: string; readonly modelId: string },
   opts: RoutingClassifierTurnOptions,
-  config: NormalizedRoutingV2Config | undefined,
+  config: NormalizedRoutingConfig | undefined,
 ): ReadonlyMap<string, readonly RoutingCapability[]> {
   const facts = new Map<string, readonly RoutingCapability[]>();
   facts.set(profileKey(baseline.providerId, baseline.modelId), [...(opts.baselineCapabilities ?? [])].sort());
@@ -218,10 +195,10 @@ function catalogCapabilityFacts(
   return facts;
 }
 
-async function runRoutingClassifierForTurnV2(
+async function runRoutingForTurn(
   line: string,
   opts: RoutingClassifierTurnOptions,
-  config: NormalizedRoutingV2Config,
+  config: NormalizedRoutingConfig,
   providers: readonly FlatPickerProvider[],
   profiles: ReturnType<typeof loadModelProfiles>,
   env: Record<string, string | undefined>,
@@ -267,7 +244,7 @@ async function runRoutingClassifierForTurnV2(
       usage.outputTokens,
     ) ?? estimated ?? undefined;
   };
-  const routed = await routeTurnV2({
+  const routed = await routeTurn({
     task: line,
     request: baseRequest,
     config,
@@ -319,7 +296,7 @@ async function runRoutingClassifierForTurnV2(
     ? decision.selection.providerId === baseline.providerId && decision.selection.modelId === baseline.modelId
       ? { kind: "session-default" as const }
       : { kind: "model" as const, providerId: decision.selection.providerId, modelId: decision.selection.modelId }
-    : legacyAssignment(config.categories[category]);
+    : categoryAssignmentFor(config.categories[category]);
   const result: RoutingClassifierTurnResult = {
     classification,
     category,
@@ -327,7 +304,7 @@ async function runRoutingClassifierForTurnV2(
     assignment,
     ...(fallbackReason === undefined ? {} : { fallbackReason }),
     ...(decision.status === "blocked" || decision.status === "needs-classification" ? { blockTurn: true } : {}),
-    ...(decision.status !== "selected" ? {} : { routingV2: {
+    ...(decision.status !== "selected" ? {} : { routingExecution: {
       config,
       request,
       snapshot,
@@ -383,17 +360,17 @@ export async function runRoutingClassifierForTurn(
 ): Promise<RoutingClassifierTurnResult | undefined> {
   if (opts.signal?.aborted) return undefined;
   if (!opts.enabled) return undefined;
-  let activeV2: NormalizedRoutingV2Config | undefined;
+  let routingConfig: NormalizedRoutingConfig;
   try {
-    activeV2 = loadActiveRoutingV2(opts.cwd, opts.userConfigDir);
+    routingConfig = loadRouting(opts.cwd, opts.userConfigDir);
   } catch (error) {
     const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
     return {
-      classification: { result: { ok: false, reason: "invalid active routing v2 configuration" }, trace: [] },
+      classification: { result: { ok: false, reason: "invalid routing configuration" }, trace: [] },
       category: "default",
       baseline,
       assignment: { kind: "session-default" },
-      fallbackReason: redactSensitiveText(`active routing v2 configuration is invalid: ${error instanceof Error ? error.message : String(error)}`),
+      fallbackReason: redactSensitiveText(`routing configuration is invalid: ${error instanceof Error ? error.message : String(error)}`),
       blockTurn: true,
     };
   }
@@ -427,169 +404,44 @@ export async function runRoutingClassifierForTurn(
       (opts.providerFactory !== undefined || hasCredential(providerId, env)),
     );
   } catch (error) {
-    if (activeV2 === undefined) throw error;
     return {
-      classification: { result: { ok: false, reason: "routing v2 preparation failed" }, trace: [] },
+      classification: { result: { ok: false, reason: "routing preparation failed" }, trace: [] },
       category: "default",
       baseline: { providerId: opts.sessionProvider, modelId: opts.sessionModel },
       assignment: { kind: "session-default" },
-      fallbackReason: redactSensitiveText(`routing v2 preparation failed: ${error instanceof Error ? error.message : String(error)}`),
+      fallbackReason: redactSensitiveText(`routing preparation failed: ${error instanceof Error ? error.message : String(error)}`),
       blockTurn: true,
     };
   }
   const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
-  const capabilityFacts = catalogCapabilityFacts(providers, baseline, opts, activeV2);
+  const capabilityFacts = catalogCapabilityFacts(providers, baseline, opts, routingConfig);
   const snapshotMeta = {
     observedAt: new Date().toISOString(),
-    policyRevision: routingV2Digest({
+    policyRevision: routingDigest({
       external: external.value,
       externalProviders,
       classifierCallerPolicy: opts.classifierAllowed === undefined ? "none" : "caller-supplied",
       executorCallerPolicy: opts.executorAllowed === undefined ? "none" : "caller-supplied",
     }),
-    capabilityRevision: routingV2Digest({
+    capabilityRevision: routingDigest({
       capabilities: [...capabilityFacts.entries()]
         .map(([target, capabilities]) => ({ target, capabilities }))
         .sort((left, right) => left.target.localeCompare(right.target)),
     }),
   };
-  const shadowV2 = env.KERYX_ROUTING_V2_SHADOW === "1";
-  if (activeV2 !== undefined && shadowV2) {
-    try {
-      const request: RoutingRequest = {
-        requestId: opts.requestId ?? randomUUID(),
-        category: "default",
-        origin: "operator",
-        baseline,
-        requirements: opts.requirements ?? { capabilities: [], inputTokensRequired: Math.max(1, Math.ceil(line.length / 4)), outputTokensReserved: 4_096 },
-      };
-      await routeTurnV2({
-        task: line,
-        request,
-        config: activeV2,
-        providers,
-        profiles,
-        snapshotMeta,
-        snapshotPolicy: {
-          credentialsAvailable: (target) => target.providerId === baseline.providerId || hasCredential(target.providerId, env),
-          policyAllowed: (target) => externalAllowed(target.providerId, target.modelId) && (opts.executorAllowed?.(target.providerId, target.modelId) ?? true),
-          parentAllowed: () => true,
-          capabilities: (target) => capabilityFacts.get(profileKey(target.providerId, target.modelId)) ?? [],
-          cooldown: () => false,
-          observedLatencyMs: () => null,
-          availability: (target) => target.providerId === baseline.providerId && target.modelId === baseline.modelId ? "available" : undefined,
-        },
-        classifier: {
-          estimatedCostUsd: () => null,
-          adapterInput: {
-            sessionProvider: opts.sessionProvider,
-            env,
-            jevEnabled: false,
-            externalAllowed: (providerId, modelId) => externalAllowed(providerId, modelId),
-          },
-        },
-        classify: false,
-        journal: { cwd: opts.cwd, ...(opts.userConfigDir === undefined ? {} : { configDir: opts.userConfigDir }), kind: "preview" },
-      });
-    } catch {
-      // Shadow observation must never change or block legacy execution.
-    }
+  try {
+    return await runRoutingForTurn(line, opts, routingConfig, providers, profiles, env, externalAllowed, fallbackModel,
+      snapshotMeta, capabilityFacts, deadline);
+  } catch (error) {
+    return {
+      classification: { result: { ok: false, reason: "routing resolution failed" }, trace: [] },
+      category: "default",
+      baseline: { providerId: opts.sessionProvider, modelId: opts.sessionModel },
+      assignment: { kind: "session-default" },
+      fallbackReason: redactSensitiveText(`routing resolution failed: ${error instanceof Error ? error.message : String(error)}`),
+      blockTurn: true,
+    };
   }
-  if (activeV2 !== undefined && !shadowV2) {
-    try {
-      return await runRoutingClassifierForTurnV2(line, opts, activeV2, providers, profiles, env, externalAllowed, fallbackModel,
-        snapshotMeta, capabilityFacts, deadline);
-    } catch (error) {
-      return {
-        classification: { result: { ok: false, reason: "routing v2 resolution failed" }, trace: [] },
-        category: "default",
-        baseline: { providerId: opts.sessionProvider, modelId: opts.sessionModel },
-        assignment: { kind: "session-default" },
-        fallbackReason: redactSensitiveText(`routing v2 resolution failed: ${error instanceof Error ? error.message : String(error)}`),
-        blockTurn: true,
-      };
-    }
-  }
-  const classification = await classifyTurn(line, TURN_CLASSIFIER_CATEGORIES, {
-    jevEnabled: opts.jevEnabled && opts.jevAllowed !== false && external.value === "on",
-    ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-    fallbackModel: fallbackModel ?? null,
-    ...(opts.providerFactory !== undefined ? { providerFactory: opts.providerFactory } : {}),
-    ...(opts.env !== undefined ? { env: opts.env } : {}),
-    ...(opts.fetch !== undefined ? { fetch: opts.fetch } : {}),
-    timeoutMs: Math.max(0, deadline - performance.now()),
-  });
-  if (opts.signal?.aborted) return undefined;
-  if (classification === undefined) return undefined;
-  const skippedJev = opts.jevEnabled && opts.jevAllowed === false ? "jev: caller policy denied"
-    : opts.jevEnabled && external.value !== "on" ? "jev: external policy denied"
-    : opts.jevEnabled && resolveJevClassifierCredential(opts.env).key === undefined ? "jev: credentials unavailable" : undefined;
-  if (!classification.result.ok) {
-    const failures = classification.trace.flatMap(stage => stage.result.ok ? [] : [`${stage.source}: ${stage.result.reason}`]);
-    return { classification, baseline, assignment: { kind: "session-default" },
-      fallbackReason: redactSensitiveText([skippedJev, ...failures,
-        fallbackModel === undefined ? "no available authorized sufficient classifier" : undefined,
-        classification.result.reason].filter(Boolean).join("; ")) };
-  }
-
-  const category = classification.result.category;
-  const location: RoutingConfigLocation = { cwd: opts.cwd, ...(opts.userConfigDir !== undefined ? { userConfigDir: opts.userConfigDir } : {}) };
-  const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
-  if (opts.signal?.aborted) return undefined;
-  const connected = connectedPredicateFrom(providers);
-  const available = availablePredicateFromProfiles(profiles);
-  let fallbackReason: string | undefined;
-  // Check the concrete default BEFORE accepting a layer, preserving the
-  // project > user > derived > session fallback order of the leaf resolver.
-  const connectedForTurn = (providerId: string, modelId?: string): boolean => {
-    if (modelId !== undefined) {
-      const reason = !connected(providerId, modelId) ? "model not connected"
-        : !externalAllowed(providerId, modelId) ? "external policy denied"
-        : !available(providerId, modelId) ? "model unavailable"
-        : !(opts.executorAllowed?.(providerId, modelId) ?? true) ? "executor policy denied"
-        : opts.providerFactory === undefined && !hasCredential(providerId, env) ? "credentials unavailable"
-        : undefined;
-      if (reason !== undefined) {
-        fallbackReason ??= `${providerId}/${modelId}: ${reason}`;
-        return false;
-      }
-      return true;
-    }
-    const defaultId = resolveProviderDefaultModelId(providerId);
-    const reason = !connected(providerId) ? "provider not connected"
-      : defaultId === undefined ? "no documented provider default"
-      : !connected(providerId, defaultId) ? "default model not connected"
-      : !externalAllowed(providerId, defaultId) ? "external policy denied"
-      : !available(providerId, defaultId) ? "default model unavailable"
-      : !(opts.executorAllowed?.(providerId, defaultId) ?? true) ? "executor policy denied"
-      : opts.providerFactory === undefined && !hasCredential(providerId, env) ? "credentials unavailable"
-      : undefined;
-    if (reason !== undefined) {
-      fallbackReason ??= `${providerId} (provider default): ${reason}`;
-      return false;
-    }
-    return true;
-  };
-  // Flow 327's `derived` layer, built from the SAME provider list already on
-  // hand (`providers`, shared with the picker) against the session's own
-  // provider/model — the same shape `keryx routing list` and `/routing` use.
-  const models = sessionDerivationModels(providers, { providerId: opts.sessionProvider, modelId: opts.sessionModel });
-  const derived: RoutingTable = deriveDefaultTable(opts.sessionProvider, models, profiles, opts.sessionModel);
-  const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connectedForTurn, available);
-  fallbackReason ??= resolved.rejected === undefined ? skippedJev : describeRejectionNotice(resolved.rejected, resolved.assignment);
-  const stageFailures = classification.trace.flatMap(stage => stage.result.ok ? [] : [`${stage.source}: ${stage.result.reason}`]);
-  const reasons = [...new Set([skippedJev, ...stageFailures, fallbackReason].filter((reason): reason is string => reason !== undefined))];
-  fallbackReason = reasons.length === 0 ? undefined : redactSensitiveText(reasons.join("; "));
-  const result = { classification, category, baseline, assignment: resolved.assignment,
-    ...(fallbackReason !== undefined ? { fallbackReason: redactSensitiveText(fallbackReason) } : {}) };
-  if (resolved.assignment.kind === "session-default") return result;
-  if (resolved.assignment.kind === "model") {
-    return { ...result, routed: { providerId: resolved.assignment.providerId, modelId: resolved.assignment.modelId } };
-  }
-  // Same documented default as the CLI/child requests, never the baseline
-  // or an arbitrary live catalogue entry. Already checked above.
-  const modelId = resolveProviderDefaultModelId(resolved.assignment.providerId);
-  return modelId === undefined ? result : { ...result, routed: { providerId: resolved.assignment.providerId, modelId } };
 }
 
 /** Report the deciding stage, not the executor's fallback status. */

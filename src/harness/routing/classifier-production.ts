@@ -1,18 +1,18 @@
 import { hasCredential, type ProviderFactory } from "../provider/single-turn";
-import type { NormalizedRoutingV2Config } from "./config-v2";
+import type { NormalizedRoutingConfig } from "./config";
 import {
   DEFAULT_JEV_ROUTING_TARGET,
   jevRoutingClassifierAdapter,
   mainModelRoutingClassifierAdapter,
-} from "./classifier-adapters-v2";
-import type { RoutingClassifierAdapter } from "./classifier-chain-v2";
+} from "./classifier-adapters";
+import type { RoutingClassifierAdapter } from "./classifier-chain";
 import type { ModelRef } from "./model-class";
 import { resolveJevClassifierCredential } from "../decision/jev-classifier";
 
 export const ROUTING_CLASSIFIER_ADAPTER_REGISTRY: ReadonlySet<string> = new Set(["jev", "model"]);
 
 export interface BuildRoutingClassifierAdaptersInput {
-  readonly config: NormalizedRoutingV2Config;
+  readonly config: NormalizedRoutingConfig;
   readonly sessionProvider: string;
   readonly fallbackModel?: ModelRef;
   readonly env: Record<string, string | undefined>;
@@ -26,7 +26,7 @@ export interface BuildRoutingClassifierAdaptersInput {
   readonly timeoutMs?: number;
 }
 
-function providerAllowed(config: NormalizedRoutingV2Config, sessionProvider: string, providerId: string): boolean {
+function providerAllowed(config: NormalizedRoutingConfig, sessionProvider: string, providerId: string): boolean {
   if (config.providers.scope === "all-connected") return true;
   if (config.providers.scope === "session-only") return providerId === sessionProvider;
   return config.providers.allowlist.includes(providerId);

@@ -1,7 +1,7 @@
 # Спецификация единого роутинга моделей
 Version: 0.1.1
 
-Status: draft implementation — контракт v2 ниже задаёт критерии приёмки. Проверка финального CI и пилот требуются для выпуска.
+Status: draft implementation — контракт Routing ниже задаёт критерии приёмки. Проверка финального CI и пилот требуются для выпуска.
 
 ## 1. Идентичность и исходные данные
 
@@ -12,7 +12,7 @@ Package: keryx-unified-model-routing. Runtime owner: src/harness/routing. Вер
 | Текущий механизм | Наблюдение | Точка интеграции |
 |---|---|---|
 | [Таблица](../../../src/harness/routing/table.ts) | override/project/user/derived/session | Заменить сборку решений общим resolver |
-| [Derived](../../../src/harness/routing/derive-default-table.ts) | Ранг по имени, optional task-cost input | Убрать из активной v2 резолюции |
+| [Derived](../../../src/harness/routing/derive-default-table.ts) | Ранг по имени, optional task-cost input | Убрать из активной резолюции Routing |
 | [Профили](../../../src/harness/routing/model-profile.ts) | Operator tier hints отдельно от derived ranking | Каталог фактов + отдельное членство в классах |
 | [Subagent](../../../src/harness/tool/builtin/spawn-subagent-tool.ts) | model_tier обходит категорию subagents | Рекомендация класса ниже конфигурации |
 | [Review](../../../src/commands/review.ts) | Категория переопределяет результат tier | Общий request/decision |
@@ -23,7 +23,7 @@ Package: keryx-unified-model-routing. Runtime owner: src/harness/routing. Вер
 | [Session routing](../../../src/session/routing.ts) | Отдельный выбор effective candidate | Потреблять canonical decision |
 | [Child gates](../../../src/harness/child/model.ts) | Авторизация дочернего provider | Сохранить проверки перед I/O |
 
-Ранее локально выполнены 98 тестов четырёх существующих файлов (table, derive-default-table, spawn-subagent-model-tier, spawn-subagent-codex-tiers): pass. Это baseline legacy, не проверка нового дизайна. Старый [Task Router](../keryx-jev-router/README.md) сохраняется как история; его ограничения single-provider derivation и отдельного tier resolver заменяются этим контрактом только в v2. [Remote sessions](../hub-remote-sessions/README.md) сохраняет собственную границу полномочий.
+Ранее локально выполнены 98 тестов четырёх существующих файлов (table, derive-default-table, spawn-subagent-model-tier, spawn-subagent-codex-tiers): pass. Это baseline legacy, не проверка нового дизайна. Старый [Task Router](../keryx-jev-router/README.md) сохраняется как история; его ограничения single-provider derivation и отдельного tier resolver заменяются этим контрактом в основном Routing. [Remote sessions](../hub-remote-sessions/README.md) сохраняет собственную границу полномочий.
 
 ## 2. Четыре класса
 
@@ -34,17 +34,17 @@ Package: keryx-unified-model-routing. Runtime owner: src/harness/routing. Вер
 | expert | 2 | Сложная реализация, глубокое review, самостоятельная работа |
 | frontier | 3 | Максимально сложные исследования и архитектурные решения |
 
-Astra/Fable → Frontier, Opus/Sol → Expert — примеры предложенного оператором распределения, не проверенные model IDs и не встроенный рейтинг. Seed catalog может предлагать распределение с provenance/version, но не активировать его без выбора оператора. Новая/неизвестная модель остаётся unassigned до назначения; ранжирование по словам имени в v2 запрещено.
+Astra/Fable → Frontier, Opus/Sol → Expert — примеры предложенного оператором распределения, не проверенные model IDs и не встроенный рейтинг. Seed catalog может предлагать распределение с provenance/version, но не активировать его без выбора оператора. Новая/неизвестная модель остаётся unassigned до назначения; ранжирование по словам имени в Routing запрещено.
 
-Членство — many-to-many: одна модель может обслуживать несколько классов. Это явное операторское заявление; пониженное качество автоматически не доказано и не опровергнуто. Пустой класс допустим как конфигурация, но resolve этого класса блокируется без разрешённого fallback. Capability и класс независимы. Пулы хранят точные providerId/modelId, при необходимости — identity существующего подключения; никакого совпадения только по modelId между провайдерами. В v2 providerId обозначает одно зарегистрированное подключение; несколько аккаунтов/endpoint одного vendor требуют разных зарегистрированных providerId. Alias → actual identity фиксируется в snapshot, resolver не выбирает аккаунт неявно.
+Членство — many-to-many: одна модель может обслуживать несколько классов. Это явное операторское заявление; пониженное качество автоматически не доказано и не опровергнуто. Пустой класс допустим как конфигурация, но resolve этого класса блокируется без разрешённого fallback. Capability и класс независимы. Пулы хранят точные providerId/modelId, при необходимости — identity существующего подключения; никакого совпадения только по modelId между провайдерами. В Routing providerId обозначает одно зарегистрированное подключение; несколько аккаунтов/endpoint одного vendor требуют разных зарегистрированных providerId. Alias → actual identity фиксируется в snapshot, resolver не выбирает аккаунт неявно.
 
 ## 3. Хранение, схемы и merge
 
-- Проект: routing.config.json.modelRouting; пользователь: auth.json.routingV2 в существующем user config dir. Credentials остаются в текущем credential store и не копируются в routing.
-- [routing-config.schema.json](schemas/routing-config.schema.json) описывает одну v2 layer. schemaVersion обязателен; остальные ключи можно опустить для наследования. Project layer действует только после trust approval её валидированного содержимого; она не может расширить родительские permissions.
+- Проект: routing.config.json.modelRouting; пользователь: auth.json.modelRouting в существующем user config dir. Credentials остаются в текущем credential store и не копируются в routing.
+- [routing-config.schema.json](schemas/routing-config.schema.json) описывает один слой Routing. schemaVersion обязателен; остальные ключи можно опустить для наследования. Project layer действует только после trust approval её валидированного содержимого; она не может расширить родительские permissions.
 - Слои: встроенный → user → trusted project → session override. Assignment запуска существует отдельно и помечается происхождением user; tool input агента не может выдать себя за этот источник.
 - categories сливаются по ключу категории. classes сливаются по ключу класса, но запись класса целиком атомарна: candidates/fallback/selection не смешиваются между слоями. providers, classifier и execution — атомарные записи. Удаление ключа означает inherit; baseline — явное назначение, останавливающее наследование категории. Пустой candidates означает явный пустой пул.
-- Built-in: все четыре пула пусты; selection=priority; cross-class fallback пуст; providers=all-connected, preferSessionProvider=false; execution maxAttempts=3, selectionTimeoutMs=3000, maxEstimatedCostUsd=null, unknownCost=allow; classifier chain пуст, timeoutMs=3000, minConfidence=0.7, onFailure=baseline. Все категории по умолчанию baseline. V2 activation требует явной проверки этих настроек; auto никогда не включается автоматически.
+- Built-in: все четыре пула пусты; selection=priority; cross-class fallback пуст; providers=all-connected, preferSessionProvider=false; execution maxAttempts=3, selectionTimeoutMs=3000, maxEstimatedCostUsd=null, unknownCost=allow; classifier chain пуст, timeoutMs=3000, minConfidence=0.7, onFailure=baseline. Все категории по умолчанию baseline. Routing используется по умолчанию без отдельной активации; auto никогда не включается автоматически.
 - Возможные overrides задаются теми же атомарными записями; окончательная нормализация заполняет все defaults и вычисляет configDigest. Policy ограничивает, а не участвует в merge.
 - Runtime validators дополнительно проверяют unique provider/model внутри пула, allowlist непустой только при соответствующем scope, отсутствие self-class/дубликатов в fallback, отсутствие циклов (fallback никогда не рекурсивен), существование identities и отсутствие секретов в configuration.
 - [classification.schema.json](schemas/classification.schema.json) — строгий ответ классификатора.
@@ -67,7 +67,7 @@ Snapshot содержит нормализованную конфигураци�
 5. Взять candidates выбранного класса и разрешённых альтернативных классов. Только явный плоский fallback список; порядок — выбранный класс, затем listed classes. Не читать fallback альтернативных классов.
 6. Применить gates к каждой паре: policy/external/network, parent/remote allowed candidates, provider scope, credentials, enabled, availability, capabilities/context, cooldown, budget. Класс и приоритет не могут снять отказ.
 7. В первом пуле с допустимыми кандидатами отсортировать: priority по убыванию; при равенстве preferSessionProvider; затем secondary policy (priority: без дополнительной метрики, cost: оценка стоимости, latency: наблюдаемая задержка); затем providerId/modelId лексикографически. Исходный порядок массива не меняет результат. Статистика отсутствует → unknown, при сортировке после known. Перестановка списка не меняет решение.
-8. Вернуть selected либо blocked с полной цепочкой исключений. В v2 нет скрытого terminal session fallback; baseline допускается только как assignment/onFailure. Все consumers исполняют именно selection canonical decision.
+8. Вернуть selected либо blocked с полной цепочкой исключений. В Routing нет скрытого terminal session fallback; baseline допускается только как assignment/onFailure. Все consumers исполняют именно selection canonical decision.
 
 Hard class floor задаёт task policy, не heuristic имя модели. Для pin/baseline с разрешённым fallbackClass альтернативы проходят тот же floor. Класс selected может отличаться от requested только при разрешённом cross-class fallback; причина class-escalated/class-downgraded сохраняется.
 
@@ -75,7 +75,7 @@ Hard class floor задаёт task policy, не heuristic имя модели. �
 
 provider scope: all-connected, session-only, allowlist. all-connected означает доступные уже авторизованные подключения; не подключает провайдеры автоматически. session-only отсекает остальные даже у pin, показывая provider-scope-conflict. Allowlist ограничивает и исполнителей, и classifier I/O; дополнительные classifier policy gates могут только сузить scope.
 
-Кандидаты имеют enabled и priority. Catalog refresh обновляет факты/availability, не удаляет назначения и не заменяет operator membership. Факт availability действителен 5 минут от observedAt в v2; TTL проверяется по injected clock snapshot. Живой положительный probe или current authenticated session может подтвердить доступность; offline list/устаревшее наблюдение остаётся unknown. Для unknown необходим ограниченный probe без текста задачи, если adapter его поддерживает; иначе candidate-unverified. Missing required capability не подразумевает поддержку.
+Кандидаты имеют enabled и priority. Catalog refresh обновляет факты/availability, не удаляет назначения и не заменяет operator membership. Факт availability действителен 5 минут от observedAt в Routing; TTL проверяется по injected clock snapshot. Живой положительный probe или current authenticated session может подтвердить доступность; offline list/устаревшее наблюдение остаётся unknown. Для unknown необходим ограниченный probe без текста задачи, если adapter его поддерживает; иначе candidate-unverified. Missing required capability не подразумевает поддержку.
 
 Budget: эффективный предел — минимум parent/task/config limits. Оценка = известные input/output prices × input estimate/output reservation; task-cost observations являются вторичным сигналом выбора и не заменяют hard reservation. Unknown цена с числовым лимитом всегда блокируется; unknownCost=allow действует лишь без денежного лимита. Подписка не приравнивается к бесплатной модели; ноль разрешён только как явная подтверждённая accounting policy. Резервирование стоимости атомарное между параллельными дочерними задачами. Все classifier и execution attempts учитываются в общем бюджете; actual usage корректирует резерв, но не допускает oversubscription следующей попытки.
 
@@ -110,17 +110,16 @@ CLI настройки и диагностики:
 | `keryx routing classes set expert pool.json --revision <revision>` | Заменяет пул Expert в пользовательском слое. |
 | `keryx routing settings set project layer.json --revision <revision>` | Атомарно заменяет слой проекта после проверки ожидаемой ревизии. |
 | `keryx routing explain --request request.json --json` | Показывает решение для конкретных требований, без вызова классификатора. |
-| `keryx routing migrate --dry-run [proposed-layers.json]` | Строит план без изменения активных настроек. |
-| `keryx routing migrate --apply plan.json --confirm` | Активирует проверенный план. |
-| `keryx routing migrate --rollback plan.json --confirm` | Восстанавливает резервную копию, если конфигурация с тех пор не менялась. |
-| `keryx routing migrate --deactivate --confirm` | Возвращает legacy для будущих запусков и сохраняет текущие файлы конфигурации. |
+| `keryx routing migrate --dry-run [--include-activated-user]` | Показывает преобразование старых настроек без записи. |
+| `keryx routing migrate [--include-activated-user]` | Идемпотентно сохраняет старые назначения в `modelRouting`; существующий канонический слой не заменяет. Пользовательский слой, ранее активированный только для проекта, становится глобальным только с явным флагом. |
+| Совместимость миграции | Старые ключи остаются для прежних версий; незавершённые старые activation/rollback journals требуют восстановления в создавшей их версии. |
 | `keryx routing pilot journal.jsonl` | Подсчитывает совпадения preview и исполнения и полноту связей fallback. |
 
-`layer.json` использует схему слоя v2, `pool.json` — её определение пула класса. После успешной правки прочитайте новую ревизию перед следующей записью. Команды legacy `set` и `unset` требуют явного `--legacy`, если v2 активен.
+`layer.json` использует схему слоя Routing, `pool.json` — её определение пула класса. После успешной правки прочитайте новую ревизию перед следующей записью. Команды `set` и `unset` изменяют назначения основного Routing; отдельного переключателя движка нет.
 
 /routing: разделы Categories, Classes, Providers, Classifier, Fallback; общий список моделей с провайдером, membership, доступностью и причиной исключения. Добавление в класс не меняет baseline. /model меняет baseline; UI показывает влияние session-only и preferSessionProvider, число pins на других провайдерах, не перезаписывает их.
 
-Decision журнал: decisionId, requestId, parentDecisionId, configDigest, snapshotDigest, assignmentSource, requestedClass, selectedClass, selection, status, exclusions, classifier receipt reference. Существующий attempt журнал связывается по decisionId и хранит actual usage/terminal status, без копирования текста задачи. Для disabled routing фиксируется baseline decision с gates; для external CLI — unmanaged, не фиктивное selected. NativeSession adapter сохраняет advertised candidateId и actual identity mapping; decision не расширяет RoutingAvailability.
+Decision журнал: decisionId, requestId, parentDecisionId, configDigest, snapshotDigest, assignmentSource, requestedClass, selectedClass, selection, status, exclusions, classifier receipt reference. Существующий attempt журнал связывается по decisionId и хранит actual usage/terminal status, без копирования текста задачи. Для baseline assignment фиксируется baseline decision с gates; для external CLI — unmanaged, не фиктивное selected. NativeSession adapter сохраняет advertised candidateId и actual identity mapping; decision не расширяет RoutingAvailability.
 
 ## 10. Acceptance criteria
 
@@ -136,5 +135,5 @@ Decision журнал: decisionId, requestId, parentDecisionId, configDigest, sn
 - AC8 / R8: одинаковые snapshot+classification receipt → одинаковый preview/execution; изменившаяся policy создаёт новое решение или блокирует I/O. Verification: judged
 - AC9 / R9: provider switch сохраняет pins, не меняет in-flight модель и обновляет future snapshots; конфликт scope явно отображается. Verification: judged
 - AC10 / R10: общий fixture проходит shell/review/subagent/native/unattended; external adapter без model control сообщает unmanaged. Verification: judged
-- AC11 / R11: dry-run не пишет активную конфигурацию; stale plan отклоняется; apply идемпотентен; rollback не меняет выполняющиеся attempts. Verification: judged
+- AC11 / R11: dry-run не пишет конфигурацию; миграция идемпотентна и не заменяет канонические слои; trust переносится только для точного одобренного содержимого; незавершённые старые journals блокируют миграцию. Verification: judged
 - AC12 / R12: каждый отказ имеет reason и provenance, journals не содержат секретов; priority/cost/latency tie-break воспроизводим без сети. Verification: judged

@@ -52,7 +52,21 @@ test("production assembly attaches the configured provider driver for its locall
 import { createSessionHost } from "./host";
 import { canonicalDigest, type Control } from "../remote-control/protocol";
 import { scriptedProvider, okReply } from "../commands/agent.test-helpers";
-import { saveRoutingConfig } from "../harness/routing/config";
+import { replaceRoutingLayer } from "../harness/routing/settings";
+import { setModelProfileField } from "../harness/routing/model-profile";
+
+/**
+ * Explicit auto routing: every turn is classified by the session model, an
+ * `expert` answer selects the deeper model, and a classifier failure falls back
+ * to the baseline. Both models carry a proven context length.
+ */
+async function configureAutoRouting(cwd: string, standard: string, deep: string): Promise<void> {
+  for (const modelId of [standard, deep]) await setModelProfileField("anthropic", modelId, { field: "contextLength", value: 200_000 }, cwd);
+  await replaceRoutingLayer("user", { cwd, configDir: cwd }, { schemaVersion: 2,
+    categories: { default: { mode: "auto" }, coding: { mode: "auto" } },
+    classes: { expert: { selection: "priority", fallbackClasses: [], candidates: [{ target: { providerId: "anthropic", modelId: deep }, enabled: true, priority: 10 }] } },
+    classifier: { chain: [{ adapterId: "model", target: { providerId: "anthropic", modelId: standard } }], timeoutMs: 2500, minConfidence: 0.7, onFailure: { mode: "baseline" } } });
+}
 
 function nativeRoutingRecord(digest: string, standard: string, deep: string): Control["SessionRecord"] { return { sessionId: "production-session", projectId: "project", machineId: "machine", checkoutId: "checkout", agentProfileId: "native", title: "Production routing", version: 1, historyVersion: 1,
       state: "idle", config: { configVersion: 1, baselineCandidateId: standard, reasoningEffort: "none", routing: { enabled: true, profileId: "local", candidateIds: [standard, deep], fallbackCandidateId: standard }, policyDigest: digest, capabilityDigest: digest },
@@ -61,11 +75,11 @@ function nativeRoutingRecord(digest: string, standard: string, deep: string): Co
       capabilities: { literalText: true, attachments: false, attachmentReason: "typed-artifact-contract-required", commandCatalogue: true, modelRouting: true } }; }
 
 test("production native factory composes the shared non-shortcut classifier and then calls the actual routed provider", async () => {
-  for (const response of ["coding", "unparseable"] as const) {
+  for (const response of ["coding|expert|0.95|tools", "unparseable"] as const) {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-production-routing-")); const profile = resolveLocalProfile("monitored-trusted-local");
   const classifier = scriptedProvider([[{ kind: "text_delta", text: response }, { kind: "usage_update", usage: { inputTokens: 9, outputTokens: 1 } }, { kind: "model_end" }], okReply]); const executor = scriptedProvider([okReply]);
   const standard = "claude-sonnet-5"; const deep = "claude-opus-4-8"; const digest = profile.fingerprint;
-  try { await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, { coding: { kind: "model", providerId: "anthropic", modelId: deep } });
+  try { await configureAutoRouting(cwd, standard, deep);
     const availability: Control["RoutingAvailability"] = { version: 1, policyDigest: digest, capabilityDigest: digest, profileIds: ["local"], candidates: [standard, deep].map((modelId) => ({
       candidateId: modelId, providerId: "anthropic", modelId, available: true, reason: "none", reasoningEfforts: ["none"], privacyClass: "approved-egress", costClass: "metered" })) };
     const assembled = await assembleNativeSessionRuntime({ cwd, configDir: cwd, sessionId: "production-session", profile, providerId: "anthropic", modelId: standard,
@@ -80,9 +94,9 @@ test("production native factory composes the shared non-shortcut classifier and 
       expectedWorkspaceBaseline: digest, controller: { controllerLeaseId: "controller", expectedControllerVersion: 1 }, association: { mode: "ad-hoc", profileConsentVersion: 1 }, messageId: "production-message", text: "Help me handle this situation carefully" };
       expect((await host.apply({ kind: "message", operationId: "production-message", payloadDigest: canonicalDigest(request), actorId: "human", runId: "production-run", turnId: "production-turn", request })).status).toBe("admitted");
       for (let i = 0; i < 100 && (await host.inspect()).state === "busy"; i++) await Bun.sleep(5);
-      expect(classifier.requests).toHaveLength(response === "coding" ? 1 : 2); expect(executor.requests).toHaveLength(response === "coding" ? 1 : 0);
+      expect(classifier.requests).toHaveLength(response !== "unparseable" ? 1 : 2); expect(executor.requests).toHaveLength(response !== "unparseable" ? 1 : 0);
       expect(observations.some((event) => event.kind === "usage" && event.usage.inputTokens === 9)).toBe(true);
-      expect(observations.some((event) => event.kind === "running" && event.snapshot.effectiveCandidateId === (response === "coding" ? deep : standard) && event.snapshot.routingDecision === (response === "coding" ? "classified" : "classifier-fallback"))).toBe(true);
+      expect(observations.some((event) => event.kind === "running" && event.snapshot.effectiveCandidateId === (response !== "unparseable" ? deep : standard) && event.snapshot.routingDecision === (response !== "unparseable" ? "classified" : "classifier-fallback"))).toBe(true);
       expect(observations.some((event) => event.kind === "terminal" && event.outcome === "succeeded")).toBe(true);
       expect(phases).toContain("admission"); expect(assembled.value.routingPolicy().jevEnabled).toBe(false);
     } finally { off(); await host.dispose(); }
@@ -94,8 +108,8 @@ test("production classifier authorization expiry and revocation never become a s
   for (const scenario of ["revoked-before-io", "revoked-before-admission", "expired-before-admission"] as const) {
     const cwd = await mkdtemp(join(tmpdir(), "keryx-native-production-routing-refuse-")); const profile = resolveLocalProfile("monitored-trusted-local"); const digest = profile.fingerprint;
     const standard = "claude-sonnet-5"; const deep = "claude-opus-4-8";
-    const classifier = scriptedProvider([[{ kind: "text_delta", text: "coding" }, { kind: "usage_update", usage: { inputTokens: 4, outputTokens: 1 } }, { kind: "model_end" }]]); const executor = scriptedProvider([okReply]); let clock = Date.now();
-    try { await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, { coding: { kind: "model", providerId: "anthropic", modelId: deep } });
+    const classifier = scriptedProvider([[{ kind: "text_delta", text: "coding|expert|0.95|tools" }, { kind: "usage_update", usage: { inputTokens: 4, outputTokens: 1 } }, { kind: "model_end" }]]); const executor = scriptedProvider([okReply]); let clock = Date.now();
+    try { await configureAutoRouting(cwd, standard, deep);
       const availability: Control["RoutingAvailability"] = { version: 1, policyDigest: digest, capabilityDigest: digest, profileIds: ["local"], candidates: [standard, deep].map((modelId) => ({ candidateId: modelId, providerId: "anthropic", modelId,
         available: true, reason: "none", reasoningEfforts: ["none"], privacyClass: "approved-egress", costClass: "metered" })) };
       const assembled = await assembleNativeSessionRuntime({ cwd, configDir: cwd, sessionId: "production-session", profile, providerId: "anthropic", modelId: standard, availability,

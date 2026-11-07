@@ -32,9 +32,10 @@ import { createAnalysisReadPorts } from "./commands/analysis-read-ports";
 import { createOwnedReadCapture } from "./native-owned-read";
 import { tasksIntegrationsCommands, type TasksIntegrationsPort } from "./commands/tasks-integrations";
 import { isNormalizedWireIdentity, wireCandidateId, wireModelIdentity, type NativeModelBinding } from "./model-identity";
-import { createMeteredRoutingProvider } from "../harness/routing/routing-provider-v2";
+import { createMeteredRoutingProvider } from "../harness/routing/routing-provider";
 import type { NativeRoutingBudgetStore } from "./native-routing-budget";
-import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
+import { loadRouting } from "../harness/routing/settings";
+import { isRoutingDecisionId } from "../harness/routing/routing-runtime";
 
 export type NativeSessionServices = ReturnType<typeof createNativeSessionServices>;
 export type NativeServicesFactoryContext = Pick<NativeSessionServicesOptions, "cwd" | "configDir" | "jobs" | "identity" | "sessionState" | "routingAvailability" | "searchController">;
@@ -325,10 +326,14 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
       // candidate- and decision-bound execution-attempt receipt.
       const selectedProvider = providerFor(candidate.providerId, candidate.modelId);
       const routingExecution = options.routingBudgetStore?.take(snapshot.selectionReceiptId);
-      let activeRoutingV2: boolean;
-      try { activeRoutingV2 = loadActiveRoutingV2(options.cwd, options.configDir) !== undefined; }
-      catch { throw new NativeRuntimeError("routing-v2-config-invalid"); }
-      if (activeRoutingV2 && snapshot.config.routing.enabled && snapshot.routingDecision === "classified" && routingExecution === undefined) {
+      try { loadRouting(options.cwd, options.configDir); }
+      catch { throw new NativeRuntimeError("routing-config-invalid"); }
+      // Every routing-selected execution — a classified pick, or the configured onFailure
+      // assignment a classifier failure resolved to — needs the budget context its receipt
+      // published. Missing it fails closed before any provider call.
+      const routingSelected = snapshot.routingDecision === "classified"
+        || (snapshot.routingDecision === "classifier-fallback" && isRoutingDecisionId(snapshot.selectionReceiptId));
+      if (snapshot.config.routing.enabled && routingSelected && routingExecution === undefined) {
         throw new NativeRuntimeError("routing-budget-context-missing");
       }
       if (routingExecution !== undefined && (routingExecution.target.providerId !== binding.actualProviderId

@@ -4,6 +4,7 @@ import { fetchOpenAiCodexModels } from "./subscription-models";
 interface DetectedLike {
   readonly name: string;
   readonly models?: readonly string[];
+  readonly observedAt?: string;
 }
 
 export interface LiveCodexModels {
@@ -11,6 +12,8 @@ export interface LiveCodexModels {
   start(): Promise<void>;
   /** The live list, or undefined while unfetched or after a failure. */
   models(): readonly string[] | undefined;
+  /** Timestamp of the successful live response; never refreshed by merging. */
+  observedAt?(): string | undefined;
 }
 
 export interface LiveCodexModelsDeps {
@@ -30,17 +33,22 @@ export function createLiveCodexModels(configDir?: string, deps: LiveCodexModelsD
   const fetchModels =
     deps.fetchModels ?? (() => fetchOpenAiCodexModels(fetch, configDir === undefined ? {} : { configDir }));
   let live: readonly string[] | undefined;
+  let observedAt: string | undefined;
   return {
     async start() {
       try {
         if (!hasGrant()) return;
         const result = await fetchModels();
-        if (result.source === "live" && result.models.length > 0) live = [...result.models];
+        if (result.source === "live" && result.models.length > 0) {
+          live = [...result.models];
+          observedAt = new Date().toISOString();
+        }
       } catch {
         // keep the curated list
       }
     },
     models: () => live,
+    observedAt: () => observedAt,
   };
 }
 
@@ -59,19 +67,20 @@ export function startLiveCodexModels(): LiveCodexModels {
 export async function withLiveCodexModels(
   detected: readonly DetectedLike[],
   live: LiveCodexModels = createLiveCodexModels(),
-): Promise<{ name: string; models: readonly string[] }[]> {
+): Promise<(DetectedLike & { models: readonly string[] })[]> {
   await live.start();
-  return mergeLiveCodexModels(detected, live.models());
+  return mergeLiveCodexModels(detected, live.models(), live.observedAt?.());
 }
 
 /** `detected` with the live Codex list replacing the curated one; the provider set itself is never widened. */
 export function mergeLiveCodexModels(
   detected: readonly DetectedLike[],
   live: readonly string[] | undefined,
-): { name: string; models: readonly string[] }[] {
-  const out = detected.map((d) => ({ name: d.name, models: d.models ?? [] }));
+  observedAt?: string,
+): (DetectedLike & { models: readonly string[] })[] {
+  const out = detected.map((d) => ({ ...d, models: d.models ?? [] }));
   if (live === undefined || live.length === 0) return out;
   const at = out.findIndex((d) => d.name === "openai-codex");
-  if (at !== -1) out[at] = { name: "openai-codex", models: live };
+  if (at !== -1) out[at] = { ...out[at]!, models: live, ...(observedAt === undefined ? {} : { observedAt }) };
   return out;
 }

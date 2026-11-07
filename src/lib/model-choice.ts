@@ -40,8 +40,10 @@
 import path from "node:path";
 import { pathExists } from "./fs";
 import { readJsonObjectFile } from "./json";
-import { loadRoutingConfig } from "../harness/routing/config";
-import type { CategoryAssignment, RoutingCategory, RoutingTable } from "../harness/routing/table";
+import type { RoutingAssignment, RoutingConfigLayer } from "../harness/routing/config";
+import { readRoutingSettings } from "../harness/routing/settings";
+import type { RoutingCategory } from "../harness/routing/table";
+import { describeRoutingAssignment } from "../harness/routing/trust";
 import { MODEL_TIERS, type ModelTier } from "../gdskills/model-tier";
 
 /**
@@ -118,7 +120,7 @@ export async function readModelGuidanceConfig(projectRoot: string): Promise<Mode
 
 export interface ModelChoiceResolution {
   /** Only the categories `MODEL_CHOICE_CATEGORY_TIERS` addresses AND the project routing table actually (and approvedly) resolves. */
-  readonly assignments: Readonly<Partial<Record<RoutingCategory, CategoryAssignment>>>;
+  readonly assignments: Readonly<Partial<Record<RoutingCategory, RoutingAssignment>>>;
   /** True when the project's `routing.config.json` exists but is not yet approved (`keryx routing trust`) — surfaced for the status line, never for the committed doc. */
   readonly untrusted: boolean;
   /** A read/parse/validation problem, when there was one — surfaced the same way. */
@@ -132,38 +134,30 @@ export interface ModelChoiceResolution {
  * in a file this module's caller commits to the repository.
  */
 export async function resolveModelChoice(projectRoot: string, userConfigDir?: string): Promise<ModelChoiceResolution> {
-  const result = await loadRoutingConfig("project", { cwd: projectRoot, ...(userConfigDir === undefined ? {} : { userConfigDir }) });
-  const assignments = pickAddressedAssignments(result.table);
+  let settings;
+  try {
+    settings = readRoutingSettings({ cwd: projectRoot, ...(userConfigDir === undefined ? {} : { configDir: userConfigDir }) }, undefined, { projectOnly: true });
+  } catch (error) {
+    return { assignments: {}, untrusted: false, error: error instanceof Error ? error.message : String(error) };
+  }
   return {
-    assignments,
-    untrusted: result.untrusted === true,
-    ...(result.error === undefined ? {} : { error: result.error }),
+    assignments: pickAddressedAssignments(settings.layers.project),
+    untrusted: !settings.project.trusted,
   };
 }
 
-function pickAddressedAssignments(table: RoutingTable): Partial<Record<RoutingCategory, CategoryAssignment>> {
-  const picked: Partial<Record<RoutingCategory, CategoryAssignment>> = {};
+function pickAddressedAssignments(layer: RoutingConfigLayer | undefined): Partial<Record<RoutingCategory, RoutingAssignment>> {
+  const picked: Partial<Record<RoutingCategory, RoutingAssignment>> = {};
   for (const category of MODEL_CHOICE_CATEGORY_ORDER) {
-    const assignment = table[category];
+    const assignment = layer?.categories?.[category];
     if (assignment !== undefined) picked[category] = assignment;
   }
   return picked;
 }
 
 /** One assignment, described for the managed block — never a raw model-id guess, only what was actually resolved. */
-function describeAssignment(assignment: CategoryAssignment): string {
-  switch (assignment.kind) {
-    case "session-default":
-      return "session default";
-    case "model":
-      return `${assignment.providerId}/${assignment.modelId}`;
-    case "provider-default":
-      return `${assignment.providerId} (provider default)`;
-    default: {
-      const exhaustive: never = assignment;
-      return exhaustive;
-    }
-  }
+function describeAssignment(assignment: RoutingAssignment): string {
+  return describeRoutingAssignment(assignment);
 }
 
 /**
@@ -174,7 +168,7 @@ function describeAssignment(assignment: CategoryAssignment): string {
  * costs about as much per-turn context as any one of the existing bullets —
  * not a new heading, not a table.
  */
-export function renderModelChoicePolicy(assignments: Readonly<Partial<Record<RoutingCategory, CategoryAssignment>>>): string {
+export function renderModelChoicePolicy(assignments: Readonly<Partial<Record<RoutingCategory, RoutingAssignment>>>): string {
   const resolvedParts = MODEL_CHOICE_CATEGORY_ORDER.filter((category) => assignments[category] !== undefined).map(
     (category) => `${category}=${describeAssignment(assignments[category]!)}`,
   );
@@ -191,7 +185,7 @@ export function renderModelChoicePolicy(assignments: Readonly<Partial<Record<Rou
 
 export interface ModelChoiceBlockInput {
   readonly enabled: boolean;
-  readonly assignments: Readonly<Partial<Record<RoutingCategory, CategoryAssignment>>>;
+  readonly assignments: Readonly<Partial<Record<RoutingCategory, RoutingAssignment>>>;
 }
 
 /** The tier-word-only, nothing-resolved default — what a fresh scaffold (no project I/O done yet) renders. */
@@ -229,7 +223,7 @@ export async function describeModelChoiceStatus(projectRoot: string, userConfigD
   const resolvedCount = Object.keys(resolved.assignments).length;
   const parts = [`model_choice: enabled (${resolvedCount}/${total} categories resolved from routing.config.json)`];
   if (resolved.untrusted) {
-    parts.push("routing.config.json has unapproved entries — run `keryx routing trust` to apply them");
+    parts.push("routing.config.json has unapproved routing settings — run `keryx routing trust` to apply them");
   } else if (resolved.error !== undefined) {
     parts.push(resolved.error);
   } else if (config.note !== undefined) {

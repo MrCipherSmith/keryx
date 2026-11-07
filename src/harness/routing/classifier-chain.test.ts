@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { runRoutingClassifierChain, type RoutingClassification, type RoutingClassifierAdapter } from "./classifier-chain-v2";
+import { runRoutingClassifierChain, type RoutingClassification, type RoutingClassifierAdapter } from "./classifier-chain";
 import { RoutingBudgetLedger } from "./routing-budget";
 
 const accepted: RoutingClassification = {

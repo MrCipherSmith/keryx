@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { summarizeRoutingPilot } from "./pilot-v2";
+import { summarizeRoutingPilot } from "./pilot";
 
 const baseline = { requestId: "request", snapshotDigest: "snapshot", classifierReceiptId: "receipt" };
 const selected = { providerId: "alpha", modelId: "same-id" };

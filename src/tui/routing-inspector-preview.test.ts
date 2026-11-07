@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { normalizeRoutingV2Config } from "../harness/routing/config-v2";
+import { normalizeRoutingConfig } from "../harness/routing/config";
 import type { ModelProfile } from "../harness/routing/model-profile";
 import { profileKey } from "../harness/routing/model-profile";
-import { formatRoutingV2ListLines, previewCatalogRoutingCategoriesV2 } from "./routing-inspector";
+import { formatRoutingPreviewLines, previewCatalogRoutingCategories } from "./routing-inspector";
 
 const target = { providerId: "alpha", modelId: "expert" };
 const profile: ModelProfile = {
@@ -12,17 +12,17 @@ const profile: ModelProfile = {
   available: true, chatCapable: true, lastSeenAt: "2026-11-04T00:00:00.000Z", refreshedAt: "2026-11-04T00:00:00.000Z",
 };
 
-test("v2 inspector preview uses the shared resolver and receipt", () => {
-  const config = normalizeRoutingV2Config({ user: { schemaVersion: 2,
+test("inspector preview uses the shared resolver and receipt", () => {
+  const config = normalizeRoutingConfig({ user: { schemaVersion: 2,
     classes: { expert: { candidates: [{ target, enabled: true, priority: 1 }], selection: "priority", fallbackClasses: [] } },
     categories: { review: { mode: "class", modelClass: "expert" }, coding: { mode: "auto" } },
   } });
-  const rows = previewCatalogRoutingCategoriesV2({
+  const rows = previewCatalogRoutingCategories({
     config, providers: [{ name: "alpha", models: ["expert"] }], profiles: { [profileKey("alpha", "expert")]: profile }, baseline: target,
     observedAt: "2026-11-04T00:04:00.000Z", policyRevision: "policy-1", capabilityRevision: "capability-1",
     policy: { credentialsAvailable: () => true, policyAllowed: () => true, parentAllowed: () => true, capabilities: () => [], cooldown: () => false, observedLatencyMs: () => null },
   });
   expect(rows.find((row) => row.category === "review")?.receipt.decision).toMatchObject({ status: "selected", selection: target });
   expect(rows.find((row) => row.category === "coding")?.receipt.decision.status).toBe("needs-classification");
-  expect(formatRoutingV2ListLines(rows, 0).find((line) => line.includes("review"))).toContain("alpha/expert");
+  expect(formatRoutingPreviewLines(rows, 0).find((line) => line.includes("review"))).toContain("alpha/expert");
 });

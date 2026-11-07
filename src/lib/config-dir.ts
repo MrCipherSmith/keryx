@@ -45,6 +45,7 @@ import {
   chmodSync,
   closeSync,
   constants,
+  copyFileSync,
   fstatSync,
   mkdirSync,
   openSync,
@@ -424,6 +425,22 @@ export function createOwnerOnlyFileExclusive(file: string, body: string): boolea
     }
   }
   return true;
+}
+
+/**
+ * Copy a config-owned file without replacing an existing destination. Keeps the
+ * source and its permissions intact, without reading a whole journal into memory.
+ * Callers must validate the source's type and permissions before invoking this;
+ * this helper deliberately does not confer trust on arbitrary source paths.
+ */
+export function copyConfigFileExclusive(source: string, target: string): boolean {
+  try {
+    copyFileSync(source, target, constants.COPYFILE_EXCL);
+    return true;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") return false;
+    throw error;
+  }
 }
 
 /**

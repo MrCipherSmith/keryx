@@ -1,6 +1,6 @@
 import { MODEL_CLASSES, type ModelClass } from "./model-class";
 import type { RoutingBudgetLedger } from "./routing-budget";
-import { routingV2Digest } from "./config-v2";
+import { routingDigest } from "./config";
 import { ROUTING_CAPABILITIES, type RoutingCapability } from "./routing-request";
 import { ROUTING_CATEGORIES, type RoutingCategory } from "./table";
 import type { NormalizedUsage } from "../provider/types";
@@ -107,7 +107,7 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
 
   const trace: ClassificationTraceEntry[] = [];
   const receiptBinding = {
-    inputDigest: routingV2Digest(input),
+    inputDigest: routingDigest(input),
     adapterIds,
     deadlineMs,
     minConfidence: options.minConfidence,
@@ -119,7 +119,7 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
     status: "fallback",
     assignment: options.onFailure,
     reason: "classifier-failed",
-    receiptId: routingV2Digest({ ...receiptBinding, assignment: options.onFailure, reason: "classifier-failed", trace }),
+    receiptId: routingDigest({ ...receiptBinding, assignment: options.onFailure, reason: "classifier-failed", trace }),
     trace,
   });
   if (deadlineMs === 0) return fallback();
@@ -166,7 +166,7 @@ export async function runRoutingClassifierChain<Input>(input: Input, options: Ru
             status: "classified",
             classification,
             adapterId: adapter.id,
-            receiptId: routingV2Digest({ ...receiptBinding, adapterId: adapter.id, classification, trace }),
+            receiptId: routingDigest({ ...receiptBinding, adapterId: adapter.id, classification, trace }),
             trace,
           };
         } catch {

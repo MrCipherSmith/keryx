@@ -1,18 +1,14 @@
 // `/routing` category assignments (the routing inspector's Categories tab, `keryx routing list`): every category resolved through the
-// shared routing table layers (project file under trust, user layer, the session's derived default), against what THIS native session
-// can reach: its locally connected routing candidates, never a provider catalog probe. No terminal rendering is involved.
-import { loadRoutingConfig } from "../../harness/routing/config";
-import { loadActiveRoutingV2 } from "../../harness/routing/active-v2";
-import type { NormalizedRoutingV2Config } from "../../harness/routing/config-v2";
-import { deriveDefaultTable } from "../../harness/routing/derive-default-table";
+// routing settings (trusted project layer, user layer, built-in baseline), against what THIS native session can reach: its locally
+// connected routing candidates, never a provider catalog probe. No terminal rendering is involved.
+import { normalizeRoutingConfig, type NormalizedRoutingConfig } from "../../harness/routing/config";
+import { readRoutingSettings, ROUTING_NORMALIZATION } from "../../harness/routing/settings";
 import { resolveRoutingForRuntime } from "../../harness/routing/routing-runtime";
-import { availablePredicateFromProfiles, loadModelProfiles } from "../../harness/routing/model-profile";
-import { connectedPredicateFrom, describeCategoryResolution, describeRejectionNotice, resolveCategoryDetailed, ROUTING_CATEGORIES, sessionDerivationModels, type FlatPickerProvider, type RoutingTable, type SessionModelRef } from "../../harness/routing/table";
-import { readTaskCostStore, taskCostLookupFrom } from "../../harness/routing/task-cost";
+import { ROUTING_CATEGORIES, type FlatPickerProvider, type SessionModelRef } from "../../harness/routing/table";
 import { validateArguments, type Control } from "../../remote-control/protocol";
 import { redactSensitiveText } from "../../security/service";
 import type { NativeModelBinding } from "../model-identity";
-import { buildNativeRoutingV2Snapshot } from "../native-routing-v2";
+import { buildNativeRoutingSnapshot } from "../native-routing";
 import type { NativeCommandContribution } from "./handlers";
 
 export type RoutingCategoriesResult = { ok: true; data: unknown } | { ok: false; error: { code: "invalid-arguments" | "read-failed" | "quota-exceeded"; message: string } };
@@ -31,7 +27,7 @@ export function sessionRoutingProviders(availability: Control["RoutingAvailabili
   return { providers: [...byProvider].map(([name, models]) => ({ name, models })), session };
 }
 
-export interface NativeRoutingCategoriesV2Context {
+export interface NativeRoutingCategoriesContext {
   readonly availability: Control["RoutingAvailability"];
   readonly bindings: readonly NativeModelBinding[];
   readonly sessionConfig: Control["SessionConfig"];
@@ -39,12 +35,12 @@ export interface NativeRoutingCategoriesV2Context {
   readonly configDir?: string;
 }
 
-/** Pure v2 preview over one frozen native availability snapshot; no classifier or provider I/O. */
-export function previewNativeRoutingCategoriesV2(
-  context: NativeRoutingCategoriesV2Context,
-  routingConfig: NormalizedRoutingV2Config,
+/** Pure routing preview over one frozen native availability snapshot; no classifier or provider I/O. */
+export function previewNativeRoutingCategories(
+  context: NativeRoutingCategoriesContext,
+  routingConfig: NormalizedRoutingConfig,
 ): unknown {
-  const frozen = buildNativeRoutingV2Snapshot({
+  const frozen = buildNativeRoutingSnapshot({
     sessionConfig: context.sessionConfig,
     availability: context.availability,
     bindings: context.bindings,
@@ -73,7 +69,6 @@ export function previewNativeRoutingCategoriesV2(
     return `${category.padEnd(12)} ${outcome}  [${decision.assignmentSource}]`;
   });
   return {
-    engineVersion: 2,
     configDigest: routingConfig.configDigest,
     snapshotDigest: frozen.snapshot.snapshotDigest,
     categories,
@@ -85,28 +80,11 @@ export function previewNativeRoutingCategoriesV2(
 export async function executeRoutingCategories(context: { cwd: string; configDir?: string; availability: Control["RoutingAvailability"]; bindings: readonly NativeModelBinding[]; baselineCandidateId: string; sessionConfig?: Control["SessionConfig"] }, input: unknown): Promise<RoutingCategoriesResult> {
   if (!validateArguments(empty, input).ok) return { ok: false, error: { code: "invalid-arguments", message: "The routing categories read takes no arguments." } };
   try {
-    const activeV2 = loadActiveRoutingV2(context.cwd, context.configDir);
-    if (activeV2 !== undefined) {
-      if (context.sessionConfig === undefined) throw new Error("active routing v2 preview requires the frozen session config");
-      const data = previewNativeRoutingCategoriesV2({ availability: context.availability, bindings: context.bindings, sessionConfig: context.sessionConfig,
-        cwd: context.cwd, ...(context.configDir === undefined ? {} : { configDir: context.configDir }) }, activeV2);
-      const json = redactSensitiveText(JSON.stringify(data).replaceAll(context.cwd, "."));
-      return Buffer.byteLength(json) > 30000 ? { ok: false, error: { code: "quota-exceeded", message: "The routing table exceeds its remote quota." } } : { ok: true, data: JSON.parse(json) as unknown };
-    }
-    const location = { cwd: context.cwd, ...(context.configDir === undefined ? {} : { userConfigDir: context.configDir }) };
-    const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
-    const { providers, session } = sessionRoutingProviders(context.availability, context.bindings, context.baselineCandidateId);
-    const profiles = loadModelProfiles(context.configDir);
-    let derived: RoutingTable = {};
-    if (session !== undefined) derived = deriveDefaultTable(session.providerId, sessionDerivationModels(providers, session), profiles, session.modelId, taskCostLookupFrom(readTaskCostStore(context.configDir)));
-    const connected = connectedPredicateFrom(providers, session); const available = availablePredicateFromProfiles(profiles);
-    const rows = ROUTING_CATEGORIES.map((category) => ({ category, ...resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connected, available) }));
-    const data = {
-      categories: rows.map((row) => ({ category: row.category, assignment: row.assignment, source: row.source, ...(row.rejected === undefined ? {} : { rejected: row.rejected }) })),
-      lines: rows.map((row) => `${row.category.padEnd(12)} ${describeCategoryResolution(row, session?.providerId)}  [${row.source}]${row.rejected === undefined ? "" : `  (${describeRejectionNotice(row.rejected, row.assignment)})`}`),
-      ...(session === undefined ? {} : { derivedFrom: session.providerId }),
-      ...(project.error === undefined ? {} : { projectError: project.error }), ...(project.untrusted === true ? { projectUntrusted: true } : {}), ...(user.error === undefined ? {} : { userError: user.error }),
-    };
+    const settings = readRoutingSettings({ cwd: context.cwd, ...(context.configDir === undefined ? {} : { configDir: context.configDir }) });
+    if (context.sessionConfig === undefined) throw new Error("the routing preview requires the frozen session config");
+    const preview = previewNativeRoutingCategories({ availability: context.availability, bindings: context.bindings, sessionConfig: context.sessionConfig,
+      cwd: context.cwd, ...(context.configDir === undefined ? {} : { configDir: context.configDir }) }, normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION));
+    const data = { ...(preview as Record<string, unknown>), ...(settings.project.trusted ? {} : { projectUntrusted: true }), ...(settings.notices.length === 0 ? {} : { notices: settings.notices }) };
     const json = redactSensitiveText(JSON.stringify(data).replaceAll(context.cwd, "."));
     return Buffer.byteLength(json) > 30000 ? { ok: false, error: { code: "quota-exceeded", message: "The routing table exceeds its remote quota." } } : { ok: true, data: JSON.parse(json) as unknown };
   } catch { return { ok: false, error: { code: "read-failed", message: "The routing table could not be read." } }; }

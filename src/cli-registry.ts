@@ -73,7 +73,7 @@ import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
-import { routingCommand } from "./commands/routing";
+import { printRoutingHelp, routingCommand } from "./commands/routing";
 import { externalCommand } from "./commands/external";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
@@ -648,6 +648,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   (rest: readonly string[]) => void
 >([
   ["hub", printHubHelp],
+  ["routing", () => printRoutingHelp()],
   ["flow", () => printFlowHelp()],
   ["trigger", () => printTriggerHelp()],
   ["serve-mcp", () => printServeMcpHelp()],

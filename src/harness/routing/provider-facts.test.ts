@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { inspectProviderRoutingFacts, routingPolicyRevision } from "./provider-facts-v2";
+import { inspectProviderRoutingFacts, routingPolicyRevision } from "./provider-facts";
 
 test("provider routing facts expose only explicitly reported capabilities", () => {
   const target = { providerId: "demo", modelId: "model" };

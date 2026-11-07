@@ -19,7 +19,7 @@ import { appendTriggerRunRecord, openReservations, readTriggerRuns, type Trigger
 import { addConfirmedSchedule, readScheduleStore } from "../trigger/store";
 import { buildGrantedArgv, grantedToolSpec } from "../trigger/granted-tools";
 import { writeFileAtomic } from "../lib/fs";
-import { normalizeRoutingV2Config, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { normalizeRoutingConfig, type NormalizedRoutingConfig } from "../harness/routing/config";
 import type { RoutingRequest } from "../harness/routing/routing-request";
 import { createRoutingSnapshot, type RoutingSnapshot } from "../harness/routing/snapshot";
 
@@ -92,8 +92,8 @@ function finalText(text: string): Round {
 const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
 const ROUND_USD = (1000 * 3 + 200 * 15) / 1_000_000;
 
-function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connected"): NormalizedRoutingV2Config {
-  return normalizeRoutingV2Config({
+function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connected"): NormalizedRoutingConfig {
+  return normalizeRoutingConfig({
     project: {
       schemaVersion: 2,
       categories: { unattended: { mode: "class", modelClass: "frontier" } },
@@ -110,7 +110,7 @@ function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connect
 }
 
 function currentRoutingSnapshot(input: {
-  config: NormalizedRoutingV2Config;
+  config: NormalizedRoutingConfig;
   request: RoutingRequest;
   baseline: { providerId: string; modelId: string };
 }): RoutingSnapshot {
@@ -604,19 +604,19 @@ describe("R700-01: an untrusted project hook is reported headless, on stderr", (
   });
 });
 
-describe("routing v2: scheduled agent task", () => {
+describe("routing: scheduled agent task", () => {
   test("a failed routed attempt keeps reported usage in the persistent trigger meter", async () => {
     await addConfirmedSchedule(root, entry());
     const provider = scripted([[USAGE, { kind: "provider_error", error: { kind: "unavailable", retryable: false, message: "upstream down" } }]]);
     await run(provider, "check-github", {
-      loadActiveRoutingV2: () => activeRoutingConfig(),
+      loadRouting: () => activeRoutingConfig(),
       routingConfigDir: path.join(keyHome, "routing-test-config"),
       routingSnapshot: currentRoutingSnapshot,
       makeProvider: () => provider,
     });
     expect((await lastRecord()).cost).toEqual({ recorded: true, usd: ROUND_USD, tokens: { input: 1000, output: 200 } });
   });
-  test("an active v2 category cannot replace the schedule's explicit provider/model pin", async () => {
+  test("a routing category cannot replace the schedule's explicit provider/model pin", async () => {
     await addConfirmedSchedule(root, entry());
     const provider = scripted([finalText("done")]);
     let selected: { provider: string; model: string } | undefined;
@@ -624,7 +624,7 @@ describe("routing v2: scheduled agent task", () => {
     const routingConfigDir = path.join(keyHome, "routing-test-config");
 
     await run(provider, "check-github", {
-      loadActiveRoutingV2: () => activeRoutingConfig(),
+      loadRouting: () => activeRoutingConfig(),
       routingConfigDir,
       routingSnapshot: (input: Parameters<typeof currentRoutingSnapshot>[0]) => {
         routedRequest = input.request;
@@ -641,16 +641,16 @@ describe("routing v2: scheduled agent task", () => {
     expect(routedRequest?.requirements.capabilities).toEqual(["tools"]);
     expect(routedRequest?.requirements.inputTokensRequired).toBeGreaterThan(0);
     expect(routedRequest?.requirements.outputTokensReserved).toBeGreaterThan(0);
-    expect(await readdir(path.join(routingConfigDir, "routing-v2", "journal"))).toHaveLength(1);
+    expect(await readdir(path.join(routingConfigDir, "routing", "journal"))).toHaveLength(1);
   });
 
-  test("an active v2 provider scope blocks the explicit pin after factual provider inspection and before model I/O", async () => {
+  test("a routing provider scope blocks the explicit pin after factual provider inspection and before model I/O", async () => {
     await addConfirmedSchedule(root, entry());
     const provider = scripted([]);
     let built = false;
 
     await run(provider, "check-github", {
-      loadActiveRoutingV2: () => activeRoutingConfig("allowlist"),
+      loadRouting: () => activeRoutingConfig("allowlist"),
       routingConfigDir: path.join(keyHome, "routing-test-config"),
       routingSnapshot: currentRoutingSnapshot,
       makeProvider: () => {

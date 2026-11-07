@@ -82,9 +82,9 @@ import { resolveProviderModelParamsByName } from "./providers";
 import { loadShellConfig } from "../lib/shell-config";
 import {
   cachedRoutingProviders,
-  resolveUnattendedRoutingV2,
+  resolveUnattendedRouting,
   routedUnattendedProvider,
-  type UnattendedRoutingV2Deps,
+  type UnattendedRoutingDeps,
 } from "../harness/routing/unattended-adapter";
 import {
   createSpendMeter,
@@ -106,7 +106,7 @@ export interface AgentTaskResult {
 }
 
 /** Injectable seams. Production passes none. */
-export interface AgentTaskDeps extends UnattendedRoutingV2Deps {
+export interface AgentTaskDeps extends UnattendedRoutingDeps {
   readonly makeProvider?: (dispatch: TriggerDispatch) => ProviderPort | { readonly error: string; readonly code?: DispatchRefusalCode };
   readonly planSandbox?: (input: UnattendedSandboxInput) => UnattendedSandboxPlan;
   readonly armTimeout?: (ms: number, fire: () => void) => () => void;
@@ -589,7 +589,7 @@ async function runLocked(
         toolNames: tools.map((tool) => tool.definition.name),
       }),
     };
-    const routing = await resolveUnattendedRoutingV2(
+    const routing = await resolveUnattendedRouting(
       projectRoot,
       dispatch,
       `unattended:${runId}:agent-task`,
@@ -606,7 +606,7 @@ async function runLocked(
       return refusal(
         runId,
         "routing-blocked",
-        `routing v2 refused the explicit unattended provider/model pin: ${reason} (decision ${routingDecision.decisionId})`,
+        `routing refused the explicit unattended provider/model pin: ${reason} (decision ${routingDecision.decisionId})`,
         action,
       );
     }

@@ -1,9 +1,9 @@
 import { expect, mock, test } from "bun:test";
-import { normalizeRoutingV2Config } from "./config-v2";
+import { normalizeRoutingConfig } from "./config";
 import { RoutingBudgetLedger } from "./routing-budget";
 import { runProductionRoutingClassification, runRoutingClassification } from "./routing-classifier-service";
 import type { RoutingRequest } from "./routing-request";
-import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "./classifier-production-v2";
+import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "./classifier-production";
 
 const request: RoutingRequest = {
   requestId: "request",
@@ -14,7 +14,7 @@ const request: RoutingRequest = {
 };
 
 test("canonical classifier service builds a bound recommendation once", async () => {
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     classifier: { chain: [{ adapterId: "model", target: { providerId: "provider", modelId: "classifier" } }], timeoutMs: 3_000, minConfidence: 0.7, onFailure: { mode: "baseline" } },
   } }, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
@@ -34,7 +34,7 @@ test("canonical classifier service builds a bound recommendation once", async ()
 });
 
 test.each([0.9, 1])("positive caller allowance %s caps the classifier deadline", async (timeoutMs) => {
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     classifier: { chain: [{ adapterId: "model", target: { providerId: "provider", modelId: "classifier" } }], timeoutMs: 3_000, minConfidence: 0.7, onFailure: { mode: "baseline" } },
   } }, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
@@ -56,7 +56,7 @@ test.each([0.9, 1])("positive caller allowance %s caps the classifier deadline",
 
 
 test.each([0, -1])("exhausted caller allowance %s uses fallback without classifier work", async (timeoutMs) => {
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     classifier: { chain: [{ adapterId: "model", target: { providerId: "provider", modelId: "classifier" } }], timeoutMs: 3_000, minConfidence: 0.7, onFailure: { mode: "class", modelClass: "expert" } },
   } }, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
@@ -90,7 +90,7 @@ test.each([0, -1])("exhausted caller allowance %s uses fallback without classifi
 });
 
 test("exhausted caller allowance preserves cancellation without constructing adapters", async () => {
-  const config = normalizeRoutingV2Config({ user: { schemaVersion: 2 } }, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
+  const config = normalizeRoutingConfig({ user: { schemaVersion: 2 } }, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
   const externalAllowed = mock(() => true);
   const result = await runProductionRoutingClassification({
     task: "cancelled",

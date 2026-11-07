@@ -1,4 +1,4 @@
-import type { NormalizedRoutingV2Config } from "./config-v2";
+import type { NormalizedRoutingConfig } from "./config";
 import type { RoutingReason } from "./decision";
 import { modelRefKey, type ModelRef } from "./model-class";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "./routing-runtime";
@@ -28,7 +28,7 @@ export type RoutingExecutionResult =
 export interface ExecuteRoutingWithFallbackInput {
   readonly request: RoutingRequest;
   readonly snapshot: RoutingSnapshot;
-  readonly config: NormalizedRoutingV2Config;
+  readonly config: NormalizedRoutingConfig;
   readonly providerFor: (target: ModelRef) => ProviderPort;
   readonly buildRequest: (target: ModelRef, attemptId: string) => NormalizedRequest;
   readonly beforeIo: (

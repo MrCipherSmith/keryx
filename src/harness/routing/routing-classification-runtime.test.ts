@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { applyRoutingClassificationResult } from "./routing-classification-runtime";
-import type { RoutingClassifierResult } from "./classifier-chain-v2";
+import type { RoutingClassifierResult } from "./classifier-chain";
 import type { RoutingRequest } from "./routing-request";
 
 const request = (category: RoutingRequest["category"]): RoutingRequest => ({

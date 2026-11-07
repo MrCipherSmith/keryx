@@ -98,10 +98,11 @@ test("enableExternalAgents keeps a consent record another process wrote between 
 
 test("setRoutingCategory (user layer) keeps a category another process set between its read and its write", async () => {
   const { saveShellConfig, shellConfigPath } = await import("../lib/shell-config");
-  const { setRoutingCategory } = await import("../harness/routing/config");
+  const { setRoutingCategory } = await import("../harness/routing/settings");
   const userConfigDir = tempDir();
   const cwd = tempDir();
-  saveShellConfig({ routing: { review: { kind: "provider-default", providerId: "anthropic" } } }, userConfigDir);
+  const review = { mode: "model", target: { providerId: "anthropic", modelId: "a" } };
+  saveShellConfig({ modelRouting: { schemaVersion: 2, categories: { review } } } as never, userConfigDir);
   const file = shellConfigPath(userConfigDir);
   armed = {
     file,
@@ -110,9 +111,9 @@ test("setRoutingCategory (user layer) keeps a category another process set betwe
         file,
         `${JSON.stringify(
           {
-            routing: {
-              review: { kind: "provider-default", providerId: "anthropic" },
-              docs: { kind: "provider-default", providerId: "openai" },
+            modelRouting: {
+              schemaVersion: 2,
+              categories: { review, docs: { mode: "class", modelClass: "light" } },
             },
           },
           null,
@@ -120,8 +121,8 @@ test("setRoutingCategory (user layer) keeps a category another process set betwe
         )}\n`,
       ),
   };
-  await setRoutingCategory("user", { cwd, userConfigDir }, "quick", { kind: "provider-default", providerId: "gemini" });
-  const routing = readJson(file).routing;
+  await setRoutingCategory("user", { cwd, configDir: userConfigDir }, "quick", { mode: "baseline" });
+  const routing = readJson(file).modelRouting.categories;
   expect(Object.keys(routing).sort()).toEqual(["docs", "quick", "review"]);
 });
 

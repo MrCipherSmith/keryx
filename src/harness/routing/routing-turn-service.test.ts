@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { normalizeRoutingV2Config } from "./config-v2";
-import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "./classifier-production-v2";
+import { normalizeRoutingConfig } from "./config";
+import { ROUTING_CLASSIFIER_ADAPTER_REGISTRY } from "./classifier-production";
 import type { ModelProfile } from "./model-profile";
 import { profileKey } from "./model-profile";
 import type { RoutingRequest } from "./routing-request";
-import { routeTurnV2 } from "./routing-turn-service-v2";
+import { routeTurn } from "./routing-turn-service";
 
 const baseline = { providerId: "provider", modelId: "baseline" } as const;
 const request: RoutingRequest = {
@@ -28,11 +28,11 @@ const profile: ModelProfile = {
 };
 
 test("neutral turn service owns the frozen snapshot, shared budget, and runtime receipt", async () => {
-  const config = normalizeRoutingV2Config({ user: {
+  const config = normalizeRoutingConfig({ user: {
     schemaVersion: 2,
     categories: { default: { mode: "baseline" } },
   } }, { classifierAdapters: ROUTING_CLASSIFIER_ADAPTER_REGISTRY });
-  const result = await routeTurnV2({
+  const result = await routeTurn({
     task: "answer with tools",
     request,
     config,
