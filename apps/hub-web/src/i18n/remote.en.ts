@@ -1,4 +1,5 @@
 export default { composerKeyboardHint: "Enter to send · Shift+Enter for a new line", newAssistantReply: "New Keryx reply (message {{cursor}}).", noOlderMessages: "No older messages", olderMessages: "Older messages",
+  baselineModelDetails: "Privacy: {{privacy}} · Cost: {{cost}}",
   sessionOpeningScope: "Check that this machine allows the selected checkout and agent profile.", sessionOpeningRecovery: "Resolve the unfinished run on this machine before retrying this checkout.",
   chatDeliveryStates: {"hub-accepted": "Accepted by Hub", "machine-started": "Machine started", "machine-rejected": "Machine rejected", "not-delivered": "Not delivered to the machine", "queue-removed": "Removed from queue", "unconfirmed": "Machine delivery unconfirmed"},
   chatDeliveryAnnouncement: "Message delivery. {{status}}.",

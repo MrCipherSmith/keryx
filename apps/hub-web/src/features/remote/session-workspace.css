@@ -145,6 +145,8 @@
   gap: 12px;
 }
 .session-context-column {
+  /* Long controller IDs must wrap inside the inspector without widening its tabs and panels. */
+  grid-template-columns: minmax(0, 1fr);
   position: sticky;
   top: 12px;
   max-height: calc(100dvh - 24px);
