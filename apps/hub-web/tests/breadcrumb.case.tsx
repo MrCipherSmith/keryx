@@ -115,6 +115,10 @@ test("the 60 px rail is available whenever desktop navigation is visible", () =>
   expect(toggle?.media).toEqual(["@media (min-width:768px)"]);
   expect(rail?.media).toEqual(toggle?.media);
   expect(rail?.decls.get("width")).toBe("60px");
+  const tabletSidebar = css.find((rule) =>
+    rule.selector === ".sidebar" && rule.decls.get("width") === "176px",
+  );
+  expect(tabletSidebar?.layered).toBe(rail?.layered);
 });
 
 test("the sidebar toggle preserves the chosen width across routes and reloads", async () => {

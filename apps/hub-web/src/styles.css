@@ -498,8 +498,10 @@
   }
 }
 @media (max-width: 1023px) {
-  .sidebar {
-    width: 176px;
+  @layer components {
+    .sidebar {
+      width: 176px;
+    }
   }
   .workspace-header {
     padding: 8px 14px;
