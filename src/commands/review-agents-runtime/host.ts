@@ -46,6 +46,7 @@ import type {
 } from "../../review/agents/types";
 
 import { ensureRunsRoot, snapshotGitRevision, reviewSkillInstructions } from "./project-files";
+import { captureRunInputs, loadRunInputs, bindSnapshotAdapter, type RunInputSnapshot } from "./input-snapshot";
 const RUN_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const ENTITY_ROLES: Readonly<Record<string, ReviewAgentRole>> = {
   "review-coordinator": "coordinator",
@@ -132,9 +133,6 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
   const leases = new Map<string, AuthorityLease>();
   const dispatchAuthorities = new Map<string, string>();
   const rootAuthority = new AsyncLocalStorage<RootAuthority>();
-  const loadedCatalog = catalogOrThrow(projectRoot);
-  const catalog = loadedCatalog.agents.map((agent) => agent.definition);
-  const policies = createReviewAgentEntityPolicyResolver(loadedCatalog);
 
   const authority: ReviewAgentAuthority = {
     authorize(request) {
@@ -195,13 +193,14 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
     runtime: ReviewAgentHostRuntime,
     controller: () => ReviewAgentController | undefined,
     config: ReviewAgentConfig,
+    snapshot: RunInputSnapshot,
   ): Promise<KeryxExternalGeneralHost> => externalGeneralHostFactory({
     runId,
     runDir: directory,
     configDir,
     provider: runtime.providerId,
     model: runtime.modelId,
-    compileInstructions: (request) => externalInstructions(projectRoot, catalog, request),
+    compileInstructions: (request) => externalInstructions(snapshot, request),
     preflightProvider: (input) => preflightExternalProvider(input, config.roleCeilings.coordinator.elapsedMs),
     controller: () => {
       const current = controller();
@@ -239,12 +238,21 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
         throw new Error(`Review agents run ${runId} is pinned to ${pinned.providerId}/${pinned.modelId}; select that runtime before reopening it`);
       }
       const sourceRoot = path.join(directory, "source");
+      const loaded = await loadRunInputs(directory);
+      if (!loaded.ok) throw loaded.error;
+      const snapshot = loaded.value;
+      const catalog = snapshot.catalog.agents.map((agent) => agent.definition);
+      const policies = createReviewAgentEntityPolicyResolver(snapshot.catalog);
       const config = hostConfig(catalog);
       let controller: ReviewAgentController | undefined;
-      const external = await createExternalHost(runId, directory, runtime, () => controller, config);
+      const external = await createExternalHost(runId, directory, runtime, () => controller, config, snapshot);
       try {
         controller = await ReviewAgentController.open({
-          storageDir: directory, adapters: [nativeAdapter(sourceRoot, () => runtime, catalog, projectRoot), external.adapter],
+          storageDir: directory, adapters: [nativeAdapter(sourceRoot, () => runtime, snapshot), external.adapter].map((adapter) =>
+            bindSnapshotAdapter(adapter, directory, snapshot, async () => {
+              if (!controller) throw new Error("Review controller unavailable");
+              return (await controller.status() as ReviewAgentRunState).activePlan;
+            })),
           authority, entityPolicies: policies, ownerId, id: nextId,
           ...(options.leaseMs === undefined ? {} : { leaseMs: options.leaseMs }),
         });
@@ -272,23 +280,33 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
           await verifyRunsRoot();
           const temporary = await mkdtemp(path.join(runsRoot, `.${runId}.`));
           let resolvedRevision: string;
+          let snapshot: RunInputSnapshot;
           try {
             resolvedRevision = await (options.snapshotRevision ?? snapshotGitRevision)(projectRoot, revision, temporary);
+            const captured = await captureRunInputs(temporary, resolvedRevision, catalogOrThrow(projectRoot), (ref) => reviewSkillInstructions(projectRoot, ref));
+            if (!captured.ok) throw captured.error;
+            snapshot = captured.value;
             await rename(temporary, destination);
             await verifiedRunDir(runId);
           } catch (error) {
             await rm(temporary, { recursive: true, force: true });
             throw error;
           }
+          const catalog = snapshot.catalog.agents.map((agent) => agent.definition);
+          const policies = createReviewAgentEntityPolicyResolver(snapshot.catalog);
           const config = hostConfig(catalog);
           let controller: ReviewAgentController | undefined;
           let external: KeryxExternalGeneralHost | undefined;
           try {
             const runtimePinned = writeRuntimeBinding(destination, runtime);
-            external = await createExternalHost(runId, destination, runtime, () => controller, config);
+            external = await createExternalHost(runId, destination, runtime, () => controller, config, snapshot);
             controller = await ReviewAgentController.create({
               storageDir: destination, runId, revision: resolvedRevision, config,
-              adapters: [nativeAdapter(path.join(destination, "source"), () => runtime, catalog, projectRoot), external.adapter],
+              adapters: [nativeAdapter(path.join(destination, "source"), () => runtime, snapshot), external.adapter].map((adapter) =>
+                bindSnapshotAdapter(adapter, destination, snapshot, async () => {
+                  if (!controller) throw new Error("Review controller unavailable");
+                  return (await controller.status() as ReviewAgentRunState).activePlan;
+                })),
               authority, entityPolicies: policies, ownerId, id: nextId,
               ...(options.leaseMs === undefined ? {} : { leaseMs: options.leaseMs }),
             });
@@ -416,7 +434,8 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
   return { tools, controller: boundController, close };
 }
 
-function nativeAdapter(sourceRoot: string, runtime: () => ReviewAgentHostRuntime, catalog: readonly AgentDefinition[], projectRoot: string) {
+function nativeAdapter(sourceRoot: string, runtime: () => ReviewAgentHostRuntime, snapshot: RunInputSnapshot) {
+  const catalog = snapshot.catalog.agents.map((agent) => agent.definition);
   return createReviewAgentNativeAdapter({
     cwd: sourceRoot,
     providerFor: async () => { const bound = runtime(); return { provider: bound.provider, providerId: bound.providerId, modelId: bound.modelId }; },
@@ -432,7 +451,7 @@ function nativeAdapter(sourceRoot: string, runtime: () => ReviewAgentHostRuntime
     requestApproval: async (_request, tool, input, meta) => runtime().io?.()?.requestApproval?.(tool, input, meta) ?? false,
     permissionMode: () => runtime().io?.()?.permissionMode?.() ?? "ask",
     entityInstructions: (request) => { const entity = catalog.find((entry) => entry.name === request.entity); if (entity === undefined) throw new Error(`Unknown Review agents entity ${request.entity}`); return entity.body; },
-    skillInstructions: (skillRef) => reviewSkillInstructions(projectRoot, skillRef),
+    skillInstructions: async (skillRef) => pinnedSkill(snapshot, skillRef),
   });
 }
 
@@ -443,15 +462,21 @@ function reviewTools(sourceRoot: string, entity: AgentDefinition | undefined): r
   return candidates.filter((tool) => tool.definition.risk === "read" && allowed.has(tool.definition.name));
 }
 
+function pinnedSkill(snapshot: RunInputSnapshot, ref: string): string {
+  const text = snapshot.skills[ref];
+  if (text === undefined) throw new Error(`Review skill ${ref} is absent from the input snapshot`);
+  return text;
+}
+
 async function externalInstructions(
-  projectRoot: string,
-  catalog: readonly AgentDefinition[],
+  snapshot: RunInputSnapshot,
   request: ReviewAgentAdapterRequest,
 ): Promise<string> {
+  const catalog = snapshot.catalog.agents.map((agent) => agent.definition);
   if (request.role !== "coordinator") throw new Error(`${EXTERNAL_ADAPTER_ID} can execute only coordinator assignments`);
   const entity = catalog.find((entry) => entry.name === request.entity);
   if (entity === undefined) throw new Error(`Unknown Review agents entity ${request.entity}`);
-  const skill = request.skillRef === undefined ? undefined : await reviewSkillInstructions(projectRoot, request.skillRef);
+  const skill = request.skillRef === undefined ? undefined : pinnedSkill(snapshot, request.skillRef);
   return [
     entity.body.trim(),
     skill === undefined ? undefined : `Trusted review skill (${request.skillRef}):\n${skill.trim()}`,
