@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, test } from "bun:test";
-import type { LiveShellCommand, LiveShellDetail, LiveShellMessage, LiveShellReply, LiveShellUpdate } from "../../remote-control/live-shell";
+import { liveShellContextHeader, type LiveShellCommand, type LiveShellContext, type LiveShellDetail, type LiveShellMessage, type LiveShellReply, type LiveShellUpdate } from "../../remote-control/live-shell";
 import { D, HEAD, fixture, publishCapabilities, reviewerToken, success as readSuccess, type Fixture } from "./fixture.test-support";
 
 let hub: Fixture;
@@ -94,6 +94,58 @@ test("Stop never moves from its observed turn to the next and a released control
   await success(shell.write("release", { clientId }));
   expect((await success<LiveShellReply>(shell.refresh())).command).toBeNull();
   expect((await shell.detail(command.operationId)).delivery?.status).toBe("rejected");
+});
+
+test("chat controls use the advertised catalogues and dispatch approval only for the current question and lease", async () => {
+  const shell = await sharedShell();
+  await shell.publish();
+  const counters = { tokensIn: 100, tokensOut: 8, cacheRead: 12, cacheWrite: 0, activeMs: 42 };
+  const context: LiveShellContext = {
+    commands: [{ name: "status", description: "Show shell status" }],
+    model: { currentId: "model-a", candidates: [{ id: "model-b", label: "Model B" }] },
+    usage: { turn: counters, session: counters },
+  };
+  const firstRefresh = await shell.refresh({ context });
+  expect(firstRefresh.headers.get(liveShellContextHeader)).toBe("1");
+  await readSuccess(firstRefresh);
+  expect((await shell.detail()).context).toEqual(context);
+  const clientId = randomUUID();
+  await success(shell.write("claim", { clientId }));
+  expect((await shell.write("invoke", { clientId, name: "exit" })).status).toBe(409);
+  expect((await shell.write("select-model", { clientId, candidateId: "unknown" })).status).toBe(409);
+  const change = await success<{operationId: string}>(shell.write("select-model", { clientId, candidateId: "model-b" }));
+  expect((await success<LiveShellReply>(shell.refresh({ context }))).command)
+    .toEqual({ id: change.operationId, kind: "select-model", candidateId: "model-b" });
+  const selected = { ...context, model: { ...context.model!, currentId: "model-b" } };
+  await success(shell.refresh({ context: selected, ack: { id: change.operationId, status: "applied" } }));
+  expect((await shell.detail(change.operationId)).context?.model?.currentId).toBe("model-b");
+
+  const invoked = await success<{operationId: string}>(shell.write("invoke", { clientId, name: "status" }));
+  expect((await success<LiveShellReply>(shell.refresh({ context: selected }))).command)
+    .toEqual({ id: invoked.operationId, kind: "invoke", name: "status" });
+  await success(shell.refresh({ context: selected, ack: { id: invoked.operationId, status: "applied", output: "Ready; Bearer private-value" } }));
+  expect((await shell.detail(invoked.operationId)).delivery).toMatchObject({ status: "applied", output: "Ready; Bearer [REDACTED]" });
+
+  const approval = { id: randomUUID(), tool: "shell_exec", summary: "printf test", reason: "Approval required", canAnswer: true };
+  const current = { ...selected, approval };
+  await success(shell.refresh({ busy: true, context: current }));
+  const first = await success<{operationId: string}>(shell.write("answer-approval", { clientId, approvalId: approval.id, decision: "allow" }));
+  const next = { ...approval, id: randomUUID() };
+  expect((await success<LiveShellReply>(shell.refresh({ busy: true, context: { ...current, approval: next } }))).command).toBeNull();
+  expect((await shell.detail(first.operationId)).delivery?.status).toBe("rejected");
+
+  const second = await success<{operationId: string}>(shell.write("answer-approval", { clientId, approvalId: next.id, decision: "allow" }));
+  await success(shell.write("release", { clientId }));
+  const secondClient = randomUUID();
+  await success(shell.write("claim", { clientId: secondClient }));
+  expect((await success<LiveShellReply>(shell.refresh({ busy: true, context: { ...current, approval: next } }))).command).toBeNull();
+  expect((await shell.detail(second.operationId)).delivery?.status).toBe("rejected");
+
+  const answer = await success<{operationId: string}>(shell.write("answer-approval", { clientId: secondClient, approvalId: next.id, decision: "deny" }));
+  expect((await success<LiveShellReply>(shell.refresh({ busy: true, context: { ...current, approval: next } }))).command)
+    .toEqual({ id: answer.operationId, kind: "answer-approval", approvalId: next.id, decision: "deny" });
+  await success(shell.refresh({ context: selected, ack: { id: answer.operationId, status: "applied" } }));
+  expect((await shell.detail(answer.operationId)).delivery?.status).toBe("applied");
 });
 
 test("an advertised shell and a new headless session cannot claim the same mapped checkout", async () => {

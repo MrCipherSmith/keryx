@@ -12,6 +12,8 @@ import { beforeEach, expect, test, vi } from "vitest";
 import i18n from "../src/i18n";
 import { HubContext, type HubContextValue } from "../src/app/hub-context";
 import { SessionSurface } from "../src/features/remote/sessions";
+import type { RunRecord } from "../../../src/remote-control/protocol";
+import type { Control } from "../src/api/remote";
 import { sessionFixture, machineFixture } from "./remote-fixtures";
 import { resetClient } from "../src/api/client";
 import { useDraftStore } from "../src/state/drafts";
@@ -25,7 +27,7 @@ const context: HubContextValue = {
   navigate,
   refresh: async () => {},
 };
-function show() {
+function show(record: Control["SessionRecord"] = sessionFixture) {
   return render(
     <QueryClientProvider
       client={
@@ -33,7 +35,7 @@ function show() {
       }
     >
       <HubContext.Provider value={context}>
-        <SessionSurface record={sessionFixture} />
+        <SessionSurface record={record} />
       </HubContext.Provider>
     </QueryClientProvider>,
   );
@@ -142,7 +144,7 @@ test("navigator shows checkout groups and opens exact session within project", a
     }),
   );
   expect(
-    await screen.findByText(/local-provider \/ actual-model/),
+    await screen.findByRole("option", { name: "local-provider / actual-model" }),
   ).toBeInTheDocument();
 });
 test("history opens at the latest page, then prepends earlier messages with explicit roles", async () => {
@@ -230,4 +232,53 @@ test("the 600px header rules wrap the header row and let the actions shrink", ()
   const actions = folded(".session-header-actions");
   expect(actions.get("flex-shrink")).toBe("1");
   expect(actions.get("min-width")).toBe("0");
+});
+
+test("ordinary session approvals and Stop render above and beside the same composer", async () => {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  const run: RunRecord = {
+    runId: "working", turnId: "turn", sessionId: "s", projectId: "p", checkoutId: "c", machineId: "m",
+    version: 2, state: "waiting-approval", lastLocalSeq: 0, association: { mode: "ad-hoc", profileConsentVersion: 1 },
+    snapshot: {
+      config: sessionFixture.config, configDigest: "a".repeat(64), effectiveCandidateId: "local",
+      routingDecision: "baseline", fallbackReason: "none", selectionReceiptId: "selection",
+    },
+    partial: false, connected: true, approvals: [{
+      approvalId: "approval", runId: "working", sessionId: "s", turnId: "turn",
+      actionFingerprint: "a".repeat(64), policyDigest: "b".repeat(64), expiresAt: "2099-01-01T00:00:00Z",
+      summary: "Confirm the local action", localRequired: true, status: "waiting",
+    }],
+  };
+  vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+    const path = String(input);
+    if (path.endsWith("/runs/working")) return Response.json(run);
+    if (path.includes("/runs/working/events")) return Response.json({ events: [], cursor: 0, gap: null });
+    return original(input, init);
+  });
+  show({ ...sessionFixture, activeRunId: "working", state: "busy" });
+  const approval = await screen.findByText("Confirm the local action");
+  const editor = screen.getByRole("textbox", { name: "Message" });
+  const dock = editor.closest(".chat-dock") as HTMLElement;
+  expect(dock).toContainElement(approval);
+  expect(approval.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(dock).getByText("Answer this request in the terminal.")).toBeVisible();
+  expect(within(dock).getByRole("button", { name: "Allow once" })).toBeDisabled();
+  expect(within(dock).getByRole("button", { name: "Stop response" })).toBeDisabled();
+});
+
+test("ordinary chat usage opens measured statistics from the session endpoint", async () => {
+  const original = vi.mocked(globalThis.fetch).getMockImplementation()!;
+  vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+    if (String(input).endsWith("/sessions/s/usage")) return Response.json({
+      turn: { tokensIn: 712, tokensOut: 24, cacheRead: 4, cacheWrite: 8, activeMs: 3100 },
+      session: { tokensIn: 1360, tokensOut: 65, cacheRead: 8, cacheWrite: 12, activeMs: 5700 },
+      incomplete: true,
+    });
+    return original(input, init);
+  });
+  show();
+  fireEvent.click(screen.getByText("Usage"));
+  expect(await screen.findByText("712")).toBeVisible();
+  expect(screen.getByText("1,360")).toBeVisible();
+  expect(screen.getByText("Some turns have no usage report. Totals cover the recorded turns.")).toBeVisible();
 });

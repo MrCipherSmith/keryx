@@ -2746,7 +2746,7 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     // optional `bus` live-getter parameter — see that file's own doc comment
     // on this field.
     expect(optsTypeBlock).toContain(
-      "makeAgentDeps: (\n    sel: TuiSelection,\n    getSlateSession: () => SlateSessionRef | undefined,\n    bus?: { client: () => BusClient | undefined },\n  ) => Promise<AgentDeps>;",
+      "makeAgentDeps: (\n    sel: TuiSelection,\n    getSlateSession: () => SlateSessionRef | undefined,\n    bus?: { client: () => BusClient | undefined },",
     );
   });
 
@@ -2771,25 +2771,25 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   });
 
   test("the /model|/connect switchTo(...) rebuild passes the same live getter", () => {
-    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
+    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
     // Widened from 300 (flow 267): `deps` now wraps the call to merge in
     // `onContextCompaction` (`deps = { ...(await opts.makeAgentDeps(...)),
     // onContextCompaction }`), pushing the closing `)` a bit further out.
     // Flow 274 T7 widens it again for `busInbox`/`busAck`.
     const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 500);
-    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, liveSlateSession, busClientRef)");
+    expect(switchToBlock).toMatch(/opts\.makeAgentDeps\(\s*ns, liveSlateSession, busClientRef,/);
   });
 
   test("switchTo refreshes the live balance panel for the NEW provider", () => {
     expect(fnBody).toContain("const balancePanel = mountBalancePanel(");
-    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
+    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
     // Flow 274 T7 widened the `deps = {...}` rebuild above (busInbox/busAck
     // carry-over), pushing `balancePanel.setProvider` a bit further out.
     // Flow 338 widened it again — `sessionModelExplicit = true;` is set at
     // the top of `switchTo`, ahead of the rebuild.
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 1600);
+    const switchToBlock = fnBody.slice(switchToIndex, fnBody.indexOf("    // Side workers", switchToIndex));
     expect(switchToBlock).toContain("void balancePanel.setProvider(ns.provider)");
   });
 
@@ -2836,7 +2836,7 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   // provider/model, inside the per-turn dispatch IIFE) — same live getters,
   // so it shares `busClientRef` too.
   test("both routing engines and the three session rebuilds share the live slate and bus", () => {
-    const occurrences = fnBody.split(", liveSlateSession, busClientRef)").length - 1;
+    const occurrences = fnBody.match(/, liveSlateSession, busClientRef[),]/g)?.length;
     expect(occurrences).toBe(5);
     expect(fnBody).toContain("opts.makeAgentDeps({ provider: target.providerId, model: target.modelId }, liveSlateSession, busClientRef)");
     expect(fnBody).not.toContain("() => slateSession)");

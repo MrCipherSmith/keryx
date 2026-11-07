@@ -9,28 +9,60 @@ import {
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { TimelineEntry } from './session-timeline';
 
-type EntryView = { id: string; entry: TimelineEntry };
-const RenderEntry = createContext<(entry: TimelineEntry) => ReactNode>(() => null);
+export type ChatTranscriptEntry = {
+  message: ThreadMessageLike & { id: string };
+  render: () => ReactNode;
+};
 
-function toMessage({ id, entry }: EntryView): ThreadMessageLike {
-  if (entry.kind === 'outcome') return { id, role: 'system', content: '/' + entry.item.outcome.commandName };
-  if (entry.kind === 'delivery') return { id, role: 'user', content: entry.delivery.text, createdAt: new Date(entry.delivery.submittedAt) };
-  const { role, text, createdAt } = entry.message;
+function toMessage({ message }: ChatTranscriptEntry): ThreadMessageLike {
+  return message;
+}
+
+const Entries = createContext<ReadonlyMap<string, ChatTranscriptEntry>>(new Map());
+
+function TranscriptMessage() {
+  const id = useAuiState(state => state.message.id);
+  const entry = useContext(Entries).get(id);
+  return entry ? <MessagePrimitive.Root asChild>{entry.render()}</MessagePrimitive.Root> : null;
+}
+
+export function ChatTranscript({ entries, children }: { entries: ChatTranscriptEntry[]; children?: ReactNode }) {
+  const indexed = useMemo(() => new Map(entries.map(entry => [entry.message.id, entry])), [entries]);
+  const runtime = useExternalStoreRuntime({
+    messages: entries,
+    convertMessage: toMessage,
+    isDisabled: true,
+    onNew: async () => { throw new Error("Submit through the Hub session composer"); },
+  });
+  return <AssistantRuntimeProvider runtime={runtime}>
+    <Entries.Provider value={indexed}>
+      <ThreadPrimitive.Root>
+        <ThreadPrimitive.Viewport className="session-transcript-body">
+          <ol className="session-thread"><ThreadPrimitive.Messages components={{ Message: TranscriptMessage }} /></ol>
+          {children}
+        </ThreadPrimitive.Viewport>
+      </ThreadPrimitive.Root>
+    </Entries.Provider>
+  </AssistantRuntimeProvider>;
+}
+
+function sessionMessage(entry: TimelineEntry): ChatTranscriptEntry["message"] {
+  if (entry.kind === 'outcome') {
+    return { id: 'command:' + entry.item.outcome.operationId, role: 'system', content: '/' + entry.item.outcome.commandName };
+  }
+  if (entry.kind === 'delivery') {
+    return {
+      id: 'delivery:' + entry.delivery.operationId, role: 'user', content: entry.delivery.text,
+      createdAt: new Date(entry.delivery.submittedAt),
+    };
+  }
+  const { role, text, createdAt, messageId } = entry.message;
   return {
-    id,
+    id: entry.delivery ? 'delivery:' + entry.delivery.operationId : 'message:' + messageId,
     role: role === 'human' ? 'user' : role === 'assistant' ? 'assistant' : 'system',
     content: text,
     createdAt: new Date(createdAt),
   };
-}
-
-const Entries = createContext<ReadonlyMap<string, TimelineEntry>>(new Map());
-
-function TimelineMessage() {
-  const id = useAuiState(state => state.message.id);
-  const entry = useContext(Entries).get(id);
-  const renderEntry = useContext(RenderEntry);
-  return entry ? <MessagePrimitive.Root asChild>{renderEntry(entry)}</MessagePrimitive.Root> : null;
 }
 
 /** Hub remains the source of truth for messages, receipts and the versioned composer. */
@@ -43,29 +75,6 @@ export function SessionTranscript({
   renderEntry: (entry: TimelineEntry) => ReactNode;
   children: ReactNode;
 }) {
-  const views = useMemo(() => entries.map(entry => ({
-    entry,
-    id: entry.kind === 'outcome' ? 'command:' + entry.item.outcome.operationId
-      : entry.kind === 'delivery' ? 'delivery:' + entry.delivery.operationId
-        : entry.delivery ? 'delivery:' + entry.delivery.operationId : 'message:' + entry.message.messageId,
-  })), [entries]);
-  const indexed = useMemo(() => new Map(views.map(view => [view.id, view.entry])), [views]);
-  const runtime = useExternalStoreRuntime({
-    messages: views,
-    convertMessage: toMessage,
-    isDisabled: true,
-    onNew: async () => { throw new Error("Submit through the Hub session composer"); },
-  });
-  return <AssistantRuntimeProvider runtime={runtime}>
-    <Entries.Provider value={indexed}>
-      <RenderEntry.Provider value={renderEntry}>
-        <ThreadPrimitive.Root>
-          <ThreadPrimitive.Viewport className="session-transcript-body">
-            <ol className="session-thread"><ThreadPrimitive.Messages components={{ Message: TimelineMessage }} /></ol>
-            {children}
-          </ThreadPrimitive.Viewport>
-        </ThreadPrimitive.Root>
-      </RenderEntry.Provider>
-    </Entries.Provider>
-  </AssistantRuntimeProvider>;
+  const views = entries.map(entry => ({ message: sessionMessage(entry), render: () => renderEntry(entry) }));
+  return <ChatTranscript entries={views}>{children}</ChatTranscript>;
 }

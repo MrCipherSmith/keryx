@@ -12,7 +12,7 @@ import { drainSessionQueue } from "./queue";
 import { createRemoteReader } from "./read-model";
 import { createSessionOperations } from "./session-operations";
 import { createLiveShells } from "./live-shells";
-import { liveShellLimits } from "../../remote-control/live-shell";
+import { liveShellContextHeader, liveShellLimits } from "../../remote-control/live-shell";
 import { randomBytes } from "node:crypto";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import { canonicalDigest, runCommandDigest, sessionCommandDigest, validateControl, parseClosedJson, parseMachineFrame, LIMITS, MACHINE_SUBPROTOCOL, type Control } from "../../remote-control/protocol";
@@ -127,7 +127,9 @@ export function createRemoteControl(ports: RemotePorts) {
       if (request.headers.has("origin")) fail(403, "origin-denied", "Machine HTTP requires native credentials without browser Origin");
       if (p[0] === "machines" && p[2] === "live-shells" && p.length === 4 && p[1] === m.machineId) {
         const update = method === "POST" ? await body(request, liveShellLimits.updateBytes) : undefined;
-        return json(liveShells.forMachine(scopedMachine(request), p[3]!, method, update));
+        const response = json(liveShells.forMachine(scopedMachine(request), p[3]!, method, update));
+        response.headers.set(liveShellContextHeader, "1");
+        return response;
       }
       return machineHttp(request,p,write ? await body(request) : undefined,m);
     }
