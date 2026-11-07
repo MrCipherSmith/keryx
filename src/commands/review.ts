@@ -140,8 +140,8 @@ import {
 } from "../review/scope";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
-import { loadRouting } from "../harness/routing/settings";
-import type { NormalizedRoutingConfig } from "../harness/routing/config";
+import { loadRouting, readRoutingSettings, ROUTING_NORMALIZATION } from "../harness/routing/settings";
+import { normalizeRoutingConfig, type NormalizedRoutingConfig } from "../harness/routing/config";
 import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
 import { buildCatalogRoutingSnapshot, catalogRoutingRevision, estimateModelCostUsd } from "../harness/routing/snapshot-adapter";
@@ -1729,11 +1729,12 @@ async function runTier(args: string[]): Promise<void> {
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
-  const routingConfig = loadRouting(process.cwd());
+  const settings = readRoutingSettings({ cwd: process.cwd() });
+  const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
   // The tier is a reporting field: only the routing receipt below selects the
   // dispatch provider/model, so the tier never ranks candidates itself.
   const tierDecision = decideDispatchModel(session, signals, []);
-  const { decision, routed, routingRefused, notices, routing } = await applyReviewRoutingCategory(
+  const { decision, routed, routingRefused, notices: routeNotices, routing } = await applyReviewRoutingCategory(
     tierDecision,
     process.cwd(),
     catalog,
@@ -1746,6 +1747,7 @@ async function runTier(args: string[]): Promise<void> {
       outputTokensReserved: 4_096,
     },
   );
+  const notices = [...settings.notices, ...routeNotices];
   // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s
   // `pinsModel`-gated provider/model — that path exists for the TIER's own
   // "discovered" resolution. `routed: true` is an ADDITIVE field on top of
@@ -2748,7 +2750,9 @@ export interface ConformExplainRoute {
 
 /** AC7: the `review`-category model (the session model when unset), same resolution `applyReviewRoutingCategory` uses, without the live provider-catalog probe a text explanation does not need. */
 async function resolveConformExplainModel(cwd: string, routingTask: string): Promise<ConformExplainRoute> {
-  const routingConfig = loadRouting(cwd);
+  const settings = readRoutingSettings({ cwd });
+  const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
+  for (const notice of settings.notices) console.error(`routing: ${notice}`);
   {
     const session = resolveCallerSession();
     if (session.providerId === "" || session.modelId === "") {

@@ -49,3 +49,26 @@ test("a live fetch is cached; a failed or non-live one keeps the curated list", 
   await noGrant.start();
   expect(fetched).toBe(false);
 });
+
+test("live catalogue preserves metadata and records actual observation time", async () => {
+  const before = Date.now();
+  const live = createLiveCodexModels(undefined, {
+    hasGrant: () => true,
+    fetchModels: async () => ({ models: ["live-model"], source: "live" }),
+  });
+  const providers = [
+    { name: "openai-codex", models: ["old"], observedAt: "2000-01-01T00:00:00.000Z" },
+    { name: "other", models: ["model"], offline: true, observedAt: "2001-01-01T00:00:00.000Z" },
+  ];
+  const merged = await withLiveCodexModels(providers, live);
+  expect(merged[1]).toEqual(providers[1]);
+  const observedAt = (merged[0] as { observedAt?: string }).observedAt;
+  expect(Date.parse(observedAt ?? "")).toBeGreaterThanOrEqual(before);
+  expect(Date.parse(observedAt ?? "")).toBeLessThanOrEqual(Date.now());
+  expect(merged[0]?.models).toEqual(["live-model"]);
+  const failed = createLiveCodexModels(undefined, {
+    hasGrant: () => true,
+    fetchModels: async () => { throw new Error("offline"); },
+  });
+  expect(await withLiveCodexModels(providers, failed)).toEqual(providers);
+});

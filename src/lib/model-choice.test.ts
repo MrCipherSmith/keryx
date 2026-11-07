@@ -191,3 +191,18 @@ test("AC7: model-choice.ts's own source never mentions a path outside the projec
   expect(codeOnly).not.toMatch(/os\.homedir/);
   expect(source).not.toMatch(/writeFile|writeFileAtomic|writeContained/);
 });
+
+test("project guidance survives malformed personal routing", async () => {
+  const { cwd, userConfigDir } = await project();
+  const categories = { review: { mode: "model" as const, target: { providerId: "anthropic", modelId: "project-review" } } };
+  await replaceRoutingLayer("project", { cwd, configDir: userConfigDir }, { schemaVersion: 2, categories });
+  approveProjectRouting({ cwd, configDir: userConfigDir });
+  for (const personal of ['{"modelRouting":null}', '{ invalid json']) {
+    await writeFile(path.join(userConfigDir, "auth.json"), personal);
+    const resolved = await resolveModelChoice(cwd, userConfigDir);
+    expect(resolved.error).toBeUndefined();
+    expect(resolved.assignments).toEqual(categories);
+    expect(resolved.untrusted).toBe(false);
+    expect((await buildModelChoiceBlockInput(cwd, userConfigDir)).assignments).toEqual(categories);
+  }
+});

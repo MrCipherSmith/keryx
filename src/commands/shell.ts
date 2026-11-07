@@ -4211,7 +4211,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             for (const d of tuiDetected) {
               byName.set(d.name, { name: d.name, models: d.models ?? [] });
             }
-            return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models());
+            return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models(), startLiveCodexModels().observedAt?.());
           },
           getRankHints: (providerId) => loadRankHints(providerId),
           // Flow 358: when the size words and version cannot settle a `model_tier`
@@ -4784,7 +4784,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)),
         describeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? (providerId === provider ? baseUrl : undefined)).describe(),
-        getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models()),
+        getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models(), startLiveCodexModels().observedAt?.()),
         getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read
         // `slateSessionBox.current` BY REFERENCE, at fold time — same

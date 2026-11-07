@@ -1374,3 +1374,18 @@ test("flow 429: --automatic is recorded on the manifest, printed on create and s
   await reviewCommand(["status", "plain-round"]);
   expect(logs.join("\n")).not.toContain("run mode: automatic review");
 });
+
+test("review tier preserves project trust notices in JSON and text", async () => {
+  await replaceRoutingLayer("project", { cwd: ROOT }, {
+    schemaVersion: 2,
+    categories: { review: { mode: "model", target: { providerId: "other", modelId: "unapproved" } } },
+  });
+  await tierRouted("--json");
+  const parsed = JSON.parse(logs.join("\n"));
+  expect(parsed.notices.join("\n")).toContain("keryx routing trust");
+  expect(parsed.routing.decision.selection).not.toEqual({ providerId: "other", modelId: "unapproved" });
+  logs.length = 0;
+  errors.length = 0;
+  await tierRouted();
+  expect(errors.join("\n")).toContain("keryx routing trust");
+});

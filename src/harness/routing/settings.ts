@@ -117,10 +117,15 @@ function readScope(
 export function readRoutingSettings(
   location: RoutingLocation,
   normalization: RoutingNormalizationOptions = ROUTING_NORMALIZATION,
+  options: { readonly projectOnly?: boolean } = {},
 ): RoutingSettings {
   const userFile = userRoutingFile(location.configDir);
   const projectFile = projectRoutingFile(location.cwd);
-  const user = readScope("user", location, readRoutingFileRoot(userFile).value, userFile, normalization);
+  // Generated project guidance must not depend on personal routing validity.
+  // Keep the same project validation and trust gate without reading auth.json.
+  const user: ScopeRead = options.projectOnly === true
+    ? { source: "none" }
+    : readScope("user", location, readRoutingFileRoot(userFile).value, userFile, normalization);
   const project = readScope("project", location, readRoutingFileRoot(projectFile).value, projectFile, normalization);
   const notices = [...(user.legacy?.notices ?? []), ...(project.legacy?.notices ?? [])];
   const unresolved = [...(user.legacy?.unresolved ?? []), ...(project.legacy?.unresolved ?? [])];

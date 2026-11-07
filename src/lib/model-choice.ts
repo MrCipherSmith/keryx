@@ -136,7 +136,7 @@ export interface ModelChoiceResolution {
 export async function resolveModelChoice(projectRoot: string, userConfigDir?: string): Promise<ModelChoiceResolution> {
   let settings;
   try {
-    settings = readRoutingSettings({ cwd: projectRoot, ...(userConfigDir === undefined ? {} : { configDir: userConfigDir }) });
+    settings = readRoutingSettings({ cwd: projectRoot, ...(userConfigDir === undefined ? {} : { configDir: userConfigDir }) }, undefined, { projectOnly: true });
   } catch (error) {
     return { assignments: {}, untrusted: false, error: error instanceof Error ? error.message : String(error) };
   }
