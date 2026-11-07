@@ -17,7 +17,7 @@ export function createLifecycleOperations(store: HubStore, deps: SessionDependen
     const checkout = inventory?.checkouts.find((c) => c.projectId === row.record.projectId && c.checkoutId === request.targetCheckoutId);
     const profile = checkout?.agentProfiles.find((p) => p.profileId === row.record.agentProfileId);
     if (!inventory || !checkout || !profile) fail(409, "setup-required", "Explicit locally mapped fork checkout/profile required");
-    const created = createSession(store.load(), store.remote, deps, auth, row.record.projectId, { machineId: row.record.machineId, checkoutId: checkout.checkoutId, agentProfileId: profile.profileId, expectedInventoryVersion: request.expectedInventoryVersion, expectedHeadSha: request.expectedHeadSha, capabilityDigest: profile.capabilityDigest, policyDigest: profile.policyDigest, title: request.title }, operationId, false);
+    const created = createSession(store.load(), store.remote, deps, auth, row.record.projectId, { machineId: row.record.machineId, checkoutId: checkout.checkoutId, agentProfileId: profile.profileId, expectedInventoryVersion: request.expectedInventoryVersion, expectedHeadSha: request.expectedHeadSha, capabilityDigest: profile.capabilityDigest, policyDigest: profile.policyDigest, title: request.title }, operationId, "reserve-clean");
     const child = session(store.remote, row.record.projectId, created.sessionId); child.record.forkedFromSessionId = row.record.sessionId; saveSession(store.remote, child);
     return { ...created, kind: "fork-session", session: child.record };
   }
@@ -61,7 +61,7 @@ export function createLifecycleOperations(store: HubStore, deps: SessionDependen
       const inventory = store.remote.get<FrameOf<"inventory">["payload"]>("remote_inventory", row.record.machineId);
       const checkout = inventory?.checkouts.find((c) => c.projectId === row.record.projectId && c.checkoutId === row.record.checkoutId);
       if (!inventory || !checkout) fail(409, "setup-required", "Current explicit checkout inventory required");
-      receipt = createSession(store.load(), store.remote, deps, auth, row.record.projectId, { machineId: row.record.machineId, checkoutId: row.record.checkoutId, agentProfileId: row.record.agentProfileId, expectedInventoryVersion: inventory.inventoryVersion, expectedHeadSha: checkout.headSha, capabilityDigest: row.record.config.capabilityDigest, policyDigest: row.record.config.policyDigest, title: "New session" }, operationId, false);
+      receipt = createSession(store.load(), store.remote, deps, auth, row.record.projectId, { machineId: row.record.machineId, checkoutId: row.record.checkoutId, agentProfileId: row.record.agentProfileId, expectedInventoryVersion: inventory.inventoryVersion, expectedHeadSha: checkout.headSha, capabilityDigest: row.record.config.capabilityDigest, policyDigest: row.record.config.policyDigest, title: "New session" }, operationId, "reserve-clean");
     } else if (command.commandName === "sessions.fork") receipt = prepareFork(row, auth, control("SessionFork", { ...args, expectedSessionVersion: row.record.version, controller: command.controller }), operationId);
     else {
       if (typeof args.sessionId !== "string") fail(400, "invalid-arguments", "Existing target session required");
@@ -82,29 +82,32 @@ export function createLifecycleOperations(store: HubStore, deps: SessionDependen
 }
 
 /** Recheck all secondary lifecycle targets at the fresh effect grant boundary. */
-export function authorizeLifecycle(repo:import('./storage').RemoteRepository,row:SessionRow,command:import('./model').StoredCommand):void {
+export function authorizeLifecycle(repo:import('./storage').RemoteRepository,row:SessionRow,command:import('./model').StoredCommand,checkoutShared:NonNullable<SessionDependencies['checkoutShared']>):void {
  const envelope=command.envelope;
- const inventory=(target:SessionRow,clean:boolean)=>{
+ const inventory=(target:SessionRow,mode:"existing"|"launch"|"clean-launch")=>{
+  const launching=mode!=="existing";
   const current=machine(repo,target.record.machineId);
+  if(checkoutShared(current.machineId,target.record.projectId,target.record.checkoutId))fail(409,'workspace-conflict','Checkout is shared by an interactive shell');
   const snapshot=repo.get<FrameOf<'inventory'>['payload']>('remote_inventory',current.machineId);
   const checkout=snapshot?.checkouts.find(c=>c.projectId===target.record.projectId&&c.checkoutId===target.record.checkoutId);
   const profile=checkout?.agentProfiles.find(p=>p.profileId===target.record.agentProfileId);
-  if(!snapshot||current.inventoryEpoch!==current.epoch||snapshot.inventoryVersion!==current.inventoryVersion||(clean&&snapshot.inventoryVersion!==target.inventoryVersion)||!checkout||checkout.headSha!==target.headSha||!profile||profile.readiness!=='ready'||profile.policyDigest!==target.record.config.policyDigest||profile.capabilityDigest!==target.record.config.capabilityDigest)fail(409,'stale-reference','Lifecycle target inventory or permitted profile changed');
+  if(!snapshot||current.inventoryEpoch!==current.epoch||snapshot.inventoryVersion!==current.inventoryVersion||(launching&&snapshot.inventoryVersion!==target.inventoryVersion)||!checkout||checkout.headSha!==target.headSha||!profile||profile.readiness!=='ready'||profile.policyDigest!==target.record.config.policyDigest||profile.capabilityDigest!==target.record.config.capabilityDigest)fail(409,'stale-reference','Lifecycle target inventory or permitted profile changed');
   completeProjection(repo,target);
-  if(clean&&(!checkout.clean||!checkout.available||checkout.busy))fail(409,'workspace-conflict','Lifecycle target must remain clean and available');
+  if(launching&&(!checkout.available||checkout.busy))fail(409,'workspace-conflict','Lifecycle target must remain available');
+  if(mode==="clean-launch"&&!checkout.clean)fail(409,'workspace-conflict','Lifecycle target must remain clean');
  };
  const resume=(target:SessionRow,request:Control['SessionResume'])=>{
   resumeProved(repo,target);
   version(target.record.version,request.expectedSessionVersion);held(target,command.authority,request.controller);version(target.record.historyVersion,request.expectedHistoryVersion);
   const lost=resumableAfterLost(repo,target,command.operationId);
   if((!target.baselineVerified&&!lost)||target.record.workspaceBaseline!==request.expectedWorkspaceBaseline||target.record.activeRunId||(target.record.state==='recovery-required'&&!lost)||(target.pending&&target.pending.operationId!==command.operationId))fail(409,'recovery-required','Lifecycle target ownership or workspace changed');
-  inventory(target,false);
+  inventory(target,"existing");
  };
  const fork=(request:Control['SessionFork'])=>{held(row,command.authority,request.controller);version(row.record.historyVersion,request.expectedHistoryVersion);if(row.record.activeRunId||request.throughHistoryCursor>row.record.historyCursor||request.targetCheckoutId===row.record.checkoutId)fail(409,'stale-reference','Fork source history or target changed');};
  let derived=false;
  if(envelope.kind==='resume-session'){resume(row,envelope.body);return;}
  if(envelope.kind==='fork-session'){fork(envelope.body.request);derived=true;}
- if(envelope.kind==='create-session'){inventory(row,true);return;}
+ if(envelope.kind==='create-session'){inventory(row,"launch");return;}
  if(envelope.kind==='invoke-command'){
   const request=envelope.body,args=request.arguments;
   if(!['new','clear','sessions.fork','sessions.resume','sessions.open'].includes(request.commandName))return;
@@ -124,5 +127,5 @@ export function authorizeLifecycle(repo:import('./storage').RemoteRepository,row
  const receipt=control('SessionOperationReceipt',operation?.response);
  const child=session(repo,row.record.projectId,receipt.sessionId);
  if(!receipt.session||child.record.machineId!==row.record.machineId||child.record.state!=='opening'||child.record.version!==receipt.session.version||child.record.activeRunId||receipt.status!=='pending'||(envelope.kind==='fork-session'&&envelope.body.newSessionId!==child.record.sessionId))fail(409,'stale-reference','Server selected child changed or was already materialized');
- inventory(child,true);
+ inventory(child,"clean-launch");
 }

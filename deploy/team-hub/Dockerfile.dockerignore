@@ -15,6 +15,7 @@ src/hub/*.test.ts
 !src/remote-control
 !src/remote-control/protocol.ts
 !src/remote-control/owned-controls.ts
+!src/remote-control/live-shell.ts
 !src/remote-control/generated
 !src/remote-control/generated/**
 src/hub/**/*.test.ts

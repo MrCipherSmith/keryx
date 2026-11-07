@@ -28,6 +28,17 @@ test('initial dirty admission refuses; owned dirty baseline permits continuation
     writeFileSync(path.join(cwd, 'other.txt'), 'external');
     expect(verifyBaseline(cwd, owned)).toBe(false);
 });
+test('full-file publication verifies captured bytes even when Git status hides a tracked edit', () => {
+    const cwd = repo();
+    const capture = () => captureBaseline(cwd, { requireClean: false, verifyCommitContents: true });
+    expect(capture().matchesCommit).toBe(true);
+    expect(Bun.spawnSync(['git', '-C', cwd, 'update-index', '--assume-unchanged', 'a.txt']).exitCode).toBe(0);
+    writeFileSync(path.join(cwd, 'a.txt'), 'local contents hidden by Git status');
+    expect(observeCheckout(cwd).clean).toBe(true);
+    const initial = capture();
+    expect(initial.matchesCommit).toBe(false);
+    expect(verifyBaseline(cwd, initial)).toBe(true);
+});
 test('baseline refuses tracked files redirected through an external directory symlink', () => {
     const cwd = repo();
     const fs = require('node:fs');
