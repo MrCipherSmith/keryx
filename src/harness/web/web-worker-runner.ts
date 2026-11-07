@@ -7,7 +7,7 @@ import type { WebPolicyResult } from "./web-policy";
 import type { WebWorkerRequest, WebWorkerResponse, WebWorkerRunner } from "./sandboxed-web-transport";
 
 const WORKER_TIMEOUT_MS = 10_000;
-const MAX_WORKER_OUTPUT_BYTES = 192_000;
+const MAX_WORKER_OUTPUT_BYTES = 512_000;
 
 // This source intentionally uses built-in modules only. It is passed with
 // `bun --eval`, so the child never imports code from the project worktree.
@@ -98,9 +98,20 @@ const { request: httpsRequest } = await import("node:https");
 const { request: httpRequest } = await import("node:http");
 const { isIP } = await import("node:net");
 const input = JSON.parse(await Bun.stdin.text());
-const fail = () => process.stdout.write(JSON.stringify({ ok: false, reason: "request failed or timed out" }));
+let timer;
+let settled = false;
+// Exactly one answer leaves the worker. A page that was cut short must not be
+// turned into "request failed" by the destroy() that stops the download.
+const emit = (payload) => {
+  if (settled) return false;
+  settled = true;
+  if (timer !== undefined) clearTimeout(timer);
+  process.stdout.write(JSON.stringify(payload));
+  return true;
+};
+const fail = () => emit({ ok: false, reason: "request failed or timed out" });
 try {
-  const timer = setTimeout(() => req.destroy(new Error("timeout")), input.timeoutMs);
+  timer = setTimeout(() => { fail(); req.destroy(); }, input.timeoutMs);
   const browserHeaders = ${BROWSER_HEADERS_SOURCE};
   const headers = input.browserHeaders
     ? browserHeaders(Math.random)
@@ -127,23 +138,35 @@ try {
     ...(input.url.startsWith("https:") ? { servername: input.hostname } : {}),
     headers,
   }, (res) => {
-    const chunks = []; let size = 0;
+    const chunks = []; let size = 0; let truncated = false;
+    const contentType = String(res.headers["content-type"] || "");
+    // JSON cannot be cut: half a document is not a smaller document, so an
+    // oversized JSON body keeps its hard failure. HTML/text/markdown is cut.
+    const isJson = /json/i.test(contentType);
+    const finish = () => emit({ ok: true, value: {
+      status: res.statusCode || 502,
+      contentType,
+      ...(typeof res.headers.location === "string" ? { location: res.headers.location } : {}),
+      body: Buffer.concat(chunks).toString("utf8"),
+      ...(truncated ? { truncated: true } : {}),
+    }});
     res.on("data", (chunk) => {
+      if (settled || truncated) return;
+      if (size + chunk.length > input.maxBytes) {
+        if (isJson) { emit({ ok: false, reason: "response exceeds size limit" }); req.destroy(); return; }
+        chunks.push(chunk.subarray(0, input.maxBytes - size));
+        truncated = true;
+        finish();
+        res.destroy();
+        return;
+      }
       size += chunk.length;
-      if (size > input.maxBytes) req.destroy(new Error("output overflow"));
-      else chunks.push(chunk);
+      chunks.push(chunk);
     });
-    res.on("end", () => {
-      clearTimeout(timer);
-      process.stdout.write(JSON.stringify({ ok: true, value: {
-        status: res.statusCode || 502,
-        contentType: String(res.headers["content-type"] || ""),
-        ...(typeof res.headers.location === "string" ? { location: res.headers.location } : {}),
-        body: Buffer.concat(chunks).toString("utf8"),
-      }}));
-    });
+    res.on("end", () => { if (!truncated) finish(); });
+    res.on("error", () => { if (!truncated) fail(); });
   });
-  req.on("error", () => { clearTimeout(timer); fail(); });
+  req.on("error", () => { fail(); });
   req.end(encoded);
 } catch { fail(); }
 `;

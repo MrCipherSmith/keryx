@@ -39,6 +39,8 @@ export interface WebWorkerResponse {
   contentType: string;
   body: string;
   location?: string;
+  /** The worker cut the body at the byte budget instead of failing the page. */
+  truncated?: boolean;
 }
 
 export interface WebWorkerRunner {
@@ -105,13 +107,16 @@ export class SandboxedWebTransport {
     if (raw.value.response.status < 200 || raw.value.response.status >= 300) {
       return { ok: false, reason: `request failed with HTTP ${raw.value.response.status}` };
     }
-    return sanitizeWebContent({
+    const content = sanitizeWebContent({
       url: raw.value.url,
       providerId: request.providerId,
       retrievedAt: this.now(),
       contentType: raw.value.response.contentType,
       text: raw.value.response.body,
     });
+    return content.ok && raw.value.response.truncated === true
+      ? { ok: true, value: { ...content.value, truncated: true } }
+      : content;
   }
 
   /** Search-provider bridge: only adapter-owned request shapes reach this API. */
@@ -234,7 +239,9 @@ export class SandboxedWebTransport {
       if (!readableContentType(response.contentType)) {
         return { ok: false, reason: "response is not readable text content" };
       }
-      if (new TextEncoder().encode(response.body).byteLength > WEB_MAX_TEXT_BYTES) {
+      // A non-truncated body over the budget is still refused: only the worker
+      // may hand back a cut body, and it says so.
+      if (response.truncated !== true && new TextEncoder().encode(response.body).byteLength > WEB_MAX_TEXT_BYTES) {
         return { ok: false, reason: "response exceeds size limit" };
       }
       return { ok: true, value: { url: url.toString(), response } };

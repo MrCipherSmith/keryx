@@ -15,6 +15,11 @@ export interface SanitizedWebContent {
   providerId: string;
   retrievedAt: string;
   text: string;
+  /**
+   * The page was longer than the transport's byte budget and only its first
+   * part is here. Set by the transport, never by a converter.
+   */
+  truncated?: boolean;
 }
 
 const AGENT_NOUN = "(?:assistant|agent|ai|llm|claude|model)";
