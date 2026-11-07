@@ -29,7 +29,7 @@
 // `allow_once` option — selects `reject_once`, or answers `cancelled` when the
 // agent offered no `reject_once` (the spec reads `cancelled` as "do not run").
 
-import { isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../../lib/command-risk";
+import { hcAgentLaunchesOf, isDestructiveCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../../lib/command-risk";
 import {
   resolveApprovalDecision,
   type ApprovalGateDecision,
@@ -69,6 +69,7 @@ export interface AcpToolCallClassification {
   readonly destructive: boolean;
   readonly credentials: boolean;
   readonly sacReviewConfirmation: boolean;
+  readonly hcAgentLaunch?: boolean;
   /** A location targets a managed flow-state file — refused regardless of approval. */
   readonly flowFile: boolean;
   /** Some location resolves outside the disposable worktree. */
@@ -141,12 +142,15 @@ export function classifyAcpToolCall(toolCall: AcpToolCallUpdate, worktree: strin
       const credentials = pathCredentials || (command.length > 0 && touchesAgentCredentials(command));
       // Flow 299: `flow confirm` shares SAC's confirm-review floor.
       const sacReviewConfirmation = command.length > 0 && touchesHumanConfirmation(command);
+      // Flow 486: `hc run <agent>` asks whatever the mode; a foreign agent has no session grant to pass it.
+      const hcAgentLaunch = command.length > 0 && hcAgentLaunchesOf(command).length > 0;
       return {
         ...base,
         risk: destructive ? "destructive" : "shell",
         destructive,
         credentials,
         sacReviewConfirmation,
+        hcAgentLaunch,
         reasons,
       };
     }
@@ -175,6 +179,7 @@ export function decideAcpPermission(
     destructive: classification.destructive,
     credentials: classification.credentials,
     sacReviewConfirmation: classification.sacReviewConfirmation,
+    hcAgentLaunch: classification.hcAgentLaunch === true,
     readOnly: false,
   });
 }

@@ -176,6 +176,17 @@ describe("keryx bus log", () => {
     ]);
   });
 
+  test("marks an external-origin event as unverified, like the live line", async () => {
+    const root = await seededRoot();
+    await appendEvent(
+      root,
+      { from: { instanceId: ID.gone, name: "scribe", origin: "external" }, to: [ID.release], toLabel: "@release", kind: "notice", body: "done" },
+      { now: () => NOW },
+    );
+    const { out } = await run(["log"], { root });
+    expect(out).toEqual(["#1 2026-09-19 12:00:00 @scribe (external, unverified) → @release notice: done"]);
+  });
+
   test("--since, --limit and --json", async () => {
     const root = await withEvents();
     expect((await run(["log", "--since", "2"], { root })).out.map((l) => l.split(" ")[0])).toEqual(["#3", "#4"]);

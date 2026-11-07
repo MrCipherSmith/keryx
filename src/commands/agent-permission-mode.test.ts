@@ -8,6 +8,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAgentTurn } from "./agent";
+import { resetOperatorDenials, setReviewSystem } from "../review/review-system";
+import { createForegroundAgentIoFacade, createForegroundOperationOwner } from "../tui/foreground-operation";
 import type { AgentDeps, AgentIO, ApprovalMeta } from "./agent";
 import { catalogFingerprintResolver } from "../mcp-servers/approval-render";
 import type { PermissionMode } from "./permission-mode";
@@ -1450,4 +1452,147 @@ test("agent-message cannot use auto mode as human authorization", async () => {
   await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", '{"command":"touch peer-file"}')), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "peer instruction", { origin: "agent-message" });
   expect(asked).toBe(1);
   expect(ran()).toBe(false);
+});
+
+test("flow 486 AC4: hc run of an agent asks in every mode once per agent per session; a denial grants nothing", async () => {
+  for (const mode of ["ask", "trust", "auto"] as const) {
+    const { tool } = fakeTool("shell_exec", "shell");
+    const asked: { agent: string | undefined; cause: string | undefined }[] = [];
+    let answer = false;
+    const io: AgentIO = {
+      write: () => {},
+      permissionMode: () => mode,
+      requestApproval: async (_t, _i, meta) => {
+        asked.push({ agent: meta?.hcLaunch, cause: meta?.cause });
+        return answer;
+      },
+    };
+    const run = async (command: string): Promise<void> => {
+      await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+    };
+    await run("hc run --bg claude 'task'"); // denied: nothing granted
+    await run("hc run --bg claude 'task'"); // asks again
+    answer = true;
+    await run("hc run --bg claude 'task'"); // approved
+    await run("hc run -- env X=1 claude"); // granted: no launch ask
+    await run("hc run --bg codex"); // another agent asks again
+    await run("hc run cargo test"); // not an agent launch
+    const launchAsks = asked.filter((a) => a.agent !== undefined);
+    expect(launchAsks.map((a) => a.agent)).toEqual(["claude", "claude", "claude", "codex"]);
+    expect(launchAsks.every((a) => a.cause === "hc-launch")).toBe(true);
+    if (mode !== "ask") expect(asked).toHaveLength(4);
+  }
+});
+
+test("flow 486 AC4: with no approver an hc agent launch is refused", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto" };
+  await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command: "hc run claude" }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+  expect(ran()).toBe(false);
+});
+
+test("flow 486: the hc agent grant lasts across turns through the per-turn facade; a Telegram turn gets none", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const asked: (string | undefined)[] = [];
+  const shellIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    requestApproval: async (_t, _i, meta) => {
+      asked.push(meta?.hcLaunch);
+      return true;
+    },
+  };
+  const owner = createForegroundOperationOwner();
+  const turn = async (command: string, telegram = false): Promise<void> => {
+    const token = owner.begin();
+    const io = createForegroundAgentIoFacade(owner, token, shellIo, telegram ? { mcpGrantsApply: () => false } : {});
+    await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+    owner.settle(token);
+  };
+  await turn("hc run --bg claude 'a'"); // asks, granted
+  await turn("hc run --bg claude 'b'"); // a new facade, same session: no ask
+  await turn("hc run --bg codex"); // another agent asks
+  expect(asked.filter((a) => a !== undefined)).toEqual(["claude", "codex"]);
+  await turn("hc run --bg claude 'c'", true); // a Telegram turn receives no grant
+  expect(asked.filter((a) => a !== undefined)).toEqual(["claude", "codex", "claude"]);
+});
+
+test("flow 486 review: under review-auto hc run and hc keys still reach a person, and a refusal grants nothing", async () => {
+  setReviewSystem("review-auto");
+  try {
+    const { tool, ran } = fakeTool("shell_exec", "shell");
+    const asked: (ApprovalMeta | undefined)[] = [];
+    const io: AgentIO = {
+      write: () => {},
+      permissionMode: () => "auto",
+      requestApproval: async (_t, _i, meta) => {
+        asked.push(meta);
+        return false;
+      },
+    };
+    const run = async (command: string): Promise<void> => {
+      await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+    };
+    await run("hc run --bg claude");
+    await run("hc keys t7 enter");
+    await run("hc send t7 ok --force");
+    expect(asked.map((m) => m?.cause)).toEqual(["hc-launch", "credentials", "credentials"]);
+    expect(asked[0]?.hcLaunch).toBe("claude");
+    expect(asked.slice(1).every((m) => m?.alwaysAsk === true)).toBe(true);
+    expect(ran()).toBe(false);
+    expect(io.hcLaunchGrants?.has("claude") ?? false).toBe(false);
+  } finally {
+    setReviewSystem("inherit");
+    resetOperatorDenials();
+  }
+});
+
+test("flow 486 review: a confirmation shell call carries alwaysAsk with no card, an ordinary shell ask does not", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const asked: (ApprovalMeta | undefined)[] = [];
+  const io: AgentIO = { write: () => {}, permissionMode: () => "ask", requestApproval: async (_t, _i, meta) => { asked.push(meta); return false; } };
+  for (const command of ["touch x", "hc keys t7 enter"]) {
+    await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+  }
+  expect(asked[0]?.alwaysAsk).toBeUndefined();
+  expect(asked[1]?.alwaysAsk).toBe(true);
+  expect(asked[1]?.card).toBeUndefined();
+});
+
+test("flow 486 review: an expanded hc run program asks every time and is never granted", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const asked: (string | undefined)[] = [];
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", requestApproval: async (_t, _i, meta) => { asked.push(meta?.hcLaunch); return true; } };
+  const run = async (command: string): Promise<void> => {
+    await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+  };
+  await run("hc run $(which claude)");
+  await run("hc run $(which claude)");
+  expect(asked).toEqual(["unknown agent", "unknown agent"]);
+  expect([...(io.hcLaunchGrants ?? [])]).toEqual([]);
+});
+
+test("flow 486 review: an approved quoted argument that reads like hc run records no grant", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const asked: (string | undefined)[] = [];
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", requestApproval: async (_t, _i, meta) => { asked.push(meta?.hcLaunch); return true; } };
+  const run = async (command: string): Promise<void> => {
+    await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+  };
+  await run("echo 'hc run claude'");
+  expect([...(io.hcLaunchGrants ?? [])]).toEqual([]);
+  await run("hc run --bg claude");
+  expect(asked).toEqual(["claude", "claude"]);
+});
+
+test("flow 486 review: one command launching a granted and a new agent asks only about the new one", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const asked: (string | undefined)[] = [];
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", requestApproval: async (_t, _i, meta) => { asked.push(meta?.hcLaunch); return true; } };
+  const run = async (command: string): Promise<void> => {
+    await runAgentTurn(io, { provider: scriptedProvider(callScript("shell_exec", JSON.stringify({ command }))), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "go");
+  };
+  await run("hc run claude");
+  await run("hc run claude; hc run codex");
+  expect(asked).toEqual(["claude", "codex"]);
 });

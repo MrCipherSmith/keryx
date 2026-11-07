@@ -206,3 +206,16 @@ describe("AC3 — fail closed", () => {
     expect(decision).toMatchObject({ gateDecision: "deny", verdict: "deny", reason: "policy" });
   });
 });
+
+describe("flow 486: an agent launch through hc", () => {
+  const launch = (command: string) => classifyAcpToolCall({ toolCallId: "t", kind: "execute", rawInput: { command } } as AcpToolCallUpdate, worktree);
+
+  test("asks even when a mode above ask reaches the gate", () => {
+    expect(launch("hc run --bg --name x claude task").hcAgentLaunch).toBe(true);
+    expect(decideAcpPermission(launch("hc run --bg --name x claude task"), "auto")).toBe("ask");
+  });
+
+  test("an ordinary hc run is not a launch", () => {
+    expect(launch("hc run cargo test").hcAgentLaunch).toBe(false);
+  });
+});

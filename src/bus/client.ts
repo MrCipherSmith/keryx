@@ -41,6 +41,7 @@ import {
   MAX_ACTIVITY_CHARS,
   type BusEvent,
   type BusEventKind,
+  type BusOrigin,
   type BusSender,
   type LeaseScope,
   type PauseLease,
@@ -87,6 +88,8 @@ export interface RenderedBusEvent {
   body?: string;
   /** True when addressed via `@all` (`to === ["*"]`); false/absent when addressed by name (flow 274). Optional for the same reason as `body`. */
   toStar?: boolean;
+  /** The sender's origin; absent on hand-built fixtures. `external` marks an unauthenticated report. */
+  origin?: BusOrigin;
 }
 
 /** `BusClient.resolveRef`'s result: enough to address a reply without a fresh name lookup. */
@@ -582,6 +585,19 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
     return { id: only.id, seq: only.seq, fromInstanceId: only.fromInstanceId, fromName: only.fromName };
   }
 
+  // An external report comes from a throwaway sender id with no presence
+  // record, so a reply addressed to it could only fail as "not live" (flow
+  // 486). Refuse it by name instead, and say where the answer can go.
+  function refuseExternalReply(resolved: ResolvedBusRef): void {
+    const source = renderedStore.find((event) => event.id === resolved.id);
+    if (source?.origin !== "external") return;
+    throw new BusRefusal(
+      "external-sender-not-replyable",
+      `@${resolved.fromName} sent an external report with no bus presence, so it cannot be replied to over the bus. ` +
+        "Tell the user, or answer through the channel that process reads (for example `hc send`)",
+    );
+  }
+
   // ---- heartbeat: rewrite presence, refresh the branch, patch the lease. ----
   let heartbeatInFlight = false;
   const heartbeatTick = (): void => {
@@ -619,6 +635,7 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         preview: preview(event.body),
         body: event.body ?? "",
         toStar: event.to.length === 1 && event.to[0] === "*",
+        origin: event.from.origin,
         ...(event.refs?.replyTo !== undefined ? { replyTo: event.refs.replyTo } : {}),
       };
       rememberRendered(rendered);
@@ -717,6 +734,7 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
       if (resolved === undefined) {
         throw new BusRefusal("unknown-message", `no rendered message matches ${JSON.stringify(ref)}`);
       }
+      refuseExternalReply(resolved);
       const from: BusSender = { instanceId, name: state.name, origin: "operator" };
       return sendMessage(root, {
         toLabel: `@${resolved.fromName}`,
@@ -749,6 +767,7 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
       if (resolved === undefined) {
         throw new BusRefusal("unknown-message", `no rendered message matches ${JSON.stringify(ref)}`);
       }
+      refuseExternalReply(resolved);
       const from: BusSender = { instanceId, name: state.name, origin: "agent" };
       return sendMessage(root, {
         toLabel: `@${resolved.fromName}`,
@@ -769,6 +788,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
     ack(events) {
       if (left) return; // review r1 F1 pattern: no-op after leave()
       for (const event of events) {
+        // An external sender has no presence to receive an ack (flow 486).
+        if (event.origin === "external") continue;
         void (async () => {
           try {
             const from: BusSender = { instanceId, name: state.name, origin: "system" };

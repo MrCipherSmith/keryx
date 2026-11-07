@@ -182,3 +182,46 @@ test("untrusted-origin shell approval cannot be answered by a saved grant", () =
   expect(ev.untrustedOrigin).toBe(true);
   expect(formatShellApprovalHints(ev).join(" ")).toContain("untrusted external content");
 });
+
+// --- hcLaunch (flow 486 AC4) ------------------------------------------------
+
+test("evaluateShellApproval: a saved rule cannot answer an hc agent launch the session has not granted", () => {
+  const io = { loadAudit: () => ({ permissions: { allow: ["hc run claude"] }, rejected: [] as const }), fingerprint: () => "start" };
+  const asked = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "hc run claude" }),
+    meta: { fingerprint: "fp", destructive: false, hcLaunch: "claude" },
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io,
+  });
+  expect(asked.autoApprove).toBe(false);
+  expect(asked.hcLaunch).toBe("claude");
+  expect(formatShellApprovalHints(asked).join(" ")).toMatch(/claude.*another agent/);
+  // Granted for the session: the agent loop sends no hcLaunch, and the normal rules apply again.
+  const granted = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "hc run claude" }),
+    meta: { fingerprint: "fp", destructive: false },
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io,
+  });
+  expect(granted.autoApprove).toBe(true);
+});
+
+test("evaluateShellApproval: hc send --force is a human-confirmation command, not auto-approved by a rule", () => {
+  const io = { loadAudit: () => ({ permissions: { allow: ["hc send t7 ok --force"] }, rejected: [] as const }), fingerprint: () => "start" };
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "hc send t7 ok --force" }),
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io,
+  });
+  expect(ev.sacReviewConfirmation).toBe(true);
+  expect(ev.autoApprove).toBe(false);
+});
+
+test("rememberExactShellGrant refuses an hc agent launch", () => {
+  const sessionAllow = new Set<string>();
+  expect(rememberExactShellGrant("hc run --bg claude", sessionAllow)).toBe("");
+  expect(sessionAllow.size).toBe(0);
+});

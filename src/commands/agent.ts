@@ -26,7 +26,7 @@ import type { ApprovalCause } from "./approval-cause";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { tracePhase } from "../lib/phase-trace";
 import { reviewPublishRefusal } from "../review/publish-guard";
-import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
+import { hcAgentLaunchesOf, hcGrantableLaunchesOf, isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { isTrustRoutineCommand, isTrustRoutineTool, recordBunfigBaseline } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, resolveQuestionAnswerer, type PermissionMode } from "./permission-mode";
@@ -70,7 +70,7 @@ import { askFloor } from "../review/arbiter-floor";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type { BusInbox } from "../bus/inbox";
 import type { RenderedBusEvent } from "../bus/client";
-import { buildPeerMessageNotification } from "../bus/peer-notification";
+import { buildPeerMessageNotification, holdsExternalReport } from "../bus/peer-notification";
 import type {
   MessageReasoning,
   NormalizedError,
@@ -213,6 +213,12 @@ export interface ApprovalMeta {
    */
   publishLeaseDetail?: string;
   /**
+   * Flow 486: the agent(s) an `hc run` in this shell command starts that this session has not granted yet
+   * (`hcAgentLaunchesOf`), comma-joined. A floor like {@link publishLease}: no mode, saved rule or session pattern
+   * answers it, and it is never remembered. An approval adds the agent to the session's grant set; a denial does not.
+   */
+  hcLaunch?: string;
+  /**
    * Untrusted external content — a `web_fetch` / `web_search` / `search_tool` /
    * `use_tool` result — is already in this turn's history, and the call being
    * approved now FOLLOWS it. Set only by the untrusted-content gate in
@@ -252,6 +258,8 @@ export interface ApprovalMeta {
    * `InteractiveTool.confirmation`, e.g. `schedule_create`). An approver must show
    * `card` verbatim, must offer only yes/no (no "always"), and must never answer it
    * from a remembered decision. The permission mode never answers it either.
+   * Flow 486: also set, with no `card`, on a shell command in the human-confirmation floor (`hc keys`, `flow confirm`):
+   * an approver without a card shows its ordinary shell dialog, which already refuses to remember that command.
    */
   alwaysAsk?: boolean;
   /** Flow 295 (AC7): the confirmation card, one line per element, for an `alwaysAsk` call. */
@@ -457,6 +465,12 @@ export interface AgentIO {
    * answer adds an entry; the model cannot.
    */
   trustedMcpTools?: Map<string, string>;
+  /**
+   * Flow 486: agents (`claude`, `codex`, `keryx`, …) the operator approved to start through `hc run` in this shell
+   * session. Session state, never persisted, filled only by a validated approval. Absent: `executeCall` creates it on
+   * first use, so a surface that predates it still gets the floor (and asks again after every restart).
+   */
+  hcLaunchGrants?: Set<string>;
   /**
    * Flow 396: whether the operator's `trustedMcpTools` grants may skip the prompt for this call.
    * A turn that came from Telegram returns `false`: an MCP `use_tool` always asks there, even for a
@@ -3104,6 +3118,8 @@ async function runAgentTurnCore(
   // reader took the completion first (the model polled, or a concurrent drain
   // ran), there is nothing to say and the turn ends before a single request is
   // made — a wake that announces nothing must not cost a model call.
+  // Carried to `untrustedContentSeen`, declared further down, when the wake below delivers an external report.
+  let externalReportAtTurnStart = false;
   if (options.origin === "task-notification") {
     const woken = deps.jobRegistry?.drainUndelivered() ?? [];
     if (woken.length === 0) {
@@ -3119,6 +3135,7 @@ async function runAgentTurnCore(
     if (delivered.length === 0) {
       return {};
     }
+    externalReportAtTurnStart = holdsExternalReport(delivered);
     history.push({ role: "user", content: scrub(buildPeerMessageNotification(delivered)), provenance: "tool", ts: now() });
     io.onHistoryChange?.("user");
     deps.busAck?.(delivered);
@@ -3398,7 +3415,9 @@ async function runAgentTurnCore(
   // within one user request is still caught). Only gates non-`read` tool calls
   // (see the `risk !== "read"` check) — a `read` tool cannot carry out a side
   // effect an injected instruction asked for, so it stays usable.
-  let untrustedContentSeen = options.origin === "agent-message";
+  // Flow 486: so does a report from a process that is not a keryx shell (`keryx report`), at any of the three bus drains
+  // (the turn-start drain above, the text-only drain and the round boundary below). A keryx peer's message does not.
+  let untrustedContentSeen = options.origin === "agent-message" || externalReportAtTurnStart;
   // Flow 425: the review arbiter runs one tier below this model. Only a turn that can ask the operator reports it,
   // so a reviewer subagent on a lighter model does not move the arbiter's tier.
   if (deps.tools.some((tool) => tool.definition.name === "ask_user")) {
@@ -4159,6 +4178,7 @@ async function runAgentTurnCore(
       // delivered here instead of being left until the operator's next line.
       const deliveredBus = deps.busInbox?.drainUndelivered() ?? [];
       if (deliveredBus.length > 0) {
+        untrustedContentSeen ||= holdsExternalReport(deliveredBus);
         history.push({ role: "user", content: scrub(buildPeerMessageNotification(deliveredBus)), provenance: "tool", ts: now() });
         io.onHistoryChange?.("tool");
         deps.busAck?.(deliveredBus);
@@ -4613,6 +4633,7 @@ async function runAgentTurnCore(
             undefined,
             untrustedContentSeen,
             reviewRun,
+            io.mcpGrantsApply?.() === false ? undefined : (io.hcLaunchGrants ??= new Set<string>()),
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -4805,6 +4826,7 @@ async function runAgentTurnCore(
     // batch is already in `history`, never spliced between them.
     const busDelivered = deps.busInbox?.drainUndelivered() ?? [];
     if (busDelivered.length > 0) {
+      untrustedContentSeen ||= holdsExternalReport(busDelivered);
       history.push({ role: "user", content: scrub(buildPeerMessageNotification(busDelivered)), provenance: "tool", ts: now() });
       io.onHistoryChange?.("tool");
       deps.busAck?.(busDelivered);
@@ -5757,6 +5779,8 @@ async function executeCallUnbounded(
   untrustedContentSeen = false,
   // Set only for a turn that belongs to an automatic review (./automatic-review.ts).
   review?: AutomaticReviewRun,
+  // Flow 486: the session's `hc run` agent grants; absent (a Telegram turn) means every launch asks and none is recorded.
+  hcLaunchGrants?: Set<string>,
 ): Promise<InteractiveToolResult> {
   const mark = (name: string): void => {
     if (stage !== undefined) stage.current = name;
@@ -5918,6 +5942,10 @@ async function executeCallUnbounded(
     // ONLY here — `isPublishCommand` knows nothing about the bus, and
     // `busLeases` is consulted nowhere else in this function.
     const publishLease = isPublishCommand(command) && (busLeases?.appliesToMe("git-publish") ?? false);
+    // Flow 486: `hc run <agent>` starts another agent outside keryx's limits. Asks in every mode until the operator
+    // has approved that agent in this session. Inspects the command line only: a script that calls hc is not seen.
+    const hcPending = hcAgentLaunchesOf(command).filter((agent) => hcLaunchGrants?.has(agent) !== true);
+    const hcLaunch = hcPending.length > 0 ? hcPending.join(", ") : undefined;
     const publishLeaseHolder = publishLease ? busLeases?.heldBy?.("git-publish") : undefined;
     const rawDecision = resolveApprovalDecision({
       mode,
@@ -5927,6 +5955,7 @@ async function executeCallUnbounded(
       sacReviewConfirmation,
       readOnly: isReadOnly,
       publishLease,
+      hcAgentLaunch: hcLaunch !== undefined,
     });
     const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
     // The untrusted-content latch must not stall a long trust-mode review on routine local commands.
@@ -5948,6 +5977,7 @@ async function executeCallUnbounded(
       !credentials &&
       !sacReviewConfirmation &&
       !publishLease &&
+      hcLaunch === undefined &&
       !isReadOnly &&
       !untrustedOrigin &&
       !gated.hookAsked &&
@@ -6003,6 +6033,8 @@ async function executeCallUnbounded(
               ...(publishLease && publishLeaseHolder !== undefined
                 ? { publishLeaseDetail: `held by @${publishLeaseHolder.name} — "${publishLeaseHolder.reason}"` }
                 : {}),
+              ...(hcLaunch !== undefined ? { hcLaunch } : {}),
+              ...(sacReviewConfirmation ? { alwaysAsk: true } : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedGate ? { untrustedOrigin: true } : {}),
               cause: classifyApprovalCause({
@@ -6010,6 +6042,7 @@ async function executeCallUnbounded(
                 credentials,
                 confirmation: sacReviewConfirmation,
                 publishLease,
+                hcLaunch: hcLaunch !== undefined,
                 hookAsk: gated.hookAsked,
                 untrusted: untrustedGate,
                 shell: true,
@@ -6026,6 +6059,12 @@ async function executeCallUnbounded(
       review?.record("manual", call.name, `operator ${isApprovalFor(response, fingerprint) ? "approved" : "refused"}: ${command}`);
       if (!isApprovalFor(response, fingerprint)) {
         return { output: denialOutput(untrustedGate ? untrustedDenial : "command not approved by the user; not executed"), isError: true };
+      }
+      // An approval grants these agents for the rest of the session; a denial returned above and grants nothing. Only a
+      // launch the command itself makes is kept: a quoted argument that reads like one asked, but started nothing.
+      if (hcPending.length > 0) {
+        const launched = hcGrantableLaunchesOf(command);
+        for (const agent of hcPending) if (launched.includes(agent)) hcLaunchGrants?.add(agent);
       }
       if (
         mcpFqn !== undefined &&

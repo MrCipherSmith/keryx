@@ -7,8 +7,9 @@
 // UI callers pass `enqueue: false` to cancel immediately.
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
-import { choiceDisplayLabel, initialChoiceSelection, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
-import { containsNode, openModal } from "./modal-host";
+import { choiceDisplayLabel, choicePasteDecision, decideChoicePaste, initialChoiceSelection, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
+import { HC_PASTED_HEADER, HC_UNPARSED_HEADER, hcHistoryEcho } from "./hc-message";
+import { containsNode, modalHides, openModal } from "./modal-host";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 
 async function loadOpenTui(): Promise<
@@ -1051,4 +1052,692 @@ otuiTest("question body reserves the actual multiline composer height", async ()
     controller.abort();
     h.destroy();
   }
+});
+
+const laterTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+
+// Flow 486 L1: a paste (herdr-core types a report this way) must never answer an open dialog.
+const pasteDialog = (otui: OtuiBundle, h: Awaited<ReturnType<typeof mountChrome>>, extra: Record<string, unknown> = {}) =>
+  showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    acceptDelayMs: 0,
+    options: [
+      { id: "once", label: "Allow once", description: "", recommended: true },
+      { id: "deny", label: "Deny", description: "" },
+    ],
+    ...extra,
+  });
+
+otuiTest("a paste into the list step goes to the sink, the next Enter is swallowed, the Enter after it approves", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text));
+  let settled: string | undefined;
+  const pending = pasteDialog(otui, h).then((id) => (settled = id));
+  await h.flush();
+  await h.mockInput.pasteBracketedText("report: two bugs");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(got).toEqual(["report: two bugs"]);
+  expect(settled).toBeUndefined();
+  expect(h.chrome.dock.visible).toBe(true);
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("once");
+  h.destroy();
+});
+
+otuiTest("a second paste keeps the dialog armed; Esc after a paste still cancels", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text));
+  let settled: string | undefined;
+  const pending = pasteDialog(otui, h).then((id) => (settled = id));
+  await h.flush();
+  await h.mockInput.pasteBracketedText("one");
+  await h.mockInput.pasteBracketedText("two");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(got).toEqual(["one", "two"]);
+  expect(settled).toBeUndefined();
+  await h.mockInput.pasteBracketedText("three");
+  h.mockInput.pressEscape();
+  expect(await pending).toBe("deny");
+  h.destroy();
+});
+
+otuiTest("a paste restarts the accept delay: an Enter inside it is ignored even after the swallowed one", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  setChoicePasteSink(h.chrome.dock, () => {});
+  let settled: string | undefined;
+  const pending = pasteDialog(otui, h, { acceptDelayMs: 150 }).then((id) => (settled = id));
+  await h.flush();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  await h.mockInput.pasteBracketedText("x");
+  h.mockInput.pressEnter(); // swallowed by the armed paste
+  h.mockInput.pressEnter(); // inside the restarted delay
+  await h.flush();
+  expect(settled).toBeUndefined();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("once");
+  h.destroy();
+});
+
+otuiTest("without a sink the pasted text is dropped with a notice and the Enter is still swallowed", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: string | undefined;
+  const pending = pasteDialog(otui, h).then((id) => (settled = id));
+  await h.flush();
+  await h.mockInput.pasteBracketedText("lost report");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(settled).toBeUndefined();
+  expect(h.captureCharFrame()).toContain("Esc · paste");
+  expect(h.captureCharFrame()).toContain("dropped");
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("once");
+  h.destroy();
+});
+
+otuiTest("a paste in the text step belongs to the input, not the sink", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text));
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question",
+    cancelId: "cancel",
+    acceptDelayMs: 0,
+    ownAnswer: {},
+    options: [{ id: "a", label: "Alpha", description: "" }],
+  });
+  await h.flush();
+  h.mockInput.pressTab(); // reason step for the highlighted option
+  await h.flush();
+  await h.mockInput.pasteBracketedText("my pasted reason");
+  await h.flush();
+  expect(got).toEqual([]);
+  h.mockInput.pressEnter(); // the Enter that ends the paste: swallowed
+  await h.flush();
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "reason", id: "a", reason: "my pasted reason" });
+  h.destroy();
+});
+
+otuiTest("after the choice closes, a paste no longer reaches the sink", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text));
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("once");
+  await h.flush();
+  await h.mockInput.pasteBracketedText("late");
+  await h.flush();
+  expect(got).toEqual([]);
+  h.destroy();
+});
+
+test("pasted text is framed as unknown authorship, distinct from the hc-shaped header", () => {
+  expect(HC_PASTED_HEADER).not.toBe(HC_UNPARSED_HEADER);
+  expect(HC_PASTED_HEADER).not.toContain("herdr-core agent message");
+  expect(HC_PASTED_HEADER).toContain("not the user's words");
+  expect(HC_PASTED_HEADER).toContain("unknown");
+  expect(HC_PASTED_HEADER).not.toContain("while a dialog was open");
+});
+
+test("hcHistoryEcho labels a stored pasted-header frame and shows its body", () => {
+  expect(hcHistoryEcho(`${HC_PASTED_HEADER}\n\nreport body`)).toEqual({ marker: "◂ unknown agent ❯", line: "report body" });
+  expect(hcHistoryEcho("plain user text")).toBeUndefined();
+});
+
+otuiTest("an idle shell holds pasted text until the choice closes, then delivers it, also on Esc", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "hold");
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("held report");
+  await h.flush();
+  expect(got).toEqual([]);
+  h.mockInput.pressEscape();
+  expect(await pending).toBe("deny");
+  await laterTask();
+  expect(got).toEqual(["held report"]);
+  h.destroy();
+});
+
+otuiTest("a busy shell queues pasted text at once even when the hold predicate is false", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "deliver");
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("now");
+  expect(got).toEqual(["now"]);
+  h.mockInput.pressEscape();
+  await pending;
+  await h.flush();
+  expect(got).toEqual(["now"]);
+  h.destroy();
+});
+
+otuiTest("a paste in the text step stays in the input, and the next Enter is swallowed once with a notice", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: unknown;
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question",
+    cancelId: "cancel",
+    acceptDelayMs: 0,
+    ownAnswer: {},
+    options: [{ id: "a", label: "Alpha", description: "" }],
+  }).then((r) => (settled = r));
+  await h.flush();
+  h.mockInput.pressTab();
+  await h.flush();
+  await h.mockInput.pasteBracketedText("answer from hc");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(settled).toBeUndefined();
+  expect(h.captureCharFrame()).toContain("press Enter again to send");
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "reason", id: "a", reason: "answer from hc" });
+  h.destroy();
+});
+
+otuiTest("typed text in the text step is sent by the first Enter: only a paste arms the guard", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question",
+    cancelId: "cancel",
+    acceptDelayMs: 0,
+    ownAnswer: {},
+    options: [{ id: "a", label: "Alpha", description: "" }],
+  });
+  await h.flush();
+  h.mockInput.pressTab();
+  await h.flush();
+  await h.mockInput.typeText("by hand");
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "reason", id: "a", reason: "by hand" });
+  h.destroy();
+});
+
+otuiTest("a paste behind a modal that owns every key (a secret field) is dropped with the notice and never reaches the sink; Enter stays guarded", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => choicePasteDecision(otui.core, h.renderer, h.chrome.dock, false));
+  const modal = openModal(otui.core, h.chrome, {
+    title: "Channels",
+    tabs: [{ id: "t", label: "Token" }],
+    renderTab: () => {},
+    ownsKeys: () => true,
+  });
+  await h.flush();
+  expect(modalHides(h.renderer, h.chrome.dock)).toBe(true);
+  let settled: string | undefined;
+  const pending = pasteDialog(otui, h).then((id) => (settled = id));
+  await h.flush();
+  await h.mockInput.pasteBracketedText("tok-secret-123");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(got).toEqual([]);
+  expect(settled).toBeUndefined();
+  modal?.close(); // the notice is under the modal's backdrop: nobody sees it until it closes
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("dropped"); // "paste dropped", wrapped
+  h.mockInput.pressEscape();
+  await pending;
+  await laterTask();
+  expect(got).toEqual([]);
+  h.destroy();
+});
+
+otuiTest("a paste behind a modal whose text input held the keyboard is dropped", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => choicePasteDecision(otui.core, h.renderer, h.chrome.dock, true));
+  let field: InstanceType<OtuiBundle["core"]["InputRenderable"]> | undefined;
+  const modal = openModal(otui.core, h.chrome, {
+    title: "Rename",
+    tabs: [{ id: "t", label: "Name" }],
+    renderTab: (_id, body) => {
+      field = new otui.core.InputRenderable(h.renderer, { id: "modal-field", value: "" });
+      (body as { add: (n: unknown) => void }).add(field);
+      field.focus();
+    },
+  });
+  await h.flush();
+  expect(h.renderer.currentFocusedRenderable === (field as unknown)).toBe(true);
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("secret-looking");
+  await h.flush();
+  expect(got).toEqual([]);
+  modal?.close();
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("dropped"); // "paste dropped", wrapped
+  h.mockInput.pressEscape();
+  await pending;
+  h.destroy();
+});
+
+otuiTest("a paste behind a read-only modal (/status) is not dropped: delivered when busy, held and delivered after close when idle", async () => {
+  const otui = requireOtui();
+  for (const busy of [true, false]) {
+    const h = await mountChrome(otui);
+    const got: Array<[string, boolean | undefined]> = [];
+    setChoicePasteSink(h.chrome.dock, (text, afterClose) => got.push([text, afterClose]), () => choicePasteDecision(otui.core, h.renderer, h.chrome.dock, busy));
+    const modal = openModal(otui.core, h.chrome, { title: "Status", tabs: [{ id: "t", label: "Status" }], renderTab: () => {} });
+    await h.flush();
+    expect(modalHides(h.renderer, h.chrome.dock)).toBe(true);
+    const pending = pasteDialog(otui, h);
+    await h.flush();
+    await h.mockInput.pasteBracketedText("report from a child");
+    await h.flush();
+    expect(got).toEqual(busy ? [["report from a child", undefined]] : []);
+    modal?.close(); // Esc closes the modal first; the dialog is answered after it
+    await h.flush();
+    h.mockInput.pressEscape();
+    await pending;
+    await laterTask();
+    expect(got).toEqual([["report from a child", busy ? undefined : true]]);
+    h.destroy();
+  }
+});
+
+otuiTest("a paste is dropped when a modal input takes the keyboard after the dialog mounted, busy or idle", async () => {
+  const otui = requireOtui();
+  for (const busy of [true, false]) {
+    for (const Field of [otui.core.InputRenderable, otui.core.TextareaRenderable]) {
+      const h = await mountChrome(otui);
+      const got: string[] = [];
+      setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => choicePasteDecision(otui.core, h.renderer, h.chrome.dock, busy));
+      const pending = pasteDialog(otui, h);
+      await h.flush();
+      const modal = openModal(otui.core, h.chrome, {
+        title: "API key",
+        tabs: [{ id: "t", label: "Key" }],
+        renderTab: (_id, body) => {
+          const field = new Field(h.renderer, { id: "kp-input" });
+          (body as { add: (n: unknown) => void }).add(field);
+          field.focus();
+        },
+      });
+      await h.flush();
+      await h.mockInput.pasteBracketedText("sk-not-for-the-model");
+      await h.flush();
+      expect(got).toEqual([]);
+      modal?.close();
+      await h.flush();
+      h.mockInput.pressEscape();
+      await pending;
+      await laterTask();
+      expect(got).toEqual([]);
+      h.destroy();
+    }
+  }
+});
+
+otuiTest("a paste behind a modal whose textarea held the keyboard is dropped", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => choicePasteDecision(otui.core, h.renderer, h.chrome.dock, true));
+  const modal = openModal(otui.core, h.chrome, {
+    title: "Notes",
+    tabs: [{ id: "t", label: "Notes" }],
+    renderTab: (_id, body) => {
+      const field = new otui.core.TextareaRenderable(h.renderer, { id: "modal-area" });
+      (body as { add: (n: unknown) => void }).add(field);
+      field.focus();
+    },
+  });
+  await h.flush();
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("secret-looking");
+  await h.flush();
+  expect(got).toEqual([]);
+  modal?.close();
+  await h.flush();
+  h.mockInput.pressEscape();
+  await pending;
+  h.destroy();
+});
+
+otuiTest("an input behind a read-only modal does not make it take text, as the origin or focused at paste time", async () => {
+  const otui = requireOtui();
+  for (const focusAt of ["origin", "paste"] as const) {
+    const h = await mountChrome(otui);
+    const got: string[] = [];
+    setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => choicePasteDecision(otui.core, h.renderer, h.chrome.dock, true));
+    const composer = new otui.core.InputRenderable(h.renderer, { id: "composer-like" });
+    h.renderer.root.add(composer);
+    const modal = openModal(otui.core, h.chrome, { title: "Status", tabs: [{ id: "t", label: "Status" }], renderTab: () => {} });
+    await h.flush();
+    if (focusAt === "origin") composer.focus();
+    const pending = pasteDialog(otui, h);
+    await h.flush();
+    if (focusAt === "paste") composer.focus();
+    await h.mockInput.pasteBracketedText("report from a child");
+    await h.flush();
+    expect(got).toEqual(["report from a child"]);
+    modal?.close();
+    await h.flush();
+    h.mockInput.pressEscape();
+    await pending;
+    h.destroy();
+  }
+});
+
+test("decideChoicePaste drops only when a modal over the dialog takes typed text", () => {
+  const cases: Array<[{ modalOverDock: boolean; modalTakesText: boolean; busy: boolean }, string]> = [
+    [{ modalOverDock: true, modalTakesText: true, busy: true }, "drop"],
+    [{ modalOverDock: true, modalTakesText: true, busy: false }, "drop"],
+    [{ modalOverDock: true, modalTakesText: false, busy: true }, "deliver"],
+    [{ modalOverDock: true, modalTakesText: false, busy: false }, "hold"],
+    [{ modalOverDock: false, modalTakesText: true, busy: false }, "hold"],
+    [{ modalOverDock: false, modalTakesText: false, busy: true }, "deliver"],
+  ];
+  for (const [input, expected] of cases) expect<string>(decideChoicePaste(input)).toBe(expected);
+});
+
+otuiTest("escape sequences and control characters in a pasted report are stripped before the sink", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text));
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("ok \u001b[31mred\u001b[0m \u001b]0;title\u0007done\u0000\nline2");
+  await h.flush();
+  expect(got).toHaveLength(1);
+  // exact text: pins stripAnsiSequences (CSI and OSC debris) as well as the control-character strip
+  expect(got[0]).toBe("ok red done\nline2");
+  h.mockInput.pressEscape();
+  await pending;
+  h.destroy();
+});
+
+otuiTest("line breaks in a pasted report are normalised: CRLF and a bare CR become one newline, not glued lines", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text));
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("one\r\ntwo\rthree");
+  await h.flush();
+  expect(got).toEqual(["one\ntwo\nthree"]);
+  h.mockInput.pressEscape();
+  await pending;
+  h.destroy();
+});
+
+otuiTest("held pastes are capped by count with a stated notice, and what fit is still delivered", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "hold");
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  for (let i = 0; i < 12; i++) await h.mockInput.pasteBracketedText(`p${i}`);
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("too much held");
+  h.mockInput.pressEscape();
+  await pending;
+  await laterTask();
+  expect(got).toHaveLength(1);
+  expect(got[0]?.split("\n")).toHaveLength(8);
+  h.destroy();
+});
+
+otuiTest("held pastes are capped by size", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "hold");
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("a".repeat(10_000));
+  await h.mockInput.pasteBracketedText("b".repeat(10_000));
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("too much held");
+  h.mockInput.pressEscape();
+  await pending;
+  await laterTask();
+  expect(got.join("")).toBe("a".repeat(10_000));
+  h.destroy();
+});
+
+otuiTest("held text is delivered after the awaiting caller has continued and the lock is released, flagged as held", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const order: string[] = [];
+  const flags: Array<boolean | undefined> = [];
+  setChoicePasteSink(
+    h.chrome.dock,
+    (_text, afterClose) => {
+      order.push("sink");
+      flags.push(afterClose);
+    },
+    () => "hold",
+  );
+  const pending = pasteDialog(otui, h).then((id) => {
+    order.push(`caller:${id}`);
+  });
+  await h.flush();
+  await h.mockInput.pasteBracketedText("report");
+  h.mockInput.pressEscape();
+  await pending;
+  await laterTask();
+  expect(order).toEqual(["caller:deny", "sink"]);
+  expect(flags).toEqual([true]);
+  h.destroy();
+});
+
+otuiTest("an Enter chained behind the swallowed one stays ignored (two hc sends in a row)", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  setChoicePasteSink(h.chrome.dock, () => {});
+  let settled: string | undefined;
+  const pending = pasteDialog(otui, h, { acceptDelayMs: 250 }).then((id) => (settled = id));
+  await h.flush();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await h.mockInput.pasteBracketedText("one");
+  await h.mockInput.pasteBracketedText("two");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  h.mockInput.pressEnter(); // ends paste one: swallowed
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  h.mockInput.pressEnter(); // ends paste two: 300 ms after the paste, inside the delay of the swallowed Enter
+  await h.flush();
+  expect(settled).toBeUndefined();
+  h.mockInput.pressEscape();
+  await pending;
+  h.destroy();
+});
+
+/** A lone Esc is held back briefly by the key parser (it could start an escape sequence). */
+const escapeAndWait = async (h: Awaited<ReturnType<typeof mountChrome>>): Promise<void> => {
+  h.mockInput.pressEscape();
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  await h.flush();
+};
+
+const ownDialog = (otui: OtuiBundle, h: Awaited<ReturnType<typeof mountChrome>>, acceptDelayMs = 0) =>
+  showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, {
+    title: "Question",
+    cancelId: "cancel",
+    acceptDelayMs,
+    ownAnswer: {},
+    options: [{ id: "a", label: "Alpha", description: "" }],
+  });
+
+otuiTest("a paste in the text step does not outlive Esc: after Tab again, typed text is sent by the first Enter", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = ownDialog(otui, h);
+  await h.flush();
+  h.mockInput.pressTab();
+  await h.flush();
+  await h.mockInput.pasteBracketedText("pasted, then abandoned");
+  await escapeAndWait(h);
+  h.mockInput.pressTab();
+  await h.flush();
+  await h.mockInput.typeText("by hand");
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "reason", id: "a", reason: "by hand" });
+  h.destroy();
+});
+
+otuiTest("the Enter swallowed in the text step restarts the accept delay for an Enter that follows in the list", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: unknown;
+  const pending = ownDialog(otui, h, 250).then((r) => (settled = r));
+  await h.flush();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  h.mockInput.pressTab();
+  await h.flush();
+  await h.mockInput.pasteBracketedText("report");
+  h.mockInput.pressEnter(); // swallowed in the text step
+  await escapeAndWait(h); // back to the list
+  h.mockInput.pressEnter(); // a chained Enter, inside the restarted delay: answers nothing
+  await h.flush();
+  expect(settled).toBeUndefined();
+  h.mockInput.pressEscape();
+  expect(await pending).toEqual({ kind: "id", id: "cancel" });
+  h.destroy();
+});
+
+otuiTest("held text waits for a choice queued right behind, and is delivered once after the last one closes", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: Array<[string, boolean | undefined]> = [];
+  setChoicePasteSink(h.chrome.dock, (text, afterClose) => got.push([text, afterClose]), () => "hold");
+  const first = pasteDialog(otui, h);
+  const second = pasteDialog(otui, h); // waits on the dock lock
+  await h.flush();
+  await h.mockInput.pasteBracketedText("held report");
+  h.mockInput.pressEscape();
+  await first;
+  await laterTask();
+  expect(h.chrome.dock.visible).toBe(true); // the second choice has the dock
+  expect(got).toEqual([]); // no turn under an open picker
+  h.mockInput.pressEscape();
+  await second;
+  await laterTask();
+  expect(got).toEqual([["held report", true]]);
+  h.destroy();
+});
+
+otuiTest("two queued choices join what they held, delivered once", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: Array<[string, boolean | undefined]> = [];
+  setChoicePasteSink(h.chrome.dock, (text, afterClose) => got.push([text, afterClose]), () => "hold");
+  const first = pasteDialog(otui, h);
+  const second = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("one");
+  h.mockInput.pressEscape();
+  await first;
+  await laterTask();
+  await h.mockInput.pasteBracketedText("two");
+  h.mockInput.pressEscape();
+  await second;
+  await laterTask();
+  expect(got).toEqual([["one\ntwo", true]]);
+  h.destroy();
+});
+
+otuiTest("a paste that would pass the held cap across queued choices gets the notice, and nothing is cut", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "hold");
+  const first = pasteDialog(otui, h);
+  const second = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("a".repeat(10_000));
+  h.mockInput.pressEscape();
+  await first;
+  await laterTask();
+  await h.mockInput.pasteBracketedText("b".repeat(10_000));
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("too much held");
+  h.mockInput.pressEscape();
+  await second;
+  await laterTask();
+  expect(got).toEqual(["a".repeat(10_000)]);
+  h.destroy();
+});
+
+otuiTest("the held cap counts the newlines of the join: exactly at the cap fits, one past it is dropped", async () => {
+  const otui = requireOtui();
+  for (const [lastChars, delivered] of [[8_383, 16_384], [8_384, 8_000]] as const) {
+    const h = await mountChrome(otui);
+    const got: string[] = [];
+    setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "hold");
+    const first = pasteDialog(otui, h);
+    const second = pasteDialog(otui, h);
+    await h.flush();
+    await h.mockInput.pasteBracketedText("a".repeat(8_000));
+    h.mockInput.pressEscape();
+    await first;
+    await laterTask();
+    await h.mockInput.pasteBracketedText("b".repeat(lastChars));
+    h.mockInput.pressEscape();
+    await second;
+    await laterTask();
+    expect(got.map((text) => text.length)).toEqual([delivered]);
+    h.destroy();
+  }
+});
+
+otuiTest("the held cap counts the newlines between pastes of one choice", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "hold");
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("a".repeat(8_192));
+  await h.mockInput.pasteBracketedText("b".repeat(8_192));
+  await h.flush();
+  h.mockInput.pressEscape();
+  await pending;
+  await laterTask();
+  expect(got.map((text) => text.length)).toEqual([8_192]);
+  h.destroy();
+});
+
+otuiTest("held text is not delivered after the sink was removed at shutdown", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const got: string[] = [];
+  setChoicePasteSink(h.chrome.dock, (text) => got.push(text), () => "hold");
+  const pending = pasteDialog(otui, h);
+  await h.flush();
+  await h.mockInput.pasteBracketedText("late report");
+  h.mockInput.pressEscape();
+  await pending;
+  setChoicePasteSink(h.chrome.dock, undefined);
+  await laterTask();
+  expect(got).toEqual([]);
+  h.destroy();
 });

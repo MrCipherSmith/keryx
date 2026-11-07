@@ -74,6 +74,12 @@ test("an ordinary tool is granted only when no floor applies and the origin is t
   expect(reviewAutoGrants("apply_patch", meta({ credentials: true }))).toBe(false);
 });
 
+test("flow 486: review-auto answers neither hc floor", () => {
+  expect(reviewAutoGrants("shell_exec", meta({ hcLaunch: "claude" }))).toBe(false);
+  expect(reviewAutoGrants("shell_exec", meta({ alwaysAsk: true }))).toBe(false);
+  expect(reviewAutoGrants("spawn_subagent", meta({ hcLaunch: "claude" }))).toBe(false);
+});
+
 test("a permission-style menu is the operator's once they have refused an action; other menus are still answered", () => {
   const allowMenu = { question: "Разрешить проверку портов?", options: [{ id: "a", label: "Разрешить", description: "" }, { id: "d", label: "Запретить", description: "" }] };
   const planMenu = { question: "Which slicing plan?", options: [{ id: "a", label: "Eight slices", description: "default" }] };

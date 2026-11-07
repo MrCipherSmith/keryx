@@ -801,6 +801,25 @@ Refusals print their code and exit non-zero (except where noted):
 - **`rate-limited`**: `send` when the clone-wide CLI message rate exceeds 30 per
   minute.
 
+## report
+
+A one-way report from a process that is not a keryx shell (another agent CLI, a script) to one live keryx shell, over the agent bus.
+
+```
+keryx report --to @name [--from <name>] <text…>
+```
+
+The command writes one `notice` event with origin `external` and a random sender id; it never joins presence. The receiving agent sees it labelled as an external, unverified report, not the user's words. `--from` names the sender (lower-case letters, digits, dashes; default `external`). The bus record is not authenticated: any process of the same user can write to the log under any name, so the name proves nothing. An external event cannot be a pause, resume or any kind other than `notice`, and a shell cannot reply to it.
+
+Refusals print a named message, exit non-zero and write nothing:
+
+- **`use-agent-tool`** (exit `2`): run inside a keryx tool call; use `bus_send`.
+- **`bus-disabled`**: the bus is off.
+- **`unknown-recipient`** / **`recipient-not-live`**: `@name` is not a live instance; `@all` is refused.
+- **`body-too-large`**: the text is over 2048 bytes; send a file path instead.
+- **`reserved-name`**: `--from` names a reserved sender.
+- **`rate-limited`**: more than 5 reports per minute under one sender name, or more than 15 per minute to one recipient from any external sender. The message names which limit was hit.
+
 ## shell behavior
 
 ### Interactive behavior

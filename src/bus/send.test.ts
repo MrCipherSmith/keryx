@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +11,8 @@ import type { PresenceRecord } from "./schema";
 import {
   AGENT_RATE_LIMIT_PER_MINUTE,
   CLI_RATE_LIMIT_PER_MINUTE,
+  EXTERNAL_RATE_LIMIT_PER_MINUTE,
+  EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE,
   OPERATOR_RATE_LIMIT_PER_MINUTE,
   rateLimitBypassed,
   sendMessage,
@@ -310,5 +313,111 @@ describe("sendMessage: recipient-is-self (review r1 F6)", () => {
     const root = await seeded();
     const sent = await sendMessage(root, input({ origin: "cli", toLabel: "@release" }));
     expect(sent.resolvedTo).toEqual([LIVE]);
+  });
+});
+
+describe("external origin sends", () => {
+  const from = { instanceId: "5d2c9a10-1b3e-4f6a-9c7d-8e0f1a2b3c4d", name: "scribe", origin: "external" as const };
+
+  test("a notice is written with the external origin and counted per sender name", async () => {
+    const root = await seeded();
+    const sent = await sendMessage(root, input({ origin: "external", toLabel: "@release", from }));
+    expect(sent.event.from.origin).toBe("external");
+    expect(EXTERNAL_RATE_LIMIT_PER_MINUTE).toBeLessThanOrEqual(AGENT_RATE_LIMIT_PER_MINUTE);
+    for (let i = 1; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() } }));
+    }
+    const refused = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() } }),
+    ).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+  });
+
+  test("the per-sender-name refusal names its limit", async () => {
+    const root = await seeded();
+    for (let i = 0; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() } }));
+    }
+    const refused = await sendMessage(root, input({ origin: "external", toLabel: "@release", from })).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+    expect((refused as Error).message).toContain("per-sender-name limit");
+  });
+
+  test("varying the sender name does not escape the per-recipient ceiling, which names itself", async () => {
+    const root = await seeded();
+    expect(EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE).toBeGreaterThan(EXTERNAL_RATE_LIMIT_PER_MINUTE);
+    for (let i = 0; i < EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(
+        root,
+        input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: `child-${i}`, origin: "external" } }),
+      );
+    }
+    const refused = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: "one-more", origin: "external" } }),
+    ).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+    expect((refused as Error).message).toContain("per-recipient limit");
+  });
+
+  test("a full ceiling for one recipient does not refuse a report to another, and the refusal says when to retry", async () => {
+    const root = await seeded();
+    await writePresence(root, presence(LIVE_TWIN, "docs", NOW - 2_000));
+    for (let i = 0; i < EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(
+        root,
+        input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: `child-${i}`, origin: "external" } }),
+      );
+    }
+    const refused = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@release", from: { instanceId: randomUUID(), name: "one-more", origin: "external" } }),
+    ).catch((error: unknown) => error);
+    expect(isBusRefusal(refused, "rate-limited")).toBe(true);
+    // every counted report is stamped NOW, so the oldest leaves the window a full minute later
+    expect((refused as Error).message).toContain("retry in 60 s");
+    const other = await sendMessage(
+      root,
+      input({ origin: "external", toLabel: "@docs", from: { instanceId: randomUUID(), name: "one-more", origin: "external" } }),
+    );
+    expect(other.resolvedTo).toEqual([LIVE_TWIN]);
+  });
+
+  test("the retry hint counts down to the oldest counted report leaving the window", async () => {
+    const root = await seeded();
+    await writePresence(root, presence(LIVE, "release", NOW + 60_000)); // stays live while the test clock moves
+    let now = NOW;
+    for (let i = 0; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() }, now: () => now }));
+      now += 5_000;
+    }
+    now = NOW + 30_000; // the first report is 30 s old
+    const refused = await sendMessage(root, input({ origin: "external", toLabel: "@release", from, now: () => now })).catch((error: unknown) => error);
+    expect((refused as Error).message).toContain("retry in 30 s");
+    now = NOW + 29_500; // part of a second still rounds up, or the retry lands inside the window
+    const early = await sendMessage(root, input({ origin: "external", toLabel: "@release", from, now: () => now })).catch((error: unknown) => error);
+    expect((early as Error).message).toContain("retry in 31 s");
+  });
+
+  test("the retry hint never says zero seconds", async () => {
+    const root = await seeded();
+    await writePresence(root, presence(LIVE, "release", NOW + 60_000)); // stays live while the test clock moves
+    let now = NOW;
+    for (let i = 0; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() }, now: () => now }));
+    }
+    now = NOW + 60_000; // exactly one window old
+    const refused = await sendMessage(root, input({ origin: "external", toLabel: "@release", from, now: () => now })).catch((error: unknown) => error);
+    expect((refused as Error).message).toContain("retry in 1 s");
+  });
+
+  test("@all and non-notice kinds are refused", async () => {
+    const root = await seeded();
+    for (const overrides of [{ toLabel: "@all" }, { kind: "question", toLabel: "@release" }]) {
+      const refused = await sendMessage(root, input({ origin: "external", from, ...overrides })).catch((error: unknown) => error);
+      expect(isBusRefusal(refused, "invalid-event")).toBe(true);
+    }
+    expect((await readEvents(root, await cursorAtStart(root))).events).toHaveLength(0);
   });
 });

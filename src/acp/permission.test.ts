@@ -51,6 +51,9 @@ describe("the options keryx offers", () => {
       // Flow 306 fix (review finding 5): a hook-tightened `ask` is the same
       // hard floor — never offer allow_always for it.
       { hookAsk: true },
+      // Flow 486: an `hc run` of an agent and a command only a person may confirm.
+      { hcLaunch: "claude" },
+      { alwaysAsk: true },
     ] satisfies Partial<ApprovalMeta>[]) {
       const options = permissionOptionsFor(meta(escalation));
       expect(permissionIsEscalated(meta(escalation))).toBe(true);
