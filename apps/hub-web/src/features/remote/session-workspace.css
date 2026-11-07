@@ -425,3 +425,94 @@
   .session-header-actions { flex-wrap:wrap; flex-shrink:1; min-width:0; }
   .session-composer :is(textarea, select) { font-size:16px; }
 }
+
+.session-transcript {
+  border: 0;
+  background: transparent;
+}
+.session-transcript-header {
+  padding-inline: 0;
+  color: var(--hub-muted);
+}
+.session-transcript-body {
+  padding: 20px 4px;
+  min-height: 240px;
+  overscroll-behavior: contain;
+}
+.session-thread, .session-live {
+  max-width: 46rem;
+  margin-inline: auto;
+}
+.session-live:not(:empty) {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+.session-live-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--hub-muted);
+  font-size: 12px;
+}
+.session-message.human {
+  margin-inline-start: min(12%, 5rem);
+}
+.session-message.human .session-message-content {
+  background: var(--hub-accent-soft);
+  border-radius: 8px;
+}
+.session-message details summary { cursor: pointer; }
+.session-message-content { overflow-wrap: anywhere; }
+.session-composer > .hub-panel {
+  background: var(--hub-surface);
+  border-radius: 12px;
+}
+.session-composer textarea { min-height: 60px; }
+
+.session-tool-log {
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--hub-border);
+  border-radius: 8px;
+}
+.session-tool-log summary { cursor: pointer; }
+.session-tool-log pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+
+.composer-command-actions .composer-send { margin-inline-start: auto; }
+.composer-command-actions > [aria-controls], .composer-command-actions > [aria-expanded] { min-width: 40px; }
+.composer-footer { font-size: 12px; color: var(--hub-muted); }
+.composer-footer > details { width: 100%; }
+.composer-footer summary { cursor: pointer; }
+@media (max-width: 480px) {
+  .session-transcript-body { min-height: 150px; }
+  .composer-command-actions { gap: 4px; }
+  .composer-command-actions .hub-button { min-height: 40px; padding-inline: 8px; }
+}
+
+.session-history-pages {
+  border-top: 0;
+  border-bottom: 1px solid var(--hub-border);
+}
+.composer-keyboard-hint {
+  display: none;
+  font-size: 11px;
+  color: var(--hub-muted);
+}
+@media (min-width: 768px) and (pointer: fine) {
+  .composer-keyboard-hint { display: block; }
+}
+
+.composer-send-icon { display: none; }
+@media (max-width: 480px) {
+  .composer-send-label { display: none; }
+  .composer-send-icon { display: block; }
+  .composer-command-actions .hub-button { min-width: 44px; min-height: 44px; }
+}
+
+.session-history-pages [aria-disabled="true"] {
+  opacity: 0.65;
+  cursor: default;
+}

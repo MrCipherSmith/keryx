@@ -57,13 +57,13 @@ beforeEach(async () => {
     if (path.endsWith("/machines?projectId=p")) return Response.json({ machines: [machineFixture] });
     if (path.endsWith("/chat-consent")) return Response.json({ profileConsentVersion: 7 });
     if (path.endsWith("/flows")) return Response.json({ flows: [] });
-    // Paged mode serves messages oldest first in two pages (1..3, then 4..5), as the Hub does.
-    if (path.endsWith("/sessions/s/history?after=0")) {
+    // In each page messages are chronological, but newer pages arrive before older pages.
+    if (path.endsWith("/sessions/s/history?before=latest")) {
       if (failHistory) return Response.json({ error: { code: "unavailable", message: "history down" } }, { status: 503 });
-      const page = pagedHistory ? messages.slice(0, 3) : messages;
-      return Response.json({ messages: page, cursor: page.length, hasMore: pagedHistory, historyVersion: 1, retainedFromCursor: 0, gap: false });
+      const page = pagedHistory ? messages.slice(-2) : messages;
+      return Response.json({ messages: page, cursor: page[0]?.historyCursor ?? 0, hasMore: pagedHistory, historyVersion: 1, retainedFromCursor: 0, gap: false });
     }
-    if (path.endsWith("/sessions/s/history?after=3")) return Response.json({ messages: messages.slice(3), cursor: messages.length, hasMore: false, historyVersion: 1, retainedFromCursor: 0, gap: false });
+    if (path.endsWith("/sessions/s/history?before=4")) return Response.json({ messages: messages.slice(0, 3), cursor: 1, hasMore: false, historyVersion: 1, retainedFromCursor: 0, gap: false });
     if (path.endsWith("/sessions/s/queue")) return Response.json({ items: [], queueVersion: 0, cursor: 0, hasMore: false });
     if (path.endsWith("/sessions/s/routing")) return Response.json({ version: 1, policyDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), candidates: [], profileIds: [] });
     if (path.endsWith("/sessions/s/commands")) return Response.json({ catalogueVersion: 1, catalogueDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), entries: [entry("status"), entry("help")] });
@@ -80,7 +80,7 @@ beforeEach(async () => {
 });
 async function open(client: QueryClient) {
   render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>);
-  await screen.findByText("first message");
+  await screen.findByText(pagedHistory ? "msg 5" : "first message");
   fireEvent.click(screen.getByRole("button", { name: "Claim control" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Release control" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Native command catalogue" }));
@@ -149,10 +149,10 @@ test("an outcome invoked before the next history page is loaded still follows ev
   messages = fiveMessages();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   await open(client);
-  expect(screen.queryByText("msg 5")).toBeNull();
+  expect(screen.queryByText("first message")).toBeNull();
   await invoke("status");
-  fireEvent.click(screen.getByRole("button", { name: i18n.t("more", { ns: "remote" }) }));
-  await screen.findByText("msg 5");
+  fireEvent.click(screen.getByRole("button", { name: i18n.t("olderMessages", { ns: "remote" }) }));
+  await screen.findByText("first message");
   expect(after(order(), "/status", "msg 5")).toBe(true);
 });
 test("an outcome invoked before any history has loaded is not drawn above the messages that already existed", async () => {

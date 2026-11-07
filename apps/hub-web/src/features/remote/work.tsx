@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ArrowUp } from "lucide-react";
 import type { Control } from "../../api/remote";
 import type { HubFlow } from "../../api/types";
 import type { CommandOutcomeListener } from "./session-timeline";
@@ -241,6 +242,10 @@ export function MessageComposer({
     }else action.mutate({path:sessionPath(record.projectId,record.sessionId)+'/messages',body},{onSuccess:receipt=>{if(receipt.status==='rejected')return;const store=useDraftStore.getState();const current=store.drafts[draftKey];if(current===submitted)store.put(draftKey,{...submitted,text:"",prepared:false});setPreserved(current!==undefined&&current!==submitted);}});
   }
 
+  const canSend = record.state !== "opening" && record.state !== "recovery-required" && record.state !== "closed" &&
+    control.active && !stale && !action.isPending && !nativeOperation && !nativePending.error &&
+    (mode !== "managed" || managed.valid) && !!draft.text.trim() && !!association();
+
   return (
     <Panel title={t("message")}>
       {record.state === "opening" || record.state === "recovery-required" ? (
@@ -248,13 +253,22 @@ export function MessageComposer({
       ) : control.claimPending ? <Notice>{t("controlApplying")}</Notice> : !control.active && !record.controller && (
         <Notice>{t("observer")} {control.operator && <a href="#session-controller" className="underline">{t("goToController")}</a>}</Notice>
       )}
-      <Field label={t("message")} hint={t("commandsHint")}>
-        <Textarea
+      <span id={commandsId + "-hint"} className="sr-only">{t("commandsHint")}</span>
+      <Field label={<span className="sr-only">{t("message")}</span>}>
+        <Textarea aria-describedby={commandsId + "-hint"}
           value={draft.text}
-          rows={3}
+          rows={2}
+          placeholder={t("messagePlaceholder")}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && openDraftCommand()) {
-              event.preventDefault();
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+              if (openDraftCommand()) {
+                event.preventDefault();
+                return;
+              }
+              if (canSend && !event.repeat && !window.matchMedia?.("(max-width: 767px), (pointer: coarse)").matches) {
+                event.preventDefault();
+                submit();
+              }
               return;
             }
             if (event.key !== "/" || draft.text || event.nativeEvent.isComposing ||
@@ -272,17 +286,22 @@ export function MessageComposer({
           ref={commandTrigger}
           variant="secondary"
           aria-label={t("commands")}
+          title={t("commandsHint")}
           aria-expanded={commands === "open"}
           aria-controls={commands === "unopened" ? undefined : commandsId}
           onClick={(event) => commands === "open" ? closeCommands() : openCommands(undefined, event.currentTarget)}
         >
-          <span aria-hidden="true">/</span> {t("commands")}
+          <span aria-hidden="true">/</span>
         </Button>
         {chatCommandShortcuts.map(shortcut => (
           <Button key={shortcut} variant="secondary" onClick={(event) => openCommandShortcut(shortcut, event.currentTarget)}>
             {shortcut}
           </Button>
         ))}
+        <Button className="composer-send" aria-label={t("send")} disabled={!canSend} onClick={submit}>
+          <ArrowUp className="composer-send-icon" size={20} aria-hidden="true" />
+          <span className="composer-send-label">{t("send")}</span>
+        </Button>
       </div>
       {commands !== "unopened" && (
         <div id={commandsId} hidden={commands !== "open"}
@@ -299,7 +318,6 @@ export function MessageComposer({
             visible={commands === "open"} focusToken={focusToken} initialSearch={commandShortcut} />
         </div>
       )}
-      <p className="composer-hint">{t("secretWarning")}</p>
       <details open={!association()} className="composer-work-context">
         <summary>{mode === "flow" && selected ? selected.title : t("workMode")}</summary>
       <div className="composer-controls">
@@ -330,6 +348,16 @@ export function MessageComposer({
           </Field>
         ) : null}
       </div>
+      {mode === "flow" && (
+        <details className="composer-pins">
+          <summary>{t("pins")}</summary>
+          <Definition label={t("pins")}>
+            {draft.specDigest || "—"}
+            <br />
+            {draft.criteriaDigest || "—"}
+          </Definition>
+        </details>
+      )}
       </details>
       {mode === "flow" ? (
         <>
@@ -341,14 +369,6 @@ export function MessageComposer({
               {t("pins")}
             </Button>
           )}
-          <details className="composer-pins">
-            <summary>{t("pins")}</summary>
-            <Definition label={t("pins")}>
-              {draft.specDigest || "—"}
-              <br />
-              {draft.criteriaDigest || "—"}
-            </Definition>
-          </details>
         </>
       ) : hasProfileConsent ? (
         <label className="flex gap-2 text-xs">
@@ -384,7 +404,8 @@ export function MessageComposer({
       {validation && <Notice tone="error">{validation}</Notice>}
       {mode === "flow" && <Feedback query={flows} />}
       <Feedback query={consent} />
-      <ActionFeedback action={action} />
+      {action.data?.status !== "admitted" && <ActionFeedback action={action} />}
+      <p className="composer-keyboard-hint">{t("composerKeyboardHint")}</p>
       <div className="composer-footer">
         <details>
           <summary>{t("chatOptions")}</summary>
@@ -402,23 +423,9 @@ export function MessageComposer({
             <option value="enqueue">{t("enqueue")}</option>
           </Select>
           </Field>
+          <p className="composer-hint">{t("secretWarning")}</p>
+          {action.data?.status === "admitted" && <ActionFeedback action={action} />}
         </details>
-        <Button
-          disabled={
-            record.state === "opening" || record.state === "recovery-required" || record.state === "closed" ||
-            !control.active ||
-            stale ||
-            action.isPending ||
-            !!nativeOperation ||
-            nativePending.error ||
-            (mode==='managed'&&!managed.valid) ||
-            !draft.text.trim() ||
-            !association()
-          }
-          onClick={submit}
-        >
-          {t("send")}
-        </Button>
       </div>
     </Panel>
   );

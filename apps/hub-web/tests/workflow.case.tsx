@@ -102,8 +102,10 @@ describe('workflow screens preserve exact Hub operations', () => {
   it('validates project creation before issuing a mutation', async () => {
     await mount(<ProjectsView />);
     fireEvent.click(await screen.findByRole('button', { name: 'Create project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
     expect(fixture.post).not.toHaveBeenCalled();
-    expect(screen.getByText(en.required)).toBeVisible();
+    expect(screen.getByText(en.projectNameRequired)).toBeVisible();
+    expect(screen.getByLabelText('Project name')).toHaveFocus();
   });
 
   it('switches application labels to Russian while preserving user-entered criteria', async () => {
@@ -135,6 +137,7 @@ it('does not navigate when a project POST completes after the create view unmoun
   let resolve!: (value: unknown) => void;
   fixture.post.mockImplementation(() => new Promise(done => { resolve = done; }));
   const mounted = await mount(<ProjectsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
   fireEvent.change(await screen.findByLabelText('Project name'), { target: { value: 'Late project' } });
   fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
   await waitFor(() => expect(fixture.post).toHaveBeenCalledTimes(1));

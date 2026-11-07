@@ -1,4 +1,6 @@
-export default {
+export default { composerKeyboardHint: "Enter — отправить · Shift+Enter — новая строка", newAssistantReply: "Новый ответ Keryx (сообщение {{cursor}}).", noOlderMessages: "Более ранних сообщений нет", olderMessages: "Ранние сообщения",
+  sessionOpeningScope: "Проверьте, что на машине разрешены выбранная рабочая копия и профиль агента.", sessionOpeningRecovery: "Перед повторным открытием этой копии восстановите незавершённый запуск на машине.",
+  messagePlaceholder: "Напишите сообщение…",
   searchCommands: "Поиск команд Keryx", noCommandsFound: "Подходящих команд нет.",
  sessionOpeningFailed: "Не открылась", sessionOpeningNextStep: "Проверьте доступность машины и создайте новую сессию.", sessionLaunchRequirements: "Выберите доступную машину, чистую рабочую копию и готовый профиль, затем введите название.", sessionLaunchOperatorOnly: "Создавать сессии могут только операторы. Обратитесь к оператору или войдите под учётной записью оператора.", sessionLaunchEnterTitle: "Введите название сессии, чтобы продолжить.", sessionLaunchFlowGone: "Выбранный Flow больше не в работе. Выберите другой Flow или сбросьте выбор.",
  sessionLaunchFlowsLoading: "Загружаем Flow, чтобы проверить выбранный…", sessionLaunchFlowsFailed: "Не удалось загрузить Flow, поэтому выбранный Flow нельзя проверить. Повторите или сбросьте выбор.", sessionOpeningCreateNew: "Создать новую сессию", sessionOpeningDetails: "Технические подробности", commandsHint: "Нажмите /, чтобы открыть команды. Чтобы ввести саму косую черту, сразу нажмите Escape.",

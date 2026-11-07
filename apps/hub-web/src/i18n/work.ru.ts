@@ -1,5 +1,6 @@
 import type en from "./work.en";
 const ru: typeof en = {
+  startPendingAmendments: "Перед запуском разберите открытые изменения требований.", startMissingApprovedPlan: "Перед запуском утвердите текущую версию Flow и обязательные задачи.", startStaleIntent: "Приведите задачи в соответствие с текущей версией Flow и её критериями.",
   revisionTechnicalDetails: "Технические подробности",
   backToResults: "Назад к результатам",
   editPlan: "Изменить план и обязательные результаты",

@@ -67,7 +67,21 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies, c
     if (suffix === "commands") { const projection = completeProjection(store.remote, row); return json(control("CommandCatalogue", { catalogueVersion: projection.catalogueVersion, catalogueDigest: projection.catalogueDigest, capabilityDigest: projection.capabilityDigest, entries: projection.catalogue })); }
     if (suffix === "routing") { const projection = completeProjection(store.remote, row); return json(control("RoutingAvailability", { version: projection.projectionVersion, policyDigest: projection.policyDigest, capabilityDigest: projection.capabilityDigest, candidates: projection.candidates, profileIds: projection.profileIds })); }
     if (suffix === "queue") return json(control("QueuePage", { cursor: 0, hasMore: false, queueVersion: row.record.queueVersion, items: store.remote.all<QueueRow>("remote_queue", { sessionId: row.record.sessionId }).map((q) => q.item) }));
-    if (suffix === "history") { const page = boundedRecords(store.remote.all<Control["SessionMessage"]>("remote_history", { sessionId: row.record.sessionId }).filter((m) => m.historyCursor > after)); return json(control("HistoryPage", { historyVersion: row.record.historyVersion, messages: page.records, cursor: page.records.at(-1)?.historyCursor ?? after, hasMore: page.hasMore, retainedFromCursor: 0, gap: false })); }
+    if (suffix === "history") {
+      const history = store.remote.all<Control["SessionMessage"]>("remote_history", { sessionId: row.record.sessionId });
+      const before = url.searchParams.get("before");
+      if (before !== null) {
+        const cursor = before === "latest" ? null : Number(before);
+        if (url.searchParams.has("after") || (cursor !== null && (!Number.isSafeInteger(cursor) || cursor < 1)))
+          fail(400, "invalid-cursor", "Invalid cursor");
+        const page = boundedRecords(history.filter(message => cursor === null || message.historyCursor < cursor).sort((left, right) => right.historyCursor - left.historyCursor));
+        // Limit the newest records first, then return them in reading order.
+        const oldest = page.records.at(-1)?.historyCursor ?? cursor ?? 0;
+        return json(control("HistoryPage", { historyVersion: row.record.historyVersion, messages: page.records.reverse(), cursor: oldest, hasMore: page.hasMore, retainedFromCursor: 0, gap: false }));
+      }
+      const page = boundedRecords(history.filter(message => message.historyCursor > after));
+      return json(control("HistoryPage", { historyVersion: row.record.historyVersion, messages: page.records, cursor: page.records.at(-1)?.historyCursor ?? after, hasMore: page.hasMore, retainedFromCursor: 0, gap: false }));
+    }
     if (suffix === "events") { const page = boundedRecords(store.remote.all<Control["SessionEvent"]>("remote_session_event", { sessionId: row.record.sessionId }).filter((e) => e.sessionEventSeq > after)); return json(control("SessionEventPage", { events:page.records, cursor: page.records.at(-1)?.sessionEventSeq ?? after, hasMore: page.hasMore, retainedFromCursor: 0, gap: false })); }
     fail(404, "not-found", "Route not found");
   }
