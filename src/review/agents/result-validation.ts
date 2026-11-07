@@ -18,7 +18,7 @@ function parseResult(content: string): unknown {
 }
 
 /** Validate the contract while preserving the raw adapter reply for export. */
-export function reviewAgentResultStatus(content: unknown): "completed" | "blocked" {
+export function validatedReviewAgentResult(content: unknown): Record<string, unknown> {
   let payload = content;
   if (typeof content === "object" && content !== null && !Array.isArray(content)) {
     const envelope = content as Record<string, unknown>;
@@ -31,6 +31,11 @@ export function reviewAgentResultStatus(content: unknown): "completed" | "blocke
   if (!validation.valid) {
     throw new Error(`invalid_review_result: ${JSON.stringify(validation.errors.slice(0, 8))}`);
   }
+  return result as Record<string, unknown>;
+}
+
+export function reviewAgentResultStatus(content: unknown): "completed" | "blocked" {
+  const result = validatedReviewAgentResult(content);
   const validated = result as { status: string; inputs_unreadable?: string[]; needs_context?: string[] };
   // A valid blocked reply is an artifact, not a completed review.
   return validated.status === "BLOCKED" || validated.status === "NEEDS_CONTEXT"

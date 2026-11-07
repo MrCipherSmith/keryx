@@ -1,5 +1,6 @@
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { exportReviewAgentResult } from "../review/agents/package-export";
 import { ReviewAgentController } from "../review/agents/controller";
 import { validateReviewAgentConfig } from "../review/agents/config";
 import {
@@ -44,7 +45,7 @@ const OPTIONS: Readonly<Record<ReviewAgentCliCommand, readonly string[]>> = {
   spawn: ["--run-dir", "--payload"],
   wait: ["--run-dir", "--dispatch"],
   cancel: ["--run-dir", "--dispatch", "--reason"],
-  result: ["--run-dir", "--dispatch"],
+  result: ["--run-dir", "--dispatch", "--package"],
 };
 
 export interface ReviewAgentCliController {
@@ -637,6 +638,12 @@ export async function runReviewAgentsCommand(args: readonly string[], deps: Revi
         break;
       case "result":
         result = await controller.result(values.get("--dispatch")!);
+        if (values.has("--package")) {
+          if (!isRecord(result) || result.dispatchId !== values.get("--dispatch")) throw new Error("No authorized result for requested dispatch");
+          const exported = await exportReviewAgentResult(values.get("--package")!, result);
+          if (!exported.ok) throw exported.error;
+          result = exported.value;
+        }
         break;
     }
     log(JSON.stringify(result));
