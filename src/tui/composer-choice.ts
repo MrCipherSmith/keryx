@@ -220,15 +220,15 @@ const choiceOrigin = new WeakMap<object, FocusTarget | null>();
 
 /**
  * The paste decision for the choice open on `dock`. A modal "takes text" when it says it owns every key (the
- * hand-built secret field) or when the node that held the keyboard before the choice opened is a text input
- * inside it. Both are signals the modal host and the renderer already expose; a read-only modal has neither.
+ * hand-built secret field) or when a text input inside it holds the keyboard now or held it before the choice
+ * opened. Both are signals the modal host and the renderer already expose; a read-only modal has neither.
  */
 export function choicePasteDecision(otui: OpenTui, r: Renderer, dock: object, busy: boolean): ChoicePasteDecision {
   const modalOverDock = modalHides(r, dock);
-  const origin = choiceOrigin.get(dock) ?? null;
-  const originIsInput =
-    origin !== null && !modalHides(r, origin) && (origin instanceof otui.InputRenderable || origin instanceof otui.TextareaRenderable);
-  return decideChoicePaste({ modalOverDock, modalTakesText: modalOwnsKeys(r) || originIsInput, busy });
+  const isModalField = (node: FocusTarget | null): boolean =>
+    node !== null && !modalHides(r, node) && (node instanceof otui.InputRenderable || node instanceof otui.TextareaRenderable);
+  const modalTakesText = modalOwnsKeys(r) || isModalField(choiceOrigin.get(dock) ?? null) || isModalField(focusedNode(r));
+  return decideChoicePaste({ modalOverDock, modalTakesText, busy });
 }
 
 /** One sink per dock, so the call sites that open a choice never have to know about paste. */
@@ -467,8 +467,8 @@ export async function showComposerChoiceDetailed(
       // Text pasted while an idle shell showed this choice. Delivered on a later task: the lock is released and
       // the code awaiting the choice (a picker applying its pick) has run, so a turn it starts sees that state.
       const before = heldForDock.get(dock);
-      const joined = before === undefined ? held : `${before}\n${held}`;
-      heldForDock.set(dock, joined.slice(0, MAX_HELD_CHARS));
+      // The hold branch of the paste handler already counted this join, so it stays inside MAX_HELD_CHARS.
+      heldForDock.set(dock, before === undefined ? held : `${before}\n${held}`);
     }
     // Also when this choice held nothing: it may be the one a previous choice's text was waiting behind.
     if (heldForDock.has(dock)) setTimeout(() => flushHeld(dock), 0);
@@ -1028,7 +1028,10 @@ function presentComposerChoice(
         return;
       }
       if (decision === "hold") {
-        if (heldPastes.length >= MAX_HELD_PASTES || heldChars + text.length > MAX_HELD_CHARS) {
+        // What this close will join: text an earlier choice left for the dock, then this choice's pastes, one newline apart.
+        const before = heldForDock.get(dock);
+        const joinedChars = (before === undefined ? 0 : before.length + 1) + heldChars + heldPastes.length + text.length;
+        if (heldPastes.length >= MAX_HELD_PASTES || joinedChars > MAX_HELD_CHARS) {
           pasteNotice = "paste dropped: too much held";
           paintTitle();
           return;

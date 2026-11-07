@@ -1042,8 +1042,19 @@ const HC_TERMINAL_ASSIGNMENT = /^HC_TERMINAL_ID\+?=/i;
 
 /** The head is hc, or an expansion that may be: a head whose last path part is literal text names that program instead. */
 function mayBeHc(head: string | undefined, expansion: WordExpansion | undefined): boolean {
-  const base = baseName(head);
-  return base === "hc" || (isExpanded(expansion) && wordIsOpaque(base));
+  return baseName(head) === "hc" || (isExpanded(expansion) && wordIsOpaque(lastPartOutsideExpansions(head ?? "")));
+}
+
+/** The text after the last `/` that is not inside a `${...}`: a default's own path (`${HC:-/opt/bin/hc}`) cuts nothing. */
+function lastPartOutsideExpansions(word: string): string {
+  let open = 0;
+  let cut = 0;
+  for (let i = 0; i < word.length; i += 1) {
+    if (word[i] === "$" && word[i + 1] === "{") open += 1;
+    else if (word[i] === "}" && open > 0) open -= 1;
+    else if (word[i] === "/" && open === 0) cut = i + 1;
+  }
+  return word.slice(cut);
 }
 
 /** Inside a plain argument nothing is about to expand: `git commit -m "$STATUS keys ready"` is prose, whatever `$STATUS` holds. */
@@ -1051,10 +1062,20 @@ function liveExpansions(expands: readonly WordExpansion[], reading: WordReading)
   return reading === "command" ? expands : expands.map(() => false);
 }
 
+/** The verb of a literal hc command. */
+function hcVerbOf(words: readonly string[]): string | undefined {
+  if (baseName(words[0]) !== "hc") return undefined;
+  return words.slice(1).find((w) => !w.startsWith("-"))?.toLowerCase();
+}
+
 /** `hc send`: its words after the verb are a terminal and a message, not a command line. */
 function isHcSend(words: readonly string[]): boolean {
-  if (baseName(words[0]) !== "hc") return false;
-  return words.slice(1).find((w) => !w.startsWith("-"))?.toLowerCase() === "send";
+  return hcVerbOf(words) === "send";
+}
+
+/** `hc run`/`hc exec`: the words after the verb are a program and its arguments, as after a terminal driver. */
+function isHcProgram(words: readonly string[]): boolean {
+  return HC_PROGRAM_VERBS.has(hcVerbOf(words) ?? "");
 }
 
 /** Do these words, whose head is hc or an expansion that may be hc, press a key or force text into a terminal? */
@@ -1145,7 +1166,7 @@ function collectHcLaunches(command: string, found: string[], wide: boolean): voi
     if (subAt < 0 || !HC_PROGRAM_VERBS.has(rest[subAt]!.toLowerCase())) return false;
     const at = hcRunProgramAt(rest, subAt);
     // Under an expanded head only a named agent says this is hc: `$DOCKER run $IMAGE` reports nothing, `$HC run claude` does.
-    collectAgentsOfProgram(rest.slice(at), live.slice(1 + at), found, 0, wide && !headExpands, wide);
+    collectAgentsOfProgram(rest.slice(at), live.slice(1 + at), found, 0, wide && !headExpands, wide, !wide);
     return false;
   };
   anySimpleCommand(command, visit, { followArguments: wide, argumentsAreText: isHcSend });
@@ -1153,9 +1174,10 @@ function collectHcLaunches(command: string, found: string[], wide: boolean): voi
 
 /**
  * The agents a program word list starts, through wrappers, `sh -c`, JS runners and (`scanDriver`) terminal drivers,
- * pushed onto `found`. {@link HC_UNKNOWN_AGENT} is pushed only under `wide`, the reading the floor asks on.
+ * pushed onto `found`. {@link HC_UNKNOWN_AGENT} is pushed only under `wide`, the reading the floor asks on. `forGrant` narrows
+ * an entry to what may be recorded as granted, see {@link agentOfEntry}.
  */
-function collectAgentsOfProgram(program: readonly string[], expands: readonly WordExpansion[], found: string[], depth: number, wide: boolean, scanDriver: boolean): void {
+function collectAgentsOfProgram(program: readonly string[], expands: readonly WordExpansion[], found: string[], depth: number, wide: boolean, scanDriver: boolean, forGrant: boolean): void {
   const add = (agent: string | undefined): void => {
     if (agent !== undefined && !found.includes(agent) && (wide || agent !== HC_UNKNOWN_AGENT)) found.push(agent);
   };
@@ -1164,7 +1186,7 @@ function collectAgentsOfProgram(program: readonly string[], expands: readonly Wo
   const body = peeled.inner ?? (/\s/.test(words[0] ?? "") ? words[0] : undefined);
   if (body !== undefined) {
     if (depth >= MAX_SHELL_NESTING) return add(HC_UNKNOWN_AGENT);
-    for (const seg of walkedSegments(body)) collectAgentsOfProgram(seg.words, wordExpansions(seg.raw), found, depth + 1, wide, scanDriver);
+    for (const seg of walkedSegments(body)) collectAgentsOfProgram(seg.words, wordExpansions(seg.raw), found, depth + 1, wide, scanDriver, forGrant);
     return;
   }
   if (words.length === 0) return;
@@ -1172,14 +1194,14 @@ function collectAgentsOfProgram(program: readonly string[], expands: readonly Wo
   if (isExpanded(wordExpands[0])) return add(HC_UNKNOWN_AGENT);
   const name = baseName(words[0]);
   if (HC_LAUNCH_RUNNERS.has(name)) {
-    for (const at of runnerEntries(words)) add(isExpanded(wordExpands[at]) ? HC_UNKNOWN_AGENT : agentOfEntry(words[at]!, true));
+    for (const at of runnerEntries(words)) add(isExpanded(wordExpands[at]) ? HC_UNKNOWN_AGENT : agentOfEntry(words[at]!, true, forGrant));
     return;
   }
-  add(agentOfEntry(words[0]!, false));
+  add(agentOfEntry(words[0]!, false, forGrant));
   if (!scanDriver || !TERMINAL_DRIVERS.has(name)) return;
   // A terminal driver runs part of its line as a program; which part depends on the driver, so every suffix is read.
   // Each is read once, without scanning a driver inside it: a later suffix already covers what that would find.
-  for (let i = 1; i < words.length; i += 1) collectAgentsOfProgram(words.slice(i), wordExpands.slice(i), found, depth, wide, false);
+  for (let i = 1; i < words.length; i += 1) collectAgentsOfProgram(words.slice(i), wordExpands.slice(i), found, depth, wide, false, forGrant);
 }
 
 /** The words a JS runner names as what it runs: its entry, and the value of any `-p`/`--package`. Indexes into `words`. */
@@ -1213,19 +1235,29 @@ function agentOfPathPart(part: string): string | undefined {
  * node_modules/@openai/codex/bin/codex.js`); a plain executable by its own name, so `hc run ./keryx/test.sh` in a checkout
  * called keryx stays an ordinary program. `cli.*` names nobody by itself: it is keryx only as this repository's own
  * relative entry (`bun src/cli.ts`, how keryx is run from a checkout), else {@link HC_UNKNOWN_AGENT}, which a keryx grant
- * does not cover.
+ * does not cover. `forGrant` reads only the parts that name what runs: a parent directory may ask (`node ~/claude/app/server.js`)
+ * but its name proves nothing, so it records no grant.
  */
-function agentOfEntry(word: string, viaRunner: boolean): string | undefined {
+function agentOfEntry(word: string, viaRunner: boolean, forGrant: boolean): string | undefined {
   const spec = word.toLowerCase().replace(/^--package=/, "").replace(/^npm:/, "").replace(/(?<=.)@[^/]*$/, "");
   const isScript = SCRIPT_EXTENSION.test(spec);
   const parts = spec.split("/").map((part) => part.replace(SCRIPT_EXTENSION, ""));
-  const read = viaRunner || isScript ? parts : parts.slice(-1);
+  const named = viaRunner || isScript ? parts : parts.slice(-1);
+  const read = forGrant ? grantableParts(named) : named;
   for (let i = read.length - 1; i >= 0; i -= 1) {
     const agent = agentOfPathPart(read[i]!);
     if (agent !== undefined) return agent;
   }
   if (!isScript || parts[parts.length - 1] !== "cli") return undefined;
   return spec.replace(/^\.\//, "") === "src/cli.ts" ? "keryx" : HC_UNKNOWN_AGENT;
+}
+
+/** Of an entry's path parts, those a grant may rest on: the package under `node_modules`, then the entry's own last part. */
+function grantableParts(parts: readonly string[]): string[] {
+  const modules = parts.lastIndexOf("node_modules");
+  const scoped = parts[modules + 1]?.startsWith("@") === true;
+  const packageName = modules < 0 ? undefined : parts[modules + (scoped ? 2 : 1)];
+  return [...(packageName === undefined ? [] : [packageName]), parts[parts.length - 1]!];
 }
 
 /** The first agent an `hc run` in the line starts (`claude`, `keryx`, …), or undefined when it starts none. Pure. */
@@ -1312,7 +1344,9 @@ function isExpanded(expansion: WordExpansion | undefined): boolean {
 
 /**
  * For each word {@link splitWords} cuts from `raw`, its {@link WordExpansion}. A backslash-escaped character does not
- * count. Cut on exactly the boundaries `splitWords` uses, so the result lines up with its words.
+ * count. Cut on exactly the boundaries `splitWords` uses, so the result lines up with its words. A `$(` opened inside double
+ * quotes stays one quoted word to the shell whatever quotes it holds (`"$(cat "$F")"`); `splitWords` has no such level, so
+ * `opened` only keeps what is inside from reading as bare and moves no cut.
  */
 function wordExpansions(raw: string): WordExpansion[] {
   const result: WordExpansion[] = [];
@@ -1321,6 +1355,11 @@ function wordExpansions(raw: string): WordExpansion[] {
   let length = 0;
   let expands: WordExpansion = false;
   let escaped = false;
+  let opened = 0;
+  const countParen = (ch: string): void => {
+    if (opened > 0 && ch === "(") opened += 1;
+    else if (opened > 0 && ch === ")") opened -= 1;
+  };
   const push = (): void => {
     if (started || length > 0) result.push(expands);
     started = false;
@@ -1336,8 +1375,14 @@ function wordExpansions(raw: string): WordExpansion[] {
         continue;
       }
       if (ch === quote) quote = undefined;
-      else {
+      else if (quote === '"' && ch === "$" && raw[i + 1] === "(") {
+        opened += 1;
+        length += 2;
+        i++;
+        if (expands === false) expands = "quoted";
+      } else {
         length += 1;
+        countParen(ch);
         if (quote === '"' && (ch === "$" || ch === "`") && expands === false) expands = "quoted";
       }
       continue;
@@ -1353,7 +1398,11 @@ function wordExpansions(raw: string): WordExpansion[] {
       if (length > 0 || started) push();
       continue;
     }
-    if (!escaped && (ch === "$" || ch === "`" || ch === "{")) expands = "bare";
+    if (!escaped) countParen(ch);
+    if (!escaped && (ch === "$" || ch === "`" || ch === "{")) {
+      if (opened === 0) expands = "bare";
+      else if (expands === false) expands = "quoted";
+    }
     escaped = !escaped && ch === "\\";
     length += 1;
   }
@@ -1386,8 +1435,8 @@ function segmentWithoutRedirections(seg: Segment): Segment {
 }
 
 /**
- * How a piece of text came to be read as a command. `command`: the line itself, a real `sh -c`/`eval` body, or a terminal
- * driver's command string, so all of shell syntax applies. `argument`: an ordinary argument that happens to read like a
+ * How a piece of text came to be read as a command. `command`: the line itself, a real `sh -c`/`eval` body, or a word after a
+ * terminal driver or an `hc run`/`hc exec`, so all of shell syntax applies. `argument`: an ordinary argument that happens to read like a
  * command line (`git commit -m "hc run claude"`), cut at separators and nothing more, so prose stays prose: a backtick,
  * a parenthesis, an `&` or a leading `if` in a sentence is not syntax. A real substitution in a double-quoted argument
  * is live and is opened at the `command` level, so nothing that runs is lost.
@@ -1431,7 +1480,8 @@ function anySimpleCommand(
     if (depth >= MAX_SHELL_NESTING) continue;
     if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, options, depth + 1, "command")) return true;
     if (options.followArguments === false || searchesText(peeled.words) || options.argumentsAreText?.(peeled.words) === true) continue;
-    const argumentReading = isDriver ? "command" : "argument";
+    // Only an `hc run` that is itself read as a command: one quoted in a commit message stays prose.
+    const argumentReading = isDriver || (reading === "command" && isHcProgram(peeled.words)) ? "command" : "argument";
     if (words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, options, depth + 1, argumentReading))) return true;
   }
   return false;

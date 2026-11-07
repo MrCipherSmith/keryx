@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { HC_UNKNOWN_AGENT, hcAgentLaunchOf, hcAgentLaunchesOf, hcGrantableLaunchesOf, touchesAgentCredentials, touchesHcDialogControl, touchesHumanConfirmation, touchesOperatorDecision, touchesSacConfirmReview } from "./command-risk";
+import { withoutRedirections } from "./shell-syntax";
 
 describe("SAC confirm-review floor is decided on parsed words (review-security-code-w12:F-001)", () => {
   const spellings: Array<[string, string]> = [
@@ -665,14 +666,10 @@ describe("flow 486 review r2: an expansion after hc send counts only where it ca
 
 describe("flow 486 review r2: a script run by a runtime is read through its path", () => {
   const launches: Array<[string, string]> = [
-    ["hc run node ~/x/claude-code/cli.js", "claude"],
     ["hc run node ./node_modules/@openai/codex/bin/codex.js", "codex"],
     ["hc run node ./node_modules/@anthropic-ai/claude-code/cli.mjs", "claude"],
     ["hc run node ./node_modules/@google/gemini-cli/bin/run.cjs", "gemini"],
-    ["hc run tsx ./opencode/src/main.ts", "opencode"],
     ["hc run ./node_modules/@openai/codex/bin/codex.js", "codex"],
-    ["hc run ~/x/claude-code/cli.js", "claude"],
-    ["hc run node ~/keryx/dist/cli.js", "keryx"],
     ["hc run bun src/cli.ts shell", "keryx"],
     ["hc run bun ./src/cli.ts shell", "keryx"],
     ["hc run bunx npm:claude", "claude"],
@@ -712,6 +709,11 @@ describe("flow 486 review r2: a redirection hides nothing", () => {
     "hc send t7 ok >/dev/null --force",
     "f(){ hc keys t7 enter; }; f",
     "{ hc keys t7 enter;}",
+    // A target's space inside a substitution or an escape stays in the target; an escaped `>` is an argument.
+    "hc >$(echo a b) keys t7 enter",
+    "hc >a\\ b keys t7 enter",
+    "hc send t7 ok \\> --force",
+    "hc <(echo a >b) keys t7 enter",
   ]) {
     test(command, () => expect(touchesHcDialogControl(command)).toBe(true));
   }
@@ -720,6 +722,17 @@ describe("flow 486 review r2: a redirection hides nothing", () => {
   }
   for (const command of ["hc send t7 '>' ok", "hc send t7 'a > b'", "hc read t7 >/tmp/keys", "ls >keys", "hc read t7 2>/dev/null", "cat <(ls) keys"]) {
     test(`no match: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(false));
+  }
+  // The structural reading turns a substitution into `$_` before the floor sees it, so only the stripper itself can pin these.
+  const stripped: Array<[string, string]> = [
+    ["hc >$(echo a b) keys t7 enter", "hc keys t7 enter"],
+    ["hc >`echo a b` keys t7 enter", "hc keys t7 enter"],
+    ["hc >a\\ b keys t7 enter", "hc keys t7 enter"],
+    ["hc send t7 ok \\> --force", "hc send t7 ok \\> --force"],
+    ["hc <(echo a >b) keys t7 enter", "hc <(echo a >b) keys t7 enter"],
+  ];
+  for (const [command, words] of stripped) {
+    test(`stripped: ${command}`, () => expect(withoutRedirections(command).replace(/\s+/g, " ")).toBe(words));
   }
   test("a quoted `>` hides no flag", () => {
     expect(touchesHcDialogControl("hc send t7 '>' --force")).toBe(true);
@@ -736,5 +749,101 @@ describe("flow 486 review r2: gates that survived deletion", () => {
     // As written the `\\'` closes the quote early and the rest reads as quoted; bash ends the word there and runs hc.
     expect(touchesHcDialogControl("echo $'\\'' & hc keys t7 enter")).toBe(true);
     expect(hcAgentLaunchesOf("echo $'\\'' & hc run claude")).toEqual(["claude"]);
+  });
+});
+
+describe("flow 486 review r3: an expansion's default holds a path", () => {
+  for (const command of ["${HC:-/opt/herdr/bin/hc} keys t7 enter", `"\${HC:-$HOME/bin/hc}" keys t7 enter`, `"\${HC_BIN:-$HOME/bin/hc}" send t7 ok --force`, "${A:-${B:-/x/y}}/hc keys t7 enter"]) {
+    test(`asks: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(true));
+  }
+  for (const command of ["${HC:-/opt/homebrew/bin/hc} run claude", "${HC:-/x/hc} run claude"]) {
+    test(`asks as a launch, no grant: ${command}`, () => {
+      expect(hcAgentLaunchesOf(command)).toEqual(["claude"]);
+      expect(hcGrantableLaunchesOf(command)).toEqual([]);
+    });
+  }
+  for (const command of ["$ROOT/bin/docker run $IMAGE", "${ROOT}/bin/docker run $IMAGE", "${ROOT:-/opt/x}/bin/docker keys t7 enter", "${ROOT:-/opt/x}/bin/mailer send a b"]) {
+    test(`no ask: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(false);
+      expect(hcAgentLaunchesOf(command)).toEqual([]);
+    });
+  }
+});
+
+describe("flow 486 review r3: a double-quoted substitution is one quoted word", () => {
+  for (const command of [`hc send t7 "$(cat "$REPORT")"`, `hc send "$PARENT" "done: $(basename "$f")"`, `hc send t7 "$(cat "a b")" ok`, `hc send t7 "$((1 + 2)) $(echo "$(date "+%F")")"`]) {
+    test(`no ask: ${command}`, () => {
+      expect(touchesHcDialogControl(command)).toBe(false);
+      expect(touchesHumanConfirmation(command)).toBe(false);
+    });
+  }
+  for (const command of [
+    `hc send t7 $(cat "$REPORT")`,
+    `hc send t7 "$(cat "$REPORT")" --force`,
+    `hc send t7 "$(cat "$REPORT")" $FLAGS`,
+    // The words after the cut splitWords makes inside the substitution must still line up.
+    `hc send t7 "$(cat "a b")" $FLAGS`,
+    `hc send t7 "\\$(x" $FLAGS`,
+    `hc send t7 "$(a)" "$(b)"$FLAGS`,
+  ]) {
+    test(`asks: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(true));
+  }
+});
+
+describe("flow 486 review r3: the words after an hc program verb are commands", () => {
+  for (const verb of ["run", "exec"]) {
+    for (const body of [
+      `sh -c 'if hc wait t7; then hc keys t7 enter; fi'`,
+      `bash -c '(hc keys t7 enter)'`,
+      `sh -c 'sleep 1 & hc keys t7 enter'`,
+      `'sleep 5 & hc keys t7 enter'`,
+      `'(hc keys t7 enter)'`,
+      `'$HC keys t7 enter'`,
+      `'if true; then hc keys t7 enter; fi'`,
+    ]) {
+      const command = `hc ${verb} ${body}`;
+      test(`asks: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(true));
+    }
+  }
+  test("the other families read the same body", () => {
+    expect(touchesHumanConfirmation("hc run '(keryx review publish)'")).toBe(true);
+  });
+  for (const command of [
+    `git commit -m "hc run '(hc keys t7 enter)'"`,
+    `echo "hc exec '$HC keys t7 enter'"`,
+    `git commit -m "(hc keys t7 enter)"`,
+    `echo 'then hc keys t7 enter'`,
+  ]) {
+    test(`prose stays prose: ${command}`, () => expect(touchesHcDialogControl(command)).toBe(false));
+  }
+});
+
+describe("flow 486 review r3: a grant rests on what runs, not on a parent directory", () => {
+  for (const [command, agent] of [
+    ["hc run node /home/dev/claude/app/server.js", "claude"],
+    ["hc run bun ~/work/keryx/scripts/check.ts", "keryx"],
+    ["hc run node ~/x/claude-code/cli.js", "claude"],
+    ["hc run ~/x/claude-code/cli.js", "claude"],
+    ["hc run tsx ./opencode/src/main.ts", "opencode"],
+    ["hc run node ~/keryx/dist/cli.js", "keryx"],
+    ["hc run node /home/dev/claude/node_modules/left-pad/index.js", "claude"],
+    ["hc run node ./node_modules/left-pad/claude/index.js", "claude"],
+  ] as const) {
+    test(`asks, records no grant: ${command}`, () => {
+      expect(hcAgentLaunchesOf(command)).toEqual([agent]);
+      expect(hcGrantableLaunchesOf(command)).toEqual([]);
+    });
+  }
+  for (const [command, agent] of [
+    ["hc run node ./node_modules/claude-code/dist/main.js", "claude"],
+    ["hc run node /usr/lib/node_modules/@openai/codex/dist/main.js", "codex"],
+    ["hc run /opt/claude/bin/codex", "codex"],
+    ["hc run node /home/dev/claude/codex.js", "codex"],
+  ] as const) {
+    test(`granted: ${command}`, () => expect(hcGrantableLaunchesOf(command)).toEqual([agent]));
+  }
+  test("a package path no plain executable is asked on grants nothing", () => {
+    expect(hcAgentLaunchesOf("hc run ./node_modules/claude-code/bin/tool")).toEqual([]);
+    expect(hcGrantableLaunchesOf("hc run ./node_modules/claude-code/bin/tool")).toEqual([]);
   });
 });

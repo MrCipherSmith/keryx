@@ -395,6 +395,21 @@ describe("external origin sends", () => {
     now = NOW + 30_000; // the first report is 30 s old
     const refused = await sendMessage(root, input({ origin: "external", toLabel: "@release", from, now: () => now })).catch((error: unknown) => error);
     expect((refused as Error).message).toContain("retry in 30 s");
+    now = NOW + 29_500; // part of a second still rounds up, or the retry lands inside the window
+    const early = await sendMessage(root, input({ origin: "external", toLabel: "@release", from, now: () => now })).catch((error: unknown) => error);
+    expect((early as Error).message).toContain("retry in 31 s");
+  });
+
+  test("the retry hint never says zero seconds", async () => {
+    const root = await seeded();
+    await writePresence(root, presence(LIVE, "release", NOW + 60_000)); // stays live while the test clock moves
+    let now = NOW;
+    for (let i = 0; i < EXTERNAL_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "external", toLabel: "@release", from: { ...from, instanceId: randomUUID() }, now: () => now }));
+    }
+    now = NOW + 60_000; // exactly one window old
+    const refused = await sendMessage(root, input({ origin: "external", toLabel: "@release", from, now: () => now })).catch((error: unknown) => error);
+    expect((refused as Error).message).toContain("retry in 1 s");
   });
 
   test("@all and non-notice kinds are refused", async () => {
