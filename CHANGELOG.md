@@ -2,10 +2,18 @@
 
 ## [Unreleased]
 
+## [0.4.20] - 2026-11-08
+
+### Added
+- **One Team Hub chat for managed sessions and connected Keryx shells ([#1152](https://github.com/MrCipherSmith/keryx/pull/1152)).** Both use the same assistant-ui conversation and composer, with slash commands, a model picker, token usage, and pending approvals above the message field. A connected shell can receive one-time approvals for eligible commands and patches initiated from Hub when the complete operation is visible. Sensitive or incomplete approvals remain in the terminal.
+
 ### Fixed
 - **`web_fetch` reads large pages instead of failing them.** A page over the transport's 128 KB budget used to fail as `request failed or timed out` — measured on `bun.com/blog` (330 KB) and GitHub Releases (533 KB) — while `curl` fetched both in under a second. The worker now cuts the body at the budget and marks it truncated, so the model gets the first 128 KB and a note saying so. Oversized JSON bodies still fail, and they fail with `response exceeds size limit` instead of a timeout.
 - **`web_search` shows publication dates.** Results carried `publicationDate` but the rendered text never included it, so a request for "links with dates" could not be answered even when every provider result had one.
 - **A failed `web_fetch` fallback no longer claims the transport served the page.** The note said "this page was served by the sandbox transport" and then, in the same line, that the transport had failed.
+
+### Upgrade notes
+- Upgrade Team Hub and the machine executor together. Start a shell on this version to use the expanded chat controls with a connected terminal. For managed sessions, the machine can advertise additional models from its configured provider with `serve --models`.
 
 ## [0.4.19] - 2026-11-07
 
