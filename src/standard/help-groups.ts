@@ -676,6 +676,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "report",
+    group: "External agents, ACP and MCP",
+    summary: "One-way, unverified report from an outside agent or script to a live keryx shell over the bus.",
+  },
+  {
+    kind: "cli",
     name: "workspace",
     group: "External agents, ACP and MCP",
     summary: "Shared Agent Context: workspaces, FWK reads, propose/review (module sac).",

@@ -18,6 +18,7 @@ export type BusRefusalCode =
   | "rate-limited"
   | "reply-without-replyTo"
   | "unknown-message"
+  | "external-sender-not-replyable"
   | "use-agent-tool"
   | "lease-already-held"
   | "ttl-out-of-range"

@@ -18,7 +18,7 @@
       "properties": {
         "instanceId": { "type": "string", "format": "uuid" },
         "name": { "$ref": "#/$defs/name", "description": "Instance name; the reserved names cli and system appear only with origin cli and system respectively." },
-        "origin": { "enum": ["agent", "operator", "cli", "system"] }
+        "origin": { "enum": ["agent", "operator", "cli", "system", "external"] }
       }
     },
     "to": {
@@ -71,6 +71,10 @@
     {
       "if": { "properties": { "kind": { "enum": ["override", "ack", "lease-expired"] } } },
       "then": { "properties": { "from": { "properties": { "origin": { "const": "system" } } } } }
+    },
+    {
+      "if": { "properties": { "from": { "properties": { "origin": { "const": "external" } } } } },
+      "then": { "properties": { "kind": { "not": { "enum": ["pause-request", "resume", "override"] } } } }
     }
   ],
   "$defs": {

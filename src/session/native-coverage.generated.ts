@@ -4,9 +4,9 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "schema": 1,
   "generator": "scripts/verify-native-coverage.ts",
   "registryDigest": "286041ef4394afd4de97b4da37e31ccb2728c485cd32488c737a2686c244fbca",
-  "contractDigest": "8facd34c5ca8aa53c36146c5b43c4c13dcb306c8a2882dcf2ce4e1afc171cc56",
-  "subjectCatalogueDigest": "470b81d96a56f829db39733fc49d2927fc93f6452d22ef509927540d39efb41d",
-  "inventoryDigest": "ff558496e30c0c067cdafd71868ddc11ba2c856d593e93ae325c747929c8bf7f",
+  "contractDigest": "43cd83cfbd494ce63e1f6c86a5a0c057a160f4a537d8119358e0f262412a96c9",
+  "subjectCatalogueDigest": "819a324bfef3387bf464f5c78d4831751b03c9c4f3cb636471e2d8f4bd88d6cc",
+  "inventoryDigest": "205ee38c450a7b11ae3f003ab7a0f939c629cc813c66cd618dc348aac9512e6f",
   "releaseReady": true,
   "counts": {
     "registeredCommands": 74,
@@ -284,5 +284,5 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "0eb550afdbe5569be4b05c2ae189a853c81b1a9100cf168b920c331bd9160e25"
+  "descriptorDigest": "abfe909e000703dba6ddcbb33e99a0e3ef00876645761a3a292e1911940c3b26"
 };

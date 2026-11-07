@@ -1,4 +1,5 @@
 export default {
+  projectNameRequired: "Enter a project name.",
   flowWorkspaceDistinction: "This view lists Flows based on specifications. Open Project work to manage intents, attempts and results.",
   openManagedWork: "Project work",
 
@@ -93,6 +94,7 @@ export default {
     "One criterion per line. These will be frozen before work starts.",
   noSpecifications:
     "Import a specification in Documents before creating a Flow.",
+  noFlowMatches: "No Flows match your search.",
   noFlows: "No Flows yet. Create one from a specification.",
   searchFlows: "Search Flows",
   searchFlowsPlaceholder: "Search by title or digest",

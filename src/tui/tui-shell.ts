@@ -285,7 +285,7 @@ import { openSetupModal } from "./setup-modal";
 import { ownKeryxPrefix, runSetupSteps } from "./setup-run";
 import { parseSetupArgs } from "../commands/setup-guide";
 import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
-import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
+import { connectedMessage, createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
 import {
@@ -349,7 +349,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
-import { frameSubmittedLine, HC_UNPARSED_HEADER, hcHistoryEcho, hcTranscriptEcho, looksLikeHcMessage } from "./hc-message";
+import { frameSubmittedLine, HC_PASTED_HEADER, hcHistoryEcho, hcTranscriptEcho, keyboardApprovalLine, looksLikeHcMessage } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -431,7 +431,7 @@ import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { createAgentHostStatus } from "./agent-host-status";
 import { createHerdrCoreReporter, createStatusWriter, type HerdrCoreAttention } from "./herdr-core-status";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
-import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
+import { choicePasteDecision, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
@@ -1827,6 +1827,8 @@ export async function pickShellApproval(
   hookAsk = false,
   // Flow 426 (AC5): the one-line cause of this prompt, shown above the command.
   cause?: ApprovalCause,
+  // The agent an `hc run` starts (`ApprovalMeta.hcLaunch`), named in the cause line.
+  hcLaunch?: string,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1845,8 +1847,9 @@ export async function pickShellApproval(
   // `formatShellApprovalHints` (`../commands/shell-approval.ts`): while the
   // lease applies, neither grant is offered, whatever `suggestShellPatterns`
   // says.
-  const canOfferExact = offerExact && !publishLease && !hookAsk;
-  const canOfferPrefix = offerPrefix && !publishLease && !hookAsk;
+  // An `hc run` agent launch is granted per session by the agent loop; no saved rule can answer it.
+  const canOfferExact = offerExact && !publishLease && !hookAsk && hcLaunch === undefined;
+  const canOfferPrefix = offerPrefix && !publishLease && !hookAsk && hcLaunch === undefined;
   const options = [
     {
       id: "once",
@@ -1891,7 +1894,7 @@ export async function pickShellApproval(
           : "Allow shell command?",
     // Untruncated: `showComposerChoice` renders this in a scrollable, ctrl+o-
     // focusable box (its own defensive char cap), not a single collapsed line.
-    subtitle: cause !== undefined ? `${approvalCauseLine(cause)}\n${command}` : command,
+    subtitle: cause !== undefined ? `${approvalCauseLine(cause, hcLaunch)}\n${command}` : command,
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options,
@@ -2766,29 +2769,26 @@ function runSearchProviderTestStep(
       }
     });
     void (async () => {
-      controller.configure(provider.id, { ...provider.defaults, ...fields }, credential);
-      const tested = await controller.test(provider.id);
+      // The same controller operation the argument paths use, so the wizard is
+      // not a third hand-rolled copy of configure -> test -> select and cannot
+      // drift from them.
+      const connected = await controller.connect(provider.id, fields, credential, { activate: setActive, isCancelled: () => left });
       if (left) {
-        return; // backed out mid-test: nothing to show, and no select()
+        return; // backed out mid-test: nothing to show
       }
-      if (!tested.ok) {
+      if (!connected.ok) {
         settled = "failure";
-        const reason = describeConnectionFailure(tested.reason);
+        const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, provider.id);
         status.content = otui.t`${roleChunk(otui, "error", "✗")} ${boldChunk(otui, `'${provider.id}' test failed: ${reason}`)} ${dimChunk(otui, "(Esc to go back and retry)")}`;
         return;
       }
       settled = "success";
-      if (!setActive) {
-        status.content = otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested successfully`)} ${dimChunk(otui, "(Enter to close)")}`;
-        return;
-      }
-      const selected = await controller.select(provider.id);
-      if (left) {
-        return;
-      }
-      status.content = selected.ok
-        ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured, tested, and set as active`)} ${dimChunk(otui, "(Enter to close)")}`
-        : otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested`)} ${dimChunk(otui, `but could not be set active (${selected.reason ?? "unknown"})`)} ${dimChunk(otui, "(Enter to close)")}`;
+      const scope = connected.servesPages ? " (web_search and web_fetch)" : "";
+      status.content = connected.active
+        ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured, tested, and set as active${scope}`)} ${dimChunk(otui, "(Enter to close)")}`
+        : connected.activationReason !== undefined
+          ? otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested`)} ${dimChunk(otui, `but could not be set active (${connected.activationReason})`)} ${dimChunk(otui, "(Enter to close)")}`
+          : otui.t`${roleChunk(otui, "ok", "✓")} ${boldChunk(otui, `'${provider.id}' configured and tested successfully`)} ${dimChunk(otui, "(Enter to close)")}`;
     })();
   });
 }
@@ -6423,7 +6423,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
-          content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta)))}`,
+          content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta), meta?.hcLaunch))}`,
         }),
       );
     };
@@ -6859,6 +6859,7 @@ export async function launchTuiAgentShell(opts: {
           // hook asked about this specific call.
           ev.hookAsk || ev.untrustedOrigin,
           causeOfMeta(tool, meta),
+          meta?.hcLaunch,
         ),
       );
       input.focus();
@@ -6891,8 +6892,8 @@ export async function launchTuiAgentShell(opts: {
             id: `av${uid++}`,
             content:
               stored.length > 0
-                ? otui.t`${roleChunk(otui, "ok", `approved · remembered “${stored}”`)}`
-                : otui.t`${roleChunk(otui, "attention", `approved once · “${pattern}” cannot be remembered`)}`,
+                ? otui.t`${roleChunk(otui, "ok", keyboardApprovalLine(`approved · remembered “${stored}”`, process.env))}`
+                : otui.t`${roleChunk(otui, "attention", keyboardApprovalLine(`approved once · “${pattern}” cannot be remembered`, process.env))}`,
           }),
         );
         setMainAgent("running", "shell");
@@ -6904,7 +6905,7 @@ export async function launchTuiAgentShell(opts: {
       transcript.add(
         new otui.TextRenderable(r, {
           id: `av${uid++}`,
-          content: otui.t`${roleChunk(otui, "ok", "approved (once)")}`,
+          content: otui.t`${roleChunk(otui, "ok", keyboardApprovalLine("approved (once)", process.env))}`,
         }),
       );
       setMainAgent("running", "shell");
@@ -7432,6 +7433,7 @@ export async function launchTuiAgentShell(opts: {
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
+      io.hcLaunchGrants?.clear();
       resetOperatorDenials();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
@@ -8042,6 +8044,7 @@ export async function launchTuiAgentShell(opts: {
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
+      io.hcLaunchGrants?.clear();
       resetOperatorDenials();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
@@ -10026,22 +10029,20 @@ export async function launchTuiAgentShell(opts: {
               return;
             }
             const providerId: SearchProviderId = descriptor.id;
-            searchProviderController.configure(
-              providerId,
-              { ...descriptor.defaults, ...args.fields },
-              args.credential,
-            );
-            const tested = await searchProviderController.test(providerId);
-            if (!tested.ok) {
-              const reason = describeConnectionFailure(tested.reason);
+            // One controller operation: configure, test and activate. Keeping
+            // the policy in the controller is what stops this surface and the
+            // headless shell from drifting apart.
+            const connected = await searchProviderController.connect(providerId, args.fields, args.credential);
+            if (!connected.ok) {
+              const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, providerId);
               io.onSystem?.(
                 `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
               );
               return;
             }
-            io.onSystem?.(
-              `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
-            );
+            // The sentence lives in the search module so a test can pin the
+            // `web_fetch` warning instead of grepping source text.
+            io.onSystem?.(`${connectedMessage(providerId, connected)}\n`);
           })());
           return;
         }
@@ -10658,7 +10659,7 @@ export async function launchTuiAgentShell(opts: {
       // (one shaped like that which does not parse, as an unknown agent).
       // A Telegram line is the operator's own words, whatever its shape: it keeps
       // its `tg ❯` mark and is never treated as an agent message.
-      const hcEcho = source === undefined ? hcTranscriptEcho(line) : undefined;
+      const hcEcho = source === undefined ? hcTranscriptEcho(line, agentShaped) : undefined;
       const echoLine = hcEcho !== undefined ? summarizeSubmittedLine(hcEcho.line) : displayLine;
       const userEcho = appendUserEcho(otui, r, transcript, {
         id: `ub${uid++}`,
@@ -11168,7 +11169,7 @@ export async function launchTuiAgentShell(opts: {
         // history stores that framed text); every other line is passed as typed. A
         // Telegram line is the operator's own words and is never framed.
         const modelLine = source === undefined
-          ? agentShaped && !looksLikeHcMessage(line) ? `${HC_UNPARSED_HEADER}\n\n${line}` : frameSubmittedLine(line)
+          ? agentShaped && !looksLikeHcMessage(line) ? `${HC_PASTED_HEADER}\n\n${line}` : frameSubmittedLine(line)
           : line;
         void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
         signal: turnSignal,
@@ -11656,6 +11657,26 @@ export async function launchTuiAgentShell(opts: {
     chrome.onSubmit((line) => {
       runLine(line);
     });
+    // Text pasted into an open dialog (herdr-core types a child's report that way) never answers it; it is
+    // queued the way a busy agent-shaped line is, framed as text of unknown authorship (HC_PASTED_HEADER).
+    // An idle shell would start a turn at once, with a picker still open: hold the text until the choice closes.
+    setChoicePasteSink(
+      chrome.dock,
+      (text, afterClose) => {
+        const line = text.trim();
+        if (line.length === 0) return;
+        if (afterClose === true) {
+          // held while a picker was open on an idle shell: through the queue the drain owns, which waits for any
+          // detached slash work (`workInFlight`) instead of starting a turn beside it
+          turnLoop.enqueue(line, summarizeSubmittedLine(line), undefined, "agent-message");
+          drainSites.onLeaseRelease();
+          return;
+        }
+        runLine(line, "agent-message");
+      },
+      // A modal taking typed text behind the dialog (a token entry, say) may be the paste's real target: never to the model.
+      () => choicePasteDecision(otui, r, chrome.dock, chrome.isBusy()),
+    );
 
     // Typed input is accepted and neither the resume picker nor the held-session choice owns the screen
     // any more, and the submit handler above exists: only now may herdr-core see `idle` (it types a

@@ -385,6 +385,11 @@ export function createForegroundAgentIoFacade(
     permissionMode: () => (accepts() ? modeOf()?.() ?? "ask" : "ask"),
     // Share the session grant set with the shell, but never let a stale turn
     // use it: readOnly denies every mutating tool when ownership is lost.
+    // The per-agent `hc run` grants live on the shell's own `io`, so they last across turns; this facade is rebuilt
+    // for every turn. A Telegram turn never reaches them: the agent skips the set when `mcpGrantsApply()` is false.
+    get hcLaunchGrants(): Set<string> {
+      return (io.hcLaunchGrants ??= new Set<string>());
+    },
     ...(io.trustedMcpTools === undefined ? {} : { trustedMcpTools: io.trustedMcpTools }),
     ...(mcpGrantsApply === undefined ? {} : { mcpGrantsApply }),
     ...(io.mcpToolFingerprint === undefined ? {} : { mcpToolFingerprint: io.mcpToolFingerprint }),

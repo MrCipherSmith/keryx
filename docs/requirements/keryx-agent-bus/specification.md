@@ -148,7 +148,7 @@ Envelope fields:
 | `seq` | Monotonic per bus. Assigned under `append.lock` as `max(head.seq, seq of the last complete line in the current segment) + 1`, so a writer that crashed between appending the line and updating `head.json` cannot cause a duplicate. |
 | `id` | UUID. |
 | `ts` | ISO timestamp. |
-| `from` | `{ instanceId, name, origin }`, where `origin` is `agent`, `operator`, `cli` or `system`. |
+| `from` | `{ instanceId, name, origin }`, where `origin` is `agent`, `operator`, `cli`, `system` or `external` (a one-way `keryx report` from a process that is not a keryx shell; unverified, and only ever a single-recipient `notice`). |
 | `to` | Resolved recipient instance ids, or the literal `["*"]` for `@all`. |
 | `toLabel` | The address as the sender typed it (`@release`, `@all`), for display. |
 | `kind` | See the table below. |
@@ -159,7 +159,7 @@ Kinds:
 
 | kind | Written by | Body | Wakes an idle recipient |
 |---|---|---|---|
-| `notice` | agent (`bus_send`), operator, cli | required | only if addressed by name (D-12) |
+| `notice` | agent (`bus_send`), operator, cli, external (`keryx report`) | required | only if addressed by name (D-12) |
 | `question` | agent (`bus_send`), operator, cli | required | yes |
 | `reply` | agent (`bus_send`), operator, cli | required | yes |
 | `handoff` | agent (`bus_send`), operator, cli | required | yes |

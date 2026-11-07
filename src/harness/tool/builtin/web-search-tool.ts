@@ -6,7 +6,14 @@ import type { InteractiveTool } from "./interactive-tools";
 
 export type SearchToolResult =
   | { ok: true; value: SearchResponse }
-  | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string };
+  | {
+      ok: false;
+      reason: "no-active-provider" | "provider-disconnected" | "search-failed";
+      detail?: string;
+      permanent?: boolean;
+      scope?: "account" | "request" | "transient";
+      cancelled?: boolean;
+    };
 
 export interface SearchToolService {
   search(query: string, signal?: AbortSignal): Promise<SearchToolResult>;
@@ -47,6 +54,23 @@ export interface WebSearchDeps {
   cwd?: string;
 }
 
+/**
+ * The advice appended to a `search-failed` detail. "Wait a few minutes" is true
+ * of a rate limit and false of a rejected key or an empty balance, and the
+ * detail itself already names which one it is.
+ */
+function retryAdviceFor(detail: string | undefined, permanent: boolean | undefined, scope: "account" | "request" | "transient" | undefined): string {
+  // The scope is data when the provider supplies it; the text heuristic is the
+  // fallback for older providers (DuckDuckGo's rate-limit wording).
+  if (scope === "request") return "Fix the request (for example shorten or rephrase the query) and retry once; do not switch providers.";
+  if (scope === "transient") return "Wait a few minutes before trying again, and do not switch providers yourself.";
+  if (scope === "account") return "Do not retry or switch providers; report this to the operator.";
+  const isPermanent = permanent ?? (detail !== undefined && /balance|rejected the API key|missing|no API key/i.test(detail));
+  return isPermanent
+    ? "Do not retry or switch providers; report this to the operator."
+    : "Wait a few minutes before trying again, and do not switch providers yourself.";
+}
+
 /** Agent tool with no provider fallback: the service owns active-state checks. */
 export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = {}): InteractiveTool {
   return {
@@ -56,7 +80,7 @@ export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = 
       inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1 } }, required: ["query"], additionalProperties: false },
       risk: "read",
     },
-    invoke: async (input) => {
+    invoke: async (input, ctx) => {
       if (typeof input.query !== "string" || input.query.trim().length === 0) {
         return { output: "web_search: query must be a non-empty string", isError: true };
       }
@@ -70,13 +94,19 @@ export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = 
         }
         return { output: "web_search: outbound secret-shaped content", isError: true };
       }
-      const response = await service.search(query);
+      const response = await service.search(query, ctx?.signal);
+      if (!response.ok && response.cancelled === true) {
+        return { output: "web_search: cancelled by the operator", isError: true };
+      }
       if (!response.ok) {
         return {
           output: response.reason === "no-active-provider"
             ? "web_search: no active connected provider. Use /search-provider to configure one, test it, then use /search-connect to select it."
             : response.reason === "search-failed"
-              ? `web_search: search failed${response.detail !== undefined && response.detail.length > 0 ? ` (${response.detail})` : ""}. Wait a few minutes before trying again, and do not switch providers yourself.`
+              // Retry advice only fits a rate limit. A permanent refusal — a
+              // rejected key, an empty balance — is cleared by the operator, so
+              // the tail must not tell the model to wait for it.
+              ? `web_search: search failed${response.detail !== undefined && response.detail.length > 0 ? ` (${response.detail})` : ""}. ${retryAdviceFor(response.detail, response.permanent, response.scope)}`
             : "web_search: active provider is unavailable; reconnect it with /search-provider before retrying.",
           isError: true,
         };

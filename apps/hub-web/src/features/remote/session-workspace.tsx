@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
@@ -12,11 +12,12 @@ import type {
   MachineSummary,
   RunRecord,
 } from "../../../../../src/remote-control/protocol";
+import type { Project } from "../../api/types";
 import type { Control } from "../../api/remote";
 import { remoteGet, remoteProject } from "../../api/remote";
 import { sessionPath, useRemoteQuery } from "../../api/remote-hooks";
 import { useHub } from "../../app/hub-context";
-import { Button, EmptyState, Input, Notice } from "../../components/ui";
+import { Button, EmptyState, Input, Notice, Select } from "../../components/ui";
 import { ControllerPanel } from "./recovery";
 import { Feedback, type Controller } from "./shared";
 import { SessionRunContext } from "./session-run-context";
@@ -88,6 +89,8 @@ export function SessionWorkspace({
   record,
   control,
   history,
+  conversation,
+  messages,
   composer,
   queue,
   settings,
@@ -97,6 +100,8 @@ export function SessionWorkspace({
   record: Control["SessionRecord"];
   control: Controller;
   history: ReactNode;
+  conversation?: HTMLDivElement | null;
+  messages?: Control["SessionMessage"][];
   composer: ReactNode;
   queue: ReactNode;
   settings: ReactNode;
@@ -205,16 +210,17 @@ export function SessionWorkspace({
         </span>
       </div>
       {machine && !machine.connected && <Notice>{words.stale}</Notice>}
+      <p role="status" aria-atomic="true" className="sr-only">
+        {run.data?.state === "waiting-approval" ? words.attention : ""}
+      </p>
       {run.data?.state === "waiting-approval" && (
         <button
           type="button"
           className="session-attention"
           onClick={() => {
-            setTab("context");
-            document
-              .getElementById(id + "-inspector")
-              ?.scrollIntoView({ block: "start" });
-            document.getElementById(id + "-context")?.focus();
+            const target = conversation?.querySelector<HTMLElement>("[data-chat-approval=waiting]") ?? conversation;
+            target?.scrollIntoView({ block: "nearest" });
+            target?.focus({ preventScroll: true });
           }}
         >
           {words.attention}
@@ -305,6 +311,8 @@ export function SessionWorkspace({
               record={record}
               control={control}
               mode={tab === "changes" || tab === "checks" ? tab : "context"}
+              conversation={conversation}
+              messages={messages}
             />
           </div>
           <div
@@ -343,10 +351,20 @@ function SessionNavigator({
   const words = useWorkspaceCopy();
   const { t } = useTranslation("remote");
   const [search, setSearch] = useState("");
+  const [projectId, setProjectId] = useState(record.projectId);
+  const client = useQueryClient();
+  const projects = client.getQueryData<{ projects: Project[] }>([hub.scopeKey, "projects"])?.projects ?? [];
+  const alternateMachines = useQuery({
+    queryKey: [hub.scopeKey, projectId, "remote", "machines"],
+    queryFn: ({ signal }) => remoteGet<{ machines: MachineSummary[] }>("/machines?projectId=" + encodeURIComponent(projectId), signal),
+    enabled: projectId !== record.projectId,
+    refetchInterval: projectId === record.projectId ? false : 20_000,
+  });
+  const visibleMachines = projectId === record.projectId ? machines : alternateMachines.data?.machines ?? [];
   const sessions = useInfiniteQuery({
     queryKey: [
       hub.scopeKey,
-      record.projectId,
+      projectId,
       "remote",
       "sessions",
       "navigator",
@@ -354,9 +372,11 @@ function SessionNavigator({
     initialPageParam: 0,
     queryFn: ({ signal, pageParam }) =>
       remoteGet<Control["SessionPage"]>(
-        remoteProject(record.projectId) + "/sessions?after=" + pageParam,
+        remoteProject(projectId) + "/sessions?after=" + pageParam,
         signal,
       ),
+    // Hub events follow the open session's project; keep the other project's sidebar fresh.
+    refetchInterval: projectId === record.projectId ? false : 20_000,
     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
   });
   const unique = new Map<string, Control["SessionRecord"]>();
@@ -366,7 +386,7 @@ function SessionNavigator({
       if (!old || old.version <= s.version) unique.set(s.sessionId, s);
     }),
   );
-  unique.set(record.sessionId, record);
+  if (record.projectId === projectId) unique.set(record.sessionId, record);
   const filtered = [...unique.values()].filter((s) =>
     s.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
@@ -382,12 +402,18 @@ function SessionNavigator({
         <Button
           variant="ghost"
           onClick={() =>
-            hub.navigate({ tab: "sessions", sessionId: undefined })
+            hub.navigate({ projectId, tab: "sessions", sessionId: undefined })
           }
         >
           {words.all}
         </Button>
       </div>
+      {projects.length > 1 && <Select aria-label={t("common:project")} value={projectId} onChange={event => {
+        setProjectId(event.target.value);
+        setSearch("");
+      }}>
+        {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+      </Select>}
       <Input
         type="search"
         aria-label={words.search}
@@ -398,10 +424,10 @@ function SessionNavigator({
       <Feedback query={sessions} />
       {[...groups].map(([key, items]) => {
         const sample = items[0]!;
-        const machine = machines.find((m) => m.machineId === sample.machineId);
+        const machine = visibleMachines.find((m) => m.machineId === sample.machineId);
         const checkout = machine?.inventory?.checkouts.find(
           (c) =>
-            c.projectId === record.projectId &&
+            c.projectId === sample.projectId &&
             c.checkoutId === sample.checkoutId,
         );
         return (

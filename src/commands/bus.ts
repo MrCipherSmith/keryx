@@ -26,7 +26,7 @@
 // not just one this CLI instance itself created (D-03).
 
 import { randomUUID } from "node:crypto";
-import { displaySafe } from "../bus/display";
+import { busOriginMark, displaySafe } from "../bus/display";
 import { busEnabled } from "../bus/enabled";
 import { BusRefusal, isBusRefusal } from "../bus/errors";
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
@@ -386,7 +386,7 @@ async function log(
     const reply = event.refs?.replyTo !== undefined ? ` (re ${event.refs.replyTo.slice(0, 8)})` : "";
     const body = event.body === undefined ? "" : `: ${displaySafe(event.body)}`;
     ctx.out(
-      `#${event.seq} ${displaySafe(event.ts.slice(0, 19).replace("T", " "))} @${displaySafe(event.from.name)} → ${displaySafe(event.toLabel)} ${event.kind}${reply}${body}`,
+      `#${event.seq} ${displaySafe(event.ts.slice(0, 19).replace("T", " "))} @${displaySafe(event.from.name)}${busOriginMark(event.from.origin)} → ${displaySafe(event.toLabel)} ${event.kind}${reply}${body}`,
     );
   }
   return 0;

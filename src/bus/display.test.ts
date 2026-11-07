@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { RenderedBusEvent } from "./client";
-import { displaySafe, formatBusEventLine, makeBusErrorReporter } from "./display";
+import { busOriginMark, displaySafe, formatBusEventLine, makeBusErrorReporter } from "./display";
 
 const ESC = "\x1b";
 
@@ -42,6 +42,16 @@ describe("displaySafe (review r1 F5, F11)", () => {
 
   test("plain text is untouched", () => {
     expect(displaySafe("flow 273 task T11A")).toBe("flow 273 task T11A");
+  });
+});
+
+describe("the external mark (flow 486)", () => {
+  test("an external-origin event is marked unverified; an agent-origin one is unchanged", () => {
+    expect(formatBusEventLine(event({ origin: "external" }))).toBe("⇄ [#12] @release (external, unverified) notice: hello");
+    expect(formatBusEventLine(event({ origin: "agent" }))).toBe("⇄ [#12] @release notice: hello");
+    expect(busOriginMark("external")).toBe(" (external, unverified)");
+    expect(busOriginMark("operator")).toBe("");
+    expect(busOriginMark(undefined)).toBe("");
   });
 });
 

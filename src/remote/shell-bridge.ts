@@ -241,6 +241,7 @@ export function describeApprovalForTopic(
     untrustedOrigin?: boolean;
     card?: readonly string[];
     cause?: ApprovalCause;
+    hcLaunch?: string;
   },
 ): string {
   const lines: string[] = [];
@@ -278,7 +279,7 @@ export function describeApprovalForTopic(
       untrusted: meta?.untrustedOrigin === true,
       shell: tool === "shell_exec" || tool === "shell",
     });
-  lines.push(approvalCauseLine(cause));
+  lines.push(approvalCauseLine(cause, meta?.hcLaunch));
   return lines.join("\n");
 }
 

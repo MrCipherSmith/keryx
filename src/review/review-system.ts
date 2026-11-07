@@ -154,12 +154,12 @@ export function reviewAutoMayAnswer(request: {
 /**
  * Whether review-auto answers an approval question itself. A bounded reviewer child is granted even after
  * untrusted content (it has no shell); any other tool only when no floor applies: destructive, credential,
- * publish-lease, hook-tightened and untrusted-origin calls still reach a human.
+ * publish-lease, hc agent launch, hook-tightened, human-confirmation and untrusted-origin calls still reach a human.
  */
 export function reviewAutoGrants(tool: string, meta: ApprovalMeta | undefined): boolean {
   if (meta === undefined) return false;
   if (meta.destructive || meta.credentials === true || meta.publishLease === true || meta.hookAsk === true) return false;
-  if (meta.alwaysAsk === true) return false;
+  if (meta.alwaysAsk === true || meta.hcLaunch !== undefined) return false;
   if (tool === "spawn_subagent") return true;
   return meta.untrustedOrigin !== true;
 }

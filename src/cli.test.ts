@@ -240,6 +240,9 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx herdr status [--json]\n",
     "                                               Register Keryx with the Herdr app and herdr-core (opt-in; programs.json entry, icon, template)\n",
     "  herdr     Register Keryx with the Herdr desktop app and herdr-core (opt-in)\n",
+    // Flow 486: `keryx report`, a brand-new verb, so a USAGE_BODY block.
+    '  keryx report --to @name [--from <name>] "<text>"\n',
+    "                                               One-way, unverified report to a live keryx shell over the bus\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

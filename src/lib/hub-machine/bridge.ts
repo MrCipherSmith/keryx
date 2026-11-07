@@ -1255,7 +1255,7 @@ export class MachineBridge {
             }
             else if (observation.kind === 'progress') {
                 const text = Buffer.from(Array.from(redactSensitiveText(observation.text)).filter(char => { const code = char.charCodeAt(0); return code >= 32 && code !== 127 || code === 9 || code === 10 || code === 13; }).join('')).subarray(0, 8192).toString('utf8');
-                this.runEvent(observation.runId, { kind: 'log', stream: observation.toolName ? 'tool-summary' : 'assistant', text });
+                this.runEvent(observation.runId, { kind: 'log', stream: observation.toolName ? 'tool-summary' : observation.diagnostic ? 'diagnostic' : 'assistant', observedAt: observation.observedAt, text });
             }
             else if (observation.kind === 'usage') {
                 const usage = Object.fromEntries(Object.entries(observation.usage).filter(([key,value])=>['inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens'].includes(key)&&typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=Number.MAX_SAFE_INTEGER));

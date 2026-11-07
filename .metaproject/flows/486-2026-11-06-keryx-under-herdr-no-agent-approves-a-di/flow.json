@@ -1,0 +1,747 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "486",
+  "slug": "keryx-under-herdr-no-agent-approves-a-di",
+  "title": "Keryx under herdr: no agent approves a dialog by accident; hc delegation is a conscious choice",
+  "status": "implemented",
+  "createdAt": "2026-11-06T22:23:44.020Z",
+  "updatedAt": "2026-11-07T00:46:44.138Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-07T00:46:12.858Z"
+    },
+    "AC2": {
+      "at": "2026-11-07T00:46:13.067Z"
+    },
+    "AC3": {
+      "at": "2026-11-07T00:46:13.268Z"
+    },
+    "AC4": {
+      "at": "2026-11-07T00:46:13.469Z"
+    },
+    "AC5": {
+      "at": "2026-11-07T00:46:13.680Z"
+    },
+    "AC6": {
+      "at": "2026-11-07T00:46:13.893Z"
+    },
+    "AC7": {
+      "at": "2026-11-07T00:46:14.099Z"
+    },
+    "AC8": {
+      "at": "2026-11-07T00:46:14.298Z"
+    },
+    "AC9": {
+      "at": "2026-11-07T00:46:14.498Z"
+    },
+    "AC11": {
+      "at": "2026-11-07T00:46:14.705Z"
+    },
+    "AC10": {
+      "at": "2026-11-07T00:46:44.138Z",
+      "note": "Rechecked on the final code (7390d6889) with a dev keryx in ask mode under hc: hc send --force with a report left the dialog open, showed paste queued and created no file; the next Enter approved, the file appeared, the line read approved (once) with author unverified, and the report arrived from unknown agent. The real Claude child report was checked earlier on this branch and its delivery path was not changed since except for the external latch, which has tests."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1140"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected in the research session and recorded in description.md and plan.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the five lane tasks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of each lane task"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "L1 dialog input guard and terminal approval mark",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "L2 hc dialog-control and agent-launch floors",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "L3 herdr prompt section and template",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "L4 keryx report and external bus origin",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "L5 strip HC_ and HERDR_ from the external child env",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Live stand: force send, Enter and a real Claude child's report",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Fix the three defects the live stand found: grant lifetime, remember options, transcript mark",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "R1 fix lane A: approval floors, hc parsing, external latch",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "R1 fix lane B: dialog, grants per session, prompt, template",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "R1 fix lane C: report CLI surface, marks, limits, tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "R2 fix lane A: floors read commands, not prose",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "R2 fix lane B: dialog, bus limits, lint",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "R3 fix: last floor spellings, paste focus at paste time",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-06T22:23:44.020Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-06T22:25:22.831Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-06T22:25:23.047Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-06T22:25:23.269Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-06T22:25:23.486Z",
+      "event": "task-added",
+      "detail": "T5: L1 dialog input guard and terminal approval mark"
+    },
+    {
+      "at": "2026-11-06T22:25:23.688Z",
+      "event": "task-added",
+      "detail": "T6: L2 hc dialog-control and agent-launch floors"
+    },
+    {
+      "at": "2026-11-06T22:25:23.899Z",
+      "event": "task-added",
+      "detail": "T7: L3 herdr prompt section and template"
+    },
+    {
+      "at": "2026-11-06T22:25:24.116Z",
+      "event": "task-added",
+      "detail": "T8: L4 keryx report and external bus origin"
+    },
+    {
+      "at": "2026-11-06T22:25:24.313Z",
+      "event": "task-added",
+      "detail": "T9: L5 strip HC_ and HERDR_ from the external child env"
+    },
+    {
+      "at": "2026-11-06T22:25:24.509Z",
+      "event": "task-added",
+      "detail": "T10: Live stand: force send, Enter and a real Claude child's report"
+    },
+    {
+      "at": "2026-11-06T22:25:24.708Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-06T22:25:24.909Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-06T22:25:37.697Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"A paste into an open choice's list step never resolves it: the next Enter is swallowed even after the accept delay, the Enter after that approves, Esc still cancels, a paste in the text step goes to the input, and the pasted text reaches the registered sink. [verify: exec `bun test src/tui/composer-choice.test.ts`] · sensitive: revert\" -> \"A paste into an open choice's list step never resolves it: the next Enter is swallowed even after the accept delay, the Enter after that approves, Esc still cancels, a paste in the text step goes to the input, and the pasted text reaches the registered sink. [verify: exec `bun test src/tui/composer-choice.test.ts` · sensitive: revert]\" (the sensitive tag belongs inside the verify marker)"
+    },
+    {
+      "at": "2026-11-06T22:25:37.905Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`hc keys`, `hc send --force` in any flag position, and an `HC_TERMINAL_ID=` assignment on an hc command count as human confirmation through path, `env`, `sh -c` and quoting spellings, while `hc send` without the flag, `hc read`, `hc wait` and `hc interrupt` do not. [verify: exec `bun test src/lib/command-risk-operator-floors.test.ts`] · sensitive: revert\" -> \"`hc keys`, `hc send --force` in any flag position, and an `HC_TERMINAL_ID=` assignment on an hc command count as human confirmation through path, `env`, `sh -c` and quoting spellings, while `hc send` without the flag, `hc read`, `hc wait` and `hc interrupt` do not. [verify: exec `bun test src/lib/command-risk-operator-floors.test.ts` · sensitive: revert]\" (the sensitive tag belongs inside the verify marker)"
+    },
+    {
+      "at": "2026-11-06T22:25:38.119Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"The first `hc run` of a known agent asks in every permission mode, including when a saved rule matches; after approval the same agent passes under the normal mode in that session and a different agent asks again; a denial grants nothing; `hc run cargo test` is unaffected. [verify: exec `bun test src/commands/permission-mode.test.ts src/commands/shell-approval.test.ts src/lib/command-risk-operator-floors.test.ts`] · sensitive: revert\" -> \"The first `hc run` of a known agent asks in every permission mode, including when a saved rule matches; after approval the same agent passes under the normal mode in that session and a different agent asks again; a denial grants nothing; `hc run cargo test` is unaffected. [verify: exec `bun test src/commands/permission-mode.test.ts src/commands/shell-approval.test.ts src/lib/command-risk-operator-floors.test.ts` · sensitive: revert]\" (the sensitive tag belongs inside the verify marker)"
+    },
+    {
+      "at": "2026-11-06T22:25:38.344Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"The external child env contains no `HC_*` or `HERDR_*` variable. [verify: exec `bun test src/harness/external/env.test.ts`] · sensitive: revert\" -> \"The external child env contains no `HC_*` or `HERDR_*` variable. [verify: exec `bun test src/harness/external/env.test.ts` · sensitive: revert]\" (the sensitive tag belongs inside the verify marker)"
+    },
+    {
+      "at": "2026-11-06T22:29:15.281Z",
+      "event": "task-done",
+      "detail": "T9: L5 strip HC_ and HERDR_ from the external child env"
+    },
+    {
+      "at": "2026-11-06T22:32:43.421Z",
+      "event": "task-done",
+      "detail": "T6: L2 hc dialog-control and agent-launch floors"
+    },
+    {
+      "at": "2026-11-06T22:34:27.355Z",
+      "event": "task-done",
+      "detail": "T8: L4 keryx report and external bus origin"
+    },
+    {
+      "at": "2026-11-06T22:38:34.796Z",
+      "event": "task-done",
+      "detail": "T7: L3 herdr prompt section and template"
+    },
+    {
+      "at": "2026-11-06T22:38:47.288Z",
+      "event": "task-done",
+      "detail": "T5: L1 dialog input guard and terminal approval mark"
+    },
+    {
+      "at": "2026-11-06T22:43:39.596Z",
+      "event": "task-added",
+      "detail": "T11: Fix the three defects the live stand found: grant lifetime, remember options, transcript mark"
+    },
+    {
+      "at": "2026-11-06T22:49:42.235Z",
+      "event": "task-done",
+      "detail": "T11: Fix the three defects the live stand found: grant lifetime, remember options, transcript mark"
+    },
+    {
+      "at": "2026-11-06T22:52:39.644Z",
+      "event": "task-done",
+      "detail": "T10: Live stand: force send, Enter and a real Claude child's report"
+    },
+    {
+      "at": "2026-11-06T23:18:49.328Z",
+      "event": "task-added",
+      "detail": "T12: R1 fix lane A: approval floors, hc parsing, external latch"
+    },
+    {
+      "at": "2026-11-06T23:18:49.548Z",
+      "event": "task-added",
+      "detail": "T13: R1 fix lane B: dialog, grants per session, prompt, template"
+    },
+    {
+      "at": "2026-11-06T23:18:49.773Z",
+      "event": "task-added",
+      "detail": "T14: R1 fix lane C: report CLI surface, marks, limits, tests"
+    },
+    {
+      "at": "2026-11-06T23:38:24.406Z",
+      "event": "task-done",
+      "detail": "T12: R1 fix lane A: approval floors, hc parsing, external latch"
+    },
+    {
+      "at": "2026-11-06T23:38:24.606Z",
+      "event": "task-done",
+      "detail": "T13: R1 fix lane B: dialog, grants per session, prompt, template"
+    },
+    {
+      "at": "2026-11-06T23:38:24.806Z",
+      "event": "task-done",
+      "detail": "T14: R1 fix lane C: report CLI surface, marks, limits, tests"
+    },
+    {
+      "at": "2026-11-06T23:59:20.017Z",
+      "event": "task-added",
+      "detail": "T15: R2 fix lane A: floors read commands, not prose"
+    },
+    {
+      "at": "2026-11-06T23:59:20.212Z",
+      "event": "task-added",
+      "detail": "T16: R2 fix lane B: dialog, bus limits, lint"
+    },
+    {
+      "at": "2026-11-07T00:12:42.133Z",
+      "event": "task-done",
+      "detail": "T15: R2 fix lane A: floors read commands, not prose"
+    },
+    {
+      "at": "2026-11-07T00:12:42.340Z",
+      "event": "task-done",
+      "detail": "T16: R2 fix lane B: dialog, bus limits, lint"
+    },
+    {
+      "at": "2026-11-07T00:28:37.158Z",
+      "event": "task-added",
+      "detail": "T17: R3 fix: last floor spellings, paste focus at paste time"
+    },
+    {
+      "at": "2026-11-07T00:40:32.323Z",
+      "event": "task-done",
+      "detail": "T17: R3 fix: last floor spellings, paste focus at paste time"
+    },
+    {
+      "at": "2026-11-07T00:46:09.791Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-07T00:46:12.440Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1140"
+    },
+    {
+      "at": "2026-11-07T00:46:12.859Z",
+      "event": "ac-confirmed",
+      "detail": "AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.067Z",
+      "event": "ac-confirmed",
+      "detail": "AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.268Z",
+      "event": "ac-confirmed",
+      "detail": "AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.469Z",
+      "event": "ac-confirmed",
+      "detail": "AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.680Z",
+      "event": "ac-confirmed",
+      "detail": "AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:13.893Z",
+      "event": "ac-confirmed",
+      "detail": "AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.099Z",
+      "event": "ac-confirmed",
+      "detail": "AC7 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC8 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.498Z",
+      "event": "ac-confirmed",
+      "detail": "AC9 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:14.705Z",
+      "event": "ac-confirmed",
+      "detail": "AC11 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-07T00:46:44.138Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Rechecked on the final code (7390d6889) with a dev keryx in ask mode under hc: hc send --force with a report left the dialog open, showed paste queued and created no file; the next Enter approved, the file appeared, the line read approved (once) with author unverified, and the report arrived from unknown agent. The real Claude child report was checked earlier on this branch and its delivery path was not changed since except for the external latch, which has tests. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/tui/composer-choice.test.ts",
+      "sensitivity": "revert"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/tui/hc-message.test.ts src/tui/composer-choice.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/lib/command-risk-operator-floors.test.ts",
+      "sensitivity": "revert"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/permission-mode.test.ts src/commands/shell-approval.test.ts src/lib/command-risk-operator-floors.test.ts",
+      "sensitivity": "revert"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/tui/hc-message.test.ts src/commands/herdr.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/report.test.ts src/bus/peer-notification.test.ts src/bus/schema.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/commands/report.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/env.test.ts",
+      "sensitivity": "revert"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/tui/composer-choice.test.ts src/tui/hc-message.test.ts"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun run typecheck"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-07T00:46:12.858Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.067Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.268Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.469Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.680Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:13.893Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.099Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.298Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.498Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:14.705Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    },
+    {
+      "at": "2026-11-07T00:46:44.138Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:7c7de9cb92feaf8418c951ebbf766a2acd806b68fefdf3b9db60de6a5e008e1b"
+    }
+  ]
+}

@@ -79,6 +79,18 @@ describe("herdr install", () => {
     expect(HERDR_TEMPLATE_MD).not.toContain("ready:");
   });
 
+  test("the template reports over the bus first, plain hc send off a bus, and keeps its other lines", () => {
+    const md = HERDR_TEMPLATE_MD;
+    expect(md.indexOf("bus_send")).toBeGreaterThan(-1);
+    expect(md).toContain('`keryx report --to @<bus name> --from <your name> "<result>"`');
+    expect(md.indexOf("Report over the bus first")).toBeLessThan(md.indexOf("plain `hc send"));
+    expect(md).toContain("only when you are not on a bus");
+    expect(md).toContain("Never answer another terminal's dialog");
+    expect(md).toContain("`hc keys` and `hc send --force` only when the operator asks");
+    expect(md).toContain('`hc get "$HC_TERMINAL_ID" --json`');
+    expect(md).toContain("Work only on the task below and stay inside the scope it names.");
+  });
+
   test("the embedded icon equals the VS Code extension glyph", () => {
     const source = readFileSync(path.join(import.meta.dir, "../../vscode-extension/media/keryx.svg"), "utf8");
     expect(HERDR_ICON_SVG).toBe(source);
@@ -301,6 +313,51 @@ describe("herdr install failure paths", () => {
     expect(JSON.parse(readFileSync(programs, "utf8")).programs.keryx).toEqual(HERDR_PROGRAM_ENTRY);
     expect(readFileSync(template, "utf8")).toBe(HERDR_TEMPLATE_MD);
     expect(readFileSync(icon, "utf8")).toBe(HERDR_ICON_SVG);
+  });
+
+  describe("a template shipped by an earlier keryx", () => {
+    const OLDER_TEMPLATE = [
+      "---",
+      "description: Keryx agent shell. Give it one task and the files in scope.",
+      "command: keryx shell",
+      "---",
+      "You are a Keryx agent started through herdr-core by another agent.",
+      "Work only on the task below and stay inside the scope it names. Do not start other agents unless the task asks for it.",
+      'If another agent assigned this task, report the result or the blocker with `hc send <its address>` when you are done or stuck, not just to acknowledge. Its address is in the `from` of the `<hc from="...">` message; otherwise `hc get "$HC_TERMINAL_ID" --json` shows your parent.',
+      "",
+    ].join("\n");
+
+    function installOlder(): void {
+      makeHomes();
+      mkdirSync(path.dirname(template), { recursive: true });
+      writeFileSync(template, OLDER_TEMPLATE);
+    }
+
+    test("install updates it without --force", async () => {
+      installOlder();
+      const report = await runHerdr("install", {}, deps);
+      expect(actions(report).template).toBe("updated");
+      expect(readFileSync(template, "utf8")).toBe(HERDR_TEMPLATE_MD);
+    });
+
+    test("remove deletes it", async () => {
+      installOlder();
+      const report = await runHerdr("remove", {}, deps);
+      expect(actions(report).template).toBe("removed");
+      expect(existsSync(template)).toBe(false);
+    });
+
+    test("status says it is out of date, not user-modified", async () => {
+      installOlder();
+      const report = await runHerdr("status", {}, deps);
+      expect(actions(report).template).toBe("outdated");
+    });
+
+    test("an edited copy of it is still the user's", async () => {
+      installOlder();
+      writeFileSync(template, `${OLDER_TEMPLATE}my own line\n`);
+      expect(actions(await runHerdr("install", {}, deps)).template).toBe("kept");
+    });
   });
 
   test("the first modification leaves a backup beside the file and a later one does not overwrite it", async () => {

@@ -33,7 +33,7 @@ import {
   MCP_ELICITATION_TOOL_PREFIX,
 } from "../../mcp-client/elicitation";
 import { isExecApprovalRequestEvent } from "../../mcp-client/wire";
-import { touchesHumanConfirmation } from "../../lib/command-risk";
+import { hcAgentLaunchesOf, touchesHumanConfirmation } from "../../lib/command-risk";
 import { resolveApprovalDecision, type ApprovalGateDecision, type PermissionMode } from "../../commands/permission-mode";
 import {
   agentConfig,
@@ -267,6 +267,8 @@ export async function superviseCodexMcpRun(
       destructive,
       credentials,
       sacReviewConfirmation,
+      // Flow 486: no session grant lives on this path, so an elicited `hc run <agent>` asks every time.
+      hcAgentLaunch: hcAgentLaunchesOf(commandText).length > 0,
       // This MCP dispatch path has its own, stricter, always-ask-or-deny
       // posture (see this module's top-of-file docstring) and is out of
       // scope for `/plan` read-only mode — it never toggles, so always false.

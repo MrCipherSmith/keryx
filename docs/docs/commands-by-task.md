@@ -169,6 +169,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx herdr` | Register Keryx with the Herdr desktop app and herdr-core (opt-in install, remove, status). |
 | `keryx serve-mcp` | Expose Metaproject services over the Model Context Protocol (opt-in). |
 | `keryx bus` | Agent bus: list peers and leases, read the log, send a message, prune. |
+| `keryx report` | One-way, unverified report from an outside agent or script to a live keryx shell over the bus. |
 | `keryx workspace` | Shared Agent Context: workspaces, FWK reads, propose/review (module sac). |
 
 | Shell command | Summary |

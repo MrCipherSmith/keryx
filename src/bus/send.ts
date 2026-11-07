@@ -21,7 +21,7 @@
 
 import { randomUUID } from "node:crypto";
 import { BusRefusal } from "./errors";
-import { appendEvent, countRecent } from "./log";
+import { appendEvent, countRecent, recentEvents } from "./log";
 import { isBusId } from "./paths";
 import { classifyPresence, listPresence, type PresenceClassifyOptions } from "./presence";
 import type { BusEvent, BusEventKind, BusSender } from "./schema";
@@ -42,7 +42,27 @@ export const OPERATOR_RATE_LIMIT_PER_MINUTE = 30;
  * than of any one in-memory closure.
  */
 export const AGENT_RATE_LIMIT_PER_MINUTE = 10;
+/**
+ * `keryx report` (origin `external`): messages per minute per sender NAME.
+ * A report process mints a fresh instanceId every run, so the name is the only
+ * stable key; tighter than the agent budget. The name is self-declared, so this
+ * bounds an honest loop, not a hostile same-user process.
+ */
+export const EXTERNAL_RATE_LIMIT_PER_MINUTE = 5;
+/**
+ * Per-recipient ceiling over every external sender, whatever name they carry:
+ * `--from` is free text, so the per-name budget alone is bypassed by varying
+ * the name, and children that pass no `--from` all share one name.
+ */
+export const EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE = 15;
 const RATE_WINDOW_MS = 60_000;
+
+/** " (retry in N s)": when the oldest counted report leaves the window and one more would fit. */
+function retryHint(counted: readonly BusEvent[], now: () => number): string {
+  const oldest = Math.min(...counted.map((event) => Date.parse(event.ts)));
+  const seconds = Math.max(1, Math.ceil((oldest + RATE_WINDOW_MS - now()) / 1000));
+  return `; retry in ${seconds} s`;
+}
 
 export interface SendInput {
   /** `@<name>` or `@all`. Always the event's display label, even when `toInstanceId` is set. */
@@ -50,8 +70,8 @@ export interface SendInput {
   kind: string;
   body: string;
   replyTo?: string | undefined;
-  origin: "cli" | "operator" | "agent";
-  /** Required (and used) for `origin: "operator"` and `origin: "agent"`; the CLI path always mints its own. */
+  origin: "cli" | "operator" | "agent" | "external";
+  /** Required (and used) for `origin: "operator"`, `"agent"` and `"external"`; the CLI path always mints its own. */
   from?: BusSender | undefined;
   now?: (() => number) | undefined;
   /** D-09 inputs for recipient resolution; defaults to this host and `processIsAlive`. */
@@ -133,7 +153,15 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
   if (input.replyTo !== undefined && !isBusId(input.replyTo)) {
     throw new BusRefusal("invalid-id", `replyTo ${JSON.stringify(input.replyTo)} is not a UUID`);
   }
-  if ((input.origin === "operator" || input.origin === "agent") && input.from === undefined) {
+  if (input.origin === "external") {
+    if (input.kind !== "notice") {
+      throw new BusRefusal("invalid-event", "an external-origin message can only be a notice");
+    }
+    if (input.toLabel === "@all") {
+      throw new BusRefusal("invalid-event", "an external-origin message must name one recipient, not @all");
+    }
+  }
+  if ((input.origin === "operator" || input.origin === "agent" || input.origin === "external") && input.from === undefined) {
     throw new BusRefusal("invalid-event", `a ${input.origin} send needs from: { instanceId, name, origin: "${input.origin}" }`);
   }
 
@@ -195,6 +223,26 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
               "rate-limited",
               `${recent} operator messages from this instance in the last minute; the limit is ${OPERATOR_RATE_LIMIT_PER_MINUTE}`,
             );
+          }
+        } else if (from.origin === "external") {
+          // One read of the log for both limits (they run under the append lock, on every report).
+          const window = await recentEvents(root, { origin: "external", sinceMs: RATE_WINDOW_MS, now });
+          const byName = window.filter((event) => event.from.name === from.name);
+          if (byName.length >= EXTERNAL_RATE_LIMIT_PER_MINUTE) {
+            throw new BusRefusal(
+              "rate-limited",
+              `per-sender-name limit: ${byName.length} reports from "${from.name}" in the last minute; the limit is ${EXTERNAL_RATE_LIMIT_PER_MINUTE} per sender name${retryHint(byName, now)}`,
+            );
+          }
+          for (const target of to) {
+            if (target === "*") continue;
+            const toRecipient = window.filter((event) => event.to.includes(target));
+            if (toRecipient.length >= EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE) {
+              throw new BusRefusal(
+                "rate-limited",
+                `per-recipient limit: ${toRecipient.length} external reports to ${input.toLabel} in the last minute from all senders; the limit is ${EXTERNAL_RECIPIENT_RATE_LIMIT_PER_MINUTE} per recipient${retryHint(toRecipient, now)}`,
+              );
+            }
           }
         } else if (from.origin === "agent") {
           // review r1 F3/F5: counted from the log, per instance, so the

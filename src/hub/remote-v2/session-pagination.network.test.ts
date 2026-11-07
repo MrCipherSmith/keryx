@@ -15,4 +15,20 @@ test("large native history and critical session events page within byte limits w
     }
     expect(count).toBe(kind==="history"?60:61); expect(cursor).toBe(kind==="history"?60:61);
   }
+  const observed: number[] = [];
+  let before: string | number = "latest";
+  for (let index = 0; index < 5; index++) {
+    const response = await f.call(`${s.path}/history?before=${before}`, { cookie: f.cookie });
+    const raw = await response.text();
+    expect(response.status).toBe(200);
+    expect(Buffer.byteLength(raw)).toBeLessThanOrEqual(512*1024);
+    const page = JSON.parse(raw) as Control["HistoryPage"];
+    expect(page.messages[0]?.historyCursor).toBe(page.cursor);
+    observed.unshift(...page.messages.map(message => message.historyCursor));
+    if (!page.hasMore) break;
+    before = page.cursor;
+  }
+  expect(observed).toEqual(Array.from({ length: 60 }, (_, index) => index + 1));
+  const ambiguous = await f.call(`${s.path}/history?after=0&before=latest`, { cookie: f.cookie });
+  expect(ambiguous.status).toBe(400);
 });

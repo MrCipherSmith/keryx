@@ -91,7 +91,7 @@ beforeEach(async () => {
       return Response.json({ machines: [machineFixture] });
     if (path.endsWith("/chat-consent")) return Response.json({profileConsentVersion: 7});
     if (path.endsWith("/flows")) return Response.json({ flows: [] });
-    if (path.endsWith("/sessions/s/history?after=0"))
+    if (path.endsWith("/sessions/s/history?before=latest"))
       return Response.json({
         messages: [],
         cursor: 0,

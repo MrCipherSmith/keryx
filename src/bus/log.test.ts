@@ -329,6 +329,19 @@ describe("countRecent", () => {
     expect(await countRecent(root, { origin: "agent", sinceMs: 60_000, now: () => now })).toBe(1);
     expect(await countRecent(root, { origin: "cli", sinceMs: 120_000, now: () => now })).toBe(3);
   });
+
+  test("toInstanceId counts only the events addressed to that recipient", async () => {
+    const root = await busRoot();
+    const clock = { now: () => T0 };
+    const external = { instanceId: B, name: "scribe", origin: "external" as const };
+    await appendEvent(root, draft("a1", { from: external, to: [A], toLabel: "@a" }), clock);
+    await appendEvent(root, draft("a2", { from: external, to: [A], toLabel: "@a" }), clock);
+    await appendEvent(root, draft("b1", { from: external, to: [B], toLabel: "@b" }), clock);
+    const count = (toInstanceId: string): Promise<number> => countRecent(root, { origin: "external", sinceMs: 60_000, now: clock.now, toInstanceId });
+    expect(await count(A)).toBe(2);
+    expect(await count(B)).toBe(1);
+    expect(await countRecent(root, { origin: "external", sinceMs: 60_000, now: clock.now })).toBe(3);
+  });
 });
 
 // Review r1 F1: a rotation between the reader's listing and its read of the

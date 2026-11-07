@@ -550,3 +550,25 @@ describe("denyInteractiveTools", () => {
     expect(() => assertDeniableTools([tool("a")], ["z"])).toThrow(/z/);
   });
 });
+
+test("the roster hands web_fetch its page provider, so the wiring is observable", async () => {
+  // `buildInteractiveAgentTools` is the only production site that supplies
+  // `pageFetcher`; without this test, deleting that one option turns the
+  // DeepSeek fetch path off while every other web_fetch test stays green.
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-page-provider-"));
+  await mkdir(join(cwd, ".metaproject"));
+  await writeFile(join(cwd, ".metaproject", "metaproject.json"), "{}", "utf8");
+  const tools = buildInteractiveAgentTools({
+    cwd,
+    metaprojectPort: createMetaprojectAdapter(cwd),
+    searchController: {
+      fetchPage: async (url: string) => ({ ok: true as const, value: { providerId: "deepseek", url, title: "T", text: "provider body" } }),
+    } as never,
+    spawnTool: stubSpawn,
+  });
+  const webFetch = tools.find((tool) => tool.definition.name === "web_fetch") as InteractiveTool;
+  const result = await webFetch.invoke({ url: "https://example.com/a" });
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("provider body");
+  expect(result.untrusted).toBe(true);
+});

@@ -214,6 +214,17 @@ function fakeController(): { controller: SearchProviderController; calls: string
       calls.push(`select:${id}`);
       return { ok: true };
     },
+    // The wizard drives the controller's one connect() operation; this mirror
+    // keeps the recorded sequence (configure -> test -> select) the same.
+    connect: async (id: string, _fields: Record<string, string>, _credential?: string, options: { activate?: boolean; isCancelled?: () => boolean } = {}) => {
+      fake.configure(id);
+      const tested = await fake.test(id);
+      if (!tested.ok) return { ok: false as const, reason: "transport-failed" as const };
+      const cancelled = options.isCancelled?.() ?? false;
+      const activate = options.activate !== false && !cancelled;
+      if (activate) await fake.select(id);
+      return { ok: true as const, active: activate, servesPages: false };
+    },
   };
   // A structural fake of the public members the wizard calls, as in tui-shell.test.ts.
   return { controller: fake as unknown as SearchProviderController, calls };
@@ -339,6 +350,15 @@ describe("flow 270 review: nothing leaks out of a wizard between or after steps"
       select: async (id: string) => {
         calls.push(`select:${id}`);
         return { ok: true };
+      },
+      connect: async (id: string, _fields: Record<string, string>, _credential?: string, options: { activate?: boolean; isCancelled?: () => boolean } = {}) => {
+        calls.push(`configure:${id}`);
+        const tested = await (controller as unknown as { test(id: string): Promise<{ ok: true }> }).test(id);
+        if (!tested.ok) return { ok: false as const, reason: "transport-failed" as const };
+        const cancelled = options.isCancelled?.() ?? false;
+      const activate = options.activate !== false && !cancelled;
+        if (activate) calls.push(`select:${id}`);
+        return { ok: true as const, active: activate, servesPages: false };
       },
     } as unknown as SearchProviderController;
 

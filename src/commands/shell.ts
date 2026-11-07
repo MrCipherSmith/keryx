@@ -73,7 +73,7 @@ import {
   runMcpTrustCommand,
   TRUSTED_MARKER,
 } from "../mcp-servers/approval-render";
-import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
+import { connectedMessage, createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createTierRankHost } from "../harness/routing/tier-rank-agent";
@@ -178,7 +178,7 @@ import { renderGroupedNamedHelp } from "../standard/service";
 // shell, so both dispatch into the same rule instead of growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import { runTasksCommand } from "../tui/tasks-command";
-import { frameSubmittedLine, herdrCoreSectionFromEnv, looksLikeHcMessage } from "../tui/hc-message";
+import { frameSubmittedLine, herdrCoreSectionFromEnv, keyboardApprovalLine, looksLikeHcMessage } from "../tui/hc-message";
 import { formatUsageLine } from "../tui/usage-format";
 import {
   type AgentDeps,
@@ -230,6 +230,14 @@ import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from 
 import { detachSlateSession } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { journaledAskUser } from "../tui/ask-user-bridge";
+
+
+let resolvedKeryxPath: string | undefined;
+/** The keryx executable, looked up once per process so the herdr-core prompt section never changes between turns. */
+function startupKeryxPath(): string {
+  resolvedKeryxPath ??= Bun.which("keryx") ?? "keryx";
+  return resolvedKeryxPath;
+}
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
@@ -1997,7 +2005,7 @@ export async function runAgentRepl(
       if (meta?.alwaysAsk === true && meta.card !== undefined && tool !== "user_prompt") {
         out(`\n${GUTTER}${style.yellow(meta.cardTitle ?? `Confirm ${tool}?`)}\n`);
         out(`${indentBlock(meta.card.join("\n"), GUTTER)}\n`);
-        out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta(tool, meta)))}\n`);
+        out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta(tool, meta), meta?.hcLaunch))}\n`);
         out(`\n${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
@@ -2026,7 +2034,7 @@ export async function runAgentRepl(
         out(`\n${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
         if (!approved) {
           return false;
         }
@@ -2054,7 +2062,7 @@ export async function runAgentRepl(
         out(`\n${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
         if (!approved) {
           return false;
         }
@@ -2089,7 +2097,7 @@ export async function runAgentRepl(
         out(`${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
         if (!approved) {
           return false;
         }
@@ -2135,14 +2143,14 @@ export async function runAgentRepl(
       for (const hint of formatShellApprovalHints(evaled)) {
         out(`${GUTTER}${style.yellow(hint)}\n`);
       }
-      out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta("shell_exec", meta)))}\n`);
+      out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta("shell_exec", meta), meta?.hcLaunch))}\n`);
       // Flow 275 (agent bus P4, T8; specification §4.4): a `git-publish` pause
       // lease that applies to this command must not be remembered, exactly
       // like `destructive`/`credentials`/`sacReviewConfirmation` — a saved
       // pattern from before the lease existed must not silently answer for it
       // either (see `rememberExactShellGrant`'s own `publishLease` guard below).
       const rememberable =
-        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk && !evaled.untrustedOrigin;
+        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk && !evaled.untrustedOrigin && evaled.hcLaunch === undefined;
       const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
       out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
       const answer = ((await readLine()) ?? "").trim();
@@ -2162,11 +2170,11 @@ export async function runAgentRepl(
         }
         out(
           stored.length > 0
-            ? style.green(`approved · remembered “${stored}”\n`)
-            : style.yellow("approved once · pattern cannot be remembered\n"),
+            ? style.green(`${keyboardApprovalLine(`approved · remembered “${stored}”`, process.env)}\n`)
+            : style.yellow(`${keyboardApprovalLine("approved once · pattern cannot be remembered", process.env)}\n`),
         );
       } else {
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        out(approved ? style.green(`${keyboardApprovalLine("approved", process.env)}\n`) : style.red("denied\n"));
       }
       if (!approved) {
         return false;
@@ -2374,6 +2382,7 @@ export async function runAgentRepl(
       );
       holdLease(next.lease);
       agentIo.trustedMcpTools?.clear();
+      agentIo.hcLaunchGrants?.clear();
       resetOperatorDenials();
       return next.handle;
     } catch (cause) {
@@ -2514,7 +2523,7 @@ export async function runAgentRepl(
             providerId: deps.providerId,
             modelId: deps.modelId,
             toolNames: interactiveAgentToolNames(rebuiltTools),
-            herdrCore: herdrCoreSectionFromEnv(process.env),
+            herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: joined.name }),
             busJoined: true,
           }),
         };
@@ -3000,6 +3009,7 @@ export async function runAgentRepl(
           history = [];
           archive = [];
           agentIo.trustedMcpTools?.clear();
+          agentIo.hcLaunchGrants?.clear();
           agentIo.onSystem?.("Conversation cleared.\n");
         }
       } else if (command === "/rewind") {
@@ -3188,18 +3198,20 @@ export async function runAgentRepl(
           continue;
         }
         const providerId: SearchProviderId = descriptor.id;
-        searchProviderController.configure(providerId, { ...descriptor.defaults, ...args.fields }, args.credential);
-        const tested = await searchProviderController.test(providerId);
-        if (!tested.ok) {
-          const reason = describeConnectionFailure(tested.reason);
+        // One controller operation: configure, test and (unless told otherwise)
+        // activate. A successful test IS the connect gesture, and keeping the
+        // policy in the controller is what stops the two surfaces from drifting.
+        const connected = await searchProviderController.connect(providerId, args.fields, args.credential);
+        if (!connected.ok) {
+          const reason = describeConnectionFailure(connected.reason === "not-configurable" ? undefined : connected.reason, providerId);
           agentIo.onSystem?.(
             `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
           );
           continue;
         }
-        agentIo.onSystem?.(
-          `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
-        );
+        // The sentence lives in the search module so a test can pin the
+        // `web_fetch` warning instead of grepping source text.
+        agentIo.onSystem?.(`${connectedMessage(providerId, connected)}\n`);
       } else if (command === "/search-connect") {
         const providerId = parts[1];
         if (providerId === undefined) {
@@ -4342,7 +4354,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             providerId: sel.provider,
             modelId: sel.model,
             toolNames: interactiveAgentToolNames(deps.tools),
-            herdrCore: herdrCoreSectionFromEnv(process.env),
+            herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: bus?.client()?.name }),
             // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
             // resolves. `tui-shell.ts` rebuilds via this same function right
             // after its own join settles, so a session that starts before the
@@ -4850,7 +4862,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: provider,
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
-          herdrCore: herdrCoreSectionFromEnv(process.env),
+          herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: busBox.current?.name }),
           // Flow 274 (T6/T7 contract): always `false` here — the bus join
           // happens later, inside `runAgentRepl` (`busBox.current` is still
           // empty at this point, and `agentDepsBase.tools` above was built

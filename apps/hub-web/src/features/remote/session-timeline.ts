@@ -46,3 +46,33 @@ export function mergeTimeline(ordered: Control["SessionMessage"][], outcomes: Co
   while (next < byAnchor.length) timeline.push({ kind: "outcome", item: byAnchor[next++] });
   return timeline;
 }
+
+type RunEvent = import("../../../../../src/remote-control/protocol").FrameOf<"run-event">["payload"];
+
+/** Keep streaming across model rounds as each completed message arrives through session history. */
+export function pendingAssistantText(runId: string, events: readonly RunEvent[], messages: readonly Control["SessionMessage"][]) {
+  let text = "";
+  const chunks = events.flatMap(event => {
+    if (event.kind !== "log" || event.stream !== "assistant") return [];
+    text += event.text;
+    return [{ time: Date.parse(event.observedAt), end: text.length }];
+  });
+  let offset = 0;
+  let older = 0;
+  let through = 0;
+  for (const message of messages) {
+    if (message.role !== "assistant" || message.runId !== runId || !message.text) continue;
+    const time = Date.parse(message.createdAt);
+    // Both timestamps come from the machine. Match text at equal timestamps so that
+    // deltas from the next round in the same millisecond are not dropped.
+    while (older < chunks.length && chunks[older].time < time) older++;
+    through = Math.max(through, older);
+    while (through < chunks.length && chunks[through].time === time) through++;
+    const before = chunks[older - 1]?.end ?? 0;
+    const boundary = chunks[through - 1]?.end ?? 0;
+    const match = text.indexOf(message.text, offset);
+    const end = match + message.text.length;
+    offset = Math.max(offset, before, match >= 0 && end <= boundary ? end : 0);
+  }
+  return text.slice(offset).trimStart();
+}

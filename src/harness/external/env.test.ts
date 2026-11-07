@@ -270,3 +270,46 @@ describe("R-I1 (flow 355 audit remediation 2): the by-name denial is case-insens
     expect(env).not.toHaveProperty("claude_code_something");
   });
 });
+
+describe("herdr terminal identity (flow 486 T9, AC8): HC_ and HERDR_ are swept", () => {
+  // The child must not inherit the parent's herdr terminal identity. hc can
+  // still find its default socket, so this removes identity, not access.
+  test("strips HC_TERMINAL_ID and HC_TERMINAL_SOCKET", () => {
+    const env = buildExternalChildEnv({
+      parent: { PATH: "/usr/bin", HC_TERMINAL_ID: "t-1", HC_TERMINAL_SOCKET: "/tmp/hc.sock" },
+      depth: 0,
+      runtimeId: "claude-cli",
+    });
+    expect(env).not.toHaveProperty("HC_TERMINAL_ID");
+    expect(env).not.toHaveProperty("HC_TERMINAL_SOCKET");
+  });
+
+  test("strips HERDR_ENV and HERDR_PANE_ID", () => {
+    const env = buildExternalChildEnv({
+      parent: { PATH: "/usr/bin", HERDR_ENV: "1", HERDR_PANE_ID: "p-9" },
+      depth: 0,
+      runtimeId: "claude-cli",
+    });
+    expect(env).not.toHaveProperty("HERDR_ENV");
+    expect(env).not.toHaveProperty("HERDR_PANE_ID");
+  });
+
+  test("the sweep is case-insensitive for HC_ and HERDR_", () => {
+    const env = buildExternalChildEnv({
+      parent: { PATH: "/usr/bin", hc_terminal_id: "t-1", herdr_pane_id: "p-9" },
+      depth: 0,
+      runtimeId: "claude-cli",
+    });
+    expect(env).not.toHaveProperty("hc_terminal_id");
+    expect(env).not.toHaveProperty("herdr_pane_id");
+  });
+
+  test("an unrelated HCX_FOO is kept (the sweep matches the HC_ prefix, not HC)", () => {
+    const env = buildExternalChildEnv({
+      parent: { PATH: "/usr/bin", HCX_FOO: "keep-me" },
+      depth: 0,
+      runtimeId: "claude-cli",
+    });
+    expect(env.HCX_FOO).toBe("keep-me");
+  });
+});

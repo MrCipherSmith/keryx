@@ -26,6 +26,7 @@ import {
   Menu,
   X,
   Layers,
+  Settings2,
 } from "lucide-react";
 import type { Principal, Project } from "../api/types";
 import {
@@ -236,6 +237,34 @@ function Locale({ onSelect, disabled }: { onSelect?: (language: "ru" | "en") => 
     </div>
   );
 }
+function InterfacePreferences({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation("common");
+  const disclosure = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      const element = disclosure.current;
+      if (element?.open && event.target instanceof Node && !element.contains(event.target))
+        element.open = false;
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+  return <details ref={disclosure} className="workspace-preferences" onBlur={event => {
+    if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget))
+      event.currentTarget.open = false;
+  }} onKeyDown={event => {
+    if (event.key === "Escape" && event.currentTarget.open) {
+      event.preventDefault();
+      event.currentTarget.open = false;
+      event.currentTarget.querySelector("summary")?.focus();
+    }
+  }}>
+    <summary className="hub-button hub-button-secondary" aria-label={t("interfaceSettings")}>
+      <Settings2 size={16} aria-hidden="true" />
+    </summary>
+    <div className="workspace-preferences-panel">{children}</div>
+  </details>;
+}
 function Brand() {
   return (
     <div className="brand">
@@ -257,10 +286,11 @@ function Shell({
   onRefresh: () => Promise<void>;
   onLogout: () => Promise<void>;
 }) {
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [railOverride, setRailOverride] = useState<boolean | null>(null);
   const { t, i18n } = useTranslation("common");
   const ru = i18n.language.startsWith("ru");
   const location = useLocation();
+  const railCollapsed = railOverride ?? (location.tab === "sessions" && !!location.sessionId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [menu, setMenu] = useState(false);
@@ -308,6 +338,14 @@ function Shell({
         ?.querySelector<HTMLButtonElement>("button:not(.desktop-rail-toggle)")
         ?.focus();
   }, [menu]);
+  const switchProject = (nextProjectId: string | null) => {
+    navigate({
+      projectId: nextProjectId,
+      tab: location.tab === "machines" || location.tab === "flows" ? location.tab : "overview",
+      flowId: undefined,
+      machineId: undefined,
+    });
+  };
   const navTabs = projectId
     ? tabs
     : (["overview", "flows", "machines"] as Tab[]);
@@ -355,7 +393,7 @@ function Shell({
             </button>
           </div>
           <nav ref={navRef} className="nav-list" aria-label={t("appName")}>
-            <button type="button" className="nav-item desktop-rail-toggle" aria-label={ru ? (railCollapsed ? "Развернуть меню" : "Свернуть меню") : (railCollapsed ? "Expand menu" : "Collapse menu")} aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(!railCollapsed)}><PanelLeft size={17} aria-hidden="true"/></button>
+            <button type="button" className="nav-item desktop-rail-toggle" aria-label={ru ? (railCollapsed ? "Развернуть меню" : "Свернуть меню") : (railCollapsed ? "Expand menu" : "Collapse menu")} aria-expanded={!railCollapsed} onClick={() => setRailOverride(!railCollapsed)}><PanelLeft size={17} aria-hidden="true"/></button>
             {navTabs.map((tab) => {
               const Icon = icons[tab];
               return (
@@ -401,8 +439,9 @@ function Shell({
                   "nav-item " + (projectId === p.id ? "project-active" : "")
                 }
                 onClick={() => {
-                  navigate({ projectId: p.id, tab: "overview" });
+                  switchProject(p.id);
                   setMenu(false);
+                  if (menu) document.getElementById("main-content")?.focus();
                 }}
               >
                 <span className="project-initial">{p.name.slice(0, 1)}</span>
@@ -471,15 +510,7 @@ function Shell({
               <Select
                 id="hub-project-selector"
                 value={projectId ?? ""}
-                onChange={(e) =>
-                  navigate({
-                    projectId: e.target.value || null,
-                    tab:
-                      location.tab === "machines" || location.tab === "flows"
-                        ? location.tab
-                        : "overview",
-                  })
-                }
+                onChange={e => switchProject(e.target.value || null)}
               >
                 <option value="">
                   {ru ? "Hub · все проекты" : "Hub · all projects"}
@@ -490,7 +521,7 @@ function Shell({
                   </option>
                 ))}
               </Select>
-              <PersonalSettings key={principal.id} principal={principal} />
+              <InterfacePreferences><PersonalSettings key={principal.id} principal={principal} /></InterfacePreferences>
               <Button
                 variant="secondary"
                 aria-label={t("refresh")}
@@ -658,21 +689,10 @@ export function App() {
         <div className="min-h-screen bg-stone-50 p-5 sm:p-10">
           <div className="mx-auto flex max-w-6xl justify-between gap-4">
             <Brand />
-            <div className="flex items-center gap-2">
-              <ThemeSelect />
-              <Locale />
-            </div>
+            <InterfacePreferences><ThemeSelect /><Locale /></InterfacePreferences>
           </div>
           <main className="mx-auto mt-16 max-w-xl rounded-3xl border border-slate-200 bg-white p-7 shadow-sm sm:mt-24 sm:p-12">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">
-              {t("tagline")}
-            </p>
-            <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-              {t("auth.title")}
-            </h1>
-            <p className="mb-7 mt-4 text-sm leading-relaxed text-slate-500">
-              {t("auth.subtitle")}
-            </p>
+            <h1 className="mb-5 text-2xl font-semibold text-slate-950">{t("auth.title")}</h1>
             {error != null && (
               <div className="mb-5">
                 <Notice tone="error">{errorMessage(error, t)}</Notice>

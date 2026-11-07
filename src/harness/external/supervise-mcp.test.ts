@@ -330,6 +330,28 @@ describe("superviseCodexMcpRun — elicitation handling (AC3, AC6)", () => {
     expect(response).toEqual({ action: "accept", decision: "approved" });
   });
 
+  test("flow 486: a codex command running `hc run claude` is asked about even under auto mode", async () => {
+    const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
+    let requestApprovalCalls = 0;
+    const run = superviseCodexMcpRun(baseInput({ mode: "auto" }), {
+      client: harness.port,
+      requestApproval: async () => {
+        requestApprovalCalls += 1;
+        return true;
+      },
+    });
+    await Promise.resolve();
+    harness.sendCodexEvent(execApprovalEvent("call-1", ["approved", "abort"]));
+    await harness.sendElicitation({
+      requestId: 1,
+      message: "allow codex to run this command?",
+      requestedSchema: { type: "object", properties: {} },
+      vendor: { codex_call_id: "call-1", codex_elicitation: "exec-approval", codex_command: ["/bin/zsh", "-lc", "hc run --bg claude"] },
+    });
+    await run;
+    expect(requestApprovalCalls).toBe(1);
+  });
+
   test("flow 299 (AC4): a codex command running `keryx flow confirm` is asked about even under auto mode", async () => {
     const harness = fakePort({ kind: "result", result: { content: "ok", isError: false } });
     let requestApprovalCalls = 0;
