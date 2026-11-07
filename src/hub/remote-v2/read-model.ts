@@ -1,3 +1,4 @@
+import { readMessageDeliveries } from "./message-delivery";
 import { runEventPage } from "./retention";
 import { releasedControllerAlias } from "./controller-recovery";
 import type { ReconciliationRow } from "./recovery";
@@ -41,6 +42,7 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies, c
     if (!p[3]) { const sessions = store.remote.all<SessionRow>("remote_session", { projectId }).map((row) => row.record).slice(after, after + 100); return json(control("SessionPage", { sessions, cursor: after + sessions.length, hasMore: sessions.length === 100 })); }
     const row = session(store.remote, projectId, p[3]); const suffix = p[4];
     if (!suffix) return json(row.record);
+    if (suffix === "message-deliveries" && !p[5]) return json(readMessageDeliveries(store.remote, projectId, row.record.sessionId, auth.actor.id));
     if (suffix === "operations" && p[5]) { const release = releasedControllerAlias(store.remote, row, p[5]); if (release) return json(release); const operation = store.remote.get<OperationRecord>("remote_operation", p[5]); if (!operation || operation.projectId !== projectId || (operation.sessionId && operation.sessionId !== row.record.sessionId)) fail(404, "not-found", "Operation not found"); return json(operation.deliveryFailure ?? operation.response,operation.status); }
     if (suffix === "controller-claims" && p[5] && p.length === 6) {
       const route = `/hub/v2/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(row.record.sessionId)}/controller/claim`;

@@ -2,18 +2,67 @@
 
 ## [Unreleased]
 
-### Added
-- **DeepSeek Search as a search provider.** `/search-provider deepseek` connects DeepSeek's Search API to `web_search`, reusing the API key already saved for the `deepseek` chat-model provider when no separate search key is stored. Results use DeepSeek's model-facing `summary` and publication date. A paid account out of credit now reports `insufficient balance` (HTTP 402) instead of a generic connection failure, and a refused search carries the provider's own words rather than an empty result set.
-- **`web_fetch` through DeepSeek's Fetch API.** While DeepSeek is the active provider, `web_fetch` retrieves the page as Markdown from `/v1/tools/fetch` instead of scraping HTML; the content still goes through the injection scan, secret redaction and the untrusted banner. Every other provider leaves `web_fetch` on the sandbox transport, and a provider that refuses a page is reported rather than silently replaced.
+## [0.4.17] - 2026-11-07
 
 ### Fixed
-- **DeepSeek review round 3 (3 majors, 16 minors).** The permanent-refusal breaker now caches only ACCOUNT refusals and keys them per operation, so a rejected query (HTTP 400/413) no longer suppresses the corrected one, and a search refusal can never take `web_fetch` away; the cached reply keeps its `permanent` flag. The Markdown sanitizer's forward scan is linear and index-safe on closed blocks (and on characters whose lowercase form is longer), DeepSeek's 429 carries its own QPS wording instead of DuckDuckGo's bot-page sentence, a cancelled `web_search` is reported as a cancellation rather than a retryable failure, and the provider lookup and request share the transport's single 20-second budget.
-- **DeepSeek review round 2 (3 majors, 20 minors).** The permanent-refusal breaker is now shared by every controller in the process, so `/search-provider` on the command surface clears the refusal the tools recorded; it also clears on a successful test/select. A search-only provider no longer takes `web_fetch` away when it is disconnected, and a disconnected page provider falls back to the transport with a note instead of failing the page. The provider target lookup is bounded by a 5 s deadline and the caller's signal, and a cancellation is its own outcome (never a retryable outage that triggers a second fetch). A fetch 429 falls back immediately instead of laddering twice, refused 429s carry the "do not rephrase" wording, permanent 4xx refusals carry `permanent` as data instead of being inferred from prose, and the wizard now drives `connect()` so all three surfaces share one policy.
-- **DeepSeek review round 1 (all 26 findings).** The remainder of the same round: a permanent refusal (empty balance, rejected key) is remembered for five minutes instead of being re-requested on every call; `connect()` is one controller operation, so both command surfaces share the configure → test → activate policy; the controller seam rejects a non-public URL before any provider sees it and reports a selected-but-disconnected provider instead of silently switching egress; provider Markdown loses `<script>`/`<style>` blocks; a page the provider cannot extract falls back to the transport; the borrow path reads an exported key before touching the saved store; and the page-retrieval tests now pin the transport wiring, the empty branches and the request order.
-- **DeepSeek review round 1 (4 majors).** The provider fetch path now resolves the target with the same public-address policy as the sandbox transport, so `localhost`/private names are refused before anything is sent; a DeepSeek key that disappears after connect refuses `web_search` instead of answering with zero results and leaves `web_fetch` on the transport; a provider timeout, 429 or 5xx falls back to the sandbox transport instead of failing the tool; and 429s are absorbed by a bounded ladder before the "do not retry" refusal. HTTP 401 now reports `invalid-credential` rather than "missing credential", and a permanent refusal is no longer dressed in "wait and retry" advice.
+- **Mobile Team Hub session settings ([#1148](https://github.com/MrCipherSmith/keryx/pull/1148)).** Long controller identifiers wrap without pushing settings off-screen. Model privacy and cost appear below the selector, where the details can wrap. The routing, versions and fork panels stay within the viewport.
+
+### Upgrade notes
+- Update Team Hub to pick up the layout fix. The existing machine executor works with this release.
+
+## [0.4.16] - 2026-11-07
+
+### Fixed
+- **Team Hub navigation ([#1147](https://github.com/MrCipherSmith/keryx/pull/1147)).** Collapse the main sidebar to a 60 px icon rail on every desktop layout, including narrower tablet windows. Team Hub remembers the choice between sections and page loads. On phones, the navigation drawer keeps its text labels.
+- **Team Hub session control ([#1147](https://github.com/MrCipherSmith/keryx/pull/1147)).** The chat retries temporary renewal failures while the current control lease remains valid. Send a follow-up or close the session after a long answer using the same control lease.
+
+### Upgrade notes
+- Update Team Hub to pick up the navigation and session control fixes. Team Hub 0.4.16 works with the 0.4.15 machine executor.
+
+## [0.4.15] - 2026-11-07
+
+### Fixed
+- **Reuse a checkout after closing a Team Hub session ([#1146](https://github.com/MrCipherSmith/keryx/pull/1146)).** The executor releases the checkout before reporting the session closed, after confirming that its work and services have stopped. Start a new session on the same clean checkout without restarting the executor. Resuming a closed conversation acquires the checkout again and verifies its saved workspace baseline.
+
+### Upgrade notes
+- Update the machine executor to pick up the session close fix. Team Hub 0.4.13 can use the updated executor.
+
+## [0.4.14] - 2026-11-07
+
+### Fixed
+- **Stop during streamed Team Hub replies ([#1145](https://github.com/MrCipherSmith/keryx/pull/1145)).** The machine executor sends and acknowledges only outstanding events instead of scanning and rewriting acknowledged history during streaming. This keeps cancellation responsive on long replies while retaining durable event order and replay.
+
+### Upgrade notes
+- Update the machine executor to pick up the Stop fix. Team Hub 0.4.13 can use the updated executor.
+
+## [0.4.13] - 2026-11-07
 
 ### Changed
-- **`/search-provider <id>` connects in one step.** A successful connection test now also makes that provider active, so `web_search` (and `web_fetch`, for providers that retrieve pages) uses it immediately. `/search-connect` still switches between connected providers.
+- **Team Hub chat ([#1144](https://github.com/MrCipherSmith/keryx/pull/1144)).** Chat shows when Hub accepts a message, when the machine starts it and when the machine refuses it. The sender can restore refused text or copy it while keeping a newer draft. The composer keeps one entry point for commands and groups settings under work context. The optional Flow at session creation applies to the first message, and later turns can use a different Flow.
+
+### Fixed
+- **Consecutive sends and draft recovery ([#1144](https://github.com/MrCipherSmith/keryx/pull/1144)).** Follow-up messages use verified session updates without a manual version refresh. A lost acknowledgement can be retried after reloading with the original request identity. Late confirmation from the machine reconciles the original receipt, including queued work. Chat keeps keyboard focus when confirming work context.
+
+## [0.4.12] - 2026-11-07
+
+### Added
+- **Team Hub redesign and session chat ([#1141](https://github.com/MrCipherSmith/keryx/pull/1141)).** The chat uses assistant-ui with real Keryx sessions. Browse sessions by project and checkout, connect to a session, or start one with a Flow and a prepared first message. Later messages keep the selected Flow. The conversation shows streaming replies, tool approvals and native command results, with a control to stop a running turn.
+- **DeepSeek Search and Fetch ([#1135](https://github.com/MrCipherSmith/keryx/pull/1135)).** Connect and activate DeepSeek with `/search-provider deepseek`, using the saved model key if no separate search key is set. Search includes model-facing summaries and publication dates. With DeepSeek active, page fetches can use its Markdown endpoint, with public-address checks, injection screening and secret redaction. Account refusals such as an empty balance are reported separately from query errors and transient failures.
+- **Terminal usage ([#1131](https://github.com/MrCipherSmith/keryx/pull/1131)).** The footer and the Usage tab in `/status` show per-turn and session token counts, cache reads and writes, active time and cost where model pricing is known.
+- **Auditable Flow completion exceptions ([#1136](https://github.com/MrCipherSmith/keryx/pull/1136)).** Explicitly accepted gate exceptions retain the operator rationale and confirmation in governance output and are distinguishable from a clean completion. Completion evidence also tracks base changes and fix PR lineage.
+- **External agent reports ([#1140](https://github.com/MrCipherSmith/keryx/pull/1140)).** Non-Keryx children can use `keryx report --to @name` to send an unverified report through the bus. Reports retain external provenance and are treated as untrusted input when the receiving agent uses tools.
+
+### Changed
+- **Hub navigation and reading ([#1141](https://github.com/MrCipherSmith/keryx/pull/1141)).** The main menu collapses consistently; theme and language share one menu. Flow stages fit narrow screens, documents have a searchable list and a reading view with exact source, revisions have file filters, and long chats open on the latest messages with older pages on demand. The existing forward history API remains available.
+- **Herdr delegation safety ([#1140](https://github.com/MrCipherSmith/keryx/pull/1140)).** Pasting into an open terminal approval no longer accepts it. The first `hc run` for each agent in a session requires approval; commands that can send keys or force text into another terminal also require approval and cannot be remembered. External child processes no longer inherit Herdr terminal identity. These checks apply to recognized commands; they are not a sandbox boundary for arbitrary scripts.
+
+### Fixed
+- **Anthropic selection ([#1125](https://github.com/MrCipherSmith/keryx/pull/1125)).** Model and review-tier selection require an Anthropic credential instead of silently selecting the offline provider. `/connect` still offers Anthropic for initial setup.
+- **Timestamped artifact paths ([#1097](https://github.com/MrCipherSmith/keryx/pull/1097)).** Output redaction preserves valid timestamps while continuing to mask nearby phone numbers and secrets.
+- **Flow acceptance criteria ([#1138](https://github.com/MrCipherSmith/keryx/pull/1138)).** The Anthropic connection flow declares its mutation sensitivity and formats its executable check for the acceptance validator.
+
+### Upgrade notes
+- Upgrade Team Hub and its machine executor together to use the new chat and distinguish assistant replies from machine diagnostics. Upgrade the self-hosted Hub through the verified install bundle so the updater backs up and trials the existing data before cutover.
 
 ## [0.4.11] - 2026-11-05
 

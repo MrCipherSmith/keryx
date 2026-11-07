@@ -1,4 +1,3 @@
-import { PanelLeft } from "lucide-react";
 import { clearPending } from "../state/pending";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
@@ -24,6 +23,8 @@ import {
   MessagesSquare,
   Play,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   X,
   Layers,
   Settings2,
@@ -275,6 +276,16 @@ function Brand() {
     </div>
   );
 }
+const railPreferenceKey = "keryx.hub.rail";
+function savedRailPreference(): boolean | null {
+  try {
+    const value = localStorage.getItem(railPreferenceKey);
+    if (value === "collapsed" || value === "expanded") return value === "collapsed";
+  } catch {
+    /* Navigation still works without storage. */
+  }
+  return null;
+}
 function Shell({
   principal,
   scopeKey,
@@ -286,11 +297,24 @@ function Shell({
   onRefresh: () => Promise<void>;
   onLogout: () => Promise<void>;
 }) {
-  const [railOverride, setRailOverride] = useState<boolean | null>(null);
+  const [railOverride, setRailOverride] = useState(savedRailPreference);
   const { t, i18n } = useTranslation("common");
   const ru = i18n.language.startsWith("ru");
   const location = useLocation();
   const railCollapsed = railOverride ?? (location.tab === "sessions" && !!location.sessionId);
+  const railLabel = railCollapsed
+    ? (ru ? "Развернуть меню" : "Expand menu")
+    : (ru ? "Свернуть меню" : "Collapse menu");
+  const RailIcon = railCollapsed ? PanelLeftOpen : PanelLeftClose;
+  const toggleRail = () => {
+    const collapsed = !railCollapsed;
+    setRailOverride(collapsed);
+    try {
+      localStorage.setItem(railPreferenceKey, collapsed ? "collapsed" : "expanded");
+    } catch {
+      /* Keep the choice for the current page. */
+    }
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [menu, setMenu] = useState(false);
@@ -334,9 +358,7 @@ function Shell({
   };
   useEffect(() => {
     if (menu)
-      navRef.current
-        ?.querySelector<HTMLButtonElement>("button:not(.desktop-rail-toggle)")
-        ?.focus();
+      navRef.current?.querySelector("button")?.focus();
   }, [menu]);
   const switchProject = (nextProjectId: string | null) => {
     navigate({
@@ -373,9 +395,10 @@ function Shell({
           {ru ? "К содержимому" : "Skip to content"}
         </a>
         <aside
+          id="hub-sidebar"
           className={"sidebar " + (menu ? "sidebar-open" : "")}
           onKeyDown={(event) => {
-            if (event.key === "Escape") {
+            if (menu && event.key === "Escape") {
               event.preventDefault();
               closeMenu();
             }
@@ -383,6 +406,17 @@ function Shell({
         >
           <div className="sidebar-brand">
             <Brand />
+            <button
+              type="button"
+              className="desktop-rail-toggle"
+              aria-label={railLabel}
+              title={railLabel}
+              aria-controls="hub-sidebar"
+              aria-expanded={!railCollapsed}
+              onClick={toggleRail}
+            >
+              <RailIcon size={17} aria-hidden="true" />
+            </button>
             <button
               type="button"
               className="mobile-menu"
@@ -393,7 +427,6 @@ function Shell({
             </button>
           </div>
           <nav ref={navRef} className="nav-list" aria-label={t("appName")}>
-            <button type="button" className="nav-item desktop-rail-toggle" aria-label={ru ? (railCollapsed ? "Развернуть меню" : "Свернуть меню") : (railCollapsed ? "Expand menu" : "Collapse menu")} aria-expanded={!railCollapsed} onClick={() => setRailOverride(!railCollapsed)}><PanelLeft size={17} aria-hidden="true"/></button>
             {navTabs.map((tab) => {
               const Icon = icons[tab];
               return (

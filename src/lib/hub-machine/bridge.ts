@@ -61,7 +61,6 @@ interface Hosted {
     mapping: CheckoutMapping;
     profile: MachineProfile;
     workspace: OwnedWorkspace;
-    leaseReleased?: boolean;
     lease: ReturnType<typeof acquireCheckoutLease>;
 }
 export interface MachineBridgeOptions {
@@ -434,27 +433,23 @@ export class MachineBridge {
         this.flushingOutbox = true;
         let pending = false;
         try {
-            for (const cursor of this.ledger!.cursors()) {
-                const events = this.ledger!.unsentEvents(cursor.stream);
-                for (const item of events) {
-                    const frame = cursor.stream.startsWith('session:') ? this.envelope('session-event', item.payload as Control['SessionEvent']) : this.envelope('run-event', item.payload as FrameOf<'run-event'>['payload']);
-                    try {
-                        this.send(frame);
-                    }
-                    catch (cause) {
-                        if (cause instanceof MachineError && ['quota-exceeded', 'machine-offline'].includes(cause.code)) {
-                            pending = true;
-                            break;
-                        }
-                        throw cause;
-                    }
-                    this.ledger!.markSent(cursor.stream, item.seq);
+            const batchSize = 500;
+            const events = this.ledger!.unsentEvents(batchSize);
+            for (const { stream, seq, payload } of events) {
+                const frame = stream.startsWith('session:') ? this.envelope('session-event', payload as Control['SessionEvent']) : this.envelope('run-event', payload as FrameOf<'run-event'>['payload']);
+                try {
+                    this.send(frame);
                 }
-                if (events.length === 500)
-                    pending = true;
-                if (pending)
-                    break;
+                catch (cause) {
+                    if (cause instanceof MachineError && ['quota-exceeded', 'machine-offline'].includes(cause.code)) {
+                        pending = true;
+                        break;
+                    }
+                    throw cause;
+                }
+                this.ledger!.markSent(stream, seq);
             }
+            pending ||= events.length === batchSize;
         }
         catch (cause) {
             this.notice(cause);
@@ -501,8 +496,8 @@ export class MachineBridge {
             return;
         }
         if (frame.type === 'run-event-ack') {
-            this.flushOutbox();
             this.ledger!.ackEvents(`run:${frame.payload.runId}`, frame.payload.localSeq);
+            this.flushOutbox();
             const run = this.runs.get(frame.payload.runId);
             if (run?.terminalSeq && frame.payload.localSeq >= run.terminalSeq && !run.publishing) {
                 run.publishing = true;
@@ -1037,17 +1032,11 @@ export class MachineBridge {
                 const request = validateControl('SessionResume', Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'sessionId')));
                 if (!request.ok || !verifyBaseline(mapping.cwd, hosted.workspace.baseline()))
                     throw new MachineError('workspace-conflict');
-                if (hosted.leaseReleased) {
-                    if (source !== hosted && source.mapping.cwd === mapping.cwd && !source.leaseReleased) {
-                        const closed = await input.releaseSource();
-                        if (closed.state !== 'closed')
-                            throw new MachineError('recovery-required');
-                        source.lease.release(source.lease.nonce);
-                        source.leaseReleased = true;
-                    }
-                    this.lifecycleContext(input);
-                    hosted.lease.reacquire();
-                    hosted.leaseReleased = false;
+                if (hosted.lease.released && source !== hosted && source.mapping.cwd === mapping.cwd && !source.lease.released) {
+                    const closed = await input.releaseSource();
+                    if (closed.state !== 'closed')
+                        throw new MachineError('recovery-required');
+                    source.lease.release(source.lease.nonce);
                 }
                 this.lifecycleContext(input);
                 let actual: Control['SessionRecord'];
@@ -1086,7 +1075,6 @@ export class MachineBridge {
                     throw new MachineError('recovery-required');
                 this.lifecycleContext(input);
                 source.lease.release(source.lease.nonce);
-                source.leaseReleased = true;
             }
             this.lifecycleContext(input);
             const lease = acquireCheckoutLease(mapping.cwd, { hubId: this.options.enrollment.hubId, runId: record.sessionId, daemonId: this.daemonId });
@@ -1157,7 +1145,10 @@ export class MachineBridge {
             catch {
                 return Promise.resolve(false);
             } return this.connection?.connected ? readSessionActionAuthority({ hubUrl: this.options.enrollment.hubUrl, secret: readMachineSecret(this.options.enrollment), action }) : Promise.resolve(false); },
-            workspace: { ...workspace, rewind: {
+            workspace: { ...workspace, checkoutLease: {
+                release: () => { if (!lease.released) lease.release(lease.nonce); },
+                reacquire: () => { if (lease.released) { lease.reacquire(); return true; } return false; },
+            }, rewind: {
                 ownership: () => { lease.assertOwnership(); const baseline = workspace.baseline(); const head = currentCheckoutHead(mapping.cwd); if (head !== baseline.head) throw new MachineError('workspace-conflict'); return { nonce: lease.nonce, gitHead: head, paths: Object.keys(baseline.files) }; },
                 validatePaths: async (paths, signal) => { signal.throwIfAborted(); lease.assertOwnership(); if (currentCheckoutHead(mapping.cwd) !== workspace.baseline().head) throw new MachineError('workspace-conflict'); validateOwnedEffectPaths(mapping.cwd, paths); signal.throwIfAborted(); },
             } } });
@@ -1369,7 +1360,7 @@ export class MachineBridge {
         for (const [id, hosted] of this.hosted) {
             if (sessionId !== undefined && id !== sessionId)
                 continue;
-            let checkoutOwned = hosted.leaseReleased !== true;
+            let checkoutOwned = !hosted.lease.released;
             try {
                 if (checkoutOwned)
                     hosted.lease.assertOwnership();
@@ -1721,7 +1712,7 @@ export class MachineBridge {
         if (runs.some(run => run.terminal?.outcome === 'unknown') || unresolved.length >= 1000 || unresolved.some(row => row.checkout === hosted.mapping.checkoutId))
             return settle(ownerRefusal('recovery-required'), true);
         try {
-            if (hosted.leaseReleased)
+            if (hosted.lease.released)
                 throw new MachineError('lease-owner-mismatch');
             hosted.lease.assertOwnership();
         }
@@ -1752,9 +1743,9 @@ export class MachineBridge {
         await hosted.host.dispose('machine-stop');
         const state = await hosted.host.inspect();
         // A re-hosted lost crash that was never resumed ran nothing, and its dispose proved the stop: it fences nothing, so the next daemon re-hosts it.
-        if (!hosted.leaseReleased && (state.state === 'idle' || state.state === 'closed' || hosted.host.resumableAfterLost()))
+        if (!hosted.lease.released && (state.state === 'idle' || state.state === 'closed' || hosted.host.resumableAfterLost()))
             hosted.lease.release(hosted.lease.nonce);
-        else if (!hosted.leaseReleased)
+        else if (!hosted.lease.released)
             provenStop = false;
     } this.hosted.clear(); await Promise.allSettled([...this.background]); this.forgetCleanDaemon(provenStop); this.ledger?.close(); this.pool?.close(); this.lock?.release(); this.lock = undefined; }
     /** A daemon whose every owned stop was proven and that keeps no run capacity or uncertain command leaves no identity to recover. */

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { remoteGet } from '../../api/remote';
+import { remoteGet,remoteMutate } from '../../api/remote';
 import { useEffect,useRef,useState,type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHub } from '../../app/hub-context';
@@ -41,7 +41,60 @@ export function useController(record:Control['SessionRecord']){
   void client.invalidateQueries({queryKey:[hub.scopeKey,record.projectId,'remote','session',record.sessionId],exact:true});
  },[client,hub.scopeKey,record.projectId,record.sessionId,claimToVerify,applied]);
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[]);
- useEffect(()=>{if(!active||!lease)return;let running=false;const timer=setInterval(()=>{if(running)return;running=true;const current=latest.current;action.mutateAsync({path:path+'/controller/renew',body:{expectedSessionVersion:current.version,expectedControllerVersion:lease.version,requestedLeaseSeconds:60,mode:'renew',controllerLeaseId:lease.controllerLeaseId} satisfies Control['ControllerClaim']}).then(receipt=>{updateControl.current(previous=>({...previous,lease:receipt.lease}));setPendingRenewal({before:structuredClone(current),receipt});}).catch(()=>setFailed(true)).finally(()=>{running=false;});},20000);return()=>clearInterval(timer);},[active,lease,path,action.mutateAsync]);
+ useEffect(()=>{
+  if(!active||!lease)return;
+  const abort=new AbortController();
+  const heldLease=lease;
+  const expiresAt=Date.parse(heldLease.expiresAt);
+  let due=Math.min(Date.now()+20000,expiresAt-10000);
+  let timer:ReturnType<typeof setTimeout>;
+  let running=false;
+  let refresh=false;
+  let before:Control['SessionRecord']|undefined;
+  const schedule=()=>{timer=setTimeout(()=>void renew(),Math.max(0,due-Date.now()));};
+  async function renew(){
+   if(running||abort.signal.aborted||Date.now()>=expiresAt)return;
+   clearTimeout(timer);
+   if(Date.now()<due){schedule();return;}
+   running=true;
+   try{
+    if(refresh){before=await remoteGet<Control['SessionRecord']>(path,abort.signal);refresh=false;}
+    if(abort.signal.aborted||Date.now()>=expiresAt)return;
+    before??=latest.current;
+    const current=before.controller;
+    if(current?.state!=='held'||current.controllerLeaseId!==heldLease.controllerLeaseId||
+      current.version!==heldLease.version||current.actorId!==heldLease.actorId||Date.parse(current.expiresAt)<=Date.now()){
+     setFailed(true);
+     return;
+    }
+    const receipt=await remoteMutate<Control['ControllerReceipt']>('POST',path+'/controller/renew',{
+     expectedSessionVersion:before.version,expectedControllerVersion:heldLease.version,requestedLeaseSeconds:60,
+     mode:'renew',controllerLeaseId:heldLease.controllerLeaseId,
+    } satisfies Control['ControllerClaim']);
+    if(abort.signal.aborted)return;
+    updateControl.current(previous=>({...previous,lease:receipt.lease}));
+    setPendingRenewal({before,receipt});
+    void client.invalidateQueries({queryKey:[hub.scopeKey,record.projectId,'remote']});
+   }catch(error){
+    if(abort.signal.aborted)return;
+    // A rejected compare-and-swap needs current pins. An uncertain transport result reuses the original request.
+    if(error instanceof ApiError&&['stale-version','session-busy','machine-offline'].includes(error.code)){
+     refresh=true;
+     before=undefined;
+    }else if(!(error instanceof ApiError&&(error.status===0||error.status===429||error.status>=500))){
+     setFailed(true);
+     return;
+    }
+    due=Date.now()+2000;
+    if(due<expiresAt)schedule();
+   }finally{running=false;}
+  }
+  const onVisible=()=>{if(document.visibilityState==='visible')void renew();};
+  schedule();
+  document.addEventListener('visibilitychange',onVisible);
+  window.addEventListener('online',onVisible);
+  return()=>{abort.abort();clearTimeout(timer);document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('online',onVisible);};
+ },[active,lease,path,client,hub.scopeKey,record.projectId]);
  function claim() {
   if (pendingClaim && !outcome.error) return;
   setFailed(false);

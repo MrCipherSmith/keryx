@@ -23,7 +23,7 @@ export class InvalidationBatch {
    if(key[0]!==scopeKey||key[1]!==projectId)return false;if(kinds.has('context'))return true;if(key[2]!=='remote')return false;if(overflow)return true;
    const kind=key[3];const id=String(key[4]??'');const has=(resource:string)=>changed.has(resource+':'+id);const session=has('session');
    if(kind==='machines')return kinds.has('machine');if(kind==='runs')return kinds.has('run')||kinds.has('approval');if(kind==='run'||kind==='run-events')return has('run')||has('approval');if(kind==='sessions')return kinds.has('session')||kinds.has('controller');
-   if(kind==='session')return session||has('history')||has('queue')||has('config')||has('controller');if(kind==='history')return session||has('history');if(kind==='queue')return session||has('queue');if(kind==='routing')return session||has('config')||has('command-catalogue');if(kind==='catalogue')return has('command-catalogue');if(kind==='controller-release'||kind==='renewal-proof')return session||has('controller');if(kind==='operation')return session||has('config')||has('queue')||has('history')||has('command-catalogue');return false;
+   if(kind==='session')return session||has('history')||has('queue')||has('config')||has('controller');if(kind==='history')return session||has('history');if(kind==='queue')return session||has('queue');if(kind==='routing')return session||has('config')||has('command-catalogue');if(kind==='catalogue')return has('command-catalogue');if(kind==='controller-release'||kind==='renewal-proof')return session||has('controller');if(kind==='message-deliveries')return session||has('history')||has('queue');if(kind==='operation')return session||has('config')||has('queue')||has('history')||has('command-catalogue');return false;
   };
  }
 }

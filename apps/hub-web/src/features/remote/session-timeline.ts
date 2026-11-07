@@ -1,4 +1,5 @@
 import type { InfiniteData } from "@tanstack/react-query";
+import type { MessageDelivery } from "../../../../../src/remote-control/message-delivery";
 import type { Control } from "../../api/remote";
 
 /**
@@ -12,12 +13,17 @@ export type CommandEntry = { outcome: Control["CommandOutcome"]; invokedAt: stri
 export type CommandOutcomeListener = (outcome: Control["CommandOutcome"], invokedAt: string, anchor?: number) => void;
 
 export type TimelineEntry =
-  | { kind: "message"; message: Control["SessionMessage"] }
+  | { kind: "message"; message: Control["SessionMessage"]; delivery?: MessageDelivery }
+  | { kind: "delivery"; delivery: MessageDelivery }
   | { kind: "outcome"; item: CommandEntry };
 
 /** The one key History reads its pages from; the command panel reads the same cache at invoke time. */
 export function historyQueryKey(scopeKey: number, projectId: string, sessionId: string) {
   return [scopeKey, projectId, "remote", "history", sessionId, "workspace"] as const;
+}
+
+export function messageDeliveriesKey(scopeKey: number, projectId: string, sessionId: string) {
+  return [scopeKey, projectId, "remote", "message-deliveries", sessionId] as const;
 }
 
 /** Highest `historyCursor` among the loaded pages (0 when nothing is loaded yet). */
@@ -29,21 +35,54 @@ export function latestHistoryCursor(data: InfiniteData<Control["HistoryPage"]> |
   return latest;
 }
 
+const turnKey = (run: string | null, turn: string | null) => run && turn ? JSON.stringify([run, turn]) : null;
+
+export function observedDeliveries(messages: Control["SessionMessage"][], deliveries: MessageDelivery[]) {
+  const turns = new Set(messages.filter(message => message.role === "human")
+    .map(message => turnKey(message.runId, message.turnId)).filter(key => key !== null));
+  return deliveries.filter(item => {
+    const key = turnKey(item.runId, item.turnId);
+    return key !== null && turns.has(key);
+  }).map(item => item.operationId);
+}
+
 /**
  * Interleave command outcomes with messages by the Hub's message order. An outcome goes after the
  * last message whose `historyCursor` is at or below its `anchor`; outcomes with the same anchor keep
  * the order they were given. The browser clock and the machine clock are never compared.
  */
-export function mergeTimeline(ordered: Control["SessionMessage"][], outcomes: CommandEntry[]): TimelineEntry[] {
-  const byAnchor = [...outcomes].sort((a, b) => a.anchor - b.anchor);
+export function mergeTimeline(
+  ordered: Control["SessionMessage"][], outcomes: CommandEntry[], deliveries: MessageDelivery[] = [],
+  observedOperationIds: ReadonlySet<string> = new Set(),
+): TimelineEntry[] {
+  const indexed = new Map(deliveries.flatMap(delivery => {
+    const key = turnKey(delivery.runId, delivery.turnId);
+    return key ? [[key, delivery] as const] : [];
+  }));
+  const matched = new Set<string>();
+  const messages: TimelineEntry[] = ordered.map(message => {
+    const key = message.role === "human" ? turnKey(message.runId, message.turnId) : null;
+    const delivery = key ? indexed.get(key) : undefined;
+    if (!delivery || matched.has(delivery.operationId)) return { kind: "message", message };
+    matched.add(delivery.operationId);
+    // The native human row also proves this exact turn started if history arrives before the receipt query.
+    return { kind: "message", message, delivery: { ...delivery, status: "machine-started", queued: false, reason: null } };
+  });
+  const byAnchor: { anchor: number; entry: TimelineEntry }[] = [
+    ...outcomes.map(item => ({ anchor: item.anchor, entry: { kind: "outcome" as const, item } })),
+    ...deliveries.filter(delivery => !matched.has(delivery.operationId) &&
+      !observedOperationIds.has(delivery.operationId) &&
+      (delivery.status !== "machine-started" || delivery.afterCursor + 1 >= (ordered[0]?.historyCursor ?? 0)))
+      .map(delivery => ({ anchor: delivery.afterCursor, entry: { kind: "delivery" as const, delivery } })),
+  ].sort((a, b) => a.anchor - b.anchor);
   const timeline: TimelineEntry[] = [];
   let next = 0;
-  for (const message of ordered) {
-    while (next < byAnchor.length && byAnchor[next].anchor < message.historyCursor)
-      timeline.push({ kind: "outcome", item: byAnchor[next++] });
-    timeline.push({ kind: "message", message });
+  for (let i = 0; i < ordered.length; i++) {
+    while (next < byAnchor.length && byAnchor[next].anchor < ordered[i].historyCursor)
+      timeline.push(byAnchor[next++].entry);
+    timeline.push(messages[i]);
   }
-  while (next < byAnchor.length) timeline.push({ kind: "outcome", item: byAnchor[next++] });
+  while (next < byAnchor.length) timeline.push(byAnchor[next++].entry);
   return timeline;
 }
 

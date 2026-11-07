@@ -1,3 +1,4 @@
+import { initialMessageDelivery } from "./message-delivery";
 import type { ManagedExecutionPort } from "./managed-execution";
 import { isStopOnlyCommand, validateOwnedControl } from "./owned-control";
 import {authorizeLifecycle} from './lifecycle';
@@ -155,7 +156,10 @@ export function createRemoteControl(ports: RemotePorts) {
           }
           value = projectMutation(state, p, method, input, current, operationId);
         } else fail(404, "not-found", "Route not found");
-        repo.put("remote_operation", operationId, { id: operationId, key, actorId: current.actor.id, sessionDigest: current.sessionDigest, projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined, payloadDigest, request: input, ...(validateControl("SessionOperationReceipt", value).ok && p[2] === "sessions" && p[3] && control("SessionOperationReceipt", value).sessionId !== p[3] ? { derivedSessionId: control("SessionOperationReceipt", value).sessionId } : {}), kind: p.slice(2).join("/"), response: value, status: 200 } satisfies OperationRecord, { projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined });
+        const messageSession = method === "POST" && p[0] === "projects" && p[2] === "sessions" &&
+          p[3] && p[4] === "messages" && p.length === 5 ? repo.get<SessionRow>("remote_session", p[3]) : undefined;
+        const messageDelivery = messageSession ? initialMessageDelivery(value, messageSession.record.historyCursor) : undefined;
+        repo.put("remote_operation", operationId, { id: operationId, key, actorId: current.actor.id, sessionDigest: current.sessionDigest, ...(messageDelivery && { messageDelivery }), projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined, payloadDigest, request: input, ...(validateControl("SessionOperationReceipt", value).ok && p[2] === "sessions" && p[3] && control("SessionOperationReceipt", value).sessionId !== p[3] ? { derivedSessionId: control("SessionOperationReceipt", value).sessionId } : {}), kind: p.slice(2).join("/"), response: value, status: 200 } satisfies OperationRecord, { projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined });
         return json(value);
       });
       for (const [machineId, socket] of machines) if (store.remote.get<MachineRecord>("remote_machine", machineId)?.revoked) socket.close(1008, "Authorization changed");
