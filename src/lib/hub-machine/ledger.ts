@@ -97,7 +97,9 @@ export class MachineLedger {
    CREATE TABLE IF NOT EXISTS machine_native_leases(token TEXT PRIMARY KEY,daemonId TEXT NOT NULL,sessionId TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS machine_run_recovery(id TEXT PRIMARY KEY,digest TEXT NOT NULL,runId TEXT NOT NULL,step TEXT NOT NULL,phase TEXT NOT NULL,result TEXT);
    CREATE TABLE IF NOT EXISTS machine_run_terminal(stream TEXT PRIMARY KEY,terminalAt INTEGER NOT NULL);
-   CREATE TABLE IF NOT EXISTS machine_retired_logs(stream TEXT NOT NULL,fromSeq INTEGER NOT NULL,toSeq INTEGER NOT NULL,digest TEXT NOT NULL,bytes INTEGER NOT NULL,retiredAt INTEGER NOT NULL,PRIMARY KEY(stream,fromSeq));`);
+   CREATE TABLE IF NOT EXISTS machine_retired_logs(stream TEXT NOT NULL,fromSeq INTEGER NOT NULL,toSeq INTEGER NOT NULL,digest TEXT NOT NULL,bytes INTEGER NOT NULL,retiredAt INTEGER NOT NULL,PRIMARY KEY(stream,fromSeq));
+   CREATE INDEX IF NOT EXISTS machine_events_unacknowledged ON machine_events(stream,seq) WHERE acked=0;
+   CREATE INDEX IF NOT EXISTS machine_discarded_logs_unacknowledged ON machine_discarded_logs(stream,seq) WHERE acked=0;`);
         const version = this.db.query<{
             value: string;
         }, [
@@ -329,15 +331,12 @@ export class MachineLedger {
         }).immediate();
     }
     resetUnackedForReplay(stream: string): void { this.db.transaction(() => { this.db.query('UPDATE machine_events SET sent=0 WHERE stream=? AND acked=0').run(stream); this.db.query('UPDATE machine_discarded_logs SET sent=0 WHERE stream=? AND acked=0').run(stream); }).immediate(); }
-    unsentEvents(stream: string): Array<{
-        seq: number;
-        payload: unknown;
-    }> { return this.db.query<{
-        seq: number;
-        payload: string;
-    }, [
-        string
-    ]>('SELECT seq,payload FROM machine_events WHERE stream=? AND acked=0 AND sent=0 ORDER BY seq LIMIT 500').all(stream).map(r => ({ seq: r.seq, payload: JSON.parse(r.payload) })); }
+    /** Select only outstanding work. Acknowledged history can be large during a streaming run. */
+    unsentEvents(limit: number): Array<{ stream: string; seq: number; payload: unknown }> {
+        return this.db.query<{ stream: string; seq: number; payload: string }, [number]>(
+            'SELECT stream,seq,payload FROM machine_events WHERE acked=0 AND sent=0 ORDER BY stream,seq LIMIT ?',
+        ).all(limit).map(row => ({ ...row, payload: JSON.parse(row.payload) }));
+    }
     pendingEvents(stream: string): Array<{
         seq: number;
         payload: unknown;
@@ -422,18 +421,16 @@ export class MachineLedger {
     }
     markSent(stream: string, seq: number): void { this.db.transaction(() => { if (this.db.query('UPDATE machine_events SET sent=1 WHERE stream=? AND seq=?').run(stream, seq).changes !== 1)
         throw new MachineError('unsent-event-ack'); this.db.query('UPDATE machine_discarded_logs SET sent=1 WHERE stream=? AND gapSeq=?').run(stream, seq); }).immediate(); }
-    ackEvents(stream: string, seq: number): void { this.db.transaction(() => { if (!Number.isSafeInteger(seq) || seq < 0 || seq > this.highest(stream) || this.db.query<{
-        n: number;
-    }, [
-        string,
-        number
-    ]>('SELECT count(*) AS n FROM machine_events WHERE stream=? AND seq<=? AND sent=0').get(stream, seq)!.n || this.db.query<{
-        n: number;
-    }, [
-        string,
-        number
-    ]>('SELECT count(*) AS n FROM machine_discarded_logs WHERE stream=? AND seq<=? AND sent=0').get(stream, seq)!.n)
-        throw new MachineError('unsent-event-ack'); this.db.query('UPDATE machine_events SET acked=1 WHERE stream=? AND seq<=?').run(stream, seq); this.db.query('UPDATE machine_discarded_logs SET acked=1 WHERE stream=? AND seq<=?').run(stream, seq); }).immediate(); }
+    ackEvents(stream: string, seq: number): void {
+        this.db.transaction(() => {
+            if (!Number.isSafeInteger(seq) || seq < 0 || seq > this.highest(stream) ||
+                this.db.query('SELECT 1 FROM machine_events WHERE stream=? AND seq<=? AND acked=0 AND sent=0 LIMIT 1').get(stream, seq) ||
+                this.db.query('SELECT 1 FROM machine_discarded_logs WHERE stream=? AND seq<=? AND acked=0 AND sent=0 LIMIT 1').get(stream, seq))
+                throw new MachineError('unsent-event-ack');
+            this.db.query('UPDATE machine_events SET acked=1 WHERE stream=? AND seq<=? AND acked=0').run(stream, seq);
+            this.db.query('UPDATE machine_discarded_logs SET acked=1 WHERE stream=? AND seq<=? AND acked=0').run(stream, seq);
+        }).immediate();
+    }
     reconcileCursor(stream: string, remote: number): void { this.db.transaction(() => { if (!Number.isSafeInteger(remote) || remote < 0 || remote > this.highest(stream) || (remote > 0 && !this.db.query('SELECT seq FROM machine_events WHERE stream=? AND seq=?').get(stream, remote) && !this.db.query('SELECT toSeq FROM machine_retired_logs WHERE stream=? AND toSeq=?').get(stream, remote)))
         throw new MachineError('replay-gap'); const local = this.cursors().find(c => c.stream === stream)?.ack ?? 0; if (remote > local) {
         this.ackEvents(stream, remote);
