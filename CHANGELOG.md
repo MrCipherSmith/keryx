@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.15] - 2026-11-07
+
+### Fixed
+- **Reuse a checkout after closing a Team Hub session ([#1146](https://github.com/MrCipherSmith/keryx/pull/1146)).** The executor releases the checkout before reporting the session closed, after confirming that its work and services have stopped. Start a new session on the same clean checkout without restarting the executor. Resuming a closed conversation acquires the checkout again and verifies its saved workspace baseline.
+
+### Upgrade notes
+- Update the machine executor to pick up the session close fix. Team Hub 0.4.13 can use the updated executor.
+
 ## [0.4.14] - 2026-11-07
 
 ### Fixed
