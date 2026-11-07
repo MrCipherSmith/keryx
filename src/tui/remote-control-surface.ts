@@ -9,6 +9,7 @@
 
 import { parseHistoryArgs } from "../remote/history";
 import { historyArgsOf } from "../remote/history-host";
+import { hubShareUsage, parseHubShareCommand } from "../remote/live-shell-share";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { waitingCardsText } from "./operator-confirmations";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
@@ -174,6 +175,9 @@ export function renderRemoteControlText(status: RemoteStatus): string {
  * full-screen shell, where the same command turns it on.
  */
 export function readlineRemoteControlText(line: string): string {
+  const hub = parseHubShareCommand(line);
+  if (hub === "usage") return `${hubShareUsage}\n`;
+  if (hub !== undefined) return "Hub sharing starts in the full-screen shell. Run `keryx shell --tui` and enter /remote-control hub on.\n";
   const request = parseRemoteControlArgs(line);
   if (request.action === "invalid") return `${request.message}\n`;
   const off = renderRemoteControlText({ state: "off", events: [] });

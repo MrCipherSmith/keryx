@@ -458,7 +458,7 @@ test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-que
     ["remoteQueue.requeuePendingEdit(", 1],
     // the other two (the drain and the recipient choice) are in turn-loop.ts, counted below
     ["remoteQueue.runQueued(", 1],
-    ["remoteQueue.turnStarted(source);", 1],
+    ["remoteQueue.turnStarted(source === TG_SOURCE ? source : undefined);", 1],
     // Flow 397 review T-2: the whole argument mapping, so constant flags (no failure reply) turn the test red.
     ["void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });", 1],
     ["remoteQueue.runTelegramLine(", 1],
@@ -489,7 +489,8 @@ test("flow 399 T-2: tui-shell.ts still feeds the session entry and the history i
     // The /history command typed in the topic.
     ["bridge.historyForCommand(historyArgsOf(line))", 1],
     // The bridge's reads: what the session says so far, and whether it was resumed.
-    ["history: () => (archive.length > 0 ? archive : history),", 1],
+    ["nativeHistory = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history", 1],
+    ["history: nativeHistory,", 2],
     ["sessionResumed: () => sessionResumed,", 1],
   ];
   const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
@@ -503,8 +504,7 @@ test("flow 399 T-2: tui-shell.ts still feeds the session entry and the history i
 test("flow 397 T-1: both session replacements stop the remote immediately before liveSession changes", () => {
   const source = readFileSync(SHELL_SOURCE, "utf8");
   const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
-  // The alias the shell's call sites use is the wiring method, once.
-  expect(shellOccurrences(source, "const stopRemoteForSessionSwitch = (): void => remoteQueue.stopRemoteForSessionSwitch();")).toBe(1);
+  expect(code).toMatch(/const stopRemoteForSessionSwitch = \(\): void => \{\s*void hubShare\?\.close\(\);\s*remoteQueue\.stopRemoteForSessionSwitch\(\);\s*\};/);
   // Every assignment of the live session from an opened handle is a session replacement.
   expect(shellOccurrences(source, "liveSession = opened.handle;")).toBe(2);
   // Each is directly preceded by the stop call (applyOpened, startNewSession).

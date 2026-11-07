@@ -36,6 +36,11 @@ export const LEDGER_LOG_BYTE_LIMIT = 48 * MiB;
 export const LOG_RETENTION_MS = 7 * 86400000;
 const TERMINAL_RUN_STATES = new Set(['succeeded', 'failed', 'cancelled', 'rejected', 'lost']);
 const OWNED_PROCESS_CAPACITY = 10000;
+const LEGACY_LEDGER_VERSIONS = ['1', '2', '3', '4', '5', '6'];
+const RETENTION_LEDGER_VERSION = '7';
+// Old executors do not enforce the local-only result policy. Fence them only once a session needs it.
+const LOCAL_RESULTS_LEDGER_VERSION = '8';
+const SUPPORTED_LEDGER_VERSIONS = new Set([...LEGACY_LEDGER_VERSIONS, RETENTION_LEDGER_VERSION, LOCAL_RESULTS_LEDGER_VERSION]);
 /** Identity of a daemon process, recorded at start so a later crash can be judged without trusting a PID or a lock's age. */
 export interface DaemonRecord { daemonId: string; lockNonce: string; pid: number; pgid: number; startedAt: string }
 /** One owned process spawn: an `intent` row exists before the spawn, `recorded` once its identity is known. */
@@ -80,7 +85,7 @@ export class MachineLedger {
             value: string;
         }, [
         ]>("SELECT value FROM machine_meta WHERE key='version'").get() : null;
-        if (existingVersion && !['1', '2', '3', '4', '5', '6', '7'].includes(existingVersion.value)) {
+        if (existingVersion && !SUPPORTED_LEDGER_VERSIONS.has(existingVersion.value)) {
             this.db.close();
             throw new MachineError('unsupported-ledger-version');
         }
@@ -104,20 +109,20 @@ export class MachineLedger {
             value: string;
         }, [
         ]>("SELECT value FROM machine_meta WHERE key='version'").get();
-        if (version && version.value !== '1' && version.value !== '2' && version.value !== '3' && version.value !== '4' && version.value !== '5' && version.value !== '6' && version.value !== '7') {
+        if (version && !SUPPORTED_LEDGER_VERSIONS.has(version.value)) {
             this.db.close();
             throw new MachineError('unsupported-ledger-version');
         }
         if (version?.value === '1') {
             this.db.transaction(() => { this.db.exec('ALTER TABLE machine_commands ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0; ALTER TABLE machine_commands ADD COLUMN envelope TEXT;'); this.db.query("UPDATE machine_meta SET value='2' WHERE key='version'").run(); }).immediate();
         }
-        if (version && version.value !== '7') {
+        if (version && LEGACY_LEDGER_VERSIONS.includes(version.value)) {
             // Runs already terminal before retention existed start their seven days now, never earlier.
             this.db.query("INSERT OR IGNORE INTO machine_run_terminal(stream,terminalAt) SELECT DISTINCT stream,? FROM machine_events WHERE stream LIKE 'run:%' AND json_extract(payload,'$.kind')='state' AND json_extract(payload,'$.state') IN ('succeeded','failed','cancelled','rejected','lost')").run(Date.now());
         }
-        this.db.query("INSERT OR IGNORE INTO machine_meta VALUES('version','7')").run();
+        this.db.query("INSERT OR IGNORE INTO machine_meta VALUES('version',?)").run(RETENTION_LEDGER_VERSION);
         this.db.query("INSERT OR IGNORE INTO machine_meta VALUES('ledgerId',?)").run(randomUUID());
-        this.db.query("UPDATE machine_meta SET value='7' WHERE key='version'").run();
+        this.db.query("UPDATE machine_meta SET value=? WHERE key='version' AND value IN ('1','2','3','4','5','6')").run(RETENTION_LEDGER_VERSION);
         this.ledgerId = this.db.query<{
             value: string;
         }, [
@@ -288,6 +293,17 @@ export class MachineLedger {
     }
     markStarting(hub: string, id: string, daemon: string): void { if (this.db.query("UPDATE machine_commands SET phase='starting',daemon=? WHERE hub=? AND id=? AND phase='received'").run(daemon, hub, id).changes !== 1)
         throw new MachineError('recovery-required'); }
+    /** Whole-file results cannot separate edits already present before this conversation. Keep the restriction across daemon restarts. */
+    keepSessionResultsLocal(sessionId: string): void {
+        this.db.transaction(() => {
+            this.db.query("INSERT OR IGNORE INTO machine_meta(key,value) VALUES(?,'1')").run('local-results:' + sessionId);
+            this.db.query("UPDATE machine_meta SET value=? WHERE key='version' AND value=?")
+                .run(LOCAL_RESULTS_LEDGER_VERSION, RETENTION_LEDGER_VERSION);
+        }).immediate();
+    }
+    sessionResultsStayLocal(sessionId: string): boolean {
+        return this.db.query('SELECT 1 FROM machine_meta WHERE key=?').get('local-results:' + sessionId) !== null;
+    }
     recordReceipt(hub: string, id: string, receipt: unknown): void { if (this.db.query('UPDATE machine_commands SET receipt=? WHERE hub=? AND id=?').run(JSON.stringify(receipt), hub, id).changes !== 1)
         throw new MachineError('unknown-command'); }
     commandReceipt(hub: string, id: string): unknown { const record = this.stored(hub, id); return record?.receipt ? JSON.parse(record.receipt) : null; }

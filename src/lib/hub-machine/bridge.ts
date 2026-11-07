@@ -368,8 +368,7 @@ export class MachineBridge {
             }
             catch (cause) {
                 const failure = machineFailure(cause);
-                // Uncommitted changes (a session's own work, or a crash's leftovers) make a checkout dirty, not unusable: Hub refuses a
-                // clean start on it, while the session owning that work still finds its HEAD and profile after a reconnect.
+                // Report existing edits without hiding the checkout or its profile.
                 if (failure.code === 'checkout-dirty')
                     headSha = currentCheckoutHead(m.cwd);
                 else {
@@ -872,14 +871,23 @@ export class MachineBridge {
         if (!record.ok)
             throw new MachineError('invalid-frame');
         const r = record.value;
-        if (c.target.scope !== 'session' || c.target.expectedSessionVersion !== 0 || r.state !== 'opening' || r.machineId !== this.options.enrollment.machineId || r.projectId !== mapping.projectId || r.checkoutId !== mapping.checkoutId || r.agentProfileId !== mapping.profileId || r.config.policyDigest !== profile.policyDigest || r.config.capabilityDigest !== profile.capabilityDigest || c.body.expectedHeadSha !== captureBaseline(mapping.cwd, { requireClean: true }).head)
+        if (c.target.scope !== 'session' || c.target.expectedSessionVersion !== 0 || r.state !== 'opening' || r.machineId !== this.options.enrollment.machineId || r.projectId !== mapping.projectId || r.checkoutId !== mapping.checkoutId || r.agentProfileId !== mapping.profileId || r.config.policyDigest !== profile.policyDigest || r.config.capabilityDigest !== profile.capabilityDigest)
             throw new MachineError('stale-reference');
         const lease = acquireCheckoutLease(mapping.cwd, { hubId: this.options.enrollment.hubId, runId: r.sessionId, daemonId: this.daemonId });
         let marked = false;
         try {
-            const workspace = createOwnedWorkspace(mapping.cwd, () => lease.assertOwnership());
+            const baseline = captureBaseline(mapping.cwd, { requireClean: false, verifyCommitContents: true });
+            if (baseline.head !== c.body.expectedHeadSha)
+                throw new MachineError('stale-reference');
+            const workspace = createOwnedWorkspace(mapping.cwd, () => lease.assertOwnership(), baseline);
+            const keepResultsLocal = baseline.matchesCommit !== true;
             const application = await this.connection!.authorization(c.commandId, { commandDigest: c.commandDigest, policyDigest: profile.policyDigest, target: c.target, controller: null }, c.authorizedBy);
-            const created = await applyStartingCommand(application, () => { this.ledger!.markStarting(this.options.enrollment.hubId, c.commandId, this.daemonId); marked = true; }, () => this.materializeRecord(r, mapping, profile, workspace, lease, undefined, () => application.valid()));
+            const created = await applyStartingCommand(application, () => {
+                if (keepResultsLocal)
+                    this.ledger!.keepSessionResultsLocal(r.sessionId);
+                this.ledger!.markStarting(this.options.enrollment.hubId, c.commandId, this.daemonId);
+                marked = true;
+            }, () => this.materializeRecord(r, mapping, profile, workspace, lease, undefined, () => application.valid()));
             if (!created.ok)
                 throw created.error;
             const host = created.value.host;
@@ -1079,6 +1087,8 @@ export class MachineBridge {
             this.lifecycleContext(input);
             const lease = acquireCheckoutLease(mapping.cwd, { hubId: this.options.enrollment.hubId, runId: record.sessionId, daemonId: this.daemonId });
             const workspace = createOwnedWorkspace(mapping.cwd, () => lease.assertOwnership(), baseline);
+            if (same && this.ledger!.sessionResultsStayLocal(input.source.sessionId))
+                this.ledger!.keepSessionResultsLocal(record.sessionId);
             const hosted = await this.materializeRecord(record, mapping, profile, workspace, lease, nativeSessionId, () => context.application.valid(), { ...(initialHistory ? { initialHistory } : {}), initialRestriction: { ...input.readonlyRestriction, configVersion: record.config.configVersion, effectiveFromTurnOrdinal: 1 } });
             const actual = await hosted.host.inspect();
             return { ok: true as const, value: { ...receipt, status: 'applied' as const, observedSessionVersion: actual.version, session: actual } };
@@ -1272,13 +1282,18 @@ export class MachineBridge {
                 }
                 let changes: ReturnType<OwnedWorkspace['resultChanges']> | undefined;
                 if (observation.outcome !== 'unknown') {
-                    try {
-                        changes = hosted.workspace.resultChanges();
+                    if (this.ledger!.sessionResultsStayLocal(observation.sessionId)) {
+                        this.runEvent(observation.runId, { kind: 'log', stream: 'diagnostic', text: 'Result stays on this machine because the session started with existing edits or unverified tracked files.' });
                     }
-                    catch (cause) {
-                        // A result the machine refuses to upload (secret screening, quota, unsafe path) stays local; the run still ends truthfully and says why.
-                        this.runEvent(observation.runId, { kind: 'log', stream: 'diagnostic', text: `Result not uploaded: ${machineFailure(cause).code}. The changes stay only in the local checkout.` });
-                        this.notice(cause);
+                    else {
+                        try {
+                            changes = hosted.workspace.resultChanges();
+                        }
+                        catch (cause) {
+                            // A refused upload stays local; the run still ends truthfully and says why.
+                            this.runEvent(observation.runId, { kind: 'log', stream: 'diagnostic', text: `Result not uploaded: ${machineFailure(cause).code}. The changes stay only in the local checkout.` });
+                            this.notice(cause);
+                        }
                     }
                 }
                 if (observation.outcome !== 'unknown' && changes !== undefined) {

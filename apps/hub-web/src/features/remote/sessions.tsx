@@ -40,6 +40,7 @@ import {
 } from "./shared";
 import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft, type MessageDraft } from "./work";
 import { ForkSession } from "./fork";
+import { LiveShells } from "./live-shells";
 import { SessionTranscript } from "./session-transcript";
 import { Settings } from "./settings";
 import { historyQueryKey, mergeTimeline, messageDeliveriesKey, observedDeliveries, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
@@ -74,6 +75,7 @@ export function SessionsView() {
         }
       />
       {create && <CreateSession focusOnOpen={focusForm} />}
+      {hub.projectId && <LiveShells key={hub.scopeKey + ":" + hub.projectId} projectId={hub.projectId} />}
       <Feedback query={sessions} />
       {sessions.data?.sessions.length === 0 && (
         <EmptyState>{t("empty")}</EmptyState>
@@ -153,7 +155,6 @@ function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
     !m.revoked &&
     !m.recoveryRequired &&
     c?.available &&
-    c.clean &&
     !c.busy &&
     profile?.adapter === "keryx-native-v1" &&
     profile.readiness === "ready";
@@ -235,14 +236,14 @@ function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
               <option
                 key={c.checkoutId}
                 value={c.checkoutId}
-                disabled={!c.available || !c.clean || c.busy}
+                disabled={!c.available || c.busy}
               >
-                {c.label} · {c.clean ? "" : t("dirty")}{" "}
-                {c.busy ? t("busy") : ""}
+                {c.label}{!c.clean && ` · ${t("dirty")}`}{c.busy && ` · ${t("busy")}`}
               </option>
             ))}
         </Select>
       </Field>
+      {c?.available && !c.busy && !c.clean && <Notice>{t("sessionLaunchDirtyCheckout")}</Notice>}
       <Field label={t("profile")}>
         <Select
           value={draft.profileId}

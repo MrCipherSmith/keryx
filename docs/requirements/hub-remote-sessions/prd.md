@@ -13,7 +13,7 @@ Users: human operators launch/control work, reviewers inspect results, machine o
 
 - R1: Enroll each machine explicitly with a separate revocable, project-scoped machine credential and locally authorized mappings. Verification: judged.
 - R2: List machine connectivity, checkout availability and truthful agent readiness; remote authority never exceeds local policy. Verification: judged.
-- R3: A human operator launches an exact in-progress Flow/spec/checkout/profile through an idempotent web operation; unowned dirty initial checkouts and conflicting busy checkouts are refused; later turns may continue verified session-owned changes. Verification: judged.
+- R3. A human operator launches work with an exact in-progress Flow, specification, checkout and profile through an idempotent web operation. A new session may start with existing edits and keeps its file and check results on the machine when the baseline cannot be verified against HEAD. Conflicting busy checkouts are refused. Later turns may continue from a verified session baseline. [verify: judged]
 - R4: Native Keryx execution has real tools, live progress and bounded local supervision, rather than a placeholder prompt/result call. Verification: judged.
 - R5: Reconnect, duplicate messages and ambiguous process crashes do not silently launch a second run. Unknown is a first-class state. Verification: judged.
 - R6: Remote approval is human-only, exact-action-bound, expiring, one-time and subordinate to local policy. Verification: judged.
