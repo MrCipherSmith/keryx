@@ -7,7 +7,8 @@ const message = (cursor: number, createdAt = "2026-01-01T00:00:00Z") =>
 const entry = (operationId: string, anchor: number, invokedAt = "2026-01-01T00:00:00Z"): CommandEntry =>
   ({ outcome: { operationId } as unknown as Control["CommandOutcome"], invokedAt, anchor });
 const label = (timeline: ReturnType<typeof mergeTimeline>) =>
-  timeline.map(item => item.kind === "message" ? item.message.messageId : item.item.outcome.operationId);
+  timeline.map(item => item.kind === "message" ? item.message.messageId :
+    item.kind === "outcome" ? item.item.outcome.operationId : item.delivery.operationId);
 test("an outcome goes after the last message at or below its anchor and before later ones", () => {
   expect(label(mergeTimeline([message(1), message(2), message(3)], [entry("a", 2)]))).toEqual(["m1", "m2", "a", "m3"]);
 });
