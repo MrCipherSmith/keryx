@@ -24,9 +24,9 @@ export function LiveShells({ projectId, before, after }: {
   before?: ReactNode;
   after?: ReactNode;
 }) {
-  const { scopeKey } = useHub();
+  const { scopeKey, location, navigate } = useHub();
   const { t } = useTranslation("remote");
-  const [selected, setSelected] = useState<string | null>(null);
+  const selected = location.liveShellId;
   const returnFocus = useRef<string | null>(null);
   const path = remoteProject(projectId) + "/live-shells";
   const list = useQuery({
@@ -38,7 +38,7 @@ export function LiveShells({ projectId, before, after }: {
   });
   if (selected) {
     return <LiveShellPane key={selected} projectId={projectId} id={selected}
-      path={path + "/" + encodeURIComponent(selected)} onDetach={() => setSelected(null)} />;
+      path={path + "/" + encodeURIComponent(selected)} onDetach={() => navigate({ liveShellId: undefined })} />;
   }
   const supported = !(list.error instanceof ApiError && list.error.status === 404);
   return <>
@@ -66,7 +66,7 @@ export function LiveShells({ projectId, before, after }: {
                 }}
                 onClick={() => {
                   returnFocus.current = shell.id;
-                  setSelected(shell.id);
+                  navigate({ tab: "sessions", sessionId: undefined, liveShellId: shell.id });
                 }}>{t("liveShells.open")}</Button>
             </li>
           ))}
@@ -275,8 +275,8 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
     if (shell?.id) title.current?.focus({ preventScroll: true });
   }, [shell?.id]);
 
-  async function detach() {
-    if (owns) await control.mutateAsync("release").catch(() => undefined);
+  function detach() {
+    if (owns) void control.mutateAsync("release").catch(() => undefined);
     onDetach();
   }
 
@@ -334,7 +334,10 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
         onClick={() => submit({ key: crypto.randomUUID(), kind: "stop", turnId: stopTurnId })} />
     : <ChatAction kind="send" label={t("send")} type="submit" disabled={!canSend} />;
   return (
-    <section className="session-workbench chat-shell">
+    <section className="session-workbench chat-shell session-chat-page">
+      <Button className="session-back" variant="ghost" disabled={control.isPending} onClick={detach}>
+        <span aria-hidden="true">←</span> {t("chatBackToSessions")}
+      </Button>
       <header className="session-workbench-header">
         <div className="session-identity">
           <MessageSquare size={18} />
@@ -357,7 +360,7 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
             <summary aria-label={t("chatActions")} title={t("chatActions")}><Ellipsis size={20} aria-hidden="true" /></summary>
             <div className="chat-header-menu-options">
               {owns && <Button variant="ghost" disabled={control.isPending} onClick={() => control.mutate("release")}>{t("release")}</Button>}
-              <Button variant="ghost" disabled={control.isPending} onClick={() => void detach()}>{t("liveShells.detach")}</Button>
+              <Button variant="ghost" disabled={control.isPending} onClick={detach}>{t("liveShells.detach")}</Button>
             </div>
           </details>
         </div>

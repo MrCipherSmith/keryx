@@ -100,7 +100,7 @@ export function SessionsView() {
               hub.navigate({ tab: "sessions", sessionId: s.sessionId })
             }
           >
-            {t("details")}
+            {t("chatOpen")}
           </Button>
         </Panel>
       ))}
@@ -314,12 +314,13 @@ export function SessionDetail({ sessionId, onNewSession }: { sessionId: string; 
     sessionPath(hub.projectId ?? "", sessionId),
   );
   return (
-    <div className="space-y-5">
+    <div className="session-chat-page">
       <Button
+        className="session-back"
         variant="ghost"
         onClick={() => hub.navigate({ sessionId: undefined })}
       >
-        ← {t("back")}
+        <span aria-hidden="true">←</span> {t("chatBackToSessions")}
       </Button>
       <Feedback query={query} />
       {query.data && <SessionSurface key={query.data.sessionId} record={query.data} onNewSession={onNewSession} />}

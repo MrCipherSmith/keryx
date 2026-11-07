@@ -1,8 +1,9 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
+import { useState } from "react";
 import type { LiveShellDelivery, LiveShellDetail, LiveShellSummary } from "../../../src/remote-control/live-shell";
 import { resetClient } from "../src/api/client";
-import type { HubContextValue } from "../src/app/hub-context";
+import { HubContext, type HubContextValue } from "../src/app/hub-context";
 import { LiveShells } from "../src/features/remote/live-shells";
 import i18n from "../src/i18n";
 import { useDraftStore } from "../src/state/drafts";
@@ -117,8 +118,18 @@ beforeEach(async () => {
   });
 });
 
+function ShellBrowser({ scopeKey = context.scopeKey }: { scopeKey?: number }) {
+  const [location, setLocation] = useState(context.location);
+  return <HubContext.Provider value={{
+    ...context, scopeKey, location,
+    navigate: patch => setLocation(previous => ({ ...previous, ...patch })),
+  }}>
+    <LiveShells projectId={projectId} />
+  </HubContext.Provider>;
+}
+
 async function openWithControl() {
-  renderHub(<LiveShells projectId={projectId} />, context);
+  renderHub(<ShellBrowser />, context);
   fireEvent.click(await screen.findByRole("button", { name: "Connect to Terminal conversation" }));
   expect(await screen.findByText("Already said in the terminal")).toBeInTheDocument();
   expect(screen.getByText("Previously answered here")).toBeInTheDocument();
@@ -183,7 +194,7 @@ test("only the matching operation acknowledgement can clear the draft", async ()
 
 test("another browser using the same operator can read history and claim after release", async () => {
   await openWithControl();
-  const other = renderHub(<LiveShells projectId={projectId} />, { ...context, scopeKey: 2 });
+  const other = renderHub(<ShellBrowser scopeKey={2} />, context);
   const browser = within(other.container);
   fireEvent.click(await browser.findByRole("button", { name: "Connect to Terminal conversation" }));
   expect(await browser.findByText("Previously answered here")).toBeInTheDocument();

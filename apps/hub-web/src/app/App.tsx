@@ -440,6 +440,7 @@ function Shell({
                       flowId: undefined,
                       revisionId: undefined,
                       sessionId: undefined,
+                      liveShellId: undefined,
                       runId: undefined,
                       machineId: undefined,
                     });

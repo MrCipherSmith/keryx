@@ -1,5 +1,7 @@
 export default { composerKeyboardHint: "Enter to send · Shift+Enter for a new line", newAssistantReply: "New Keryx reply (message {{cursor}}).", noOlderMessages: "No older messages", olderMessages: "Older messages",
   chatActions: "Session actions",
+  chatBackToSessions: "Back to sessions",
+  chatOpen: "Open chat",
   chatStop: "Stop response",
   chatModel: "Model",
   chatUsage: "Usage",

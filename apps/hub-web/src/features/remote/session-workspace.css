@@ -3,6 +3,22 @@
   display: grid;
   gap: 12px;
 }
+.session-chat-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.session-back {
+  justify-self: start;
+}
+.session-chat-page .session-conversation-column {
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-block-size: min(68dvh, 42rem);
+}
+@media (max-width: 767px) {
+  .session-chat-page .session-back { min-height: 44px; }
+  .session-chat-page .session-conversation-column { min-block-size: min(62dvh, 42rem); }
+}
 .session-workbench-header {
   display: flex;
   align-items: center;
