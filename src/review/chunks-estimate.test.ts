@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runChunks } from "../commands/review-chunks";
-import { saveRoutingConfig } from "../harness/routing/config";
+import { setRoutingCategory } from "../harness/routing/settings";
 import { recordChunk } from "./chunks";
 import {
   AUTOMATIC_REVIEW_DISCLOSURE_FILE,
@@ -186,12 +186,12 @@ test("the ceiling comes from routing.config.json reviewChunks.maxPasses and fall
   expect((await readChunkLimits(root)).maxPasses).toBe(25);
 });
 
-test("saving the routing table keeps the reviewChunks key", async () => {
-  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ categories: {}, reviewChunks: { maxPasses: 7 } }));
-  await saveRoutingConfig("project", { cwd: root }, { review: { kind: "session-default" } });
+test("saving routing settings keeps the reviewChunks key", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses: 7 } }));
+  await setRoutingCategory("project", { cwd: root, configDir: root }, "review", { mode: "baseline" });
   const saved = JSON.parse(readFileSync(path.join(root, "routing.config.json"), "utf8"));
   expect(saved.reviewChunks).toEqual({ maxPasses: 7 });
-  expect(saved.categories.review).toEqual({ kind: "session-default" });
+  expect(saved.modelRouting.categories.review).toEqual({ mode: "baseline" });
 });
 
 test("a routing.config.json that is not a JSON object leaves the defaults and a warning that says so (R2-33)", async () => {

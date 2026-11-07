@@ -64,7 +64,7 @@ describe("checkDispatch model block", () => {
     expect((await checkDispatch([payload(plain)])).ok).toBe(true);
   });
 
-  test("a report-only tier result from a routing v2 refusal cannot be dispatched as an implicit fallback", async () => {
+  test("a report-only tier result from a routing refusal cannot be dispatched as an implicit fallback", async () => {
     const refused = {
       tier: "standard",
       tier_reasons: ["base"],

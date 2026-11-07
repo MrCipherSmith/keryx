@@ -1,4 +1,5 @@
 export default {
+  historyRepeated: "Повторные события · {{count}}", fileType: "Тип файла", documentNoMatches: "Ничего не найдено", resetDocumentSearch: "Очистить поиск и фильтры", searchRevisionFiles: "Поиск по пути файла", noRevisionFiles: "Файлы не найдены",
   historyEventType: "Тип события",
   historyYou: "Вы",
   historyIdentifiers: "Идентификаторы",

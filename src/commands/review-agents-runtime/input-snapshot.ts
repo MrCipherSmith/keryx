@@ -99,7 +99,7 @@ export function bindSnapshotAdapter(adapter: ReviewAgentAdapter, directory: stri
     try { await writeFile(file, serialized, { flag: "wx", mode: 0o600 }); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      if (await readFile(file, "utf8") !== serialized) throw new Error("Persisted input packet mismatch");
+      if (await readFile(file, "utf8") !== serialized) throw new Error("Persisted input packet mismatch", { cause: error });
     }
     const result = await adapter.execute({ ...request,
       task: `${request.task}\n\nHost-pinned review input packet (source is the run-local revision snapshot; never substitute the live project):\n${serialized}` }, context);

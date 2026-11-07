@@ -4,7 +4,7 @@ import { canonicalDigest, type Control } from "../remote-control/protocol";
 export interface SessionRoutingOptions {
   config: Control["SessionConfig"];
   availability: Control["RoutingAvailability"];
-  classify?: (text: string, config: Control["SessionConfig"], signal?: AbortSignal) => Promise<string | { readonly candidateId?: string; readonly selectionReceiptId?: string } | undefined>;
+  classify?: (text: string, config: Control["SessionConfig"], signal?: AbortSignal) => Promise<string | { readonly candidateId?: string; readonly selectionReceiptId?: string; readonly classifierFallback?: true } | undefined>;
   /** Active routing failures that must refuse the turn instead of becoming a legacy baseline fallback. */
   fatalClassificationError?: (cause: unknown) => boolean;
 }
@@ -31,7 +31,10 @@ export function createSessionRouting(options: SessionRoutingOptions) {
           const classified = await options.classify?.(text, pinned, signal);
           const selected = typeof classified === "string" ? classified : classified?.candidateId;
           if (selected !== undefined && (selected === pinned.baselineCandidateId || pinned.routing.candidateIds.includes(selected)) && available(selected, pinned) !== undefined) {
-            effectiveCandidateId = selected; routingDecision = "classified";
+            effectiveCandidateId = selected;
+            // A receipt for the configured onFailure assignment still reports that the classifier failed.
+            if (typeof classified === "object" && classified.classifierFallback === true) { routingDecision = "classifier-fallback"; fallbackReason = "classifier-failed"; }
+            else routingDecision = "classified";
             selectionReceiptId = typeof classified === "object" ? classified.selectionReceiptId : undefined;
           } else { routingDecision = "classifier-fallback"; fallbackReason = selected === undefined ? "classifier-failed" : "candidate-unavailable"; }
         } catch (cause) {

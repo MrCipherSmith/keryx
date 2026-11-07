@@ -1,68 +1,50 @@
-// Flow 305 (Flow A), AC4 — the `/routing` modal: list + a flat model picker.
+// The `/routing` modal: every category's routing decision + a flat model picker.
 //
-// List: every category (`ROUTING_CATEGORIES`) with its current resolution.
+// List: every category (`ROUTING_CATEGORIES`) previewed through the routing
+// resolver against the session baseline, with the layer that assigned it.
 // Enter opens the picker: ONE searchable/filterable list spanning every
-// connected provider's models (`mountFilterList`, `./filter-list.ts` —
-// extracted from `tui-shell.ts` so this file can reuse it without a
-// `tui-shell.ts` <-> modal import cycle), plus one "provider default" row per
-// connected provider and one "session default" row — never a two-step
-// provider-then-model flow (PRD §7, §Non-goals). A confirmed pick writes
-// immediately to the per-user layer (AC3's default write layer), not on
-// modal close.
+// connected provider's models (`mountFilterList`, `./filter-list.ts`), plus
+// one "provider default" row per connected provider and one "session default"
+// row. A confirmed pick writes immediately to the user layer's canonical
+// routing settings (`settings.ts`), not on modal close.
 //
-// Flow 305 review findings, additive to AC4:
-//  - AC10: the SAME connected-provider list already fetched once for the
-//    flat picker (`reload()`, below — not a second live probe) also gates
-//    category RESOLUTION; a rejected layer's entry is shown with the
-//    "not connected, falling back to …" notice.
-//  - AC11: an unapproved/changed project `routing.config.json` is ignored
-//    (surfaced by `loadRoutingConfig` itself, `config.ts`) with a visible
-//    notice; `t` on the list tab arms an approve action that shows the
-//    file's entries BEFORE recording anything (`y` confirms, any other key
+//  - The SAME connected-provider list fetched once for the flat picker
+//    (`reload()`, below — not a second live probe) also feeds the preview.
+//  - Unapproved project settings are ignored (`readRoutingSettings`) with a
+//    visible notice; `t` on the list tab arms an approve action that shows the
+//    project layer BEFORE recording anything (`y` confirms, any other key
 //    cancels) — the same discipline `keryx routing trust` uses on the CLI.
+import { normalizeRoutingConfig, routingDigest, type NormalizedRoutingConfig, type RoutingAssignment, type RoutingConfigLayer } from "../harness/routing/config";
 import {
-  loadRoutingConfig,
-  loadRoutingConfigRaw,
-  saveRoutingConfig,
-  type RoutingConfigLocation,
-  type RoutingConfigResult,
-} from "../harness/routing/config";
-import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
-import { routingV2Digest, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+  approveProjectRouting,
+  readRoutingSettings,
+  ROUTING_NORMALIZATION,
+  setRoutingCategory,
+  type RoutingLocation,
+  type RoutingScope,
+} from "../harness/routing/settings";
 import type { RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
 import type { RoutingJournalLocation } from "../harness/routing/routing-journal";
 import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
 import { buildCatalogRoutingSnapshot, type RoutingSnapshotPolicy } from "../harness/routing/snapshot-adapter";
+import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
 import {
   connectedPredicateFrom,
-  describeAssignment,
-  describeCategoryResolution,
-  describeRejectionNotice,
   flatModelOptions,
-  resolveCategoryDetailed,
   ROUTING_CATEGORIES,
-  sessionDerivationModels,
-  type AvailablePredicate,
   type CategoryAssignment,
-  type ConnectedPredicate,
   type FlatModelOption,
   type FlatPickerProvider,
-  type ProviderListState,
   type RoutingCategory,
-  type RoutingSource,
-  type RoutingTable,
 } from "../harness/routing/table";
-import { approveProjectRouting, describeTableForApproval, type RoutingTrustResult } from "../harness/routing/trust";
-import { deriveDefaultTable } from "../harness/routing/derive-default-table";
+import { describeLayerForApproval, describeRoutingAssignment } from "../harness/routing/trust";
 import {
-  availablePredicateFromProfiles,
   formatNumericField,
   isModelDerivable,
   loadModelProfiles,
   profileKey,
   type ModelProfile,
 } from "../harness/routing/model-profile";
-import { readTaskCostStore, taskCostLookupFrom, type TaskCostLookup } from "../harness/routing/task-cost";
 import type { DetectedProvider } from "../commands/select";
 import type { ProviderCatalogDeps } from "../harness/provider-catalog";
 import { mountFilterList, type KeypressEvent } from "./filter-list";
@@ -86,20 +68,12 @@ export const ROUTING_FOOTER = [
   { key: "esc", label: "close" },
 ] as const;
 
-export interface RoutingCategoryRow {
-  readonly category: RoutingCategory;
-  readonly assignment: CategoryAssignment;
-  readonly source: RoutingSource;
-  /** AC10 — the layer's own entry, when one was rejected (not connected, or — flow 327 — unavailable) before landing here. */
-  readonly rejected?: { readonly assignment: CategoryAssignment; readonly source: RoutingSource; readonly reason?: "unavailable" };
-}
-
-export interface RoutingCategoryV2Row {
+export interface RoutingPreviewRow {
   readonly category: RoutingCategory;
   readonly receipt: RoutingDecisionReceipt;
 }
 
-export function formatRoutingV2ListLines(rows: readonly RoutingCategoryV2Row[], selected: number): string[] {
+export function formatRoutingPreviewLines(rows: readonly RoutingPreviewRow[], selected: number): string[] {
   return rows.map((row, index) => {
     const mark = index === selected ? ">" : " ";
     const decision = row.receipt.decision;
@@ -111,8 +85,8 @@ export function formatRoutingV2ListLines(rows: readonly RoutingCategoryV2Row[], 
   });
 }
 
-export function previewCatalogRoutingCategoriesV2(options: {
-  readonly config: NormalizedRoutingV2Config;
+export function previewCatalogRoutingCategories(options: {
+  readonly config: NormalizedRoutingConfig;
   readonly providers: readonly FlatPickerProvider[];
   readonly profiles: Readonly<Record<string, ModelProfile>>;
   readonly baseline: { readonly providerId: string; readonly modelId: string };
@@ -121,7 +95,7 @@ export function previewCatalogRoutingCategoriesV2(options: {
   readonly policyRevision: string;
   readonly capabilityRevision: string;
   readonly journal?: RoutingJournalLocation;
-}): RoutingCategoryV2Row[] {
+}): RoutingPreviewRow[] {
   return ROUTING_CATEGORIES.map((category) => {
     const request = {
       requestId: `routing-inspector:${category}`,
@@ -150,69 +124,30 @@ export function previewCatalogRoutingCategoriesV2(options: {
   });
 }
 
-/**
- * The list tab's rows, derived from both layers (AC3's precedence, AC10's
- * connected fallback). `derived`/`available` (flow 327) are optional and
- * additive — omitted, behavior is byte-identical to before either existed
- * (AC14).
- */
-export function routingCategoryRows(
-  project: RoutingConfigResult,
-  user: RoutingConfigResult,
-  connected: ConnectedPredicate = () => true,
-  derived: RoutingTable = {},
-  available: AvailablePredicate = () => true,
-): RoutingCategoryRow[] {
-  return ROUTING_CATEGORIES.map((category) => ({
-    category,
-    ...resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connected, available),
-  }));
-}
-
-/** `$1.23`/`$0.0041` — enough precision to distinguish two cheap models, never scientific notation. Shared with the CLI's own formatter shape (`src/commands/routing.ts`). */
-function formatUsdShort(value: number): string {
-  const digits = value < 0.01 ? 4 : 2;
-  return `$${value.toFixed(digits)}`;
-}
-
-/**
- * Flow 341 (AC7) — the per-task median cost suffix for a `"derived"` row,
- * when a matching `task-cost.ts` stats entry exists: `" · ~$0.04/task (n=37)"`.
- * Empty for every other row (nothing recorded yet, a non-`"model"`
- * assignment, or the row was not resolved by the `derived` layer) — never a
- * placeholder, so an operator with no history sees the row exactly as before
- * this flow.
- */
-export function describeTaskCostSuffix(row: RoutingCategoryRow, lookup: TaskCostLookup): string {
-  if (row.source !== "derived" || row.assignment.kind !== "model") return "";
-  const stats = lookup(row.assignment.providerId, row.assignment.modelId, row.category);
-  if (stats === undefined || stats.medianCostUsd === undefined) return "";
-  return `  ·  ~${formatUsdShort(stats.medianCostUsd)}/task (n=${stats.n})`;
-}
-
-/**
- * The list tab's rendered lines. Exported so a test can hold it against the
- * CLI's own `list` output shape. `sessionProviderId` (flow 327) is optional —
- * omitted, a `"derived"` row (which cannot occur without a `derived` layer
- * anyway) would fall back to a bare `describeAssignment`, but no existing
- * test constructs that state, so this stays behavior-identical for AC14.
- * `taskCostFor` (flow 341, optional and additive) drives
- * `describeTaskCostSuffix`; omitted, every line is byte-identical to before
- * that flow.
- */
-export function formatRoutingListLines(
-  rows: readonly RoutingCategoryRow[],
-  selected: number,
-  sessionProviderId?: string,
-  taskCostFor: TaskCostLookup = () => undefined,
-  providerList?: ProviderListState,
-): string[] {
-  return rows.map((row, index) => {
+/** Every category's assignment and source, for when there is no session baseline to resolve against. */
+export function formatRoutingAssignmentLines(config: NormalizedRoutingConfig, selected: number): string[] {
+  return ROUTING_CATEGORIES.map((category, index) => {
     const mark = index === selected ? ">" : " ";
-    const suffix = row.rejected !== undefined ? `  (${describeRejectionNotice(row.rejected, row.assignment, providerList)})` : "";
-    const costSuffix = describeTaskCostSuffix(row, taskCostFor);
-    return `${mark} ${row.category.padEnd(12)} ${describeCategoryResolution(row, sessionProviderId)}  [${row.source}]${suffix}${costSuffix}`;
+    return `${mark} ${category.padEnd(12)} ${describeRoutingAssignment(config.categories[category])}  [${config.categorySources[category]}]`;
   });
+}
+
+/** The session's own model is always reachable, even when the provider list omits it (flow 468). */
+function withSessionModel(providers: readonly FlatPickerProvider[], session: { readonly providerId: string; readonly modelId: string }): readonly FlatPickerProvider[] {
+  const own = providers.find((provider) => provider.name === session.providerId);
+  if (own === undefined) return [...providers, { name: session.providerId, models: [session.modelId] }];
+  if (own.models?.includes(session.modelId) === true) return providers;
+  return providers.map((provider) => provider === own ? { ...provider, models: [...(provider.models ?? []), session.modelId] } : provider);
+}
+
+/** A picker row as a routing assignment; a provider default resolves to that provider's documented model. */
+export function pickerAssignment(assignment: CategoryAssignment): RoutingAssignment | { readonly error: string } {
+  if (assignment.kind === "session-default") return { mode: "baseline" };
+  if (assignment.kind === "model") return { mode: "model", target: { providerId: assignment.providerId, modelId: assignment.modelId } };
+  const modelId = resolveProviderDefaultModelId(assignment.providerId);
+  return modelId === undefined
+    ? { error: `${assignment.providerId} has no documented default model; pick a model instead` }
+    : { mode: "model", target: { providerId: assignment.providerId, modelId } };
 }
 
 /** Longer than the catalog's own per-provider fetch bound (8s), so a slow-but-answering catalog still lands. */
@@ -233,20 +168,15 @@ export interface RoutingModalOptions {
   /** How long `reload()` waits for the provider loader before showing the model list as unavailable (flow 468). Default {@link ROUTING_PROVIDERS_TIMEOUT_MS}; a test seam. */
   timeoutMs?: number;
   /**
-   * Flow 327 (AC12) — the session's own current provider/model, for the
-   * `derived` layer (PRD §6.3 — v1 derives from the session's own provider
-   * only). `undefined` (no live selection, e.g. a test that doesn't care
-   * about derivation) means the modal shows no `derived` rows — every
-   * category simply resolves through `user`/`project`/`default` as before
-   * this flow (AC14: unaffected when omitted).
+   * The session's own current provider/model — the baseline every preview
+   * resolves against. `undefined` (no live selection) shows each category's
+   * assignment and source without resolving it.
    */
   session?: { providerId: string; modelId: string };
   /** Model-profile catalogue loader (flow 327) — defaults to the real per-user store (`../harness/routing/model-profile.ts`). Test seam. */
   loadProfiles?: (userConfigDir: string | undefined) => Record<string, ModelProfile>;
-  load?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
-  loadRaw?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
-  save?: (layer: "project" | "user", location: RoutingConfigLocation, table: RoutingTable) => Promise<void>;
-  approve?: (cwd: string, table: RoutingTable, userConfigDir: string | undefined) => Promise<RoutingTrustResult>;
+  /** Category write (test seam). Default: the canonical routing settings store. */
+  write?: (scope: RoutingScope, location: RoutingLocation, category: RoutingCategory, assignment: RoutingAssignment) => Promise<void>;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   /** True while a composer choice or permission prompt owns the keyboard (review pattern, flow 300). */
@@ -270,25 +200,14 @@ export interface RoutingModalHandle extends ModalHandle {
 export function openRouting(otui: unknown, chrome: unknown, options: RoutingModalOptions): RoutingModalHandle | undefined {
   const core = otui as OpenTui;
   const r = (chrome as { renderer?: unknown } | undefined)?.renderer;
-  const load = options.load ?? loadRoutingConfig;
-  const loadRaw = options.loadRaw ?? loadRoutingConfigRaw;
-  const save = options.save ?? saveRoutingConfig;
-  const approve = options.approve ?? ((cwd, table, userConfigDir) => approveProjectRouting(cwd, table, userConfigDir));
-  const location: RoutingConfigLocation = {
+  const write = options.write ?? setRoutingCategory;
+  const location: RoutingLocation = {
     cwd: options.cwd,
-    ...(options.userConfigDir !== undefined ? { userConfigDir: options.userConfigDir } : {}),
+    ...(options.userConfigDir !== undefined ? { configDir: options.userConfigDir } : {}),
   };
   const loadProviders = options.providers ?? (() => loadRoutingProviders(options.redetect, options.catalog));
   const providersTimeoutMs = options.timeoutMs ?? ROUTING_PROVIDERS_TIMEOUT_MS;
   const loadProfiles = options.loadProfiles ?? ((dir) => loadModelProfiles(dir));
-  let activeV2: NormalizedRoutingV2Config | undefined;
-  let activeV2Error: string | undefined;
-  try {
-    activeV2 = loadActiveRoutingV2(options.cwd, options.userConfigDir);
-  } catch (error) {
-    activeV2Error = error instanceof Error ? error.message : String(error);
-  }
-  const usesV2 = activeV2 !== undefined || activeV2Error !== undefined;
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const panelRows =
     typeof rendererHint?.width === "number" && typeof rendererHint.height === "number"
@@ -296,56 +215,40 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
       : 13;
   const bodyRows = Math.max(1, options.visibleRows ?? panelRows);
 
-  let rows: RoutingCategoryRow[] = [];
-  let rowsV2: RoutingCategoryV2Row[] = [];
+  let config: NormalizedRoutingConfig | undefined;
+  let previewRows: RoutingPreviewRow[] = [];
   let flatOptions: FlatModelOption[] = [];
   let providers: readonly FlatPickerProvider[] = [];
-  /** Why the provider list could not be read (loader rejected or timed out) — shown on the Model tab and behind "provider list unavailable". */
+  /** Why the provider list could not be read (loader rejected or timed out) — shown on the Model tab. */
   let providersError: string | undefined;
-  /** Why the routing table itself could not be read; keeps the list tab off "Reading routing table…" forever. */
+  /** Why the routing settings could not be read; keeps the list tab off "Reading routing settings…" forever. */
   let loadError: string | undefined;
-  /** Flow 327 (AC12) — the operator's model-profile catalogue, reloaded alongside the routing tables. */
   let profiles: Record<string, ModelProfile> = {};
-  /** Flow 341 (AC7) — the real measured task-cost store, reloaded alongside the routing tables; `formatRoutingListLines` reads from it via `taskCostFor`. */
-  let taskCostFor: TaskCostLookup = () => undefined;
   let projectIsUntrusted = false;
   let selected = 0;
   let statusText = "enter to pick a model for the selected category";
   let closed = false;
   let currentTab: string = "list";
-  /** AC11 — armed by `t`, confirmed by `y`, cancelled by any other key. */
-  let armedApproval: RoutingTable | undefined;
-  /** Every async action (write/arm/approve/reload) assigns here — `settled()` (tests) awaits exactly the work a keypress actually started, instead of a fixed number of ticks. */
+  /** Armed by `t`, confirmed by `y`, cancelled by any other key. */
+  let armedApproval: RoutingConfigLayer | undefined;
+  /** Every async action (write/arm/approve/reload) assigns here — `settled()` (tests) awaits exactly the work a keypress started. */
   let inFlight: Promise<void> = Promise.resolve();
   let statusNode: { content: unknown } | undefined;
   let bodyNode: { content: unknown } | undefined;
   const host: { handle?: ModalHandle } = {};
   const keys: { off?: () => void } = {};
 
-  const selectedRow = (): RoutingCategoryRow | undefined => rows[selected];
+  const selectedCategory = (): RoutingCategory | undefined => (config === undefined ? undefined : ROUTING_CATEGORIES[selected]);
 
-  const listLines = (): string[] =>
-    usesV2
-      ? rowsV2.length === 0 ? [loadError === undefined ? "Reading routing v2 snapshot…" : `routing v2 unavailable: ${loadError}`] : formatRoutingV2ListLines(rowsV2, selected)
-      : rows.length === 0
-      ? [loadError === undefined ? "Reading routing table…" : `routing table unavailable: ${loadError}`]
-      : formatRoutingListLines(rows, selected, options.session?.providerId, taskCostFor, { providers, unavailable: providersError !== undefined });
+  const listLines = (): string[] => {
+    if (config === undefined) return [loadError === undefined ? "Reading routing settings…" : `routing settings unavailable: ${loadError}`];
+    return options.session === undefined ? formatRoutingAssignmentLines(config, selected) : formatRoutingPreviewLines(previewRows, selected);
+  };
 
   const paintList = (): void => {
-    // Guarded on `currentTab`, not `host.handle?.activeTab()` (which is
-    // unavailable during the very first synchronous paint — `host.handle` is
-    // only assigned once `openModal` has already returned, after the initial
-    // `renderTab` call already ran) and not merely on `closed`:
-    // `statusNode`/`bodyNode` are reused closure variables the "list" tab's
-    // own `renderTab` call assigns; once the operator switches to "picker",
-    // modal-host tears those nodes down (`unmountActiveTab`) and the picker
-    // branch never reassigns them (it uses its own status node). `reload()`
-    // (called from `writePick`, which can run while "picker" is still
-    // active, right before it switches back to "list") must not paint into
-    // an already-destroyed TextRenderable. A THEME CHANGE while "picker" is
-    // active hits this exact guard too (`onThemeChange` below calls
-    // `paintList` through `guardedThemeRepaint`) — regression-pinned by
-    // `routing-inspector.test.ts`.
+    // Guarded on `currentTab`: once the operator switches to "picker",
+    // modal-host tears the list nodes down and `reload()` (called from
+    // `writePick`) or a theme change must not paint into them.
     if (closed || currentTab !== "list") return;
     if (statusNode !== undefined) {
       statusNode.content = core.t`${roleChunk(core, armedApproval !== undefined ? "attention" : "muted", statusText)}`;
@@ -374,7 +277,8 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     try {
       await reloadUnguarded();
     } catch (error) {
-      // Never reject and never leave "Reading routing table…": the reason is the visible state.
+      // Never reject and never leave "Reading routing settings…": the reason is the visible state.
+      config = undefined;
       loadError = error instanceof Error ? error.message : String(error);
       statusText = `routing: ${loadError}`;
       paintList();
@@ -382,103 +286,100 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   };
 
   const reloadUnguarded = async (): Promise<void> => {
-    if (activeV2Error !== undefined) throw new Error(activeV2Error);
-    if (activeV2 !== undefined) {
-      if (options.session === undefined) throw new Error("routing v2 preview requires a session baseline");
-      const loaded = await loadProvidersBounded();
-      loadError = undefined;
-      providers = loaded.list;
-      providersError = loaded.error;
-      profiles = loadProfiles(location.userConfigDir);
-      projectIsUntrusted = false;
-      const connected = connectedPredicateFrom(providers, options.session);
-      const external = await resolveExternalSetting({ cwd: location.cwd, ...(location.userConfigDir === undefined ? {} : { dir: location.userConfigDir }) });
-      const externalProviders = loadExternalProvidersConfig(location.userConfigDir).config;
+    const settings = readRoutingSettings(location);
+    const loaded = await loadProvidersBounded();
+    loadError = undefined;
+    config = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
+    providers = loaded.list;
+    providersError = loaded.error;
+    profiles = loadProfiles(options.userConfigDir);
+    projectIsUntrusted = !settings.project.trusted;
+    for (const notice of settings.notices) statusText = `routing: ${notice}`;
+    if (options.session !== undefined) {
+      const session = options.session;
+      const connected = connectedPredicateFrom(providers, session);
+      const external = await resolveExternalSetting({ cwd: location.cwd, ...(options.userConfigDir === undefined ? {} : { dir: options.userConfigDir }) });
+      const externalProviders = loadExternalProvidersConfig(options.userConfigDir).config;
       const allowed = externalAllowedConnectedPredicate(connected, external.value === "on", externalProviders);
-      const env = envWithSavedApiKeys(process.env, location.userConfigDir);
-      const observedAt = new Date().toISOString();
-      rowsV2 = previewCatalogRoutingCategoriesV2({
-        config: activeV2,
-        providers,
+      const env = envWithSavedApiKeys(process.env, options.userConfigDir);
+      previewRows = previewCatalogRoutingCategories({
+        config,
+        providers: withSessionModel(providers, session),
         profiles,
-        baseline: options.session,
-        observedAt,
-        policyRevision: routingV2Digest({ external: external.value, externalProviders }),
-        capabilityRevision: routingV2Digest({ baseline: options.session, capabilities: "unproven", catalogCapabilities: "unproven" }),
-        journal: { cwd: location.cwd, ...(location.userConfigDir === undefined ? {} : { configDir: location.userConfigDir }) },
+        baseline: session,
+        observedAt: new Date().toISOString(),
+        policyRevision: routingDigest({ external: external.value, externalProviders }),
+        capabilityRevision: routingDigest({ baseline: session, capabilities: "unproven", catalogCapabilities: "unproven" }),
+        journal: { cwd: location.cwd, ...(options.userConfigDir === undefined ? {} : { configDir: options.userConfigDir }) },
         policy: {
-          credentialsAvailable: (target) => target.providerId === options.session!.providerId || hasCredential(target.providerId, env),
+          credentialsAvailable: (target) => target.providerId === session.providerId || hasCredential(target.providerId, env),
           policyAllowed: (target) => allowed(target.providerId, target.modelId),
           parentAllowed: () => true,
           capabilities: () => [],
           cooldown: () => false,
           observedLatencyMs: () => null,
-          availability: (target) => target.providerId === options.session!.providerId && target.modelId === options.session!.modelId ? "available" : undefined,
+          availability: (target) => target.providerId === session.providerId && target.modelId === session.modelId ? "available" : undefined,
         },
       });
-      rows = [];
-      selected = Math.min(selected, Math.max(0, rowsV2.length - 1));
-      statusText = "routing v2 preview · assignments are managed by routing.config.json";
-      paintList();
-      return;
+    } else {
+      previewRows = [];
     }
-    const [project, user, loaded] = await Promise.all([load("project", location), load("user", location), loadProvidersBounded()]);
-    loadError = undefined;
-    providers = loaded.list;
-    providersError = loaded.error;
-    profiles = loadProfiles(location.userConfigDir);
-    projectIsUntrusted = project.untrusted === true;
-    for (const error of [project.error, user.error]) {
-      if (error !== undefined) statusText = `routing: ${error}`;
-    }
-    const connected = connectedPredicateFrom(providers, options.session);
-    const available = availablePredicateFromProfiles(profiles);
-    // Flow 327 (AC10/AC12) — the `derived` layer, built from the SAME
-    // provider list just fetched for the picker/connected-check (no extra
-    // probe), against the session's own provider only (PRD §6.3).
-    taskCostFor = taskCostLookupFrom(readTaskCostStore(location.userConfigDir));
-    let derived: RoutingTable = {};
-    if (options.session !== undefined) {
-      derived = deriveDefaultTable(options.session.providerId, sessionDerivationModels(providers, options.session), profiles, options.session.modelId, taskCostFor);
-    }
-    rows = routingCategoryRows(project, user, connected, derived, available);
-    selected = Math.min(selected, Math.max(0, rows.length - 1));
+    selected = Math.min(selected, ROUTING_CATEGORIES.length - 1);
     paintList();
   };
 
-  const writePick = async (category: RoutingCategory, assignment: CategoryAssignment): Promise<void> => {
-    const current = await load("user", location);
-    await save("user", location, { ...current.table, [category]: assignment });
-    statusText = `${category} -> ${describeAssignment(assignment)}  [user]`;
+  const writePick = async (category: RoutingCategory, picked: CategoryAssignment): Promise<void> => {
+    const assignment = pickerAssignment(picked);
+    if ("error" in assignment) {
+      statusText = `routing: ${assignment.error}`;
+    } else {
+      try {
+        await write("user", location, category, assignment);
+        statusText = `${category} -> ${describeRoutingAssignment(assignment)}  [user]`;
+      } catch (error) {
+        statusText = `routing: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
     await reload();
     host.handle?.setTab("list");
   };
 
-  /** AC11 — `t`: show the project file's raw entries and arm the approval. */
+  /** `t`: show the project layer and arm the approval. */
   const armApproval = async (): Promise<void> => {
-    const raw = await loadRaw("project", location);
-    if (raw.error !== undefined && raw.untrusted !== true) {
-      statusText = `routing: ${raw.error}`;
+    let layer: RoutingConfigLayer | undefined;
+    try {
+      layer = readRoutingSettings(location).project.layer;
+    } catch (error) {
+      statusText = `routing: ${error instanceof Error ? error.message : String(error)}`;
       paintList();
       return;
     }
-    if (Object.keys(raw.table).length === 0) {
-      statusText = "routing.config.json declares no categories — nothing to approve.";
+    const lines = layer === undefined ? [] : describeLayerForApproval(layer);
+    if (layer === undefined || lines.length === 0) {
+      statusText = "routing.config.json declares no routing settings — nothing to approve.";
       paintList();
       return;
     }
-    armedApproval = raw.table;
-    const lines = describeTableForApproval(raw.table);
+    armedApproval = layer;
     statusText = `Approve routing.config.json?\n  ${lines.join("\n  ")}\ny confirms · any other key cancels`;
     paintList();
   };
 
   const confirmApproval = async (): Promise<void> => {
-    const table = armedApproval;
+    const layer = armedApproval;
     armedApproval = undefined;
-    if (table === undefined) return;
-    const result = await approve(location.cwd, table, location.userConfigDir);
-    statusText = result.ok ? `Approved (${result.file}).` : `routing: ${result.error}`;
+    if (layer === undefined) return;
+    try {
+      const current = readRoutingSettings(location).project.layer;
+      if (current === undefined || routingDigest(current) !== routingDigest(layer)) {
+        statusText = "routing.config.json changed since it was shown; nothing was approved — press t again";
+      } else {
+        const result = approveProjectRouting(location);
+        statusText = result.ok ? `Approved (${result.file}).` : `routing: ${result.error}`;
+      }
+    } catch (error) {
+      statusText = `routing: ${error instanceof Error ? error.message : String(error)}`;
+    }
     await reload();
   };
 
@@ -487,9 +388,9 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     title: ROUTING_COMMAND,
     tabs: [
       { id: "list", label: "Categories" },
-      ...(activeV2 === undefined && activeV2Error === undefined ? [{ id: "picker", label: "Model" }] : []),
+      { id: "picker", label: "Model" },
     ],
-    footer: usesV2 ? [{ key: "↑/↓", label: "move" }, { key: "esc", label: "close" }] : ROUTING_FOOTER,
+    footer: ROUTING_FOOTER,
     renderTab: (tabId, body) => {
       currentTab = tabId;
       const parent = body as { add(child: unknown): void };
@@ -516,22 +417,21 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
             selected = Math.max(0, selected - 1);
             paintList();
           } else if (token === "down" || token === "j") {
-            const rowCount = activeV2 === undefined ? rows.length : rowsV2.length;
-            selected = Math.min(Math.max(0, rowCount - 1), selected + 1);
+            selected = Math.min(ROUTING_CATEGORIES.length - 1, selected + 1);
             paintList();
           } else if (token === "return" || token === "enter") {
-            if (activeV2 === undefined && selectedRow() !== undefined) host.handle?.setTab("picker");
-          } else if (token === "t" && !usesV2) {
+            if (selectedCategory() !== undefined) host.handle?.setTab("picker");
+          } else if (token === "t") {
             inFlight = armApproval();
           }
         });
       }
-      // "picker" tab — the flat model list (AC4), built from the SAME
-      // provider list `reload()` already fetched (no extra live probe).
-      const row = selectedRow();
+      // "picker" tab — the flat model list, built from the SAME provider
+      // list `reload()` already fetched (no extra live probe).
+      const category = selectedCategory();
       statusNode = new core.TextRenderable(r as never, {
         id: "rt-picker-status",
-        content: core.t`${roleChunk(core, "muted", row === undefined ? "no category selected" : `picking a model for ${row.category}`)}`,
+        content: core.t`${roleChunk(core, "muted", category === undefined ? "no category selected" : `picking a model for ${category}`)}`,
       }) as never;
       parent.add(statusNode as never);
       flatOptions = flatModelOptions(providers, options.session);
@@ -547,12 +447,8 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
       const list = mountFilterList(core, r as never, parent as never, {
         idPrefix: "rt",
         items: flatOptions,
-        // Flow 327 (AC12) — each "model" row also shows its profile (tier,
-        // price, context, priority, sources, availability), read from the
-        // SAME `profiles` catalogue `reload()` already loaded — no extra
-        // lookup. Non-model rows ("session default", "<provider> (provider
-        // default)") carry no profile and show an empty description, exactly
-        // as before this flow.
+        // Each "model" row also shows its profile (tier, price, context,
+        // priority, sources, availability) from the catalogue `reload()` loaded.
         toOption: (opt) => ({ name: opt.label, description: describePickerRowProfile(opt, profiles) }),
         matches: (opt, q) => opt.search.includes(q),
         emptyLabel: "(no connected providers)",
@@ -562,9 +458,9 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
         width: "100%",
         height: Math.max(1, bodyRows - 1 - notes.length),
         onPick: (opt) => {
-          const currentRow = selectedRow();
-          if (opt === undefined || currentRow === undefined) return;
-          inFlight = writePick(currentRow.category, opt.assignment);
+          const current = selectedCategory();
+          if (opt === undefined || current === undefined) return;
+          inFlight = writePick(current, opt.assignment);
         },
       });
       return options.onKeypress((key) => {
@@ -591,7 +487,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     reload,
     status: () => statusText,
     visibleLines: () => windowLines(listLines(), bodyRows),
-    selectedCategory: () => activeV2 === undefined ? selectedRow()?.category : rowsV2[selected]?.category,
+    selectedCategory,
     pickerOptions: () => flatOptions,
     projectUntrusted: () => projectIsUntrusted,
     settled: () => inFlight,

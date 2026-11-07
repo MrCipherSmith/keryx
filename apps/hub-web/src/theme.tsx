@@ -44,7 +44,7 @@ export function ThemeSelect({ preferred, onSelect, disabled }: { preferred?: The
     ["dark", ru ? "Тёмная" : "Dark"],
   ] as const;
   return (
-    <div className="inline-flex flex-wrap rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label={ru ? "Оформление" : "Appearance"}>
+    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label={ru ? "Оформление" : "Appearance"}>
       {options.map(([value, label]) => (
         <button
           key={value}

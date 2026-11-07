@@ -9,11 +9,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { FlowState } from "../flow/types";
+import type { CompletionException, FlowState } from "../flow/types";
 import { appendTriggerRunRecord } from "../trigger/record";
 import { addConfirmedSchedule } from "../trigger/store";
 import { runTriggerOnce } from "../commands/trigger";
 import type { NormalizedEvent, ProviderPort } from "../harness/provider/types";
+import { createRoutingSnapshot } from "../harness/routing/snapshot";
 import { registerProject } from "../lib/project-registry";
 import {
   buildGovernanceReport,
@@ -246,6 +247,22 @@ test("flow 295 AC14: a scheduled agent-task run's cost is included in project tr
     await runTriggerOnce(ROOT, "check-github", {
       agentTask: {
         makeProvider: () => provider,
+        // Scripted models need fixture facts, not the live provider catalogue.
+        // Routing admission and the real usage/spend path still execute.
+        routingSnapshot: ({ config, baseline }) => createRoutingSnapshot({
+          configDigest: config.configDigest,
+          observedAt: new Date().toISOString(),
+          catalogRevision: "governance-fixture",
+          policyRevision: "governance-fixture",
+          capabilityRevision: "governance-fixture",
+          authFailedProviderIds: [], baseline,
+          models: [{
+            target: baseline, connected: true, credentialsAvailable: true,
+            policyAllowed: true, parentAllowed: true, availability: "available",
+            capabilities: ["tools"], contextLength: 100_000, cooldown: false,
+            estimatedCostUsd: 0.01, observedLatencyMs: 1,
+          }],
+        }),
         planSandbox: () => ({ ok: true, launcher: "none", args: [], env: {}, wrap: () => ["/bin/true"] }),
       },
     });
@@ -985,4 +1002,92 @@ test("flow 364 AC1 (review T-007): a stored report written before effect/summary
   const markdown = renderGovernanceMarkdown(read.report);
   expect(markdown).toContain("effect: not recorded");
   expect(markdown).toContain("summary: not recorded");
+});
+
+// Regression: accepted exceptions must remain visible in both governance artifacts.
+const completionException: CompletionException = {
+  gate: "review", condition: "coverage", detail: "Coverage is incomplete",
+  reason: "Operator accepts the documented coverage gap", operatorWords: "yes",
+  confirmedVia: "host-question", at: "2026-01-02T00:00:00.000Z",
+  hostQuestion: { source: "keryx-shell", ref: "question-1073", questionText: "Complete with exceptions?",
+    answerText: "yes", time: "2026-01-02T00:00:00.000Z" },
+};
+
+async function completionReport(overrides: Partial<FlowState>) {
+  await writeFlowFixture("001-2026-01-01-exceptions", overrides);
+  return buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date("2026-01-03") });
+}
+
+function completionSignature() {
+  return { kind: "complete" as const, at: completionException.at,
+    identity: { value: "Operator", basis: "stated" as const, source: "--signed-by flag" },
+    acChecksum: null, headCommit: "abc123" };
+}
+
+test("completion exceptions: signature and artifacts preserve the full operator decision", async () => {
+  const report = await completionReport({
+    signatures: [{ ...completionSignature(), cleanCompletion: false, exceptions: [completionException] }],
+    completionAttempts: [{ at: completionException.at, acChecksum: null, passed: true, cleanCompletion: false,
+      exceptions: [completionException], gates: [{ name: "review", status: "fail", detail: completionException.detail }] }],
+  });
+  const confirmations = report.projects[0]!.flows[0]!.confirmations;
+  expect(confirmations.recorded).toBe(true);
+  if (!confirmations.recorded) throw new Error("Expected recorded confirmations");
+  expect(confirmations.completionSignature).toMatchObject({ cleanCompletion: false, exceptions: [completionException] });
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("completion mode: completed with exceptions");
+  expect(markdown).toContain("passed with exceptions — review=fail");
+  expect(markdown.match(/review:coverage/g)).toHaveLength(2);
+  expect(markdown).toContain(completionException.detail);
+  expect(markdown).toContain(`reason: ${completionException.reason}`);
+  expect(markdown).toContain("confirmed via host-question");
+  expect(markdown).toContain("operator words: yes");
+  expect(markdown).toContain("question-1073");
+  expect(markdown).toContain("Operator");
+  const { jsonPath, markdownPath } = await writeGovernanceArtifacts(ROOT, report);
+  const stored = JSON.parse(await readFile(jsonPath, "utf8"));
+  expect(stored.projects[0].flows[0].confirmations.completionSignature.exceptions).toEqual([completionException]);
+  expect(await readFile(markdownPath, "utf8")).toBe(markdown);
+});
+
+test("completion exceptions: signature renders without attempt records", async () => {
+  const { condition: _, hostQuestion: __, ...base } = completionException;
+  const exception: CompletionException = { ...base, gate: "security", confirmedVia: "terminal" };
+  const report = await completionReport({ signatures: [{ ...completionSignature(), cleanCompletion: false, exceptions: [exception] }] });
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("completion mode: completed with exceptions");
+  expect(markdown).toContain(`security: ${exception.detail}; reason: ${exception.reason}`);
+  expect(markdown).toContain("confirmed via terminal");
+  expect(markdown).toContain("gate outcomes: not recorded");
+});
+
+test("completion exceptions: explicit clean completions remain distinguishable", async () => {
+  const report = await completionReport({
+    signatures: [{ ...completionSignature(), cleanCompletion: true, exceptions: [] }],
+    completionAttempts: [{ at: completionException.at, acChecksum: null, passed: true, cleanCompletion: true,
+      exceptions: [], gates: [{ name: "security", status: "pass", detail: "ok" }] }],
+  });
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("completion mode: clean completion");
+  expect(markdown).toContain("passed (clean completion) — security=pass");
+  expect(markdown).not.toContain("with exceptions");
+});
+
+test("completion exceptions: legacy records do not imply clean completion", async () => {
+  const report = await completionReport({ signatures: [completionSignature()],
+    completionAttempts: [{ at: completionException.at, acChecksum: null, passed: true, gates: [] }] });
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("completion mode: not recorded");
+  expect(markdown).toContain("passed (completion mode: not recorded)");
+  expect(markdown).not.toContain("clean completion");
+});
+
+test("completion exceptions: failed attempt never becomes passed due to accepted exceptions", async () => {
+  const report = await completionReport({ completionAttempts: [{ at: completionException.at, acChecksum: null,
+    passed: false, cleanCompletion: false, exceptions: [completionException],
+    gates: [{ name: "review", status: "fail", detail: "blocked" }] }] });
+  const markdown = renderGovernanceMarkdown(report);
+  expect(markdown).toContain("failed — review=fail");
+  expect(markdown).toContain(`reason: ${completionException.reason}`);
+  expect(markdown).not.toContain("passed with exceptions");
 });

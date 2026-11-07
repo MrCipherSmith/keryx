@@ -1,286 +1,461 @@
-// Flow 305 (Flow A), AC2 — the routing table's two config layers:
-// `routing.config.json` at the project root, and a per-user entry alongside
-// `apiKeys`/`openrouterKey` in shell config (`src/lib/shell-config.ts`).
-//
-// Same "config file + schema validation" pattern `src/security/config.ts`
-// already uses for `security.config.json`: an ABSENT file is the ordinary
-// "never configured" case (an empty table); a file that EXISTS but cannot be
-// read as one — invalid JSON, JSON that is not a plain object, or a category
-// entry that does not match the `CategoryAssignment` shape — is a NAMED,
-// SURFACED error, never a silently empty table.
+// The model routing configuration: one schema-versioned layer per scope
+// (built-in -> user -> trusted project), validated strictly and merged into
+// one frozen `NormalizedRoutingConfig` every routing consumer resolves
+// against. Persisted under the `modelRouting` key of `routing.config.json`
+// (project) and of the per-user `auth.json` (user); `settings.ts` owns reading
+// and writing those keys, `legacy-migration.ts` owns every older shape.
 import path from "node:path";
-import { pathExists, withFileLock, writeFileAtomic } from "../../lib/fs";
-import { readJsonObjectFile } from "../../lib/json";
-import { loadShellConfig, saveShellConfig, updateShellConfig } from "../../lib/shell-config";
-import { isRoutingCategory, ROUTING_CATEGORIES, type CategoryAssignment, type RoutingCategory, type RoutingTable } from "./table";
-import { isProjectRoutingApproved, ROUTING_TRUST_NOTICE } from "./trust";
+import { createHash } from "node:crypto";
+import { withFileLock } from "../../lib/fs";
+import { MODEL_CLASSES, isModelClass, modelRefKey, type ModelClass, type ModelRef } from "./model-class";
+import { ROUTING_CATEGORIES, isRoutingCategory, type RoutingCategory } from "./table";
 
-/** The two layers a config file/entry can be read from or written to. */
-export type RoutingConfigLayer = "project" | "user";
+/** Numeric schema version of a persisted routing layer. */
+export const ROUTING_SCHEMA_VERSION = 2 as const;
+/** The key both `routing.config.json` and `auth.json` store a routing layer under. */
+export const ROUTING_CONFIG_KEY = "modelRouting";
 
-/**
- * Where each layer's config lives. `cwd` (the project layer) and the per-user
- * config dir (`userConfigDir`) are DIFFERENT directories in production — a
- * project's `routing.config.json` sits at the project root, the per-user
- * entry sits in the OPERATOR's global `auth.json`
- * (`~/.local/share/keryx`, `src/lib/config-dir.ts`), which has nothing to do
- * with which project happens to be open. Collapsing both onto one `dir`
- * parameter (an earlier draft of this module did) would make `loadShellConfig`
- * read/write `<project root>/auth.json` instead of the real per-user file —
- * silently pointing every `keryx routing set` at the wrong store. `userConfigDir`
- * is the SAME test seam `loadShellConfig`/`saveShellConfig` already take
- * (`dir?: string`, `shell-config.ts`) — omitted in production, so the user
- * layer resolves to the real global config; a test overrides it to a temp
- * directory independently of whatever `cwd` it also uses for the project layer.
- */
-export interface RoutingConfigLocation {
-  /** Project root — the "project" layer's `routing.config.json` lives here. */
-  readonly cwd: string;
-  /** Per-user config dir override (test seam only) — the "user" layer. */
-  readonly userConfigDir?: string;
-}
-
-export interface RoutingConfigResult {
-  readonly table: RoutingTable;
-  /**
-   * A human-readable reason to surface, set when either:
-   *  - the file/entry EXISTS but could not be read as a routing table —
-   *    invalid JSON, a non-object payload, or a category entry that fails
-   *    validation. `table` is still the best-effort partial parse (valid
-   *    categories kept, invalid ones dropped) so one bad entry never blanks
-   *    the whole layer.
-   *  - (project layer only, AC11) the file is well-formed but UNAPPROVED —
-   *    same text as `untrusted`, below, which a caller can also check
-   *    directly when it needs to distinguish the two cases.
-   * Either way, `error` must be surfaced by every caller rather than treated
-   * as "nothing configured".
-   */
-  readonly error?: string;
-  /**
-   * AC11 — set (project layer only) when the file parses and validates fine
-   * but its CURRENT content has not been approved via `keryx routing trust`
-   * (or was approved for a since-changed content). `table` is EMPTY in this
-   * state — the entries are ignored, not merely flagged — so every existing
-   * caller that reads `.table` without checking this flag already gets the
-   * safe behavior; callers that want to show the notice check this flag.
-   */
-  readonly untrusted?: boolean;
-}
-
-/** `routing.config.json` at the project root (sibling to the project's `.metaproject/`, per AC2). */
+/** `routing.config.json` at the project root. Other top-level keys belong to other readers. */
 export function projectRoutingConfigPath(cwd: string): string {
   return path.join(cwd, "routing.config.json");
 }
 
-/** One `CategoryAssignment`'s validation error, or `undefined` when it is well-shaped. */
-const ASSIGNMENT_KEYS: Readonly<Record<string, readonly string[]>> = {
-  "session-default": ["kind"],
-  model: ["kind", "providerId", "modelId"],
-  "provider-default": ["kind", "providerId"],
-};
-
-function validateAssignment(value: unknown): string | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return "must be an object";
-  const kind = (value as { kind?: unknown }).kind;
-  // An assignment carries only the fields its kind defines: an extra key (a
-  // stray baseUrl, say) is refused rather than carried along unvalidated for
-  // some later reader to trust.
-  const allowed = typeof kind === "string" ? ASSIGNMENT_KEYS[kind] : undefined;
-  if (allowed !== undefined) {
-    const extra = Object.keys(value).filter((key) => !allowed.includes(key));
-    if (extra.length > 0) return `unexpected field${extra.length > 1 ? "s" : ""} ${extra.map((key) => JSON.stringify(key)).join(", ")} for kind ${JSON.stringify(kind)}`;
-  }
-  if (kind === "session-default") return undefined;
-  if (kind === "model") {
-    const providerId = (value as { providerId?: unknown }).providerId;
-    const modelId = (value as { modelId?: unknown }).modelId;
-    if (typeof providerId !== "string" || providerId.length === 0) return "model.providerId must be a non-empty string";
-    if (typeof modelId !== "string" || modelId.length === 0) return "model.modelId must be a non-empty string";
-    return undefined;
-  }
-  if (kind === "provider-default") {
-    const providerId = (value as { providerId?: unknown }).providerId;
-    if (typeof providerId !== "string" || providerId.length === 0) return "provider-default.providerId must be a non-empty string";
-    return undefined;
-  }
-  return `unknown kind ${JSON.stringify(kind)}`;
-}
-
-/**
- * Validate a raw `{categories: {...}}` payload into a `RoutingTable`. Unknown
- * top-level keys are ignored (forward compatibility); an unknown category name
- * or a malformed assignment is dropped from the result AND reported in the
- * returned error list — never silently kept or silently discarded with no
- * trace.
- */
-export function validateRoutingConfig(raw: unknown): { table: RoutingTable; errors: string[] } {
-  const table: RoutingTable = {};
-  const errors: string[] = [];
-  if (typeof raw !== "object" || raw === null) {
-    return { table, errors: ["routing config must be a JSON object"] };
-  }
-  const categories = (raw as { categories?: unknown }).categories;
-  if (categories === undefined) {
-    return { table, errors };
-  }
-  if (typeof categories !== "object" || categories === null || Array.isArray(categories)) {
-    return { table, errors: ["categories must be an object"] };
-  }
-  for (const [key, value] of Object.entries(categories as Record<string, unknown>)) {
-    if (!isRoutingCategory(key)) {
-      errors.push(`unknown category "${key}" (expected one of ${ROUTING_CATEGORIES.join(", ")})`);
-      continue;
-    }
-    const assignmentError = validateAssignment(value);
-    if (assignmentError !== undefined) {
-      errors.push(`categories.${key}: ${assignmentError}`);
-      continue;
-    }
-    table[key] = value as CategoryAssignment;
-  }
-  return { table, errors };
-}
-
-/** Render a `RoutingTable` back to the on-disk/on-config `{categories: {...}}` shape. */
-export function renderRoutingConfig(table: RoutingTable): { categories: RoutingTable } {
-  return { categories: table };
-}
-
-/**
- * Read one layer's routing table AS WRITTEN — no AC11 trust gate applied.
- * Never throws. An absent project file or an absent/empty user entry is
- * `{table: {}}` — the ordinary "never configured" case — not an error.
- *
- * This is the merge base `setRoutingCategory`/`unsetRoutingCategory` read
- * before writing: a project file the operator has not yet approved still
- * physically holds whatever OTHER categories were already set in it, and a
- * `keryx routing set <cat> ... --project` on top of it must not silently
- * discard them just because AC11 hides them from ordinary reads. Approval
- * status is a DISPLAY/RESOLUTION concern, not a data-loss switch.
- */
-export async function loadRoutingConfigRaw(layer: RoutingConfigLayer, location: RoutingConfigLocation): Promise<RoutingConfigResult> {
-  if (layer === "user") {
-    const raw = loadShellConfig(location.userConfigDir).routing;
-    if (raw === undefined) return { table: {} };
-    // `ShellConfig.routing` stores the bare category map (no `{categories}`
-    // envelope — it already lives under its OWN `routing` key inside
-    // `auth.json`, alongside `apiKeys`/`modelParams`). `validateRoutingConfig`
-    // validates the project file's self-describing `{categories: {...}}`
-    // shape; wrap here so both layers share the one validator.
-    const { table, errors } = validateRoutingConfig({ categories: raw });
-    return errors.length > 0 ? { table, error: errors.join("; ") } : { table };
-  }
-  const file = projectRoutingConfigPath(location.cwd);
-  if (!(await pathExists(file))) {
-    return { table: {} };
-  }
-  const read = await readJsonObjectFile(file);
-  if (read.state !== "object") {
-    return { table: {}, error: `${file} could not be read as JSON (state: ${read.state})` };
-  }
-  const { table, errors } = validateRoutingConfig(read.value);
-  return errors.length > 0 ? { table, error: `${file}: ${errors.join("; ")}` } : { table };
-}
-
-/**
- * Read one layer's routing table for RESOLUTION/DISPLAY (AC1-AC9's original
- * contract, plus AC11's trust gate on the project layer): a well-formed
- * project table takes effect only once the operator has approved its CURRENT
- * content (`keryx routing trust`). Unapproved (or approved-then-edited) ->
- * the entries are ignored outright, exactly as if the project layer had
- * nothing configured, with `untrusted: true` and a notice in `error` for
- * callers that want to show it. The user layer has no trust gate (it is the
- * operator's own global config, not a file a repository can commit).
- */
-export async function loadRoutingConfig(layer: RoutingConfigLayer, location: RoutingConfigLocation): Promise<RoutingConfigResult> {
-  const raw = await loadRoutingConfigRaw(layer, location);
-  if (layer === "user" || Object.keys(raw.table).length === 0) {
-    return raw;
-  }
-  // The trust check runs on whatever survived validation, even when some other
-  // entry in the same file was malformed: a partial parse still carries live
-  // entries, and a stray invalid line must never switch the approval gate off.
-  if (!isProjectRoutingApproved(location.cwd, raw.table, location.userConfigDir)) {
-    const notice = raw.error !== undefined ? `${raw.error}; ${ROUTING_TRUST_NOTICE}` : ROUTING_TRUST_NOTICE;
-    return { table: {}, untrusted: true, error: notice };
-  }
-  return raw;
-}
-
-/**
- * Write one layer's routing table. The user layer merges into the existing
- * shell config (like every other `saveShellConfig` caller); the project layer
- * overwrites `routing.config.json` atomically (mirrors
- * `renderSecurityConfig`'s "config file, freshly rendered" writer).
- */
-export async function saveRoutingConfig(layer: RoutingConfigLayer, location: RoutingConfigLocation, table: RoutingTable): Promise<void> {
-  if (layer === "user") {
-    saveShellConfig({ routing: table }, location.userConfigDir);
-    return;
-  }
-  await withProjectRoutingWriteLock(location.cwd, () => writeProjectRoutingConfig(location.cwd, table));
-}
-
+/** Serializes every writer of one project's `routing.config.json`. */
 export function withProjectRoutingWriteLock<T>(cwd: string, action: () => Promise<T>): Promise<T> {
   return withFileLock(`${projectRoutingConfigPath(path.resolve(cwd))}.lock`, action);
 }
 
-async function writeProjectRoutingConfig(cwd: string, table: RoutingTable): Promise<void> {
-  const file = projectRoutingConfigPath(cwd);
-  // Top-level keys beside `categories` (for example `reviewChunks`) belong to other readers and survive a routing write.
-  const existing = (await pathExists(file)) ? await readJsonObjectFile(file) : undefined;
-  const others = existing?.state === "object" ? (existing.value as Record<string, unknown>) : {};
-  const body = `${JSON.stringify({ ...others, ...renderRoutingConfig(table) }, null, 2)}\n`;
-  await writeFileAtomic(file, body);
+export type RoutingSelectionPolicy = "priority" | "cost" | "latency";
+export type ProviderScope = "all-connected" | "session-only" | "allowlist";
+
+export type RoutingAssignment =
+  | { readonly mode: "auto" }
+  | { readonly mode: "baseline"; readonly fallbackClass?: ModelClass }
+  | { readonly mode: "class"; readonly modelClass: ModelClass }
+  | { readonly mode: "model"; readonly target: ModelRef; readonly fallbackClass?: ModelClass };
+
+export type RoutingFallbackAssignment = Exclude<RoutingAssignment, { readonly mode: "auto" }>;
+
+export interface RoutingCandidate {
+  readonly target: ModelRef;
+  readonly enabled: boolean;
+  readonly priority: number;
 }
 
-/**
- * Change the user layer's table as it is on disk when the write happens. The
- * table is validated and rewritten inside `updateShellConfig`'s mutate, never
- * read first and saved whole: a category another process set in between was
- * dropped by the stale whole-table write.
- */
-function updateUserRoutingTable(location: RoutingConfigLocation, change: (table: RoutingTable) => RoutingTable): void {
-  updateShellConfig((current) => {
-    const table = current.routing === undefined ? {} : validateRoutingConfig({ categories: current.routing }).table;
-    return { ...current, routing: change(table) };
-  }, location.userConfigDir);
+export interface ModelClassConfig {
+  readonly candidates: readonly RoutingCandidate[];
+  readonly selection: RoutingSelectionPolicy;
+  readonly fallbackClasses: readonly ModelClass[];
 }
 
-/**
- * Set one category's assignment in a layer, preserving every other category
- * already set there. Merges against `loadRoutingConfigRaw` (AC11 note on that
- * function): an unapproved project file's OTHER entries must survive a write
- * that only meant to add or change one category.
- */
-export async function setRoutingCategory(
-  layer: RoutingConfigLayer,
-  location: RoutingConfigLocation,
-  category: RoutingCategory,
-  assignment: CategoryAssignment,
-): Promise<void> {
-  if (layer === "user") {
-    updateUserRoutingTable(location, (table) => ({ ...table, [category]: assignment }));
+export interface ProviderRoutingConfig {
+  readonly scope: ProviderScope;
+  readonly allowlist: readonly string[];
+  readonly preferSessionProvider: boolean;
+}
+
+export interface ClassifierEntry {
+  readonly adapterId: string;
+  readonly target?: ModelRef;
+}
+
+export interface ClassifierConfig {
+  readonly chain: readonly ClassifierEntry[];
+  readonly timeoutMs: number;
+  readonly minConfidence: number;
+  readonly onFailure: RoutingFallbackAssignment;
+}
+
+export interface RoutingExecutionConfig {
+  readonly maxAttempts: number;
+  readonly selectionTimeoutMs: number;
+  readonly maxEstimatedCostUsd: number | null;
+  readonly unknownCost: "allow" | "deny";
+}
+
+export interface RoutingConfigLayer {
+  readonly schemaVersion: 2;
+  readonly classes?: Partial<Record<ModelClass, ModelClassConfig>>;
+  readonly categories?: Partial<Record<RoutingCategory, RoutingAssignment>>;
+  readonly providers?: ProviderRoutingConfig;
+  readonly classifier?: ClassifierConfig;
+  readonly execution?: RoutingExecutionConfig;
+}
+
+export interface RoutingConfigLayers {
+  readonly user?: RoutingConfigLayer;
+  readonly project?: RoutingConfigLayer;
+}
+export interface RoutingNormalizationOptions {
+  /** Must be the same adapter registry execution will resolve against. */
+  readonly classifierAdapters?: { has(adapterId: string): boolean };
+}
+
+export interface NormalizedRoutingConfig {
+  readonly schemaVersion: 2;
+  readonly classes: Readonly<Record<ModelClass, ModelClassConfig>>;
+  readonly categories: Readonly<Record<RoutingCategory, RoutingAssignment>>;
+  readonly categorySources: Readonly<Record<RoutingCategory, "project" | "user" | "builtin">>;
+  readonly providers: ProviderRoutingConfig;
+  readonly classifier: ClassifierConfig;
+  readonly execution: RoutingExecutionConfig;
+  readonly configDigest: string;
+}
+
+export interface RoutingValidationResult {
+  readonly ok: boolean;
+  readonly errors: readonly string[];
+}
+
+const EMPTY_CLASS: ModelClassConfig = { candidates: [], selection: "priority", fallbackClasses: [] };
+const BASELINE_ASSIGNMENT: RoutingAssignment = { mode: "baseline" };
+const DEFAULT_PROVIDERS: ProviderRoutingConfig = { scope: "all-connected", allowlist: [], preferSessionProvider: false };
+const DEFAULT_CLASSIFIER: ClassifierConfig = {
+  chain: [],
+  timeoutMs: 3_000,
+  minConfidence: 0.7,
+  onFailure: BASELINE_ASSIGNMENT,
+};
+const DEFAULT_EXECUTION: RoutingExecutionConfig = {
+  maxAttempts: 3,
+  selectionTimeoutMs: 3_000,
+  maxEstimatedCostUsd: null,
+  unknownCost: "allow",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function unknownKeys(value: Record<string, unknown>, allowed: readonly string[], path: string, errors: string[]): void {
+  const allowedSet = new Set(allowed);
+  for (const key of Object.keys(value)) if (!allowedSet.has(key)) errors.push(`${path}.${key} is not allowed`);
+}
+
+function validateModelRef(value: unknown, path: string, errors: string[]): value is ModelRef {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an object`);
+    return false;
+  }
+  unknownKeys(value, ["providerId", "modelId"], path, errors);
+  if (typeof value.providerId !== "string" || value.providerId.length === 0) errors.push(`${path}.providerId must be a non-empty string`);
+  if (typeof value.modelId !== "string" || value.modelId.length === 0) errors.push(`${path}.modelId must be a non-empty string`);
+  return typeof value.providerId === "string" && value.providerId.length > 0 && typeof value.modelId === "string" && value.modelId.length > 0;
+}
+
+function validateAssignment(value: unknown, path: string, errors: string[], allowAuto = true): void {
+  if (!isRecord(value)) {
+    errors.push(`${path} must be an assignment object`);
     return;
   }
-  await withProjectRoutingWriteLock(location.cwd, async () => {
-    const current = await loadRoutingConfigRaw(layer, location);
-    await writeProjectRoutingConfig(location.cwd, { ...current.table, [category]: assignment });
+  if (value.mode === "auto") {
+    unknownKeys(value, ["mode"], path, errors);
+    if (!allowAuto) errors.push(`${path}.mode auto is not allowed`);
+    return;
+  }
+  if (value.mode === "baseline") {
+    unknownKeys(value, ["mode", "fallbackClass"], path, errors);
+    if (value.fallbackClass !== undefined && !isModelClass(value.fallbackClass)) errors.push(`${path}.fallbackClass is invalid`);
+    return;
+  }
+  if (value.mode === "class") {
+    unknownKeys(value, ["mode", "modelClass"], path, errors);
+    if (!isModelClass(value.modelClass)) errors.push(`${path}.modelClass is invalid`);
+    return;
+  }
+  if (value.mode === "model") {
+    unknownKeys(value, ["mode", "target", "fallbackClass"], path, errors);
+    validateModelRef(value.target, `${path}.target`, errors);
+    if (value.fallbackClass !== undefined && !isModelClass(value.fallbackClass)) errors.push(`${path}.fallbackClass is invalid`);
+    return;
+  }
+  errors.push(`${path}.mode is invalid`);
+}
+
+function secretPaths(value: unknown, at = "config"): string[] {
+  if (Array.isArray(value)) return value.flatMap((entry, index) => secretPaths(entry, `${at}[${index}]`));
+  if (!isRecord(value)) return [];
+  return Object.entries(value).flatMap(([key, entry]) => {
+    const path = `${at}.${key}`;
+    return /api.?key|token|password|secret|credential/i.test(key) ? [path] : secretPaths(entry, path);
   });
 }
 
-/** Clear one category back to unset (`session-default` falls through to it) in a layer. Same raw-merge-base note as `setRoutingCategory`. */
-export async function unsetRoutingCategory(layer: RoutingConfigLayer, location: RoutingConfigLocation, category: RoutingCategory): Promise<void> {
-  if (layer === "user") {
-    updateUserRoutingTable(location, (table) => {
-      const { [category]: _gone, ...kept } = table;
-      return kept;
-    });
-    return;
+export function validateRoutingConfigLayer(raw: unknown, options: RoutingNormalizationOptions = {}): RoutingValidationResult {
+  const errors: string[] = [];
+  if (!isRecord(raw)) return { ok: false, errors: ["routing config must be an object"] };
+  unknownKeys(raw, ["schemaVersion", "classes", "categories", "providers", "classifier", "execution"], "config", errors);
+  if (raw.schemaVersion !== 2) errors.push("schemaVersion must be 2");
+  errors.push(...secretPaths(raw).map((path) => `${path} must not contain credentials`));
+
+  if (raw.categories !== undefined) {
+    if (!isRecord(raw.categories)) errors.push("categories must be an object");
+    else for (const [category, assignment] of Object.entries(raw.categories)) {
+      if (!isRoutingCategory(category)) errors.push(`categories.${category} is not allowed`);
+      validateAssignment(assignment, `categories.${category}`, errors);
+    }
   }
-  await withProjectRoutingWriteLock(location.cwd, async () => {
-    const current = await loadRoutingConfigRaw(layer, location);
-    const { [category]: _removed, ...rest } = current.table;
-    await writeProjectRoutingConfig(location.cwd, rest);
+
+  if (raw.classes !== undefined) {
+    if (!isRecord(raw.classes)) errors.push("classes must be an object");
+    else for (const [modelClass, config] of Object.entries(raw.classes)) {
+      if (!isModelClass(modelClass)) errors.push(`classes.${modelClass} is not allowed`);
+      if (!isRecord(config)) {
+        errors.push(`classes.${modelClass} must be an object`);
+        continue;
+      }
+      unknownKeys(config, ["candidates", "selection", "fallbackClasses"], `classes.${modelClass}`, errors);
+      if (!Array.isArray(config.candidates)) errors.push(`classes.${modelClass}.candidates must be an array`);
+      else {
+        const targets = new Set<string>();
+        for (const [index, candidate] of config.candidates.entries()) {
+          const path = `classes.${modelClass}.candidates[${index}]`;
+          if (!isRecord(candidate)) {
+            errors.push(`${path} must be an object`);
+            continue;
+          }
+          unknownKeys(candidate, ["target", "enabled", "priority"], path, errors);
+          if (validateModelRef(candidate.target, `${path}.target`, errors)) {
+            const key = modelRefKey(candidate.target);
+            if (targets.has(key)) errors.push(`${path}.target is duplicated`);
+            targets.add(key);
+          }
+          if (typeof candidate.enabled !== "boolean") errors.push(`${path}.enabled must be a boolean`);
+          if (!Number.isSafeInteger(candidate.priority)) errors.push(`${path}.priority must be an integer`);
+        }
+      }
+      if (!(["priority", "cost", "latency"] as const).includes(config.selection as RoutingSelectionPolicy)) errors.push(`classes.${modelClass}.selection is invalid`);
+      if (!Array.isArray(config.fallbackClasses)) errors.push(`classes.${modelClass}.fallbackClasses must be an array`);
+      else {
+        if (config.fallbackClasses.length > 3) errors.push(`classes.${modelClass}.fallbackClasses must contain at most 3 items`);
+        const seen = new Set<ModelClass>();
+        for (const [index, fallback] of config.fallbackClasses.entries()) {
+          if (!isModelClass(fallback)) errors.push(`classes.${modelClass}.fallbackClasses[${index}] is invalid`);
+          else {
+            if (fallback === modelClass) errors.push(`classes.${modelClass} cannot fall back to itself`);
+            if (seen.has(fallback)) errors.push(`classes.${modelClass}.fallbackClasses contains duplicate ${fallback}`);
+            seen.add(fallback);
+          }
+        }
+      }
+    }
+  }
+
+  if (raw.providers !== undefined) {
+    if (!isRecord(raw.providers)) errors.push("providers must be an object");
+    else {
+      unknownKeys(raw.providers, ["scope", "allowlist", "preferSessionProvider"], "providers", errors);
+      if (!(raw.providers.scope === "all-connected" || raw.providers.scope === "session-only" || raw.providers.scope === "allowlist")) errors.push("providers.scope is invalid");
+      if (!Array.isArray(raw.providers.allowlist)) errors.push("providers.allowlist must be an array");
+      else {
+        if (!raw.providers.allowlist.every((entry) => typeof entry === "string" && entry.length > 0)) errors.push("providers.allowlist must contain non-empty strings");
+        if (new Set(raw.providers.allowlist).size !== raw.providers.allowlist.length) errors.push("providers.allowlist must contain unique items");
+        if (raw.providers.scope === "allowlist" && raw.providers.allowlist.length === 0) errors.push("providers.allowlist must not be empty when scope is allowlist");
+      }
+      if (typeof raw.providers.preferSessionProvider !== "boolean") errors.push("providers.preferSessionProvider must be a boolean");
+    }
+  }
+
+  if (raw.classifier !== undefined) {
+    if (!isRecord(raw.classifier)) errors.push("classifier must be an object");
+    else {
+      unknownKeys(raw.classifier, ["chain", "timeoutMs", "minConfidence", "onFailure"], "classifier", errors);
+      if (!Array.isArray(raw.classifier.chain)) errors.push("classifier.chain must be an array");
+      else {
+        if (raw.classifier.chain.length > 3) errors.push("classifier.chain must contain at most 3 items");
+        if (raw.classifier.chain.length > 0 && options.classifierAdapters === undefined) errors.push("classifier adapter registry is required for a non-empty classifier chain");
+        const adapterIds = new Set<string>();
+        for (const [index, entry] of raw.classifier.chain.entries()) {
+          const path = `classifier.chain[${index}]`;
+          if (!isRecord(entry)) {
+            errors.push(`${path} must be an object`);
+            continue;
+          }
+          unknownKeys(entry, ["adapterId", "target"], path, errors);
+          if (typeof entry.adapterId !== "string" || entry.adapterId.length === 0) errors.push(`${path}.adapterId must be a non-empty string`);
+          else {
+            if (adapterIds.has(entry.adapterId)) errors.push(`${path}.adapterId is duplicated`);
+            adapterIds.add(entry.adapterId);
+            if (options.classifierAdapters?.has(entry.adapterId) !== true) errors.push(`${path}.adapterId is not registered`);
+            if (entry.adapterId === "model" && entry.target === undefined) errors.push(`${path}.target is required for model adapter`);
+          }
+          if (entry.target !== undefined) validateModelRef(entry.target, `${path}.target`, errors);
+        }
+      }
+      if (!Number.isSafeInteger(raw.classifier.timeoutMs) || (raw.classifier.timeoutMs as number) < 1 || (raw.classifier.timeoutMs as number) > 30_000) errors.push("classifier.timeoutMs must be an integer between 1 and 30000");
+      if (typeof raw.classifier.minConfidence !== "number" || !Number.isFinite(raw.classifier.minConfidence) || raw.classifier.minConfidence < 0 || raw.classifier.minConfidence > 1) errors.push("classifier.minConfidence must be between 0 and 1");
+      validateAssignment(raw.classifier.onFailure, "classifier.onFailure", errors, false);
+    }
+  }
+
+  if (raw.execution !== undefined) {
+    if (!isRecord(raw.execution)) errors.push("execution must be an object");
+    else {
+      unknownKeys(raw.execution, ["maxAttempts", "selectionTimeoutMs", "maxEstimatedCostUsd", "unknownCost"], "execution", errors);
+      if (!Number.isSafeInteger(raw.execution.maxAttempts) || (raw.execution.maxAttempts as number) < 1 || (raw.execution.maxAttempts as number) > 10) errors.push("execution.maxAttempts must be an integer between 1 and 10");
+      if (!Number.isSafeInteger(raw.execution.selectionTimeoutMs) || (raw.execution.selectionTimeoutMs as number) < 1 || (raw.execution.selectionTimeoutMs as number) > 30_000) errors.push("execution.selectionTimeoutMs must be an integer between 1 and 30000");
+      if (raw.execution.maxEstimatedCostUsd !== null && (typeof raw.execution.maxEstimatedCostUsd !== "number" || !Number.isFinite(raw.execution.maxEstimatedCostUsd) || raw.execution.maxEstimatedCostUsd < 0)) errors.push("execution.maxEstimatedCostUsd must be null or a non-negative finite number");
+      if (!(raw.execution.unknownCost === "allow" || raw.execution.unknownCost === "deny")) errors.push("execution.unknownCost is invalid");
+    }
+  }
+  const rawClasses = raw.classes;
+  if (errors.length === 0 && isRecord(rawClasses)) {
+    const semanticClasses = Object.fromEntries(MODEL_CLASSES.map((modelClass) => [
+      modelClass,
+      rawClasses[modelClass] ?? EMPTY_CLASS,
+    ])) as Record<ModelClass, ModelClassConfig>;
+    try { assertAcyclicFallbacks(semanticClasses); } catch (error) {
+      errors.push(error instanceof Error ? error.message : "routing class fallback cycle");
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+}
+
+export function routingDigest(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+}
+
+function assertClassConfig(modelClass: ModelClass, config: ModelClassConfig): void {
+  const candidates = new Set<string>();
+  for (const candidate of config.candidates) {
+    if (!candidate.target.providerId || !candidate.target.modelId) throw new Error(`${modelClass} contains an invalid model target`);
+    const key = modelRefKey(candidate.target);
+    if (candidates.has(key)) throw new Error(`${modelClass} contains duplicate candidate ${candidate.target.providerId}/${candidate.target.modelId}`);
+    candidates.add(key);
+    if (!Number.isSafeInteger(candidate.priority)) throw new Error(`${modelClass} candidate priority must be an integer`);
+  }
+  const fallbacks = new Set<ModelClass>();
+  for (const fallback of config.fallbackClasses) {
+    if (fallback === modelClass) throw new Error(`${modelClass} cannot fall back to itself`);
+    if (fallbacks.has(fallback)) throw new Error(`${modelClass} contains duplicate fallback ${fallback}`);
+    fallbacks.add(fallback);
+  }
+}
+function assertAcyclicFallbacks(classes: Readonly<Record<ModelClass, ModelClassConfig>>): void {
+  const visiting = new Set<ModelClass>();
+  const visited = new Set<ModelClass>();
+  const visit = (modelClass: ModelClass, path: readonly ModelClass[]): void => {
+    if (visiting.has(modelClass)) {
+      const cycleStart = path.indexOf(modelClass);
+      const cycle = [...path.slice(cycleStart), modelClass];
+      throw new Error(`routing class fallback cycle: ${cycle.join(" -> ")}`);
+    }
+    if (visited.has(modelClass)) return;
+    visiting.add(modelClass);
+    for (const fallback of classes[modelClass].fallbackClasses) visit(fallback, [...path, modelClass]);
+    visiting.delete(modelClass);
+    visited.add(modelClass);
+  };
+  for (const modelClass of MODEL_CLASSES) visit(modelClass, []);
+}
+
+function copyModelRef(ref: ModelRef): ModelRef {
+  return Object.freeze({ providerId: ref.providerId, modelId: ref.modelId });
+}
+
+function copyAssignment(assignment: RoutingAssignment): RoutingAssignment {
+  if (assignment.mode === "auto") return Object.freeze({ mode: "auto" });
+  if (assignment.mode === "class") return Object.freeze({ mode: "class", modelClass: assignment.modelClass });
+  if (assignment.mode === "baseline") {
+    return Object.freeze({ mode: "baseline", ...(assignment.fallbackClass !== undefined ? { fallbackClass: assignment.fallbackClass } : {}) });
+  }
+  return Object.freeze({
+    mode: "model",
+    target: copyModelRef(assignment.target),
+    ...(assignment.fallbackClass !== undefined ? { fallbackClass: assignment.fallbackClass } : {}),
   });
+}
+
+function copyClassConfig(config: ModelClassConfig): ModelClassConfig {
+  return Object.freeze({
+    candidates: Object.freeze(config.candidates.map((candidate) => Object.freeze({
+      target: copyModelRef(candidate.target),
+      enabled: candidate.enabled,
+      priority: candidate.priority,
+    }))),
+    selection: config.selection,
+    fallbackClasses: Object.freeze([...config.fallbackClasses]),
+  });
+}
+
+function copyProviders(config: ProviderRoutingConfig): ProviderRoutingConfig {
+  return Object.freeze({ scope: config.scope, allowlist: Object.freeze([...config.allowlist]), preferSessionProvider: config.preferSessionProvider });
+}
+
+function copyClassifier(config: ClassifierConfig): ClassifierConfig {
+  return Object.freeze({
+    chain: Object.freeze(config.chain.map((entry) => Object.freeze({
+      adapterId: entry.adapterId,
+      ...(entry.target !== undefined ? { target: copyModelRef(entry.target) } : {}),
+    }))),
+    timeoutMs: config.timeoutMs,
+    minConfidence: config.minConfidence,
+    onFailure: copyAssignment(config.onFailure) as RoutingFallbackAssignment,
+  });
+}
+
+function copyExecution(config: RoutingExecutionConfig): RoutingExecutionConfig {
+  return Object.freeze({
+    maxAttempts: config.maxAttempts,
+    selectionTimeoutMs: config.selectionTimeoutMs,
+    maxEstimatedCostUsd: config.maxEstimatedCostUsd,
+    unknownCost: config.unknownCost,
+  });
+}
+
+export function normalizeRoutingConfig(layers: RoutingConfigLayers, options: RoutingNormalizationOptions = {}): NormalizedRoutingConfig {
+  for (const [name, layer] of Object.entries(layers)) {
+    if (layer === undefined) continue;
+    const validation = validateRoutingConfigLayer(layer, options);
+    if (!validation.ok) throw new Error(`invalid ${name} routing config: ${validation.errors.join("; ")}`);
+  }
+
+  const classes = Object.fromEntries(MODEL_CLASSES.map((modelClass) => {
+    const config = layers.project?.classes?.[modelClass] ?? layers.user?.classes?.[modelClass] ?? EMPTY_CLASS;
+    assertClassConfig(modelClass, config);
+    return [modelClass, copyClassConfig(config)];
+  })) as Record<ModelClass, ModelClassConfig>;
+  assertAcyclicFallbacks(classes);
+
+  const categories = {} as Record<RoutingCategory, RoutingAssignment>;
+  const categorySources = {} as Record<RoutingCategory, "project" | "user" | "builtin">;
+  for (const category of ROUTING_CATEGORIES) {
+    if (layers.project?.categories?.[category] !== undefined) {
+      categories[category] = copyAssignment(layers.project.categories[category]);
+      categorySources[category] = "project";
+    } else if (layers.user?.categories?.[category] !== undefined) {
+      categories[category] = copyAssignment(layers.user.categories[category]);
+      categorySources[category] = "user";
+    } else {
+      categories[category] = copyAssignment(BASELINE_ASSIGNMENT);
+      categorySources[category] = "builtin";
+    }
+  }
+
+  const providers = copyProviders(layers.project?.providers ?? layers.user?.providers ?? DEFAULT_PROVIDERS);
+  const classifier = copyClassifier(layers.project?.classifier ?? layers.user?.classifier ?? DEFAULT_CLASSIFIER);
+  if (classifier.chain.length > 0 && options.classifierAdapters === undefined) {
+    throw new Error("classifier adapter registry is required for a non-empty classifier chain");
+  }
+  for (const entry of classifier.chain) {
+    if (options.classifierAdapters?.has(entry.adapterId) !== true) throw new Error(`unregistered classifier adapter ${JSON.stringify(entry.adapterId)}`);
+    if (entry.adapterId === "model" && entry.target === undefined) throw new Error("classifier adapter \"model\" requires an explicit target");
+  }
+  const execution = copyExecution(layers.project?.execution ?? layers.user?.execution ?? DEFAULT_EXECUTION);
+  const normalized = Object.freeze({
+    schemaVersion: 2 as const,
+    classes: Object.freeze(classes),
+    categories: Object.freeze(categories),
+    categorySources: Object.freeze(categorySources),
+    providers,
+    classifier,
+    execution,
+  });
+  return Object.freeze({ ...normalized, configDigest: routingDigest(normalized) });
 }

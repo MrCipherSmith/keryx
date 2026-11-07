@@ -101,7 +101,11 @@ export function permissionIsEscalated(meta?: ApprovalMeta): boolean {
     meta?.credentials === true ||
     meta?.publishLease === true ||
     meta?.untrustedOrigin === true ||
-    meta?.hookAsk === true
+    meta?.hookAsk === true ||
+    // Flow 486: an `hc run` of an agent is granted per session by the agent loop, never by the client, and
+    // `alwaysAsk` is a call only a person may confirm (`hc keys`, `flow confirm`).
+    meta?.hcLaunch !== undefined ||
+    meta?.alwaysAsk === true
   );
 }
 

@@ -2,7 +2,8 @@
 //
 // A question or a tool call of one of these classes goes the way it went before the arbiter existed: to the
 // operator, or, in an autonomous run, to a refusal. The classes mirror review-auto's own floor
-// (`reviewAutoGrants`): destructive, credential, publish and hook-tightened calls, a call after untrusted content,
+// (`reviewAutoGrants`): destructive, credential, publish, hc-launch and hook-tightened calls, a call only a person may
+// confirm (`alwaysAsk`), a call after untrusted content,
 // and an irreversible decision. Nothing the arbiter's model says can lower this floor, because the check runs
 // before the model is reached and does not read the model's answer.
 
@@ -18,6 +19,7 @@ export const FLOOR_CLASSES = [
   "destructive",
   "credentials",
   "publish",
+  "hc-launch",
   "hook-ask",
   "always-ask",
   "untrusted-origin",
@@ -39,6 +41,7 @@ export function approvalFloor(meta: ApprovalMeta | undefined): FloorClass | unde
   if (meta.destructive) return "destructive";
   if (meta.credentials === true) return "credentials";
   if (meta.publishLease === true) return "publish";
+  if (meta.hcLaunch !== undefined) return "hc-launch";
   if (meta.hookAsk === true) return "hook-ask";
   if (meta.alwaysAsk === true) return "always-ask";
   if (meta.untrustedOrigin === true) return "untrusted-origin";

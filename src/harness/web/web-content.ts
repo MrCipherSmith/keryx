@@ -15,6 +15,11 @@ export interface SanitizedWebContent {
   providerId: string;
   retrievedAt: string;
   text: string;
+  /**
+   * The page was longer than the transport's byte budget and only its first
+   * part is here. Set by the transport, never by a converter.
+   */
+  truncated?: boolean;
 }
 
 const AGENT_NOUN = "(?:assistant|agent|ai|llm|claude|model)";
@@ -101,6 +106,44 @@ function stripMarkup(html: string): string {
 }
 
 /**
+ * Markdown reaches a model as text, so stripping every tag would eat autolinks
+ * and code fences. Only executable blocks are removed — the same defence the
+ * HTML path applies, narrowed to what Markdown can carry.
+ */
+function stripScriptAndStyle(markdown: string): string {
+  // Forward scan, not a lazy global regex: `[\s\S]*?` rescans to the end for
+  // every opener that has no closer, which is quadratic on hostile input — the
+  // exact hazard `stripMarkup` above was rewritten to avoid.
+  let text = markdown;
+  for (const tag of ["script", "style"] as const) {
+    const opener = new RegExp(`<${tag}\\b`, "gi");
+    const closer = new RegExp(`</${tag}>`, "gi");
+    let out = "";
+    let pos = 0;
+    let cursor = 0;
+    while (true) {
+      opener.lastIndex = cursor;
+      const open = opener.exec(text);
+      if (open === null) break;
+      // Case-insensitive search over the ORIGINAL string: its indices are the
+      // ones `slice` uses, and it allocates nothing per block (a lowercased
+      // copy both leaked quadratic time and shifted indices when the fold
+      // changed the string's length, e.g. U+0130).
+      closer.lastIndex = open.index;
+      const end = closer.exec(text);
+      // An unclosed block is left in place, as stripMarkup does.
+      if (end === null) break;
+      out += text.slice(pos, open.index) + " ";
+      pos = end.index + end[0].length;
+      cursor = pos;
+    }
+    out += text.slice(pos);
+    text = out;
+  }
+  return text;
+}
+
+/**
  * The only conversion permitted from an untrusted worker body to agent-visible
  * text. It deliberately drops headers and transport diagnostics.
  */
@@ -111,7 +154,9 @@ export function sanitizeWebContent(
     ? stripMarkup(content.text)
         .replace(/\s+/g, " ")
         .trim()
-    : content.text.trim();
+    : content.contentType.toLowerCase().startsWith("text/markdown")
+      ? stripScriptAndStyle(content.text).trim()
+      : content.text.trim();
   if (isUnsafeExternalInstruction(text)) {
     return { ok: false, reason: "external content contains a likely prompt injection" };
   }

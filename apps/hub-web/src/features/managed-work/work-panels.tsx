@@ -121,13 +121,14 @@ export function FlowSummary({
   const missing = results.length
     ? revision?.criteria.filter((criterion) => !mapped.has(criterion.criterionId)) ?? []
     : [];
-  const planBlocked = pendingAmendments(records, flow.id).length > 0 ||
-    (flow.state === "ready" && (flow.approvedRevisionId !== revision?.id ||
-      !results.length || results.length !== revision?.requiredIntentIds.length)) ||
-    results.some((result) => !result.revision ||
+  const hasAmendments = pendingAmendments(records, flow.id).length > 0;
+  const missingApprovedPlan = flow.state === "ready" && (flow.approvedRevisionId !== revision?.id ||
+    !results.length || results.length !== revision?.requiredIntentIds.length);
+  const staleIntent = results.some((result) => !result.revision ||
       (!!result.intent.approvedRevisionId && (result.intent.approvedRevisionId !== result.revision.id ||
         result.revision.flowRevisionId !== revision?.id)) ||
       result.revision.flowCriterionIds.some((id) => !revision?.criteria.some((criterion) => criterion.criterionId === id)));
+  const planBlocked = hasAmendments || missingApprovedPlan || staleIntent;
   const startPlan = () => {
     if (!revision || planBlocked || missing.length) return;
     const reviewed = results.flatMap(({ intent, revision: result }) => result
@@ -202,7 +203,9 @@ export function FlowSummary({
             })()}
           {fastStart && (
             <>
-              {planBlocked && <Notice>{t("startPlanBlocked")}</Notice>}
+              {hasAmendments && <Notice>{t("startPendingAmendments")}</Notice>}
+              {missingApprovedPlan && <Notice>{t("startMissingApprovedPlan")}</Notice>}
+              {staleIntent && <Notice>{t("startStaleIntent")}</Notice>}
               {missing.length > 0 && (
                 <Notice>
                   {t("startCoverageMissing")}
@@ -242,7 +245,9 @@ export function FlowSummary({
               {t("approve")}
             </Button>
           )}
-          {!fastStart && flow.state === "ready" && (
+          {!fastStart && flow.state === "ready" && (<>
+            {!can("flow.start") && <Notice>{t("noPermission")}</Notice>}
+            {can("flow.start") && !flowStartReady(records, flow) && <Notice>{t("startMissingApprovedPlan")}</Notice>}
             <Button
               disabled={!can("flow.start") || !flowStartReady(records, flow)}
               onClick={() =>
@@ -265,7 +270,7 @@ export function FlowSummary({
             >
               {t("start")}
             </Button>
-          )}
+          </>)}
         </>
       )}
     </section>

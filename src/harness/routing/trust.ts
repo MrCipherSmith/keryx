@@ -1,4 +1,4 @@
-// Flow 305 AC11 — project routing-table trust.
+// Flow 305 AC11 — project routing trust.
 //
 // `routing.config.json` is a COMMITTED, project-scoped file, exactly the
 // shape `.keryx/mcp-servers.json` is (`src/mcp-servers/trust.ts`, whose
@@ -9,12 +9,12 @@
 // the operator's own config directory, never in the repository, keyed by
 // project root (routing.config.json has no per-server name to key on the way
 // MCP's store does; one file, one project, one key). Editing the file after
-// approval — any category/assignment change — changes the fingerprint and
+// approval — any category, class, provider, classifier or execution change —
+// changes the fingerprint and
 // voids the approval; a pure reformat (whitespace, key order) does not, since
-// the fingerprint is computed over the VALIDATED TABLE, not the raw bytes —
+// the fingerprint is computed over the VALIDATED LAYER, not the raw bytes —
 // the same "what will actually apply" reasoning `serverFingerprint` documents
 // for MCP.
-import { createHash } from "node:crypto";
 import path from "node:path";
 import {
   ensureKeryxConfigDir,
@@ -23,7 +23,7 @@ import {
   type ConfigReadResult,
 } from "../../lib/config-dir";
 import { updateConfigFile } from "../../lib/config-update";
-import type { CategoryAssignment, RoutingTable } from "./table";
+import { routingDigest, type RoutingAssignment, type RoutingConfigLayer } from "./config";
 
 export function routingTrustFile(configDir?: string): string {
   return path.join(configDir ?? ensureKeryxConfigDir(), "routing-config-trust.json");
@@ -32,20 +32,18 @@ export function routingTrustFile(configDir?: string): string {
 /** `{ approvals: { "<project root>": "<fingerprint>" } }` */
 export type RoutingTrustStore = { approvals?: Record<string, string> };
 
-/** Key-order-independent: a pure reformat of `routing.config.json` does not void approval. */
-function sortedAssignment(assignment: CategoryAssignment): Array<[string, unknown]> {
-  return Object.entries(assignment).sort(([a], [b]) => a.localeCompare(b));
+/**
+ * What the operator is actually approving: the validated routing layer, not
+ * the raw file bytes, so whitespace and key order never force re-approval but
+ * any change to categories, classes, providers, classifier or execution does.
+ */
+export function routingLayerFingerprint(layer: RoutingConfigLayer): string {
+  return routingDigest(layer);
 }
 
-/**
- * What the operator is actually approving: the validated category table, not
- * the raw file bytes (so whitespace/key-order changes don't force
- * re-approval, but any actual category/assignment change does).
- */
-export function routingTableFingerprint(table: RoutingTable): string {
-  const categories = Object.keys(table).sort();
-  const material = JSON.stringify(categories.map((c) => [c, sortedAssignment(table[c as keyof RoutingTable]!)]));
-  return createHash("sha256").update(material).digest("hex");
+/** A layer that sets nothing beyond its schema version gives an operator nothing to approve. */
+export function isEmptyRoutingLayer(layer: RoutingConfigLayer | undefined): boolean {
+  return layer === undefined || Object.keys(layer).every((key) => key === "schemaVersion");
 }
 
 /** The key an approval is filed under: the project root, normalized. */
@@ -76,13 +74,13 @@ function parseRoutingTrustStore(read: ConfigReadResult): Record<string, string> 
 }
 
 /**
- * Is `table` (the project layer's CURRENT content) approved for `cwd`? Empty
- * tables need no approval — there is nothing for an operator to have seen.
+ * Is `layer` (the project layer's CURRENT content) approved for `cwd`? An empty
+ * layer needs no approval — there is nothing for an operator to have seen.
  */
-export function isProjectRoutingApproved(cwd: string, table: RoutingTable, configDir?: string): boolean {
-  if (Object.keys(table).length === 0) return true;
+export function isProjectRoutingApproved(cwd: string, layer: RoutingConfigLayer | undefined, configDir?: string): boolean {
+  if (isEmptyRoutingLayer(layer)) return true;
   const approvals = loadRoutingTrustStore(configDir);
-  return approvals[routingTrustKey(cwd)] === routingTableFingerprint(table);
+  return approvals[routingTrustKey(cwd)] === routingLayerFingerprint(layer!);
 }
 
 export type RoutingTrustResult =
@@ -116,10 +114,10 @@ function updateRoutingTrust(
   return { ok: true, file };
 }
 
-/** Record approval for exactly this table as it validates today. */
-export function approveProjectRouting(cwd: string, table: RoutingTable, configDir?: string): RoutingTrustResult {
+/** Record approval for exactly this layer as it validates today. */
+export function approveProjectRouting(cwd: string, layer: RoutingConfigLayer, configDir?: string): RoutingTrustResult {
   const key = routingTrustKey(cwd);
-  const fingerprint = routingTableFingerprint(table);
+  const fingerprint = routingLayerFingerprint(layer);
   return updateRoutingTrust(routingTrustFile(configDir), (approvals) => {
     approvals[key] = fingerprint;
   });
@@ -133,21 +131,30 @@ export function revokeProjectRouting(cwd: string, configDir?: string): RoutingTr
   });
 }
 
-/** One line per category, for `keryx routing trust`/`/routing`'s approve action to show BEFORE recording anything. */
-export function describeTableForApproval(table: RoutingTable): string[] {
-  return Object.entries(table)
+/** What `keryx routing trust` and `/routing`'s approve action show BEFORE recording anything. */
+export function describeLayerForApproval(layer: RoutingConfigLayer): string[] {
+  const lines = Object.entries(layer.categories ?? {})
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([category, assignment]) => `${category}: ${describeAssignmentForApproval(assignment)}`);
+    .map(([category, assignment]) => `${category}: ${describeRoutingAssignment(assignment)}`);
+  for (const key of ["classes", "providers", "classifier", "execution"] as const) {
+    if (layer[key] !== undefined) lines.push(`${key}: ${JSON.stringify(layer[key])}`);
+  }
+  return lines;
 }
 
-function describeAssignmentForApproval(assignment: CategoryAssignment): string {
-  switch (assignment.kind) {
-    case "session-default":
-      return "session default";
-    case "model":
-      return `${assignment.providerId}/${assignment.modelId}`;
-    case "provider-default":
-      return `${assignment.providerId} (provider default)`;
+/** One assignment in operator words. */
+export function describeRoutingAssignment(assignment: RoutingAssignment): string {
+  switch (assignment.mode) {
+    case "auto":
+      return "auto (classified per task)";
+    case "baseline":
+      return assignment.fallbackClass === undefined ? "session model" : `session model (fallback class ${assignment.fallbackClass})`;
+    case "class":
+      return `class ${assignment.modelClass}`;
+    case "model": {
+      const target = `${assignment.target.providerId}/${assignment.target.modelId}`;
+      return assignment.fallbackClass === undefined ? target : `${target} (fallback class ${assignment.fallbackClass})`;
+    }
     default: {
       const exhaustive: never = assignment;
       return exhaustive;
@@ -157,4 +164,4 @@ function describeAssignmentForApproval(assignment: CategoryAssignment): string {
 
 /** Standard notice shown wherever a project layer's entries are ignored pending approval. */
 export const ROUTING_TRUST_NOTICE =
-  "routing.config.json has unapproved entries — ignored. Run `keryx routing trust` (or approve it in /routing) to review and apply them.";
+  "routing.config.json has unapproved routing settings — ignored. Run `keryx routing trust` (or approve it in /routing) to review and apply them.";

@@ -1,4 +1,4 @@
-import { routingV2Digest } from "./config-v2";
+import { routingDigest } from "./config";
 import type { ModelProfile } from "./model-profile";
 import { profileKey } from "./model-profile";
 import { modelRefKey, type ModelRef } from "./model-class";
@@ -52,7 +52,7 @@ export function catalogRoutingRevision(
   providers: readonly FlatPickerProvider[],
   profiles: Readonly<Record<string, ModelProfile>>,
 ): string {
-  return routingV2Digest({
+  return routingDigest({
     providers: providers.map((provider) => ({ ...provider, models: provider.models === undefined ? undefined : [...provider.models].sort() }))
       .sort((left, right) => left.name.localeCompare(right.name)),
     profiles,

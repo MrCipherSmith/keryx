@@ -52,7 +52,7 @@
       ]
     },
     "model": {
-      "description": "The `model` block `keryx review tier` printed for this dispatch (Step 6) — pasted verbatim, never composed by hand. `tier` is the mechanical vocabulary the command emits (`light`/`standard`/`deep`), never a model name. `provider`/`model` are present when the command resolved a concrete model; legacy unresolved tiers use `inherit: true`. A routing-v2 refusal instead emits `dispatchable: false` and dispatch-check rejects it, so it can never become an implicit session fallback. Field naming otherwise matches `model` in `contracts/subagent-dispatch.schema.json` and the object `keryx review tier --json` prints under its own `model` key.",
+      "description": "The `model` block `keryx review tier` printed for this dispatch (Step 6) — pasted verbatim, never composed by hand. `tier` is the mechanical vocabulary the command emits (`light`/`standard`/`deep`), never a model name. `provider`/`model` are present when the command resolved a concrete model; legacy unresolved tiers use `inherit: true`. A routing refusal instead emits `dispatchable: false` and dispatch-check rejects it, so it can never become an implicit session fallback. Field naming otherwise matches `model` in `contracts/subagent-dispatch.schema.json` and the object `keryx review tier --json` prints under its own `model` key.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -95,7 +95,7 @@
         },
         "dispatchable": {
           "type": "boolean",
-          "description": "False only when routing v2 refused selection. This tier result is report-only and dispatch-check rejects it; it must not be reinterpreted as inherit/session fallback."
+          "description": "False only when routing refused selection. This tier result is report-only and dispatch-check rejects it; it must not be reinterpreted as inherit/session fallback."
         },
         "tier_resolution": {
           "type": "string",

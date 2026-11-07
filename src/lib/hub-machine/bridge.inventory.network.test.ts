@@ -1,9 +1,13 @@
 import {expect,test} from 'bun:test';
-import {rmSync,writeFileSync} from 'node:fs';
+import {readFileSync,rmSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {allowAll,bridgeHarness,git,newFilePatch,wait} from './bridge.test-support';
 import {callRound,okReply,scriptedProvider} from '../../commands/agent.test-helpers';
+import {success} from '../../hub/remote-v2/fixture.test-support';
+import type {Control} from '../../remote-control/protocol';
 import type {MachineBridge} from './bridge';
+import {machineStateDir} from './config';
+import {MachineLedger} from './ledger';
 
 const {get,post,hub,local,startBridge,machine,sessionHandle}=bridgeHarness();
 type Checkout={checkoutId:string;headSha:string;clean:boolean;available:boolean;agentProfiles:Array<{readiness:string;reason:string}>};
@@ -31,17 +35,54 @@ test('a checkout changed between connections reaches Hub as a higher inventory v
  const committed=await wait(read,v=>v.connected&&v.inventory!.checkouts[0]!.headSha===head);
  expect(committed.inventory!.inventoryVersion).toBeGreaterThan(version);expect(committed.inventory!.checkouts[0]).toMatchObject({clean:true,available:true,agentProfiles:[{readiness:'ready'}]});
  await created(committed,'Committed checkout');
- // A dirty checkout after a restart is shown dirty at its real HEAD, still a usable checkout: new work is refused as dirty, never as setup-required.
+ // A dirty checkout after a restart is shown dirty at its real HEAD and still admits a session.
  await restart(started.bridge);writeFileSync(path.join(state.cwd,'untracked.txt'),'left behind\n');await restart(started.bridge);
  const dirty=await wait(read,v=>v.connected&&v.inventory!.checkouts[0]!.clean===false);
  expect(dirty.inventory!.inventoryVersion).toBeGreaterThan(committed.inventory!.inventoryVersion);expect(dirty.inventory!.checkouts[0]).toMatchObject({headSha:head,clean:false,available:true,agentProfiles:[{readiness:'ready',reason:'none'}]});
- const refused=await wait(async()=>{const response=await create(dirty,'Dirty checkout');return {status:response.status,body:await response.json() as {error?:{code?:string}}};},r=>r.body.error?.code!=='setup-required');
- expect(refused).toMatchObject({status:409,body:{error:{code:'checkout-dirty'}}});
+ await created(dirty,'Dirty checkout');
  // Cleaning it again is one more change: the version still only grows.
  await started.bridge.stop();await wait(read,v=>!v.connected);rmSync(path.join(state.cwd,'untracked.txt'));await startBridge(state,{},provider);
  const clean=await wait(read,v=>v.connected&&v.inventory!.checkouts[0]!.clean);expect(clean.inventory!.inventoryVersion).toBeGreaterThan(dirty.inventory!.inventoryVersion);
  await created(clean,'Cleaned checkout');
 },60000);
+
+test('a new session on an edited checkout preserves its index and keeps full-file results local',async()=>{
+ const state=await local();
+ const tracked=path.join(state.cwd,'seed.txt');
+ const scratch=path.join(state.cwd,'scratch.txt');
+ const index=path.join(state.cwd,'.git','index');
+ writeFileSync(tracked,'staged owner text\n');
+ expect(git(state.cwd,'add','seed.txt').exitCode).toBe(0);
+ const original='staged owner text\nunstaged owner text\n';
+ writeFileSync(tracked,original);
+ writeFileSync(scratch,'untracked owner text\n');
+ const staged=readFileSync(index);
+ const patch=JSON.stringify({patch:'diff --git a/seed.txt b/seed.txt\n--- a/seed.txt\n+++ b/seed.txt\n@@ -1,2 +1,3 @@\n staged owner text\n unstaged owner text\n+agent edit\n'});
+ const provider=scriptedProvider([callRound('patch','apply_patch',patch),okReply]);
+ const started=await startBridge(state,{approve:allowAll},provider);
+ const read=()=>get<MachineView>(`/hub/v2/machines/${state.machine.machineId}`);
+ const dirty=await wait(read,v=>v.connected&&v.inventory?.checkouts[0]?.clean===false);
+ const created=await success<Control['SessionOperationReceipt']>(await post(`/hub/v2/projects/${hub().project.id}/sessions`,{
+  machineId:state.machine.machineId,checkoutId:'checkout',agentProfileId:'fixture',expectedInventoryVersion:dirty.inventory!.inventoryVersion,
+  expectedHeadSha:dirty.inventory!.checkouts[0]!.headSha,capabilityDigest:started.digest,policyDigest:started.digest,title:'Keep owner changes local',
+ }));
+ const session=sessionHandle(created.sessionId,started.catalogue.catalogueDigest);
+ await wait(session.read,v=>v.state==='idle');
+ expect(readFileSync(tracked,'utf8')).toBe(original);
+ expect(readFileSync(scratch,'utf8')).toBe('untracked owner text\n');
+ expect(readFileSync(index)).toEqual(staged);
+ const lease=(await session.claim()).lease;
+ const turn=await session.turn(lease,'Edit the file with existing changes');
+ const run=await session.waitRun(turn.runId!,v=>v.state==='succeeded');
+ expect(run.result).toBeUndefined();
+ expect((await session.events(turn.runId!)).some(e=>e.kind==='log'&&e.text.includes('Result stays on this machine'))).toBe(true);
+ expect(readFileSync(tracked,'utf8')).toBe(`${original}agent edit\n`);
+ expect(readFileSync(scratch,'utf8')).toBe('untracked owner text\n');
+ expect(readFileSync(index)).toEqual(staged);
+ await started.bridge.stop();
+ const ledger=new MachineLedger(path.join(machineStateDir(state.configDir,state.hubId),'control.sqlite'));
+ try{expect(ledger.sessionResultsStayLocal(created.sessionId)).toBe(true);}finally{ledger.close();}
+},40000);
 test('while serve stays connected a developer commit reaches Hub at the bounded re-measure as the next version, and an unchanged checkout publishes nothing new',async()=>{
  const state=await local();const provider=scriptedProvider([okReply]);
  const read=()=>get<MachineView>(`/hub/v2/machines/${state.machine.machineId}`);

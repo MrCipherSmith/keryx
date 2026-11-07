@@ -27,7 +27,7 @@ it('opens the exact project Flow and keeps acceptance independent of status and 
  const atlas = await screen.findByRole('button', { name: 'Atlas navigation' });
  expect(within(atlas.closest('[role="row"]')!).getByText('Not accepted yet')).toBeVisible();
  expect(within(atlas.closest('[role="row"]')!).getByText('2 criteria')).toBeVisible();
- expect(within(atlas.closest('[role="row"]')!).getByText('Criterion coverage is not reported')).toBeVisible();
+ expect(within(atlas.closest('[role="row"]')!).queryByText('Criterion coverage is not reported')).not.toBeInTheDocument();
  const beacon = await screen.findByRole('button', { name: 'Beacon context' });
  expect(within(beacon.closest('[role="row"]')!).getByText('Accepted by: human:maya')).toBeVisible();
  fireEvent.click(beacon);

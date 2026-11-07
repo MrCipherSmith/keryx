@@ -179,8 +179,7 @@ export function FlowRows({
               </span>
             )}
             <span className="hub-flow-meta">
-              {t("version")} {flow.version} ·{" "}
-              {flow.specContentDigest.slice(0, 12)}
+              {t("version")} {flow.version}
             </span>
           </div>
           <div role="cell">
@@ -188,7 +187,6 @@ export function FlowRows({
           </div>
           <div role="cell">
             <span>{t("criteriaCount", { count: flow.criteria.length })}</span>
-            <span className="hub-flow-meta">{t("coverageNotReported")}</span>
           </div>
           <div role="cell">
             {flow.acceptedBy ? (

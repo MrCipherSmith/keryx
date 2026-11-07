@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
@@ -12,13 +12,17 @@ import type {
   MachineSummary,
   RunRecord,
 } from "../../../../../src/remote-control/protocol";
+import type { Project } from "../../api/types";
 import type { Control } from "../../api/remote";
 import { remoteGet, remoteProject } from "../../api/remote";
-import { sessionPath, useRemoteQuery } from "../../api/remote-hooks";
+import { sessionPath, useAppliedReceipt, useRemoteAction, useRemoteQuery } from "../../api/remote-hooks";
 import { useHub } from "../../app/hub-context";
-import { Button, EmptyState, Input, Notice } from "../../components/ui";
+import { Button, EmptyState, Input, Notice, Select } from "../../components/ui";
 import { ControllerPanel } from "./recovery";
-import { Feedback, type Controller } from "./shared";
+import { ActionFeedback, Feedback, type Controller } from "./shared";
+import { ChatConversation, ChatModelPicker, ChatUsage } from "./chat-composer";
+import type { SessionChatUsage } from "../../../../../src/remote-control/chat-usage";
+import { Confirmation } from "./settings";
 import { SessionRunContext } from "./session-run-context";
 import "./session-workspace.css";
 
@@ -83,11 +87,19 @@ export function useWorkspaceCopy() {
   const { i18n } = useTranslation();
   return copy[i18n.language.startsWith("ru") ? "ru" : "en"];
 }
+export type SessionComposerSlots = {
+  model: ReactNode;
+  usage: ReactNode;
+  stopTargetRef: (node: HTMLSpanElement | null) => void;
+  approvalDock: HTMLDivElement | null;
+};
 export function SessionWorkspace({
   openingRejected = false,
   record,
   control,
   history,
+  conversation,
+  messages,
   composer,
   queue,
   settings,
@@ -97,7 +109,9 @@ export function SessionWorkspace({
   record: Control["SessionRecord"];
   control: Controller;
   history: ReactNode;
-  composer: ReactNode;
+  conversation?: HTMLDivElement | null;
+  messages?: Control["SessionMessage"][];
+  composer: (slots: SessionComposerSlots) => ReactNode;
   queue: ReactNode;
   settings: ReactNode;
   operations: ReactNode;
@@ -109,6 +123,9 @@ export function SessionWorkspace({
     "context" | "changes" | "checks" | "queue" | "settings"
   >("context");
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [approvalDock, setApprovalDock] = useState<HTMLDivElement | null>(null);
+  const [stopDock, setStopDock] = useState<HTMLSpanElement | null>(null);
+  const [usageOpened, setUsageOpened] = useState(false);
   const id = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -142,6 +159,31 @@ export function SessionWorkspace({
   const candidate = routing.data?.candidates.find(
     (c) => c.candidateId === candidateId,
   );
+  const path = sessionPath(record.projectId, record.sessionId);
+  const usage = useRemoteQuery<SessionChatUsage>(["session", record.sessionId, "usage"], path + "/usage", usageOpened);
+  const model = useRemoteAction<Control["ConfigReceipt"]>();
+  const modelResult = useAppliedReceipt(record, model.data, receipt => receipt.status === "applied" || receipt.status === "rejected");
+  const receipt = modelResult.data ?? model.data;
+  const modelPending = receipt?.status === "queued";
+  const needsConfirmation = receipt?.status === "confirmation-required" && receipt.confirmation !== null;
+  const compatibleCandidates = routing.data?.candidates.filter(item => item.available &&
+    item.reasoningEfforts.includes(record.config.reasoningEffort)) ?? [];
+  function selectModel(candidateId: string) {
+    if (!control.active || !control.binding || record.state !== "idle" || model.isPending || modelPending ||
+        candidateId === record.config.baselineCandidateId ||
+        !compatibleCandidates.some(item => item.candidateId === candidateId)) return;
+    const current = record.config.routing;
+    const routing = {
+      ...current,
+      candidateIds: current.enabled ? [...new Set([...current.candidateIds, candidateId])] : [candidateId],
+      fallbackCandidateId: candidateId,
+    };
+    model.mutate({ method: "PUT", path: path + "/config", body: {
+      expectedSessionVersion: record.version, controller: control.binding,
+      expectedConfigVersion: record.config.configVersion, baselineCandidateId: candidateId,
+      reasoningEffort: record.config.reasoningEffort, routing, busyPolicy: "reject",
+    } satisfies Control["ConfigChange"] });
+  }
   const tabs = ["context", "changes", "checks", "queue", "settings"] as const;
   return (
     <section className="session-workbench">
@@ -205,16 +247,17 @@ export function SessionWorkspace({
         </span>
       </div>
       {machine && !machine.connected && <Notice>{words.stale}</Notice>}
+      <p role="status" aria-atomic="true" className="sr-only">
+        {run.data?.state === "waiting-approval" ? words.attention : ""}
+      </p>
       {run.data?.state === "waiting-approval" && (
         <button
           type="button"
           className="session-attention"
           onClick={() => {
-            setTab("context");
-            document
-              .getElementById(id + "-inspector")
-              ?.scrollIntoView({ block: "start" });
-            document.getElementById(id + "-context")?.focus();
+            const target = approvalDock?.querySelector<HTMLElement>("[data-chat-approval=waiting]") ?? conversation;
+            target?.scrollIntoView({ block: "nearest" });
+            target?.focus({ preventScroll: true });
           }}
         >
           {words.attention}
@@ -234,10 +277,27 @@ export function SessionWorkspace({
             onPick={() => setNavigationOpen(false)}
           />
         </aside>
-        <div className="session-conversation-column">
-          {history}
-          <div className="session-composer">{composer}</div>
-        </div>
+        <ChatConversation transcript={history} approval={<>
+          <div className="chat-approval-slot" ref={setApprovalDock} />
+          {needsConfirmation && receipt.confirmation && <div className="chat-approval-slot">
+            <Confirmation key={receipt.confirmation.confirmationId} card={receipt.confirmation}
+              record={record} control={control} kind="config" />
+          </div>}
+          {(model.isPending || modelPending || receipt?.status === "rejected" || model.error || modelResult.error) && <ActionFeedback
+            action={{ ...model, data: receipt, error: model.error ?? modelResult.error }} />}
+        </>} composer={composer({
+          model: <ChatModelPicker value={record.config.baselineCandidateId}
+            candidates={(routing.data?.candidates ?? []).map(item => ({
+              id: item.candidateId, label: item.providerId + " / " + item.modelId,
+              disabled: !compatibleCandidates.includes(item),
+            }))}
+            disabled={!control.active || record.state !== "idle" || model.isPending || modelPending}
+            onSelect={selectModel} />,
+          usage: <ChatUsage usage={usage.data} busy={usageOpened && usage.isPending}
+            unavailable={!!usage.error} onOpen={() => { setUsageOpened(true); if (usageOpened) void usage.refetch(); }} />,
+          stopTargetRef: setStopDock,
+          approvalDock,
+        })} />
         <aside id={id + "-inspector"} className="session-context-column">
           <ControllerPanel record={record} control={control} />
           <div
@@ -305,6 +365,10 @@ export function SessionWorkspace({
               record={record}
               control={control}
               mode={tab === "changes" || tab === "checks" ? tab : "context"}
+              conversation={conversation}
+              approvalDock={approvalDock}
+              stopDock={stopDock}
+              messages={messages}
             />
           </div>
           <div
@@ -343,10 +407,20 @@ function SessionNavigator({
   const words = useWorkspaceCopy();
   const { t } = useTranslation("remote");
   const [search, setSearch] = useState("");
+  const [projectId, setProjectId] = useState(record.projectId);
+  const client = useQueryClient();
+  const projects = client.getQueryData<{ projects: Project[] }>([hub.scopeKey, "projects"])?.projects ?? [];
+  const alternateMachines = useQuery({
+    queryKey: [hub.scopeKey, projectId, "remote", "machines"],
+    queryFn: ({ signal }) => remoteGet<{ machines: MachineSummary[] }>("/machines?projectId=" + encodeURIComponent(projectId), signal),
+    enabled: projectId !== record.projectId,
+    refetchInterval: projectId === record.projectId ? false : 20_000,
+  });
+  const visibleMachines = projectId === record.projectId ? machines : alternateMachines.data?.machines ?? [];
   const sessions = useInfiniteQuery({
     queryKey: [
       hub.scopeKey,
-      record.projectId,
+      projectId,
       "remote",
       "sessions",
       "navigator",
@@ -354,9 +428,11 @@ function SessionNavigator({
     initialPageParam: 0,
     queryFn: ({ signal, pageParam }) =>
       remoteGet<Control["SessionPage"]>(
-        remoteProject(record.projectId) + "/sessions?after=" + pageParam,
+        remoteProject(projectId) + "/sessions?after=" + pageParam,
         signal,
       ),
+    // Hub events follow the open session's project; keep the other project's sidebar fresh.
+    refetchInterval: projectId === record.projectId ? false : 20_000,
     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
   });
   const unique = new Map<string, Control["SessionRecord"]>();
@@ -366,7 +442,7 @@ function SessionNavigator({
       if (!old || old.version <= s.version) unique.set(s.sessionId, s);
     }),
   );
-  unique.set(record.sessionId, record);
+  if (record.projectId === projectId) unique.set(record.sessionId, record);
   const filtered = [...unique.values()].filter((s) =>
     s.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   );
@@ -382,12 +458,18 @@ function SessionNavigator({
         <Button
           variant="ghost"
           onClick={() =>
-            hub.navigate({ tab: "sessions", sessionId: undefined })
+            hub.navigate({ projectId, tab: "sessions", sessionId: undefined })
           }
         >
           {words.all}
         </Button>
       </div>
+      {projects.length > 1 && <Select aria-label={t("common:project")} value={projectId} onChange={event => {
+        setProjectId(event.target.value);
+        setSearch("");
+      }}>
+        {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+      </Select>}
       <Input
         type="search"
         aria-label={words.search}
@@ -398,10 +480,10 @@ function SessionNavigator({
       <Feedback query={sessions} />
       {[...groups].map(([key, items]) => {
         const sample = items[0]!;
-        const machine = machines.find((m) => m.machineId === sample.machineId);
+        const machine = visibleMachines.find((m) => m.machineId === sample.machineId);
         const checkout = machine?.inventory?.checkouts.find(
           (c) =>
-            c.projectId === record.projectId &&
+            c.projectId === sample.projectId &&
             c.checkoutId === sample.checkoutId,
         );
         return (

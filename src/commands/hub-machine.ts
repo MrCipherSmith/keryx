@@ -7,6 +7,7 @@ import { keryxConfigDir } from '../lib/config-dir';
 import { nestedAgentCardRefusal } from './operator-confirm-tools';
 import { allowCheckout, hubIdentity, machineStateDir, loadEnrollment, removeEnrollment, pairEnrollment } from '../lib/hub-machine/config';
 import {canonicalDigest,type Control} from '../remote-control/protocol';
+import {encodeLocalModelCandidate} from '../lib/hub-machine/model-candidates';
 import {loadShellConfig} from '../lib/shell-config';
 import {readMachinePolicy,writeMachinePolicy} from '../lib/hub-machine/policy';
 import { MachineLedger } from '../lib/hub-machine/ledger';
@@ -41,7 +42,7 @@ interface CommandOptions {
     nativeCoverageDescriptor?: unknown;
 }
 /** Every `keryx hub machine` subcommand and the flags it accepts; the usage error and the help are checked against it. */
-const allowed: Record<string, string[]> = { pair: ['--url', '--code-env'], allow: ['--project', '--checkout', '--path', '--profile','--hub'], configure:['--hub','--candidate','--ad-hoc','--max-runs'], readiness: [], recover: ['--hub','--action','--session','--native-session','--controller-lease','--controller-version','--session-version','--history-version','--workspace-baseline','--request-id','--run','--reconciliation','--command'], unpair: ['--hub'] };
+const allowed: Record<string, string[]> = { pair: ['--url', '--code-env'], allow: ['--project', '--checkout', '--path', '--profile','--hub'], configure:['--hub','--candidate','--ad-hoc','--max-runs','--models'], readiness: [], recover: ['--hub','--action','--session','--native-session','--controller-lease','--controller-version','--session-version','--history-version','--workspace-baseline','--request-id','--run','--reconciliation','--command'], unpair: ['--hub'] };
 export const MACHINE_SUBCOMMANDS: readonly string[] = Object.keys(allowed);
 /** Subcommands that enroll this machine, widen what the Hub may run here, or drop the enrollment: the operator's own decision. */
 const OPERATOR_SUBCOMMANDS: ReadonlySet<string> = new Set(['pair', 'allow', 'configure', 'unpair']);
@@ -110,11 +111,29 @@ export async function hubMachineCommand(args: string[], options: CommandOptions 
         const e=loadEnrollment(stateDir,flags.get('--hub'));if(!e)throw new MachineError('not-paired');
         if(required('--candidate')!=='current'||!['allow','deny'].includes(required('--ad-hoc'))||!['1','2'].includes(required('--max-runs')))throw new MachineError('invalid-policy');
         const saved=loadShellConfig(stateDir);if(!saved.provider||saved.provider==='fake'||!saved.model)throw new MachineError('provider-setup');
-        const candidateId=canonicalDigest([saved.provider,saved.model]),adHoc=required('--ad-hoc')==='allow';const prior=readMachinePolicy(stateDir,e.hubId);
-        const policy:Control['LocalMachinePolicy']={version:2,hubId:e.hubId,enabled:true,maxConcurrentRuns:Number(required('--max-runs')),allowAdHocSessions:adHoc,allowedCandidateIds:[candidateId],
-          checkouts:e.mappings.map(m=>({projectId:m.projectId,checkoutId:m.checkoutId,localBindingId:canonicalDigest([e.hubId,m.checkoutId]),path:m.cwd,profileIds:[m.profileId]})),
-          profiles:[...new Set(e.mappings.map(m=>m.profileId))].map(profileId=>({profileId,allowAdHocTurns:adHoc,consentVersion:(prior?.profiles.find(p=>p.profileId===profileId)?.consentVersion??0)+1,allowedCandidateIds:[candidateId]}))};
-        writeMachinePolicy(stateDir,policy);write('Local policy saved for the current candidate. Readiness still requires supported native commands, credentials and containment.');return;
+        const provider = saved.provider;
+        const models = [...new Set(flags.get('--models')?.split(',') ?? [])].filter(model => model !== saved.model);
+        if (models.length > 15) throw new MachineError('invalid-policy');
+        const candidateIds = [canonicalDigest([provider, saved.model])];
+        for (const model of models) {
+            const id = encodeLocalModelCandidate(provider, model);
+            if (!id) throw new MachineError('invalid-policy');
+            candidateIds.push(id);
+        }
+        const adHoc = required('--ad-hoc') === 'allow';
+        const prior = readMachinePolicy(stateDir, e.hubId);
+        const policy: Control['LocalMachinePolicy'] = {
+            version: 2, hubId: e.hubId, enabled: true, maxConcurrentRuns: Number(required('--max-runs')),
+            allowAdHocSessions: adHoc, allowedCandidateIds: candidateIds,
+            checkouts: e.mappings.map(m => ({ projectId: m.projectId, checkoutId: m.checkoutId,
+                localBindingId: canonicalDigest([e.hubId, m.checkoutId]), path: m.cwd, profileIds: [m.profileId] })),
+            profiles: [...new Set(e.mappings.map(m => m.profileId))].map(profileId => ({ profileId, allowAdHocTurns: adHoc,
+                consentVersion: (prior?.profiles.find(p => p.profileId === profileId)?.consentVersion ?? 0) + 1,
+                allowedCandidateIds: candidateIds })),
+        };
+        writeMachinePolicy(stateDir, policy);
+        write('Local policy saved for the approved models. Readiness still requires supported native commands, credentials and containment.');
+        return;
     }
     // Neither command may infer process absence or delete unresolved launch identities.
     const enrollment=loadEnrollment(stateDir,flags.get('--hub'));

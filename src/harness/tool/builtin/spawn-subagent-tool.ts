@@ -52,14 +52,9 @@ import { openSlate, type SlateSessionRef } from "../../../session/slate-lifecycl
 import { composeAbortSignals } from "../../../lib/abort-compose";
 import { withFileLock } from "../../../lib/fs";
 import {
-  applyTierResolution,
   buildTierMap,
   TIER_RANK_HINTS,
   MODEL_TIERS,
-  parseModelTier,
-  rankDiscoveredModels,
-  resolveTierModel,
-  resolveTierWithAgent,
   type DiscoveredProvider,
   type ModelPrices,
   type ModelRankHint,
@@ -67,9 +62,7 @@ import {
   type TierRankCache,
 } from "../../../gdskills/model-tier";
 import { providerClass, resolveChildModel, type ChildModelRequest } from "../../child/model";
-import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
-import { loadRoutingConfig } from "../../routing/config";
-import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed, type FlatPickerProvider } from "../../routing/table";
+import { connectedPredicateFrom, type FlatPickerProvider } from "../../routing/table";
 import { canonicalExternalAgentId } from "../../external/registry";
 import { resolveExternalSetting } from "../../../lib/external-switch";
 import {
@@ -78,7 +71,7 @@ import {
   isProviderIdExternal,
   loadExternalProvidersConfig,
 } from "../../../lib/external-providers";
-import { loadActiveRoutingV2 } from "../../routing/active-v2";
+import { loadRouting } from "../../routing/settings";
 import { MODEL_CLASSES, isModelClass, modelRefKey, type ModelRef } from "../../routing/model-class";
 import { loadModelProfiles, profileKey, type ModelProfile } from "../../routing/model-profile";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../../routing/routing-runtime";
@@ -88,11 +81,11 @@ import {
   estimateModelCostUsd,
 } from "../../routing/snapshot-adapter";
 import type { RoutingRequest } from "../../routing/routing-request";
-import { inspectProviderRoutingFacts, routingPolicyRevision } from "../../routing/provider-facts-v2";
+import { inspectProviderRoutingFacts, routingPolicyRevision } from "../../routing/provider-facts";
 import { RoutingBudgetLedger } from "../../routing/routing-budget";
 import { runProductionRoutingClassification } from "../../routing/routing-classifier-service";
-import { DEFAULT_JEV_ROUTING_TARGET } from "../../routing/classifier-adapters-v2";
-import { createMeteredRoutingProvider } from "../../routing/routing-provider-v2";
+import { DEFAULT_JEV_ROUTING_TARGET } from "../../routing/classifier-adapters";
+import { createMeteredRoutingProvider } from "../../routing/routing-provider";
 import type { RoutingReason } from "../../routing/decision";
 import { envWithSavedApiKeys } from "../../../lib/shell-config";
 import { hasCredential } from "../../provider/single-turn";
@@ -700,7 +693,7 @@ export interface SpawnSubagentToolDeps {
   getParentModel: () => { providerId: string; modelId: string; baseUrl?: string };
   /** Build a ProviderPort for a resolved provider/model. */
   makeProvider: (providerId: string, modelId: string, baseUrl?: string) => ProviderPort;
-  /** Static runtime metadata for v2 capability gates; absence stays fail-closed. */
+  /** Static runtime metadata for routing capability gates; absence stays fail-closed. */
   describeProvider?: (providerId: string, modelId: string, baseUrl?: string) => ProviderDescription;
   /**
    * Credentialed providers the child may use (detection allowlist) AND the
@@ -1126,10 +1119,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "lack shell/test execution and nested spawn; summaries are capped at 16000 chars. " +
         "Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
-        "trivial questions (answer yourself). Legacy routing optionally uses a 'model_tier' " +
-        "(light|standard|deep); active routing v2 accepts it only as ignored migration input and " +
-        "instead uses a 'model_class' recommendation (light|standard|expert|frontier), below the " +
-        "configured subagents category. A 'runtime' " +
+        "trivial questions (answer yourself). Model routing takes an optional 'model_class' " +
+        "recommendation (light|standard|expert|frontier), below the configured subagents category; " +
+        "the older relative 'model_tier' is accepted for compatibility but ignored. A 'runtime' " +
         "block to delegate the child to an external vendor coding CLI instead of running it " +
         "in-process. Optional 'cwd' runs the child's tools against a different directory than " +
         "yours (e.g. a review worktree checked out at a PR head) — accepted only when it is your " +
@@ -1228,17 +1220,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             type: "string",
             enum: [...MODEL_TIERS],
             description:
-              "Size the child's model against your own: 'light' for mechanical, verifiable work, " +
-              "'standard' for ordinary work (same as omitting it), 'deep' for genuinely hard " +
-              "reasoning. Resolved against the models this session's provider actually reports; " +
-              "when they cannot be ranked the child keeps your model. With active routing v2 this " +
-              "legacy field is accepted for migration compatibility but ignored.",
+              "Deprecated relative size (light|standard|deep). Accepted for compatibility but " +
+              "ignored: model routing chooses the child's model. Use model_class instead.",
           },
           model_class: {
             type: "string",
             enum: [...MODEL_CLASSES],
             description:
-              "Routing v2 only: recommend an absolute model class for this task. The configured " +
+              "Recommend an absolute model class for this task. The configured " +
               "subagents category keeps precedence; this is never treated as a user override.",
           },
           /**
@@ -1497,17 +1486,20 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         ...p,
         models: p.models ?? [],
       }));
-      const activeRoutingV2 = loadActiveRoutingV2(deps.cwd, deps.routingConfigDir);
-      const legacyTierMigrationNotice = activeRoutingV2 !== undefined && input.model_tier !== undefined
-        ? `ignored legacy model_tier ${String(input.model_tier)} because routing v2 is authoritative; migrate the caller to model_class`
+      let routingConfig: ReturnType<typeof loadRouting>;
+      try {
+        routingConfig = loadRouting(deps.cwd, deps.routingConfigDir);
+      } catch (error) {
+        // Malformed or unconvertible routing settings are surfaced, never routed around.
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
+        return { status: "Error", output: `spawn_subagent refused: routing settings are invalid: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+      }
+      const legacyTierMigrationNotice = input.model_tier !== undefined
+        ? `ignored model_tier ${String(input.model_tier)} because model routing chooses the child's model; migrate the caller to model_class`
         : undefined;
       if (input.model_class !== undefined && !isModelClass(input.model_class)) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
         return { status: "Error", output: "spawn_subagent model_class must be light, standard, expert, or frontier", isError: true };
-      }
-      if (activeRoutingV2 === undefined && input.model_class !== undefined) {
-        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-legacy", task });
-        return { status: "Error", output: "spawn_subagent model_class requires active routing v2", isError: true };
       }
       if (legacyTierMigrationNotice !== undefined) {
         emitFleetEvent({
@@ -1519,7 +1511,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           },
         });
       }
-      if (activeRoutingV2 !== undefined && isExternalRuntimeRequest && input.model_class !== undefined) {
+      if (isExternalRuntimeRequest && input.model_class !== undefined) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-unmanaged", task });
         return {
           status: "Error",
@@ -1528,15 +1520,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         };
       }
 
-      // v2 and legacy are separate engines. The relative legacy tier is never
-      // translated into an absolute v2 class; an agent class is a recommendation
-      // only and cannot populate RoutingRequest.userOverride.
-      const requestedTier = activeRoutingV2 === undefined
-        ? parseModelTier(typeof input.model_tier === "string" ? input.model_tier : undefined)
-        : undefined;
+      // The relative tier is never translated into an absolute class; an agent
+      // class is a recommendation only and cannot populate RoutingRequest.userOverride.
       let categoryModelRequest: ChildModelRequest | undefined;
-      let routingV2Receipt: RoutingDecisionReceipt | undefined;
-      let routingV2ExecutionBudget: {
+      let routingReceipt: RoutingDecisionReceipt | undefined;
+      let routingExecutionBudget: {
         readonly ledger: RoutingBudgetLedger;
         readonly target: ModelRef;
         readonly profile: ModelProfile | undefined;
@@ -1548,8 +1536,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           context: { readonly signal: AbortSignal; readonly request: NormalizedRequest },
         ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: RoutingReason }>;
       } | undefined;
-      let routingV2ExecutionDenied: RoutingReason | undefined;
-      if (activeRoutingV2 !== undefined && !isExternalRuntimeRequest) {
+      let routingExecutionDenied: RoutingReason | undefined;
+      if (!isExternalRuntimeRequest) {
         const observedAt = clock();
         const external = await resolveExternalSetting({
           cwd: deps.cwd,
@@ -1590,13 +1578,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           cooldown: false,
         }));
         const profiles = loadModelProfiles(deps.routingConfigDir);
-        let routingBudget = routingBudgets.get(activeRoutingV2.configDigest);
+        let routingBudget = routingBudgets.get(routingConfig.configDigest);
         if (routingBudget === undefined) {
           routingBudget = new RoutingBudgetLedger({
-            configUsd: activeRoutingV2.execution.maxEstimatedCostUsd,
-            unknownCost: activeRoutingV2.execution.unknownCost,
+            configUsd: routingConfig.execution.maxEstimatedCostUsd,
+            unknownCost: routingConfig.execution.unknownCost,
           });
-          routingBudgets.set(activeRoutingV2.configDigest, routingBudget);
+          routingBudgets.set(routingConfig.configDigest, routingBudget);
         }
         let request: RoutingRequest = {
           requestId: `subagent:${workerId}:${randomUUID()}`,
@@ -1612,15 +1600,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             ? { recommendation: { modelClass: input.model_class, source: "agent" } }
             : {}),
         };
-        if (activeRoutingV2.categories.subagents.mode === "auto" && request.recommendation === undefined) {
+        if (routingConfig.categories.subagents.mode === "auto" && request.recommendation === undefined) {
           const env = envWithSavedApiKeys(process.env, deps.routingConfigDir);
           const classified = await runProductionRoutingClassification({
             task,
             request,
-            config: activeRoutingV2,
+            config: routingConfig,
             budget: routingBudget,
             estimatedCostUsd: (adapter) => {
-              const entry = activeRoutingV2.classifier.chain.find((candidate) => candidate.adapterId === adapter.id);
+              const entry = routingConfig.classifier.chain.find((candidate) => candidate.adapterId === adapter.id);
               const target = entry?.target ?? (adapter.id === "jev" ? DEFAULT_JEV_ROUTING_TARGET : session);
               return estimateModelCostUsd(profiles[profileKey(target.providerId, target.modelId)], 4_000, 180);
             },
@@ -1644,7 +1632,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           request = classified.request;
         }
         const snapshot = buildCatalogRoutingSnapshot({
-          configDigest: activeRoutingV2.configDigest,
+          configDigest: routingConfig.configDigest,
           observedAt,
           catalogRevision: catalogRoutingRevision(catalog, profiles),
           policyRevision,
@@ -1660,33 +1648,37 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             availability: (target) => modelRefKey(target) === modelRefKey(session) && credentialsAvailable(target)
               ? "available"
               : undefined,
-            capabilities: providerFacts.capabilities,
+            // The parent is calling this tool on its own model, which proves that
+            // model makes tool calls even when its static description omits it.
+            capabilities: (target) => modelRefKey(target) === modelRefKey(session) && !providerFacts.capabilities(target).includes("tools")
+              ? [...providerFacts.capabilities(target), "tools"]
+              : providerFacts.capabilities(target),
             cooldown: () => false,
             observedLatencyMs: () => null,
           },
         });
-        routingV2Receipt = resolveRoutingForRuntime({
+        routingReceipt = resolveRoutingForRuntime({
           request,
           snapshot,
-          config: activeRoutingV2,
+          config: routingConfig,
           journal: {
             cwd: deps.cwd,
             ...(deps.routingConfigDir === undefined ? {} : { configDir: deps.routingConfigDir }),
             kind: "dispatch",
           },
         });
-        const decision = routingV2Receipt.decision;
+        const decision = routingReceipt.decision;
         if (decision.status !== "selected") {
           const reason = decision.status === "blocked" ? decision.reason : decision.status;
           emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: `routing-${reason}`, task });
           emitFleetEvent({
             kind: "log",
             id: workerId,
-            entry: { kind: "system", text: `routing v2 ${decision.decisionId}: ${decision.status} (${reason})` },
+            entry: { kind: "system", text: `routing ${decision.decisionId}: ${decision.status} (${reason})` },
           });
           return {
             status: "Denied",
-            output: `spawn_subagent denied by routing v2: ${reason} (decision ${decision.decisionId})`,
+            output: `spawn_subagent denied by routing: ${reason} (decision ${decision.decisionId})`,
             isError: true,
           };
         }
@@ -1698,15 +1690,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         const selectedAvailability = snapshot.models.find(
           (facts) => modelRefKey(facts.target) === modelRefKey(decision.selection),
         )?.availability;
-        routingV2ExecutionBudget = {
+        routingExecutionBudget = {
           ledger: routingBudget,
           target: decision.selection,
           // One immutable snapshot per child dispatch. The before-I/O and
           // metering callbacks share it instead of synchronously reparsing the
           // complete profile catalogue on every model round.
           profile: profiles[profileKey(decision.selection.providerId, decision.selection.modelId)],
-          receipt: routingV2Receipt,
-          selectionTimeoutMs: activeRoutingV2.execution.selectionTimeoutMs,
+          receipt: routingReceipt,
+          selectionTimeoutMs: routingConfig.execution.selectionTimeoutMs,
           beforeIo: async (target, _decisionId, context) => {
             const currentDetected = deps.getDetectedProviders();
             const currentCredentialedProviders = new Set(currentDetected.map((entry) => entry.name));
@@ -1758,102 +1750,16 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           id: workerId,
           entry: {
             kind: "system",
-            text: `routing v2 ${decision.decisionId}: ${decision.assignmentSource}/${decision.recommendationSource} -> ${decision.selection.providerId}/${decision.selection.modelId}`,
+            text: `routing ${decision.decisionId}: ${decision.assignmentSource}/${decision.recommendationSource} -> ${decision.selection.providerId}/${decision.selection.modelId}`,
           },
         });
-      } else if (activeRoutingV2 === undefined && requestedTier === undefined) {
-        // Legacy Flow 305: when the dispatcher named no explicit model tier,
-        // resolve the legacy `subagents` category before the unchanged child
-        // G1/G2/G3 authorization gates.
-        // `{cwd: deps.cwd}` — the project layer's `routing.config.json` lives at
-        // the project root; the user layer ignores `cwd` entirely and reads the
-        // operator's real global config (no `userConfigDir` override here, same
-        // as every other production call site — see `RoutingConfigLocation`'s
-        // doc in `routing/config.ts`). AC11's project-trust gate applies
-        // automatically here too — `loadRoutingConfig("project", …)` already
-        // returns an EMPTY table for an unapproved/changed
-        // `routing.config.json`, so an untrusted project entry never reaches
-        // this branch at all; no additional gate is needed for AC11(e).
-        const routingLocation = { cwd: deps.cwd };
-        const [projectRouting, userRouting] = await Promise.all([
-          loadRoutingConfig("project", routingLocation),
-          loadRoutingConfig("user", routingLocation),
-        ]);
-        // Flow 305 review finding 3 — a malformed routing.config.json (or
-        // per-user entry) used to be silently swallowed here: the category
-        // just fell back to `default` with no trace. Surfaced as a
-        // non-fatal system-log diagnostic (never blocks the spawn) rather
-        // than an error.
-        for (const layer of [projectRouting, userRouting]) {
-          if (layer.error !== undefined) {
-            emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "system", text: `routing: ${layer.error}` } });
-          }
-        }
-        // AC10 — an assignment naming a provider/model the parent has not
-        // actually detected is unresolved at that layer; `catalog` (above) is
-        // the SAME detection result already computed for tier resolution, so
-        // this adds no new network call.
-        // Flow 346 (design §3): same external-block wrap as `review.ts`'s
-        // "review" category resolution — a subagent-routing entry naming a
-        // blocked provider/model falls through with a notice, never silently.
-        const external = await resolveExternalSetting({ cwd: deps.cwd });
-        const { config: externalConfig } = loadExternalProvidersConfig();
-        // Flow 468: the session's own provider/model counts as connected even
-        // when `catalog` lacks it, so an assignment to the model the session
-        // runs on is not rejected into a runtime fallback.
-        const connected = externalAllowedConnectedPredicate(
-          connectedPredicateFrom(catalog, { providerId: session.providerId, modelId: session.modelId }),
-          external.value === "on",
-          externalConfig,
-        );
-        const resolved = resolveCategoryDetailed("subagents", { project: projectRouting.table, user: userRouting.table }, connected);
-        if (resolved.rejected !== undefined) {
-          emitFleetEvent({
-            kind: "log",
-            id: workerId,
-            entry: { kind: "system", text: `routing: ${describeFallbackNotice(resolved.rejected.assignment, resolved.assignment)}` },
-          });
-        }
-        categoryModelRequest = categoryAssignmentToChildModelRequest(resolved.assignment);
       }
-      const dispatchModelRequest: ChildModelRequest | undefined =
-        requestedTier !== undefined ? { kind: "tier", tier: requestedTier } : categoryModelRequest;
-      // The recording half of the same decision (dispatch schema
-      // `model.tier_resolution` / `model.model_discovery`): WHICH of the three
-      // outcomes produced the child's model, and what was on the table when it
-      // did. Derived from the same pure, deterministic resolution the map above
-      // is built from — same session, same catalogue, same answer — so the record
-      // cannot drift from the map that is actually applied.
+      const dispatchModelRequest: ChildModelRequest | undefined = categoryModelRequest;
+      // The child's tier map stays total over the tier vocabulary (every tier
+      // resolves to a model), but nothing requests a tier any more: the
+      // routing decision above is the only source of a non-session model.
       const rankHints = deps.getRankHints?.(session.providerId) ?? TIER_RANK_HINTS;
-      let tierMap = buildTierMap(session, catalog, rankHints);
-      const tierPrices = deps.tierRank?.prices?.(session.providerId);
-      let tierResolution =
-        requestedTier === undefined ? undefined : resolveTierModel(session, requestedTier, catalog, rankHints, tierPrices);
-      if (requestedTier !== undefined && tierResolution?.source === "session-fallback" && tierResolution.ranking?.fallbackReason) {
-        emitFleetEvent({
-          kind: "log",
-          id: workerId,
-          entry: {
-            kind: "system",
-            text: `model_tier ${requestedTier} kept the session model (${session.modelId}): ${tierResolution.ranking.fallbackReason}. Pin tiers with \`keryx routing profile set ${session.providerId}/<model> --tier light|standard|deep\`.`,
-          },
-        });
-      }
-      if (requestedTier !== undefined && deps.tierRank !== undefined) {
-        // Flow 358: only reaches the agent when the deterministic answer is refused
-        // or ambiguous; every other dispatch resolves without a single extra call.
-        // A failure inside is a resolution too (the session model, with the reason),
-        // so nothing here can fail the dispatch.
-        tierResolution = await resolveTierWithAgent(session, requestedTier, rankDiscoveredModels(session, catalog, rankHints), {
-          agent: deps.tierRank.agent,
-          ...(deps.tierRank.cache !== undefined ? { cache: deps.tierRank.cache } : {}),
-          ...(tierPrices !== undefined ? { prices: tierPrices } : {}),
-          ...(parent.baseUrl !== undefined ? { baseUrl: parent.baseUrl } : {}),
-        });
-        if (tierResolution.source === "agent-ranked") {
-          tierMap = applyTierResolution(tierMap, tierResolution);
-        }
-      }
+      const tierMap = buildTierMap(session, catalog, rankHints);
 
       const reviewWave =
         input.review_wave === undefined ? undefined : await resolveReviewWave(deps.cwd, input.review_wave);
@@ -1933,29 +1839,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider: parent.providerId,
         model: parent.modelId,
       };
-      /**
-       * One line naming the outcome the dispatch schema's `tier_resolution`
-       * enumerates — `discovered`, `session-ranked` or `session-fallback` — plus
-       * the sentence that explains it. Undefined when no tier was asked for, in
-       * which case there is no resolution to record and the child simply
-       * inherited.
-       *
-       * This is what makes a finished run explainable: without it a dispatch says
-       * which model it ran on and never why, and a fallback is indistinguishable
-       * from an assignment that happened to land on the session's model.
-       */
-      const tierRecord =
-        tierResolution === undefined
-          ? undefined
-          : `model tier ${tierResolution.tier} → ${runModel.provider}/${runModel.model} ` +
-            `[${tierResolution.source}] ${tierResolution.reason}` +
-            (tierResolution.agent === undefined
-              ? ""
-              : ` (agent ${tierResolution.agent.trigger}, ran on ${tierResolution.agent.runOn.providerId}/${tierResolution.agent.runOn.modelId}, ` +
-                `${tierResolution.agent.cacheHit ? "cache hit" : "asked"}${tierResolution.agent.failure === null ? "" : `, failed: ${tierResolution.agent.failure}`})`);
-      const routingRecord = routingV2Receipt?.decision.status === "selected"
-        ? `routing v2 ${routingV2Receipt.decision.decisionId} → ${runModel.provider}/${runModel.model} ` +
-          `[${routingV2Receipt.decision.assignmentSource}/${routingV2Receipt.decision.recommendationSource}]`
+      const routingRecord = routingReceipt?.decision.status === "selected"
+        ? `routing ${routingReceipt.decision.decisionId} → ${runModel.provider}/${runModel.model} ` +
+          `[${routingReceipt.decision.assignmentSource}/${routingReceipt.decision.recommendationSource}]`
         : undefined;
       // --- External runtime seam (flow 176) ---------------------------------
       // Reached only when the dispatch asks for it AND the host wired the hook,
@@ -1974,11 +1860,6 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         task,
         ...externalMark,
       });
-      if (tierRecord !== undefined) {
-        // The run trace is where this is read back from afterwards; it goes out
-        // on the same diagnostics channel every other per-dispatch fact uses.
-        emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "system", text: tierRecord } });
-      }
 
       // Placed here because `spawnSubagent` above has already applied admission,
       // the ledger and the depth/child caps: an external child is gated
@@ -2220,17 +2101,17 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       try {
         const providerBaseUrl = runModel.provider === parent.providerId ? parent.baseUrl : undefined;
         provider = deps.makeProvider(runModel.provider, runModel.model, providerBaseUrl);
-        if (routingV2ExecutionBudget !== undefined) {
-          const decisionId = routingV2ExecutionBudget.receipt.decision.decisionId;
-          const routingTarget = routingV2ExecutionBudget.target;
-          const dispatchProfile = routingV2ExecutionBudget.profile;
+        if (routingExecutionBudget !== undefined) {
+          const decisionId = routingExecutionBudget.receipt.decision.decisionId;
+          const routingTarget = routingExecutionBudget.target;
+          const dispatchProfile = routingExecutionBudget.profile;
           provider = createMeteredRoutingProvider({
             provider,
             target: routingTarget,
-            receipt: routingV2ExecutionBudget.receipt,
-            budget: routingV2ExecutionBudget.ledger,
-            selectionTimeoutMs: routingV2ExecutionBudget.selectionTimeoutMs,
-            beforeIo: routingV2ExecutionBudget.beforeIo,
+            receipt: routingExecutionBudget.receipt,
+            budget: routingExecutionBudget.ledger,
+            selectionTimeoutMs: routingExecutionBudget.selectionTimeoutMs,
+            beforeIo: routingExecutionBudget.beforeIo,
             estimatedCostUsd: (request) => estimateModelCostUsd(
               dispatchProfile,
               estimateNormalizedInputTokens(request),
@@ -2245,11 +2126,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
               kind: "dispatch",
             },
             onDenied: (reason) => {
-              routingV2ExecutionDenied = reason;
+              routingExecutionDenied = reason;
               emitFleetEvent({
                 kind: "log",
                 id: workerId,
-                entry: { kind: "system", text: `routing v2 ${decisionId}: execution denied before provider I/O (${reason})` },
+                entry: { kind: "system", text: `routing ${decisionId}: execution denied before provider I/O (${reason})` },
               });
             },
           });
@@ -2742,14 +2623,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         closed = true;
         composed.dispose();
         releaseBudget();
-        if (routingV2ExecutionDenied !== undefined) {
-          const reason = routingV2ExecutionDenied;
-          const decisionId = routingV2Receipt?.decision.decisionId ?? "unknown";
+        if (routingExecutionDenied !== undefined) {
+          const reason = routingExecutionDenied;
+          const decisionId = routingReceipt?.decision.decisionId ?? "unknown";
           const status = reason === "cancelled" ? "Interrupted" : "Denied";
           await failChild(`routing-${reason}`, status, { withModel: true });
           return {
             status,
-            output: `spawn_subagent routing v2 execution stopped: ${reason} (decision ${decisionId})`,
+            output: `spawn_subagent routing execution stopped: ${reason} (decision ${decisionId})`,
             isError: true,
           };
         }
@@ -2834,7 +2715,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           (configuredMaxToolCalls === undefined ? "" : `calls≤${configuredMaxToolCalls} `) +
           (advisoryToolCalls === undefined ? "" : `calls~${advisoryToolCalls}(advisory) `) +
           `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
-          (tierRecord === undefined ? "" : `${tierRecord}\n`) +
+
           (routingRecord === undefined ? "" : `${routingRecord}\n`) +
           (legacyTierMigrationNotice === undefined ? "" : `migration: ${legacyTierMigrationNotice}\n`);
         // Only a completed child with text is final: a stopped one, or one with no text, never replaces a complete result.
@@ -2872,14 +2753,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         internalAbort.abort();
         composed.dispose();
         releaseBudget(); // a failed child must not hold the parent's budget either
-        if (routingV2ExecutionDenied !== undefined) {
-          const reason = routingV2ExecutionDenied;
-          const decisionId = routingV2Receipt?.decision.decisionId ?? "unknown";
+        if (routingExecutionDenied !== undefined) {
+          const reason = routingExecutionDenied;
+          const decisionId = routingReceipt?.decision.decisionId ?? "unknown";
           const status = reason === "cancelled" ? "Interrupted" : "Denied";
           await failChild(`routing-${reason}`, status, { withModel: true });
           return {
             status,
-            output: `spawn_subagent routing v2 execution stopped: ${reason} (decision ${decisionId})`,
+            output: `spawn_subagent routing execution stopped: ${reason} (decision ${decisionId})`,
             isError: true,
           };
         }

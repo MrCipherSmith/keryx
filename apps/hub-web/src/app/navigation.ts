@@ -20,6 +20,7 @@ export type HubLocation = {
   attemptId?: string;
   revisionId?: string;
   sessionId?: string;
+  liveShellId?: string;
   runId?: string;
   machineId?: string;
 };
@@ -39,13 +40,19 @@ export const tabs: Tab[] = [
 function read(): HubLocation {
   const p = new URLSearchParams(window.location.search);
   const candidate = p.get("view");
+  const projectId = p.get("project");
+  const sessionId = p.get("session") ?? undefined;
+  const liveShellId = candidate === "sessions" && projectId && !sessionId
+    ? p.get("shell") || undefined
+    : undefined;
   return {
-    projectId: p.get("project"),
+    projectId,
     tab: tabs.includes(candidate as Tab) ? (candidate as Tab) : "overview",
     documentId: p.get("document") ?? undefined,
     flowId: p.get("flow") ?? undefined,
     revisionId: p.get("revision") ?? undefined,
-    sessionId: p.get("session") ?? undefined,
+    sessionId,
+    ...(liveShellId ? { liveShellId } : {}),
     runId: p.get("run") ?? undefined,
     machineId: p.get("machine") ?? undefined,
     ...(p.get("intent") ? { intentId: p.get("intent")! } : {}),
@@ -66,6 +73,7 @@ export function navigate(patch: Partial<HubLocation>, replace = false) {
     next.flowId = patch.flowId;
     next.revisionId = patch.revisionId;
     next.sessionId = patch.sessionId;
+    next.liveShellId = patch.liveShellId;
     next.runId = patch.runId;
     next.machineId = patch.machineId;
     next.intentId = patch.intentId;
@@ -86,6 +94,9 @@ export function navigate(patch: Partial<HubLocation>, replace = false) {
   if (next.flowId) p.set("flow", next.flowId);
   if (next.revisionId) p.set("revision", next.revisionId);
   if (next.sessionId) p.set("session", next.sessionId);
+  if (next.projectId && next.tab === "sessions" && !next.sessionId && next.liveShellId) {
+    p.set("shell", next.liveShellId);
+  }
   if (next.runId) p.set("run", next.runId);
   if (next.machineId) p.set("machine", next.machineId);
   if (next.intentId) p.set("intent", next.intentId);

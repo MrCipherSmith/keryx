@@ -8,14 +8,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   approveProjectRouting,
-  describeTableForApproval,
+  describeLayerForApproval,
   isProjectRoutingApproved,
   loadRoutingTrustStore,
   revokeProjectRouting,
-  routingTableFingerprint,
+  routingLayerFingerprint,
   routingTrustKey,
 } from "./trust";
-import type { RoutingTable } from "./table";
+import type { RoutingConfigLayer } from "./config";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -28,12 +28,13 @@ async function tempDir(prefix: string): Promise<string> {
   return dir;
 }
 
-const TABLE: RoutingTable = { review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } };
+const TABLE: RoutingConfigLayer = { schemaVersion: 2, categories: { review: { mode: "model", target: { providerId: "anthropic", modelId: "claude-x" } } } };
 
-test("an empty table needs no approval — nothing for an operator to have seen", async () => {
+test("an empty layer needs no approval — nothing for an operator to have seen", async () => {
   const cwd = await tempDir("keryx-routing-trust-cwd-");
   const configDir = await tempDir("keryx-routing-trust-cfg-");
-  expect(isProjectRoutingApproved(cwd, {}, configDir)).toBe(true);
+  expect(isProjectRoutingApproved(cwd, { schemaVersion: 2 }, configDir)).toBe(true);
+  expect(isProjectRoutingApproved(cwd, undefined, configDir)).toBe(true);
 });
 
 test("a non-empty table is unapproved until `approveProjectRouting` records it", async () => {
@@ -45,32 +46,20 @@ test("a non-empty table is unapproved until `approveProjectRouting` records it",
   expect(isProjectRoutingApproved(cwd, TABLE, configDir)).toBe(true);
 });
 
-test("editing the table (an actual category/assignment change) voids the approval", async () => {
+test("editing the layer (a category, class, provider or execution change) voids the approval", async () => {
   const cwd = await tempDir("keryx-routing-trust-cwd-");
   const configDir = await tempDir("keryx-routing-trust-cfg-");
   await approveProjectRouting(cwd, TABLE, configDir);
-  const edited: RoutingTable = { review: { kind: "model", providerId: "anthropic", modelId: "claude-y" } };
+  const edited: RoutingConfigLayer = { schemaVersion: 2, categories: { review: { mode: "model", target: { providerId: "anthropic", modelId: "claude-y" } } } };
   expect(isProjectRoutingApproved(cwd, edited, configDir)).toBe(false);
+  expect(isProjectRoutingApproved(cwd, { ...TABLE, execution: { maxAttempts: 1, selectionTimeoutMs: 1000, maxEstimatedCostUsd: null, unknownCost: "allow" } }, configDir)).toBe(false);
+  expect(isProjectRoutingApproved(cwd, { ...TABLE, providers: { scope: "allowlist", allowlist: ["x"], preferSessionProvider: false } }, configDir)).toBe(false);
 });
 
-test("a pure reformat (key order) does NOT void the approval — fingerprint is over the VALIDATED table, not raw bytes", () => {
-  const a = routingTableFingerprint({ review: { kind: "model", providerId: "anthropic", modelId: "claude-x" } });
-  // Same content, different construction order.
-  const reordered: RoutingTable = { review: { modelId: "claude-x", kind: "model", providerId: "anthropic" } as never };
-  const b = routingTableFingerprint(reordered);
-  expect(a).toBe(b);
-});
-
-test("two categories in a different insertion order still fingerprint identically", () => {
-  const a = routingTableFingerprint({
-    review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
-    quick: { kind: "provider-default", providerId: "deepseek" },
-  });
-  const b = routingTableFingerprint({
-    quick: { kind: "provider-default", providerId: "deepseek" },
-    review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
-  });
-  expect(a).toBe(b);
+test("a pure reformat (key order) does NOT void the approval — fingerprint is over the VALIDATED layer, not raw bytes", () => {
+  const a = routingLayerFingerprint(TABLE);
+  const reordered = { categories: { review: { target: { modelId: "claude-x", providerId: "anthropic" }, mode: "model" } }, schemaVersion: 2 } as unknown as RoutingConfigLayer;
+  expect(routingLayerFingerprint(reordered)).toBe(a);
 });
 
 test("approval is keyed by PROJECT ROOT — two different projects with the same table content are independently approved", async () => {
@@ -103,10 +92,18 @@ test("loadRoutingTrustStore: an unreadable/corrupt store grants nothing (fail cl
   expect(loadRoutingTrustStore(configDir)).toEqual({});
 });
 
-test("describeTableForApproval: one readable line per category, sorted", () => {
-  const lines = describeTableForApproval({
-    review: { kind: "model", providerId: "anthropic", modelId: "claude-x" },
-    quick: { kind: "provider-default", providerId: "deepseek" },
+test("describeLayerForApproval: one readable line per category, sorted, then every other setting", () => {
+  const lines = describeLayerForApproval({
+    schemaVersion: 2,
+    categories: {
+      review: { mode: "model", target: { providerId: "anthropic", modelId: "claude-x" } },
+      quick: { mode: "class", modelClass: "light" },
+    },
+    providers: { scope: "session-only", allowlist: [], preferSessionProvider: true },
   });
-  expect(lines).toEqual(["quick: deepseek (provider default)", "review: anthropic/claude-x"]);
+  expect(lines).toEqual([
+    "quick: class light",
+    "review: anthropic/claude-x",
+    'providers: {"scope":"session-only","allowlist":[],"preferSessionProvider":true}',
+  ]);
 });

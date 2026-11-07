@@ -81,7 +81,8 @@ export const EXTERNAL_ENV_DENY: readonly string[] = [
  * that falls behind the vendor's next release, and this is exactly the kind of
  * list nobody notices has gone stale.
  */
-export const EXTERNAL_ENV_PREFIX_SWEEPS: readonly string[] = ["CLAUDE_CODE_", "KERYX_"];
+// The child must not inherit the parent's herdr terminal identity; hc can still find its default socket, so this removes identity, not access.
+export const EXTERNAL_ENV_PREFIX_SWEEPS: readonly string[] = ["CLAUDE_CODE_", "KERYX_", "HC_", "HERDR_"];
 
 /**
  * Names that survive despite looking like they should not.

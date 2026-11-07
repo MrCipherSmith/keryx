@@ -7,7 +7,7 @@ import type { RemoteRepository } from "./storage";
 import type { HumanAuthority, Projection, QueueRow, RunRow, SessionRow, StoredCommand } from "./model";
 import { control, held, id, idleFence, iso, machine, projectionKey, saveSession, version } from "./guards";
 import { runCommand, sessionCommand } from "./commands";
-export type SessionDependencies = { online(machineId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean; beforeAdmission?(auth:HumanAuthority,row:SessionRow,operationId:string,state:HubState):void; admitted?(run:RunRow,operationId:string,state:HubState):void };
+export type SessionDependencies = { online(machineId: string): boolean; checkoutShared?(machineId: string, projectId: string, checkoutId: string): boolean; authorityValid(auth: HumanAuthority,projectId?:string): boolean; beforeAdmission?(auth:HumanAuthority,row:SessionRow,operationId:string,state:HubState):void; admitted?(run:RunRow,operationId:string,state:HubState):void };
 export function completeProjection(repo: RemoteRepository, row: SessionRow): Projection {
   const p = repo.get<Projection>("remote_projection", projectionKey(row.record.machineId, row.record.projectId, row.record.checkoutId, row.record.agentProfileId));
   const current = machine(repo, row.record.machineId);
@@ -25,7 +25,7 @@ export function checkAssociation(state: HubState, association: Control["FlowAsso
     if(!flow||!spec||flow.status!=='in-progress'||drift.length)fail(409,'stale-reference','Managed Flow association is not current executable work');
   }
 }
-export function createSession(state: HubState, repo: RemoteRepository, deps: SessionDependencies, auth: HumanAuthority, projectId: string, body: Control["SessionCreate"], operationId: string, deliver = true) {
+export function createSession(state: HubState, repo: RemoteRepository, deps: SessionDependencies, auth: HumanAuthority, projectId: string, body: Control["SessionCreate"], operationId: string, mode: "launch" | "reserve-clean" = "launch") {
   const m = machine(repo, body.machineId);
   if (!m.projectIds.includes(projectId)) fail(404, "not-found", "Machine not found");
   if (!deps.online(m.machineId) || m.recoveryRequired) fail(409, "machine-offline", "Machine is unavailable or requires recovery");
@@ -33,8 +33,8 @@ export function createSession(state: HubState, repo: RemoteRepository, deps: Ses
   const checkout = inventory?.checkouts.find((c) => c.projectId === projectId && c.checkoutId === body.checkoutId);
   const profile = checkout?.agentProfiles.find((p) => p.profileId === body.agentProfileId);
   if (!inventory || inventory.inventoryVersion !== body.expectedInventoryVersion || !checkout || checkout.headSha !== body.expectedHeadSha || !profile || profile.readiness !== "ready" || profile.capabilityDigest !== body.capabilityDigest || profile.policyDigest !== body.policyDigest) fail(409, "stale-reference", "Inventory or capability selection changed");
-  if (!checkout.clean) fail(409, "checkout-dirty", "Initial checkout must be clean");
-  if (!checkout.available || checkout.busy) fail(409, "machine-busy", "Checkout unavailable");
+  if (mode === "reserve-clean" && !checkout.clean) fail(409, "checkout-dirty", "The lifecycle target must be clean");
+  if (!checkout.available || checkout.busy || deps.checkoutShared?.(m.machineId, projectId, body.checkoutId)) fail(409, "machine-busy", "Checkout unavailable");
   const projection = repo.get<Projection>("remote_projection", projectionKey(m.machineId, projectId, body.checkoutId, body.agentProfileId));
   if (!projection || projection.connectionEpoch !== m.epoch || m.inventoryEpoch !== m.epoch || projection.inventoryVersion !== inventory.inventoryVersion || projection.policyDigest !== body.policyDigest || projection.capabilityDigest !== body.capabilityDigest) fail(409, "setup-required", "Complete capability projection required");
   const baseline = projection.candidates.find((candidate) => candidate.available && candidate.reason === "none");
@@ -43,7 +43,7 @@ export function createSession(state: HubState, repo: RemoteRepository, deps: Ses
   const sessionId = id();
   const record: Control["SessionRecord"] = { sessionId, projectId, machineId: m.machineId, checkoutId: body.checkoutId, agentProfileId: body.agentProfileId, version: 1, historyVersion: 1, state: "opening", title: body.title, config: { configVersion: 1, baselineCandidateId: baseline.candidateId, reasoningEffort: baseline.reasoningEfforts.includes("none") ? "none" : baseline.reasoningEfforts[0] ?? "none", routing: { enabled: false, profileId, candidateIds: [baseline.candidateId], fallbackCandidateId: baseline.candidateId }, policyDigest: body.policyDigest, capabilityDigest: body.capabilityDigest }, controller: null, activeRunId: null, activeTurnId: null, nextTurnOrdinal: 1, historyCursor: 0, sessionEventCursor: 0, queueVersion: 0, workspaceBaseline: "0".repeat(64), forkedFromSessionId: null, capabilities: { literalText: true, attachments: false, attachmentReason: "typed-artifact-contract-required", commandCatalogue: true, modelRouting: true } };
   const row: SessionRow = { baselineVerified: false, record, acceptedVersion: 1, controllerVersion: 0, catalogueVersion: projection.catalogueVersion, catalogueDigest: projection.catalogueDigest, inventoryVersion: inventory.inventoryVersion, headSha: body.expectedHeadSha };
-  saveSession(repo, row); if (deliver) sessionCommand(repo, m, row, auth, operationId, "create-session", body);
+  saveSession(repo, row); if (mode === "launch") sessionCommand(repo, m, row, auth, operationId, "create-session", body);
   return { receiptId: id(), operationId, sessionId, kind: "create-session", status: "pending", observedSessionVersion: 0, session: record, reason: "none" } satisfies Control["SessionOperationReceipt"];
 }
 export function controllerMutation(repo: RemoteRepository, auth: HumanAuthority, row: SessionRow, action: string, input: unknown): Control["ControllerReceipt"] {

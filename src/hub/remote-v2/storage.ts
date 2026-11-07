@@ -64,7 +64,10 @@ export function remoteRepository(db: Database, options:Partial<RemoteBudgets>={}
   db.exec(`CREATE INDEX IF NOT EXISTS remote_queue_managed_operation ON remote_queue(sessionId,json_extract(body,'$.item.operationId'));
     CREATE INDEX IF NOT EXISTS remote_queue_managed_replacement ON remote_queue(sessionId,json_extract(body,'$.item.replacesOperationId'));
     CREATE INDEX IF NOT EXISTS remote_command_managed_operation ON remote_command(sessionId,json_extract(body,'$.operationId'));
-    CREATE INDEX IF NOT EXISTS remote_operation_managed_queue ON remote_operation(sessionId,json_extract(body,'$.request.queueItemId'));`);
+    CREATE INDEX IF NOT EXISTS remote_operation_managed_queue ON remote_operation(sessionId,json_extract(body,'$.request.queueItemId'));
+    CREATE INDEX IF NOT EXISTS remote_operation_message_delivery ON remote_operation(
+      sessionId,projectId,json_extract(body,'$.actorId'),json_extract(body,'$.messageDelivery.submittedAt') DESC)
+      WHERE json_type(body,'$.messageDelivery')='object';`);
   return {
     managedReconciliation(sessionId: string, operationIds: string[]): { queue: QueueRow[]; commands: StoredCommand[]; operations: OperationRecord[] } {
       if (!operationIds.length) return { queue: [], commands: [], operations: [] };
@@ -80,6 +83,12 @@ export function remoteRepository(db: Database, options:Partial<RemoteBudgets>={}
           AND json_extract(body,'$.request.expectedItemVersion') < (SELECT json_extract(q.body,'$.item.version') FROM remote_queue q WHERE q.id=json_extract(remote_operation.body,'$.request.queueItemId')))
         ORDER BY seq,id`).all(sessionId,JSON.stringify(queue.map(row => row.item.queueItemId))).map(row => JSON.parse(row.body) as OperationRecord);
       return { queue, commands, operations };
+    },
+    recentMessageOperations(projectId: string, sessionId: string, actorId: string): OperationRecord[] {
+      return db.query<{ body: string }, [string, string, string]>(`SELECT body FROM remote_operation
+        WHERE sessionId=? AND projectId=? AND json_extract(body,'$.actorId')=? AND json_type(body,'$.messageDelivery')='object'
+        ORDER BY json_extract(body,'$.messageDelivery.submittedAt') DESC, rowid DESC LIMIT 60`)
+        .all(sessionId, projectId, actorId).map(row => JSON.parse(row.body) as OperationRecord);
     },
     budgets,
     /** Nested calls use a SQLite savepoint on this same shared connection. */

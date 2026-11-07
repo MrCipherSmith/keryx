@@ -1,3 +1,4 @@
+import { observeMessageDelivery } from "./message-delivery";
 import {commandRunId,saveSession} from './guards';
 import type {RemoteRepository} from "./storage";
 import type {OperationRecord,RunRow,SessionRow,StoredCommand} from "./model";
@@ -14,7 +15,7 @@ export function expirePendingCommands(repo:RemoteRepository,now=Date.now()):{pro
   command.status=control?'expired-unconfirmed':uncertain?"unknown":"not-applied";if(control)command.capacityReleased=true;
   repo.put("remote_command",command.envelope.commandId,command);
   const operation=repo.get<OperationRecord>("remote_operation",command.operationId);
-  if(operation){operation.status=409;operation.deliveryFailure={error:{code:control?"command-expired":uncertain?"recovery-required":"command-expired",message:control?"Control delivery expired; application and cessation remain unconfirmed":uncertain?"Delivered operation has no native admission proof; reconcile local ownership":"Operation expired before delivery"}};repo.put("remote_operation",operation.id,operation);}
+  if(operation){operation.status=409;operation.deliveryFailure={error:{code:control?"command-expired":uncertain?"recovery-required":"command-expired",message:control?"Control delivery expired; application and cessation remain unconfirmed":uncertain?"Delivered operation has no native admission proof; reconcile local ownership":"Operation expired before delivery"}};if(!operation.messageDelivery?.queueItemId)observeMessageDelivery(operation,{status:uncertain?"unconfirmed":"not-delivered",queued:false,reason:operation.deliveryFailure.error.code});repo.put("remote_operation",operation.id,operation);}
   const envelope=command.envelope,sessionId="target" in envelope?envelope.target.sessionId:envelope.sessionId;
   const row=repo.get<SessionRow>("remote_session",sessionId);
   if(row&&control&&!uncertain&&row.pendingClosure?.commandId===envelope.commandId){delete row.pendingClosure;row.closing=false;}

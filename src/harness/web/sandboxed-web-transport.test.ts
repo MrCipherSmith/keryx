@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { SandboxedWebTransport, type WebWorkerRunner } from "./sandboxed-web-transport";
+import { SandboxedWebTransport, WEB_MAX_TEXT_BYTES, type WebWorkerRunner } from "./sandboxed-web-transport";
 
 const publicAddress = "93.184.216.34";
 
@@ -264,4 +264,30 @@ test("a late DNS answer after the deadline never reaches the runner", async () =
   expect(result.ok).toBe(false);
   await new Promise((resolve) => setTimeout(resolve, 300));
   expect(calls).toEqual([]);
+});
+
+test("a page cut at the byte budget keeps the read and says it was truncated", async () => {
+  // A page bigger than the budget used to be a hard "request failed or timed
+  // out"; the worker now cuts it and the transport carries the flag through.
+  const runner: WebWorkerRunner = {
+    run: async () => ({ ok: true, value: { status: 200, contentType: "text/html", body: "x".repeat(WEB_MAX_TEXT_BYTES), truncated: true } }),
+  };
+  const transport = new SandboxedWebTransport({ lookup: async () => [{ address: publicAddress }], runner });
+  const result = await transport.fetchPage({ url: "https://example.com/docs", providerId: "web_fetch" });
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    expect(result.value.truncated).toBe(true);
+    expect(result.value.text).toContain("x");
+  }
+});
+
+test("a body over the budget without the truncation flag is still refused", async () => {
+  const runner: WebWorkerRunner = {
+    run: async () => ({ ok: true, value: { status: 200, contentType: "text/html", body: "x".repeat(WEB_MAX_TEXT_BYTES + 1) } }),
+  };
+  const transport = new SandboxedWebTransport({ lookup: async () => [{ address: publicAddress }], runner });
+  expect(await transport.fetchPage({ url: "https://example.com/docs", providerId: "web_fetch" })).toEqual({
+    ok: false,
+    reason: "response exceeds size limit",
+  });
 });

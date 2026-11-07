@@ -10,11 +10,12 @@ import {
 } from "./approval-cause";
 import { describeApprovalForTopic } from "../remote/shell-bridge";
 
-test("AC5: the cause set is closed and has the seven frozen names", () => {
+test("AC5: the cause set is closed and has the eight frozen names (flow 486 added hc-launch)", () => {
   expect([...APPROVAL_CAUSES]).toEqual([
     "destructive",
     "credentials",
     "publish",
+    "hc-launch",
     "hook-ask",
     "untrusted-content",
     "not-in-routine-list",
@@ -87,4 +88,27 @@ test("AC5: the Telegram relay of the prompt carries the same cause line", () => 
     });
     expect(text).toContain(approvalCauseLine(cause));
   }
+});
+
+test("flow 486 hc-launch: an hc agent launch names hc-launch and the line names the agent", () => {
+  expect(classifyApprovalCause({ hcLaunch: true })).toBe("hc-launch");
+  expect(classifyApprovalCause({ publishLease: true, hcLaunch: true })).toBe("publish");
+  expect(classifyApprovalCause({ hcLaunch: true, hookAsk: true })).toBe("hc-launch");
+  expect(classifyApprovalCause({ destructive: true, hcLaunch: true })).toBe("destructive");
+  expect(classifyApprovalCause({ credentials: true, hcLaunch: true })).toBe("credentials");
+  expect(classifyApprovalCause({ confirmation: true, hcLaunch: true })).toBe("credentials");
+  const meta = { fingerprint: "fp", destructive: false, hcLaunch: "claude" };
+  expect(causeOfMeta("shell_exec", meta)).toBe("hc-launch");
+  expect(approvalCauseLine("hc-launch", "claude")).toContain("claude");
+  expect(approvalCauseLine("hc-launch", "claude")).toContain("outside keryx's limits");
+  expect(approvalCauseLine("hc-launch")).toContain("another agent outside keryx's limits");
+});
+
+test("the Telegram relay names the agent an hc run starts", () => {
+  const text = describeApprovalForTopic("shell_exec", JSON.stringify({ command: "hc run --bg claude x" }), {
+    cause: "hc-launch",
+    hcLaunch: "claude",
+  });
+  expect(text).toContain(approvalCauseLine("hc-launch", "claude"));
+  expect(text).toContain("starts claude as another agent");
 });

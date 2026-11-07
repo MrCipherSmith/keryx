@@ -7,12 +7,12 @@ import type {
   NormalizedUsage,
   ProviderPort,
 } from "../provider/types";
-import { loadActiveRoutingV2 } from "./active-v2";
-import { routingV2Digest, type NormalizedRoutingV2Config } from "./config-v2";
+import { loadRouting } from "./settings";
+import { routingDigest, type NormalizedRoutingConfig } from "./config";
 import { modelRefKey, sameModelRef, type ModelRef } from "./model-class";
 import { loadModelProfiles } from "./model-profile";
 import { RoutingBudgetLedger } from "./routing-budget";
-import { createRoutingExecutionProvider } from "./routing-provider-v2";
+import { createRoutingExecutionProvider } from "./routing-provider";
 import type { RoutingRequest } from "./routing-request";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "./routing-runtime";
 import { createRoutingSnapshot, type RoutingSnapshot } from "./snapshot";
@@ -25,14 +25,14 @@ import type { TriggerDispatch } from "../../trigger/config";
 import type { DispatchRefusalCode } from "../../trigger/record";
 
 /** Injectable seams shared by every internal unattended dispatcher. */
-export interface UnattendedRoutingV2Deps {
-  /** Test seam; production reads the shared activation marker and v2 layers. */
-  readonly loadActiveRoutingV2?: (cwd: string) => NormalizedRoutingV2Config | undefined;
+export interface UnattendedRoutingDeps {
+  /** Test seam; production reads the routing settings (`settings.ts`). */
+  readonly loadRouting?: (cwd: string) => NormalizedRoutingConfig;
   /** Per-user config dir seam used by every routing input and by the dispatch receipt journal. */
   readonly routingConfigDir?: string;
   /** Test seam for a current, fully factual snapshot; production reads live catalogue/profile/policy facts. */
   readonly routingSnapshot?: (input: {
-    readonly config: NormalizedRoutingV2Config;
+    readonly config: NormalizedRoutingConfig;
     readonly request: RoutingRequest;
     readonly baseline: { readonly providerId: string; readonly modelId: string };
     readonly provider: ProviderPort;
@@ -50,12 +50,12 @@ export interface UnattendedRoutingRuntime {
 }
 
 /** Result shared by flow-next and agent-task unattended command adapters. */
-export interface UnattendedRoutingV2Resolution {
+export interface UnattendedRoutingResolution {
   readonly receipt?: RoutingDecisionReceipt;
   readonly maxOutputTokens: number;
   readonly modelParams: UnattendedRoutingRuntime["modelParams"];
   readonly execution?: {
-    readonly config: NormalizedRoutingV2Config;
+    readonly config: NormalizedRoutingConfig;
     readonly routeFor: (request: NormalizedRequest) => Promise<{ readonly request: RoutingRequest; readonly snapshot: RoutingSnapshot }>;
   };
 }
@@ -72,7 +72,7 @@ function routingCapabilities(provider: ProviderPort): RoutingRequest["requiremen
 async function currentUnattendedSnapshot(
   projectRoot: string,
   configDir: string | undefined,
-  config: NormalizedRoutingV2Config,
+  config: NormalizedRoutingConfig,
   request: RoutingRequest,
   baseline: { readonly providerId: string; readonly modelId: string },
   providerFor: (target: ModelRef) => ProviderPort | undefined,
@@ -87,9 +87,14 @@ async function currentUnattendedSnapshot(
   const observedAt = new Date().toISOString();
   // The trigger's concrete pin has no fallbackClass. Keep the snapshot scoped to that pin so
   // routing cannot construct or authorize unrelated provider adapters behind the operator's back.
-  const providers = catalogToFlatPickerProviders(catalog, { withStatusRows: true })
+  const listed = catalogToFlatPickerProviders(catalog, { withStatusRows: true })
     .filter((entry) => entry.name === baseline.providerId)
     .map((entry) => ({ ...entry, models: entry.models?.filter((modelId) => modelId === baseline.modelId) ?? [] }));
+  // The pin is the operator's explicit choice: it is a candidate even when the
+  // catalogue does not list it, with its availability left unknown below.
+  const providers = listed.some((entry) => entry.models?.includes(baseline.modelId) === true)
+    ? listed
+    : [...listed.filter((entry) => entry.name !== baseline.providerId), { name: baseline.providerId, models: [baseline.modelId] }];
   const profiles = loadModelProfiles(configDir);
   const baselineProvider = providerFor(baseline);
   if (baselineProvider === undefined) throw new Error("the explicit unattended provider/model pin could not be built");
@@ -97,8 +102,8 @@ async function currentUnattendedSnapshot(
     baseline,
     configDigest: config.configDigest,
     observedAt,
-    policyRevision: routingV2Digest({ external, externalPolicy }),
-    capabilityRevision: routingV2Digest({ target: baseline, capabilities: routingCapabilities(baselineProvider) }),
+    policyRevision: routingDigest({ external, externalPolicy }),
+    capabilityRevision: routingDigest({ target: baseline, capabilities: routingCapabilities(baselineProvider) }),
     providers,
     profiles,
     request,
@@ -111,8 +116,8 @@ async function currentUnattendedSnapshot(
         const candidate = providerFor(target);
         return candidate === undefined ? [] : routingCapabilities(candidate);
       },
-      // A configured pin that the current catalogue did not list stays unknown; constructing an adapter is not proof that the model exists.
-      availability: (target) => providers.some((entry) => entry.name === target.providerId && entry.models?.includes(target.modelId))
+      // A pin the current catalogue did not list stays unknown; constructing an adapter is not proof that the model exists.
+      availability: (target) => listed.some((entry) => entry.name === target.providerId && entry.models?.includes(target.modelId))
         ? undefined
         : "unknown",
       // No durable cooldown/latency observation exists yet. Availability comes from the live catalogue above.
@@ -136,8 +141,8 @@ async function currentUnattendedSnapshot(
     models,
   });
 }
-/** Resolve an internal unattended dispatch through the active v2 engine. */
-export async function resolveUnattendedRoutingV2(
+/** Resolve an internal unattended dispatch through model routing. */
+export async function resolveUnattendedRouting(
   projectRoot: string,
   dispatch: TriggerDispatch,
   requestId: string,
@@ -146,13 +151,12 @@ export async function resolveUnattendedRoutingV2(
   toolDefs: readonly NormalizedToolDefinition[],
   maxEstimatedCostUsd: number,
   runtime: UnattendedRoutingRuntime,
-  deps: UnattendedRoutingV2Deps = {},
-): Promise<UnattendedRoutingV2Resolution> {
+  deps: UnattendedRoutingDeps = {},
+): Promise<UnattendedRoutingResolution> {
   const { maxOutputTokens, modelParams, systemInstruction } = runtime;
-  const config = deps.loadActiveRoutingV2 === undefined
-    ? loadActiveRoutingV2(projectRoot, deps.routingConfigDir)
-    : deps.loadActiveRoutingV2(projectRoot);
-  if (config === undefined) return { maxOutputTokens, modelParams };
+  const config = deps.loadRouting === undefined
+    ? loadRouting(projectRoot, deps.routingConfigDir)
+    : deps.loadRouting(projectRoot);
 
   const baseline = { providerId: dispatch.provider, modelId: dispatch.model };
   const requestFor = (inputTokensRequired: number, outputTokensReserved: number): RoutingRequest => ({
@@ -183,7 +187,7 @@ export async function resolveUnattendedRoutingV2(
   });
   const decision = receipt.decision;
   if (decision.status === "selected" && !sameModelRef(decision.selection, baseline)) {
-    throw new Error("routing v2 changed an explicit unattended provider/model pin");
+    throw new Error("routing changed an explicit unattended provider/model pin");
   }
   return {
     receipt,
@@ -233,7 +237,7 @@ export function routedUnattendedProvider(
   reservedUsd: number,
   baseline: ProviderPort,
   providerFor: (target: ModelRef) => ProviderPort | undefined,
-  routing: UnattendedRoutingV2Resolution,
+  routing: UnattendedRoutingResolution,
   onAttemptUsage?: (usage: NormalizedUsage | undefined) => void,
 ): ProviderPort {
   const execution = routing.execution;

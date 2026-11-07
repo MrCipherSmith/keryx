@@ -278,3 +278,62 @@ describe("AC2: the post-answer drain continues the turn instead of ending it", (
     expect(ackCalls.length).toBe(1);
   });
 });
+
+// =======================================================================
+// Flow 486 review: an external report sets the untrusted latch at all three drain sites
+// =======================================================================
+describe("flow 486: an external report is untrusted content for the rest of the turn", () => {
+  const shellCall = [
+    { kind: "tool_call_start", toolCallId: "c1", toolName: "shell_exec" },
+    { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ command: "touch x" }) },
+    { kind: "model_end" },
+  ] as Partial<NormalizedEvent>[];
+  const answer = [{ kind: "text_delta", text: "done" }, { kind: "model_end" }] as Partial<NormalizedEvent>[];
+  const readRound = [
+    { kind: "tool_call_start", toolCallId: "r1", toolName: "alpha" },
+    { kind: "tool_call_end", toolCallId: "r1", input: "{}" },
+    { kind: "model_end" },
+  ] as Partial<NormalizedEvent>[];
+
+  async function shellAsks(scripts: Partial<NormalizedEvent>[][], event: BusInboxEvent, wake: boolean): Promise<{ asks: number; floor: boolean | undefined; ran: boolean }> {
+    const { provider } = scriptedProvider(scripts);
+    let asks = 0;
+    let floor: boolean | undefined;
+    let ran = false;
+    const shell: InteractiveTool = {
+      definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" },
+      invoke: async () => {
+        ran = true;
+        return { output: "ok", isError: false };
+      },
+    };
+    const io: AgentIO = {
+      write: () => {},
+      permissionMode: () => "auto",
+      requestApproval: async (_tool, _input, meta) => {
+        asks += 1;
+        floor = meta?.untrustedOrigin;
+        return false;
+      },
+    };
+    await runAgentTurn(io, makeDeps({ provider, tools: [shell, readTool("alpha")], busInbox: fakeBusInbox([event]).inbox, busAck: () => {} }), [], wake ? "" : "status", wake ? { origin: "bus-message" } : undefined);
+    return { asks, floor, ran };
+  }
+
+  const external = busEvent({ origin: "external" });
+  const sites: Array<[string, Partial<NormalizedEvent>[][], boolean]> = [
+    ["the turn-start drain", [shellCall, answer], true],
+    ["the round-boundary drain", [readRound, shellCall, answer], false],
+    ["the text-only drain", [[{ kind: "text_delta", text: "note" }, { kind: "model_end" }], shellCall, answer], false],
+  ];
+  for (const [site, scripts, wake] of sites) {
+    test(`${site}: a shell call after an external report hits the untrusted floor in auto mode`, async () => {
+      const result = await shellAsks(scripts, external, wake);
+      expect(result).toEqual({ asks: 1, floor: true, ran: false });
+    });
+    test(`${site}: a keryx peer's message leaves the turn as it was`, async () => {
+      const result = await shellAsks(scripts, busEvent(), wake);
+      expect(result).toEqual({ asks: 0, floor: undefined, ran: true });
+    });
+  }
+});

@@ -2,13 +2,14 @@ import { getJson } from '../../api/client';
 import type { HubFlow } from '../../api/types';
 import { digestCriteria } from './shared';
 import { Textarea } from '../../components/ui';
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { remoteGet } from "../../api/remote";
 import { formatDate } from "../../i18n/format";
 import { Markdown } from "../../components/Markdown";
 import { SessionWorkspace, useWorkspaceCopy } from "./session-workspace";
 import { useTranslation } from "react-i18next";
+import type { MessageDeliveries, MessageDelivery } from "../../../../../src/remote-control/message-delivery";
 import type { MachineSummary } from "../../../../../src/remote-control/protocol";
 import type { Control } from "../../api/remote";
 import { remoteProject } from "../../api/remote";
@@ -37,10 +38,12 @@ import {
   useController,
   useOperator,
 } from "./shared";
-import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
+import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft, type MessageDraft } from "./work";
 import { ForkSession } from "./fork";
+import { LiveShells } from "./live-shells";
+import { SessionTranscript } from "./session-transcript";
 import { Settings } from "./settings";
-import { historyQueryKey, mergeTimeline, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
+import { historyQueryKey, mergeTimeline, messageDeliveriesKey, observedDeliveries, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
 export function SessionsView() {
   const hub = useHub();
   const { t } = useTranslation("remote");
@@ -62,49 +65,52 @@ export function SessionsView() {
         onNewSession={() => { setCreate(true); setFocusForm(true); hub.navigate({ tab: "sessions", sessionId: undefined }); }}
       />
     );
-  return (
-    <div className="space-y-5">
-      <PageHeading
-        title={t("sessions")}
-        description={t("description")}
-        action={
-          <Button onClick={() => { setFocusForm(false); setCreate(!create); }}>{t("newSession")}</Button>
-        }
-      />
-      {create && <CreateSession focusOnOpen={focusForm} />}
-      <Feedback query={sessions} />
-      {sessions.data?.sessions.length === 0 && (
-        <EmptyState>{t("empty")}</EmptyState>
-      )}
-      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        {sessions.data?.sessions.map((s) => (
-          <Panel
-            key={s.sessionId}
-            title={s.title}
-            description={t("states." + s.state, { defaultValue: s.state })}
+  const before = <>
+    <PageHeading
+      title={t("sessions")}
+      description={t("description")}
+      action={<Button onClick={() => { setFocusForm(false); setCreate(!create); }}>{t("newSession")}</Button>}
+    />
+    {create && <CreateSession focusOnOpen={focusForm} />}
+  </>;
+  const after = <>
+    <Feedback query={sessions} />
+    {sessions.data?.sessions.length === 0 && (
+      <EmptyState>{t("empty")}</EmptyState>
+    )}
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+      {sessions.data?.sessions.map((s) => (
+        <Panel
+          key={s.sessionId}
+          title={s.title}
+          description={t("states." + s.state, { defaultValue: s.state })}
+        >
+          <dl className="space-y-3">
+            <Definition label={t("machine")}>
+              {machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId}
+            </Definition>
+            <Definition label={t("checkout")}>{s.checkoutId}</Definition>
+            <Definition label={t("controller")}>
+              {s.controller?.actorId ?? "—"}
+            </Definition>
+          </dl>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              hub.navigate({ tab: "sessions", sessionId: s.sessionId })
+            }
           >
-            <dl className="space-y-3">
-              <Definition label={t("machine")}>
-                {machines.data?.machines.find(machine => machine.machineId === s.machineId)?.displayName ?? s.machineId}
-              </Definition>
-              <Definition label={t("checkout")}>{s.checkoutId}</Definition>
-              <Definition label={t("controller")}>
-                {s.controller?.actorId ?? "—"}
-              </Definition>
-            </dl>
-            <Button
-              variant="secondary"
-              onClick={() =>
-                hub.navigate({ tab: "sessions", sessionId: s.sessionId })
-              }
-            >
-              {t("details")}
-            </Button>
-          </Panel>
-        ))}
-      </div>
+            {t("chatOpen")}
+          </Button>
+        </Panel>
+      ))}
     </div>
-  );
+  </>;
+  return <div className="space-y-5">
+    {hub.projectId
+      ? <LiveShells key={hub.scopeKey + ":" + hub.projectId} projectId={hub.projectId} before={before} after={after} />
+      : <>{before}{after}</>}
+  </div>;
 }
 /** The first launch requirement that is not met, in the order the operator should fix them. */
 function firstUnmetLaunchCondition({ operator, targetReady, hasTitle, flowsState, flowGone }: { operator: boolean; targetReady: boolean; hasTitle: boolean; flowsState: "ready" | "loading" | "failed"; flowGone: boolean }) {
@@ -151,7 +157,6 @@ function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
     !m.revoked &&
     !m.recoveryRequired &&
     c?.available &&
-    c.clean &&
     !c.busy &&
     profile?.adapter === "keryx-native-v1" &&
     profile.readiness === "ready";
@@ -233,14 +238,14 @@ function CreateSession({ focusOnOpen = false }: { focusOnOpen?: boolean }) {
               <option
                 key={c.checkoutId}
                 value={c.checkoutId}
-                disabled={!c.available || !c.clean || c.busy}
+                disabled={!c.available || c.busy}
               >
-                {c.label} · {c.clean ? "" : t("dirty")}{" "}
-                {c.busy ? t("busy") : ""}
+                {c.label}{!c.clean && ` · ${t("dirty")}`}{c.busy && ` · ${t("busy")}`}
               </option>
             ))}
         </Select>
       </Field>
+      {c?.available && !c.busy && !c.clean && <Notice>{t("sessionLaunchDirtyCheckout")}</Notice>}
       <Field label={t("profile")}>
         <Select
           value={draft.profileId}
@@ -309,18 +314,21 @@ export function SessionDetail({ sessionId, onNewSession }: { sessionId: string; 
     sessionPath(hub.projectId ?? "", sessionId),
   );
   return (
-    <div className="space-y-5">
+    <div className="session-chat-page">
       <Button
+        className="session-back"
         variant="ghost"
         onClick={() => hub.navigate({ sessionId: undefined })}
       >
-        ← {t("back")}
+        <span aria-hidden="true">←</span> {t("chatBackToSessions")}
       </Button>
       <Feedback query={query} />
       {query.data && <SessionSurface key={query.data.sessionId} record={query.data} onNewSession={onNewSession} />}
     </div>
   );
 }
+const emptyDeliveryProofs: readonly string[] = [];
+
 export function SessionSurface({
   record,
   onNewSession,
@@ -329,12 +337,47 @@ export function SessionSurface({
   onNewSession?: () => void;
 }) {
   const { t } = useTranslation("remote");
+  const hub = useHub();
   const control = useController(record);
   const action = useRemoteAction();
   const path = sessionPath(record.projectId, record.sessionId);
   // Command outcomes are tab-local (the history endpoint carries only messages). Each keeps its
   // invocation time for display and the history cursor at invocation for placement; the first report
   // of an operation fixes both, later reports only refresh the outcome.
+  const [conversation, setConversation] = useState<HTMLDivElement | null>(null);
+  const restoreDraftRef = useRef<(text: string) => boolean>(null);
+  const draftText = useDraftStore(state =>
+    (state.drafts[messageDraftKey(hub.scopeKey, record.projectId, record.sessionId)] as MessageDraft | undefined)?.text ?? "");
+  const deliveryQuery = useQuery({
+    queryKey: messageDeliveriesKey(hub.scopeKey, record.projectId, record.sessionId),
+    queryFn: ({ signal }) => remoteGet<MessageDeliveries>(path + "/message-deliveries", signal),
+    retry: false,
+    refetchInterval: query => query.state.data?.deliveries?.some(item => item.status === "hub-accepted" && !item.queued) ? 1500 : false,
+  });
+  const deliveries = deliveryQuery.data?.deliveries ?? [];
+  const restoreText = (value: string) => restoreDraftRef.current?.(value) === true;
+  const history = useSessionHistory(record);
+  const messages = useMemo(() => {
+    const loaded = new Map<string, Control["SessionMessage"]>();
+    for (const page of history.data?.pages ?? [])
+      for (const message of page.messages) loaded.set(message.messageId, message);
+    return [...loaded.values()].sort((a, b) => a.historyCursor - b.historyCursor);
+  }, [history.data]);
+  const [deliveryProofs, setDeliveryProofs] = useDraft(
+    messageDraftKey(hub.scopeKey, record.projectId, record.sessionId) + ":history-proof",
+    emptyDeliveryProofs,
+  );
+  const currentProofs = useMemo(() => observedDeliveries(messages, deliveries), [messages, deliveries]);
+  const observedOperationIds = useMemo(() => new Set([...deliveryProofs, ...currentProofs]), [deliveryProofs, currentProofs]);
+  useEffect(() => {
+    if (currentProofs.some(id => !deliveryProofs.includes(id))) {
+      setDeliveryProofs(Array.from(observedOperationIds).slice(-120));
+    }
+  }, [currentProofs, deliveryProofs, observedOperationIds, setDeliveryProofs]);
+  const awaitingMachine = deliveries.some(item => item.runId && !item.queued &&
+    item.runId !== record.activeRunId && !observedOperationIds.has(item.operationId) &&
+    (item.status === "hub-accepted" ||
+      item.status === "machine-started" && record.activeRunId === null && item.afterCursor >= record.historyCursor));
   const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
   const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
     setOutcomes(previous => {
@@ -351,7 +394,8 @@ export function SessionSurface({
     <>
     {openingError && (
       <Notice tone="error">
-        {t("sessionOpeningRejected")} {t("sessionOpeningNextStep")}
+        {t("sessionOpeningRejected")} {t(openingError === "scope-denied" ? "sessionOpeningScope"
+          : openingError === "recovery-required" ? "sessionOpeningRecovery" : "sessionOpeningNextStep")}
         {onNewSession && <Button variant="secondary" onClick={onNewSession}>{t("sessionOpeningCreateNew")}</Button>}
         <details>
           <summary>{t("sessionOpeningDetails")}</summary>
@@ -363,9 +407,13 @@ export function SessionSurface({
       openingRejected={!!openingError}
       record={record}
       control={control}
-      history={<History record={record} outcomes={outcomes} />}
-      composer={
-        <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
+      history={<History record={record} outcomes={outcomes} liveRef={setConversation} query={history} messages={messages}
+        deliveries={deliveries} observedOperationIds={observedOperationIds} draftText={draftText} restoreText={restoreText} deliveryQuery={deliveryQuery} />}
+      conversation={conversation}
+      messages={messages}
+      composer={slots =>
+        <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome}
+          awaitingMachine={awaitingMachine} restoreDraftRef={restoreDraftRef} slots={slots} />
       }
       queue={<QueueControls record={record} control={control} />}
       settings={<Settings record={record} control={control} />}
@@ -435,60 +483,105 @@ export function SessionSurface({
   );
 }
 
-function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: CommandEntry[] }) {
-  const { t } = useTranslation("remote");
+function useSessionHistory(record: Control["SessionRecord"]) {
   const hub = useHub();
-  const query = useInfiniteQuery({
+  return useInfiniteQuery({
     queryKey: historyQueryKey(hub.scopeKey, record.projectId, record.sessionId),
-    initialPageParam: 0,
+    initialPageParam: "latest" as number | "latest",
     queryFn: ({ signal, pageParam }) =>
       remoteGet<Control["HistoryPage"]>(
         sessionPath(record.projectId, record.sessionId) +
-          "/history?after=" +
+          "/history?before=" +
           pageParam,
         signal,
       ),
     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
   });
-  const messages = new Map<string, Control["SessionMessage"]>();
-  query.data?.pages.forEach((page) =>
-    page.messages.forEach((message) =>
-      messages.set(message.messageId, message),
-    ),
-  );
-  const ordered = [...messages.values()].sort(
-    (a, b) => a.historyCursor - b.historyCursor,
-  );
-  const timeline = mergeTimeline(ordered, outcomes);
+}
+
+function History({ record, outcomes, liveRef, query, messages, deliveries, observedOperationIds, draftText, restoreText, deliveryQuery }: {
+  record: Control["SessionRecord"];
+  outcomes: CommandEntry[];
+  liveRef: (element: HTMLDivElement | null) => void;
+  query: ReturnType<typeof useSessionHistory>;
+  messages: Control["SessionMessage"][];
+  deliveries: MessageDelivery[];
+  observedOperationIds: ReadonlySet<string>;
+  draftText: string;
+  deliveryQuery: { error: unknown; data?: MessageDeliveries; refetch: () => unknown };
+  restoreText: (text: string) => boolean;
+}) {
+  const { t } = useTranslation("remote");
+  const announcedCursor = useRef<number | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    if (!query.data) return;
+    const last = messages.at(-1)?.historyCursor ?? 0;
+    const previous = announcedCursor.current;
+    announcedCursor.current = Math.max(previous ?? 0, last);
+    if (previous === null) return;
+    for (let i = messages.length - 1; i >= 0 && messages[i].historyCursor > previous; i--) {
+      if (messages[i].role !== 'assistant') continue;
+      setAnnouncement(t('newAssistantReply', { cursor: messages[i].historyCursor }));
+      break;
+    }
+  }, [messages, query.data, t]);
+  const timeline = useMemo(() => mergeTimeline(messages, outcomes, deliveries, observedOperationIds),
+    [messages, outcomes, deliveries, observedOperationIds]);
+  const announcedDeliveries = useRef(new Map<string, string>());
+  const [deliveryAnnouncement, setDeliveryAnnouncement] = useState({ sequence: 0, text: "" });
+  useEffect(() => {
+    let status: MessageDelivery["status"] | undefined;
+    for (const entry of timeline) {
+      if (entry.kind === "outcome" || !entry.delivery) continue;
+      const item = entry.delivery;
+      if (announcedDeliveries.current.get(item.operationId) === item.status) continue;
+      announcedDeliveries.current.set(item.operationId, item.status);
+      status = item.status;
+    }
+    if (status) {
+      const text = t("chatDeliveryAnnouncement", { status: t("chatDeliveryStates." + status) });
+      setDeliveryAnnouncement(previous => ({ sequence: previous.sequence + 1, text }));
+    }
+  }, [timeline, t]);
   return (
     <section className="session-transcript" aria-label={t("history")}>
+      <p role="status" aria-atomic="true" className="sr-only">{announcement}</p>
+      <p role="status" aria-atomic="true" className="sr-only">
+        <span key={deliveryAnnouncement.sequence}>{deliveryAnnouncement.text}</span>
+      </p>
       <header className="session-transcript-header">
         <h2>{t("history")}</h2>
         <span>{record.agentProfileId}</span>
       </header>
-      <div className="session-transcript-body">
+      {(query.hasNextPage || (query.data?.pages.length ?? 0) > 1) && (
+        <div className="session-history-pages">
+          <Button
+            variant="secondary"
+            aria-disabled={!query.hasNextPage || query.isFetching}
+            onClick={() => {
+              if (query.hasNextPage && !query.isFetching) void query.fetchNextPage();
+            }}
+          >
+            {t(query.hasNextPage ? "olderMessages" : "noOlderMessages")}
+          </Button>
+        </div>
+      )}
+      <SessionTranscript entries={timeline} renderEntry={entry => entry.kind === "outcome"
+        ? <OutcomeItem record={record} item={entry.item} />
+        : entry.kind === "delivery"
+          ? <DeliveryItem delivery={entry.delivery} draftText={draftText} restoreText={restoreText} />
+          : <MessageItem message={entry.message} delivery={entry.delivery} />}>
         <Feedback query={query} />
+        {deliveryQuery.error != null && !deliveryQuery.data && (
+          <Notice>{t("chatDeliveryUnavailable")} <Button variant="secondary" onClick={() => void deliveryQuery.refetch()}>{t("common:retry")}</Button></Notice>
+        )}
         {query.data?.pages.some((page) => page.gap) && (
           <Notice>{t("gap")}</Notice>
         )}
-        <ol>
-          {timeline.map((entry) => entry.kind === "outcome"
-            ? <OutcomeItem key={entry.item.outcome.operationId} record={record} item={entry.item} />
-            : <MessageItem key={entry.message.messageId} message={entry.message} />)}
-        </ol>
-        {query.data && !ordered.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
-      </div>
-      {query.hasNextPage && (
-        <footer className="session-history-pages">
-          <Button
-            variant="secondary"
-            disabled={query.isFetchingNextPage}
-            onClick={() => void query.fetchNextPage()}
-          >
-            {t("more")}
-          </Button>
-        </footer>
-      )}
+        {query.data && !timeline.length && <EmptyState>{t("empty")}</EmptyState>}
+        <div ref={liveRef} tabIndex={-1} />
+      </SessionTranscript>
     </section>
   );
 }
@@ -498,14 +591,14 @@ function formatResult(result: unknown) {
 }
 const isSettled = (status: Control["CommandOutcome"]["status"]) => status === "applied" || status === "rejected";
 /** One command outcome, followed through its own operation so it moves from queued to applied or rejected. */
-function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item: CommandEntry }) {
+function OutcomeItem({ record, item, ...props }: React.ComponentPropsWithRef<"li"> & { record: Control["SessionRecord"]; item: CommandEntry }) {
   const { t, i18n } = useTranslation("remote");
   // Follow the operation only until it settles: an applied or rejected record cannot change, and a live
   // query per outcome would be refetched on every invalidation for the tab's lifetime.
   const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, item.outcome, receipt => isSettled(receipt.status));
   const outcome = followed.data ?? item.outcome;
   return (
-    <li className="session-message system">
+    <li {...props} className="session-message system">
       <span className="session-avatar" aria-hidden="true">/</span>
       <div>
         <div className="session-message-header">
@@ -521,12 +614,12 @@ function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item:
     </li>
   );
 }
-function MessageItem({ message }: { message: Control["SessionMessage"] }) {
+function MessageItem({ message, delivery, ...props }: React.ComponentPropsWithRef<"li"> & { message: Control["SessionMessage"]; delivery?: MessageDelivery }) {
   const { i18n } = useTranslation("remote");
   const hub = useHub();
   const words = useWorkspaceCopy();
   return (
-    <li className={"session-message " + message.role}>
+    <li {...props} className={"session-message " + message.role}>
       <span className="session-avatar" aria-hidden="true">
         {message.role === "human" ? "H" : message.role === "assistant" ? "K" : "↳"}
       </span>
@@ -536,8 +629,11 @@ function MessageItem({ message }: { message: Control["SessionMessage"] }) {
           <time dateTime={message.createdAt}>{formatDate(message.createdAt, i18n.language)}</time>
         </div>
         <div className="session-message-content">
-          {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
+          {message.role === "assistant" ? <Markdown content={message.text} /> : message.role === "tool-summary"
+            ? <details><summary>{words.role[message.role]}</summary><pre>{message.text}</pre></details>
+            : <pre>{message.text}</pre>}
         </div>
+        {delivery && <DeliveryStatus delivery={delivery} />}
         {message.role === "assistant" && message.runId && (
           <Button
             variant="ghost"
@@ -549,4 +645,55 @@ function MessageItem({ message }: { message: Control["SessionMessage"] }) {
       </div>
     </li>
   );
+}
+
+
+function DeliveryStatus({ delivery }: { delivery: MessageDelivery }) {
+  const { t } = useTranslation("remote");
+  return <p className="session-delivery-status" data-state={delivery.status}>
+    {t("chatDeliveryStates." + delivery.status)}
+    {delivery.queued && <> · {t("receiptStatuses.queued")}</>}
+  </p>;
+}
+
+function DeliveryItem({ delivery, draftText, restoreText, ...props }: React.ComponentPropsWithRef<"li"> & {
+  delivery: MessageDelivery;
+  draftText: string;
+  restoreText: (text: string) => boolean;
+}) {
+  const { t, i18n } = useTranslation("remote");
+  const words = useWorkspaceCopy();
+  const [feedback, setFeedback] = useState("");
+  const hasDraft = !!draftText;
+  const hasDifferentDraft = hasDraft && draftText !== delivery.text;
+  const canRestore = delivery.status === "machine-rejected" || delivery.status === "not-delivered";
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(delivery.text);
+      setFeedback(t("chatTextCopied"));
+    } catch {
+      setFeedback(t("chatCopyFailed"));
+    }
+  }
+  return <li {...props} className="session-message human" data-delivery-run={delivery.runId ?? undefined}>
+    <span className="session-avatar" aria-hidden="true">H</span>
+    <div>
+      <div className="session-message-header">
+        <strong>{words.role.human}</strong>
+        <time dateTime={delivery.submittedAt}>{formatDate(delivery.submittedAt, i18n.language)}</time>
+      </div>
+      <div className="session-message-content"><pre>{delivery.text}</pre></div>
+      <DeliveryStatus delivery={delivery} />
+      {canRestore && <div className="session-delivery-actions">
+        {delivery.reason && <p>{t("chatDeliveryReasons." + delivery.reason, { defaultValue: "" })}</p>}
+        <Button variant="secondary" disabled={hasDraft} onClick={() => {
+          setFeedback(t(restoreText(delivery.text) ? "chatTextRestored" : "chatRestoreBlocked"));
+        }}>{t("chatRestoreText")}</Button>
+        {(hasDifferentDraft || feedback === t("chatRestoreBlocked")) &&
+          <Button variant="ghost" onClick={() => void copy()}>{t("chatCopyOriginal")}</Button>}
+        {hasDifferentDraft && <p>{t("chatRestoreBlocked")}</p>}
+        <p role="status" className={feedback ? undefined : "sr-only"}>{feedback}</p>
+      </div>}
+    </div>
+  </li>;
 }

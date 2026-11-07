@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { callRound, okReply, scriptedProvider } from "../commands/agent.test-helpers";
-import { normalizeRoutingV2Config } from "../harness/routing/config-v2";
+import { normalizeRoutingConfig } from "../harness/routing/config";
 import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
 import type { RoutingRequest } from "../harness/routing/routing-request";
 import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
@@ -16,7 +16,7 @@ test("native runtime shares the selection ledger across model rounds without swi
   const cwd = await mkdtemp(join(tmpdir(), "keryx-native-routing-budget-"));
   const provider = scriptedProvider([callRound("unknown", "missing_tool", "{}"), okReply]);
   const target = { providerId: "scripted", modelId: "m" };
-  const routingConfig = normalizeRoutingV2Config({ user: { schemaVersion: 2,
+  const routingConfig = normalizeRoutingConfig({ user: { schemaVersion: 2,
     categories: { default: { mode: "baseline" } },
     execution: { maxAttempts: 3, selectionTimeoutMs: 3_000, maxEstimatedCostUsd: 0.15, unknownCost: "allow" } } });
   const request: RoutingRequest = { requestId: "native-budget", category: "default", origin: "native-session", baseline: target,

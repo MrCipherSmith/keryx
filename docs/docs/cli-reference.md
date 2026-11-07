@@ -801,6 +801,25 @@ Refusals print their code and exit non-zero (except where noted):
 - **`rate-limited`**: `send` when the clone-wide CLI message rate exceeds 30 per
   minute.
 
+## report
+
+A one-way report from a process that is not a keryx shell (another agent CLI, a script) to one live keryx shell, over the agent bus.
+
+```
+keryx report --to @name [--from <name>] <text…>
+```
+
+The command writes one `notice` event with origin `external` and a random sender id; it never joins presence. The receiving agent sees it labelled as an external, unverified report, not the user's words. `--from` names the sender (lower-case letters, digits, dashes; default `external`). The bus record is not authenticated: any process of the same user can write to the log under any name, so the name proves nothing. An external event cannot be a pause, resume or any kind other than `notice`, and a shell cannot reply to it.
+
+Refusals print a named message, exit non-zero and write nothing:
+
+- **`use-agent-tool`** (exit `2`): run inside a keryx tool call; use `bus_send`.
+- **`bus-disabled`**: the bus is off.
+- **`unknown-recipient`** / **`recipient-not-live`**: `@name` is not a live instance; `@all` is refused.
+- **`body-too-large`**: the text is over 2048 bytes; send a file path instead.
+- **`reserved-name`**: `--from` names a reserved sender.
+- **`rate-limited`**: more than 5 reports per minute under one sender name, or more than 15 per minute to one recipient from any external sender. The message names which limit was hit.
+
 ## shell behavior
 
 ### Interactive behavior
@@ -1719,11 +1738,13 @@ confirmed pick writes immediately to the per-user layer. `t` on the list side
 shows the project file's entries and arms an approval; `y` confirms, any
 other key cancels.
 
-### Routing v2
+### Routing settings and class pools
 
-Routing v2 is opt-in through `keryx routing migrate`. With v2 active,
-the class pools can contain models from multiple providers. Use the revision
-returned by the settings read when writing a layer or class pool. An intervening
+Routing is the default implementation; no activation flag is required. Class
+pools can contain models from multiple providers. The canonical settings key is
+`modelRouting` in the user `auth.json` and the project's `routing.config.json`.
+Project settings require approval of their current content. Use the revision
+returned by the settings read when writing a layer or class pool; an intervening
 edit invalidates that revision and requires a fresh read.
 
 ```sh
@@ -1735,7 +1756,11 @@ keryx routing explain --request <file.json> --json
 keryx routing pilot <observations.json|journal.jsonl>
 ```
 
-`routing settings` reads or replaces an active v2 layer. `routing classes`
+`routing migrate --dry-run` previews conversion of older settings; migration
+does not enable an alternative engine. Older persisted keys are supported for
+compatibility and migration, not as names for the current Routing API.
+
+`routing settings` reads or replaces a Routing layer. `routing classes`
 lists the effective pools or replaces one user pool. `routing explain`
 returns the decision and evidence for an explicit request without executing
 the task. `routing pilot` summarizes recorded preview parity and fallback

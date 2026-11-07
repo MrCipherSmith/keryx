@@ -10,6 +10,25 @@ import { explainConformVerdicts, reviewCommand, type ConformExplainRoute } from 
 import { aggregateConformVerdicts, type ConformVerdict } from "../review/conform-jev";
 import type { ModelTurnInput, ModelTurnResult } from "../harness/provider/single-turn";
 import { CONFORM_RECENTS_PATH } from "../review/conform-report";
+
+/**
+ * A routing decision that selected the explanation model, with an open budget:
+ * the explanation calls still reserve and reconcile through it. Production
+ * resolves this through the routing settings, which needs the caller's session
+ * model (its refusal is pinned at the end of this file); these tests are about
+ * prompt construction and privacy.
+ */
+async function routedExplainFixture(): Promise<ConformExplainRoute> {
+  return {
+    provider: "fixture",
+    model: "fixture",
+    routing: {
+      decisionId: "decision-explain-fixture",
+      budget: new RoutingBudgetLedger({ configUsd: null, unknownCost: "allow" }),
+      estimatedCostUsd: () => 0,
+    },
+  };
+}
 import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures", "conform");
@@ -447,13 +466,13 @@ describe("Flow 326, AC1: --explain sends one prompt per violated clause, not one
       return { provider: "fixture", model: "fixture", credentialAvailable: true, text: "explanation text" };
     };
 
-    const explanations = await explainConformVerdicts(ROOT, MANY_HUNKS_REF, explainCandidates, 0.5, undefined, fakeRunTurn);
+    const explanations = await explainConformVerdicts(ROOT, MANY_HUNKS_REF, explainCandidates, 0.5, undefined, fakeRunTurn, routedExplainFixture);
 
     expect(prompts).toHaveLength(1);
     expect(explanations["hunks-1"]).toBe("explanation text");
   });
 
-  test("routing v2 reserves the complete multi-clause explanation fan-out before provider I/O", async () => {
+  test("routing reserves the complete multi-clause explanation fan-out before provider I/O", async () => {
     ROOT = await projectRoot(true);
     process.env.XDG_DATA_HOME = path.join(ROOT, "xdg");
     const verdicts: ConformVerdict[] = ["clause-1", "clause-2"].map((clause_id) => ({
@@ -472,7 +491,7 @@ describe("Flow 326, AC1: --explain sends one prompt per violated clause, not one
     const route: ConformExplainRoute = {
       provider: "fixture",
       model: "fixture",
-      routingV2: {
+      routing: {
         decisionId: "decision-budget-test",
         budget: new RoutingBudgetLedger({ configUsd: 0.015, unknownCost: "deny" }),
         estimatedCostUsd: () => 0.01,
@@ -491,7 +510,7 @@ describe("Flow 326, AC1: --explain sends one prompt per violated clause, not one
     expect(prompts).toEqual([]);
   });
 
-  test("routing v2 stops before the next explanation when reported usage exhausts the shared budget", async () => {
+  test("routing stops before the next explanation when reported usage exhausts the shared budget", async () => {
     ROOT = await projectRoot(true);
     process.env.XDG_DATA_HOME = path.join(ROOT, "xdg");
     const verdicts: ConformVerdict[] = ["clause-1", "clause-2"].map((clause_id) => ({
@@ -516,10 +535,10 @@ describe("Flow 326, AC1: --explain sends one prompt per violated clause, not one
     const route: ConformExplainRoute = {
       provider: "fixture",
       model: "fixture",
-      routingV2: {
+      routing: {
         decisionId: "decision-actual-budget-test",
         budget: new RoutingBudgetLedger({ configUsd: 0.025, unknownCost: "deny" }),
-        estimatedCostUsd: (_inputTokens, outputTokens) => outputTokens > 512 ? 0.02 : 0.01,
+        estimatedCostUsd: (_inputTokens: number, outputTokens: number) => outputTokens > 512 ? 0.02 : 0.01,
       },
     };
 
@@ -587,7 +606,7 @@ describe("AC7 privacy: --explain never sends the reference document's full path 
       return { provider: "fixture", model: "fixture", credentialAvailable: true, text: "explanation text" };
     };
 
-    const explanations = await explainConformVerdicts(ROOT, refPath, [verdict], 0.5, undefined, fakeRunTurn);
+    const explanations = await explainConformVerdicts(ROOT, refPath, [verdict], 0.5, undefined, fakeRunTurn, routedExplainFixture);
 
     expect(explanations["change-limits-1"]).toBe("explanation text");
     expect(capturedUser).toBeDefined();
@@ -630,4 +649,24 @@ describe("CLI arg validation", () => {
     await reviewCommand(["conform", "--ref", REF_PATH]);
     expect(output()).toContain("Usage: keryx review conform");
   });
+});
+
+test("--explain without the caller's session model is refused by routing before any model call", async () => {
+  const saved = { provider: process.env.KERYX_SESSION_PROVIDER, model: process.env.KERYX_SESSION_MODEL };
+  delete process.env.KERYX_SESSION_PROVIDER;
+  delete process.env.KERYX_SESSION_MODEL;
+  let calls = 0;
+  try {
+    const verdict: ConformVerdict = {
+      clause_id: "change-limits-1", state_kind: "pr", status: "likely-violated", probability: 0.1, factLines: ["a fact"], tag_source: "jev",
+    };
+    await expect(explainConformVerdicts(ROOT, path.join(ROOT, "ref.md"), [verdict], 0.5, undefined, async () => {
+      calls += 1;
+      return { provider: "fixture", model: "fixture", credentialAvailable: true, text: "never" };
+    })).rejects.toThrow("routing requires the caller session provider/model for review explanations");
+    expect(calls).toBe(0);
+  } finally {
+    if (saved.provider === undefined) delete process.env.KERYX_SESSION_PROVIDER; else process.env.KERYX_SESSION_PROVIDER = saved.provider;
+    if (saved.model === undefined) delete process.env.KERYX_SESSION_MODEL; else process.env.KERYX_SESSION_MODEL = saved.model;
+  }
 });

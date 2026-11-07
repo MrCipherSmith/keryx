@@ -28,8 +28,6 @@ Run in the main session: this skill dispatches workers. Without a subagent-spawn
 ## Purpose
 
 Flow Orchestrator is the Task Manager-aware implementation orchestrator. Plan bridge: publish the tasks with `plan_set` under the ids `T1`…`Tn`, mirror each `keryx flow task done` with `plan_update`, and publish Phase 4's completion choice as `proposed` — see the `session-plan-bridge` rule.
-It wraps the existing gdskills pipeline with `keryx flow` state.
-
 Use this skill instead of `job-orchestrator` when the user wants a managed story/issue lifecycle with frozen acceptance criteria, task state, an explicit completion choice, Code Health, and a durable flow package in `.metaproject/flows/`.
 
 ## Hard Preconditions
@@ -613,6 +611,8 @@ keryx flow complete <id>
 Completion is allowed only after the PR merge has been confirmed. The merge
 target must be the base branch captured when the flow was created; do not
 silently retarget or close against another branch. The flow folder is committed in the same PR as the code; the commit at closing is a rule to follow, not one the gate checks. `flow complete` fails the `folder-committed` gate while the flow's `flow.json` is not in `HEAD` (flows created from 0.3.53 on; commit it with `git add .metaproject/flows/<dir> && git commit`, then run `flow complete` again). `flow init` and `flow renumber` avoid numbers used on known remote branches, and `keryx flow check` reports a clash with a remote branch (repair with `keryx flow renumber <dir> --to <free id> --reason "<why>"`) and warns about a folder that is not committed. Flows created since the owner gate fail completion while no owner is set (`keryx flow owner set <id> --owner "<name>" --reason "<why>"`); `ac confirm` and `flow complete` append a signature — `--signed-by "<name>"` names the signer, otherwise `KERYX_ACTOR` or the local git identity is recorded, as a claim. A flow created with `--require-confirmation` needs one more gate — `--confirm-token <token>` from `keryx flow confirm <id>`, a short-lived single-use token. In keryx shell call the `flow_confirm` tool (the operator answers it as a card; never send the operator to a terminal); outside it, a typed challenge in a terminal mints it. It proves an interactive step ran, not that a human ran it. A flow left stuck in `completing` by a crash or interrupted attempt (never a normal gate failure) recovers with `keryx flow recover <id> --reason "<why>"`.
+
+For released work with known refusals, read [completion-exceptions.md](completion-exceptions.md) before closing: require fresh operator words, preserve failing gates, and never call it clean.
 
 If gates fail, the CLI returns the flow to `in-progress`. Add a journal note,
 create fix tasks, and repeat Phase 2.

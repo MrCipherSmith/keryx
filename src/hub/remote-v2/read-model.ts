@@ -1,3 +1,5 @@
+import { readSessionChatUsage } from "./chat-usage";
+import { readMessageDeliveries } from "./message-delivery";
 import { runEventPage } from "./retention";
 import { releasedControllerAlias } from "./controller-recovery";
 import type { ReconciliationRow } from "./recovery";
@@ -27,7 +29,7 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies, c
     if (p[2] === "runs") {
       const all = store.remote.all<RunRow>("remote_run", { projectId });
       const exposed = (run: RunRow) => {
-        const { commandDigest, commandId, nativeIdentity, ...safe } = run;
+        const { commandDigest, commandId, nativeIdentity, chatTokens, chatStartedAt, chatUsageGap, ...safe } = run;
         const approvals = store.remote.all<ApprovalRow>("remote_approval_projection", { runId: run.runId }).map((question) => ({ approvalId: question.approvalId, runId: question.runId, sessionId: question.sessionId, turnId: question.turnId, actionFingerprint: question.actionFingerprint, policyDigest: question.policyDigest, expiresAt: question.expiresAt, summary: question.summary, localRequired: question.localRequired, status: question.status, ...(question.decision ? { decision: question.decision } : {}) }));
         const reconciliationReceipts = store.remote.all<ReconciliationRow>("remote_reconciliation", { runId: run.runId }).map((record) => record.receipt).filter((receipt) => (receipt.expectedRunVersion === run.version || (run.state === "lost" && run.reconciliationId === receipt.reconciliationId && receipt.expectedRunVersion + 1 === run.version)) && Date.now() - Date.parse(receipt.receivedAt) <= 30000 && receipt.observation !== "unknown");
         return { ...safe, approvals, reconciliationReceipts, connected: deps.online(run.machineId) };
@@ -41,6 +43,8 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies, c
     if (!p[3]) { const sessions = store.remote.all<SessionRow>("remote_session", { projectId }).map((row) => row.record).slice(after, after + 100); return json(control("SessionPage", { sessions, cursor: after + sessions.length, hasMore: sessions.length === 100 })); }
     const row = session(store.remote, projectId, p[3]); const suffix = p[4];
     if (!suffix) return json(row.record);
+    if (suffix === "usage" && !p[5]) return json(readSessionChatUsage(store.remote, row));
+    if (suffix === "message-deliveries" && !p[5]) return json(readMessageDeliveries(store.remote, projectId, row.record.sessionId, auth.actor.id));
     if (suffix === "operations" && p[5]) { const release = releasedControllerAlias(store.remote, row, p[5]); if (release) return json(release); const operation = store.remote.get<OperationRecord>("remote_operation", p[5]); if (!operation || operation.projectId !== projectId || (operation.sessionId && operation.sessionId !== row.record.sessionId)) fail(404, "not-found", "Operation not found"); return json(operation.deliveryFailure ?? operation.response,operation.status); }
     if (suffix === "controller-claims" && p[5] && p.length === 6) {
       const route = `/hub/v2/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(row.record.sessionId)}/controller/claim`;
@@ -67,7 +71,21 @@ export function createRemoteReader(store: HubStore, deps: SessionDependencies, c
     if (suffix === "commands") { const projection = completeProjection(store.remote, row); return json(control("CommandCatalogue", { catalogueVersion: projection.catalogueVersion, catalogueDigest: projection.catalogueDigest, capabilityDigest: projection.capabilityDigest, entries: projection.catalogue })); }
     if (suffix === "routing") { const projection = completeProjection(store.remote, row); return json(control("RoutingAvailability", { version: projection.projectionVersion, policyDigest: projection.policyDigest, capabilityDigest: projection.capabilityDigest, candidates: projection.candidates, profileIds: projection.profileIds })); }
     if (suffix === "queue") return json(control("QueuePage", { cursor: 0, hasMore: false, queueVersion: row.record.queueVersion, items: store.remote.all<QueueRow>("remote_queue", { sessionId: row.record.sessionId }).map((q) => q.item) }));
-    if (suffix === "history") { const page = boundedRecords(store.remote.all<Control["SessionMessage"]>("remote_history", { sessionId: row.record.sessionId }).filter((m) => m.historyCursor > after)); return json(control("HistoryPage", { historyVersion: row.record.historyVersion, messages: page.records, cursor: page.records.at(-1)?.historyCursor ?? after, hasMore: page.hasMore, retainedFromCursor: 0, gap: false })); }
+    if (suffix === "history") {
+      const history = store.remote.all<Control["SessionMessage"]>("remote_history", { sessionId: row.record.sessionId });
+      const before = url.searchParams.get("before");
+      if (before !== null) {
+        const cursor = before === "latest" ? null : Number(before);
+        if (url.searchParams.has("after") || (cursor !== null && (!Number.isSafeInteger(cursor) || cursor < 1)))
+          fail(400, "invalid-cursor", "Invalid cursor");
+        const page = boundedRecords(history.filter(message => cursor === null || message.historyCursor < cursor).sort((left, right) => right.historyCursor - left.historyCursor));
+        // Limit the newest records first, then return them in reading order.
+        const oldest = page.records.at(-1)?.historyCursor ?? cursor ?? 0;
+        return json(control("HistoryPage", { historyVersion: row.record.historyVersion, messages: page.records.reverse(), cursor: oldest, hasMore: page.hasMore, retainedFromCursor: 0, gap: false }));
+      }
+      const page = boundedRecords(history.filter(message => message.historyCursor > after));
+      return json(control("HistoryPage", { historyVersion: row.record.historyVersion, messages: page.records, cursor: page.records.at(-1)?.historyCursor ?? after, hasMore: page.hasMore, retainedFromCursor: 0, gap: false }));
+    }
     if (suffix === "events") { const page = boundedRecords(store.remote.all<Control["SessionEvent"]>("remote_session_event", { sessionId: row.record.sessionId }).filter((e) => e.sessionEventSeq > after)); return json(control("SessionEventPage", { events:page.records, cursor: page.records.at(-1)?.sessionEventSeq ?? after, hasMore: page.hasMore, retainedFromCursor: 0, gap: false })); }
     fail(404, "not-found", "Route not found");
   }

@@ -8,18 +8,20 @@ export function RecordBrowser({
   list,
   detail,
   onBack,
+  listOnly = false,
 }: {
   selectedId?: string;
   list: ReactNode;
   detail: ReactNode;
   onBack: () => void;
+  listOnly?: boolean;
 }) {
   const { t } = useTranslation('context');
   const detailPane = useRef<HTMLDivElement>(null);
   const beforeOpen = useRef<{ scrollY: number; target: HTMLElement } | null>(null);
 
   useLayoutEffect(() => {
-    if (!window.matchMedia?.('(width < 80rem)').matches) return;
+    if (!listOnly && !window.matchMedia?.('(width < 80rem)').matches) return;
     if (selectedId) {
       detailPane.current?.focus({ preventScroll: true });
       detailPane.current?.scrollIntoView?.({ block: 'start' });
@@ -31,12 +33,12 @@ export function RecordBrowser({
       window.scrollTo({ top: previous.scrollY });
       beforeOpen.current = null;
     }
-  }, [selectedId]);
+  }, [selectedId, listOnly]);
 
   return (
-    <div className="mt-6 grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(0,2fr)]">
+    <div className={listOnly ? "document-browser grid min-w-0" : "mt-6 grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.8fr)_minmax(0,2fr)]"}>
       <div
-        className={selectedId ? 'hidden min-w-0 xl:block' : 'min-w-0'}
+        className={selectedId ? listOnly ? 'hidden' : 'hidden min-w-0 xl:block' : 'min-w-0'}
         onClickCapture={(event) => {
           const button = (event.target as HTMLElement).closest('button[data-record-open]');
           if (button instanceof HTMLElement) {
@@ -49,13 +51,11 @@ export function RecordBrowser({
       <div
         ref={detailPane}
         tabIndex={selectedId ? -1 : undefined}
-        className={selectedId ? 'min-w-0 scroll-mt-24 outline-none' : 'hidden min-w-0 xl:block'}
+        className={selectedId ? 'min-w-0 scroll-mt-24 outline-none' : listOnly ? 'hidden' : 'hidden min-w-0 xl:block'}
       >
-        {selectedId && (
-          <Button variant="secondary" className="mb-4 xl:hidden" onClick={onBack}>
-            ← {t('backToList')}
-          </Button>
-        )}
+        {selectedId && <div className={listOnly ? "document-back-bar" : "mb-4 xl:hidden"}>
+          <Button variant="secondary" onClick={onBack}>← {t('backToList')}</Button>
+        </div>}
         {detail}
       </div>
     </div>

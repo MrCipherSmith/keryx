@@ -3,3 +3,13 @@
 .acceptance-criteria{display:grid;gap:.75rem}.acceptance-criterion{padding:1rem;border:1px solid var(--hub-border,#dce5df);border-radius:.75rem;min-width:0}.acceptance-criterion>strong{display:block}.acceptance-support{display:inline-block;margin:.5rem 0;padding:.2rem .55rem;border-radius:.4rem;background:var(--hub-subtle,#edf4ef);font-size:.8rem}.acceptance-support[data-state=fail],.acceptance-support[data-state=conflicting]{background:color-mix(in srgb,var(--hub-danger) 12%,var(--hub-surface));color:var(--hub-danger,#923826)}
 .acceptance-steps{display:grid;gap:1rem}.acceptance-steps li{padding:.5rem;min-width:0}.acceptance-instruction{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font-family:var(--font-mono,monospace);font-size:.8rem;background:var(--hub-subtle,#f2f6f3);padding:.8rem;border-radius:.5rem}.acceptance-review details>summary{cursor:pointer;font-weight:600;padding:.6rem 0}.acceptance-review details pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:24rem;overflow:auto}.acceptance-review details code{overflow-wrap:anywhere}.acceptance-actions{display:flex;flex-wrap:wrap;gap:.6rem}.acceptance-confirmation{padding:1rem;border:1px solid var(--hub-border,#b9d3c6);border-radius:.75rem;display:grid;gap:.8rem}.acceptance-confirmation textarea{width:100%;min-height:7rem}.acceptance-confirmation label{display:flex;gap:.5rem;align-items:flex-start}.acceptance-confirmation .hub-field label{display:block}.acceptance-review :focus-visible{outline:2px solid var(--hub-focus,#266c57);outline-offset:3px}.acceptance-status{padding:.75rem;border-radius:.6rem;background:var(--hub-subtle,#edf4ef)}
 @media(max-width:600px){.acceptance-review{padding:1rem;gap:1rem}.acceptance-actions{flex-direction:column}.acceptance-actions>.hub-button{width:100%;white-space:normal}.acceptance-criterion{padding:.75rem}.acceptance-review h2{font-size:1.05rem}}
+
+.acceptance-review .acceptance-criterion {
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--hub-border);
+  padding-inline: 0;
+}
+.acceptance-criterion-title { font-weight: 400; }
+.acceptance-criterion-title > span { color: var(--hub-muted); font-variant-numeric: tabular-nums; }
+.acceptance-criterion a { text-decoration: underline; }

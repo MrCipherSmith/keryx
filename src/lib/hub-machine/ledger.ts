@@ -36,6 +36,11 @@ export const LEDGER_LOG_BYTE_LIMIT = 48 * MiB;
 export const LOG_RETENTION_MS = 7 * 86400000;
 const TERMINAL_RUN_STATES = new Set(['succeeded', 'failed', 'cancelled', 'rejected', 'lost']);
 const OWNED_PROCESS_CAPACITY = 10000;
+const LEGACY_LEDGER_VERSIONS = ['1', '2', '3', '4', '5', '6'];
+const RETENTION_LEDGER_VERSION = '7';
+// Old executors do not enforce the local-only result policy. Fence them only once a session needs it.
+const LOCAL_RESULTS_LEDGER_VERSION = '8';
+const SUPPORTED_LEDGER_VERSIONS = new Set([...LEGACY_LEDGER_VERSIONS, RETENTION_LEDGER_VERSION, LOCAL_RESULTS_LEDGER_VERSION]);
 /** Identity of a daemon process, recorded at start so a later crash can be judged without trusting a PID or a lock's age. */
 export interface DaemonRecord { daemonId: string; lockNonce: string; pid: number; pgid: number; startedAt: string }
 /** One owned process spawn: an `intent` row exists before the spawn, `recorded` once its identity is known. */
@@ -80,7 +85,7 @@ export class MachineLedger {
             value: string;
         }, [
         ]>("SELECT value FROM machine_meta WHERE key='version'").get() : null;
-        if (existingVersion && !['1', '2', '3', '4', '5', '6', '7'].includes(existingVersion.value)) {
+        if (existingVersion && !SUPPORTED_LEDGER_VERSIONS.has(existingVersion.value)) {
             this.db.close();
             throw new MachineError('unsupported-ledger-version');
         }
@@ -97,25 +102,27 @@ export class MachineLedger {
    CREATE TABLE IF NOT EXISTS machine_native_leases(token TEXT PRIMARY KEY,daemonId TEXT NOT NULL,sessionId TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS machine_run_recovery(id TEXT PRIMARY KEY,digest TEXT NOT NULL,runId TEXT NOT NULL,step TEXT NOT NULL,phase TEXT NOT NULL,result TEXT);
    CREATE TABLE IF NOT EXISTS machine_run_terminal(stream TEXT PRIMARY KEY,terminalAt INTEGER NOT NULL);
-   CREATE TABLE IF NOT EXISTS machine_retired_logs(stream TEXT NOT NULL,fromSeq INTEGER NOT NULL,toSeq INTEGER NOT NULL,digest TEXT NOT NULL,bytes INTEGER NOT NULL,retiredAt INTEGER NOT NULL,PRIMARY KEY(stream,fromSeq));`);
+   CREATE TABLE IF NOT EXISTS machine_retired_logs(stream TEXT NOT NULL,fromSeq INTEGER NOT NULL,toSeq INTEGER NOT NULL,digest TEXT NOT NULL,bytes INTEGER NOT NULL,retiredAt INTEGER NOT NULL,PRIMARY KEY(stream,fromSeq));
+   CREATE INDEX IF NOT EXISTS machine_events_unacknowledged ON machine_events(stream,seq) WHERE acked=0;
+   CREATE INDEX IF NOT EXISTS machine_discarded_logs_unacknowledged ON machine_discarded_logs(stream,seq) WHERE acked=0;`);
         const version = this.db.query<{
             value: string;
         }, [
         ]>("SELECT value FROM machine_meta WHERE key='version'").get();
-        if (version && version.value !== '1' && version.value !== '2' && version.value !== '3' && version.value !== '4' && version.value !== '5' && version.value !== '6' && version.value !== '7') {
+        if (version && !SUPPORTED_LEDGER_VERSIONS.has(version.value)) {
             this.db.close();
             throw new MachineError('unsupported-ledger-version');
         }
         if (version?.value === '1') {
             this.db.transaction(() => { this.db.exec('ALTER TABLE machine_commands ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0; ALTER TABLE machine_commands ADD COLUMN envelope TEXT;'); this.db.query("UPDATE machine_meta SET value='2' WHERE key='version'").run(); }).immediate();
         }
-        if (version && version.value !== '7') {
+        if (version && LEGACY_LEDGER_VERSIONS.includes(version.value)) {
             // Runs already terminal before retention existed start their seven days now, never earlier.
             this.db.query("INSERT OR IGNORE INTO machine_run_terminal(stream,terminalAt) SELECT DISTINCT stream,? FROM machine_events WHERE stream LIKE 'run:%' AND json_extract(payload,'$.kind')='state' AND json_extract(payload,'$.state') IN ('succeeded','failed','cancelled','rejected','lost')").run(Date.now());
         }
-        this.db.query("INSERT OR IGNORE INTO machine_meta VALUES('version','7')").run();
+        this.db.query("INSERT OR IGNORE INTO machine_meta VALUES('version',?)").run(RETENTION_LEDGER_VERSION);
         this.db.query("INSERT OR IGNORE INTO machine_meta VALUES('ledgerId',?)").run(randomUUID());
-        this.db.query("UPDATE machine_meta SET value='7' WHERE key='version'").run();
+        this.db.query("UPDATE machine_meta SET value=? WHERE key='version' AND value IN ('1','2','3','4','5','6')").run(RETENTION_LEDGER_VERSION);
         this.ledgerId = this.db.query<{
             value: string;
         }, [
@@ -286,6 +293,17 @@ export class MachineLedger {
     }
     markStarting(hub: string, id: string, daemon: string): void { if (this.db.query("UPDATE machine_commands SET phase='starting',daemon=? WHERE hub=? AND id=? AND phase='received'").run(daemon, hub, id).changes !== 1)
         throw new MachineError('recovery-required'); }
+    /** Whole-file results cannot separate edits already present before this conversation. Keep the restriction across daemon restarts. */
+    keepSessionResultsLocal(sessionId: string): void {
+        this.db.transaction(() => {
+            this.db.query("INSERT OR IGNORE INTO machine_meta(key,value) VALUES(?,'1')").run('local-results:' + sessionId);
+            this.db.query("UPDATE machine_meta SET value=? WHERE key='version' AND value=?")
+                .run(LOCAL_RESULTS_LEDGER_VERSION, RETENTION_LEDGER_VERSION);
+        }).immediate();
+    }
+    sessionResultsStayLocal(sessionId: string): boolean {
+        return this.db.query('SELECT 1 FROM machine_meta WHERE key=?').get('local-results:' + sessionId) !== null;
+    }
     recordReceipt(hub: string, id: string, receipt: unknown): void { if (this.db.query('UPDATE machine_commands SET receipt=? WHERE hub=? AND id=?').run(JSON.stringify(receipt), hub, id).changes !== 1)
         throw new MachineError('unknown-command'); }
     commandReceipt(hub: string, id: string): unknown { const record = this.stored(hub, id); return record?.receipt ? JSON.parse(record.receipt) : null; }
@@ -329,15 +347,12 @@ export class MachineLedger {
         }).immediate();
     }
     resetUnackedForReplay(stream: string): void { this.db.transaction(() => { this.db.query('UPDATE machine_events SET sent=0 WHERE stream=? AND acked=0').run(stream); this.db.query('UPDATE machine_discarded_logs SET sent=0 WHERE stream=? AND acked=0').run(stream); }).immediate(); }
-    unsentEvents(stream: string): Array<{
-        seq: number;
-        payload: unknown;
-    }> { return this.db.query<{
-        seq: number;
-        payload: string;
-    }, [
-        string
-    ]>('SELECT seq,payload FROM machine_events WHERE stream=? AND acked=0 AND sent=0 ORDER BY seq LIMIT 500').all(stream).map(r => ({ seq: r.seq, payload: JSON.parse(r.payload) })); }
+    /** Select only outstanding work. Acknowledged history can be large during a streaming run. */
+    unsentEvents(limit: number): Array<{ stream: string; seq: number; payload: unknown }> {
+        return this.db.query<{ stream: string; seq: number; payload: string }, [number]>(
+            'SELECT stream,seq,payload FROM machine_events WHERE acked=0 AND sent=0 ORDER BY stream,seq LIMIT ?',
+        ).all(limit).map(row => ({ ...row, payload: JSON.parse(row.payload) }));
+    }
     pendingEvents(stream: string): Array<{
         seq: number;
         payload: unknown;
@@ -422,18 +437,16 @@ export class MachineLedger {
     }
     markSent(stream: string, seq: number): void { this.db.transaction(() => { if (this.db.query('UPDATE machine_events SET sent=1 WHERE stream=? AND seq=?').run(stream, seq).changes !== 1)
         throw new MachineError('unsent-event-ack'); this.db.query('UPDATE machine_discarded_logs SET sent=1 WHERE stream=? AND gapSeq=?').run(stream, seq); }).immediate(); }
-    ackEvents(stream: string, seq: number): void { this.db.transaction(() => { if (!Number.isSafeInteger(seq) || seq < 0 || seq > this.highest(stream) || this.db.query<{
-        n: number;
-    }, [
-        string,
-        number
-    ]>('SELECT count(*) AS n FROM machine_events WHERE stream=? AND seq<=? AND sent=0').get(stream, seq)!.n || this.db.query<{
-        n: number;
-    }, [
-        string,
-        number
-    ]>('SELECT count(*) AS n FROM machine_discarded_logs WHERE stream=? AND seq<=? AND sent=0').get(stream, seq)!.n)
-        throw new MachineError('unsent-event-ack'); this.db.query('UPDATE machine_events SET acked=1 WHERE stream=? AND seq<=?').run(stream, seq); this.db.query('UPDATE machine_discarded_logs SET acked=1 WHERE stream=? AND seq<=?').run(stream, seq); }).immediate(); }
+    ackEvents(stream: string, seq: number): void {
+        this.db.transaction(() => {
+            if (!Number.isSafeInteger(seq) || seq < 0 || seq > this.highest(stream) ||
+                this.db.query('SELECT 1 FROM machine_events WHERE stream=? AND seq<=? AND acked=0 AND sent=0 LIMIT 1').get(stream, seq) ||
+                this.db.query('SELECT 1 FROM machine_discarded_logs WHERE stream=? AND seq<=? AND acked=0 AND sent=0 LIMIT 1').get(stream, seq))
+                throw new MachineError('unsent-event-ack');
+            this.db.query('UPDATE machine_events SET acked=1 WHERE stream=? AND seq<=? AND acked=0').run(stream, seq);
+            this.db.query('UPDATE machine_discarded_logs SET acked=1 WHERE stream=? AND seq<=? AND acked=0').run(stream, seq);
+        }).immediate();
+    }
     reconcileCursor(stream: string, remote: number): void { this.db.transaction(() => { if (!Number.isSafeInteger(remote) || remote < 0 || remote > this.highest(stream) || (remote > 0 && !this.db.query('SELECT seq FROM machine_events WHERE stream=? AND seq=?').get(stream, remote) && !this.db.query('SELECT toSeq FROM machine_retired_logs WHERE stream=? AND toSeq=?').get(stream, remote)))
         throw new MachineError('replay-gap'); const local = this.cursors().find(c => c.stream === stream)?.ack ?? 0; if (remote > local) {
         this.ackEvents(stream, remote);

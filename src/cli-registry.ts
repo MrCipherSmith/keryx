@@ -60,6 +60,7 @@ import { shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
 import { acpCommand } from "./commands/acp";
 import { busCommand } from "./commands/bus";
+import { reportCommand } from "./commands/report";
 import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
 import { serveCommand } from "./commands/serve";
@@ -72,7 +73,7 @@ import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
-import { routingCommand } from "./commands/routing";
+import { printRoutingHelp, routingCommand } from "./commands/routing";
 import { externalCommand } from "./commands/external";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
@@ -182,6 +183,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   session: sessionsCommand,
   acp: acpCommand,
   bus: busCommand,
+  report: reportCommand,
   version: versionCommand,
   workspace: workspaceCommand,
   retention: retentionCommand,
@@ -272,6 +274,8 @@ export const USAGE_BODY = `Usage:
                                                Agent Client Protocol agent server over stdio
   keryx bus list [--json] | log [--since <seq>] [--limit N] [--json] | send <@name|@all> [--kind <k>] [--reply-to <id>] <text> | prune
                                                Agent bus: peers, events and messages shared across this clone's worktrees
+  keryx report --to @name [--from <name>] "<text>"
+                                               One-way, unverified report to a live keryx shell over the bus
   keryx version check [--json]                 Check npm latest (advisory; never installs)
   keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
@@ -644,6 +648,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   (rest: readonly string[]) => void
 >([
   ["hub", printHubHelp],
+  ["routing", () => printRoutingHelp()],
   ["flow", () => printFlowHelp()],
   ["trigger", () => printTriggerHelp()],
   ["serve-mcp", () => printServeMcpHelp()],

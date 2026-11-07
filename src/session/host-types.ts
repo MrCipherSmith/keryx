@@ -24,7 +24,7 @@ interface TurnObservationBase { sessionId: string; runId: string; turnId: string
 export type NativeTurnObservation = TurnObservationBase & (
   | { kind: "admission-refused"; operationId: string; reason: "expired-work" | "temporarily-unavailable" | "renewal-drift" | "revoked-or-forbidden" | "stale-subject"; retainedQueue: boolean; selectionSettled: true; codingAdmitted: false }
   | { kind: "running"; snapshot: Control["ConfigSnapshot"] }
-  | { kind: "progress"; text: string; toolName?: string }
+  | { kind: "progress"; text: string; toolName?: string; diagnostic?: true }
   | { kind: "usage"; usage: NormalizedUsage; source?: "agent" | "routing-classifier"; candidateId?: string; providerId?: string; modelId?: string; actualProviderId?: string; actualModelId?: string }
   | { kind: "terminal"; outcome: "succeeded" | "failed" | "cancelled" | "unknown"; reason: string; result?: RunAgentTurnResult; checks: NativeCheckObservation[]; workspaceBaseline: string; partial: boolean }
 );
@@ -75,6 +75,8 @@ export interface SessionOwnedControlAuthority extends SessionInspectionAuthority
 /** An effect the owner refused before the tool ran: nothing was written and the owned baseline still holds, so only that call fails. */
 export interface EffectRefusal { ok: false; error: ProtocolError; wroteNothing: true }
 export interface SessionWorkspacePort {
+  /** Remote checkout ownership spans native execution. A closed conversation may reacquire it to resume. */
+  checkoutLease?: { release(): void; reacquire(): boolean };
   /** Trusted held checkout ownership; never serialized to Hub. */
   rewind?: { ownership(): { nonce: string; gitHead: string; paths: string[] }; validatePaths(paths: readonly string[], signal: AbortSignal): Promise<void> };
   verify(expectedBaseline: string): Promise<ProtocolResult<{ baseline: string }> | { ok: true; baseline: string }>;

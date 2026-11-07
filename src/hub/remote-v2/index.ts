@@ -1,3 +1,4 @@
+import { initialMessageDelivery } from "./message-delivery";
 import type { ManagedExecutionPort } from "./managed-execution";
 import { isStopOnlyCommand, validateOwnedControl } from "./owned-control";
 import {authorizeLifecycle} from './lifecycle';
@@ -10,6 +11,8 @@ import { executionBinding } from "./execution";
 import { drainSessionQueue } from "./queue";
 import { createRemoteReader } from "./read-model";
 import { createSessionOperations } from "./session-operations";
+import { createLiveShells } from "./live-shells";
+import { liveShellContextHeader, liveShellLimits } from "../../remote-control/live-shell";
 import { randomBytes } from "node:crypto";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import { canonicalDigest, runCommandDigest, sessionCommandDigest, validateControl, parseClosedJson, parseMachineFrame, LIMITS, MACHINE_SUBPROTOCOL, type Control } from "../../remote-control/protocol";
@@ -42,7 +45,9 @@ export function createRemoteControl(ports: RemotePorts) {
   const machines = new Map<string, ServerWebSocket<RemoteSocketData>>(); const pending = new Set<string>(); const browsers = new Set<ServerWebSocket<RemoteSocketData>>();
   const attempts = new Map<string, { count: number; reset: number }>();
   const managedExecution=ports.managedExecution;
-  const deps: SessionDependencies = { online: (machineId) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; }, authorityValid: ports.authorityValid, ...(managedExecution?{beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted}:{}) };
+  const online = (machineId: string) => { const socket = machines.get(machineId); return !!socket && socket.data.kind === "machine" && socket.data.daemonId !== null && socket.readyState === 1; };
+  const liveShells = createLiveShells(ports, online);
+  const deps: SessionDependencies = { online, checkoutShared: liveShells.checkoutShared, authorityValid: ports.authorityValid, ...(managedExecution?{beforeAdmission:managedExecution.beforeAdmission, admitted:managedExecution.admitted}:{}) };
   const profileConsent = new Map<string, { epoch: number; profiles: Map<string, number> }>();
   const humanRead = createRemoteReader(store, deps, record => {
     const machine = store.remote.get<MachineRecord>("remote_machine", record.machineId);
@@ -120,9 +125,24 @@ export function createRemoteControl(ports: RemotePorts) {
     const m = resolveMachine(request);
     if (m) {
       if (request.headers.has("origin")) fail(403, "origin-denied", "Machine HTTP requires native credentials without browser Origin");
+      if (p[0] === "machines" && p[2] === "live-shells" && p.length === 4 && p[1] === m.machineId) {
+        const update = method === "POST" ? await body(request, liveShellLimits.updateBytes) : undefined;
+        const response = json(liveShells.forMachine(scopedMachine(request), p[3]!, method, update));
+        response.headers.set(liveShellContextHeader, "1");
+        return response;
+      }
       return machineHttp(request,p,write ? await body(request) : undefined,m);
     }
     const auth = await ports.human(request);
+    if (p[0] === "projects" && p[1] && p[2] === "live-shells") {
+      if (method === "GET" && p.length <= 4) return json(liveShells.read(p[1], p[3], auth, url.searchParams.get("operationId")));
+      if (method !== "POST" || p.length !== 5) fail(404, "not-found", "Route not found");
+      ports.checkOrigin(request);
+      operator(auth);
+      const key = mutationKey(request);
+      const input = await body(request, 64 * 1024);
+      return json(liveShells.mutate(p[1], p[3]!, p[4]!, await ports.human(request), key, input));
+    }
     if (write) { ports.checkOrigin(request); mutationKey(request); if (!(p[0] === "projects" && p[2] === "sessions" && p[4] === "open")) operator(auth); }
     if (!write) return humanRead(p, url, auth);
     const input = await body(request);
@@ -155,7 +175,10 @@ export function createRemoteControl(ports: RemotePorts) {
           }
           value = projectMutation(state, p, method, input, current, operationId);
         } else fail(404, "not-found", "Route not found");
-        repo.put("remote_operation", operationId, { id: operationId, key, actorId: current.actor.id, sessionDigest: current.sessionDigest, projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined, payloadDigest, request: input, ...(validateControl("SessionOperationReceipt", value).ok && p[2] === "sessions" && p[3] && control("SessionOperationReceipt", value).sessionId !== p[3] ? { derivedSessionId: control("SessionOperationReceipt", value).sessionId } : {}), kind: p.slice(2).join("/"), response: value, status: 200 } satisfies OperationRecord, { projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined });
+        const messageSession = method === "POST" && p[0] === "projects" && p[2] === "sessions" &&
+          p[3] && p[4] === "messages" && p.length === 5 ? repo.get<SessionRow>("remote_session", p[3]) : undefined;
+        const messageDelivery = messageSession ? initialMessageDelivery(value, messageSession.record.historyCursor) : undefined;
+        repo.put("remote_operation", operationId, { id: operationId, key, actorId: current.actor.id, sessionDigest: current.sessionDigest, ...(messageDelivery && { messageDelivery }), projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined, payloadDigest, request: input, ...(validateControl("SessionOperationReceipt", value).ok && p[2] === "sessions" && p[3] && control("SessionOperationReceipt", value).sessionId !== p[3] ? { derivedSessionId: control("SessionOperationReceipt", value).sessionId } : {}), kind: p.slice(2).join("/"), response: value, status: 200 } satisfies OperationRecord, { projectId: p[0] === "projects" ? p[1] : undefined, sessionId: p[2] === "sessions" ? p[3] : undefined });
         return json(value);
       });
       for (const [machineId, socket] of machines) if (store.remote.get<MachineRecord>("remote_machine", machineId)?.revoked) socket.close(1008, "Authorization changed");
@@ -333,7 +356,7 @@ export function createRemoteControl(ports: RemotePorts) {
         if (envelope.kind === "start-turn") checkAssociation(_state, envelope.body.request.association, command.projectId);
         if (envelope.kind === "submit-message") checkAssociation(_state, envelope.body.association, command.projectId);
         if (envelope.kind === "invoke-command") { validateOwnedControl(repo, row, envelope.body); if (envelope.body.association) checkAssociation(_state, envelope.body.association, command.projectId); }
-        authorizeLifecycle(repo,row,command);
+        authorizeLifecycle(repo,row,command,liveShells.checkoutShared);
         authorizeConfirmation(repo,row,command,ports.authorityValid);
 
         if (b.controller) held(row, command.authority, b.controller);
@@ -462,6 +485,7 @@ export function createRemoteControl(ports: RemotePorts) {
   };
   let maintenancePending = false;
   const timer = setInterval(() => {
+    liveShells.expire();
     for (const socket of machines.values()) { const data = socket.data; if (data.kind !== "machine") continue; const m = store.remote.get<MachineRecord>("remote_machine", data.machineId); if (!m || !socketAuthorityCurrent(m, data) || Date.now() - data.lastHeartbeat > LIMITS.heartbeatTimeoutMs) socket.close(1008, "Authorization or heartbeat changed"); }
     for (const socket of browsers) { const data = socket.data; if (data.kind !== "browser") continue; void ports.human(data.request).then((auth) => { if (!ports.authorityValid(auth, data.projectId, true)) socket.close(1008, "Authorization changed"); }).catch(() => socket.close(1008, "Authorization changed")); }
     if (!maintenancePending && !transportsClosed) { maintenancePending = true; void ports.serialized(async () => { store.writeTransaction((state, repo) => { retireRunLogs(repo); for(const sessionId of repo.retryableSessions(Date.now()))drainSessionQueue(state,repo,deps,sessionId); }); dispatch(); }).catch((error: unknown) => console.error("Hub maintenance failed", error instanceof Error ? error.name : "UnknownError")).finally(() => { maintenancePending = false; }); }
@@ -471,5 +495,5 @@ export function createRemoteControl(ports: RemotePorts) {
     if (request.method !== "GET" || path[0] !== "projects" || !path[1] || !m.projectIds.includes(path[1]) || !["context", "documents", "flows"].includes(path[2] ?? "")) fail(403, "scope-denied", "Machine context read denied");
     return json(hubRead(store.load(), path, url));
   }
-  return { handle, upgrade, websocket, machineRead, transportsClosed() { return (shutdownSnapshot ?? [...trackedTransports]).every((socket) => socket.readyState === 3); }, close() { shutdownSnapshot ??= [...trackedTransports]; transportsClosed = true; unsubscribeStore(); clearInterval(timer); for (const socket of trackedTransports) if (socket.readyState !== 3) socket.close(1012, "Hub restart"); machines.clear(); browsers.clear(); pending.clear(); } };
+  return { handle, upgrade, websocket, machineRead, transportsClosed() { return (shutdownSnapshot ?? [...trackedTransports]).every((socket) => socket.readyState === 3); }, close() { shutdownSnapshot ??= [...trackedTransports]; transportsClosed = true; unsubscribeStore(); clearInterval(timer); liveShells.close(); for (const socket of trackedTransports) if (socket.readyState !== 3) socket.close(1012, "Hub restart"); machines.clear(); browsers.clear(); pending.clear(); } };
 }

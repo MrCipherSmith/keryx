@@ -12,24 +12,25 @@ export interface NativeRoutingSelection {
   readonly selectionReceiptId?: string;
   /** Local test/diagnostic seam; createSessionRouting deliberately does not serialize it. */
   readonly classifierReceiptId?: string;
+  /** The classifier failed and routing applied its configured `onFailure` assignment. */
+  readonly classifierFallback?: true;
 }
 export type NativeRoutingClassifier = (text: string, config: Control["SessionConfig"], context: NativeClassifierContext) => Promise<string | NativeRoutingSelection | undefined>;
 
-import { runRoutingClassifierForTurn } from "../tui/routing-classifier-source";
 import { runModelTurn } from "../harness/provider/single-turn";
 import type { ProviderPort } from "../harness/provider/types";
-import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
-import { routingV2Digest, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { loadRouting } from "../harness/routing/settings";
+import { routingDigest, type NormalizedRoutingConfig } from "../harness/routing/config";
 import { classifyDeterministic } from "../harness/decision/deterministic-shortcuts";
-import type { RoutingClassifierAdapter } from "../harness/routing/classifier-chain-v2";
-import { buildRoutingClassifierAdapters } from "../harness/routing/classifier-production-v2";
+import type { RoutingClassifierAdapter } from "../harness/routing/classifier-chain";
+import { buildRoutingClassifierAdapters } from "../harness/routing/classifier-production";
 import { runRoutingClassification } from "../harness/routing/routing-classifier-service";
 import { RoutingBudgetLedger } from "../harness/routing/routing-budget";
 import { resolveRoutingForRuntime } from "../harness/routing/routing-runtime";
-import { prepareRoutingCandidate } from "../harness/routing/routing-execution-v2";
+import { prepareRoutingCandidate } from "../harness/routing/routing-execution";
 import { ROUTING_CAPABILITIES, type RoutingRequest, type RoutingRequirements } from "../harness/routing/routing-request";
 import type { NativeModelBinding } from "./model-identity";
-import { nativeRoutingV2Resolution, prepareNativeRoutingV2, type NativeRoutingV2FactsProvider, type NativeRoutingV2Resolution } from "./native-routing-v2";
+import { nativeRoutingResolution, prepareNativeRouting, type NativeRoutingFactsProvider, type NativeRoutingResolution } from "./native-routing";
 import type { NativeRoutingBudgetStore } from "./native-routing-budget";
 import { ROUTING_CATEGORIES } from "../harness/routing/table";
 import { MODEL_CLASSES } from "../harness/routing/model-class";
@@ -40,9 +41,9 @@ export interface NativeRoutingClassifierOptions {
   bindings(): readonly NativeModelBinding[];
   providerFactory(providerId: string, modelId: string): ProviderPort;
   allowed?(providerId: string, modelId: string): boolean;
-  modelFacts?: NativeRoutingV2FactsProvider;
+  modelFacts?: NativeRoutingFactsProvider;
   /** Capture one coherent set of local facts for each decision. */
-  modelFactsFactory?: () => NativeRoutingV2FactsProvider;
+  modelFactsFactory?: () => NativeRoutingFactsProvider;
   /** Same output reservation the native agent turn will enforce. */
   outputTokensReserved?: number;
   /** One aggregate native service budget, including cleanup, never above the frozen original work window. */
@@ -81,9 +82,9 @@ function parseCompactNativeClassification(value: string): unknown {
 export function createNativeRoutingClassifier(options: NativeRoutingClassifierOptions): NativeRoutingClassifier {
   return async (text, config, context) => {
     context.signal.throwIfAborted();
-    let routingV2: NormalizedRoutingV2Config | undefined;
-    try { routingV2 = loadActiveRoutingV2(options.cwd, options.configDir); }
-    catch { throw new NativeClassifierError("routing-v2-config-invalid", true); }
+    let routingConfig: NormalizedRoutingConfig;
+    try { routingConfig = loadRouting(options.cwd, options.configDir); }
+    catch { throw new NativeClassifierError("routing-config-invalid", true); }
     const frozenAvailability = options.availability(config);
     const frozenBindings = options.bindings();
     const available = frozenAvailability.candidates.filter((candidate) => candidate.available && candidate.reason === "none"
@@ -96,14 +97,13 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
     const actual = (providerId: string, modelId: string) => choices.find((choice) => choice.binding.actualProviderId === providerId && choice.binding.actualModelId === modelId);
     const baseline = choices.find((choice) => choice.candidate.candidateId === config.baselineCandidateId);
     if (baseline === undefined) throw new NativeClassifierError("classifier-baseline-not-permitted");
-    const detected = [...new Set(choices.map((choice) => choice.binding.actualProviderId))].map((name) => ({ name, models: choices.filter((choice) => choice.binding.actualProviderId === name).map((choice) => choice.binding.actualModelId) }));
     const budget = Math.max(1, Math.min(2500, options.timeoutMs ?? 2500));
     const deadline = performance.now() + Math.min(3000, budget + 500);
     const aggregateSignal = AbortSignal.any([context.signal, AbortSignal.timeout(Math.max(1, Math.ceil(deadline - performance.now())))]);
-    const modelFacts = routingV2 === undefined ? undefined : options.modelFactsFactory?.() ?? options.modelFacts;
-    const routingBudget = routingV2 === undefined ? undefined : new RoutingBudgetLedger({
-      configUsd: routingV2.execution.maxEstimatedCostUsd,
-      unknownCost: routingV2.execution.unknownCost,
+    const modelFacts = options.modelFactsFactory?.() ?? options.modelFacts;
+    const routingBudget = new RoutingBudgetLedger({
+      configUsd: routingConfig.execution.maxEstimatedCostUsd,
+      unknownCost: routingConfig.execution.unknownCost,
     });
     let authorityRefused = false; let calls = 0;
     const classifierUsage = new Map<string, NormalizedUsage>();
@@ -138,9 +138,8 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
       await Promise.race([Promise.allSettled([...pending]), new Promise<void>((resolve) => { timer = setTimeout(resolve, Math.max(0, deadline - performance.now())); })]);
       if (timer !== undefined) clearTimeout(timer);
     } };
-    if (routingV2 !== undefined) {
+    {
       const taskBudget = routingBudget;
-      if (taskBudget === undefined) throw new NativeClassifierError("routing-v2-budget-unavailable", true);
       const estimateCost = (providerId: string, modelId: string, requirements: RoutingRequirements): number | null => {
         const choice = actual(providerId, modelId);
         if (choice === undefined || modelFacts === undefined) return null;
@@ -151,7 +150,7 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
       };
       const category = classifyDeterministic(text) ?? "default";
       const baseRequest: Omit<RoutingRequest, "baseline"> = {
-        requestId: routingV2Digest({ origin: "native-session", category, text }),
+        requestId: routingDigest({ origin: "native-session", category, text }),
         category,
         origin: "native-session",
         requirements: {
@@ -162,9 +161,9 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
       };
       let request = baseRequest;
       let classifierReceiptId: string | undefined;
-      const needsClassification = routingV2.categories[category].mode === "auto";
+      const needsClassification = routingConfig.categories[category].mode === "auto";
       if (needsClassification) {
-        const configuredAdapters = buildRoutingClassifierAdapters({ config: routingV2,
+        const configuredAdapters = buildRoutingClassifierAdapters({ config: routingConfig,
           sessionProvider: baseline.binding.actualProviderId,
           fallbackModel: { providerId: baseline.binding.actualProviderId, modelId: baseline.binding.actualModelId },
           env: { ...options.env }, jevEnabled: false, jevAllowed: false,
@@ -172,14 +171,14 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
           classifierAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
           providerFactory: classifierProviderFactory,
           ...(options.configDir === undefined ? {} : { userConfigDir: options.configDir }),
-          timeoutMs: Math.min(budget, routingV2.classifier.timeoutMs),
+          timeoutMs: Math.min(budget, routingConfig.classifier.timeoutMs),
         });
         const adapters: RoutingClassifierAdapter<string>[] = configuredAdapters.map((adapter, index) => {
-          const entry = routingV2.classifier.chain[index];
+          const entry = routingConfig.classifier.chain[index];
           const target = entry?.target;
-          const providerInScope = target !== undefined && (routingV2.providers.scope === "all-connected"
-            || routingV2.providers.scope === "session-only" && target.providerId === baseline.binding.actualProviderId
-            || routingV2.providers.scope === "allowlist" && routingV2.providers.allowlist.includes(target.providerId));
+          const providerInScope = target !== undefined && (routingConfig.providers.scope === "all-connected"
+            || routingConfig.providers.scope === "session-only" && target.providerId === baseline.binding.actualProviderId
+            || routingConfig.providers.scope === "allowlist" && routingConfig.providers.allowlist.includes(target.providerId));
           if (entry?.adapterId !== "model" || target === undefined || !providerInScope || actual(target.providerId, target.modelId) === undefined) return adapter;
           return { id: adapter.id, async classify(task, classifierContext) {
             const result = await runModelTurn({
@@ -188,7 +187,7 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
               system: `Classify the request. Reply with one compact line only: category|modelClass|confidence|requiredCapabilities. category=${ROUTING_CATEGORIES.join(",")}; modelClass=${MODEL_CLASSES.join(",")}; confidence=0..1; requiredCapabilities is comma-separated from ${ROUTING_CAPABILITIES.join(",")} or - for none.`,
               user: redactSensitiveText(task.slice(0, 2_000)),
               maxOutputTokens: NATIVE_CLASSIFIER_OUTPUT_TOKENS,
-              requestId: "keryx-native-routing-classifier-v2",
+              requestId: "keryx-native-routing-classifier",
               env: { ...options.env },
               providerFactory: classifierProviderFactory,
               signal: classifierContext.signal,
@@ -204,11 +203,11 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
           inputTokensRequired: Math.max(1, Math.ceil(Buffer.byteLength(text) / 4)),
           outputTokensReserved: NATIVE_CLASSIFIER_OUTPUT_TOKENS,
         };
-        const classifierTarget = (adapterId: string) => routingV2.classifier.chain.find((entry) => entry.adapterId === adapterId)?.target;
+        const classifierTarget = (adapterId: string) => routingConfig.classifier.chain.find((entry) => entry.adapterId === adapterId)?.target;
         const classified = await runRoutingClassification({
           task: text,
           request: { ...baseRequest, baseline: { providerId: baseline.binding.actualProviderId, modelId: baseline.binding.actualModelId } },
-          config: routingV2,
+          config: routingConfig,
           adapters,
           budget: taskBudget,
           estimatedCostUsd: (adapter) => {
@@ -231,7 +230,7 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
         });
         if (classified.status === "cancelled" || classified.classification.status === "cancelled") {
           context.signal.throwIfAborted();
-          throw new NativeClassifierError("routing-v2-cancelled", true);
+          throw new NativeClassifierError("routing-cancelled", true);
         }
         classifierReceiptId = classified.classification.receiptId;
         const { baseline: _baseline, ...classifiedRequest } = classified.request;
@@ -241,8 +240,8 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
       if (authorityRefused) throw new NativeClassifierError("classifier-authority-refused");
       if (pending.size > 0) throw new NativeClassifierError("classifier-stop-unconfirmed");
       context.signal.throwIfAborted();
-      if (aggregateSignal.aborted) throw new NativeClassifierError("routing-v2-uncertain-outcome", true);
-      let resolution: NativeRoutingV2Resolution;
+      if (aggregateSignal.aborted) throw new NativeClassifierError("routing-uncertain-outcome", true);
+      let resolution: NativeRoutingResolution;
       let receiptId: string;
       try {
         const remainingEstimatedCostUsd = taskBudget.snapshot().remainingUsd;
@@ -250,20 +249,20 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
           ...request.requirements,
           maxEstimatedCostUsd: Math.min(request.requirements.maxEstimatedCostUsd ?? remainingEstimatedCostUsd, remainingEstimatedCostUsd),
         } };
-        const prepared = prepareNativeRoutingV2({
+        const prepared = prepareNativeRouting({
           sessionConfig: config,
           availability: frozenAvailability,
           bindings: frozenBindings,
-          routingConfig: routingV2,
+          routingConfig: routingConfig,
           ...(options.allowed === undefined ? {} : { allowed: options.allowed }),
           ...(modelFacts === undefined ? {} : { modelFacts }),
           request,
         });
         const journal = { cwd: options.cwd, ...(options.configDir === undefined ? {} : { configDir: options.configDir }) };
-        const route = { request: prepared.request, snapshot: prepared.frozen.snapshot, config: routingV2 };
+        const route = { request: prepared.request, snapshot: prepared.frozen.snapshot, config: routingConfig };
         const receipt = resolveRoutingForRuntime({ ...route, journal: { ...journal, kind: "dispatch" } });
         const remainingSelectionMs = Math.max(0, Math.floor(deadline - performance.now()));
-        if (remainingSelectionMs <= 0) throw new NativeClassifierError("routing-v2-uncertain-outcome", true);
+        if (remainingSelectionMs <= 0) throw new NativeClassifierError("routing-uncertain-outcome", true);
         const candidate = await prepareRoutingCandidate({
           ...route, journal, receipt, signal: aggregateSignal, selectionTimeoutMs: remainingSelectionMs,
           prepare: async (target) => {
@@ -286,17 +285,17 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
             return { ok: true, value: undefined };
           },
         });
-        if (!candidate.ok) throw new NativeClassifierError(`routing-v2-${candidate.reason}`, true);
+        if (!candidate.ok) throw new NativeClassifierError(`routing-${candidate.reason}`, true);
         receiptId = candidate.receipt.receiptId;
-        resolution = nativeRoutingV2Resolution(prepared.frozen, candidate.receipt.decision);
+        resolution = nativeRoutingResolution(prepared.frozen, candidate.receipt.decision);
         if (resolution.decision.status === "selected" && options.routingBudgetStore !== undefined) {
           const selectedTarget = resolution.decision.selection;
           const selectedChoice = actual(selectedTarget.providerId, selectedTarget.modelId);
-          if (selectedChoice === undefined) throw new NativeClassifierError("routing-v2-policy-denied", true);
+          if (selectedChoice === undefined) throw new NativeClassifierError("routing-policy-denied", true);
           options.routingBudgetStore.publish(receiptId, {
             target: selectedTarget,
             receipt: candidate.receipt,
-            config: routingV2,
+            config: routingConfig,
             budget: taskBudget,
             journal,
             estimatedCostUsd: (normalizedRequest) => estimateCost(
@@ -324,26 +323,15 @@ export function createNativeRoutingClassifier(options: NativeRoutingClassifierOp
         }
       } catch (cause) {
         if (cause instanceof NativeClassifierError) throw cause;
-        throw new NativeClassifierError("routing-v2-snapshot-invalid", true);
+        throw new NativeClassifierError("routing-snapshot-invalid", true);
       }
       if (resolution.decision.status === "selected" && resolution.candidateId !== undefined) {
         return { candidateId: resolution.candidateId, selectionReceiptId: receiptId,
-          ...(classifierReceiptId === undefined ? {} : { classifierReceiptId }) };
+          ...(classifierReceiptId === undefined ? {} : { classifierReceiptId }),
+          ...(resolution.decision.recommendationSource === "classifier-fallback" ? { classifierFallback: true as const } : {}) };
       }
       const reason = resolution.decision.status === "blocked" ? resolution.decision.reason : "config-invalid";
-      throw new NativeClassifierError(`routing-v2-${reason}`, true);
+      throw new NativeClassifierError(`routing-${reason}`, true);
     }
-    const result = await runRoutingClassifierForTurn(text, { enabled: config.routing.enabled, jevEnabled: false, jevAllowed: false,
-      cwd: options.cwd, ...(options.configDir === undefined ? {} : { userConfigDir: options.configDir }), env: { ...options.env }, detected,
-      sessionProvider: baseline.binding.actualProviderId, sessionModel: baseline.binding.actualModelId, signal: context.signal, timeoutMs: budget,
-      classifierAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
-      executorAllowed: (providerId, modelId) => actual(providerId, modelId) !== undefined,
-      providerFactory: classifierProviderFactory,
-    });
-    await confirmStopped();
-    if (authorityRefused) throw new NativeClassifierError("classifier-authority-refused");
-    if (pending.size > 0) throw new NativeClassifierError("classifier-stop-unconfirmed");
-    context.signal.throwIfAborted();
-    return result?.routed === undefined ? undefined : actual(result.routed.providerId, result.routed.modelId)?.candidate.candidateId;
   };
 }

@@ -372,9 +372,9 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       turnLog.append(observation);
       for (const sink of turnListeners) { try { sink(observation); } catch { turnListeners.delete(sink); } }
     };
-    const progress = (value: string) => {
+    const progress = (value: string, diagnostic = false) => {
       let remaining = redactSensitiveText(value);
-      while (remaining.length > 0) { const chunk = utf8Bounded(remaining, 8192); observe({ kind: "progress", text: chunk }); remaining = remaining.slice(chunk.length); }
+      while (remaining.length > 0) { const chunk = utf8Bounded(remaining, 8192); observe({ kind: "progress", text: chunk, ...(diagnostic ? { diagnostic: true } : {}) }); remaining = remaining.slice(chunk.length); }
     };
     const receipt = command === undefined ? checked("TurnReceipt", { operationId: operation.operationId, messageId: request.messageId, sessionId: record.sessionId,
       sessionVersion: record.version, queueItemId: null, status: "admitted", runId: operation.runId, turnId: operation.turnId, turnOrdinal })
@@ -404,7 +404,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
             persist();
           },
           onAssistantText: (text) => publishMessage("assistant", text, operation.runId, operation.turnId),
-          onSystem: progress,
+          onSystem: (value) => progress(value, true),
           beforeAction: async (action) => { if (commandOwnershipUnknown) throw new SessionHostError("workspace-conflict"); await beforeAction(action); if (!announcedRunning) { announcedRunning = true; observe({ kind: "running", snapshot }); } },
           beforeMutation: async () => {
             const before = await options.workspace.verify(record.workspaceBaseline); if (!before.ok) throw new SessionHostError("workspace-conflict");
@@ -718,7 +718,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   const commandContext = (operationId: string, effect?: SessionCommandEffect, inspection?: SessionCommandInspection): SessionCommandContext => ({ cwd: options.cwd, nativeSessionDir: handle.dir,
     inspectionMode: options.inspectionMode ?? "hub-remote", ...(options.projectContext === undefined ? {} : { projectContext: options.projectContext }),
     ...((options.configDir ?? options.dataDir) === undefined ? {} : { configDir: options.configDir ?? options.dataDir }), ...(effect === undefined ? {} : { effect, runId: effect.runId, turnId: effect.turnId }),
-    operationId, questions, decisionJournal: { session: questionJournal.session, lastDecisionId: questionJournal.lastDecisionId }, restriction, ...(rewindPort === undefined ? {} : { rewind: rewindPort }), close: closeForCommand, record, catalogue: catalogue(), runtime: options.runtime, contributions: contributions(), ...(inspection === undefined ? {} : { inspection }),
+    operationId, questions, decisionJournal: { session: questionJournal.session, lastDecisionId: questionJournal.lastDecisionId }, restriction, ...(rewindPort === undefined ? {} : { rewind: rewindPort }), record, catalogue: catalogue(), runtime: options.runtime, contributions: contributions(), ...(inspection === undefined ? {} : { inspection }),
     history: () => history, publicHistory: () => structuredClone(publicHistory), compact: (compaction) => { const result = compactMessages(history, compaction?.focus === undefined ? {} : { focus: compaction.focus });
       history.splice(0, history.length, ...result.context); archiveCursor = history.length; syncHistory(); return { removed: result.removed, noop: result.noop }; },
   });
@@ -834,15 +834,21 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     if ((record.state === "recovery-required" && !lostResumable) || recovering) throw new SessionHostError("recovery-required");
     if (active !== undefined || request.expectedSessionVersion !== record.version
       || request.expectedHistoryVersion !== record.historyVersion || request.expectedWorkspaceBaseline !== record.workspaceBaseline) throw new SessionHostError("stale-resume-pins");
-    const verified = await options.workspace.verify(record.workspaceBaseline); if (!verified.ok) throw new SessionHostError("workspace-conflict");
-    if (opened.lease.checkLost()) throw new SessionHostError("native-lease-lost");
-    if (opened.lease.released) {
-      const reopened = openLeasedSession({ cwd: options.cwd, resumeId: nativeId, ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }) });
-      unwatchLease(); opened = reopened; handle = reopened.handle; options.onNativeLease?.({ token: opened.lease.owner.token, nativeSessionId: handle.summary.id });
-      history.splice(0, history.length, ...reopened.history); archive.splice(0, archive.length, ...reopened.archive); archiveCursor = history.length;
-      options.runtime.bindSessionDir(handle.dir); unwatchLease = opened.lease.onLost(onLeaseLost);
-      // Close finalized the session services; the resumed owner binds fresh ones, or stays fenced.
-      try { await attachSessionServices(); } catch { lostResumable = false; record.state = "recovery-required"; state(); throw new SessionHostError("recovery-required"); }
+    const reacquired = options.workspace.checkoutLease?.reacquire();
+    try {
+      const verified = await options.workspace.verify(record.workspaceBaseline); if (!verified.ok) throw new SessionHostError("workspace-conflict");
+      if (opened.lease.checkLost()) throw new SessionHostError("native-lease-lost");
+      if (opened.lease.released) {
+        const reopened = openLeasedSession({ cwd: options.cwd, resumeId: nativeId, ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }) });
+        unwatchLease(); opened = reopened; handle = reopened.handle; options.onNativeLease?.({ token: opened.lease.owner.token, nativeSessionId: handle.summary.id });
+        history.splice(0, history.length, ...reopened.history); archive.splice(0, archive.length, ...reopened.archive); archiveCursor = history.length;
+        options.runtime.bindSessionDir(handle.dir); unwatchLease = opened.lease.onLost(onLeaseLost);
+        // Close finalized the session services; the resumed owner binds fresh ones, or stays fenced.
+        try { await attachSessionServices(); } catch { lostResumable = false; record.state = "recovery-required"; state(); throw new SessionHostError("recovery-required"); }
+      }
+    } catch (cause) {
+      if (reacquired && opened.lease.released) options.workspace.checkoutLease?.release();
+      throw cause;
     }
     // The lost run is passed for good: it stays lost in history and the session continues from its re-verified baseline.
     lostRun = undefined; lostResumable = false;
@@ -896,10 +902,21 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
   const closeOwnedIdleSession = async (): Promise<{ status: "closed" | "recovery-required" }> => {
     if (active !== undefined || selecting !== undefined) throw new SessionHostError("busy");
     if (opened.lease.checkLost()) { options.runtime.detachSession(); record.state = "recovery-required"; state(); throw new SessionHostError("native-lease-lost"); }
-    if (!opened.lease.released) {
-      // An unproven service close keeps the native lease, exactly like an unproven job stop.
-      if (!(await closeSessionServices())) { record.state = "recovery-required"; state(); fenceLease(); return { status: "recovery-required" }; }
-      syncHistory(); await options.runtime.preserveSession(); releaseSessionLease(opened.lease);
+    try {
+      if (!opened.lease.released) {
+        for (const abort of inspections.keys()) abort.abort(new SessionHostError("session-closed"));
+        const stopped = await options.runtime.stop();
+        const settled = await within(Promise.allSettled([...inspections.values()]).then(() => true), false, SETTLE_BOUND_MS);
+        if (stopped.status !== "stopped" || !settled || !(await closeSessionServices()) || opened.lease.checkLost()) {
+          throw new SessionHostError("recovery-required");
+        }
+        syncHistory(); await options.runtime.preserveSession(); releaseSessionLease(opened.lease);
+      }
+      // Hub must never see a successful close while this conversation still blocks a new one.
+      options.workspace.checkoutLease?.release();
+    } catch {
+      record.state = "recovery-required"; state(); fenceLease();
+      return { status: "recovery-required" };
     }
     // Old queued work never replays automatically after close: a later resume reauthorizes it with fresh grants.
     for (const item of queueItems) if (item.state === "queued") { item.state = "suspended"; item.version++; record.queueVersion++; record.version++; emit({ kind: "queue-changed", queueVersion: record.queueVersion, item: structuredClone(item) }); }
@@ -1173,6 +1190,8 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
       let outcome: Control["CommandOutcome"];
       try {
         const context = commandContext(operation.operationId, undefined, inspection.context);
+        // Exit settles other inspections. Its own scope must end before it starts waiting.
+        context.close = () => { inspection.close(); return closeForCommand(); };
         if (options.lifecycle !== undefined) { context.lifecycle = options.lifecycle; context.lifecycleInput = lifecycleInput; }
         const integrations = options.runtime.integrationPort(); if (integrations !== undefined) context.integrations = integrations;
         context.approvals = { pending: approvals.pending, answer: async () => ({ status: "rejected", reason: "owned-control-required" }) };

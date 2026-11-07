@@ -127,6 +127,9 @@ function moduleStems(module: string): string[] {
     // `auth *` (subscription OAuth grants). Collapsing that to one stem would
     // force auth onto core, which is the worse answer.
     providers: ["providers", "auth"],
+    // `bus` owns `keryx report` too: an outside process's one-way report is a
+    // bus write (origin external), not a core command.
+    bus: ["bus", "report"],
   };
   return map[module] ?? [module];
 }

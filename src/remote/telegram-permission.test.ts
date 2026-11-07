@@ -365,6 +365,7 @@ describe("what a Telegram prompt may offer to remember (AC6)", () => {
       { fingerprint: "f", destructive: false, hookAsk: true },
       { fingerprint: "f", destructive: false, publishLease: true },
       { fingerprint: "f", destructive: false, untrustedOrigin: true },
+      { fingerprint: "f", destructive: false, hcLaunch: "claude" },
     ]) {
       expect(judge("bun test src/foo.test.ts", [], meta).offer).toBeUndefined();
     }

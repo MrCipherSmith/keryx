@@ -1,8 +1,8 @@
 import { modelRefKey, type ModelRef } from "./model-class";
-import { routingV2Digest } from "./config-v2";
+import { routingDigest } from "./config";
 import { ROUTING_CAPABILITIES, type RoutingCapability } from "./routing-request";
 
-export type RoutingAvailabilityV2 = "available" | "unavailable" | "unknown";
+export type RoutingTargetAvailability = "available" | "unavailable" | "unknown";
 
 export interface RoutingModelFacts {
   readonly target: ModelRef;
@@ -10,7 +10,7 @@ export interface RoutingModelFacts {
   readonly credentialsAvailable: boolean;
   readonly policyAllowed: boolean;
   readonly parentAllowed: boolean;
-  readonly availability: RoutingAvailabilityV2;
+  readonly availability: RoutingTargetAvailability;
   readonly capabilities: readonly RoutingCapability[];
   readonly contextLength: number | null;
   readonly cooldown: boolean;
@@ -100,7 +100,7 @@ function canonicalSnapshotBody(body: RoutingSnapshotBody): unknown {
 }
 
 export function routingSnapshotDigest(body: RoutingSnapshotBody): string {
-  return routingV2Digest(canonicalSnapshotBody(body));
+  return routingDigest(canonicalSnapshotBody(body));
 }
 
 export function createRoutingSnapshot(body: RoutingSnapshotBody): RoutingSnapshot {

@@ -1,5 +1,5 @@
 import type { NormalizedRequest, NormalizedUsage } from "../harness/provider/types";
-import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import type { NormalizedRoutingConfig } from "../harness/routing/config";
 import type { ModelRef } from "../harness/routing/model-class";
 import type { RoutingBudgetLedger } from "../harness/routing/routing-budget";
 import type { RoutingJournalLocation } from "../harness/routing/routing-journal";
@@ -9,7 +9,7 @@ import type { RoutingDecisionReceipt } from "../harness/routing/routing-runtime"
 export interface NativeRoutingExecutionBudget {
   readonly target: ModelRef;
   readonly receipt: RoutingDecisionReceipt;
-  readonly config: NormalizedRoutingV2Config;
+  readonly config: NormalizedRoutingConfig;
   readonly budget: RoutingBudgetLedger;
   readonly journal: RoutingJournalLocation;
   readonly estimatedCostUsd: (request: NormalizedRequest) => number | null;

@@ -26,7 +26,11 @@ export const MAX_BODY_BYTES = 2048;
 export const MAX_ACTIVITY_CHARS = 120;
 export const MAX_LEASE_TTL_MS = 4 * 60 * 60 * 1000;
 
-export const BUS_ORIGINS = ["agent", "operator", "cli", "system"] as const;
+// `external` is a record written by a process that is not a keryx shell and is
+// not authenticated (`keryx report`, a later external bus peer). It can only
+// carry a `notice`; the schema refuses pause-request/resume/override from it.
+export const BUS_ORIGINS = ["agent", "operator", "cli", "system", "external"] as const;
+export const EXTERNAL_FORBIDDEN_KINDS = ["pause-request", "resume", "override"] as const;
 export const BUS_EVENT_KINDS = [
   "notice",
   "question",
@@ -166,6 +170,10 @@ export const BUS_EVENT_SCHEMA: Record<string, unknown> = {
       if: { properties: { kind: { enum: ["override", "ack", "lease-expired"] } } },
       then: { properties: { from: { properties: { origin: { const: "system" } } } } },
     },
+    {
+      if: { properties: { from: { properties: { origin: { const: "external" } } } } },
+      then: { properties: { kind: { not: { enum: [...EXTERNAL_FORBIDDEN_KINDS] } } } },
+    },
   ],
 };
 
@@ -280,6 +288,9 @@ export function busEventProblems(value: unknown): string[] {
   if (!senderNameAllowed(event.from.name, event.from.origin)) {
     problems.push(`$.from.name: "${event.from.name}" is reserved for another origin`);
   }
+  // The external-origin kind ban lives in the JSON schema alone (`if/then not
+  // enum`, above): schemaProblems returns before this point for any event it
+  // refuses, so a second code check here could never run.
   if (!isTimestamp(event.ts)) problems.push("$.ts: not a timestamp");
   if (event.body !== undefined && Buffer.byteLength(event.body, "utf8") > MAX_BODY_BYTES) {
     problems.push(`$.body: longer than ${MAX_BODY_BYTES} bytes`);

@@ -28,7 +28,7 @@ import { withFileLock } from "../lib/fs";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import { loadShellPermissions, shellPermissionsPath } from "../lib/shell-permissions";
 import { acquireCwd, releaseCwd } from "../lib/test-cwd";
-import { normalizeRoutingV2Config, type NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { normalizeRoutingConfig, type NormalizedRoutingConfig } from "../harness/routing/config";
 import type { RoutingRequest } from "../harness/routing/routing-request";
 import { createRoutingSnapshot, type RoutingSnapshot } from "../harness/routing/snapshot";
 
@@ -91,8 +91,8 @@ const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
 /** 1000 in + 200 out at the rates above. */
 const ROUND_1_USD = (1000 * 3 + 200 * 15) / 1_000_000;
 
-function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connected"): NormalizedRoutingV2Config {
-  return normalizeRoutingV2Config({
+function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connected"): NormalizedRoutingConfig {
+  return normalizeRoutingConfig({
     project: {
       schemaVersion: 2,
       categories: { unattended: { mode: "class", modelClass: "frontier" } },
@@ -109,7 +109,7 @@ function activeRoutingConfig(scope: "all-connected" | "allowlist" = "all-connect
 }
 
 function currentRoutingSnapshot(input: {
-  config: NormalizedRoutingV2Config;
+  config: NormalizedRoutingConfig;
   request: RoutingRequest;
   baseline: { providerId: string; modelId: string };
 }, facts: Partial<RoutingSnapshot["models"][number]> = {}): RoutingSnapshot {
@@ -552,23 +552,18 @@ describe("AC7/AC8: spend", () => {
     expect((await lastRecord()).outcome).toBe("ok");
   });
 
-  test("AC8: the run stops at the remaining allowance — attempt failed 'spend cap reached', overshoot at most one response", async () => {
+  test("AC8: a run whose estimated cost exceeds the remaining allowance is refused before any model call — no overshoot", async () => {
     const allowance = 0.001; // below one round's cost
     await writeTriggers([dispatchEntry({ ceilingUsd: allowance })]);
     const provider = scripted([
       [USAGE_ROUND_1, ...toolCall("apply_patch", { patch: NEW_FILE_PATCH }), { kind: "model_end" }],
-      [USAGE_ROUND_1, { kind: "text_delta", text: "second round must never happen" }, { kind: "model_end" }],
     ]);
     await run(provider);
-    expect(provider.calls()).toBe(1);
+    // Routing prices the request against the remaining allowance before provider I/O.
+    expect(provider.calls()).toBe(0);
     const record = await lastRecord();
-    expect(record.outcome).toBe("failed");
-    expect(record.detail).toContain("spend cap reached");
-    expect(record.cost.recorded).toBe(true);
-    if (record.cost.recorded) expect(record.cost.usd).toBeLessThanOrEqual(allowance + ROUND_1_USD);
-    const t1 = ((await flowJson())["tasks"] as { id: string; attempts?: { log: { outcome: string; detail?: string }[] } }[]).find((t) => t.id === "T1")!;
-    expect(t1.attempts?.log.map((e) => e.outcome)).toEqual(["started", "failed"]);
-    expect(t1.attempts?.log[1]?.detail).toContain("spend cap reached");
+    expect(record.outcome).toBe("dispatch-refused");
+    expect(record.detail).toContain("routing refused the explicit unattended provider/model pin: budget-exceeded");
   });
 });
 
@@ -1102,12 +1097,12 @@ describe("R700-01/D9: project-hook trust is looked up under the main project roo
   }, projectHookIntegrationTimeoutMs);
 });
 
-describe("routing v2: unattended flow dispatch", () => {
+describe("routing: unattended flow dispatch", () => {
   test("a failed routed attempt keeps reported usage in the persistent trigger meter", async () => {
     await writeTriggers([dispatchEntry()]);
     const provider = scripted([[USAGE_ROUND_1, { kind: "provider_error", error: { kind: "unavailable", retryable: false, message: "upstream down" } }]]);
     await run(provider, {
-      loadActiveRoutingV2: () => activeRoutingConfig(),
+      loadRouting: () => activeRoutingConfig(),
       routingConfigDir: path.join(root, "routing-test-config"),
       routingSnapshot: currentRoutingSnapshot,
       makeProvider: () => provider,
@@ -1118,7 +1113,7 @@ describe("routing v2: unattended flow dispatch", () => {
     await writeTriggers([dispatchEntry()]);
     const provider = scripted([[{ kind: "provider_error", error: { kind: "unavailable", retryable: false, message: "upstream down" } }]]);
     await run(provider, {
-      loadActiveRoutingV2: () => activeRoutingConfig(),
+      loadRouting: () => activeRoutingConfig(),
       routingConfigDir: path.join(root, "routing-test-config"),
       routingSnapshot: currentRoutingSnapshot,
       makeProvider: () => provider,
@@ -1127,7 +1122,7 @@ describe("routing v2: unattended flow dispatch", () => {
     expect(record.cost).toEqual({ recorded: true, usd: 1, tokens: { input: 0, output: 0 } });
     expect(record.detail).toContain("without token usage");
   });
-  test("an active v2 category cannot replace the trigger's explicit provider/model pin", async () => {
+  test("a routing category cannot replace the trigger's explicit provider/model pin", async () => {
     await writeTriggers([dispatchEntry()]);
     const provider = scripted([[USAGE_ROUND_1, { kind: "text_delta", text: "inspected" }, { kind: "model_end" }]]);
     let selected: { provider: string; model: string } | undefined;
@@ -1135,7 +1130,7 @@ describe("routing v2: unattended flow dispatch", () => {
     const routingConfigDir = path.join(root, "routing-test-config");
 
     await run(provider, {
-      loadActiveRoutingV2: () => activeRoutingConfig(),
+      loadRouting: () => activeRoutingConfig(),
       routingConfigDir,
       routingSnapshot: (input: Parameters<typeof currentRoutingSnapshot>[0]) => {
         routedRequest = input.request;
@@ -1153,7 +1148,7 @@ describe("routing v2: unattended flow dispatch", () => {
     expect(routedRequest?.requirements.inputTokensRequired).toBeGreaterThan(0);
     expect(routedRequest?.requirements.outputTokensReserved).toBeGreaterThan(0);
     expect(routedRequest?.requirements.maxEstimatedCostUsd).toBe(1);
-    const journalDir = path.join(routingConfigDir, "routing-v2", "journal");
+    const journalDir = path.join(routingConfigDir, "routing", "journal");
     const journalFiles = await readdir(journalDir);
     expect(journalFiles).toHaveLength(1);
     const journalFile = journalFiles[0];
@@ -1163,13 +1158,13 @@ describe("routing v2: unattended flow dispatch", () => {
     expect(journal).toContain('"kind":"attempt"');
   });
 
-  test("an active v2 provider scope blocks the explicit pin after factual provider inspection and before model I/O", async () => {
+  test("a routing provider scope blocks the explicit pin after factual provider inspection and before model I/O", async () => {
     await writeTriggers([dispatchEntry()]);
     const provider = scripted([]);
     let built = false;
 
     await run(provider, {
-      loadActiveRoutingV2: () => activeRoutingConfig("allowlist"),
+      loadRouting: () => activeRoutingConfig("allowlist"),
       routingConfigDir: path.join(root, "routing-test-config"),
       routingSnapshot: currentRoutingSnapshot,
       makeProvider: () => {
@@ -1196,7 +1191,7 @@ describe("routing v2: unattended flow dispatch", () => {
     const provider = scripted([]);
 
     await run(provider, {
-      loadActiveRoutingV2: () => activeRoutingConfig(),
+      loadRouting: () => activeRoutingConfig(),
       routingConfigDir: path.join(root, "routing-test-config"),
       routingSnapshot: (input: Parameters<typeof currentRoutingSnapshot>[0]) => currentRoutingSnapshot(input, facts),
       makeProvider: () => provider,

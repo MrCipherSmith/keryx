@@ -26,12 +26,7 @@ export function ManagedAttentionOverview({
     >
       <header>
         <h2>{t("managedAttention")}</h2>
-        <small>
-          {t("projectsShown", {
-            count: visible.length,
-            total: projects.length,
-          })}
-        </small>
+        {projects.length > pageSize && <small>{t("projectsShown", { count: visible.length, total: projects.length })}</small>}
       </header>
       {visible.map((project) => (
         <ProjectAttention key={project.id} project={project} />

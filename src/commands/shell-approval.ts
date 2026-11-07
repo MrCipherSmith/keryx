@@ -2,7 +2,7 @@
 // Surfaces still own the prompt chrome; this module decides auto-approve vs ask.
 
 import type { ApprovalMeta } from "./agent";
-import { touchesHumanConfirmation } from "../lib/command-risk";
+import { hcAgentLaunchOf, touchesHumanConfirmation } from "../lib/command-risk";
 import {
   allowShellPattern,
   isShellCommandAllowed,
@@ -50,6 +50,11 @@ export type ShellApprovalEval = {
    * not answer a prompt a hook specifically asked for, and (like
    * `publishLease`) it is never remembered even if the caller offered to.
    */
+  /**
+   * `ApprovalMeta.hcLaunch`: an `hc run` starts an agent this session has not granted (flow 486). Excluded from
+   * `autoApprove` like `publishLease`, so no saved or session rule answers the first ask, and never remembered.
+   */
+  hcLaunch?: string;
   hookAsk: boolean;
   untrustedOrigin: boolean;
   autoApprove: boolean;
@@ -87,6 +92,7 @@ export function evaluateShellApproval(input: {
   const publishLease = input.meta?.publishLease === true;
   const publishLeaseDetail = input.meta?.publishLeaseDetail;
   const hookAsk = input.meta?.hookAsk === true;
+  const hcLaunch = input.meta?.hcLaunch;
   const untrustedOrigin = input.meta?.untrustedOrigin === true;
   const audit = io.loadAudit();
   // The saved list is read on every call. What it held last time is remembered per set, so a rule
@@ -109,6 +115,7 @@ export function evaluateShellApproval(input: {
     !credentials &&
     !sacReviewConfirmation &&
     !publishLease &&
+    hcLaunch === undefined &&
     !hookAsk &&
     !untrustedOrigin &&
     isShellCommandAllowed(command, [...input.sessionAllow]);
@@ -119,6 +126,7 @@ export function evaluateShellApproval(input: {
     sacReviewConfirmation,
     publishLease,
     ...(publishLeaseDetail !== undefined ? { publishLeaseDetail } : {}),
+    ...(hcLaunch !== undefined ? { hcLaunch } : {}),
     hookAsk,
     untrustedOrigin,
     autoApprove,
@@ -150,6 +158,10 @@ export function rememberExactShellGrant(
   if (options?.publishLease === true || options?.hookAsk === true) {
     return "";
   }
+  // Flow 486: an `hc run` of an agent is granted per session by the agent loop, never by a saved rule.
+  if (hcAgentLaunchOf(command) !== undefined) {
+    return "";
+  }
   const { exact, offerExact } = suggestShellPatterns(command);
   if (!offerExact) {
     return "";
@@ -177,6 +189,9 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
   }
   if (evaled.untrustedOrigin) {
     lines.push("follows untrusted external content — will not be remembered");
+  }
+  if (evaled.hcLaunch !== undefined) {
+    lines.push(`starts ${evaled.hcLaunch} as another agent outside keryx's limits — will not be remembered`);
   }
   if (evaled.publishLease) {
     // Flow 275 F1 (specification §4.4): name the lease's holder and reason

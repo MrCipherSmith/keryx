@@ -33,7 +33,7 @@ test("a resolved assignment is rendered into the block's Model choice line", () 
     enableTasks: true,
     modelChoice: {
       enabled: true,
-      assignments: { review: { kind: "model", providerId: "anthropic", modelId: "claude-opus-5" } },
+      assignments: { review: { mode: "model", target: { providerId: "anthropic", modelId: "claude-opus-5" } } },
     },
   });
   expect(block).toContain("review=anthropic/claude-opus-5");

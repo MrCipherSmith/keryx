@@ -12,6 +12,9 @@ Version: 0.1.1
 - External Keryx adapter: dedicated worker, scoped Unix bridge, OS source/config containment, host-side provider preflight и process-group stop proof.
 - CLI start/plan/spawn/status/wait/result/cancel, authenticated foreground terminal-host для внешнего управляющего harness (финальная интеграционная проверка в процессе).
 - Review-orchestrator explicit opt-in --hierarchical; legacy путь сохраняется default.
+- Перед completed обязателен валидный REVIEW_RESULT: schema, identity, revision и scope checks; blocked/невалидные ответы не сохраняются как успешные результаты.
+- Native/external workers получают сохранённые input snapshots и plan-bound dispatch packets; повторное открытие run не перечитывает изменившиеся инструкции. Несоответствие hash/revision отклоняется без fallback.
+- Явный экспорт `review-agents result --run-dir <run> --dispatch <id> --package <package>` создаёт raw/driver artifacts с provenance. Повторный экспорт идемпотентен, конфликты и symlink paths отклоняются; scope IDs должны совпадать с managed slice IDs. Автоматический ingest не запускается.
 
 ## Ограничения
 
@@ -21,4 +24,4 @@ OAuth-refresh внутри external worker не разрешён; до стар�
 
 ## Проверки
 
-Детальные команды, финальный verdict и remaining gaps фиксируются в verification.md и job implement-keryx-review-agents. Изолированные и промежуточные зелёные прогоны не заменяют итоговый общий прогон. Реальные провайдеры/платные agents не запускались, auth stores этой работой не менялись. Commit/push/PR/deploy не выполнены.
+Детальные команды, финальный verdict и remaining gaps фиксируются в verification.md. Связанный flow/job в дереве PR не найден. Изолированные и промежуточные зелёные прогоны не заменяют итоговый общий прогон. Реальные провайдеры/платные agents не запускались, auth stores этой работой не менялись. Валидация отправлена в PR #1134; snapshot и экспорт закоммичены отдельно, финальная интеграционная проверка продолжается.

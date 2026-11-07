@@ -127,3 +127,11 @@ test("load/save/allowShellPattern round-trip", () => {
   saveShellPermissions({ allow: ["bun test*"] }, dir);
   expect(loadShellPermissions(dir).allow).toEqual(["bun test*"]);
 });
+
+test("flow 486: an hc run of an agent offers no remembered grant, exact or prefix", () => {
+  for (const command of ["hc run --bg claude 'task'", "hc run -- env X=1 codex"]) {
+    const offer = suggestShellPatterns(command);
+    expect(offer.offerExact).toBe(false);
+    expect(offer.offerPrefix).toBe(false);
+  }
+});

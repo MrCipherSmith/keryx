@@ -4,7 +4,7 @@ import { isMetaprojectManagedPath } from '../metaproject-gitignore';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, closeSync, fstatSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-function git(cwd: string, args: string[]): Buffer { const r = Bun.spawnSync(['git', '-C', cwd, ...args],{env:withoutGitDiscoveryOverrides(process.env)}); if (r.exitCode !== 0)
+function git(cwd: string, args: string[]): Buffer { const r = Bun.spawnSync(['git', '--no-optional-locks', '-C', cwd, ...args],{env:withoutGitDiscoveryOverrides(process.env)}); if (r.exitCode !== 0)
     throw new MachineError('invalid-checkout'); return Buffer.from(r.stdout); }
 export function currentCheckoutHead(cwd: string): string { return git(cwd, ['rev-parse', 'HEAD']).toString().trim(); }
 export function acquireCheckoutLease(cwd: string, owner: {
@@ -34,7 +34,7 @@ export function acquireCheckoutLease(cwd: string, owner: {
         closeSync(fd);
     }
     const assertOwnership=()=>{let descriptor:number|undefined;try{descriptor=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW);const stat=fstatSync(descriptor);if(!stat.isFile()||stat.size!==Buffer.byteLength(bytes)||readFileSync(descriptor,'utf8')!==bytes)throw new MachineError('lease-owner-mismatch');}catch(cause){throw new MachineError('lease-owner-mismatch',{cause});}finally{if(descriptor!==undefined)closeSync(descriptor);}};
-    return {get nonce(){return nonce;},assertOwnership,reacquire(){
+    return {get nonce(){return nonce;},get released(){return released;},assertOwnership,reacquire(){
      if(!released)throw new MachineError('lease-owner-mismatch');const next=randomUUID(),nextBytes=JSON.stringify({...owner,nonce:next,cwd:canonical});let descriptor:number;
      try{descriptor=openSync(file,'wx',0o600);}catch(cause){if((cause as NodeJS.ErrnoException).code==='EEXIST')throw new MachineError('checkout-busy',{cause});throw cause;}
      try{writeFileSync(descriptor,nextBytes);fsyncSync(descriptor);}finally{closeSync(descriptor);}nonce=next;bytes=nextBytes;released=false;
@@ -63,6 +63,8 @@ export interface WorkspaceBaseline {
     files:Record<string,{mode:number;hash:string;symlink?:string}>;
     /** What a fresh capture measured against the snapshot quota; not part of the digest. */
     usage?:{bytes:number;entries:number};
+    /** Whether captured bytes, modes and staged changes match the commit for full-file result publication. */
+    matchesCommit?: boolean;
 }
 /** The bounded provenance snapshot: beyond either limit a capture refuses with quota-exceeded. */
 export const SNAPSHOT_QUOTA={bytes:20*1024*1024,entries:10000} as const;
@@ -79,8 +81,27 @@ export function observeCheckout(cwd: string): { head: string; clean: boolean; op
     const head = currentCheckoutHead(cwd), operation = gitOperationActive(cwd);
     return { head, clean: !trackedChanges(cwd) && untrackedNames(cwd).length === 0, operation };
 }
+type CommittedObject = {mode: string; id: string};
+function committedObjects(cwd: string, head: string): Map<string, CommittedObject> {
+    const objects = new Map<string, CommittedObject>();
+    for (const entry of git(cwd, ['ls-tree', '-r', '-z', '--full-tree', head]).toString().split('\0').filter(Boolean)) {
+        const tab = entry.indexOf('\t');
+        const [mode, type, id] = entry.slice(0, tab).split(' ');
+        if (tab < 0 || !mode || type !== 'blob' || !id)
+            continue;
+        objects.set(entry.slice(tab + 1), {mode, id});
+    }
+    return objects;
+}
+function matchesBlob(object: CommittedObject | undefined, mode: string, bytes: Buffer): boolean {
+    if (object?.mode !== mode)
+        return false;
+    const hash = createHash(object.id.length === 40 ? 'sha1' : 'sha256');
+    return hash.update(`blob ${bytes.length}\0`).update(bytes).digest('hex') === object.id;
+}
 export function captureBaseline(cwd: string, options: {
     requireClean: boolean;
+    verifyCommitContents?: boolean;
 }): WorkspaceBaseline {
     const head = currentCheckoutHead(cwd);
     if (gitOperationActive(cwd))
@@ -89,6 +110,9 @@ export function captureBaseline(cwd: string, options: {
     if (options.requireClean && (trackedChanges(cwd) || untracked.length))
         throw new MachineError('checkout-dirty');
     const names = [...git(cwd, ['ls-files', '-z', '--cached']).toString().split('\0').filter(Boolean), ...untracked];
+    // Git status can hide working bytes via index flags and clean/smudge filters. Full-file upload needs the raw bytes.
+    const committed = options.verifyCommitContents && untracked.length === 0 ? committedObjects(cwd, head) : undefined;
+    let matchesCommit = committed !== undefined;
     const entries: unknown[] = [];
     const files:WorkspaceBaseline['files']={};
     let total = 0;
@@ -98,6 +122,7 @@ export function captureBaseline(cwd: string, options: {
         const file = path.join(cwd, name);
         if (!existsSync(file)) {
             entries.push([name, 'deleted']);
+            matchesCommit = false;
             continue;
         }
         const resolved = realpathSync(file);
@@ -105,7 +130,11 @@ export function captureBaseline(cwd: string, options: {
             throw new MachineError('unsafe-workspace-path');
         const stat = lstatSync(file);
         if (stat.isSymbolicLink()) {
-            entries.push([name, 'symlink', readlinkSync(file)]);files[name]={mode:stat.mode&0o777,hash:'symlink',symlink:readlinkSync(file)};
+            const link = readlinkSync(file, {encoding:'buffer'});
+            const target = link.toString();
+            entries.push([name, 'symlink', target]);files[name]={mode:stat.mode&0o777,hash:'symlink',symlink:target};
+            if (matchesCommit)
+                matchesCommit = matchesBlob(committed!.get(name), '120000', link);
             continue;
         }
         if (!stat.isFile())
@@ -113,8 +142,12 @@ export function captureBaseline(cwd: string, options: {
         total += stat.size;
         if (total > SNAPSHOT_QUOTA.bytes || entries.length >= SNAPSHOT_QUOTA.entries)
             throw new MachineError('quota-exceeded');
-        const hash=createHash('sha256').update(readFileSync(file)).digest('hex');files[name]={mode:stat.mode&0o777,hash};entries.push([name,stat.mode&0o777,hash]);
+        const bytes = readFileSync(file);
+        const hash=createHash('sha256').update(bytes).digest('hex');files[name]={mode:stat.mode&0o777,hash};entries.push([name,stat.mode&0o777,hash]);
+        if (matchesCommit)
+            matchesCommit = matchesBlob(committed!.get(name), stat.mode & 0o111 ? '100755' : '100644', bytes);
     }
-    const index=git(cwd,['diff','--cached','--binary']);return {head,files,usage:{bytes:total,entries:entries.length},indexDigest:createHash('sha256').update(index).digest('hex'),digest:createHash('sha256').update(JSON.stringify([head,index.toString(),entries])).digest('hex')};
+    const index=git(cwd,['diff','--cached','--binary']);return {head,files,usage:{bytes:total,entries:entries.length},indexDigest:createHash('sha256').update(index).digest('hex'),digest:createHash('sha256').update(JSON.stringify([head,index.toString(),entries])).digest('hex'),
+        ...(options.verifyCommitContents ? {matchesCommit: matchesCommit && committed?.size === entries.length && index.length === 0} : {})};
 }
 export function verifyBaseline(cwd: string, baseline: WorkspaceBaseline): boolean { const actual = captureBaseline(cwd, { requireClean: false }); return actual.head === baseline.head && actual.digest === baseline.digest; }

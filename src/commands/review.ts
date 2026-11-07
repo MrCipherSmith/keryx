@@ -1,3 +1,4 @@
+import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { closeSync, openSync } from "node:fs";
@@ -141,22 +142,20 @@ import {
 } from "../review/scope";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
-import { loadRoutingConfig } from "../harness/routing/config";
-import { loadActiveRoutingV2 } from "../harness/routing/active-v2";
-import type { NormalizedRoutingV2Config } from "../harness/routing/config-v2";
+import { loadRouting, readRoutingSettings, ROUTING_NORMALIZATION } from "../harness/routing/settings";
+import { normalizeRoutingConfig, type NormalizedRoutingConfig } from "../harness/routing/config";
 import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
 import { buildCatalogRoutingSnapshot, catalogRoutingRevision, estimateModelCostUsd } from "../harness/routing/snapshot-adapter";
 import type { RoutingRequest, RoutingRequirements } from "../harness/routing/routing-request";
 import { modelRefKey, type ModelRef } from "../harness/routing/model-class";
-import { inspectProviderRoutingFacts, routingPolicyRevision } from "../harness/routing/provider-facts-v2";
+import { inspectProviderRoutingFacts, routingPolicyRevision } from "../harness/routing/provider-facts";
 import { RoutingBudgetLedger, type RoutingBudgetReservation } from "../harness/routing/routing-budget";
 import { appendRoutingJournal } from "../harness/routing/routing-journal";
 import { runProductionRoutingClassification } from "../harness/routing/routing-classifier-service";
-import { DEFAULT_JEV_ROUTING_TARGET } from "../harness/routing/classifier-adapters-v2";
+import { DEFAULT_JEV_ROUTING_TARGET } from "../harness/routing/classifier-adapters";
 import { makeProvider as makeRoutingProvider } from "../harness/provider/make-provider";
-import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
-import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
+import { connectedPredicateFrom } from "../harness/routing/table";
 import { resolveExternalSetting } from "../lib/external-switch";
 import {
   externalAllowedConnectedPredicate,
@@ -191,13 +190,11 @@ import { resolveCallerSession, type SessionSource } from "../lib/caller-session"
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import {
   decideDispatchModel,
-  decideDispatchModelWithAgent,
   type DiscoveredProvider,
   type DispatchModelDecision,
   type SessionModelContext,
   type TierSignals,
 } from "../gdskills/model-tier";
-import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-rank-agent";
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import { writeVerdict } from "../review/verdict";
@@ -605,7 +602,7 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
@@ -1575,39 +1572,32 @@ async function runBudget(args: string[]): Promise<void> {
  * honestly, touching `model-tier.ts`'s public contract for a distinction the
  * dispatch schema does not otherwise need.
  *
- * Flow 305 review findings, additive to AC5:
- *  - AC10: the resolved assignment is checked against `catalog` (the same
- *    provider/model list already fetched for tier ranking — no NEW network
- *    call). An assignment naming an unconnected provider/model falls through
- *    exactly as `resolveCategoryDetailed` documents; `notices` carries the
- *    fallback line for the caller to print.
- *  - AC11(b): a malformed or unapproved project `routing.config.json` is
- *    surfaced in `notices` (never silently swallowed) rather than only
- *    logged nowhere the operator can see it.
- *  - item 4: a `provider-default` assignment is resolved the same way
- *    `subagents` already does (`resolveProviderDefaultModelId`), not ignored.
+ * Routing evidence: the receipt names which layer assigned the category and
+ * which recommendation source (if any) chose the class; a refusal returns the
+ * tier decision as a report only, never as a dispatch target. Unapproved or
+ * malformed routing settings throw from `loadRouting` rather than routing on
+ * the baseline silently.
  */
 interface ReviewRoutingResult {
   readonly decision: DispatchModelDecision;
   readonly routed: boolean;
-  /** The v2 engine refused selection. The legacy decision is report-only and must not be dispatched. */
+  /** Routing refused selection. The tier decision is report-only and must not be dispatched. */
   readonly routingRefused?: boolean;
   /** Human-readable lines to surface alongside the tier output — never silent. */
   readonly notices: readonly string[];
-  /** Present when the explicitly activated v2 engine selected or refused this dispatch. */
-  readonly routingV2?: RoutingDecisionReceipt;
+  /** The routing decision that selected or refused this dispatch. */
+  readonly routing: RoutingDecisionReceipt;
 }
 
-async function resolveReviewRoutingV2(
+async function resolveReviewRouting(
   cwd: string,
   catalog: readonly DiscoveredProvider[],
   session: SessionModelContext,
-  activeRoutingV2: NormalizedRoutingV2Config | undefined = loadActiveRoutingV2(cwd),
+  routingConfig: NormalizedRoutingConfig = loadRouting(cwd),
   task = "review",
   requirements: RoutingRequirements = { capabilities: ["tools"], inputTokensRequired: 4_096, outputTokensReserved: 4_096 },
   sharedBudget?: RoutingBudgetLedger,
-): Promise<RoutingDecisionReceipt | undefined> {
-  if (activeRoutingV2 === undefined) return undefined;
+): Promise<RoutingDecisionReceipt> {
   const observedAt = new Date().toISOString();
   const env = envWithSavedApiKeys();
   const external = await resolveExternalSetting({ cwd });
@@ -1648,18 +1638,18 @@ async function resolveReviewRoutingV2(
     baseline,
     requirements,
   };
-  if (activeRoutingV2.categories.review.mode === "auto") {
+  if (routingConfig.categories.review.mode === "auto") {
     const budget = sharedBudget ?? new RoutingBudgetLedger({
-      configUsd: activeRoutingV2.execution.maxEstimatedCostUsd,
-      unknownCost: activeRoutingV2.execution.unknownCost,
+      configUsd: routingConfig.execution.maxEstimatedCostUsd,
+      unknownCost: routingConfig.execution.unknownCost,
     });
     const classified = await runProductionRoutingClassification({
       task,
       request,
-      config: activeRoutingV2,
+      config: routingConfig,
       budget,
       estimatedCostUsd: (adapter) => {
-        const entry = activeRoutingV2.classifier.chain.find((candidate) => candidate.adapterId === adapter.id);
+        const entry = routingConfig.classifier.chain.find((candidate) => candidate.adapterId === adapter.id);
         const target = entry?.target ?? (adapter.id === "jev" ? DEFAULT_JEV_ROUTING_TARGET : baseline);
         return estimateModelCostUsd(profiles[profileKey(target.providerId, target.modelId)], 4_000, 180);
       },
@@ -1672,11 +1662,11 @@ async function resolveReviewRoutingV2(
         classifierAllowed: (providerId, modelId) => policyConnected(providerId, modelId),
       },
     });
-    if (classified.status === "cancelled") throw new Error("routing v2 review classification was cancelled");
+    if (classified.status === "cancelled") throw new Error("routing review classification was cancelled");
     request = classified.request;
   }
   const snapshot = buildCatalogRoutingSnapshot({
-    configDigest: activeRoutingV2.configDigest,
+    configDigest: routingConfig.configDigest,
     observedAt,
     catalogRevision: catalogRoutingRevision(catalog, profiles),
     policyRevision,
@@ -1700,7 +1690,7 @@ async function resolveReviewRoutingV2(
   return resolveRoutingForRuntime({
     request,
     snapshot,
-    config: activeRoutingV2,
+    config: routingConfig,
     journal: { cwd, kind: "dispatch" },
   });
 }
@@ -1710,99 +1700,38 @@ async function applyReviewRoutingCategory(
   cwd: string,
   catalog: readonly DiscoveredProvider[],
   session: SessionModelContext,
-  activeRoutingV2: NormalizedRoutingV2Config | undefined,
+  routingConfig: NormalizedRoutingConfig,
   routingTask: string,
   routingRequirements: RoutingRequirements,
 ): Promise<ReviewRoutingResult> {
-  const receipt = await resolveReviewRoutingV2(
+  const receipt = await resolveReviewRouting(
     cwd,
     catalog,
     session,
-    activeRoutingV2,
+    routingConfig,
     routingTask,
     routingRequirements,
   );
-  if (receipt !== undefined) {
-    if (receipt.decision.status !== "selected") {
-      const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
-      return {
-        decision,
-        routed: false,
-        routingRefused: true,
-        notices: [`routing v2 refused review selection: ${reason} (decision ${receipt.decision.decisionId}); no dispatch target was selected`],
-        routingV2: receipt,
-      };
-    }
+  if (receipt.decision.status !== "selected") {
+    const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
     return {
-      decision: {
-        ...decision,
-        provider: receipt.decision.selection.providerId,
-        model: receipt.decision.selection.modelId,
-      },
-      routed: true,
-      notices: [],
-      routingV2: receipt,
+      decision,
+      routed: false,
+      routingRefused: true,
+      notices: [`routing refused review selection: ${reason} (decision ${receipt.decision.decisionId}); no dispatch target was selected`],
+      routing: receipt,
     };
   }
-
-  const location = { cwd };
-  const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
-  const notices: string[] = [];
-  for (const layer of [project, user]) {
-    if (layer.error !== undefined) notices.push(layer.error);
-  }
-  // Flow 346 (design §3): a routing-table entry naming an externally-blocked
-  // provider/model reads as "not connected" when `/external` is off — the
-  // SAME fallback-with-notice path AC10 (flow 305) already exercises for an
-  // unconnected provider, never a silent switch.
-  const external = await resolveExternalSetting({ cwd });
-  const { config: externalConfig } = loadExternalProvidersConfig();
-  const connected = externalAllowedConnectedPredicate(connectedPredicateFrom(catalog), external.value === "on", externalConfig);
-  const resolved = resolveCategoryDetailed("review", { project: project.table, user: user.table }, connected);
-  if (resolved.rejected !== undefined) {
-    notices.push(describeFallbackNotice(resolved.rejected.assignment, resolved.assignment));
-  }
-  const { assignment } = resolved;
-  if (assignment.kind === "model") {
-    return { decision: { ...decision, provider: assignment.providerId, model: assignment.modelId }, routed: true, notices };
-  }
-  if (assignment.kind === "provider-default") {
-    const modelId = resolveProviderDefaultModelId(assignment.providerId);
-    if (modelId !== undefined) {
-      return { decision: { ...decision, provider: assignment.providerId, model: modelId }, routed: true, notices };
-    }
-  }
-  return { decision, routed: false, notices };
-}
-
-/**
- * Flow 358: the deterministic decision, plus the agent fallback for the one case
- * the size words and version cannot settle. The fallback compares discovered model
- * ids and profile prices only; if the host pieces cannot even be built, the
- * deterministic decision stands, so `review tier` never fails on the fallback.
- */
-async function decideTierWithFallback(
-  session: SessionModelContext,
-  signals: TierSignals,
-  catalog: readonly DiscoveredProvider[],
-): Promise<DispatchModelDecision> {
-  let host: TierRankHost;
-  try {
-    host = tierRankHostFactory();
-  } catch {
-    return decideDispatchModel(session, signals, catalog);
-  }
-  return await decideDispatchModelWithAgent(session, signals, catalog, {
-    agent: host.agent,
-    cache: host.cache,
-    prices: host.prices(session.providerId),
-  });
-}
-
-/** Test seam: the host the fallback runs on. Production always uses the real one. */
-let tierRankHostFactory: () => TierRankHost = () => createTierRankHost();
-export function setTierRankHostForTests(factory: (() => TierRankHost) | undefined): void {
-  tierRankHostFactory = factory ?? (() => createTierRankHost());
+  return {
+    decision: {
+      ...decision,
+      provider: receipt.decision.selection.providerId,
+      model: receipt.decision.selection.modelId,
+    },
+    routed: true,
+    notices: [],
+    routing: receipt,
+  };
 }
 
 async function runTier(args: string[]): Promise<void> {
@@ -1814,19 +1743,17 @@ async function runTier(args: string[]): Promise<void> {
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
-  const activeRoutingV2 = loadActiveRoutingV2(process.cwd());
-  // The legacy tier remains a compatibility/reporting field under v2, but it
-  // must not rank candidates or call the legacy ranking agent. Only the v2
-  // receipt below may select the dispatch provider/model.
-  const tierDecision = activeRoutingV2 === undefined
-    ? await decideTierWithFallback(session, signals, catalog)
-    : decideDispatchModel(session, signals, []);
-  const { decision, routed, routingRefused, notices, routingV2 } = await applyReviewRoutingCategory(
+  const settings = readRoutingSettings({ cwd: process.cwd() });
+  const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
+  // The tier is a reporting field: only the routing receipt below selects the
+  // dispatch provider/model, so the tier never ranks candidates itself.
+  const tierDecision = decideDispatchModel(session, signals, []);
+  const { decision, routed, routingRefused, notices: routeNotices, routing } = await applyReviewRoutingCategory(
     tierDecision,
     process.cwd(),
     catalog,
     session,
-    activeRoutingV2,
+    routingConfig,
     JSON.stringify({ category: "review", signals }),
     {
       capabilities: ["tools"],
@@ -1834,6 +1761,7 @@ async function runTier(args: string[]): Promise<void> {
       outputTokensReserved: 4_096,
     },
   );
+  const notices = [...settings.notices, ...routeNotices];
   // AC11(d): a routed pick is NEVER folded into `dispatchModelBlock`'s
   // `pinsModel`-gated provider/model — that path exists for the TIER's own
   // "discovered" resolution. `routed: true` is an ADDITIVE field on top of
@@ -1847,7 +1775,7 @@ async function runTier(args: string[]): Promise<void> {
   if (args.includes("--json")) {
     console.log(JSON.stringify({
       model: block,
-      ...(routingV2 !== undefined ? { routing_v2: routingV2 } : {}),
+      routing,
       ...(notices.length > 0 ? { notices } : {}),
     }, null, 2));
     return;
@@ -1869,18 +1797,14 @@ async function runTier(args: string[]): Promise<void> {
   if (routed) {
     console.log(`provider: ${decision.provider}`);
     console.log(`model: ${decision.model}`);
-    if (routingV2 !== undefined) {
-      console.log(`routed: true (routing v2 decision ${routingV2.decision.decisionId})`);
-      console.log(`routing_assignment: ${routingV2.decision.assignmentSource}`);
-      console.log(`routing_recommendation: ${routingV2.decision.recommendationSource}`);
-    } else {
-      console.log(`routed: true (from the routing table's "review" category — not tier-discovered)`);
-    }
-  } else if (routingRefused === true && routingV2 !== undefined) {
+    console.log(`routed: true (routing decision ${routing.decision.decisionId})`);
+    console.log(`routing_assignment: ${routing.decision.assignmentSource}`);
+    console.log(`routing_recommendation: ${routing.decision.recommendationSource}`);
+  } else if (routingRefused === true) {
     console.log("dispatchable: false");
-    console.log(`routing_v2_status: ${routingV2.decision.status}`);
-    if (routingV2.decision.status === "blocked") console.log(`routing_v2_reason: ${routingV2.decision.reason}`);
-    console.log("model: none — routing v2 did not authorize a dispatch target");
+    console.log(`routing_status: ${routing.decision.status}`);
+    if (routing.decision.status === "blocked") console.log(`routing_reason: ${routing.decision.reason}`);
+    console.log("model: none — routing did not authorize a dispatch target");
   } else if (pinsModel(decision)) {
     console.log(`provider: ${decision.provider}`);
     console.log(`model: ${decision.model}`);
@@ -1902,7 +1826,7 @@ async function runTier(args: string[]): Promise<void> {
   console.log("```");
 }
 
-/** A tier explanation returned after v2 refusal. It deliberately cannot be mistaken for an executable model target. */
+/** A tier explanation returned after a routing refusal. It deliberately cannot be mistaken for an executable model target. */
 function dispatchModelBlockRefused(decision: DispatchModelDecision): Record<string, unknown> {
   return {
     tier: decision.tier,
@@ -2830,7 +2754,8 @@ async function scoreConformClauses(
 export interface ConformExplainRoute {
   readonly provider?: string;
   readonly model?: string;
-  readonly routingV2?: {
+  /** Present when routing selected this target; its budget gates every explanation call. */
+  readonly routing?: {
     readonly decisionId: string;
     readonly budget: RoutingBudgetLedger;
     readonly estimatedCostUsd: (inputTokens: number, outputTokens: number) => number | null;
@@ -2839,22 +2764,24 @@ export interface ConformExplainRoute {
 
 /** AC7: the `review`-category model (the session model when unset), same resolution `applyReviewRoutingCategory` uses, without the live provider-catalog probe a text explanation does not need. */
 async function resolveConformExplainModel(cwd: string, routingTask: string): Promise<ConformExplainRoute> {
-  const activeRoutingV2 = loadActiveRoutingV2(cwd);
-  if (activeRoutingV2 !== undefined) {
+  const settings = readRoutingSettings({ cwd });
+  const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
+  for (const notice of settings.notices) console.error(`routing: ${notice}`);
+  {
     const session = resolveCallerSession();
     if (session.providerId === "" || session.modelId === "") {
-      throw new Error("routing v2 requires the caller session provider/model for review explanations");
+      throw new Error("routing requires the caller session provider/model for review explanations");
     }
     const catalog = await tierCatalog([], session);
     const budget = new RoutingBudgetLedger({
-      configUsd: activeRoutingV2.execution.maxEstimatedCostUsd,
-      unknownCost: activeRoutingV2.execution.unknownCost,
+      configUsd: routingConfig.execution.maxEstimatedCostUsd,
+      unknownCost: routingConfig.execution.unknownCost,
     });
-    const receipt = await resolveReviewRoutingV2(
+    const receipt = await resolveReviewRouting(
       cwd,
       catalog,
       session,
-      activeRoutingV2,
+      routingConfig,
       routingTask,
       {
         capabilities: [],
@@ -2863,32 +2790,22 @@ async function resolveConformExplainModel(cwd: string, routingTask: string): Pro
       },
       budget,
     );
-    if (receipt === undefined) throw new Error("routing v2 activation changed while resolving review explanation");
     if (receipt.decision.status !== "selected") {
       const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
-      throw new Error(`routing v2 refused review explanation: ${reason} (decision ${receipt.decision.decisionId})`);
+      throw new Error(`routing refused review explanation: ${reason} (decision ${receipt.decision.decisionId})`);
     }
     const selected = receipt.decision.selection;
     const profile = loadModelProfiles()[profileKey(selected.providerId, selected.modelId)];
     return {
       provider: selected.providerId,
       model: selected.modelId,
-      routingV2: {
+      routing: {
         decisionId: receipt.decision.decisionId,
         budget,
         estimatedCostUsd: (inputTokens, outputTokens) => estimateModelCostUsd(profile, inputTokens, outputTokens),
       },
     };
   }
-  const location = { cwd };
-  const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
-  const { assignment } = resolveCategoryDetailed("review", { project: project.table, user: user.table });
-  if (assignment.kind === "model") return { provider: assignment.providerId, model: assignment.modelId };
-  if (assignment.kind === "provider-default") {
-    const modelId = resolveProviderDefaultModelId(assignment.providerId);
-    if (modelId !== undefined) return { provider: assignment.providerId, model: modelId };
-  }
-  return {};
 }
 
 const CONFORM_EXPLAIN_OUTPUT_TOKENS = 512;
@@ -2956,29 +2873,29 @@ export async function explainConformVerdicts(
   const route = await resolveRoute(cwd, routingTask);
   const planned = toExplain.map((verdict) => ({ verdict, user: conformExplainUser(refPath, verdict) }));
   const reservations: Array<RoutingBudgetReservation | undefined> = planned.map(() => undefined);
-  if (route.routingV2 !== undefined) {
+  if (route.routing !== undefined) {
     // Reserve the complete fan-out before the first provider call. A single
     // selected receipt never authorizes N unaccounted calls, and a partial
     // reservation failure performs no I/O.
     for (const [index, item] of planned.entries()) {
       const inputTokens = estimatedPromptTokens(CONFORM_EXPLAIN_SYSTEM, item.user);
-      const reserved = route.routingV2.budget.reserve({
+      const reserved = route.routing.budget.reserve({
         purpose: "execution",
-        estimatedCostUsd: route.routingV2.estimatedCostUsd(inputTokens, CONFORM_EXPLAIN_OUTPUT_TOKENS),
+        estimatedCostUsd: route.routing.estimatedCostUsd(inputTokens, CONFORM_EXPLAIN_OUTPUT_TOKENS),
       });
       if (!reserved.ok) {
         for (const existing of reservations) {
-          if (existing !== undefined) route.routingV2.budget.release(existing.id);
+          if (existing !== undefined) route.routing.budget.release(existing.id);
         }
         appendRoutingJournal({ cwd }, {
           kind: "attempt",
-          decisionId: route.routingV2.decisionId,
+          decisionId: route.routing.decisionId,
           attempt: index + 1,
           outcome: "rejected",
           inputTokens,
           outputTokens: CONFORM_EXPLAIN_OUTPUT_TOKENS,
         });
-        throw new Error(`routing v2 refused review explanation execution: ${reserved.reason} before provider I/O`);
+        throw new Error(`routing refused review explanation execution: ${reserved.reason} before provider I/O`);
       }
       reservations[index] = reserved.reservation;
     }
@@ -2987,10 +2904,10 @@ export async function explainConformVerdicts(
   for (const [index, item] of planned.entries()) {
     const reservation = reservations[index];
     let attemptSettled = false;
-    if (route.routingV2 !== undefined) {
+    if (route.routing !== undefined) {
       appendRoutingJournal({ cwd }, {
         kind: "attempt",
-        decisionId: route.routingV2.decisionId,
+        decisionId: route.routing.decisionId,
         attempt: index + 1,
         outcome: "started",
       });
@@ -3003,48 +2920,48 @@ export async function explainConformVerdicts(
         user: item.user,
         maxOutputTokens: CONFORM_EXPLAIN_OUTPUT_TOKENS,
       });
-      if (route.routingV2 !== undefined && reservation !== undefined) {
-        const actualCost = route.routingV2.estimatedCostUsd(
+      if (route.routing !== undefined && reservation !== undefined) {
+        const actualCost = route.routing.estimatedCostUsd(
           result.usage?.inputTokens ?? estimatedPromptTokens(CONFORM_EXPLAIN_SYSTEM, item.user),
           result.usage?.outputTokens ?? CONFORM_EXPLAIN_OUTPUT_TOKENS,
         ) ?? reservation.estimatedCostUsd;
-        route.routingV2.budget.reconcile(reservation.id, actualCost);
+        route.routing.budget.reconcile(reservation.id, actualCost);
         attemptSettled = true;
         appendRoutingJournal({ cwd }, {
           kind: "attempt",
-          decisionId: route.routingV2.decisionId,
+          decisionId: route.routing.decisionId,
           attempt: index + 1,
           outcome: result.error === undefined ? "completed" : "rejected",
           ...(result.usage?.inputTokens === undefined ? {} : { inputTokens: result.usage.inputTokens }),
           ...(result.usage?.outputTokens === undefined ? {} : { outputTokens: result.usage.outputTokens }),
         });
-        const snapshot = route.routingV2.budget.snapshot();
+        const snapshot = route.routing.budget.snapshot();
         if (snapshot.capUsd !== null && snapshot.spentUsd + snapshot.reservedUsd > snapshot.capUsd && index + 1 < planned.length) {
           for (let pending = index + 1; pending < reservations.length; pending += 1) {
             const pendingReservation = reservations[pending];
-            if (pendingReservation !== undefined) route.routingV2.budget.release(pendingReservation.id);
+            if (pendingReservation !== undefined) route.routing.budget.release(pendingReservation.id);
           }
           appendRoutingJournal({ cwd }, {
             kind: "attempt",
-            decisionId: route.routingV2.decisionId,
+            decisionId: route.routing.decisionId,
             attempt: index + 2,
             outcome: "rejected",
           });
-          throw new Error("routing v2 refused the next review explanation before provider I/O: actual task cost exhausted the budget");
+          throw new Error("routing refused the next review explanation before provider I/O: actual task cost exhausted the budget");
         }
       }
       if (result.text.length > 0) explanations[item.verdict.clause_id] = result.text;
     } catch (error) {
-      if (route.routingV2 !== undefined && reservation !== undefined) {
+      if (route.routing !== undefined && reservation !== undefined) {
         if (!attemptSettled) {
           try {
-            route.routingV2.budget.release(reservation.id);
+            route.routing.budget.release(reservation.id);
           } catch {
             // A provider wrapper may have settled the reservation before throwing.
           }
           appendRoutingJournal({ cwd }, {
             kind: "attempt",
-            decisionId: route.routingV2.decisionId,
+            decisionId: route.routing.decisionId,
             attempt: index + 1,
             outcome: "interrupted",
           });
@@ -3053,7 +2970,7 @@ export async function explainConformVerdicts(
           const pendingReservation = reservations[pending];
           if (pendingReservation !== undefined) {
             try {
-              route.routingV2.budget.release(pendingReservation.id);
+              route.routing.budget.release(pendingReservation.id);
             } catch {
               // A completed attempt has already reconciled its reservation.
             }
@@ -5015,6 +4932,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
+  const hostQuestion = reviewCompletionHostAnswer(args);
   const headFlag = flagTokens(args).find((token) => token.name === "--head");
   if (headFlag !== undefined && (headFlag.value === undefined || headFlag.value.trim() === "")) {
     throw new Error("--head needs a commit SHA: --head <sha> (the commit this round ran against, 7-40 hex characters).");
@@ -5026,11 +4944,11 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
   // statement, so a person has to be at the terminal that carries it.
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
-  if (waiver !== undefined && !isTerminal()) {
+  if (waiver !== undefined && hostQuestion === undefined && !isTerminal()) {
     throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
   }
   const readinessWaivers = parseReadinessWaivers(args);
-  if (readinessWaivers.length > 0 && !isTerminal()) {
+  if (readinessWaivers.length > 0 && hostQuestion === undefined && !isTerminal()) {
     throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
   }
   // completeReviewGated also refuses slice routing narrower than a slice's content needs (security review M3).
@@ -5043,7 +4961,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     rolesNotRun,
     warnings,
     estimateLine,
-  } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+  } = await completeReviewGated(process.cwd(), ref, { hostQuestion, dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
@@ -5129,7 +5047,7 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
     }
-    if (token.name === "--waive-coverage" || token.name === "--head" || token.name === "--waive") {
+    if (["--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"].includes(token.name)) {
       continue;
     }
     if (token.name === "--finding") {

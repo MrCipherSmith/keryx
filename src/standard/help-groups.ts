@@ -592,7 +592,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/remote-control",
     group: "Automation",
-    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed.",
+    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed. To share this full-screen shell and its recent conversation with Team Hub, use /remote-control hub on|off|status.",
   },
   {
     kind: "slash",
@@ -673,6 +673,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "bus",
     group: "External agents, ACP and MCP",
     summary: "Agent bus: list peers and leases, read the log, send a message, prune.",
+  },
+  {
+    kind: "cli",
+    name: "report",
+    group: "External agents, ACP and MCP",
+    summary: "One-way, unverified report from an outside agent or script to a live keryx shell over the bus.",
   },
   {
     kind: "cli",

@@ -29,6 +29,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import { flowExceptionSpec } from "./operator-confirm-flow-exceptions";
 import { otherConfirmSpecs } from "./operator-confirm-other";
 import { reviewConfirmSpecs } from "./operator-confirm-review";
 
@@ -243,7 +244,7 @@ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: Op
  * constant, so a spec module that imports this file is never read half-built through a cycle.
  */
 export function operatorConfirmSpecs(): readonly OperatorConfirmSpec[] {
-  return [...reviewConfirmSpecs(), ...otherConfirmSpecs()];
+  return [...reviewConfirmSpecs(), ...otherConfirmSpecs(), flowExceptionSpec()];
 }
 
 /** The names in the registry — what `../trigger/unattended.ts` refuses to an unattended run. */

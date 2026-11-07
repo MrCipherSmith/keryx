@@ -164,6 +164,7 @@ export function buildSessionInfoSnapshot(source: SessionInfoSource): SessionInfo
     { label: "Project", value: displayOrMissing(source.summary?.projectPath) },
     { label: "Provider", value: displayOrMissing(provider) },
     { label: "Model", value: displayOrMissing(model) },
+    { label: "Routing", value: "unified" },
   ];
   if (source.summary?.parentSessionId !== undefined && source.summary.parentSessionId.length > 0) {
     sessionRows.push({ label: "Parent", value: source.summary.parentSessionId });

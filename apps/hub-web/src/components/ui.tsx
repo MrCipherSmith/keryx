@@ -4,7 +4,6 @@ import {
   useId,
   type ComponentPropsWithRef,
   type SelectHTMLAttributes,
-  type TextareaHTMLAttributes,
   type ReactNode,
   type ReactElement,
 } from "react";
@@ -101,7 +100,7 @@ export function Select({
 export function Textarea({
   className = "",
   ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+}: ComponentPropsWithRef<"textarea">) {
   return (
     <textarea
       className={inputClass + " min-h-28 resize-y " + className}

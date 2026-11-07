@@ -1,4 +1,5 @@
 export default {
+  historyRepeated: "Repeated events · {{count}}", fileType: "File type", documentNoMatches: "No documents found", resetDocumentSearch: "Clear search and filters", searchRevisionFiles: "Search file paths", noRevisionFiles: "No files found",
   historyEventType: "Event type",
   historyYou: "You",
   historyIdentifiers: "Identifiers",

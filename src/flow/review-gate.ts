@@ -2109,7 +2109,7 @@ export async function reviewGate(input: {
   tracker: TrackerAdapter | null;
   externalCommentsGate?: ExternalCommentsGate | undefined;
   mergedCommit?: string | undefined;
-}): Promise<{ name: "review"; status: "pass" | "fail" | "skipped"; detail: string }> {
+}): Promise<{ name: "review"; status: "pass" | "fail" | "skipped"; detail: string; conditions?: ReviewGateCondition[] }> {
   if (input.flow.gates?.review !== true) {
     return {
       name: "review",
@@ -2120,5 +2120,5 @@ export async function reviewGate(input: {
     };
   }
   const verdict = await runReviewGate(input);
-  return { name: "review", status: verdict.status, detail: verdict.detail };
+  return { name: "review", status: verdict.status, detail: verdict.detail, conditions: verdict.conditions };
 }

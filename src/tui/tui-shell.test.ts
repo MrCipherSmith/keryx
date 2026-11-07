@@ -2319,6 +2319,21 @@ for (const cause of APPROVAL_CAUSES) {
   });
 }
 
+otuiTest("flow 486: the hc agent launch dialog offers no Always allow, an ordinary command does (headless)", async () => {
+  const otui = requireOtui();
+  for (const hcLaunch of ["claude", undefined] as const) {
+    const h = await mountApprovalDock(otui, { width: 160 });
+    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "bun test src/x.test.ts", async () => "", false, false, {}, false, undefined, false, "hc-launch", hcLaunch);
+    await h.flush();
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("Allow once");
+    expect(frame.includes("Always allow")).toBe(hcLaunch === undefined);
+    await pressEscapeAndSettle(h);
+    expect(await choice).toBe("deny");
+    h.renderer.destroy();
+  }
+});
+
 otuiTest("a failing approval-context loader still renders a default-deny approval (headless)", async () => {
   const otui = requireOtui();
   const command = "rm -rf build";
@@ -2731,7 +2746,7 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     // optional `bus` live-getter parameter — see that file's own doc comment
     // on this field.
     expect(optsTypeBlock).toContain(
-      "makeAgentDeps: (\n    sel: TuiSelection,\n    getSlateSession: () => SlateSessionRef | undefined,\n    bus?: { client: () => BusClient | undefined },\n  ) => Promise<AgentDeps>;",
+      "makeAgentDeps: (\n    sel: TuiSelection,\n    getSlateSession: () => SlateSessionRef | undefined,\n    bus?: { client: () => BusClient | undefined },",
     );
   });
 
@@ -2756,25 +2771,25 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   });
 
   test("the /model|/connect switchTo(...) rebuild passes the same live getter", () => {
-    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
+    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
     // Widened from 300 (flow 267): `deps` now wraps the call to merge in
     // `onContextCompaction` (`deps = { ...(await opts.makeAgentDeps(...)),
     // onContextCompaction }`), pushing the closing `)` a bit further out.
     // Flow 274 T7 widens it again for `busInbox`/`busAck`.
     const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 500);
-    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, liveSlateSession, busClientRef)");
+    expect(switchToBlock).toMatch(/opts\.makeAgentDeps\(\s*ns, liveSlateSession, busClientRef,/);
   });
 
   test("switchTo refreshes the live balance panel for the NEW provider", () => {
     expect(fnBody).toContain("const balancePanel = mountBalancePanel(");
-    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
+    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
     // Flow 274 T7 widened the `deps = {...}` rebuild above (busInbox/busAck
     // carry-over), pushing `balancePanel.setProvider` a bit further out.
     // Flow 338 widened it again — `sessionModelExplicit = true;` is set at
     // the top of `switchTo`, ahead of the rebuild.
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 1600);
+    const switchToBlock = fnBody.slice(switchToIndex, fnBody.indexOf("    // Side workers", switchToIndex));
     expect(switchToBlock).toContain("void balancePanel.setProvider(ns.provider)");
   });
 
@@ -2821,7 +2836,7 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   // provider/model, inside the per-turn dispatch IIFE) — same live getters,
   // so it shares `busClientRef` too.
   test("both routing engines and the three session rebuilds share the live slate and bus", () => {
-    const occurrences = fnBody.split(", liveSlateSession, busClientRef)").length - 1;
+    const occurrences = fnBody.match(/, liveSlateSession, busClientRef[),]/g)?.length;
     expect(occurrences).toBe(5);
     expect(fnBody).toContain("opts.makeAgentDeps({ provider: target.providerId, model: target.modelId }, liveSlateSession, busClientRef)");
     expect(fnBody).not.toContain("() => slateSession)");
@@ -2921,8 +2936,8 @@ describe("PR 992 round 3 — tui-shell.ts refusal memory and self-answer line (s
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
   test.each([
-    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
-    ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
+    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
+    ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
     ["a permission-mode change (commitPermissionMode)", "paintModeRow();\n      resetOperatorDenials();\n      chrome.showToast(`Permission mode:"],
   ])("%s clears the remembered refusals", (_site, snippet) => {
     expect(source).toContain(snippet);
@@ -2959,7 +2974,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
 
   test("flow 396: only the facade of a turn the bridge took as a Telegram turn carries the Telegram hooks", () => {
     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
-    expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
+    expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : fromHub ? hubTurnIo : {})");
     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
     // Flow 419: the shell's io still decides locally (`requestApprovalLocally` is the inner call, the dock is the
     // decider); the wrapper only also posts the question to the topic, and must not read the bridge-wide flag.
@@ -3415,6 +3430,24 @@ function fakeSearchProviderController(opts: {
     select: async (providerId: SearchProviderId): Promise<SearchSelectionResult> => {
       calls.push({ kind: "select", providerId });
       return opts.selectResult ?? { ok: true };
+    },
+    // The wizard now drives the controller's one `connect()` operation; this
+    // mirror keeps the recorded call sequence the same (configure -> test ->
+    // select) so the AC6 assertions still describe the behaviour.
+    connect: async (
+      providerId: SearchProviderId,
+      fields: Record<string, string>,
+      credential?: string,
+      options: { activate?: boolean; isCancelled?: () => boolean } = {},
+    ) => {
+      const descriptor = opts.providers.find((candidate) => candidate.id === providerId);
+      fake.configure(providerId, { ...(descriptor?.defaults ?? {}), ...fields }, credential);
+      const tested = await fake.test(providerId);
+      if (!tested.ok) return { ok: false as const, reason: tested.reason ?? "transport-failed" };
+      const cancelled = options.isCancelled?.() ?? false;
+      const activate = options.activate !== false && !cancelled;
+      const selected = activate ? await fake.select(providerId) : ({ ok: true } as const);
+      return { ok: true as const, active: activate && selected.ok, servesPages: descriptor?.fetchPage !== undefined };
     },
   };
   // `SearchProviderController` is a concrete class with private fields, so
