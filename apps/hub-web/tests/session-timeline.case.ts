@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import type { InfiniteData } from "@tanstack/react-query";
 import type { Control } from "../src/api/remote";
-import { latestHistoryCursor, mergeTimeline, type CommandEntry } from "../src/features/remote/session-timeline";
+import { latestHistoryCursor, mergeTimeline, pendingAssistantText, type CommandEntry } from "../src/features/remote/session-timeline";
 const message = (cursor: number, createdAt = "2026-01-01T00:00:00Z") =>
   ({ messageId: "m" + cursor, role: "human", text: "t" + cursor, createdAt, historyCursor: cursor, runId: null }) as unknown as Control["SessionMessage"];
 const entry = (operationId: string, anchor: number, invokedAt = "2026-01-01T00:00:00Z"): CommandEntry =>
@@ -25,4 +25,18 @@ test("the latest cursor is the highest loaded historyCursor, or 0 with nothing l
   const pages = (...cursors: number[][]) => ({ pages: cursors.map(list => ({ messages: list.map(cursor => message(cursor)) })), pageParams: [] }) as unknown as InfiniteData<Control["HistoryPage"]>;
   expect(latestHistoryCursor(pages([1, 2], [3]))).toBe(3);
   expect(latestHistoryCursor(undefined)).toBe(0);
+});
+
+test("keeps the next round visible when an earlier round enters history in the same millisecond", () => {
+  const time = "2026-01-01T00:00:00.000Z";
+  const runId = "run";
+  const deltas = ["Same ", "answer", "Same ", "answer", " Next round"].map((text, index) => ({
+    kind: "log" as const, stream: "assistant" as const, text, localSeq: index + 1,
+    observedAt: time, runId, turnId: "turn", sessionId: "session", projectId: "project", checkoutId: "checkout",
+  }));
+  const first = { ...message(1, time), role: "assistant" as const, runId, text: "Same answer" };
+  const second = { ...first, messageId: "m2", historyCursor: 2 };
+  expect(pendingAssistantText(runId, deltas, [])).toBe("Same answerSame answer Next round");
+  expect(pendingAssistantText(runId, deltas, [first])).toBe("Same answer Next round");
+  expect(pendingAssistantText(runId, deltas, [first, second])).toBe("Next round");
 });

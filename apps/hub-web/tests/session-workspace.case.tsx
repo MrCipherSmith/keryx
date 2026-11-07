@@ -62,7 +62,7 @@ beforeEach(async () => {
         cursor: 2,
         hasMore: false,
       });
-    if (path.includes("/history?after=0"))
+    if (path.includes("/history?before=2"))
       return Response.json({
         messages: [
           {
@@ -77,12 +77,12 @@ beforeEach(async () => {
           },
         ],
         cursor: 1,
-        hasMore: true,
+        hasMore: false,
         historyVersion: 1,
         retainedFromCursor: 0,
         gap: false,
       });
-    if (path.includes("/history?after=1"))
+    if (path.includes("/history?before=latest"))
       return Response.json({
         messages: [
           {
@@ -97,7 +97,7 @@ beforeEach(async () => {
           },
         ],
         cursor: 2,
-        hasMore: false,
+        hasMore: true,
         historyVersion: 1,
         retainedFromCursor: 0,
         gap: false,
@@ -145,14 +145,16 @@ test("navigator shows checkout groups and opens exact session within project", a
     await screen.findByText(/local-provider \/ actual-model/),
   ).toBeInTheDocument();
 });
-test("history appends pages and preserves earlier messages with explicit roles", async () => {
+test("history opens at the latest page, then prepends earlier messages with explicit roles", async () => {
   show();
   const history = screen.getByRole("region", { name: "History" });
-  expect(await within(history).findByText("First message")).toBeVisible();
-  fireEvent.click(
-    within(history).getByRole("button", { name: "Load next page" }),
-  );
   expect(await within(history).findByText("Reply from agent")).toBeVisible();
+  expect(within(history).queryByText("First message")).not.toBeInTheDocument();
+  const older = within(history).getByRole("button", { name: "Older messages" });
+  older.focus();
+  fireEvent.click(older);
+  expect(await within(history).findByText("First message")).toBeVisible();
+  expect(within(history).getByRole("button", { name: "No older messages" })).toHaveFocus();
   expect(within(history).getByText("First message")).toBeVisible();
   expect(within(history).getByText("Human")).toBeVisible();
   fireEvent.click(within(history).getByRole("button", { name: "Open run" }));
@@ -164,7 +166,7 @@ test("history appends pages and preserves earlier messages with explicit roles",
 });
 test("inspector tabs support keyboard navigation and keep observer controls disabled", async () => {
   show();
-  await screen.findByText("First message");
+  await screen.findByText("Reply from agent");
   const contextTab = screen.getByRole("tab", { name: "Context" });
   contextTab.focus();
   fireEvent.keyDown(contextTab, { key: "End" });
@@ -182,7 +184,7 @@ test("inspector tabs support keyboard navigation and keep observer controls disa
 // only the composer's own panel header may be hidden; the nested Commands and Confirmation Panels keep their headings.
 test("composer header rule hides only the composer's own panel header", async () => {
   const { container } = show();
-  await screen.findByText("First message");
+  await screen.findByText("Reply from agent");
   const rules = parseCssRules(
     readFileSync("src/features/remote/session-workspace.css", "utf8"),
   );

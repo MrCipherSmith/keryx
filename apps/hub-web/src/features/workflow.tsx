@@ -4,7 +4,7 @@ import {ManagedAttentionOverview} from "./managed-work/overview-attention";
 import { ProjectOverview } from './project-overview';
 export { GlobalFlowsView } from './global-flows';
 import { FlowRows } from './global-flows';
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { getJson, postJson } from '../api/client';
@@ -47,27 +47,33 @@ export function ProjectsView() {
   const hub = useHub(); const { t } = useTranslation('workflow'); const client = useQueryClient();
   const [draft, setDraft, clearDraft] = useDraft('create-project', { name: '' });
   const [validation, setValidation] = useState('');
+  const [creating, setCreating] = useState(false);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const errorId = useId();
+  useEffect(() => { if (creating) nameInput.current?.focus(); }, [creating]);
   const [draftKept, setDraftKept] = useState(false);
   const isCurrent = usePresentationGuard(`${hub.scopeKey}:${hub.projectId}:${hub.location.tab}`);
   const projects = useQuery({ queryKey: [hub.scopeKey, 'projects'], queryFn: ({ signal }) => getJson<{ projects: Project[] }>('/projects', signal) });
   const create = useMutation({ mutationFn: (context: { isCurrent: () => boolean; draft: typeof draft }) => postJson<Project>('/projects', { name: context.draft.name.trim() }), onSuccess: (project, context) => {
     void client.invalidateQueries({ queryKey: [hub.scopeKey, 'projects'] }); const cleared = clearDraft(context.draft); if (!context.isCurrent()) return; setDraftKept(!cleared); if (!cleared) return; hub.navigate({ projectId: project.id, tab: 'overview' });
   } });
-  function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.name.trim()) { setValidation(t('required')); return; } create.mutate({ isCurrent, draft: draft }); }
-  return <div className="space-y-8">
-    <PageHeading title={t('projectsTitle')} description={t('projectsDescription')} />
+  function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.name.trim()) { setValidation(t('projectNameRequired')); nameInput.current?.focus(); return; } create.mutate({ isCurrent, draft: draft }); }
+  return <div className="space-y-5">
+    <PageHeading title={t('projectsTitle')} action={<Button variant={creating ? 'secondary' : 'primary'} aria-expanded={creating} disabled={create.isPending} onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'createProject')}</Button>} />
+    {creating && <Panel title={t('createProject')}><form noValidate onSubmit={submit} className="max-w-xl space-y-3">
+      <Field label={t('projectName')}><input ref={nameInput} className={inputClass} value={draft.name} onChange={event => { setValidation(''); setDraft({ name: event.target.value }); }} aria-invalid={!!validation} aria-errormessage={validation ? errorId : undefined} maxLength={200} required /></Field>
+      {validation && <p id={errorId} role="alert" className="text-sm text-red-700">{validation}</p>}
+      {draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{create.isError && <ErrorNotice error={create.error} />}
+      <Button type="submit" disabled={create.isPending}>{create.isPending ? t('loading') : t('createProject')}</Button>
+    </form></Panel>}
     <QueryFeedback query={projects} />
-    {projects.data && <ManagedAttentionOverview projects={projects.data.projects}/>}
-    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="hub-project-card group min-w-0 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-teal-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
-      <span className="mb-5 flex size-11 items-center justify-center rounded-xl bg-teal-50 text-lg font-semibold text-teal-800">{project.name.slice(0, 1).toUpperCase()}</span>
-      <span className="block break-words text-lg font-semibold text-slate-950">{project.name}</span><span className="mt-2 block text-sm text-slate-500">{t('openProject')} <span aria-hidden="true">→</span></span>
+    {projects.data && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{projects.data.projects.map(project => <button key={project.id} type="button" onClick={() => hub.navigate({ projectId: project.id, tab: 'overview' })} className="hub-project-card">
+      <span className="flex size-10 items-center justify-center rounded-xl bg-teal-50 text-lg font-semibold text-teal-800">{project.name.slice(0, 1).toUpperCase()}</span>
+      <span className="min-w-0 break-words font-semibold">{project.name}</span><span aria-hidden="true">→</span>
     </button>)}</div>}
     {projects.data?.projects.length === 0 && <EmptyState>{t('noProjects')}</EmptyState>}
-    <Panel title={t('createProject')}><form noValidate onSubmit={submit} className="max-w-xl space-y-4">
-      <Field label={t('projectName')}><input className={inputClass} value={draft.name} onChange={event => setDraft({ name: event.target.value })} placeholder={t('projectNamePlaceholder')} maxLength={200} required /></Field>
-      {draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{validation && <Notice tone="error"><span role="alert">{validation}</span></Notice>}{create.isError && <ErrorNotice error={create.error} />}
-      <Button type="submit" disabled={create.isPending}>{create.isPending ? t('loading') : t('createProject')}</Button>
-    </form></Panel>
+
+    {projects.data && <ManagedAttentionOverview projects={projects.data.projects}/>}
   </div>;
 }
 
@@ -84,6 +90,11 @@ export function FlowsView() {
 function FlowsProject({ projectId, title }: { projectId: string; title: string }) {
   const hub = useHub(); const { t } = useTranslation('workflow'); const client = useQueryClient(); const prefix = projectPath(projectId);
   const [layout, setLayout] = useState<'list' | 'board'>('list');
+  const [lane, setLane] = useState<HubFlow['status']>('initializing');
+  const board = useRef<HTMLDivElement>(null);
+  const returnCard = useRef<string | null>(null);
+  const selected = hub.location.flowId;
+  const searchInput = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false); const [search, setSearch] = useState(''); const [validation, setValidation] = useState('');
   const [draftKept, setDraftKept] = useState(false);
   const [draft, setDraft, clearDraft] = useDraft(`create-flow:${projectId}`, { title: '', specDocumentId: '', criteria: '' });
@@ -95,9 +106,23 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
     void client.invalidateQueries({ queryKey: [hub.scopeKey, projectId, 'flows'] }); const cleared = clearDraft(context.draft); if (!context.isCurrent()) return; setDraftKept(!cleared); if (!cleared) return; setCreating(false); hub.navigate({ tab: 'flows', flowId: flow.id });
   } });
   function submit(event: FormEvent) { event.preventDefault(); setValidation(''); if (!draft.title.trim() || !specs.some(spec => spec.id === draft.specDocumentId) || !draft.criteria.trim()) { setValidation(t('required')); return; } create.mutate({ isCurrent, draft: draft }); }
-  const selected = hub.location.flowId;
+  const filtered = flows.data?.flows.filter(flow => `${flow.title} ${flow.specContentDigest}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) ?? [];
+  const filtering = search.trim() !== '';
+  const selectedLane = filtering && !filtered.some(flow => flow.status === lane)
+    ? filtered[0]?.status ?? lane
+    : lane;
+  const returningStatus = filtered.find(flow => flow.id === returnCard.current)?.status;
+  useLayoutEffect(() => {
+    if (selected || !returnCard.current || flows.isFetching) return;
+    if (returningStatus && lane !== returningStatus) {
+      setLane(returningStatus);
+      return;
+    }
+    const card = board.current?.querySelector<HTMLButtonElement>(`[data-board-flow="${CSS.escape(returnCard.current)}"]`);
+    (card ?? searchInput.current)?.focus();
+    returnCard.current = null;
+  }, [selected, returningStatus, lane, flows.isFetching]);
   if (selected) return <FlowDetail key={`${projectId}:${selected}`} projectId={projectId} flowId={selected} documents={documents.data?.documents ?? []} />;
-  const filtered = flows.data?.flows.filter(flow => `${flow.title} ${flow.specContentDigest}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
   return <div className="space-y-6"><PageHeading title={title} description={t('boardDescription')} action={<Button variant={creating ? 'secondary' : 'primary'} onClick={() => setCreating(!creating)}>{creating ? t('cancel') : t('createFlow')}</Button>} />
     <Notice>
       <p>{t('flowWorkspaceDistinction')}</p>
@@ -112,10 +137,36 @@ function FlowsProject({ projectId, title }: { projectId: string; title: string }
       <div className="space-y-3 lg:col-span-2">{draftKept && <Notice tone="success">{t('common:draftPreserved')}</Notice>}{validation && <Notice tone="error"><span role="alert">{validation}</span></Notice>}{create.isError && <ErrorNotice error={create.error} />}<Button type="submit" disabled={create.isPending || specs.length === 0}>{create.isPending ? t('loading') : t('createFlow')}</Button></div>
     </form></Panel>}
     <QueryFeedback query={flows} /><QueryFeedback query={documents} />
-    {flows.data && <><Field label={t('searchFlows')}><input className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('searchFlowsPlaceholder')} aria-label={t('flowSearchLabel')} /></Field>
-      {flows.data.flows.length === 0 && <EmptyState>{t('noFlows')}</EmptyState>}
-      <div className="flex gap-2" role="group" aria-label={t('boardLabel')}><Button variant={layout === 'list' ? 'primary' : 'secondary'} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>{t('listView')}</Button><Button variant={layout === 'board' ? 'primary' : 'secondary'} aria-pressed={layout === 'board'} onClick={() => setLayout('board')}>{t('boardView')}</Button></div>
-      {layout === 'list' ? <FlowRows rows={filtered.map(flow => ({ flow }))} /> : <div className="min-w-0 overflow-x-auto pb-3" aria-label={t('boardLabel')}><div className="grid min-w-[1320px] grid-cols-6 gap-3">{flowStatuses.map(status => <section key={status} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"><div className="mb-3 flex items-center justify-between gap-2 px-1"><h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t(statusKeys[status])}</h2><span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500">{filtered.filter(flow => flow.status === status).length}</span></div><div className="space-y-3">{filtered.filter(flow => flow.status === status).map(flow => <button key={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => hub.navigate({ tab: 'flows', flowId: flow.id })} className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-teal-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><span className="block break-words text-sm font-semibold leading-6 text-slate-900">{flow.title}</span><span className="mt-4 block font-mono text-[11px] text-slate-400">{flow.specContentDigest.slice(0, 12)}</span><span className="mt-2 block text-xs text-slate-500">{t('criteriaCount', { count: flow.criteria.length })} · v{flow.version}</span></button>)}{filtered.every(flow => flow.status !== status) && <p className="px-1 py-4 text-xs text-slate-400">{t('noLaneItems')}</p>}</div></section>)}</div></div>}
+    {flows.data && <>
+      <div className="flow-list-toolbar">
+        <Field label={t('searchFlows')}><input ref={searchInput} className={inputClass} type="search" value={search} onChange={event => setSearch(event.target.value)} aria-label={t('flowSearchLabel')} /></Field>
+        <div className="flex gap-2" role="group" aria-label={t('boardLabel')}><Button variant={layout === 'list' ? 'primary' : 'secondary'} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>{t('listView')}</Button><Button variant={layout === 'board' ? 'primary' : 'secondary'} aria-pressed={layout === 'board'} onClick={() => setLayout('board')}>{t('boardView')}</Button></div>
+      </div>
+      {flows.data.flows.length === 0 ? <EmptyState>{t('noFlows')}</EmptyState> : filtering && !filtered.length ? <EmptyState>{t('noFlowMatches')}</EmptyState> : null}
+      {!filtered.length ? null : layout === 'list' ? <FlowRows rows={filtered.map(flow => ({ flow }))} /> : <>
+        <div className="flow-lane-picker" role="group" aria-label={t('flowState')}>
+          {flowStatuses.map(status => <Button key={status} variant={selectedLane === status ? 'primary' : 'secondary'} aria-pressed={selectedLane === status} disabled={filtering && !filtered.some(flow => flow.status === status)} onClick={() => setLane(status)}>
+            {t(statusKeys[status])} · {filtered.filter(flow => flow.status === status).length}
+          </Button>)}
+        </div>
+        <div ref={board} className="flow-board-grid" aria-label={t('boardLabel')}>
+          {flowStatuses.map(status => {
+            const cards = filtered.filter(flow => flow.status === status);
+            return <section key={status} data-lane-visible={selectedLane === status}>
+              <h2>{t(statusKeys[status])} <span>{cards.length}</span></h2>
+              {cards.map(flow => <button key={flow.id} data-board-flow={flow.id} type="button" aria-label={t('openFlow', { title: flow.title })} onClick={() => {
+                returnCard.current = flow.id;
+                setLane(status);
+                hub.navigate({ tab: 'flows', flowId: flow.id });
+              }}>
+                <strong>{flow.title}</strong>
+                <small>{t('criteriaCount', { count: flow.criteria.length })} · v{flow.version}</small>
+              </button>)}
+              {!cards.length && <p>{t('noLaneItems')}</p>}
+            </section>;
+          })}
+        </div>
+      </>}
     </>}
   </div>;
 }

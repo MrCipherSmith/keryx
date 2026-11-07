@@ -2,7 +2,7 @@ import { getJson } from '../../api/client';
 import type { HubFlow } from '../../api/types';
 import { digestCriteria } from './shared';
 import { Textarea } from '../../components/ui';
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { remoteGet } from "../../api/remote";
 import { formatDate } from "../../i18n/format";
@@ -39,6 +39,7 @@ import {
 } from "./shared";
 import { MessageComposer, QueueControls, messageDraftKey, prepareFlowMessageDraft } from "./work";
 import { ForkSession } from "./fork";
+import { SessionTranscript } from "./session-transcript";
 import { Settings } from "./settings";
 import { historyQueryKey, mergeTimeline, type CommandEntry, type CommandOutcomeListener } from "./session-timeline";
 export function SessionsView() {
@@ -335,6 +336,14 @@ export function SessionSurface({
   // Command outcomes are tab-local (the history endpoint carries only messages). Each keeps its
   // invocation time for display and the history cursor at invocation for placement; the first report
   // of an operation fixes both, later reports only refresh the outcome.
+  const [conversation, setConversation] = useState<HTMLDivElement | null>(null);
+  const history = useSessionHistory(record);
+  const messages = useMemo(() => {
+    const loaded = new Map<string, Control["SessionMessage"]>();
+    for (const page of history.data?.pages ?? [])
+      for (const message of page.messages) loaded.set(message.messageId, message);
+    return [...loaded.values()].sort((a, b) => a.historyCursor - b.historyCursor);
+  }, [history.data]);
   const [outcomes, setOutcomes] = useState<CommandEntry[]>([]);
   const recordOutcome = useCallback<CommandOutcomeListener>((outcome, invokedAt, anchor) => {
     setOutcomes(previous => {
@@ -351,7 +360,8 @@ export function SessionSurface({
     <>
     {openingError && (
       <Notice tone="error">
-        {t("sessionOpeningRejected")} {t("sessionOpeningNextStep")}
+        {t("sessionOpeningRejected")} {t(openingError === "scope-denied" ? "sessionOpeningScope"
+          : openingError === "recovery-required" ? "sessionOpeningRecovery" : "sessionOpeningNextStep")}
         {onNewSession && <Button variant="secondary" onClick={onNewSession}>{t("sessionOpeningCreateNew")}</Button>}
         <details>
           <summary>{t("sessionOpeningDetails")}</summary>
@@ -363,7 +373,9 @@ export function SessionSurface({
       openingRejected={!!openingError}
       record={record}
       control={control}
-      history={<History record={record} outcomes={outcomes} />}
+      history={<History record={record} outcomes={outcomes} liveRef={setConversation} query={history} messages={messages} />}
+      conversation={conversation}
+      messages={messages}
       composer={
         <MessageComposer record={record} control={control} onCommandOutcome={recordOutcome} />
       }
@@ -435,60 +447,75 @@ export function SessionSurface({
   );
 }
 
-function History({ record, outcomes }: { record: Control["SessionRecord"]; outcomes: CommandEntry[] }) {
-  const { t } = useTranslation("remote");
+function useSessionHistory(record: Control["SessionRecord"]) {
   const hub = useHub();
-  const query = useInfiniteQuery({
+  return useInfiniteQuery({
     queryKey: historyQueryKey(hub.scopeKey, record.projectId, record.sessionId),
-    initialPageParam: 0,
+    initialPageParam: "latest" as number | "latest",
     queryFn: ({ signal, pageParam }) =>
       remoteGet<Control["HistoryPage"]>(
         sessionPath(record.projectId, record.sessionId) +
-          "/history?after=" +
+          "/history?before=" +
           pageParam,
         signal,
       ),
     getNextPageParam: (page) => (page.hasMore ? page.cursor : undefined),
   });
-  const messages = new Map<string, Control["SessionMessage"]>();
-  query.data?.pages.forEach((page) =>
-    page.messages.forEach((message) =>
-      messages.set(message.messageId, message),
-    ),
-  );
-  const ordered = [...messages.values()].sort(
-    (a, b) => a.historyCursor - b.historyCursor,
-  );
-  const timeline = mergeTimeline(ordered, outcomes);
+}
+
+function History({ record, outcomes, liveRef, query, messages }: {
+  record: Control["SessionRecord"];
+  outcomes: CommandEntry[];
+  liveRef: (element: HTMLDivElement | null) => void;
+  query: ReturnType<typeof useSessionHistory>;
+  messages: Control["SessionMessage"][];
+}) {
+  const { t } = useTranslation("remote");
+  const announcedCursor = useRef<number | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    if (!query.data) return;
+    const last = messages.at(-1)?.historyCursor ?? 0;
+    const previous = announcedCursor.current;
+    announcedCursor.current = Math.max(previous ?? 0, last);
+    if (previous === null) return;
+    for (let i = messages.length - 1; i >= 0 && messages[i].historyCursor > previous; i--) {
+      if (messages[i].role !== 'assistant') continue;
+      setAnnouncement(t('newAssistantReply', { cursor: messages[i].historyCursor }));
+      break;
+    }
+  }, [messages, query.data, t]);
+  const timeline = mergeTimeline(messages, outcomes);
   return (
     <section className="session-transcript" aria-label={t("history")}>
+      <p role="status" aria-atomic="true" className="sr-only">{announcement}</p>
       <header className="session-transcript-header">
         <h2>{t("history")}</h2>
         <span>{record.agentProfileId}</span>
       </header>
-      <div className="session-transcript-body">
+      {(query.hasNextPage || (query.data?.pages.length ?? 0) > 1) && (
+        <div className="session-history-pages">
+          <Button
+            variant="secondary"
+            aria-disabled={!query.hasNextPage || query.isFetching}
+            onClick={() => {
+              if (query.hasNextPage && !query.isFetching) void query.fetchNextPage();
+            }}
+          >
+            {t(query.hasNextPage ? "olderMessages" : "noOlderMessages")}
+          </Button>
+        </div>
+      )}
+      <SessionTranscript entries={timeline} renderEntry={entry => entry.kind === "outcome"
+        ? <OutcomeItem record={record} item={entry.item} />
+        : <MessageItem message={entry.message} />}>
         <Feedback query={query} />
         {query.data?.pages.some((page) => page.gap) && (
           <Notice>{t("gap")}</Notice>
         )}
-        <ol>
-          {timeline.map((entry) => entry.kind === "outcome"
-            ? <OutcomeItem key={entry.item.outcome.operationId} record={record} item={entry.item} />
-            : <MessageItem key={entry.message.messageId} message={entry.message} />)}
-        </ol>
-        {query.data && !ordered.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
-      </div>
-      {query.hasNextPage && (
-        <footer className="session-history-pages">
-          <Button
-            variant="secondary"
-            disabled={query.isFetchingNextPage}
-            onClick={() => void query.fetchNextPage()}
-          >
-            {t("more")}
-          </Button>
-        </footer>
-      )}
+        {query.data && !messages.length && !outcomes.length && <EmptyState>{t("empty")}</EmptyState>}
+        <div ref={liveRef} tabIndex={-1} />
+      </SessionTranscript>
     </section>
   );
 }
@@ -498,14 +525,14 @@ function formatResult(result: unknown) {
 }
 const isSettled = (status: Control["CommandOutcome"]["status"]) => status === "applied" || status === "rejected";
 /** One command outcome, followed through its own operation so it moves from queued to applied or rejected. */
-function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item: CommandEntry }) {
+function OutcomeItem({ record, item, ...props }: React.ComponentPropsWithRef<"li"> & { record: Control["SessionRecord"]; item: CommandEntry }) {
   const { t, i18n } = useTranslation("remote");
   // Follow the operation only until it settles: an applied or rejected record cannot change, and a live
   // query per outcome would be refetched on every invalidation for the tab's lifetime.
   const followed = useAppliedReceipt<Control["CommandOutcome"]>(record, item.outcome, receipt => isSettled(receipt.status));
   const outcome = followed.data ?? item.outcome;
   return (
-    <li className="session-message system">
+    <li {...props} className="session-message system">
       <span className="session-avatar" aria-hidden="true">/</span>
       <div>
         <div className="session-message-header">
@@ -521,12 +548,12 @@ function OutcomeItem({ record, item }: { record: Control["SessionRecord"]; item:
     </li>
   );
 }
-function MessageItem({ message }: { message: Control["SessionMessage"] }) {
+function MessageItem({ message, ...props }: React.ComponentPropsWithRef<"li"> & { message: Control["SessionMessage"] }) {
   const { i18n } = useTranslation("remote");
   const hub = useHub();
   const words = useWorkspaceCopy();
   return (
-    <li className={"session-message " + message.role}>
+    <li {...props} className={"session-message " + message.role}>
       <span className="session-avatar" aria-hidden="true">
         {message.role === "human" ? "H" : message.role === "assistant" ? "K" : "↳"}
       </span>
@@ -536,7 +563,9 @@ function MessageItem({ message }: { message: Control["SessionMessage"] }) {
           <time dateTime={message.createdAt}>{formatDate(message.createdAt, i18n.language)}</time>
         </div>
         <div className="session-message-content">
-          {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
+          {message.role === "assistant" ? <Markdown content={message.text} /> : message.role === "tool-summary"
+            ? <details><summary>{words.role[message.role]}</summary><pre>{message.text}</pre></details>
+            : <pre>{message.text}</pre>}
         </div>
         {message.role === "assistant" && message.runId && (
           <Button
