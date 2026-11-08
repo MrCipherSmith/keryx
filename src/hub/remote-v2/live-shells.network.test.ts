@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, test } from "bun:test";
-import { liveShellContextHeader, type LiveShellCommand, type LiveShellContext, type LiveShellDetail, type LiveShellMessage, type LiveShellReply, type LiveShellUpdate } from "../../remote-control/live-shell";
+import { liveShellContextHeader, liveShellLimits, liveShellStreamHeader, type LiveShellCommand, type LiveShellContext, type LiveShellDetail, type LiveShellMessage, type LiveShellReply, type LiveShellUpdate } from "../../remote-control/live-shell";
 import { D, HEAD, fixture, publishCapabilities, reviewerToken, success as readSuccess, type Fixture } from "./fixture.test-support";
 
 let hub: Fixture;
@@ -94,6 +94,29 @@ test("Stop never moves from its observed turn to the next and a released control
   await success(shell.write("release", { clientId }));
   expect((await success<LiveShellReply>(shell.refresh())).command).toBeNull();
   expect((await shell.detail(command.operationId)).delivery?.status).toBe("rejected");
+});
+
+test("keeps preview separate from history and clears it when the machine leaves the turn", async () => {
+  const shell = await sharedShell();
+  await shell.publish();
+  const turnId = randomUUID();
+  const busy = { busy: true, turnId };
+  expect((await shell.refresh({ preview: "Idle preview" })).status).toBe(400);
+  expect((await shell.refresh({ busy: true, preview: "Missing turn" })).status).toBe(400);
+  expect((await shell.refresh({ ...busy, preview: "a".repeat(liveShellLimits.messageBytes + 1) })).status).toBe(400);
+  const refresh = await shell.refresh({ ...busy, preview: "First words" });
+  expect(refresh.headers.get(liveShellStreamHeader)).toBe("1");
+  await readSuccess(refresh);
+  expect(await shell.detail()).toMatchObject({ preview: "First words", messages: [] });
+  await success(shell.refresh({ ...busy, preview: "First words and more" }));
+  expect((await shell.detail()).preview).toBe("First words and more");
+  await success(shell.refresh({ busy: true, turnId: randomUUID() }));
+  expect((await shell.detail()).preview).toBeUndefined();
+  await success(shell.refresh({ ...busy, preview: "Temporary text" }));
+  await success(shell.refresh({ messages: [{ role: "assistant", text: "Final answer" }] }));
+  const detail = await shell.detail();
+  expect(detail.preview).toBeUndefined();
+  expect(detail.messages).toEqual([{ role: "assistant", text: "Final answer" }]);
 });
 
 test("chat controls use the advertised catalogues and dispatch approval only for the current question and lease", async () => {

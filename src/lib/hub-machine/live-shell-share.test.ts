@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { NormalizedMessage } from "../../harness/provider/types";
-import { liveShellContextHeader, type LiveShellCommand, type LiveShellContext, type LiveShellUpdate } from "../../remote-control/live-shell";
+import { liveShellContextHeader, liveShellStreamHeader, type LiveShellCommand, type LiveShellContext, type LiveShellUpdate } from "../../remote-control/live-shell";
 import { liveShellHistory, LiveShellShare } from "./live-shell-share";
 
 const previous: NormalizedMessage[] = [
@@ -27,6 +27,48 @@ test("shares only human-facing history, redacts secrets, and excludes an unfinis
   expect(messages[2]?.text).not.toContain(secret);
   expect(JSON.stringify(messages)).not.toContain("private tool output");
 });
+
+test("negotiates preview support and withholds an unfinished token before redaction", async () => {
+  const turnId = randomUUID();
+  const token = "ghp_" + "a1B".repeat(12);
+  const updates: LiveShellUpdate[] = [];
+  const done = Promise.withResolvers<void>();
+  let preview = "First words " + token.slice(0, 13);
+  let busy = true;
+  const server = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    async fetch(request) {
+      if (request.method === "DELETE") return new Response(null, { status: 204 });
+      const index = updates.push(await request.json() as LiveShellUpdate) - 1;
+      if (index === 1) preview = "First words " + token + " trailing";
+      if (index === 2) busy = false;
+      if (index === 3) done.resolve();
+      return Response.json({ command: null }, { headers: { [liveShellStreamHeader]: "1" } });
+    },
+  });
+  const share = new LiveShellShare({
+    sessionId: () => "session",
+    history: () => previous,
+    preview: () => preview,
+    isBusy: () => busy,
+    turnId: () => busy ? turnId : undefined,
+    submit: () => false,
+    stop: () => false,
+    notice: () => {},
+  }, { url: server.url.href, headers: {}, projectId: "project", checkoutId: "checkout" });
+  try {
+    share.start();
+    await done.promise;
+    expect(updates[0]?.preview).toBeUndefined();
+    expect(updates[1]?.preview).toBe("First words");
+    expect(updates[2]?.preview).toMatch(/hidden|скрыто|REDACTED/);
+    expect(updates[2]?.preview).not.toContain(token);
+    expect(updates[3]?.preview).toBeUndefined();
+  } finally {
+    await share.close();
+    await server.stop(true);
+  }
+}, 8_000);
 
 test("shares native history, rejects a busy race, deduplicates delivery, pins Stop, and detaches on a session switch", async () => {
   let nativeSession = "first-session";
@@ -62,6 +104,7 @@ test("shares native history, rejects a busy race, deduplicates delivery, pins St
   const share = new LiveShellShare({
     sessionId: () => nativeSession,
     history: () => previous,
+    preview: () => "This Hub does not advertise previews",
     isBusy: () => busy,
     turnId: () => busy ? turnId : undefined,
     submit: (text) => { submitted.push(text); return true; },
@@ -73,6 +116,7 @@ test("shares native history, rejects a busy race, deduplicates delivery, pins St
     await detached.promise;
     expect(updates[0]).toMatchObject({ projectId: "project", checkoutId: "checkout", busy: false });
     expect(updates[1]).toMatchObject({ busy: true, turnId });
+    expect(updates.every(update => update.preview === undefined)).toBe(true);
     expect(updates[0]?.messages?.[0]).toEqual({ role: "user", text: "Original terminal question" });
     expect(updates.slice(1).map((update) => update.ack)).toEqual([
       { id: busyMessage.id, status: "rejected" },

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, test, vi } from "vitest";
 import i18n from "../src/i18n";
@@ -66,14 +66,21 @@ beforeEach(async () => {
     if (path.endsWith("/sessions/s/history?before=4")) return Response.json({ messages: messages.slice(0, 3), cursor: 1, hasMore: false, historyVersion: 1, retainedFromCursor: 0, gap: false });
     if (path.endsWith("/sessions/s/queue")) return Response.json({ items: [], queueVersion: 0, cursor: 0, hasMore: false });
     if (path.endsWith("/sessions/s/routing")) return Response.json({ version: 1, policyDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), candidates: [], profileIds: [] });
-    if (path.endsWith("/sessions/s/commands")) return Response.json({ catalogueVersion: 1, catalogueDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), entries: [entry("status"), entry("help")] });
+    if (path.endsWith("/sessions/s/commands")) return Response.json({ catalogueVersion: 1, catalogueDigest: "a".repeat(64), capabilityDigest: "a".repeat(64), entries: [entry("status"), entry("help"), { ...entry("copy"), summary: "Copy the latest response", availability: "policy-denied" }] });
     if (path.endsWith("/commands/invoke") && init?.method === "POST") {
       const { commandName } = JSON.parse(String(init.body)) as { commandName: string };
       onInvoke?.();
       return Response.json(outcome("op-" + commandName + "-" + ++invokeCount, commandName, "queued"));
     }
     const operation = /\/operations\/([^/?]+)$/.exec(path);
-    if (operation) return Response.json(outcome(operation[1], operation[1].split("-")[1], appliedOperations.has(operation[1]) ? "applied" : "queued"));
+    if (operation) {
+      const name = operation[1].split("-")[1];
+      const applied = appliedOperations.has(operation[1]);
+      const receipt = outcome(operation[1], name, applied ? "applied" : "queued");
+      return Response.json(applied && name === "help"
+        ? { ...receipt, result: '{"catalogueVersion":1,"entries":[{"inputSchema":' }
+        : receipt);
+    }
     if (path.endsWith("/sessions/s")) return Response.json({ ...sessionFixture, version: claimed ? 3 : 2, controller: claimed ? sessionFixture.controller : null, historyCursor: messages.length });
     return Response.json({ error: { code: "not-found", message: "no" } }, { status: 404 });
   });
@@ -99,6 +106,18 @@ const order = () => screen.getAllByRole("listitem").map(item => item.textContent
 const queued = () => i18n.t("receiptStatuses.queued", { ns: "remote" });
 const applied = () => i18n.t("receiptStatuses.applied", { ns: "remote" });
 const itemFor = (name: string) => screen.getByText("/" + name).closest("li")!;
+test("help renders the complete readable catalogue even when its receipt contains truncated JSON", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  await open(client);
+  await invoke("help");
+  appliedOperations.add("op-help-1");
+  await act(async () => { await client.invalidateQueries(); });
+  const list = await screen.findByRole("list", { name: "Commands in this session" });
+  expect(within(list).getByText("/status")).toBeInTheDocument();
+  expect(within(list).getByText("Copy the latest response")).toBeInTheDocument();
+  expect(within(list).getByText("Unavailable in Hub")).toBeInTheDocument();
+  expect(screen.queryByText(/"inputSchema":/)).not.toBeInTheDocument();
+});
 test("an outcome is placed by the history cursor at invocation, not by comparing the browser clock with the machine clock", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   await open(client);

@@ -12,7 +12,7 @@ import { drainSessionQueue } from "./queue";
 import { createRemoteReader } from "./read-model";
 import { createSessionOperations } from "./session-operations";
 import { createLiveShells } from "./live-shells";
-import { liveShellContextHeader, liveShellLimits } from "../../remote-control/live-shell";
+import { liveShellContextHeader, liveShellLimits, liveShellStreamHeader } from "../../remote-control/live-shell";
 import { randomBytes } from "node:crypto";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import { canonicalDigest, runCommandDigest, sessionCommandDigest, validateControl, parseClosedJson, parseMachineFrame, LIMITS, MACHINE_SUBPROTOCOL, type Control } from "../../remote-control/protocol";
@@ -129,6 +129,7 @@ export function createRemoteControl(ports: RemotePorts) {
         const update = method === "POST" ? await body(request, liveShellLimits.updateBytes) : undefined;
         const response = json(liveShells.forMachine(scopedMachine(request), p[3]!, method, update));
         response.headers.set(liveShellContextHeader, "1");
+        response.headers.set(liveShellStreamHeader, "1");
         return response;
       }
       return machineHttp(request,p,write ? await body(request) : undefined,m);

@@ -118,7 +118,7 @@ function parseContext(value: unknown): LiveShellContext {
 }
 
 function parseUpdate(value: unknown): LiveShellUpdate {
-  const raw = record(value, ["projectId", "checkoutId", "title", "busy", "turnId", "messages", "context", "ack"]);
+  const raw = record(value, ["projectId", "checkoutId", "title", "busy", "turnId", "preview", "messages", "context", "ack"]);
   const projectId = identifier(raw.projectId, bindingId);
   const checkoutId = identifier(raw.checkoutId, bindingId);
   const title = redact(text(raw.title, limits.titleBytes)).trim();
@@ -128,6 +128,10 @@ function parseUpdate(value: unknown): LiveShellUpdate {
   }
   const update: LiveShellUpdate = { projectId, checkoutId, title, busy };
   if (raw.turnId !== undefined) update.turnId = identifier(raw.turnId, uuid);
+  if (raw.preview !== undefined) {
+    if (!busy || !update.turnId) fail(400, "invalid-arguments", "Live shell preview requires an active turn");
+    update.preview = displayText(raw.preview, limits.messageBytes);
+  }
   if (raw.messages !== undefined) {
     if (!Array.isArray(raw.messages) || raw.messages.length > limits.messages) {
       fail(400, "invalid-arguments", "Invalid live shell history");
@@ -173,6 +177,7 @@ type LiveShell = {
   machineId: string;
   heartbeatAt: number;
   turnId: string | undefined;
+  preview: string | undefined;
   context: LiveShellContext | undefined;
   messages: LiveShellMessage[];
   lease?: Lease;
@@ -302,12 +307,13 @@ export function createLiveShells(
       }
       if (shells.size >= limits.sessions) fail(429, "quota-exceeded", "Too many shared shells");
       shell = { summary, projectId: update.projectId, machineId: machine.machineId,
-        heartbeatAt: Date.now(), turnId: update.turnId, context: update.context,
+        heartbeatAt: Date.now(), turnId: update.turnId, context: update.context, preview: update.preview,
         messages: [], operations: new Map(), outputOperations: [] };
       shells.set(shellId, shell);
     }
     shell.summary = summary;
     shell.turnId = update.turnId;
+    shell.preview = update.preview;
     shell.context = update.context;
     shell.heartbeatAt = Date.now();
     if (update.messages) shell.messages = update.messages;
@@ -350,6 +356,7 @@ export function createLiveShells(
     return {
       shell: shell.summary, messages: shell.messages, controllerHeld: !!shell.lease, delivery,
       ...(shell.context === undefined ? {} : { context: shell.context }),
+      ...(shell.preview ? { preview: shell.preview } : {}),
     };
   }
 

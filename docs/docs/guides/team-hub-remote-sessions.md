@@ -208,10 +208,11 @@ terminal and Hub resolve the same question. When a question requires the
 terminal, the chat tells you where to answer.
 
 The browser receives up to the last 100 completed text messages, within a 256 KiB
-history limit. While a turn is running, the browser shows its status and displays
-the response after completion. Sharing makes this history visible to people with
-read access to the mapped project. Disconnecting from the browser leaves the
-shell running. Use `/remote-control hub status` to check sharing and
+history limit. With streaming support on both Hub and shell, visible reply text
+appears as the agent writes it. The preview is replaced by the completed reply,
+or cleared if the turn is stopped. Sharing makes this conversation visible to
+people with read access to the mapped project. Disconnecting from the browser
+leaves the shell running. Use `/remote-control hub status` to check sharing and
 `/remote-control hub off` to remove the shell and its shared history from the
 Hub. Exiting the shell or switching its conversation also ends sharing.
 

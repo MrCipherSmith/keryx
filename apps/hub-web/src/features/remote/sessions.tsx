@@ -589,6 +589,29 @@ function History({ record, outcomes, liveRef, query, messages, deliveries, obser
 function formatResult(result: unknown) {
   return typeof result === "string" ? result : JSON.stringify(result, null, 2);
 }
+
+function SessionCommandHelp({ record }: { record: Control["SessionRecord"] }) {
+  const { t } = useTranslation("remote");
+  // The command result is a bounded string and may truncate the catalogue JSON.
+  // Use the same complete, machine-scoped catalogue as the command picker.
+  const query = useRemoteQuery<Control["CommandCatalogue"]>(
+    ["catalogue", record.sessionId],
+    sessionPath(record.projectId, record.sessionId) + "/commands",
+  );
+  return <>
+    <Feedback query={query} />
+    {query.data?.entries.length ? <ul className="grid list-none gap-2" aria-label={t("helpCommands")}>
+      {query.data.entries.map(command => <li key={command.commandName} className="min-w-0">
+        <code className="font-semibold">/{command.commandName}</code>
+        {command.availability !== "available" && (
+          <span className="ms-2 text-xs text-slate-500">{t("helpAvailability." + command.availability)}</span>
+        )}
+        <p>{command.summary}</p>
+      </li>)}
+    </ul> : query.isSuccess && <p>{t("noCommandsFound")}</p>}
+  </>;
+}
+
 const isSettled = (status: Control["CommandOutcome"]["status"]) => status === "applied" || status === "rejected";
 /** One command outcome, followed through its own operation so it moves from queued to applied or rejected. */
 function OutcomeItem({ record, item, ...props }: React.ComponentPropsWithRef<"li"> & { record: Control["SessionRecord"]; item: CommandEntry }) {
@@ -608,7 +631,9 @@ function OutcomeItem({ record, item, ...props }: React.ComponentPropsWithRef<"li
         <div className="session-message-content">
           <p>{t("receiptStatuses." + outcome.status, { defaultValue: outcome.status })}</p>
           {outcome.errorCode && <p>{outcome.errorCode}</p>}
-          {outcome.result !== null && <pre className="whitespace-pre-wrap break-all">{formatResult(outcome.result)}</pre>}
+          {outcome.commandName === "help" && outcome.status === "applied"
+            ? <SessionCommandHelp record={record} />
+            : outcome.result !== null && <pre className="whitespace-pre-wrap break-all">{formatResult(outcome.result)}</pre>}
         </div>
       </div>
     </li>

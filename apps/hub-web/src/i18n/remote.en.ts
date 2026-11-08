@@ -2,6 +2,8 @@ export default { composerKeyboardHint: "Enter to send · Shift+Enter for a new l
   chatActions: "Session actions",
   chatBackToSessions: "Back to sessions",
   chatOpen: "Open chat",
+  helpCommands: "Commands in this session",
+  helpAvailability: { "setup-required": "Setup required", "policy-denied": "Unavailable in Hub", "implementation-gap": "Not supported" },
   chatStop: "Stop response",
   chatModel: "Model",
   chatUsage: "Usage",

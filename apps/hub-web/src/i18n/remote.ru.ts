@@ -2,6 +2,8 @@ export default { composerKeyboardHint: "Enter — отправить · Shift+En
   chatActions: "Действия с сессией",
   chatBackToSessions: "К списку сессий",
   chatOpen: "Открыть чат",
+  helpCommands: "Команды этой сессии",
+  helpAvailability: { "setup-required": "Требуется настройка", "policy-denied": "Недоступно в Hub", "implementation-gap": "Не поддерживается" },
   chatStop: "Остановить ответ",
   chatModel: "Модель",
   chatUsage: "Статистика",

@@ -20,6 +20,7 @@ export const liveShellLimits = {
 
 /** A successful machine poll advertises support before the shell sends context. */
 export const liveShellContextHeader = "Keryx-Live-Shell-Context";
+export const liveShellStreamHeader = "Keryx-Live-Shell-Stream";
 
 /** Invisible direction/formatting characters and CR can disguise a command in a preview. */
 export function canShowExactApproval(preview: string): boolean {
@@ -60,6 +61,8 @@ export type LiveShellUpdate = {
   title: string;
   busy: boolean;
   turnId?: string;
+  /** Replacement snapshot for the current turn. Omission clears it. */
+  preview?: string;
   messages?: LiveShellMessage[];
   context?: LiveShellContext;
   ack?: { id: string; status: "applied" | "rejected"; output?: string };
@@ -85,4 +88,5 @@ export type LiveShellDetail = {
   controllerHeld: boolean;
   delivery: LiveShellDelivery | null;
   context?: LiveShellContext;
+  preview?: string;
 };

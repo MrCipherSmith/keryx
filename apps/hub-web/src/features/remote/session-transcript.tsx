@@ -26,12 +26,17 @@ function TranscriptMessage() {
   return entry ? <MessagePrimitive.Root asChild>{entry.render()}</MessagePrimitive.Root> : null;
 }
 
-export function ChatTranscript({ entries, children }: { entries: ChatTranscriptEntry[]; children?: ReactNode }) {
+export function ChatTranscript({ entries, children, isRunning = false }: {
+  entries: ChatTranscriptEntry[];
+  children?: ReactNode;
+  isRunning?: boolean;
+}) {
   const indexed = useMemo(() => new Map(entries.map(entry => [entry.message.id, entry])), [entries]);
   const runtime = useExternalStoreRuntime({
     messages: entries,
     convertMessage: toMessage,
     isDisabled: true,
+    isRunning,
     onNew: async () => { throw new Error("Submit through the Hub session composer"); },
   });
   return <AssistantRuntimeProvider runtime={runtime}>
