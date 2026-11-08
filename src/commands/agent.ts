@@ -331,6 +331,8 @@ export interface ApproverProvenance {
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
   write: (s: string) => void;
+  /** Visible provider text only. The first chunk starts a new model attempt. */
+  onAssistantDelta?: (text: string, firstChunk: boolean) => void;
   /** Awaited before every provider request and tool invocation, including reads and wrap-ups.
    * A transport host uses this to pause at a safe boundary after losing authenticated control.
    * Local renderers omit it. The gate must honor abort while paused. */
@@ -3858,6 +3860,7 @@ async function runAgentTurnCore(
             flushReasoning(); // reasoning precedes the answer → surface it first
             const text = event.text ?? "";
             io.write(text);
+            io.onAssistantDelta?.(text, assistantMessage === undefined);
             assistantText += text;
             if (assistantMessage === undefined) {
               assistantMessage = { role: "assistant", content: text, provenance: "model", ts: now() };

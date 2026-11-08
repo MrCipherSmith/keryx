@@ -6,6 +6,7 @@ import {
   canShowExactApproval,
   liveShellContextHeader,
   liveShellLimits,
+  liveShellStreamHeader,
   type LiveShellCommand,
   type LiveShellContext,
   type LiveShellDecision,
@@ -25,6 +26,7 @@ export interface LiveShellHost {
   isBusy(): boolean;
   turnId(): string | undefined;
   history(): readonly NormalizedMessage[];
+  preview?(): string | undefined;
   submit(text: string): boolean;
   stop(turnId: string): boolean;
   notice(text: string): void;
@@ -65,6 +67,7 @@ const operationIdPattern = /^[0-9a-f]{64}$/;
 const commandNamePattern = /^[a-z][a-z0-9-]{0,63}$/;
 const candidateIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const pollMs = 1500;
+const streamPollMs = 500;
 const fullRefreshMs = 10_000;
 const requestTimeoutMs = 4000;
 
@@ -76,6 +79,15 @@ function sharedText(input: string, max: number): string {
   return encoded.length > max
     ? `${decoder.decode(encoded.subarray(0, max - 8)).replace(/\ufffd$/u, "")}…`
     : text;
+}
+
+function sharedPreview(input: string): string | undefined {
+  // Keep the last word until it has a following word. A token split across
+  // provider chunks must be checked as a whole before the Hub can see it.
+  const lastWord = input.search(/(?:^|\s)\S+\s*$/u);
+  if (lastWord <= 0) return undefined;
+  const prefix = input.slice(0, lastWord);
+  return sharedText(prefix, liveShellLimits.messageBytes);
 }
 
 function sharedContext(context: LiveShellContext): LiveShellContext {
@@ -157,6 +169,7 @@ export class LiveShellShare {
   #active = true;
   #connected = false;
   #supportsContext = false;
+  #supportsStream = false;
   #timer: ReturnType<typeof setTimeout> | undefined;
   #inFlight: Promise<void> | undefined;
   #closing: Promise<void> | undefined;
@@ -193,10 +206,11 @@ export class LiveShellShare {
     }).finally(() => {
       this.#inFlight = undefined;
       if (!this.active) return;
+      const streaming = this.#supportsStream && this.host.turnId() !== undefined && this.host.preview?.();
       this.#timer = setTimeout(() => {
         this.#timer = undefined;
         this.start();
-      }, pollMs);
+      }, streaming ? streamPollMs : pollMs);
       this.#timer.unref?.();
     });
   }
@@ -213,6 +227,9 @@ export class LiveShellShare {
   async #poll(): Promise<void> {
     const { url, headers, projectId, checkoutId } = this.registration;
     const turnId = this.host.turnId();
+    const busy = this.host.isBusy();
+    const rawPreview = this.#supportsStream && busy && turnId !== undefined ? this.host.preview?.() : undefined;
+    const preview = rawPreview ? sharedPreview(rawPreview) : undefined;
     const messages = liveShellHistory(this.host.history(), turnId !== undefined);
     const snapshot = JSON.stringify(messages);
     const now = Date.now();
@@ -221,8 +238,9 @@ export class LiveShellShare {
     const context = this.#supportsContext ? this.host.inspect?.() : undefined;
     const wireAck = ack && !this.#supportsContext ? { id: ack.id, status: ack.status } : ack;
     const update: LiveShellUpdate = {
-      projectId, checkoutId, title: `Keryx shell · ${this.#sessionId.slice(0, 8)}`, busy: this.host.isBusy(),
+      projectId, checkoutId, title: `Keryx shell · ${this.#sessionId.slice(0, 8)}`, busy,
       ...(turnId !== undefined ? { turnId } : {}),
+      ...(preview ? { preview } : {}),
       ...(publish ? { messages } : {}),
       ...(context !== undefined ? { context: sharedContext(context) } : {}),
       ...(wireAck !== undefined ? { ack: wireAck } : {}),
@@ -238,6 +256,7 @@ export class LiveShellShare {
       if (response.status === 400 && (context !== undefined || wireAck?.output !== undefined)) {
         this.#supportsContext = false;
       }
+      if (response.status === 400 && preview !== undefined) this.#supportsStream = false;
       if ([401, 403, 404, 410].includes(response.status) && this.active) {
         this.host.notice(`◇ Hub sharing ended (HTTP ${response.status}).`);
         void this.close();
@@ -257,6 +276,7 @@ export class LiveShellShare {
     if (!this.#connected) this.host.notice("◇ This shell is available in Team Hub. Use /remote-control hub off to disconnect it.");
     this.#connected = true;
     this.#supportsContext = supportsContext;
+    this.#supportsStream = response.headers.get(liveShellStreamHeader) === "1";
     this.#lastFailure = undefined;
     if (publish) {
       this.#lastHistory = snapshot;

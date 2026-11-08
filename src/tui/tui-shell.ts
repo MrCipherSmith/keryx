@@ -7382,7 +7382,7 @@ export async function launchTuiAgentShell(opts: {
       permissionMode: () => "ask",
       mcpGrantsApply: () => false,
     };
-    let hubTurn: { token: ForegroundOperationToken; id: string } | undefined;
+    let hubTurn: { token: ForegroundOperationToken; id: string; preview: string } | undefined;
     const currentHubTurn = (): string | undefined =>
       hubTurn !== undefined && foregroundOperation.accepts(hubTurn.token) ? hubTurn.id : undefined;
 
@@ -10986,7 +10986,8 @@ export async function launchTuiAgentShell(opts: {
       sessions.clear();
       deps.resetSubagentBudget?.();
       const operation = foregroundOperation.begin();
-      hubTurn = { token: operation, id: crypto.randomUUID() };
+      const sharedTurn = { token: operation, id: crypto.randomUUID(), preview: "" };
+      hubTurn = sharedTurn;
       // Flow 376: a turn that came from Telegram has its reply, its approvals and its run
       // time limit handled by the bridge; every other turn resets that state.
       remoteQueue.turnStarted(source === TG_SOURCE ? source : undefined);
@@ -11274,6 +11275,24 @@ export async function launchTuiAgentShell(opts: {
         syncArchive();
         rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
         const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : fromHub ? hubTurnIo : {});
+        const onToolCall = foregroundIo.onToolCall;
+        foregroundIo.onToolCall = (name, input) => {
+          sharedTurn.preview = "";
+          onToolCall?.(name, input);
+        };
+        const onAttemptInterrupted = foregroundIo.onAttemptInterrupted;
+        foregroundIo.onAttemptInterrupted = () => {
+          sharedTurn.preview = "";
+          onAttemptInterrupted?.();
+        };
+        foregroundIo.onAssistantDelta = (text, firstChunk) => {
+          if (origin !== "operator" || agentShaped || !hubShare?.active ||
+              !foregroundOperation.accepts(operation) || turnSignal.aborted) return;
+          if (firstChunk) sharedTurn.preview = "";
+          // Keep lookahead for redaction at the preview's byte limit.
+          const remaining = liveShellLimits.messageBytes + 512 - sharedTurn.preview.length;
+          if (remaining > 0) sharedTurn.preview += text.slice(0, remaining);
+        };
         // Captured now, while `operation` is still the active one — `.signal`
         // throws once `foregroundOperation.settle(operation)` below clears it,
         // and by the time the guard's own deferred continuation (further down)
@@ -11685,6 +11704,7 @@ export async function launchTuiAgentShell(opts: {
         const share = transport.LiveShellShare.open(sessionCwd, {
           sessionId: () => liveSession.summary.id,
           history: nativeHistory,
+          preview: () => currentHubTurn() !== undefined && !foregroundOperation.signal.aborted ? hubTurn?.preview : undefined,
           isBusy: hubShellBusy,
           turnId: currentHubTurn,
           submit: (text) => {

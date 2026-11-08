@@ -6,6 +6,7 @@ import {
   liveShellLimits,
   type LiveShellDelivery,
   type LiveShellDetail,
+  type LiveShellMessage,
   type LiveShellSummary,
 } from "../../../../../src/remote-control/live-shell";
 import { ApiError, errorMessage } from "../../api/client";
@@ -140,7 +141,7 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
     queryKey: [scopeKey, projectId, "remote", "live-shells", id, operationId],
     queryFn: ({ signal }) => remoteGet<LiveShellDetail>(detailPath, signal),
     placeholderData: keepPreviousData,
-    refetchInterval: 1_000,
+    refetchInterval: query => query.state.data?.shell.stopTurnId ? 500 : 1_000,
     gcTime: 0,
     retry: false,
   });
@@ -300,19 +301,22 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
   function send() {
     if (canSend) submit({ key: crypto.randomUUID(), kind: "message", text: draft.text });
   }
-  const messages = detail.data?.messages ?? [];
-  const entries: ChatTranscriptEntry[] = messages.map((message, index) => ({
-    message: { id: "shell:" + index, role: message.role, content: message.text },
-    render: () => <li className={"session-message " + (message.role === "user" ? "human" : "assistant")}>
-      <span className="session-avatar" aria-hidden="true">{message.role === "assistant" ? "K" : "H"}</span>
-      <div className="min-w-0">
-        <div className="session-message-header"><strong>{message.role === "assistant" ? "Keryx" : t("liveShells.human")}</strong></div>
-        <div className="session-message-content">
-          {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
+  function shellMessage(id: string, message: LiveShellMessage, streaming = false): ChatTranscriptEntry {
+    return {
+      message: { id, role: message.role, content: message.text },
+      render: () => <li data-chat-stream={streaming || undefined} className={"session-message " + (message.role === "user" ? "human" : "assistant")}>
+        <span className="session-avatar" aria-hidden="true">{message.role === "assistant" ? "K" : "H"}</span>
+        <div className="min-w-0">
+          <div className="session-message-header"><strong>{message.role === "assistant" ? "Keryx" : t("liveShells.human")}</strong></div>
+          <div className="session-message-content">
+            {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
+          </div>
         </div>
-      </div>
-    </li>,
-  }));
+      </li>,
+    };
+  }
+  const messages = detail.data?.messages ?? [];
+  const entries = messages.map((message, index) => shellMessage("shell:" + index, message));
   let priorResults = 0;
   for (const result of draft.commandResults ?? []) {
     entries.splice(Math.min(result.anchor + priorResults, entries.length), 0, {
@@ -327,6 +331,8 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
     });
     priorResults++;
   }
+  const preview = !detail.error && stopTurnId ? detail.data?.preview : undefined;
+  if (preview) entries.push(shellMessage("shell:preview:" + stopTurnId, { role: "assistant", text: preview }, true));
   const matches = commands.filter(command =>
     (command.name + " " + command.description).toLowerCase().includes(search.trim().replace(/^\//, "").toLowerCase()));
   const stop = stopTurnId && owns
@@ -374,7 +380,7 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
         </p>}
         <ChatConversation transcript={<section className="session-transcript" aria-label={t("history")}>
           <header className="session-transcript-header"><h2>{t("history")}</h2></header>
-          <ChatTranscript entries={entries}>
+          <ChatTranscript entries={entries} isRunning={!!preview}>
             {!entries.length && <p className="chat-empty">{t("liveShells.noHistory")}</p>}
           </ChatTranscript>
         </section>}

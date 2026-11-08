@@ -570,6 +570,9 @@
   padding-bottom: env(safe-area-inset-bottom, 0);
   background: var(--hub-surface);
 }
+/* Keep the shell composer below its scrolling transcript. A sticky dock can
+   overlap the newest text when the chat header and composer fill the viewport. */
+.chat-shell .chat-dock { position: relative; }
 /* Expanded command and context panels participate in the page scroll so they
    cannot cover the conversation or move keyboard focus under the dock. */
 .chat-dock:has(.chat-native-command-picker:not([hidden]), .chat-command-picker, .composer-work-context[open]) {

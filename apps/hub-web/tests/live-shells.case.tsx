@@ -151,6 +151,23 @@ test("connects to the existing terminal history and releases only the browser on
   expect(releases).toBe(1);
 });
 
+test("updates one assistant preview and replaces it with one completed reply", async () => {
+  await openWithControl();
+  detail.shell = { ...shell, busy: true, stopTurnId: "stream-turn" };
+  detail.preview = "First words";
+  const partial = await screen.findByText("First words", {}, { timeout: 2_500 });
+  expect(partial.closest("li")).toHaveAttribute("data-chat-stream", "true");
+  detail.preview = "First words and more";
+  const extended = await screen.findByText("First words and more", {}, { timeout: 2_500 });
+  expect(extended.closest("li")).toBe(partial.closest("li"));
+  detail.shell = shell;
+  delete detail.preview;
+  detail.messages = [...detail.messages, { role: "assistant", text: "First words and more, done." }];
+  const final = await screen.findByText("First words and more, done.", {}, { timeout: 2_500 });
+  expect(final.closest("li")).not.toHaveAttribute("data-chat-stream");
+  expect(screen.queryByText("First words and more")).not.toBeInTheDocument();
+});
+
 test("retries an uncertain send with the same operation key and clears the draft only after acknowledgement", async () => {
   loseReceipt = true;
   const composer = await openWithControl();
