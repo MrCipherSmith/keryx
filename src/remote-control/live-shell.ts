@@ -9,8 +9,11 @@ export const liveShellLimits = {
   titleBytes: 200,
   descriptionBytes: 256,
   commandCount: 40,
+  terminalCommandCount: 128,
   candidateCount: 40,
   approvalSummaryBytes: 4096,
+  questionOptions: 6,
+  questionAnswerBytes: 4096,
   outputBytes: 4096,
   outputCount: 24,
   heartbeatMs: 15_000,
@@ -21,6 +24,7 @@ export const liveShellLimits = {
 /** A successful machine poll advertises support before the shell sends context. */
 export const liveShellContextHeader = "Keryx-Live-Shell-Context";
 export const liveShellStreamHeader = "Keryx-Live-Shell-Stream";
+export const liveShellChatHeader = "Keryx-Live-Shell-Chat";
 
 /** Invisible direction/formatting characters and CR can disguise a command in a preview. */
 export function canShowExactApproval(preview: string): boolean {
@@ -29,6 +33,23 @@ export function canShowExactApproval(preview: string): boolean {
 
 export type LiveShellMessage = { role: "user" | "assistant"; text: string };
 export type LiveShellDecision = "allow" | "deny";
+export type LiveShellQuestion = {
+  id: string;
+  text: string;
+  options: Array<{ label: string; description: string }>;
+  canAnswer: boolean;
+};
+export type LiveShellQuestionAnswer = { option: number } | { text: string };
+
+export function validLiveShellQuestionAnswer(value: unknown): value is LiveShellQuestionAnswer {
+  if (value === null || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== 1) return false;
+  if ("option" in value) {
+    return typeof value.option === "number" && Number.isInteger(value.option) &&
+      value.option >= 0 && value.option < liveShellLimits.questionOptions;
+  }
+  return "text" in value && typeof value.text === "string" && !!value.text.trim() &&
+    new TextEncoder().encode(value.text).length <= liveShellLimits.questionAnswerBytes;
+}
 export type LiveShellUsage = {
   tokensIn: number;
   tokensOut: number;
@@ -39,6 +60,7 @@ export type LiveShellUsage = {
 export type LiveShellContext = {
   model?: { currentId: string; candidates: Array<{ id: string; label: string }> };
   commands?: Array<{ name: string; description: string }>;
+  terminalCommands?: Array<{ name: string; description: string }>;
   usage?: { turn: LiveShellUsage; session: LiveShellUsage };
   approval?: {
     id: string;
@@ -47,6 +69,7 @@ export type LiveShellContext = {
     reason: string;
     canAnswer: boolean;
   };
+  question?: LiveShellQuestion;
   phase?: "thinking" | "working" | "waiting-input";
 };
 export type LiveShellCommand =
@@ -54,6 +77,7 @@ export type LiveShellCommand =
   | { id: string; kind: "stop"; turnId: string }
   | { id: string; kind: "invoke"; name: string }
   | { id: string; kind: "select-model"; candidateId: string }
+  | { id: string; kind: "answer-question"; questionId: string; answer: LiveShellQuestionAnswer }
   | { id: string; kind: "answer-approval"; approvalId: string; decision: LiveShellDecision };
 export type LiveShellUpdate = {
   projectId: string;

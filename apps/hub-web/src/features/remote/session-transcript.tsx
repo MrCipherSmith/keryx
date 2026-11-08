@@ -7,6 +7,8 @@ import {
   type ThreadMessageLike,
 } from '@assistant-ui/react';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ArrowDown } from 'lucide-react';
 import type { TimelineEntry } from './session-timeline';
 
 export type ChatTranscriptEntry = {
@@ -26,11 +28,13 @@ function TranscriptMessage() {
   return entry ? <MessagePrimitive.Root asChild>{entry.render()}</MessagePrimitive.Root> : null;
 }
 
-export function ChatTranscript({ entries, children, isRunning = false }: {
+export function ChatTranscript({ entries, children, isRunning = false, showLatest = false }: {
   entries: ChatTranscriptEntry[];
   children?: ReactNode;
   isRunning?: boolean;
+  showLatest?: boolean;
 }) {
+  const { t } = useTranslation('remote');
   const indexed = useMemo(() => new Map(entries.map(entry => [entry.message.id, entry])), [entries]);
   const runtime = useExternalStoreRuntime({
     messages: entries,
@@ -41,11 +45,14 @@ export function ChatTranscript({ entries, children, isRunning = false }: {
   });
   return <AssistantRuntimeProvider runtime={runtime}>
     <Entries.Provider value={indexed}>
-      <ThreadPrimitive.Root>
-        <ThreadPrimitive.Viewport className="session-transcript-body">
+      <ThreadPrimitive.Root className="session-transcript-content">
+        <ThreadPrimitive.Viewport className="session-transcript-body" scrollToBottomOnRunStart={!showLatest}>
           <ol className="session-thread"><ThreadPrimitive.Messages components={{ Message: TranscriptMessage }} /></ol>
           {children}
         </ThreadPrimitive.Viewport>
+        {showLatest && <ThreadPrimitive.ScrollToBottom className="chat-latest" aria-label={t('liveShells.latest')} title={t('liveShells.latest')}>
+          <ArrowDown size={18} aria-hidden="true" />
+        </ThreadPrimitive.ScrollToBottom>}
       </ThreadPrimitive.Root>
     </Entries.Provider>
   </AssistantRuntimeProvider>;

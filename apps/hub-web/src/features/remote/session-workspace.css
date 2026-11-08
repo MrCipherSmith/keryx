@@ -573,6 +573,96 @@
 /* Keep the shell composer below its scrolling transcript. A sticky dock can
    overlap the newest text when the chat header and composer fill the viewport. */
 .chat-shell .chat-dock { position: relative; }
+
+/* In a connected shell the transcript, not the document, owns chat scrolling. */
+.workspace:has(.chat-shell) {
+  display: flex;
+  flex-direction: column;
+  block-size: 100dvh;
+}
+.workspace:has(.chat-shell) > .workspace-header { flex-shrink: 0; }
+.workspace-main:has(.chat-shell),
+.workspace-main > div:has(.chat-shell),
+.workspace-main > div > div:has(> .chat-shell),
+.chat-shell,
+.chat-shell .session-transcript,
+.chat-shell .session-transcript-content {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  flex: 1;
+}
+.workspace-main:has(.chat-shell) { inline-size: 100%; overflow: auto; }
+.chat-shell { gap: 8px; }
+.chat-shell > :not(.session-conversation-column) { flex-shrink: 0; }
+.chat-shell .session-back { align-self: flex-start; }
+.chat-shell .session-conversation-column {
+  flex: 1;
+  min-block-size: 0;
+}
+.chat-shell .session-transcript {
+  inline-size: min(100%, 46rem);
+  margin-inline: auto;
+}
+.chat-shell .session-transcript-header { border: 0; padding: 0; }
+.chat-shell .session-transcript-header h2 { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.chat-shell .session-transcript-content { position: relative; }
+.chat-latest {
+  position: absolute;
+  inset-block-end: 8px;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  background: var(--hub-surface);
+  border: 1px solid var(--hub-border);
+  border-radius: 50%;
+}
+.chat-latest:disabled { display: none; }
+.chat-shell .session-transcript-body {
+  flex: 1;
+  min-block-size: 0;
+  max-block-size: none;
+  scrollbar-gutter: stable;
+}
+.chat-shell .markdown-table { max-inline-size: 100%; overflow-x: auto; }
+.chat-shell .markdown-table table { inline-size: max-content; min-inline-size: 100%; border-collapse: collapse; }
+.chat-shell .markdown-table :is(th, td) { padding: 6px 8px; border-bottom: 1px solid var(--hub-border); }
+.chat-shell .markdown-table th { text-align: start; }
+.chat-shell .chat-dock { min-block-size: 0; }
+.chat-shell .chat-approval-slot {
+  max-block-size: 36dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.chat-shell .session-location { padding-bottom: 8px; }
+.chat-shell .chat-composer-frame textarea { resize: none; }
+.chat-question-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-question-options { display: grid; gap: 4px; margin-block: 8px; }
+.chat-question-options .hub-button {
+  inline-size: 100%;
+  display: grid;
+  justify-items: start;
+  justify-content: stretch;
+  gap: 2px;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.chat-question-options .hub-button span { color: var(--hub-muted); }
+.chat-question-answer { display: flex; gap: 6px; }
+.chat-question-answer .hub-input { flex: 1; min-width: 0; }
+@media (max-width: 767px) {
+  .app-shell:has(.chat-shell) { display: flex; flex-direction: column; block-size: 100dvh; }
+  .workspace:has(.chat-shell) { block-size: auto; min-block-size: 0; }
+  .app-shell:has(.chat-shell) .sidebar-open { max-block-size: 45dvh; overflow: auto; }
+}
+@media (max-height: 480px) {
+  .workspace-main:has(.chat-shell) { overflow-y: auto; }
+  .chat-shell .session-conversation-column { min-block-size: 17rem; }
+}
 /* Expanded command and context panels participate in the page scroll so they
    cannot cover the conversation or move keyboard focus under the dock. */
 .chat-dock:has(.chat-native-command-picker:not([hidden]), .chat-command-picker, .composer-work-context[open]) {
@@ -691,6 +781,15 @@
   overflow-wrap: anywhere;
 }
 .chat-command-picker button span { color: var(--hub-muted); }
+.chat-command-terminal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+}
+.chat-command-terminal :is(span, small) { color: var(--hub-muted); }
+.chat-command-terminal small { margin-inline-start: auto; }
 .chat-delivery-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 480px) {
   .chat-tools { gap: 4px; }

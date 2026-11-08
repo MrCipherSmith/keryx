@@ -102,7 +102,7 @@ beforeEach(async () => {
       return Response.json({ operationId });
     }
     const route = path.slice((listPath + "/shell/").length);
-    if (route === "invoke" || route === "select-model" || route === "answer-approval") {
+    if (route === "invoke" || route === "select-model" || route === "answer-approval" || route === "answer-question") {
       if (owner !== body.clientId) return Response.json({ error: { code: "controller-conflict" } }, { status: 409 });
       const key = new Headers(init?.headers).get("Idempotency-Key")!;
       const operationId = "operation-" + key;
@@ -112,6 +112,7 @@ beforeEach(async () => {
       operations.set(operationId, detail.delivery);
       if (route === "select-model" && detail.context?.model) detail.context.model.currentId = "next-model";
       if (route === "answer-approval" && detail.context) delete detail.context.approval;
+      if (route === "answer-question" && detail.context) delete detail.context.question;
       return Response.json({ operationId });
     }
     return Response.json({}, { status: 404 });
@@ -128,23 +129,25 @@ function ShellBrowser({ scopeKey = context.scopeKey }: { scopeKey?: number }) {
   </HubContext.Provider>;
 }
 
-async function openWithControl() {
+async function openChat() {
   renderHub(<ShellBrowser />, context);
   fireEvent.click(await screen.findByRole("button", { name: "Connect to Terminal conversation" }));
   expect(await screen.findByText("Already said in the terminal")).toBeInTheDocument();
   expect(screen.getByText("Previously answered here")).toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: "Claim control" }));
-  await waitFor(() => expect(screen.queryByRole("button", { name: "Claim control" })).not.toBeInTheDocument());
+  expect(screen.queryByRole("button", { name: "Claim control" })).not.toBeInTheDocument();
   return screen.getByRole("textbox", { name: "Message" });
 }
 
 test("connects to the existing terminal history and releases only the browser on disconnect", async () => {
-  const composer = await openWithControl();
+  const composer = await openChat();
+  expect(claims).toHaveLength(0);
+  expect(screen.queryByText("Usage")).not.toBeInTheDocument();
   fireEvent.change(composer, { target: { value: "From Hub" } });
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   expect(await screen.findByText("From Hub", { selector: "pre" })).toBeInTheDocument();
   await waitFor(() => expect(composer).toHaveValue(""));
   expect(reads).toContain("operation-" + sends[0]);
+  expect(claims).toHaveLength(1);
   fireEvent.click(screen.getByLabelText("Session actions"));
   fireEvent.click(screen.getByRole("button", { name: "Disconnect from shell" }));
   expect(await screen.findByRole("button", { name: "Connect to Terminal conversation" })).toBeInTheDocument();
@@ -152,7 +155,7 @@ test("connects to the existing terminal history and releases only the browser on
 });
 
 test("updates one assistant preview and replaces it with one completed reply", async () => {
-  await openWithControl();
+  await openChat();
   detail.shell = { ...shell, busy: true, stopTurnId: "stream-turn" };
   detail.preview = "First words";
   const partial = await screen.findByText("First words", {}, { timeout: 2_500 });
@@ -170,7 +173,7 @@ test("updates one assistant preview and replaces it with one completed reply", a
 
 test("retries an uncertain send with the same operation key and clears the draft only after acknowledgement", async () => {
   loseReceipt = true;
-  const composer = await openWithControl();
+  const composer = await openChat();
   fireEvent.change(composer, { target: { value: "One message only" } });
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   expect(await screen.findByRole("button", { name: "Retry the same request" })).toBeEnabled();
@@ -184,7 +187,7 @@ test("retries an uncertain send with the same operation key and clears the draft
 
 test("keeps rejected text editable once the shell reports it was rejected", async () => {
   messageStatus = "rejected";
-  const composer = await openWithControl();
+  const composer = await openChat();
   fireEvent.change(composer, { target: { value: "Keep this draft" } });
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   expect(await screen.findByText("The shell rejected the request.")).toBeInTheDocument();
@@ -195,7 +198,7 @@ test("keeps rejected text editable once the shell reports it was rejected", asyn
 
 test("only the matching operation acknowledgement can clear the draft", async () => {
   messageStatus = "pending";
-  const composer = await openWithControl();
+  const composer = await openChat();
   fireEvent.change(composer, { target: { value: "My own pending message" } });
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
   expect(await screen.findByText("Waiting for the shell to accept the request.")).toBeInTheDocument();
@@ -210,20 +213,23 @@ test("only the matching operation acknowledgement can clear the draft", async ()
 });
 
 test("another browser using the same operator can read history and claim after release", async () => {
-  await openWithControl();
+  const first = await openChat();
+  fireEvent.change(first, { target: { value: "Take control by sending" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+  await waitFor(() => expect(first).toHaveValue(""));
   const other = renderHub(<ShellBrowser scopeKey={2} />, context);
   const browser = within(other.container);
   fireEvent.click(await browser.findByRole("button", { name: "Connect to Terminal conversation" }));
   expect(await browser.findByText("Previously answered here")).toBeInTheDocument();
-  expect(browser.getByRole("button", { name: "Claim control" })).toBeDisabled();
+  expect(browser.getByText(/Another browser holds control/)).toBeVisible();
   fireEvent.change(browser.getByRole("textbox", { name: "Message" }), { target: { value: "Keep in other browser" } });
   expect(browser.getByRole("button", { name: "Send message" })).toBeDisabled();
   fireEvent.click(screen.getAllByLabelText("Session actions")[0]);
   fireEvent.click(screen.getByRole("button", { name: "Release control" }));
-  await waitFor(() => expect(browser.getByRole("button", { name: "Claim control" })).toBeEnabled(), { timeout: 2_500 });
-  fireEvent.click(browser.getByRole("button", { name: "Claim control" }));
-  await waitFor(() => expect(browser.queryByRole("button", { name: "Claim control" })).not.toBeInTheDocument());
-  expect(browser.getByRole("button", { name: "Send message" })).toBeEnabled();
+  const send = browser.getByRole("button", { name: "Send message" });
+  await waitFor(() => expect(send).toBeEnabled(), { timeout: 2_500 });
+  fireEvent.click(send);
+  await waitFor(() => expect(browser.getByRole("textbox", { name: "Message" })).toHaveValue(""));
   expect(claims).toHaveLength(2);
   expect(claims[0]).not.toBe(claims[1]);
 });
@@ -231,7 +237,7 @@ test("another browser using the same operator can read history and claim after r
 test("retries a lost Stop receipt for the original turn even when the shell has started another", async () => {
   detail.shell = { ...shell, busy: true, stopTurnId: "turn-A" };
   loseReceipt = true;
-  await openWithControl();
+  await openChat();
   fireEvent.click(screen.getByRole("button", { name: "Stop response" }));
   fireEvent.click(await screen.findByRole("button", { name: "Retry the same request" }));
   expect(await screen.findByText("The shell accepted the request.")).toBeInTheDocument();
@@ -251,7 +257,7 @@ test("slash commands return output to history, models change on acknowledgement 
     commands: [{ name: "status", description: "Show terminal status" }],
     usage: { turn: usage, session: usage },
   };
-  const composer = await openWithControl();
+  const composer = await openChat();
   fireEvent.keyDown(composer, { key: "/" });
   expect(screen.getByRole("searchbox", { name: "Search Keryx commands" })).toHaveFocus();
   fireEvent.click(screen.getByRole("button", { name: /\/status/ }));
@@ -274,7 +280,7 @@ test("the pending shell approval sits above the composer and answers the exact q
     id: "approval-A", tool: "shell_exec", summary: "pwd", reason: "Command execution needs approval", canAnswer: true,
   } };
   detail.shell = { ...shell, busy: true, stopTurnId: "turn-A" };
-  const composer = await openWithControl();
+  const composer = await openChat();
   const dock = composer.closest(".chat-dock") as HTMLElement;
   expect(within(dock).getByText("Command execution needs approval")).toBeVisible();
   const approve = within(dock).getByRole("button", { name: "Allow once" });
@@ -284,4 +290,28 @@ test("the pending shell approval sits above the composer and answers the exact q
   expect(chatOperations).toEqual([{
     route: "answer-approval", payload: { clientId: expect.any(String), approvalId: "approval-A", decision: "allow" },
   }]);
+});
+
+test("a shell question accepts an answer from the browser without a separate claim", async () => {
+  detail.context = { phase: "waiting-input", question: {
+    id: "question-A", text: "Which plan should I use?", canAnswer: true,
+    options: [{ label: "Plan A", description: "Read the files" }, { label: "Plan B", description: "Run the test" }],
+  } };
+  detail.shell = { ...shell, busy: true, stopTurnId: "turn-A" };
+  const composer = await openChat();
+  const dock = composer.closest(".chat-dock") as HTMLElement;
+  expect(within(dock).getByText("Which plan should I use?")).toBeVisible();
+  fireEvent.click(within(dock).getByRole("button", { name: /Plan B/ }));
+  await waitFor(() => expect(within(dock).queryByText("Which plan should I use?")).not.toBeInTheDocument());
+  expect(chatOperations).toEqual([{
+    route: "answer-question", payload: { clientId: expect.any(String), questionId: "question-A", answer: { option: 1 } },
+  }]);
+});
+
+test("renders a terminal reply with a Markdown table as a table", async () => {
+  detail.messages.push({ role: "assistant", text: "| PR | State |\n| --- | --- |\n| 1154 | Merged |" });
+  await openChat();
+  const table = within(screen.getByRole("region", { name: "History" })).getByRole("table");
+  expect(within(table).getByRole("columnheader", { name: "State" })).toBeVisible();
+  expect(within(table).getByRole("cell", { name: "Merged" })).toBeVisible();
 });

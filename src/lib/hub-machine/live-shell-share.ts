@@ -6,11 +6,14 @@ import {
   canShowExactApproval,
   liveShellContextHeader,
   liveShellLimits,
+  liveShellChatHeader,
   liveShellStreamHeader,
+  validLiveShellQuestionAnswer,
   type LiveShellCommand,
   type LiveShellContext,
   type LiveShellDecision,
   type LiveShellMessage,
+  type LiveShellQuestionAnswer,
   type LiveShellUpdate,
 } from "../../remote-control/live-shell";
 import { parseClosedJson } from "../../remote-control/protocol";
@@ -34,6 +37,7 @@ export interface LiveShellHost {
   invoke?(name: string): { output?: string } | false | Promise<{ output?: string } | false>;
   selectModel?(candidateId: string): boolean | Promise<boolean>;
   answerApproval?(approvalId: string, decision: LiveShellDecision): boolean;
+  answerQuestion?(questionId: string, answer: LiveShellQuestionAnswer): boolean;
 }
 
 type Registration = {
@@ -90,13 +94,20 @@ function sharedPreview(input: string): string | undefined {
   return sharedText(prefix, liveShellLimits.messageBytes);
 }
 
-function sharedContext(context: LiveShellContext): LiveShellContext {
-  const { commands, model, approval } = context;
-  const safe: LiveShellContext = { ...context };
+function sharedContext(context: LiveShellContext, supportsChat = false): LiveShellContext {
+  const { question, terminalCommands, ...remaining } = context;
+  const safe: LiveShellContext = remaining;
+  const { commands, model, approval } = safe;
   if (commands) safe.commands = commands.slice(0, liveShellLimits.commandCount).map(entry => ({
     name: entry.name,
     description: sharedText(entry.description, liveShellLimits.descriptionBytes),
   }));
+  if (terminalCommands && supportsChat) {
+    safe.terminalCommands = terminalCommands.slice(0, liveShellLimits.terminalCommandCount).map(entry => ({
+      name: entry.name,
+      description: sharedText(entry.description, liveShellLimits.descriptionBytes),
+    }));
+  }
   if (model) safe.model = { ...model, candidates: model.candidates.slice(0, liveShellLimits.candidateCount).map(entry => ({
     id: entry.id,
     label: sharedText(entry.label, liveShellLimits.descriptionBytes),
@@ -110,6 +121,19 @@ function sharedContext(context: LiveShellContext): LiveShellContext {
       canAnswer: approval.canAnswer && canShowExactApproval(summary) &&
         tool === approval.tool && summary === approval.summary && reason === approval.reason,
     };
+  }
+  if (question && supportsChat) {
+    const body = sharedText(question.text, liveShellLimits.approvalSummaryBytes);
+    let exact = body === question.text && canShowExactApproval(body) &&
+      question.options.length >= 2 && question.options.length <= liveShellLimits.questionOptions;
+    const options = question.options.slice(0, liveShellLimits.questionOptions).map(option => {
+      const label = sharedText(option.label, liveShellLimits.descriptionBytes);
+      const description = sharedText(option.description, liveShellLimits.descriptionBytes);
+      exact &&= label === option.label && description === option.description && canShowExactApproval(label) &&
+        (!description || canShowExactApproval(description));
+      return { label, description };
+    });
+    safe.question = { id: question.id, text: body, options, canAnswer: question.canAnswer && exact };
   }
   return safe;
 }
@@ -130,7 +154,7 @@ export function liveShellHistory(history: readonly NormalizedMessage[], turnRunn
   return result.reverse();
 }
 
-function replyCommand(value: unknown, supportsContext: boolean): LiveShellCommand | null {
+function replyCommand(value: unknown, supportsContext: boolean, supportsChat: boolean): LiveShellCommand | null {
   if (value === null || typeof value !== "object" || !Object.hasOwn(value, "command")) throw new MachineError("invalid-live-shell-reply");
   const command = (value as { command: unknown }).command;
   if (command === null) return null;
@@ -144,6 +168,10 @@ function replyCommand(value: unknown, supportsContext: boolean): LiveShellComman
       return { id: fields.id, kind: "stop", turnId: fields.turnId };
     }
     if (supportsContext) {
+      if (supportsChat && fields.kind === "answer-question" && typeof fields.questionId === "string" &&
+          uuidPattern.test(fields.questionId) && validLiveShellQuestionAnswer(fields.answer)) {
+        return { id: fields.id, kind: "answer-question", questionId: fields.questionId, answer: fields.answer };
+      }
       if (fields.kind === "invoke" && typeof fields.name === "string" && commandNamePattern.test(fields.name)) {
         return { id: fields.id, kind: "invoke", name: fields.name };
       }
@@ -170,6 +198,7 @@ export class LiveShellShare {
   #connected = false;
   #supportsContext = false;
   #supportsStream = false;
+  #supportsChat = false;
   #timer: ReturnType<typeof setTimeout> | undefined;
   #inFlight: Promise<void> | undefined;
   #closing: Promise<void> | undefined;
@@ -242,7 +271,7 @@ export class LiveShellShare {
       ...(turnId !== undefined ? { turnId } : {}),
       ...(preview ? { preview } : {}),
       ...(publish ? { messages } : {}),
-      ...(context !== undefined ? { context: sharedContext(context) } : {}),
+      ...(context !== undefined ? { context: sharedContext(context, this.#supportsChat) } : {}),
       ...(wireAck !== undefined ? { ack: wireAck } : {}),
     };
     const response = await fetch(url, {
@@ -255,6 +284,7 @@ export class LiveShellShare {
       // error does not drop capability or discard an undelivered result.
       if (response.status === 400 && (context !== undefined || wireAck?.output !== undefined)) {
         this.#supportsContext = false;
+        this.#supportsChat = false;
       }
       if (response.status === 400 && preview !== undefined) this.#supportsStream = false;
       if ([401, 403, 404, 410].includes(response.status) && this.active) {
@@ -268,7 +298,8 @@ export class LiveShellShare {
     const parsed = parseClosedJson(await readBoundedResponse(response, maxReplyBytes), maxReplyBytes);
     if (!parsed.ok) throw new MachineError("invalid-live-shell-reply");
     const supportsContext = response.headers.get(liveShellContextHeader) === "1";
-    const command = replyCommand(parsed.value, supportsContext);
+    const supportsChat = response.headers.get(liveShellChatHeader) === "1";
+    const command = replyCommand(parsed.value, supportsContext, supportsChat);
     if (!this.active) {
       void this.close();
       return;
@@ -276,6 +307,7 @@ export class LiveShellShare {
     if (!this.#connected) this.host.notice("◇ This shell is available in Team Hub. Use /remote-control hub off to disconnect it.");
     this.#connected = true;
     this.#supportsContext = supportsContext;
+    this.#supportsChat = supportsChat;
     this.#supportsStream = response.headers.get(liveShellStreamHeader) === "1";
     this.#lastFailure = undefined;
     if (publish) {
@@ -339,6 +371,12 @@ export class LiveShellShare {
         const approval = context && sharedContext(context).approval;
         return approval?.id === command.approvalId && approval.canAnswer &&
           this.host.answerApproval?.(command.approvalId, command.decision) ? {} : false;
+      }
+      case "answer-question": {
+        const context = this.host.inspect?.();
+        const question = context && sharedContext(context, true).question;
+        return this.#supportsChat && question?.id === command.questionId && question.canAnswer &&
+          this.host.answerQuestion?.(command.questionId, command.answer) ? {} : false;
       }
     }
   }

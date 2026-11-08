@@ -4,9 +4,12 @@ import { Ellipsis, MessageSquare, Monitor } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   liveShellLimits,
+  validLiveShellQuestionAnswer,
   type LiveShellDelivery,
   type LiveShellDetail,
   type LiveShellMessage,
+  type LiveShellQuestion,
+  type LiveShellQuestionAnswer,
   type LiveShellSummary,
 } from "../../../../../src/remote-control/live-shell";
 import { ApiError, errorMessage } from "../../api/client";
@@ -95,6 +98,10 @@ type Attempt = ({
   kind: "answer-approval";
   approvalId: string;
   decision: "allow" | "deny";
+} | {
+  kind: "answer-question";
+  questionId: string;
+  answer: LiveShellQuestionAnswer;
 }) & {
   key: string;
   operationId?: string;
@@ -116,6 +123,7 @@ function liveCommandBody(request: Attempt, clientId: string) {
     case "invoke": return { clientId, name: request.name };
     case "select-model": return { clientId, candidateId: request.candidateId };
     case "answer-approval": return { clientId, approvalId: request.approvalId, decision: request.decision };
+    case "answer-question": return { clientId, questionId: request.questionId, answer: request.answer };
   }
 }
 
@@ -149,7 +157,9 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
   const delivery = detail.data?.delivery;
   const context = detail.data?.context;
   const approval = context?.approval;
+  const question = context?.question;
   const commands = context?.commands ?? [];
+  const terminalCommands = context?.terminalCommands ?? [];
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
@@ -235,11 +245,14 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
   }, [attempt, delivery, setDraft]);
 
   const command = useMutation({
-    mutationFn: (request: Attempt) => remoteMutate<{ operationId: string }>(
-      "POST", path + "/" + request.kind,
-      liveCommandBody(request, clientId),
-      { operationId: request.key },
-    ),
+    mutationFn: async (request: Attempt) => {
+      if (leaseUntil <= Date.now()) await control.mutateAsync("claim");
+      return remoteMutate<{ operationId: string }>(
+        "POST", path + "/" + request.kind,
+        liveCommandBody(request, clientId),
+        { operationId: request.key },
+      );
+    },
     onSuccess: ({ operationId }, request) => {
       setDraft(current => ({
         ...current, attempt: { ...request, operationId, uncertain: false },
@@ -249,14 +262,19 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
     onError: (error, request) => {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setDraft(current => ({ ...current, attempt: isUncertain(error) ? { ...request, uncertain: true } : null }));
-      if (error instanceof ApiError && ["controller-conflict", "controller-expired"].includes(error.code)) setLeaseUntil(0);
+      if (error instanceof ApiError && ["controller-conflict", "controller-expired"].includes(error.code)) {
+        setLeaseUntil(0);
+        void detail.refetch();
+      }
     },
     retry: false,
   });
   const ended = detail.error instanceof ApiError && detail.error.status === 404;
   const owns = operator && leaseUntil > Date.now() && !ended;
   const stopTurnId = shell?.stopTurnId;
-  const canCommand = !!shell && owns && !detail.error && !control.isPending && !command.isPending;
+  const heldElsewhere = !owns && !!detail.data?.controllerHeld;
+  const canCommand = operator && !!shell && !detail.error && !control.isPending && !command.isPending &&
+    (!heldElsewhere || !!attempt?.uncertain);
   const reviewDelivery = !!operationId && !detail.isPlaceholderData && !!detail.data &&
     (!delivery || delivery.status === "unconfirmed");
   const deliveryStatus = reviewDelivery ? "unconfirmed"
@@ -309,7 +327,7 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
         <div className="min-w-0">
           <div className="session-message-header"><strong>{message.role === "assistant" ? "Keryx" : t("liveShells.human")}</strong></div>
           <div className="session-message-content">
-            {message.role === "assistant" ? <Markdown content={message.text} /> : <pre>{message.text}</pre>}
+            {message.role === "assistant" ? <Markdown content={message.text} gfm /> : <pre>{message.text}</pre>}
           </div>
         </div>
       </li>,
@@ -333,15 +351,18 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
   }
   const preview = !detail.error && stopTurnId ? detail.data?.preview : undefined;
   if (preview) entries.push(shellMessage("shell:preview:" + stopTurnId, { role: "assistant", text: preview }, true));
-  const matches = commands.filter(command =>
-    (command.name + " " + command.description).toLowerCase().includes(search.trim().replace(/^\//, "").toLowerCase()));
-  const stop = stopTurnId && owns
+  const query = search.trim().replace(/^\//, "").toLowerCase();
+  const match = (item: { name: string; description: string }) =>
+    (item.name + " " + item.description).toLowerCase().includes(query);
+  const matches = commands.filter(match);
+  const terminalMatches = terminalCommands.filter(match);
+  const stop = stopTurnId
     ? <ChatAction kind="stop" label={t("liveShells.stop")} disabled={!canCommand || !!attempt}
         onClick={() => submit({ key: crypto.randomUUID(), kind: "stop", turnId: stopTurnId })} />
     : <ChatAction kind="send" label={t("send")} type="submit" disabled={!canSend} />;
   return (
     <section className="session-workbench chat-shell session-chat-page">
-      <Button className="session-back" variant="ghost" disabled={control.isPending} onClick={detach}>
+      <Button className="session-back" variant="ghost" disabled={control.isPending || command.isPending} onClick={detach}>
         <span aria-hidden="true">←</span> {t("chatBackToSessions")}
       </Button>
       <header className="session-workbench-header">
@@ -356,8 +377,6 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
           </div>
         </div>
         <div className="chat-shell-actions">
-          {operator && shell && !detail.error && !owns &&
-            <Button disabled={control.isPending || !!detail.data?.controllerHeld} onClick={() => control.mutate("claim")}>{t("claim")}</Button>}
           <details className="chat-header-menu" onKeyDown={event => {
             if (event.key !== "Escape") return;
             event.currentTarget.open = false;
@@ -366,25 +385,27 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
             <summary aria-label={t("chatActions")} title={t("chatActions")}><Ellipsis size={20} aria-hidden="true" /></summary>
             <div className="chat-header-menu-options">
               {owns && <Button variant="ghost" disabled={control.isPending} onClick={() => control.mutate("release")}>{t("release")}</Button>}
-              <Button variant="ghost" disabled={control.isPending} onClick={detach}>{t("liveShells.detach")}</Button>
+              <Button variant="ghost" disabled={control.isPending || command.isPending} onClick={detach}>{t("liveShells.detach")}</Button>
             </div>
           </details>
         </div>
       </header>
       {shell && <div className="session-location"><Monitor size={13} /><span>{shell.machineName}</span><span>/</span><span>{shell.checkoutId}</span></div>}
       {ended ? <Notice>{t("liveShells.ended")}</Notice> : <Feedback query={detail} />}
-      {(control.error || renewalError) ? <Notice tone="error">{errorMessage(control.error ?? renewalError, t)}</Notice> : null}
+      {renewalError && !canCommand && !heldElsewhere ? <Notice tone="error">{errorMessage(renewalError, t)}</Notice> : null}
       {shell && <>
-        {!owns && !ended && <p className="chat-control-status">
-          {t(!operator ? "liveShells.readOnly" : detail.data?.controllerHeld ? "liveShells.held" : "liveShells.observing")}
+        {!ended && (!operator || heldElsewhere) && <p className="chat-control-status">
+          {t(!operator ? "liveShells.readOnly" : "liveShells.held")}
         </p>}
         <ChatConversation transcript={<section className="session-transcript" aria-label={t("history")}>
           <header className="session-transcript-header"><h2>{t("history")}</h2></header>
-          <ChatTranscript entries={entries} isRunning={!!preview}>
+          <ChatTranscript entries={entries} isRunning={!!preview} showLatest>
             {!entries.length && <p className="chat-empty">{t("liveShells.noHistory")}</p>}
           </ChatTranscript>
         </section>}
-        approval={approval ? <div className="chat-approval-slot" data-chat-approval="waiting">
+        approval={question ? <ShellQuestion key={question.id} question={question} disabled={!canCommand || !!attempt}
+          answer={answer => submit({ key: crypto.randomUUID(), kind: "answer-question", questionId: question.id, answer })} />
+          : approval ? <div className="chat-approval-slot" data-chat-approval="waiting">
           <Panel title={t("approval")}>
             <p><code>{approval.tool}</code></p>
             {approval.summary && <pre className="chat-approval-summary" dir="ltr">{approval.summary}</pre>}
@@ -423,7 +444,7 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
               model={context?.model && <ChatModelPicker value={context.model.currentId} candidates={context.model.candidates}
                 disabled={!canCommand || !!attempt || shell.busy}
                 onSelect={candidateId => submit({ key: crypto.randomUUID(), kind: "select-model", candidateId })} />}
-              usage={<ChatUsage usage={context?.usage} unavailable={!context} />}
+              usage={context?.usage && <ChatUsage usage={context.usage} />}
               action={operator ? stop : null} />
             {commandsOpen && <div className="chat-command-picker" id={commandsId}
               onPointerDownCapture={() => { slashOpened.current = false; }}
@@ -438,12 +459,16 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
               }}>
               <Field label={t("searchCommands")}><Input ref={searchInput} type="search" value={search}
                 onChange={event => setSearch(event.target.value)} /></Field>
-              {matches.length === 0 ? <p>{t("noCommandsFound")}</p> : <ul>
+              {matches.length + terminalMatches.length === 0 ? <p>{t("noCommandsFound")}</p> : <ul>
                 {matches.map(item => <li key={item.name}><Button variant="ghost" disabled={!canCommand || !!attempt || shell.busy}
                   onClick={() => {
                     closeCommands();
                     submit({ key: crypto.randomUUID(), kind: "invoke", name: item.name, anchor: messages.length });
                   }}><strong>/{item.name}</strong><span>{item.description}</span></Button></li>)}
+                {terminalMatches.map(item => <li key={item.name} className="chat-command-terminal">
+                  <strong>/{item.name}</strong><span>{item.description}</span>
+                  <small>{t("liveShells.terminalOnly")}</small>
+                </li>)}
               </ul>}
             </div>}
             {operator && <div className="chat-delivery-actions">
@@ -459,4 +484,35 @@ function LiveShellPane({ projectId, id, path, onDetach }: {
       </>}
     </section>
   );
+}
+
+function ShellQuestion({ question, disabled, answer }: {
+  question: LiveShellQuestion;
+  disabled: boolean;
+  answer: (answer: LiveShellQuestionAnswer) => void;
+}) {
+  const { t } = useTranslation("remote");
+  const [text, setText] = useState("");
+  return <div className="chat-approval-slot" data-chat-question="waiting">
+    <Panel title={t("liveShells.question")}>
+      <p className="chat-question-text">{question.text}</p>
+      {question.canAnswer ? <>
+        <ul className="chat-question-options">
+          {question.options.map((option, index) => <li key={index}>
+            <Button variant="secondary" disabled={disabled} onClick={() => answer({ option: index })}>
+              <strong>{option.label}</strong>{option.description && <span>{option.description}</span>}
+            </Button>
+          </li>)}
+        </ul>
+        <form className="chat-question-answer" onSubmit={event => {
+          event.preventDefault();
+          if (!disabled && validLiveShellQuestionAnswer({ text })) answer({ text: text.trim() });
+        }}>
+          <Input aria-label={t("liveShells.ownAnswer")} placeholder={t("liveShells.ownAnswer")}
+            value={text} maxLength={liveShellLimits.questionAnswerBytes} onChange={event => setText(event.target.value)} />
+          <Button type="submit" disabled={disabled || !validLiveShellQuestionAnswer({ text })}>{t("liveShells.answer")}</Button>
+        </form>
+      </> : <Notice>{t("chatApprovalLocal")}</Notice>}
+    </Panel>
+  </div>;
 }

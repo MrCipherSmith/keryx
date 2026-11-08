@@ -186,3 +186,40 @@ test("an advertised shell and a new headless session cannot claim the same mappe
   expect((await success<{status: string}>(launch())).status).toBe("pending");
   expect((await shell.refresh()).status).toBe(409);
 });
+
+test("an answer is offered only for the same visible question and valid choice", async () => {
+  const shell = await sharedShell();
+  await shell.publish();
+  const turnId = randomUUID();
+  const clientId = randomUUID();
+  const question = {
+    id: randomUUID(), text: "Which check should I run?", canAnswer: true,
+    options: [{ label: "Quick", description: "" }, { label: "Deep", description: "Check everything" }],
+  };
+  const terminalCommands = [{ name: "permissions", description: "Change local permissions" }];
+  const refresh = (current: typeof question) => shell.refresh({
+    busy: true, turnId, context: { question: current, terminalCommands },
+  });
+  const first = await refresh(question);
+  expect(first.headers.get("Keryx-Live-Shell-Chat")).toBe("1");
+  await readSuccess(first);
+  expect((await shell.detail()).context?.question).toEqual(question);
+  await success(shell.write("claim", { clientId }));
+  expect((await shell.write("invoke", { clientId, name: "permissions" })).status).toBe(409);
+  const base = { clientId, questionId: question.id };
+  expect((await shell.write("answer-question", { ...base, answer: { option: 2 } })).status).toBe(409);
+  expect((await shell.write("answer-question", { ...base, answer: { option: 0, text: "Both" } })).status).toBe(400);
+  const stale = await success<{operationId: string}>(shell.write("answer-question", { ...base, answer: { option: 1 } }));
+  const next = { ...question, id: randomUUID() };
+  expect((await readSuccess<LiveShellReply>(await refresh(next))).command).toBeNull();
+  expect((await shell.detail(stale.operationId)).delivery?.status).toBe("rejected");
+  const answer = { text: "Check the chat" };
+  const receipt = await success<{operationId: string}>(shell.write("answer-question", { clientId, questionId: next.id, answer }));
+  expect((await readSuccess<LiveShellReply>(await refresh(next))).command)
+    .toEqual({ id: receipt.operationId, kind: "answer-question", questionId: next.id, answer });
+  const unsafe = { ...question, id: randomUUID(), text: "Review Bearer private-value" };
+  await success(shell.refresh({
+    busy: true, turnId, context: { question: unsafe }, ack: { id: receipt.operationId, status: "applied" },
+  }));
+  expect((await shell.detail()).context?.question).toMatchObject({ text: "Review Bearer [REDACTED]", canAnswer: false });
+});

@@ -75,6 +75,8 @@ export interface ComposerChoiceRequest {
   onOpen?: () => void;
   /** A second surface can select a displayed option while this exact dock is open. */
   onSelectReady?: (select: (id: string) => boolean) => void;
+  /** A second surface can submit its own text while this question is still open. */
+  onOwnAnswerReady?: (answer: (text: string) => boolean) => void;
   /**
    * Enter is ignored for this long after the menu mounts, and for this long
    * after the last printable key reached the menu. A dialog that pops up while
@@ -1064,6 +1066,11 @@ function presentComposerChoice(
     request.onSelectReady?.((id) => {
       if (settled || request.signal?.aborted || !request.options.some((option) => option.id === id)) return false;
       finish(id, "remote");
+      return true;
+    });
+    if (ownEnabled) request.onOwnAnswerReady?.((text) => {
+      if (settled || request.signal?.aborted || !text.trim()) return false;
+      settle({ kind: "own", text }, "remote");
       return true;
     });
   });

@@ -7,4 +7,7 @@
 - Keep message actions in the composer and show actionable approvals immediately above it.
 - Retain the conversation title, connection state and machine in the header. Leave the existing session controls available.
 - On narrow screens the conversation takes one column, with a 44 px Back control and room for translated labels.
-- A connected shell opens in observer mode. Claim control before sending a message.
+- A connected shell acquires browser control on the first send, stop, or answer. Opening it to read history leaves any current controller alone.
+- On a connected shell page only the transcript scrolls during normal chat use. The composer stays beneath it, and a pending question or approval sits immediately above the composer.
+- Show usage after the shell sends measured counts. Older shells can still send text and display history.
+- Use the shell's own command registry for discovery. Mark commands that still need the terminal. The connected chat can run `/help`, `/status`, `/usage`, `/model`, `/models` and `/queue` without passing arbitrary slash text to the terminal.

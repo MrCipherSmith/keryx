@@ -1,6 +1,7 @@
 import {
   canShowExactApproval,
   liveShellLimits as limits,
+  validLiveShellQuestionAnswer,
   type LiveShellCommand,
   type LiveShellContext,
   type LiveShellDelivery,
@@ -69,7 +70,7 @@ function boundedList<T>(value: unknown, max: number, parse: (entry: unknown) => 
 }
 
 function parseContext(value: unknown): LiveShellContext {
-  const raw = record(value, ["model", "commands", "usage", "approval", "phase"]);
+  const raw = record(value, ["model", "commands", "terminalCommands", "usage", "approval", "question", "phase"]);
   const context: LiveShellContext = {};
   if (raw.model !== undefined) {
     const model = record(raw.model, ["currentId", "candidates"]);
@@ -92,6 +93,16 @@ function parseContext(value: unknown): LiveShellContext {
     }
     context.commands = commands;
   }
+  if (raw.terminalCommands !== undefined) {
+    const terminalCommands = boundedList(raw.terminalCommands, limits.terminalCommandCount, value => {
+      const command = record(value, ["name", "description"]);
+      return { name: identifier(command.name, commandName), description: displayText(command.description, limits.descriptionBytes) };
+    });
+    if (new Set(terminalCommands.map(command => command.name)).size !== terminalCommands.length) {
+      fail(400, "invalid-arguments", "Duplicate terminal command");
+    }
+    context.terminalCommands = terminalCommands;
+  }
   if (raw.usage !== undefined) {
     const counts = record(raw.usage, ["turn", "session"]);
     context.usage = { turn: usage(counts.turn), session: usage(counts.session) };
@@ -107,6 +118,21 @@ function parseContext(value: unknown): LiveShellContext {
       canAnswer: approval.canAnswer && canShowExactApproval(summary) &&
         tool === approval.tool && summary === approval.summary && reason === approval.reason,
     };
+  }
+  if (raw.question !== undefined) {
+    const question = record(raw.question, ["id", "text", "options", "canAnswer"]);
+    if (typeof question.canAnswer !== "boolean") fail(400, "invalid-arguments", "Invalid live shell question");
+    const body = displayText(question.text, limits.approvalSummaryBytes);
+    let exact = body === question.text && canShowExactApproval(body);
+    const options = boundedList(question.options, limits.questionOptions, value => {
+      const option = record(value, ["label", "description"]);
+      const label = displayText(option.label, limits.descriptionBytes);
+      const description = displayText(option.description, limits.descriptionBytes);
+      exact &&= label === option.label && description === option.description && canShowExactApproval(label) &&
+        (!description || canShowExactApproval(description));
+      return { label, description };
+    });
+    context.question = { id: identifier(question.id, uuid), text: body, options, canAnswer: question.canAnswer && exact && options.length >= 2 };
   }
   if (raw.phase !== undefined) {
     if (raw.phase !== "thinking" && raw.phase !== "working" && raw.phase !== "waiting-input") {
@@ -205,6 +231,10 @@ function parseCommand(action: string, args: Record<string, unknown>, id: string)
       if (decision !== "allow" && decision !== "deny") fail(400, "invalid-arguments", "Invalid live shell decision");
       return { id, kind: "answer-approval", approvalId: identifier(args.approvalId, uuid), decision };
     }
+    case "answer-question": {
+      if (!validLiveShellQuestionAnswer(args.answer)) fail(400, "invalid-arguments", "Invalid live shell answer");
+      return { id, kind: "answer-question", questionId: identifier(args.questionId, uuid), answer: args.answer };
+    }
     default:
       fail(404, "not-found", "Route not found");
   }
@@ -213,6 +243,7 @@ function parseCommand(action: string, args: Record<string, unknown>, id: string)
 const actionKeys: Record<string, string[]> = {
   message: ["text"], stop: ["turnId"], invoke: ["name"],
   "select-model": ["candidateId"], "answer-approval": ["approvalId", "decision"],
+  "answer-question": ["questionId", "answer"],
 };
 
 function commandCurrent(shell: LiveShell, command: LiveShellCommand): boolean {
@@ -227,6 +258,11 @@ function commandCurrent(shell: LiveShell, command: LiveShellCommand): boolean {
       return !shell.summary.busy && !!shell.context?.model?.candidates.some(entry => entry.id === command.candidateId);
     case "answer-approval":
       return shell.context?.approval?.id === command.approvalId && shell.context.approval.canAnswer;
+    case "answer-question": {
+      const question = shell.context?.question;
+      return !!question?.canAnswer && question.id === command.questionId &&
+        (!("option" in command.answer) || command.answer.option < question.options.length);
+    }
   }
 }
 
