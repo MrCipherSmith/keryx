@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.4.22] - 2026-11-08
+
+### Added
+- **Hierarchical review orchestration ([#1134](https://github.com/MrCipherSmith/keryx/pull/1134)).** Review teams can delegate to native or external Keryx workers with shared budgets and durable coverage plans. Validated results can be exported to managed review packages.
+- **Streaming replies in connected Team Hub shells ([#1154](https://github.com/MrCipherSmith/keryx/pull/1154)).** Replies appear as they arrive. Stop interrupts the response and the shell stays available for follow-up.
+
+### Fixed
+- **Readable `/help` in Team Hub ([#1154](https://github.com/MrCipherSmith/keryx/pull/1154)).** Managed session chat displays the full command catalogue with descriptions and availability.
+
+### Upgrade notes
+- Update both Team Hub and Keryx. Open a shell with the updated Keryx to stream replies from a connected terminal.
+
 ## [0.4.21] - 2026-11-08
 
 ### Added
