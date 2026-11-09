@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.4.23] - 2026-11-09
+
+### Fixed
+- **Routing with offline model catalogues.** A fallback model list no longer marks a connected provider as disconnected. The current session model remains usable even when absent from that list; unverified alternatives and missing or failed credentials remain blocked.
+
 ## [0.4.22] - 2026-11-08
 
 ### Added
