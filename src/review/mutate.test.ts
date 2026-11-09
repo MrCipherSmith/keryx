@@ -799,7 +799,12 @@ describe("bun fixture", () => {
     test("bail status parity: early failure plus later hang is killed", async () => {
       await rm(path.join(proj, "b.test.ts"));
       await rm(path.join(proj, "c.test.ts"));
-      await writeFile(path.join(proj, "z.test.ts"), 'import { test } from "bun:test";\nimport { add } from "./calc";\ntest("hang", () => {\n  if (add(2, 3) !== 5) while (true) {}\n});\n');
+      // Bun does not guarantee file execution order, even with explicit arguments.
+      // Keep the failure and subsequent hang in declaration order within one file.
+      const first = path.join(proj, "a.test.ts");
+      await writeFile(first, `${await readFile(first, "utf8")}\ntest("hang", () => {\n  if (add(2, 3) !== 5) while (true) {}\n});\n`);
+      // Retain multiple explicit file arguments without depending on their order.
+      await writeFile(path.join(proj, "z.test.ts"), 'import { test, expect } from "bun:test";\ntest("independent", () => expect(true).toBe(true));\n');
       const command = "bun test a.test.ts z.test.ts";
       const one = parseMutantSpec([{ id: "kill", file: "calc.ts", anchor: "a + b", replacement: "a - b" }]);
       const bailedRecord = await runMutation({ worktree: proj, command, scratchRoot: scratch, timeoutMs: 5000, mutants: one });
