@@ -127,7 +127,9 @@ async function listEntries(dir: string, limit: number): Promise<{ entries: Diren
     }
     return { entries, more: false };
   } finally {
-    await handle.close().catch(() => {});
+    // Bun 1.3 returns void here, while Node returns a Promise. Await supports both;
+    // calling .catch() on the result discards a successful listing on older Bun.
+    await handle.close();
   }
 }
 

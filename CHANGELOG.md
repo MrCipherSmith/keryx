@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.24] - 2026-11-09
+
+### Fixed
+- **Review completion on Bun 1.3.14.** Directory scans now await directory closure instead of relying on an unsupported synchronous close API.
+- **Deterministic mutation bail test.** The early failure and later hang share one fixture file so filesystem ordering cannot turn the expected kill into a timeout.
+
+Includes the offline routing fix from 0.4.23, whose release did not complete.
+
 ## [0.4.23] - 2026-11-09
 
 ### Fixed
