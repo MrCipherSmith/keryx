@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { catalogToFlatPickerProviders } from "../provider-catalog";
+import { normalizeRoutingConfig } from "./config";
+import { resolveRoutingDecision } from "./resolver";
 import type { ModelProfile } from "./model-profile";
 import { profileKey } from "./model-profile";
 import type { RoutingRequest } from "./routing-request";
@@ -83,7 +86,7 @@ test("offline rows remain unknown and status-only providers never invent models"
     policy,
   });
   expect(snapshot.models).toHaveLength(1);
-  expect(snapshot.models[0]).toMatchObject({ connected: false, availability: "unknown" });
+  expect(snapshot.models[0]).toMatchObject({ connected: true, availability: "unknown" });
   expect(snapshot.authFailedProviderIds).toEqual(["broken"]);
 });
 
@@ -174,4 +177,42 @@ test("fresh live listings establish availability independently of profile refres
   expect(availability({ ...provider, offline: true })).toEqual(["unknown", "unknown", "unknown"]);
   expect(availability({ ...provider, observedAt: "2026-11-04T00:04:00.000Z" }))
     .toEqual(["unknown", "unknown", "unavailable"]);
+});
+
+for (const models of [["session", "other"], ["other"]]) {
+  test(`offline catalog retains baseline connection: ${models.join(",")}`, () => {
+    const config = normalizeRoutingConfig({ user: { schemaVersion: 2, categories: { review: { mode: "baseline" } } } });
+    const providers = catalogToFlatPickerProviders({
+      fetchedAt: SNAPSHOT_META.observedAt,
+      providers: { anthropic: { name: "anthropic", status: "not-supported", models: [], fallbackModels: models, fetchedAt: SNAPSHOT_META.observedAt } },
+    });
+    const snapshot = buildCatalogRoutingSnapshot({
+      ...SNAPSHOT_META,
+      configDigest: config.configDigest, baseline: request.baseline, request, policy,
+      providers,
+      profiles: {},
+    });
+    expect(snapshot.models.find((entry) => entry.target.modelId === "session"))
+      .toMatchObject({ connected: true, availability: "unknown", credentialsAvailable: true });
+    expect(snapshot.models.find((entry) => entry.target.modelId === "other"))
+      .toMatchObject({ connected: true, availability: "unknown" });
+    expect(resolveRoutingDecision(request, snapshot, config)).toMatchObject({ status: "selected", selection: request.baseline });
+    const alternate = { ...request, userOverride: { mode: "model" as const, target: { providerId: "anthropic", modelId: "other" } } };
+    expect(resolveRoutingDecision(alternate, snapshot, config)).toMatchObject({ status: "blocked", reason: "candidate-unverified" });
+  });
+}
+
+test("offline baseline retains credential and auth-failure gates", () => {
+  const config = normalizeRoutingConfig({ user: { schemaVersion: 2, categories: { review: { mode: "baseline" } } } });
+  for (const authFailed of [false, true]) {
+    const snapshot = buildCatalogRoutingSnapshot({
+      ...SNAPSHOT_META,
+      configDigest: config.configDigest, baseline: request.baseline, request,
+      providers: [{ name: "anthropic", models: ["session"], offline: true, authFailed }],
+      profiles: {}, policy: { ...policy, credentialsAvailable: () => false },
+    });
+    expect(resolveRoutingDecision(request, snapshot, config)).toMatchObject({
+      status: "blocked", reason: authFailed ? "auth-failed" : "credentials-missing",
+    });
+  }
 });

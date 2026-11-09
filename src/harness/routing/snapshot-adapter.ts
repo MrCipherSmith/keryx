@@ -121,7 +121,9 @@ export function buildCatalogRoutingSnapshot(options: BuildCatalogRoutingSnapshot
       const profile = options.profiles[profileKey(provider.name, modelId)];
       models.push({
         target,
-        connected: provider.offline !== true,
+        // offline describes the model list's provenance, not provider connectivity.
+        // Credentials and unknown availability remain independently gated.
+        connected: true,
         credentialsAvailable: options.policy.credentialsAvailable(target),
         policyAllowed: options.policy.policyAllowed(target),
         parentAllowed: options.policy.parentAllowed(target),
@@ -137,7 +139,7 @@ export function buildCatalogRoutingSnapshot(options: BuildCatalogRoutingSnapshot
   const baselineKey = modelRefKey(options.baseline);
   if (!seen.has(baselineKey)) {
     const provider = options.providers.find((entry) => entry.name === options.baseline.providerId);
-    if (provider !== undefined && provider.offline !== true && provider.authFailed !== true && provider.listUnavailable === undefined) {
+    if (provider !== undefined && provider.authFailed !== true && provider.listUnavailable === undefined) {
       const profile = options.profiles[profileKey(options.baseline.providerId, options.baseline.modelId)];
       models.push({
         target: options.baseline,
@@ -145,7 +147,7 @@ export function buildCatalogRoutingSnapshot(options: BuildCatalogRoutingSnapshot
         credentialsAvailable: options.policy.credentialsAvailable(options.baseline),
         policyAllowed: options.policy.policyAllowed(options.baseline),
         parentAllowed: options.policy.parentAllowed(options.baseline),
-        availability: options.policy.availability?.(options.baseline) ?? "available",
+        availability: options.policy.availability?.(options.baseline) ?? (provider.offline === true ? "unknown" : "available"),
         capabilities: options.policy.capabilities(options.baseline),
         contextLength: profile === undefined ? null : numericValue(profile.contextLength),
         cooldown: options.policy.cooldown(options.baseline),

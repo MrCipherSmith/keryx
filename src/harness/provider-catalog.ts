@@ -322,6 +322,8 @@ export async function loadOrRefreshProviderCatalogLive(
  * for an `auth-failed` provider, `listUnavailable: <reason>` for an
  * unreachable, timed-out or unsupported one with no curated fallback list.
  * Such a row is never selectable.
+ * `offline` describes list provenance, not provider connectivity; routing
+ * must keep connection identity separate from unknown model availability.
  */
 export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { withStatusRows?: boolean } = {}): FlatPickerProvider[] {
   const out: FlatPickerProvider[] = [];
