@@ -94,7 +94,7 @@ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import type { LiveShellShare } from "../lib/hub-machine/live-shell-share";
-import { liveShellLimits, type LiveShellContext, type LiveShellDecision, type LiveShellUsage } from "../remote-control/live-shell";
+import { liveShellLimits, type LiveShellContext, type LiveShellDecision, type LiveShellQuestion, type LiveShellQuestionAnswer, type LiveShellUsage } from "../remote-control/live-shell";
 import { looksLikeSecret, redactSensitiveText } from "../security/service";
 import { SHELL_TOOL_NAMES } from "../lib/shell-tool-names";
 import { exportCallerSession } from "../lib/caller-session";
@@ -7106,6 +7106,7 @@ export async function launchTuiAgentShell(opts: {
       };
     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
 
+    let hubQuestionDock: { prompt: LiveShellQuestion; answer: (answer: LiveShellQuestionAnswer) => boolean } | undefined;
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
       question: string;
@@ -7124,11 +7125,17 @@ export async function launchTuiAgentShell(opts: {
       );
       // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins
       const topicBridge = remoteBridge?.active === true ? remoteBridge : undefined;
+      const turnId = currentHubTurn();
+      const optionIds = req.options.map(option => option.id);
+      const exactChoices = new Set(optionIds).size === optionIds.length &&
+        optionIds.every(id => id !== ASK_USER_CANCEL && !id.includes("\u0000"));
       const outcome = await raceAskUser({
         turnSignal: foregroundOperation.signal,
         ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),
-        dock: (dockSignal) =>
-          chrome.withOverlay(() =>
+        dock: (dockSignal) => {
+          let presented: typeof hubQuestionDock;
+          let answerText: ((text: string) => boolean) | undefined;
+          return chrome.withOverlay(() =>
             showComposerChoiceDetailed(otui, r, chrome.dock, {
               title: "Question",
               body: req.question,
@@ -7137,6 +7144,24 @@ export async function launchTuiAgentShell(opts: {
               // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)
               ownAnswer: {},
               onOpen: () => chrome.blurComposer(),
+              onOwnAnswerReady: answer => { answerText = answer; },
+              onSelectReady: select => {
+                if (turnId === undefined) return;
+                presented = {
+                  prompt: {
+                    id: crypto.randomUUID(), text: req.question, canAnswer: exactChoices,
+                    options: req.options.map(({ label, description }) => ({ label, description })),
+                  },
+                  answer: answer => {
+                    if (hubShare?.active !== true || destroyed || !sessionLease.canPersist() ||
+                        dockSignal.aborted || currentHubTurn() !== turnId || hubQuestionDock !== presented) return false;
+                    if ("text" in answer) return answerText?.(answer.text) ?? false;
+                    const option = req.options[answer.option];
+                    return option !== undefined && select(option.id);
+                  },
+                };
+                hubQuestionDock = presented;
+              },
               signal: dockSignal,
               options: req.options.map(
                 (o): ChoiceOption => ({
@@ -7148,7 +7173,10 @@ export async function launchTuiAgentShell(opts: {
                 }),
               ),
             }),
-          ),
+          ).finally(() => {
+            if (hubQuestionDock === presented) hubQuestionDock = undefined;
+          });
+        },
       });
       input.focus();
       const result: ComposerChoiceResult =
@@ -11629,8 +11657,15 @@ export async function launchTuiAgentShell(opts: {
       { name: "help", description: "Show commands available in this connected shell" },
       { name: "status", description: "Show shell session status and usage" },
       { name: "usage", description: "Show token counts and active time" },
+      { name: "model", description: "Show the active model and available choices" },
       { name: "models", description: "List models for the active provider" },
+      { name: "queue", description: "Show how many messages the shell has queued" },
     ];
+    const terminalCommands = commandsForMode("agent").flatMap(({ name, description }) => {
+      const command = name.slice(1);
+      return /^[a-z][a-z0-9-]{0,63}$/.test(command) && !hubCommands.some(item => item.name === command)
+        ? [{ name: command, description }] : [];
+    });
     let hubModels: { provider: string; baseUrl: string | undefined; models: string[] } | undefined;
     const hubModelId = (provider: string, model: string): string =>
       createHash("sha256").update(JSON.stringify([provider, model])).digest("hex");
@@ -11662,19 +11697,22 @@ export async function launchTuiAgentShell(opts: {
     const inspectHubShell = (): LiveShellContext => {
       const usage = usageTracker.snapshot();
       const approval = hubApprovalDock?.prompt ?? terminalApprovals.values().next().value;
-      const phase = approval !== undefined || (chrome.isBusy() && busyPhase.startsWith("waiting for your"))
+      const question = hubQuestionDock?.prompt;
+      const phase = approval !== undefined || question !== undefined || (chrome.isBusy() && busyPhase.startsWith("waiting for your"))
         ? "waiting-input"
         : chrome.isBusy() && (busyPhase.startsWith("thinking") || busyPhase === "waiting for model")
           ? "thinking"
           : hubShellBusy() ? "working" : undefined;
       return {
         commands: hubCommands,
+        terminalCommands,
         model: {
           currentId: hubModelId(currentSel.provider, currentSel.model),
           candidates: hubModelChoices().map(({ id, label }) => ({ id, label })),
         },
         ...(usage.turnRunning || usage.turns > 0 ? { usage: { turn: hubUsage(usage.turn), session: hubUsage(usage.session) } } : {}),
         ...(approval !== undefined ? { approval } : {}),
+        ...(question !== undefined ? { question } : {}),
         ...(phase !== undefined ? { phase } : {}),
       };
     };
@@ -11726,6 +11764,13 @@ export async function launchTuiAgentShell(opts: {
                 };
               case "usage":
                 return { output: formatUsageTable(usageTracker.snapshot()) };
+              case "queue":
+                return { output: `Queued messages: ${turnLoop.queue.length}` };
+              case "model":
+                return {
+                  output: `Active model: ${currentSel.provider}/${currentSel.model}\n` +
+                    hubModelChoices().map((model) => model.label).join("\n"),
+                };
               case "models":
                 return { output: hubModelChoices().map((model) => model.label).join("\n") };
               default:
@@ -11758,6 +11803,8 @@ export async function launchTuiAgentShell(opts: {
           },
           answerApproval: (id, decision) =>
             hubApprovalDock?.prompt.id === id && hubApprovalDock.answer(decision),
+          answerQuestion: (id, answer) =>
+            hubQuestionDock?.prompt.id === id && hubQuestionDock.answer(answer),
           notice,
         });
         hubShare = share;
