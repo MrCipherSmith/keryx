@@ -9,17 +9,38 @@
   "id": "487",
   "slug": "shell-product-review-p1",
   "title": "Fix five P1 findings from the Keryx Shell product review",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-11-10T17:10:03.872Z",
-  "updatedAt": "2026-11-10T18:53:06.373Z",
+  "updatedAt": "2026-11-10T20:23:33.834Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-10T20:23:12.652Z",
+      "note": "S03 journal and allocated PTY: startup -r and /sessions sent the same 208 ordered messages. The destination checkpoint preserved the original archive and appended the follow-up."
+    },
+    "AC2": {
+      "at": "2026-11-10T20:23:12.855Z",
+      "note": "S04 live PTY: cancel and leased destination retained the source; successful switch replaced preview, blocks and usage. The final held-Slate run retained draft until an explicit Enter in destination, and a separate live replay suppressed outgoing Side-1 output."
+    },
+    "AC3": {
+      "at": "2026-11-10T20:23:13.057Z",
+      "note": "S02 live PTY and OpenTUI regression: Escape restored the draft without a Main or Side-1 dispatch. Explicit choices worked in the original session; stale choices restored both drafts."
+    },
+    "AC4": {
+      "at": "2026-11-10T20:23:13.269Z",
+      "note": "S05 provider and PTY traces: Agent and Chat stopped on Esc and both accepted follow-up. An open theme modal consumed its own Esc without aborting the stream. The final Agent PTY regression passed."
+    },
+    "AC5": {
+      "at": "2026-11-10T20:23:13.498Z",
+      "note": "S01 PTY temporary file stayed unchanged after bare Enter and Escape; explicit Allow once wrote the marker once. Empty readline Enter also denied."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1160"
   },
   "baseBranch": "main",
   "outcomeAuthor": "agent",
@@ -184,7 +205,7 @@
       "id": "T9",
       "title": "Fix PR #1160 CI regressions and verify the published head",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -198,7 +219,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "GitHub CI on 0ae2e709: all 20 executed checks passed. Terminal matrix 2,930 pass, macOS PTY 8 pass without skips, native coverage 147/147. Four managed rounds ingested, findings resolved and no external comments."
     }
   ],
   "history": [
@@ -324,6 +347,55 @@
       "at": "2026-11-10T18:53:06.373Z",
       "event": "owner-set",
       "detail": "not set -> MrCipherSmith (Operator explicitly assigned flow 487 ownership during the PR #1160 handoff.)"
+    },
+    {
+      "at": "2026-11-10T20:23:09.849Z",
+      "event": "task-done",
+      "detail": "T9: Fix PR #1160 CI regressions and verify the published head"
+    },
+    {
+      "at": "2026-11-10T20:23:12.425Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1160 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-10T20:23:12.652Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: S03 journal and allocated PTY: startup -r and /sessions sent the same 208 ordered messages. The destination checkpoint preserved the original archive and appended the follow-up. (signed: Codex [stated])"
+    },
+    {
+      "at": "2026-11-10T20:23:12.855Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: S04 live PTY: cancel and leased destination retained the source; successful switch replaced preview, blocks and usage. The final held-Slate run retained draft until an explicit Enter in destination, and a separate live replay suppressed outgoing Side-1 output. (signed: Codex [stated])"
+    },
+    {
+      "at": "2026-11-10T20:23:13.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: S02 live PTY and OpenTUI regression: Escape restored the draft without a Main or Side-1 dispatch. Explicit choices worked in the original session; stale choices restored both drafts. (signed: Codex [stated])"
+    },
+    {
+      "at": "2026-11-10T20:23:13.269Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: S05 provider and PTY traces: Agent and Chat stopped on Esc and both accepted follow-up. An open theme modal consumed its own Esc without aborting the stream. The final Agent PTY regression passed. (signed: Codex [stated])"
+    },
+    {
+      "at": "2026-11-10T20:23:13.499Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: S01 PTY temporary file stayed unchanged after bare Enter and Escape; explicit Allow once wrote the marker once. Empty readline Enter also denied. (signed: Codex [stated])"
+    },
+    {
+      "at": "2026-11-10T20:23:26.029Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-11-10T20:23:33.833Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-11-10T20:23:33.834Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "origin": {
@@ -351,5 +423,161 @@
     "value": "MrCipherSmith",
     "basis": "stated",
     "source": "`--owner` flag on `flow owner set`"
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-10T20:23:12.652Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47"
+    },
+    {
+      "at": "2026-11-10T20:23:12.855Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47"
+    },
+    {
+      "at": "2026-11-10T20:23:13.057Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47"
+    },
+    {
+      "at": "2026-11-10T20:23:13.269Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47"
+    },
+    {
+      "at": "2026-11-10T20:23:13.498Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47"
+    },
+    {
+      "at": "2026-11-10T20:23:33.834Z",
+      "kind": "complete",
+      "cleanCompletion": true,
+      "identity": {
+        "value": "Codex",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47",
+      "headCommit": "0ae2e709dd3c7b8f2df4aade37344b54a424f036"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-11-10T20:23:33.833Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "487-2026-11-10-shell-product-review-p1 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 4 ingested round(s)",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "pass",
+              "detail": "4 of 4 round(s) ingested; latest is `2026-11-10-flow-487-pr-1160-ready`"
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "pass",
+              "detail": "8 finding(s) at or above `minor` across 4 ingested round(s), every one terminal with the evidence its disposition requires (1 below the floor, not blocking)"
+            },
+            {
+              "id": "head-commit",
+              "status": "pass",
+              "detail": "round `2026-11-10-flow-487-pr-1160-ready` ran against the PR head 0ae2e709dd3c7b8f2df4aade37344b54a424f036"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1160: 0 comment(s) collected over 1 round(s) up to the PR head 0ae2e709dd3c7b8f2df4aade37344b54a424f036 (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "pass",
+              "detail": "round `2026-11-10-flow-487-pr-1160-ready`: verification_mode `annotate`, 0 claim(s) received, 0 refuted, 0 retained"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47",
+      "cleanCompletion": true
+    }
+  ]
 }
