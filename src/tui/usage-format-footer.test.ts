@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatActiveTime, formatUsageFooter, formatUsageTable } from "./usage-format";
+import { formatActiveTime, formatUsageFooter, formatUsageTable, usageFooterSegments } from "./usage-format";
 import { createUsageTracker } from "./usage-tracker";
 
 describe("usage footer format (flow 483)", () => {
@@ -29,5 +29,21 @@ describe("usage footer format (flow 483)", () => {
   test("active time", () => {
     expect(formatActiveTime(3_725_000)).toBe("1h02m");
     expect(formatActiveTime(9_000)).toBe("9s");
+  });
+  test("coloured segments join to the plain footer text and colour the figures", () => {
+    const tr = createUsageTracker({ now: () => 0 });
+    tr.startTurn();
+    tr.addUsage({ inputTokens: 12_345, outputTokens: 678, cacheReadTokens: 10_000, cacheWriteTokens: 0 });
+    tr.setTurnCost(0.0421);
+    const segments = usageFooterSegments(tr.snapshot()) ?? [];
+    expect(segments.map((s) => s.text).join("")).toBe(formatUsageFooter(tr.snapshot()) ?? "");
+    const roleOf = (needle: string) => segments.find((s) => s.text.includes(needle))?.role;
+    expect(roleOf("\u219112.3k")).toBe("accent");
+    expect(roleOf("\u2193678")).toBe("ok");
+    expect(roleOf("$0.04")).toBe("attention");
+    expect(roleOf("cache")).toBe("muted");
+  });
+  test("no segments before the first turn", () => {
+    expect(usageFooterSegments(createUsageTracker({ now: () => 0 }).snapshot())).toBeUndefined();
   });
 });
