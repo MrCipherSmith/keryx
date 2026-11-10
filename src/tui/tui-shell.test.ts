@@ -4714,7 +4714,7 @@ test("session replacement paths revoke foreground callbacks before replacing the
 otuiTest("busy recipient Escape restores the draft and only explicit recipients deliver it", async () => {
   const otui = requireOtui();
   const setup = await otui.testing.createTestRenderer({ width: 100, height: 30 });
-  const { renderer, mockInput, mockMouse, waitForFrame } = setup;
+  const { renderer, mockInput, mockMouse, flush, captureCharFrame } = setup;
   const cwd = await mkdtemp(join(tmpdir(), "keryx-busy-route-"));
   const chrome = await createShellChrome(otui.core, renderer, {
     title: "keryx · agent",
@@ -4732,14 +4732,16 @@ otuiTest("busy recipient Escape restores the draft and only explicit recipients 
       side: () => { delivered.push(`side:${line}`); },
     });
   });
-  const openPicker = () => {
+  const openPicker = async () => {
     mockInput.pressEnter();
-    return waitForFrame(async (frame) => {
-      if (frame.includes("Main agent is busy") && frame.includes("Side-1")) return true;
-      // The decision is written to disk before the menu opens.
-      await Bun.sleep(10);
-      return false;
-    }, { maxPasses: 200 });
+    // The renderer can be idle while the decision journal is still writing.
+    for (let attempt = 0; attempt < 100; attempt++) {
+      await flush();
+      const frame = captureCharFrame();
+      if (frame.includes("Main agent is busy") && frame.includes("Side-1")) return frame;
+      await Bun.sleep(20);
+    }
+    throw new Error("The busy recipient picker did not open");
   };
   try {
     chrome.startBusy();
