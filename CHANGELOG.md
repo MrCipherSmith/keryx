@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.4.25] - 2026-11-10
+
+### Fixed
+- **Session token and cost totals in the shell footer and `/status` no longer inflate with every turn.** Usage events used to be counted once per earlier turn, so turn N was counted N times. A single usage sink is now installed once per shell and each turn attaches to it and detaches when the turn ends. The per-turn cost also no longer gets overwritten by an older turn.
+
+### Changed
+- **The usage footer is coloured and drops the key hint.** Input tokens, output tokens and cost use distinct theme roles. While usage is shown, the `/ commands · Ctrl+C cancels a turn` hint is omitted; it still appears before the first turn.
+
 ## [0.4.24] - 2026-11-09
 
 ### Fixed
