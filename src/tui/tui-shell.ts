@@ -1787,7 +1787,7 @@ export async function routeBusyMessage(
   cwd: string,
   line: string,
   draft: string,
-  deliver: { main(): void; side(): void },
+  deliver: { main(): void; side(): void; blockedReason?(): string | undefined },
 ): Promise<void> {
   const chosen = await journaledPick(
     cwd,
@@ -1802,21 +1802,31 @@ export async function routeBusyMessage(
         { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
       ],
     },
-    (options, dismissId) =>
-      showComposerChoice(otui, chrome.renderer, chrome.dock, {
+    (options, dismissId) => {
+      const reason = deliver.blockedReason?.();
+      if (reason !== undefined) {
+        chrome.showToast(reason);
+        return Promise.resolve(dismissId);
+      }
+      return showComposerChoice(otui, chrome.renderer, chrome.dock, {
         title: "Main agent is busy",
         subtitle: line,
         options,
         cancelId: dismissId,
         enqueue: false,
         onBusy: () => chrome.showToast("Answer the open approval first, then resend."),
-      }),
+      });
+    },
   );
-  if (chosen === "main") {
+  // Recording the answer can yield after the dock closes. Recheck the originating
+  // session before either callback reads the current history or paints a message.
+  const blocked = chosen === "main" || chosen === "side" ? deliver.blockedReason?.() : undefined;
+  if (blocked === undefined && chosen === "main") {
     deliver.main();
-  } else if (chosen === "side") {
+  } else if (blocked === undefined && chosen === "side") {
     deliver.side();
   } else {
+    if (blocked !== undefined) chrome.showToast(blocked);
     // The decision journal can yield before the picker takes input focus.
     const currentDraft = chrome.input.value;
     chrome.input.value = currentDraft.length === 0 ? draft : `${draft}\n${currentDraft}`;
@@ -10026,7 +10036,11 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
+        const recipientSession = sideSessionAbort.signal;
         void routeBusyMessage(otui, chrome, sessionCwd, line, draft, {
+          blockedReason: () => recipientSession.aborted
+            ? "Session changed. Review the draft before sending it again."
+            : sessionTransferInProgress ? sessionTransferNotice : undefined,
           main: () => {
             turnLoop.enqueue(line, displayLine);
             // The recipient choice is asynchronous. The turn may have settled
@@ -11669,6 +11683,9 @@ export async function launchTuiAgentShell(opts: {
           if (first === "ask" || first === "trust" || first === "auto") commitPermissionMode(first);
           io.onSystem?.(`Permission mode: ${formatModeInForce(modeForTurn(true))} (ask, trust or auto)\n`);
         });
+      }
+      if (sessionTransferInProgress && name !== "/exit") {
+        return { ok: false, output: sessionTransferNotice };
       }
       return await captureShellOutput(() => runLine(line, "operator", TG_SOURCE));
     };

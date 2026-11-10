@@ -4727,9 +4727,11 @@ otuiTest("busy recipient Escape restores the draft and only explicit recipients 
   });
   const draft = "  follow-up draft\n  with a second line  ";
   const delivered: string[] = [];
+  let recipientSessionChanged = false;
   let pending: Promise<void> | undefined;
   chrome.onSubmit((line, originalDraft) => {
     pending = routeBusyMessage(otui.core, chrome, cwd, line, originalDraft, {
+      blockedReason: () => recipientSessionChanged ? "Session changed." : undefined,
       main: () => { delivered.push(`main:${line}`); },
       side: () => { delivered.push(`side:${line}`); },
     });
@@ -4777,6 +4779,19 @@ otuiTest("busy recipient Escape restores the draft and only explicit recipients 
       expect(delivered).toEqual([`${route}:${draft.trim()}`]);
       expect(chrome.input.value).toBe("");
       delivered.length = 0;
+    }
+
+    for (const label of ["Main queue", "Side-1"]) {
+      recipientSessionChanged = false;
+      chrome.input.value = draft;
+      const lines = (await openPicker("new draft")).split("\n");
+      const row = lines.findIndex((line) => line.includes(label));
+      expect(row).toBeGreaterThanOrEqual(0);
+      recipientSessionChanged = true;
+      await mockMouse.click(lines[row]!.indexOf(label), row);
+      await pending;
+      expect(delivered).toEqual([]);
+      expect(chrome.input.value).toBe(`${draft}\nnew draft`);
     }
   } finally {
     chrome.destroy();
