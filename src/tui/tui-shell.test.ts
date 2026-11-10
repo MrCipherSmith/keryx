@@ -2964,7 +2964,7 @@ describe("PR 992 round 3 — tui-shell.ts refusal memory and self-answer line (s
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
   test.each([
-    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
+    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = opened.history;"],
     ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
     ["a permission-mode change (commitPermissionMode)", "paintModeRow();\n      resetOperatorDenials();\n      chrome.showToast(`Permission mode:"],
   ])("%s clears the remembered refusals", (_site, snippet) => {
@@ -4369,7 +4369,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
     const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
-    const applied = block.indexOf("applyOpened(opened, true);");
+    const applied = block.indexOf("applyOpened(opened);");
     expect(applied).toBeGreaterThanOrEqual(0);
     expect(block.indexOf("bindSlateToLiveSession();", applied)).toBeGreaterThan(applied);
   });

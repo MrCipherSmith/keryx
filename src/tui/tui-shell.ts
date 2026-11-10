@@ -548,8 +548,6 @@ interface SidebarRepoMetadata {
   prUrl?: string;
 }
 
-const SESSION_PREVIEW_MESSAGE_COUNT = 200;
-
 /**
  * Flow 173 F-003: `risk === "read"` alone is NOT the side-worker safety
  * boundary — `shell_job_kill` is intentionally `risk:"read"` (this flow's
@@ -7525,6 +7523,7 @@ export async function launchTuiAgentShell(opts: {
       foregroundOperation.invalidateSession();
       usageTracker = createUsageTracker();
       usageTurnOpen = false;
+      chrome.repaintStatus();
       io.resetStream();
       blockIo.resetReasoningLiveState();
       // Not `forceHandoff.clear()`: a forced line has already been taken out of
@@ -7556,7 +7555,6 @@ export async function launchTuiAgentShell(opts: {
         archive: NormalizedMessage[];
         resumed: boolean;
       },
-      previewHistory?: boolean,
     ): void => {
       if (opened.history.length > 0) {
         splash?.removeIfShown();
@@ -7571,7 +7569,7 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       io.hcLaunchGrants?.clear();
       resetOperatorDenials();
-      history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
+      history = opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
       refreshRewindSidebar();
@@ -7620,6 +7618,25 @@ export async function launchTuiAgentShell(opts: {
     // `● live` / `◌ stale` on the picker rows (AC4).
     const leaseState = leaseStateLookup(sessionCwd);
 
+    const showSessionPreview = (): void => {
+      const recentPrompts = history.filter((message) => message.role === "user").slice(-5);
+      if (recentPrompts.length === 0) return;
+      transcript.add(new otui.TextRenderable(r, {
+        id: `sesspreview${uid++}`,
+        content: otui.t`${dimChunk(otui, "Recent prompts")}`,
+      }));
+      for (const message of recentPrompts) {
+        // A framed hc message uses the same sender marker as its live echo.
+        const hc = hcHistoryEcho(message.content);
+        const text = hc?.line ?? message.content;
+        const preview = text.length > 100 ? `${text.slice(0, 97)}…` : text;
+        transcript.add(new otui.TextRenderable(r, {
+          id: `sessu${uid++}`,
+          content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${preview}`)}`,
+        }));
+      }
+    };
+
     /** The transcript lines an opened session announces: skipped, degraded, resumed. */
     const showOpenedNotes = (opened: ReturnType<typeof openLeasedSession>): void => {
       if (opened.skipped !== undefined) {
@@ -7651,19 +7668,7 @@ export async function launchTuiAgentShell(opts: {
             marginTop: 1,
           }),
         );
-        for (const m of history.filter((x) => x.role === "user").slice(-5)) {
-          // An hc message is stored framed (flow 481); show it as the live echo did, sender and
-          // body, so the long frame header does not fill the 100 characters.
-          const hc = hcHistoryEcho(m.content);
-          const text = hc?.line ?? m.content;
-          const t = text.length > 100 ? `${text.slice(0, 97)}…` : text;
-          transcript.add(
-            new otui.TextRenderable(r, {
-              id: `sessu${uid++}`,
-              content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${t}`)}`,
-            }),
-          );
-        }
+        showSessionPreview();
       }
     };
 
@@ -8131,6 +8136,7 @@ export async function launchTuiAgentShell(opts: {
     };
     refreshRewindSidebar();
     const resetSessionSurface = (): void => {
+      splash?.removeIfShown();
       nav.exit();
       chrome.stopBusy();
       io.resetStream();
@@ -8235,7 +8241,8 @@ export async function launchTuiAgentShell(opts: {
         );
         return;
       }
-      applyOpened(opened, true);
+      resetSessionSurface();
+      applyOpened(opened);
       // Outgoing history and Slate were preserved before ownership transfer.
       bindSlateToLiveSession();
       // After the rebind: it reads the bound workspace from the slate ref.
@@ -8247,6 +8254,7 @@ export async function launchTuiAgentShell(opts: {
       io.onSystem?.(
         `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
       );
+      showSessionPreview();
     });
 
     paintSessionHeader();

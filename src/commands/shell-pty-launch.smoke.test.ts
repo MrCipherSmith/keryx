@@ -41,6 +41,7 @@ import path from "node:path";
 import { buildGovernanceReport, writeGovernanceArtifacts } from "../governance/service";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { uniqueTestRoot } from "../lib/test-tmp";
+import { createSession, loadArchive, loadContext, persistHistory } from "../session";
 
 const REAL_SUBPROCESS_FLAG = process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1";
 /** BSD `script`. The util-linux spelling takes `-c "<cmd>" <file>` instead. */
@@ -287,6 +288,111 @@ test("the pty assertions stay coupled to the renderer's real options", () => {
 describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
   "keryx shell on an allocated pty (macOS; KERYX_ALLOW_REAL_SUBPROCESS=1)",
   () => {
+    test.each(["full context", "destination preview"])(
+      "switching sessions restores the %s",
+      async (check) => {
+        const root = uniqueTestRoot(tmpdir(), "keryx-pty-session-switch");
+        const cwd = path.join(root, "cwd");
+        const dataHome = path.join(root, "data");
+        const dataDir = path.join(dataHome, "keryx");
+        mkdirSync(cwd, { recursive: true });
+        mkdirSync(dataDir, { recursive: true });
+        writeFileSync(path.join(dataDir, "help-first-run.json"), '{"shown":true}');
+        const messages = Array.from({ length: 208 }, (_, index) => ({
+          role: index % 2 === 0 ? "user" as const : "assistant" as const,
+          content: `Destination history ${index}`,
+          ts: "2025-01-01T00:00:00.000Z",
+        }));
+        const archive = [{ role: "user" as const, content: "Archived before compaction", ts: messages[0]!.ts }, ...messages];
+        const target = persistHistory(createSession({ cwd, dataDir, title: "Destination session" }), messages, { archive });
+        const requests: string[][] = [];
+        const server = Bun.serve({
+          hostname: "127.0.0.1",
+          port: 0,
+          async fetch(request) {
+            const pathname = new URL(request.url).pathname;
+            if (pathname === "/api/tags") return Response.json({ models: [{ name: "test-model" }] });
+            if (pathname === "/api/show") return Response.json({ capabilities: ["completion", "tools"], model_info: { "test.context_length": 65536 } });
+            if (request.method === "GET") return Response.json({ data: [{ id: "test-model", object: "model" }] });
+            const body = await request.json() as { messages: { content: string }[] };
+            requests.push(body.messages.map((message) => message.content));
+            const reply = requests.length === 1 ? "Outgoing answer" : "Destination answer";
+            const chunk = { choices: [{ index: 0, delta: { content: reply }, finish_reason: "stop" }], usage: { prompt_tokens: 19, completion_tokens: 7, total_tokens: 26 } };
+            return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
+          },
+        });
+        const output: Buffer[] = [];
+        const proc = Bun.spawn([
+          process.execPath, ...SAFE_BUN_SPAWN_ARGS, CLI, "shell", "--provider", "ollama", "--model", "test-model",
+          "--base-url", `http://127.0.0.1:${server.port}`,
+        ], {
+          cwd,
+          timeout: 25_000,
+          terminal: { rows: 36, cols: 120, data: (_, chunk) => { output.push(Buffer.from(chunk)); } },
+          env: {
+            PATH: process.env.PATH ?? "",
+            HOME: root,
+            XDG_DATA_HOME: dataHome,
+            KERYX_DATA_DIR: dataDir,
+            TERM: "xterm-256color",
+            KERYX_SKIP_BOOT: "1",
+          },
+        });
+        const terminal = proc.terminal;
+        const waitFor = async (marker: string, since = 0): Promise<void> => {
+          const deadline = Date.now() + 8000;
+          while (Date.now() < deadline && proc.exitCode === null) {
+            const text = visibleText(Buffer.concat(output.slice(since)).toString("utf8"));
+            if (text.includes(marker)) return;
+            await Bun.sleep(25);
+          }
+          throw new Error(`PTY never printed ${marker}. Tail: ${visibleText(Buffer.concat(output).toString("utf8")).slice(-1000)}`);
+        };
+        try {
+          await waitFor("Enter send");
+          terminal?.write("Outgoing prompt\r");
+          await waitFor("worked for");
+          expect(requests[0]).toContain("Outgoing prompt");
+
+          terminal?.write("/sessions\r");
+          await waitFor("Session Switcher");
+          terminal?.write("\u001b[B");
+          const switchFrame = output.length;
+          terminal?.write("\r");
+          await waitFor("Resumed", switchFrame);
+
+          if (check === "destination preview") {
+            await waitFor("Destination history 206", switchFrame);
+            const preview = Buffer.concat(output.slice(switchFrame)).toString("utf8");
+            expect(visibleText(preview)).toContain("Recent prompts");
+            const expandFrame = output.length;
+            terminal?.write("/expand\r");
+            await waitFor("Nothing to expand", expandFrame);
+            return;
+          }
+          terminal?.write("After switch\r");
+          await waitFor("Destination answer", switchFrame);
+          await waitFor("worked for", switchFrame);
+          expect(requests[1]?.slice(1, -1)).toEqual(messages.map((message) => message.content));
+          terminal?.write("/exit\r");
+          expect(await proc.exited).toBe(0);
+          const savedContext = loadContext(cwd, target.summary.id, dataDir);
+          const savedArchive = loadArchive(cwd, target.summary.id, dataDir);
+          expect(savedContext.slice(0, -2)).toEqual(messages);
+          expect(savedArchive.slice(0, -2)).toEqual(archive);
+          expect(savedContext.slice(-2).map((message) => message.content)).toEqual(["After switch", "Destination answer"]);
+          expect(savedArchive.slice(-2)).toEqual(savedContext.slice(-2));
+        } finally {
+          if (proc.exitCode === null) proc.kill();
+          terminal?.close();
+          await proc.exited;
+          server.stop(true);
+          rmSync(root, { recursive: true, force: true });
+        }
+      },
+      30_000,
+    );
+
     test(
       "the real shell launches, draws a frame into the alternate screen, and exits cleanly",
       async () => {
