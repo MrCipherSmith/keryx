@@ -1,4 +1,5 @@
 import type { NormalizedUsage } from "../harness/provider/types";
+import type { TextRole } from "./theme";
 import type { UsageSnapshot } from "./usage-tracker";
 
 /** Cache counters are input subsets, not extra tokens or a price. */
@@ -54,6 +55,39 @@ function totalsPart(t: Totals): string {
 export function formatUsageFooter(snap: UsageSnapshot): string | undefined {
   if (!snap.turnRunning && snap.turns === 0) return undefined;
   return `turn ${totalsPart(snap.turn)} \u00b7 session ${totalsPart(snap.session)}`;
+}
+
+/** A run of footer text and the theme role it is painted with. */
+export interface UsageSegment {
+  role: TextRole;
+  text: string;
+}
+
+function totalsSegments(label: string, t: Totals): UsageSegment[] {
+  const segments: UsageSegment[] = [
+    { role: "muted", text: label },
+    { role: "accent", text: ` \u2191${compactTokens(t.tokensIn)}` },
+    { role: "ok", text: ` \u2193${compactTokens(t.tokensOut)}` },
+  ];
+  if (t.cacheRead > 0 || t.cacheWrite > 0) {
+    segments.push({ role: "muted", text: ` cache ${compactTokens(t.cacheRead)}/${compactTokens(t.cacheWrite)}` });
+  }
+  if (t.costUsd !== undefined) segments.push({ role: "attention", text: ` ${formatCostUsd(t.costUsd)}` });
+  segments.push({ role: "text", text: ` ${formatActiveTime(t.activeMs)}` });
+  return segments;
+}
+
+/**
+ * Flow 483: the footer as coloured segments. Joined, the text is exactly `formatUsageFooter`'s.
+ * Roles: tokens in = accent, tokens out = ok, cost = attention, cache and labels = muted.
+ */
+export function usageFooterSegments(snap: UsageSnapshot): readonly UsageSegment[] | undefined {
+  if (!snap.turnRunning && snap.turns === 0) return undefined;
+  return [
+    ...totalsSegments("turn", snap.turn),
+    { role: "muted", text: " \u00b7 " },
+    ...totalsSegments("session", snap.session),
+  ];
 }
 
 /** Flow 483: the /status Usage tab table. */

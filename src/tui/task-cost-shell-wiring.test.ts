@@ -20,15 +20,21 @@ test("launchTuiAgentShell exists and this audit is anchored inside it", () => {
   expect(FN_START).toBeGreaterThan(-1);
 });
 
-test("io.onUsage is wrapped to sum THIS turn's own tokens, exactly once per dispatch, before runAgentTurn is called", () => {
-  const wrapAt = SOURCE.indexOf("const prevOnUsageForCost = io.onUsage;", FN_START);
-  expect(wrapAt).toBeGreaterThan(FN_START);
+test("THIS turn's own tokens are summed by one per-turn handler, installed before runAgentTurn, and io.onUsage is not re-wrapped per turn", () => {
+  const createAt = SOURCE.indexOf("const turnUsage = createTurnUsage({", FN_START);
+  expect(createAt).toBeGreaterThan(FN_START);
   const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {", FN_START);
-  expect(dispatchAt).toBeGreaterThan(wrapAt);
-  const between = SOURCE.slice(wrapAt, dispatchAt);
-  expect(between).toContain("turnInputTokens += usage.inputTokens ?? 0;");
-  expect(between).toContain("turnOutputTokens += usage.outputTokens ?? 0;");
-  expect(between).toContain("prevOnUsageForCost?.(usage);");
+  expect(dispatchAt).toBeGreaterThan(createAt);
+  const between = SOURCE.slice(createAt, dispatchAt);
+  expect(between).toContain("turnUsageSlot.set(turnUsageSink);");
+  // Flow 483: wrapping `io.onUsage` inside `runLine` stacked one wrapper per turn and counted each
+  // turn's usage once per earlier turn. The hook is installed once, at shell setup.
+  expect(between).not.toContain("io.onUsage =");
+  expect(SOURCE).not.toContain("prevOnUsageForCost");
+  expect(SOURCE.match(/installTurnUsageSink\(io\)/g)).toHaveLength(1);
+  // The sink is released when the turn settles, before anything else in the callback.
+  const finallyAt = SOURCE.indexOf("})).finally(() => {", dispatchAt);
+  expect(SOURCE.slice(finallyAt, finallyAt + 160)).toContain("turnUsageSlot.clear(turnUsageSink);");
 });
 
 test("recordTurnTaskCostBestEffort is called inside the turn's .finally(), fired with `void` (never awaited by the settle callback)", () => {
@@ -42,8 +48,8 @@ test("recordTurnTaskCostBestEffort is called inside the turn's .finally(), fired
   const call = SOURCE.slice(callAt, callEnd + "});".length);
   expect(call).toContain("providerId: deps.providerId,");
   expect(call).toContain("modelId: deps.modelId,");
-  expect(call).toContain("inputTokens: turnInputTokens,");
-  expect(call).toContain("outputTokens: turnOutputTokens,");
+  expect(call).toContain("inputTokens: turnUsage.totals.input,");
+  expect(call).toContain("outputTokens: turnUsage.totals.output,");
   expect(call).toContain("success: !turnFailed,");
   expect(call).toContain('...(turnCategory !== undefined ? { category: turnCategory } : {}),');
 });
