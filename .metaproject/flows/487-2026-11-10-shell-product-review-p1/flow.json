@@ -11,7 +11,7 @@
   "title": "Fix five P1 findings from the Keryx Shell product review",
   "status": "in-progress",
   "createdAt": "2026-11-10T17:10:03.872Z",
-  "updatedAt": "2026-11-10T18:35:37.319Z",
+  "updatedAt": "2026-11-10T18:53:06.373Z",
   "source": {
     "type": "description",
     "ref": null
@@ -179,6 +179,26 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "S01–S05 passed in isolated 120×36 PTYs against a loopback provider. 29 PNGs and reproduction details in journal. Broad tests 2679 pass, macOS PTY suite 7 pass."
+    },
+    {
+      "id": "T9",
+      "title": "Fix PR #1160 CI regressions and verify the published head",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-10T18:50:39.788Z",
+            "outcome": "started",
+            "detail": "Fix startup-prompt source assertions and refresh native command coverage after the Shell changes."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -289,6 +309,21 @@
       "at": "2026-11-10T18:35:37.319Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-10T18:50:23.434Z",
+      "event": "task-added",
+      "detail": "T9: Fix PR #1160 CI regressions and verify the published head"
+    },
+    {
+      "at": "2026-11-10T18:50:39.788Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — Fix startup-prompt source assertions and refresh native command coverage after the Shell changes."
+    },
+    {
+      "at": "2026-11-10T18:53:06.373Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (Operator explicitly assigned flow 487 ownership during the PR #1160 handoff.)"
     }
   ],
   "origin": {
@@ -311,5 +346,10 @@
     "AC5": {
       "kind": "judged"
     }
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
   }
 }

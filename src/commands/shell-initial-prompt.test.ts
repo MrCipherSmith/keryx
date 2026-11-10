@@ -145,7 +145,7 @@ describe("TUI wiring (source audit)", () => {
     expect(submit).toBeGreaterThan(ready);
     // The same `runLine` the composer's onSubmit handler calls; `idle` is reported only once that
     // handler is registered (a line typed on the first `idle` must find it).
-    const onSubmit = tui.indexOf("chrome.onSubmit((line) => {");
+    const onSubmit = tui.indexOf("chrome.onSubmit(");
     expect(onSubmit).toBeGreaterThan(-1);
     expect(ready).toBeGreaterThan(onSubmit);
     expect(submit).toBeGreaterThan(ready);
@@ -153,11 +153,11 @@ describe("TUI wiring (source audit)", () => {
   });
 
   test("startup prompts and agent messages skip TUI slash routing while typed operator lines route", () => {
-    expect(tui).toMatch(/skipSlashRouting = false,\n\s+\): void => \{/);
+    expect(tui).toMatch(/skipSlashRouting = false,\n\s+draft = line,\n\s+\): void => \{/);
     expect(tui.includes('if (!skipSlashRouting && !agentShaped && line.startsWith("/")) {')).toBe(true);
     expect(tui.includes('const command = skipSlashRouting || agentShaped ? undefined : findAgentCommand(line, "agent");')).toBe(true);
-    // Typed operator lines (and `/`-menu selections) still route: onSubmit passes no flag.
-    expect(tui).toMatch(/chrome\.onSubmit\(\(line\) => \{\n\s+runLine\(line\);/);
+    // Typed operator lines and menu selections keep slash routing and pass the untrimmed draft.
+    expect(tui).toMatch(/chrome\.onSubmit\(\(line, draft\) => \{\n\s+runLine\(line, "operator", undefined, false, draft\);/);
     // No `startsWith("/")` route is left that the startup prompt could reach.
     const routes = tui.split('line.startsWith("/")').length - 1;
     const guarded = tui.split('!skipSlashRouting && !agentShaped && line.startsWith("/")').length - 1;

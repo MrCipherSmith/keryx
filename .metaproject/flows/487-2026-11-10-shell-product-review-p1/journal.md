@@ -143,3 +143,8 @@ The final live tmux run passed S01–S05. A separate replay with Side-1 still ru
 Final verification passed 2,687 tests across 179 files and seven macOS PTY checks. TypeScript and changed-file ESLint passed. The general health wrapper's ESLint invocation picked up nested checkout backups and reported an ambiguous TypeScript config root. Running the repo linter with `.worktree-backups/**` and `.metaproject/tmp/**` excluded passed. The test processes used an empty global Git config to isolate fixture commits from local Git hooks.
 
 All eight tasks are done. The flow is awaiting review of its draft PR.
+
+Draft [PR #1160](https://github.com/MrCipherSmith/keryx/pull/1160) targets `main` at published head `43a67e917`. The nine PTY images in the PR were verified over HTTP. The flow remains in progress while the PR is a draft.
+- 2026-11-10T18:50:23.434Z - task-added: T9: Fix PR #1160 CI regressions and verify the published head
+- 2026-11-10T18:50:39.788Z - task-attempt: T9: started (attempt 1) — Fix startup-prompt source assertions and refresh native command coverage after the Shell changes.
+- 2026-11-10T18:53:06.373Z - owner-set: not set -> MrCipherSmith (Operator explicitly assigned flow 487 ownership during the PR #1160 handoff.)
