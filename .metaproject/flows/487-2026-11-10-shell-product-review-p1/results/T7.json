@@ -1,0 +1,49 @@
+{
+  "task_id": "task-7",
+  "task_name": "Interrupt active Agent and Chat turns with Escape",
+  "task_type": "fix",
+  "status": "success",
+  "description": "Route Escape from the unclaimed shell keyboard to the active provider cancellation. Keep modal, dropdown, dock, and navigation key handlers in priority order. Let Chat finish its existing turn lifecycle and read the next prompt after cancellation.",
+  "files_modified": [
+    "src/commands/shell.ts",
+    "src/commands/shell-types.ts",
+    "src/tui/chat-shell.ts",
+    "src/tui/chat-shell.test.ts",
+    "src/tui/shell-chrome.ts",
+    "src/tui/tui-shell.ts",
+    "src/tui/tui-shell.test.ts"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass",
+  "type_check_result": "pass",
+  "test_result": "352 passed, 0 failed across five related suites, including both AC4 regressions on the renderer and provider drivers.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
+      "how": "followed"
+    }
+  ],
+  "not_touched": [
+    {
+      "path": "src/tui/chat-mode.ts",
+      "reason": "The Chat TUI implementation is in src/tui/chat-shell.ts."
+    }
+  ],
+  "notes": "Chat red reproduced the ignored Escape at the provider signal in gdctx e9b535. Green for both modes is in gdctx 2e692a. Agent headless tests mount the real chrome with the foreground owner and call the real driver. T8 separately verifies the CLI entry points in PTY."
+}
