@@ -12,7 +12,8 @@ export interface ShellIO {
    * assistant token deltas (still `write`) apart from system text and see turn
    * boundaries, so it can render a spinner + markdown.
    */
-  onTurnStart?: () => void;
+  /** The optional callback aborts the current model stream without closing the shell. */
+  onTurnStart?: (interrupt?: () => void) => void;
   onTurnEnd?: (full: string) => void;
   onSystem?: (text: string) => void;
   /** Flush queued asynchronous notices only while terminal output is safe. */

@@ -1245,7 +1245,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     busWorking = true;
     // Signal the start of a streamed reply so a rich wrapper can show a role
     // label + spinner; a no-op (no output) when no wrapper is attached.
-    io.onTurnStart?.();
+    io.onTurnStart?.(() => turn.abort.abort());
     try {
       const streamOptions = {
         attemptId: deps.idSeq(),
@@ -1253,7 +1253,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         ...(modelParams.timeoutMs !== undefined ? { timeoutMs: modelParams.timeoutMs } : {}),
       };
       for await (const event of provider.stream(request, streamOptions)) {
-        if (closing) break;
+        if (closing || turn.abort.signal.aborted) break;
         if (event.kind === "text_delta") {
           const text = event.text ?? "";
           io.write(text);
@@ -1272,7 +1272,9 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       if (closing) break;
       // A reused adapter emits `provider_error` events rather than throwing, but
       // guard against an unexpected throw so one bad turn never ends the session.
-      system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
+      if (!turn.abort.signal.aborted) {
+        system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
+      }
       errored = true;
     }
 
@@ -1282,6 +1284,10 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     // (any turn that streamed content, errored or not). No-op when unattached.
     if (accumulated.length > 0) {
       io.onTurnEnd?.(accumulated);
+    }
+    if (turn.abort.signal.aborted) {
+      system("◇ chat turn interrupted (Esc).\n");
+      errored = true;
     }
 
     if (!errored) {

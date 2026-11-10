@@ -69,6 +69,7 @@ import { applyThemeId, getTheme, getThemeId } from "./theme";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
+import { createForegroundOperationOwner } from "./foreground-operation";
 import { executePlanCommand } from "../session/commands/plan";
 import { executeReasoningCommand } from "../session/commands/reasoning";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
@@ -1608,6 +1609,69 @@ otuiTest("AC4: nav keys stay inert while the /-menu or an overlay owns the keybo
   expect(h.state.composerFocusCalls).toBeGreaterThan(focusCalls);
   expect(h.textarea.focused).toBe(true);
   h.destroy();
+});
+
+otuiTest("flow 487 AC4: Escape aborts the Agent provider and a new foreground turn can reply", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
+  const chrome = await createShellChrome(otui.core, setup.renderer, {
+    title: "keryx · agent",
+    status: "scripted/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  const io = createTuiAgentIo(otui.core, setup.renderer, chrome.transcript);
+  const foreground = createForegroundOperationOwner();
+  chrome.onEscapeInterrupt(() => foreground.cancel("interrupted by Escape"));
+  const started = Promise.withResolvers<AbortSignal | undefined>();
+  const release = Promise.withResolvers<void>();
+  const next = scriptedProvider([[{ kind: "text_delta", text: "Fresh agent reply" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider: {
+      describe: next.describe,
+      stream(request, opts) {
+        if (request.messages.at(-1)?.content !== "Slow question") return next.stream(request, opts);
+        const aborted = new Promise<void>((resolve) => {
+          if (opts.signal?.aborted) resolve();
+          else opts.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        started.resolve(opts.signal);
+        return (async function* (): AsyncGenerator<NormalizedEvent> {
+          await Promise.race([aborted, release.promise]);
+          yield { sequence: 0, attemptId: opts.attemptId, kind: "model_end" };
+        })();
+      },
+    },
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  const operation = foreground.begin();
+  const pending = runAgentTurn(io, deps, history, "Slow question", { signal: foreground.signal })
+    .finally(() => foreground.settle(operation));
+  try {
+    const firstSignal = await started.promise;
+    expect(firstSignal?.aborted).toBe(false);
+    await pressEscapeAndSettle(setup);
+    expect(firstSignal?.aborted).toBe(true);
+    await pending;
+    expect(foreground.isActive).toBe(false);
+
+    const followUp = foreground.begin();
+    await runAgentTurn(io, deps, history, "Next question", { signal: foreground.signal })
+      .finally(() => foreground.settle(followUp));
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Fresh agent reply");
+  } finally {
+    release.resolve();
+    await pending;
+    chrome.destroy();
+    setup.renderer.destroy();
+  }
 });
 
 otuiTest("AC5: a ```ts fence renders as a framed block whose header carries the language tag (headless)", async () => {

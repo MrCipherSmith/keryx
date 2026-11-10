@@ -72,6 +72,7 @@ type KeypressEvent = {
   ctrl: boolean;
   meta: boolean;
   sequence: string;
+  readonly defaultPrevented: boolean;
   preventDefault: () => void;
   stopPropagation: () => void;
 };
@@ -480,6 +481,8 @@ export interface ShellChrome {
   keyboardOwnedElsewhere(): boolean;
   /** Mark an overlay active for the duration of an async run. */
   withOverlay<T>(run: () => Promise<T>): Promise<T>;
+  /** Bind Esc after the shell's own keyboard modes. The handler reports whether a turn was interrupted. */
+  onEscapeInterrupt(interrupt: () => boolean): void;
 
   /** Transient `✓ msg` in the sidebar; replaces any pending toast. */
   showToast(message: string): void;
@@ -1703,6 +1706,7 @@ export async function createShellChrome(
     appliedTheme = theme;
   };
   const unsubTheme = onThemeChange((theme) => applyTheme(theme));
+  let offEscapeInterrupt: (() => void) | undefined;
 
   {
     const run = currentDebugRun();
@@ -1752,6 +1756,15 @@ export async function createShellChrome(
     addOverlaySource,
     keyboardOwnedElsewhere,
     withOverlay,
+    onEscapeInterrupt: (interrupt) => {
+      offEscapeInterrupt?.();
+      offEscapeInterrupt = onKeypress(r, (key) => {
+        if (key.name !== "escape" || key.ctrl || key.meta || key.defaultPrevented) return;
+        if (overlayActive() || (menu.visible && menuNav) || !interrupt()) return;
+        key.preventDefault();
+        key.stopPropagation();
+      });
+    },
 
     showToast,
     applyTheme,
@@ -1803,6 +1816,7 @@ export async function createShellChrome(
       destroyModalHost(r);
       clearBusyTimer();
       clearToastTimer();
+      offEscapeInterrupt?.();
       unsubscribeMenuKeys();
       unsubscribeSuggestionKeys();
       try {

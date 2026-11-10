@@ -11948,6 +11948,11 @@ export async function launchTuiAgentShell(opts: {
     onKeypress(r, (key) => {
       handleQueueNavKey(key);
     });
+    chrome.onEscapeInterrupt(() => {
+      if (!foregroundOperation.cancel("interrupted by Escape")) return false;
+      io.onSystem?.("◇ main turn interrupted (Esc).\n");
+      return true;
+    });
 
     // Both a composer Enter and a `/`-menu selection arrive here: the chrome has
     // already trimmed the line, cleared the composer and closed the dropdown.
