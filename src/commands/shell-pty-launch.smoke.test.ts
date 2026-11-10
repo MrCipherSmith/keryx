@@ -316,9 +316,18 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
             if (request.method === "GET") return Response.json({ data: [{ id: "test-model", object: "model" }] });
             const body = await request.json() as { messages: { content: string }[] };
             requests.push(body.messages.map((message) => message.content));
+            const headers = { "content-type": "text/event-stream" };
+            if (body.messages.at(-1)?.content === "Hold an Agent stream") {
+              return new Response(new ReadableStream({
+                start(controller) {
+                  controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Agent stream started"}}]}\n\n'));
+                },
+              }), { headers });
+            }
             const reply = requests.length === 1 ? "Outgoing answer" : "Destination answer";
             const chunk = { choices: [{ index: 0, delta: { content: reply }, finish_reason: "stop" }], usage: { prompt_tokens: 19, completion_tokens: 7, total_tokens: 26 } };
-            return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
+            const reasoning = requests.length === 1 ? 'data: {"choices":[{"delta":{"reasoning_content":"Outgoing reasoning marker"}}]}\n\n' : "";
+            return new Response(`${reasoning}data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, { headers });
           },
         });
         const output: Buffer[] = [];
@@ -353,9 +362,19 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
           terminal?.write("Outgoing prompt\r");
           await waitFor("worked for");
           expect(requests[0]).toContain("Outgoing prompt");
+          if (check === "destination preview") {
+            const expandFrame = output.length;
+            terminal?.write("/think\r");
+            await waitFor("Outgoing reasoning marker", expandFrame);
+            terminal?.write("/sessions\r");
+            await waitFor("Session Switcher", expandFrame);
+            terminal?.write("\r");
+            await waitFor("That session is already open.", expandFrame);
+          }
 
+          const pickerFrame = output.length;
           terminal?.write("/sessions\r");
-          await waitFor("Session Switcher");
+          await waitFor("Session Switcher", pickerFrame);
           terminal?.write("\u001b[B");
           const switchFrame = output.length;
           terminal?.write("\r");
@@ -368,6 +387,14 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
             const expandFrame = output.length;
             terminal?.write("/expand\r");
             await waitFor("Nothing to expand", expandFrame);
+            terminal?.write("Hold an Agent stream\r");
+            await waitFor("Agent stream started", expandFrame);
+            const interruptFrame = output.length;
+            terminal?.write("\u001b");
+            await waitFor("interrupted (Esc)", interruptFrame);
+            await waitFor("worked for", interruptFrame);
+            terminal?.write("After interrupt\r");
+            await waitFor("Destination answer", interruptFrame);
             return;
           }
           terminal?.write("After switch\r");

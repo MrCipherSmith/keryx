@@ -1817,7 +1817,9 @@ export async function routeBusyMessage(
   } else if (chosen === "side") {
     deliver.side();
   } else {
-    chrome.input.value = draft;
+    // The decision journal can yield before the picker takes input focus.
+    const currentDraft = chrome.input.value;
+    chrome.input.value = currentDraft.length === 0 ? draft : `${draft}\n${currentDraft}`;
     if (!chrome.overlayActive()) chrome.input.focus();
   }
 }
@@ -7442,6 +7444,8 @@ export async function launchTuiAgentShell(opts: {
     let nextArchiveIndex = 0;
     let refreshRewindSidebar: () => void = () => {};
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
+    const sideQueue: { question: string; displayQuestion: string }[] = [];
+    let sideSessionAbort = new AbortController();
     /**
      * SLATE-5 open/close wiring (parity with `runAgentRepl` in
      * `src/commands/shell.ts`) — a fresh, never-opened ref per live session
@@ -8139,6 +8143,9 @@ export async function launchTuiAgentShell(opts: {
     };
     refreshRewindSidebar();
     const resetSessionSurface = (): void => {
+      sideQueue.length = 0;
+      sideSessionAbort.abort();
+      sideSessionAbort = new AbortController();
       splash?.removeIfShown();
       nav.exit();
       chrome.stopBusy();
@@ -8163,13 +8170,19 @@ export async function launchTuiAgentShell(opts: {
       signal: AbortSignal,
       target: { resumeId?: string } = {},
     ): Promise<ReturnType<typeof openLeasedSession>> => {
-      assertSessionSwitchActive(signal, sessionLease.canPersist());
+      const assertCanSwitch = (): void => {
+        assertSessionSwitchActive(signal, sessionLease.canPersist());
+        if (chrome.isBusy() || foregroundOperation.isActive) {
+          throw new Error("The main agent is busy. Wait for the turn to finish.");
+        }
+      };
+      assertCanSwitch();
       const opened = await switchPreservedSession(sessionLease.current, () => openLeasedSession({
         cwd: sessionCwd, ...target, provider: currentSel.provider, model: currentSel.model,
       }), async () => {
         flushSessionCheckpoint();
         await closeSlateSession(slateSession, mintTimestampAttemptId);
-        assertSessionSwitchActive(signal, sessionLease.canPersist());
+        assertCanSwitch();
       });
       sessionLease.hold(opened.lease);
       return opened;
@@ -8217,6 +8230,10 @@ export async function launchTuiAgentShell(opts: {
       const found = target ?? (await pickRecentSession(signal));
       if (signal.aborted) return;
       if (found === undefined) {
+        return;
+      }
+      if (found.id === liveSession.summary.id) {
+        io.onSystem?.("That session is already open.\n");
         return;
       }
       // Guarded, and deliberately NOT by falling back to a new session the way
@@ -9200,11 +9217,6 @@ export async function launchTuiAgentShell(opts: {
     // Side workers while main is busy (automatic — no special slash command).
     const SIDE_WORKER_ID = `${SIDE_WORKER_ID_PREFIX}1`;
     const sideWorkerLabelText = sideWorkerLabel(1);
-    type QueuedSideQuestion = {
-      question: string;
-      displayQuestion: string;
-    };
-    const sideQueue: QueuedSideQuestion[] = [];
 
     // QueuedMainQuestion type imported from ./main-queue (pure helpers).
     let sideWorkerRunning = false;
@@ -9518,6 +9530,8 @@ export async function launchTuiAgentShell(opts: {
             break;
           }
           const currentQuestion = next.question;
+          const sideSignal = sideSessionAbort.signal;
+          const canPaintSide = (): boolean => !sideSignal.aborted && !destroyed;
           sideWorkerRunning = true;
           if (sideClearTimeout !== undefined) {
             clearTimeout(sideClearTimeout);
@@ -9571,6 +9585,7 @@ export async function launchTuiAgentShell(opts: {
             // purely because the MAIN session happened to be joined, not
             // because this worker needs it.
             const base = await opts.makeAgentDeps(currentSel, liveSlateSession, undefined);
+            if (!canPaintSide()) continue;
             // Read-only: never allow shell/mutations from a side worker. `bus_send`
             // is excluded by name (`SIDE_WORKER_DENIED_TOOL_NAMES`) even though it
             // is `risk: "read"` — see that list's own doc comment.
@@ -9593,6 +9608,7 @@ export async function launchTuiAgentShell(opts: {
                 answer = text;
               },
               onToolCall: (name) => {
+                if (!canPaintSide()) return;
                 fleet.upsert({
                   id: SIDE_WORKER_ID,
                   label: sideWorkerLabelText,
@@ -9601,9 +9617,11 @@ export async function launchTuiAgentShell(opts: {
                 });
               },
               onToolResult: () => {
+                if (!canPaintSide()) return;
                 fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "running", detail: "waiting" });
               },
               onSystem: (text) => {
+                if (!canPaintSide()) return;
                 transcript.add(
                   new otui.TextRenderable(r, {
                     id: `side-sys${uid++}`,
@@ -9614,7 +9632,8 @@ export async function launchTuiAgentShell(opts: {
               // Side workers never get shell approval — tools are read-only only.
               requestApproval: async () => false,
             };
-            await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
+            await runAgentTurn(sideIo, sideDeps, sideHistory, prompt, { signal: sideSignal });
+            if (!canPaintSide()) continue;
             const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
             appendUserEcho(otui, r, transcript, {
               id: `side-a${uid++}`,
@@ -9630,6 +9649,7 @@ export async function launchTuiAgentShell(opts: {
               detail: "answered",
             });
           } catch (cause) {
+            if (!canPaintSide()) continue;
             const msg = cause instanceof Error ? cause.message : String(cause);
             transcript.add(
               new otui.TextRenderable(r, {

@@ -4732,8 +4732,10 @@ otuiTest("busy recipient Escape restores the draft and only explicit recipients 
       side: () => { delivered.push(`side:${line}`); },
     });
   });
-  const openPicker = async () => {
+  const openPicker = async (textWhileOpening = "") => {
     mockInput.pressEnter();
+    // These keys reach the composer before the asynchronous journal takes focus.
+    await mockInput.pressKeys([...textWhileOpening]);
     // The renderer can be idle while the decision journal is still writing.
     for (let attempt = 0; attempt < 100; attempt++) {
       await flush();
@@ -4753,6 +4755,14 @@ otuiTest("busy recipient Escape restores the draft and only explicit recipients 
     expect(delivered).toEqual([]);
     expect(chrome.isBusy()).toBe(true);
     expect(chrome.input.value).toBe(draft);
+    expect(chrome.textarea.focused).toBe(true);
+
+    await openPicker("new draft");
+    expect(chrome.input.value).toBe("new draft");
+    await pressEscapeAndSettle(setup);
+    await pending;
+    expect(delivered).toEqual([]);
+    expect(chrome.input.value).toBe(`${draft}\nnew draft`);
     expect(chrome.textarea.focused).toBe(true);
 
     for (const [route, label] of [["main", "Main queue"], ["side", "Side-1"]] as const) {
