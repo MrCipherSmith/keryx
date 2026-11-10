@@ -173,7 +173,7 @@ describe("tui-shell wiring (source audit)", () => {
   test("markReady runs after the resume picker and the submit handler, before the positional prompt", () => {
     const picker = source.indexOf("opts.session?.pickOnStart === true && opts.session.resumeId === undefined");
     const ready = source.indexOf("hostStatus.markReady();");
-    const onSubmit = source.indexOf("chrome.onSubmit((line) => {");
+    const onSubmit = source.indexOf("chrome.onSubmit(");
     const initial = source.indexOf("opts.takeInitialPrompt?.()");
     expect(picker).toBeGreaterThan(0);
     expect(ready).toBeGreaterThan(picker);

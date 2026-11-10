@@ -297,6 +297,82 @@ otuiTest("a turn settling never steals focus from a `/` dropdown opened while it
   setup.renderer.destroy();
 });
 
+otuiTest("flow 487 AC4: Escape dismisses local UI, then aborts the Chat stream and accepts another turn", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+  const release = Promise.withResolvers<void>();
+  let firstSignal: AbortSignal | undefined;
+  const next = scriptedTextProvider(["Fresh reply"]);
+  const provider: ProviderPort = {
+    describe: next.describe,
+    stream(request, opts) {
+      if (request.messages.at(-1)?.content !== "Slow question") return next.stream(request, opts);
+      firstSignal = opts.signal;
+      const aborted = new Promise<void>((resolve) => {
+        if (opts.signal?.aborted) resolve();
+        else opts.signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text: "Partial reply" };
+        await Promise.race([aborted, release.promise]);
+        // Deliberately yield again after abort to test the driver's output guard.
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "text_delta", text: " Late reply" };
+        yield { sequence: 2, attemptId: opts.attemptId, kind: "model_end" };
+      })();
+    },
+  };
+  const handle = await mountChatShell(otui.core, setup.renderer, {
+    deps: { ...chatDeps([]), makeProvider: () => provider },
+    runShell,
+    persistSelection: false,
+  });
+  const submit = async (line: string): Promise<void> => {
+    handle.chrome.input.value = line;
+    await setup.flush();
+    setup.mockInput.pressEnter();
+    await settle(setup);
+  };
+  const escape = async (): Promise<void> => {
+    setup.mockInput.pressEscape();
+    // The stdin parser waits 20 ms to distinguish bare Esc from a sequence.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await settle(setup);
+  };
+  try {
+    await submit("Slow question");
+    expect(setup.captureCharFrame()).toContain("Partial reply");
+    expect(firstSignal?.aborted).toBe(false);
+
+    await submit("/theme");
+    expect(handle.chrome.overlayActive()).toBe(true);
+    await escape();
+    expect(handle.chrome.overlayActive()).toBe(false);
+    expect(firstSignal?.aborted).toBe(false);
+
+    await setup.mockInput.pressKeys(["/"]);
+    await settle(setup);
+    expect(handle.chrome.menuActive()).toBe(true);
+    await escape();
+    expect(handle.chrome.menuActive()).toBe(false);
+    expect(firstSignal?.aborted).toBe(false);
+
+    await escape();
+    expect(firstSignal?.aborted).toBe(true);
+    expect(handle.chrome.isBusy()).toBe(false);
+    expect(setup.captureCharFrame()).toContain("chat turn interrupted");
+    expect(setup.captureCharFrame()).not.toContain("Late reply");
+
+    await submit("Next question");
+    expect(setup.captureCharFrame()).toContain("Fresh reply");
+  } finally {
+    handle.bridge.close();
+    release.resolve();
+    await handle.done;
+    handle.destroy();
+    setup.renderer.destroy();
+  }
+});
+
 otuiTest("/new resets the estimated context counter instead of letting it keep climbing", async () => {
   const otui = requireOtui();
   const h = await mountChat(otui, { replies: ["A fairly long scripted answer about keryx."] });

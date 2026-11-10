@@ -40,7 +40,7 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
   });
 
   test("the busy-branch side-worker dispatch is gated before the Main-queue/Side-1 composer choice, with no choice offered while held", () => {
-    const choiceIdx = source.indexOf('title: "Main agent is busy"');
+    const choiceIdx = source.indexOf("void routeBusyMessage(");
     expect(choiceIdx).toBeGreaterThan(0);
     const pendingEditIdx = source.indexOf("if (!agentShaped && remoteQueue.requeuePendingEdit(line, displayLine))");
     expect(pendingEditIdx).toBeGreaterThan(0);
@@ -49,7 +49,7 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     expect(block).toContain("leaseView()?.held() === true");
     expect(block).toContain("const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? \"agent-message\" : undefined);");
     expect(block).toContain("queued as q${position} (no side worker while held).\\n");
-    // The held branch must return BEFORE the composer-choice IIFE below it.
+    // The held branch must return before opening the recipient picker.
     const heldIdx = block.indexOf("leaseView()?.held() === true");
     expect(block.indexOf("return;", heldIdx)).toBeGreaterThan(heldIdx);
   });
@@ -136,7 +136,7 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     for (const field of [
       "forced: forceHandoff,",
       "paint: () => paintMainQueue(),",
-      "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "turnWorkInFlight: () => foregroundOperation.isDisposed || chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
       "onSettle: () => busWakeController?.onSettle(),",
       // The reply path to the topic, the label of a queued line, the composer, the transcript line,
       // the Telegram source on a drained line and the report of a failed detached command.

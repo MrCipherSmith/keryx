@@ -522,7 +522,7 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
     const start = source.indexOf("const resumeSessionInteractive = ");
     expect(start).toBeGreaterThanOrEqual(0);
     const body = source.slice(start, source.indexOf("paintSessionHeader();\n\n", start));
-    expect(body).toContain("applyOpened(opened, true);");
+    expect(body).toContain("applyOpened(opened);");
   });
 
   test("the join call passes surface tui, a session-lease GETTER, and status from herdrStateFor (review r1 F2)", () => {

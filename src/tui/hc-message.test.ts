@@ -526,7 +526,7 @@ describe("wiring (source audit)", () => {
     expect(tuiSource).toMatch(/runAgentTurn\(foregroundIo, deps, history, modelLine,/);
     // The scroll pin carries the same label as the echo; the resume summary decodes stored frames.
     expect(tuiSource).toContain("chrome.registerUserPrompt(userEcho, echoLine, hcEcho?.marker);");
-    expect(tuiSource).toContain("const hc = hcHistoryEcho(m.content);");
+    expect(tuiSource).toContain("const hc = hcHistoryEcho(message.content);");
   });
 
   test("a Telegram line is the operator's: its tg mark wins and it is never framed", () => {
@@ -546,7 +546,7 @@ describe("wiring (source audit)", () => {
     const queued = tuiSource.indexOf('if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source, "agent-message");');
     expect(defined).toBeGreaterThan(-1);
     expect(busy).toBeGreaterThan(defined);
-    const dialog = tuiSource.indexOf('title: "Main agent is busy",');
+    const dialog = tuiSource.indexOf("void routeBusyMessage(");
     expect(busy).toBeGreaterThan(-1);
     expect(queued).toBeGreaterThan(busy);
     expect(dialog).toBeGreaterThan(queued);

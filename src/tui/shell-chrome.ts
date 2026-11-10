@@ -73,6 +73,7 @@ type KeypressEvent = {
   ctrl: boolean;
   meta: boolean;
   sequence: string;
+  readonly defaultPrevented: boolean;
   preventDefault: () => void;
   stopPropagation: () => void;
 };
@@ -481,6 +482,8 @@ export interface ShellChrome {
   keyboardOwnedElsewhere(): boolean;
   /** Mark an overlay active for the duration of an async run. */
   withOverlay<T>(run: () => Promise<T>): Promise<T>;
+  /** Bind Esc after the shell's own keyboard modes. The handler reports whether a turn was interrupted. */
+  onEscapeInterrupt(interrupt: () => boolean): void;
 
   /** Transient `✓ msg` in the sidebar; replaces any pending toast. */
   showToast(message: string): void;
@@ -517,8 +520,8 @@ export interface ShellChrome {
   setStatus(text: string): void;
   setHeaderMeta(text: string): void;
 
-  /** Subscribe to submitted lines (composer Enter + `/`-menu selection). */
-  onSubmit(handler: (line: string) => void): () => void;
+  /** Subscribe to the submitted line and the original text for draft restoration. */
+  onSubmit(handler: (line: string, draft: string) => void): () => void;
 
   /**
    * Show a model-suggested "next step" in the composer placeholder while the
@@ -1470,8 +1473,8 @@ export async function createShellChrome(
   syncComposerHeight();
 
   // --- submit hook --------------------------------------------------------
-  const submitHandlers = new Set<(line: string) => void>();
-  const emitSubmit = (line: string): void => {
+  const submitHandlers = new Set<(line: string, draft: string) => void>();
+  const emitSubmit = (line: string, draft = line): void => {
     // Flow 269 AC5: sending something jumps the transcript to its end and
     // re-arms auto-follow, so the reply is on screen. A bare Enter on an empty
     // composer sends nothing and leaves an operator reading history in place.
@@ -1480,7 +1483,7 @@ export async function createShellChrome(
       scroll.stickyScroll = true;
     }
     for (const handler of [...submitHandlers]) {
-      handler(line);
+      handler(line, draft);
     }
   };
 
@@ -1501,7 +1504,8 @@ export async function createShellChrome(
       debugEvent("composer.submit-blocked", { reason: "overlay active", dockVisible: dock.visible, overlayDepth });
       return;
     }
-    const line = input.value.trim();
+    const draft = input.value;
+    const line = draft.trim();
     debugEvent("composer.submit", { chars: line.length, slash: line.startsWith("/") });
     input.value = "";
     hideMenu();
@@ -1511,7 +1515,7 @@ export async function createShellChrome(
     // empty composer with no suggestion at all (`emitSubmit("")`, which
     // `runLine` in tui-shell.ts no-ops on for an operator-origin line). Only
     // Tab/Right (below) accepts a suggestion into the composer.
-    emitSubmit(line);
+    emitSubmit(line, draft);
   };
 
   // Route printable keys / Backspace / Esc for the open dropdown — via the
@@ -1716,6 +1720,7 @@ export async function createShellChrome(
     appliedTheme = theme;
   };
   const unsubTheme = onThemeChange((theme) => applyTheme(theme));
+  let offEscapeInterrupt: (() => void) | undefined;
 
   {
     const run = currentDebugRun();
@@ -1765,6 +1770,15 @@ export async function createShellChrome(
     addOverlaySource,
     keyboardOwnedElsewhere,
     withOverlay,
+    onEscapeInterrupt: (interrupt) => {
+      offEscapeInterrupt?.();
+      offEscapeInterrupt = onKeypress(r, (key) => {
+        if (key.name !== "escape" || key.ctrl || key.meta || key.defaultPrevented) return;
+        if (overlayActive() || (menu.visible && menuNav) || !interrupt()) return;
+        key.preventDefault();
+        key.stopPropagation();
+      });
+    },
 
     showToast,
     applyTheme,
@@ -1816,6 +1830,7 @@ export async function createShellChrome(
       destroyModalHost(r);
       clearBusyTimer();
       clearToastTimer();
+      offEscapeInterrupt?.();
       unsubscribeMenuKeys();
       unsubscribeSuggestionKeys();
       try {

@@ -549,8 +549,6 @@ interface SidebarRepoMetadata {
   prUrl?: string;
 }
 
-const SESSION_PREVIEW_MESSAGE_COUNT = 200;
-
 /**
  * Flow 173 F-003: `risk === "read"` alone is NOT the side-worker safety
  * boundary — `shell_job_kill` is intentionally `risk:"read"` (this flow's
@@ -1782,6 +1780,60 @@ async function pickWikiEnrichMode(
   return id === "drafts" || id === "force" || id === "cancel" ? id : "cancel";
 }
 
+/** Ask where a message submitted during the main turn should go. */
+export async function routeBusyMessage(
+  otui: OpenTui,
+  chrome: ShellChrome,
+  cwd: string,
+  line: string,
+  draft: string,
+  deliver: { main(): void; side(): void; blockedReason?(): string | undefined },
+): Promise<void> {
+  const chosen = await journaledPick(
+    cwd,
+    {
+      source: DECISION_SOURCES.queueRoute,
+      // The message text stays out of the journal: only the choice is recorded.
+      question: "The main agent is busy. Where should this message go?",
+      recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
+      cancelId: "cancel",
+      options: [
+        { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
+        { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
+      ],
+    },
+    (options, dismissId) => {
+      const reason = deliver.blockedReason?.();
+      if (reason !== undefined) {
+        chrome.showToast(reason);
+        return Promise.resolve(dismissId);
+      }
+      return showComposerChoice(otui, chrome.renderer, chrome.dock, {
+        title: "Main agent is busy",
+        subtitle: line,
+        options,
+        cancelId: dismissId,
+        enqueue: false,
+        onBusy: () => chrome.showToast("Answer the open approval first, then resend."),
+      });
+    },
+  );
+  // Recording the answer can yield after the dock closes. Recheck the originating
+  // session before either callback reads the current history or paints a message.
+  const blocked = chosen === "main" || chosen === "side" ? deliver.blockedReason?.() : undefined;
+  if (blocked === undefined && chosen === "main") {
+    deliver.main();
+  } else if (blocked === undefined && chosen === "side") {
+    deliver.side();
+  } else {
+    if (blocked !== undefined) chrome.showToast(blocked);
+    // The decision journal can yield before the picker takes input focus.
+    const currentDraft = chrome.input.value;
+    chrome.input.value = currentDraft.length === 0 ? draft : `${draft}\n${currentDraft}`;
+    if (!chrome.overlayActive()) chrome.input.focus();
+  }
+}
+
 /** Resolves the short advisory approval context for a proposed shell command. */
 export type ApprovalContextLoader = (command: string) => Promise<string>;
 
@@ -1870,7 +1922,6 @@ export async function pickShellApproval(
       id: "once",
       label: "Allow once",
       description: "Run only this time",
-      recommended: true,
     },
     ...(canOfferExact
       ? [
@@ -1894,6 +1945,7 @@ export async function pickShellApproval(
       id: "deny",
       label: "Deny",
       description: "Do not run",
+      recommended: true,
     },
   ];
   // Not journaled: a pure allow/deny has no recommendation to follow or ignore, so an arm would measure nothing.
@@ -4760,6 +4812,8 @@ export async function launchTuiAgentShell(opts: {
     },
   });
   const foregroundOperation = createForegroundOperationOwner();
+  let sessionTransferInProgress = false;
+  const sessionTransferNotice = "Session switch in progress. Try again when it finishes.";
   const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
@@ -6034,7 +6088,7 @@ export async function launchTuiAgentShell(opts: {
       paint: () => paintMainQueue(),
       say: (text) => io.onSystem?.(text),
       runLine: (line, origin, source) => runLine(line, origin, source),
-      turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
+      turnWorkInFlight: () => foregroundOperation.isDisposed || chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
       onSettle: () => busWakeController?.onSettle(),
       onDetachedFailure: (error) => {
         const reason = error instanceof Error ? error.message : String(error);
@@ -7402,6 +7456,8 @@ export async function launchTuiAgentShell(opts: {
     let nextArchiveIndex = 0;
     let refreshRewindSidebar: () => void = () => {};
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
+    const sideQueue: { question: string; displayQuestion: string }[] = [];
+    let sideSessionAbort = new AbortController();
     /**
      * SLATE-5 open/close wiring (parity with `runAgentRepl` in
      * `src/commands/shell.ts`) — a fresh, never-opened ref per live session
@@ -7486,6 +7542,7 @@ export async function launchTuiAgentShell(opts: {
       foregroundOperation.invalidateSession();
       usageTracker = createUsageTracker();
       usageTurnOpen = false;
+      chrome.repaintStatus();
       io.resetStream();
       blockIo.resetReasoningLiveState();
       // Not `forceHandoff.clear()`: a forced line has already been taken out of
@@ -7517,7 +7574,6 @@ export async function launchTuiAgentShell(opts: {
         archive: NormalizedMessage[];
         resumed: boolean;
       },
-      previewHistory?: boolean,
     ): void => {
       if (opened.history.length > 0) {
         splash?.removeIfShown();
@@ -7532,7 +7588,7 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       io.hcLaunchGrants?.clear();
       resetOperatorDenials();
-      history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
+      history = opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
       refreshRewindSidebar();
@@ -7581,6 +7637,25 @@ export async function launchTuiAgentShell(opts: {
     // `● live` / `◌ stale` on the picker rows (AC4).
     const leaseState = leaseStateLookup(sessionCwd);
 
+    const showSessionPreview = (): void => {
+      const recentPrompts = history.filter((message) => message.role === "user").slice(-5);
+      if (recentPrompts.length === 0) return;
+      transcript.add(new otui.TextRenderable(r, {
+        id: `sesspreview${uid++}`,
+        content: otui.t`${dimChunk(otui, "Recent prompts")}`,
+      }));
+      for (const message of recentPrompts) {
+        // A framed hc message uses the same sender marker as its live echo.
+        const hc = hcHistoryEcho(message.content);
+        const text = hc?.line ?? message.content;
+        const preview = text.length > 100 ? `${text.slice(0, 97)}…` : text;
+        transcript.add(new otui.TextRenderable(r, {
+          id: `sessu${uid++}`,
+          content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${preview}`)}`,
+        }));
+      }
+    };
+
     /** The transcript lines an opened session announces: skipped, degraded, resumed. */
     const showOpenedNotes = (opened: ReturnType<typeof openLeasedSession>): void => {
       if (opened.skipped !== undefined) {
@@ -7612,19 +7687,7 @@ export async function launchTuiAgentShell(opts: {
             marginTop: 1,
           }),
         );
-        for (const m of history.filter((x) => x.role === "user").slice(-5)) {
-          // An hc message is stored framed (flow 481); show it as the live echo did, sender and
-          // body, so the long frame header does not fill the 100 characters.
-          const hc = hcHistoryEcho(m.content);
-          const text = hc?.line ?? m.content;
-          const t = text.length > 100 ? `${text.slice(0, 97)}…` : text;
-          transcript.add(
-            new otui.TextRenderable(r, {
-              id: `sessu${uid++}`,
-              content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${t}`)}`,
-            }),
-          );
-        }
+        showSessionPreview();
       }
     };
 
@@ -8092,6 +8155,10 @@ export async function launchTuiAgentShell(opts: {
     };
     refreshRewindSidebar();
     const resetSessionSurface = (): void => {
+      sideQueue.length = 0;
+      sideSessionAbort.abort();
+      sideSessionAbort = new AbortController();
+      splash?.removeIfShown();
       nav.exit();
       chrome.stopBusy();
       io.resetStream();
@@ -8115,16 +8182,31 @@ export async function launchTuiAgentShell(opts: {
       signal: AbortSignal,
       target: { resumeId?: string } = {},
     ): Promise<ReturnType<typeof openLeasedSession>> => {
-      assertSessionSwitchActive(signal, sessionLease.canPersist());
+      const assertCanSwitch = (): void => {
+        assertSessionSwitchActive(signal, sessionLease.canPersist());
+        if (chrome.isBusy() || foregroundOperation.isActive) {
+          throw new Error("The main agent is busy. Wait for the turn to finish.");
+        }
+      };
+      assertCanSwitch();
       const opened = await switchPreservedSession(sessionLease.current, () => openLeasedSession({
         cwd: sessionCwd, ...target, provider: currentSel.provider, model: currentSel.model,
       }), async () => {
         flushSessionCheckpoint();
         await closeSlateSession(slateSession, mintTimestampAttemptId);
-        assertSessionSwitchActive(signal, sessionLease.canPersist());
+        assertCanSwitch();
       });
       sessionLease.hold(opened.lease);
       return opened;
+    };
+
+    // Keep the outgoing session idle until its Slate, lease and visible surface have all
+    // transferred. A foreground turn must not start after the outgoing Slate begins closing.
+    const withSessionTransfer = (action: () => Promise<void>): Promise<void> => {
+      sessionTransferInProgress = true;
+      const work = action().finally(() => { sessionTransferInProgress = false; });
+      turnLoop.drain.detach(work);
+      return work;
     };
 
     const startNewSession = async (signal: AbortSignal, note?: string): Promise<boolean> => {
@@ -8171,43 +8253,51 @@ export async function launchTuiAgentShell(opts: {
       if (found === undefined) {
         return;
       }
-      // Guarded, and deliberately NOT by falling back to a new session the way
-      // the startup path does. The operator asked to resume a specific session;
-      // losing the live one as a side effect of that request would be a second
-      // failure on top of the first. Unguarded, the throw escaped an async
-      // handler with no rejection boundary.
-      //
-      // Flow 271 (§6.2, AC6): the target's lease is taken before the current
-      // one is released. A session another shell holds is refused here with the
-      // lease error, which names the holder and `--fork`; the current session
-      // and its lease stay exactly as they were.
-      let opened: ReturnType<typeof openLeasedSession>;
-      try {
-        opened = await preservedOpen(signal, { resumeId: found.id });
-      } catch (cause) {
-        const hint =
-          cause instanceof SessionLeasedError
-            ? `To continue it in this shell, start one with: keryx shell -r ${shortSessionId(found.id)} --fork\n`
-            : "";
-        io.onSystem?.(
-          `Could not resume ${shortSessionId(found.id)}: ${cause instanceof Error ? cause.message : String(cause)}\n` +
-            hint +
-            `Staying in the current session.\n`,
-        );
+      if (found.id === liveSession.summary.id) {
+        io.onSystem?.("That session is already open.\n");
         return;
       }
-      applyOpened(opened, true);
-      // Outgoing history and Slate were preserved before ownership transfer.
-      bindSlateToLiveSession();
-      // After the rebind: it reads the bound workspace from the slate ref.
-      void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
-      paintSessionHeader();
-      if (opened.archiveDegraded !== undefined) {
-        io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
-      }
-      io.onSystem?.(
-        `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
-      );
+      await withSessionTransfer(async () => {
+        // Guarded, and deliberately NOT by falling back to a new session the way
+        // the startup path does. The operator asked to resume a specific session;
+        // losing the live one as a side effect of that request would be a second
+        // failure on top of the first. Unguarded, the throw escaped an async
+        // handler with no rejection boundary.
+        //
+        // Flow 271 (§6.2, AC6): the target's lease is taken before the current
+        // one is released. A session another shell holds is refused here with the
+        // lease error, which names the holder and `--fork`; the current session
+        // and its lease stay exactly as they were.
+        let opened: ReturnType<typeof openLeasedSession>;
+        try {
+          opened = await preservedOpen(signal, { resumeId: found.id });
+        } catch (cause) {
+          const hint =
+            cause instanceof SessionLeasedError
+              ? `To continue it in this shell, start one with: keryx shell -r ${shortSessionId(found.id)} --fork\n`
+              : "";
+          io.onSystem?.(
+            `Could not resume ${shortSessionId(found.id)}: ${cause instanceof Error ? cause.message : String(cause)}\n` +
+              hint +
+              `Staying in the current session.\n`,
+          );
+          return;
+        }
+        resetSessionSurface();
+        applyOpened(opened);
+        // Outgoing history and Slate were preserved before ownership transfer.
+        bindSlateToLiveSession();
+        // After the rebind: it reads the bound workspace from the slate ref.
+        void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
+        paintSessionHeader();
+        if (opened.archiveDegraded !== undefined) {
+          io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
+        }
+        io.onSystem?.(
+          `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
+        );
+        showSessionPreview();
+      });
     });
 
     paintSessionHeader();
@@ -9150,11 +9240,6 @@ export async function launchTuiAgentShell(opts: {
     // Side workers while main is busy (automatic — no special slash command).
     const SIDE_WORKER_ID = `${SIDE_WORKER_ID_PREFIX}1`;
     const sideWorkerLabelText = sideWorkerLabel(1);
-    type QueuedSideQuestion = {
-      question: string;
-      displayQuestion: string;
-    };
-    const sideQueue: QueuedSideQuestion[] = [];
 
     // QueuedMainQuestion type imported from ./main-queue (pure helpers).
     let sideWorkerRunning = false;
@@ -9311,6 +9396,10 @@ export async function launchTuiAgentShell(opts: {
     const forceMainQueue = (index: number): void => {
       const item = turnLoop.queue[index];
       if (item === undefined) return;
+      if (sessionTransferInProgress) {
+        chrome.showToast(sessionTransferNotice);
+        return;
+      }
       // Flow 275 T7 (specification §4.3, AC4): "/queue force" — and the
       // Ctrl+Q queue-nav force action and the queue-dock force button, which
       // both call this SAME function — must not be the back door around a
@@ -9340,7 +9429,7 @@ export async function launchTuiAgentShell(opts: {
         // `runQueued` goes through `runLine`, whose busy branch diverts the line
         // to the recipient dock or a side worker. Ask before dispatching, and hand
         // the line back to the queue while the chrome is still busy.
-        isBusy: () => chrome.isBusy(),
+        isBusy: () => chrome.isBusy() || sessionTransferInProgress,
         resume: () => drainSites.onLeaseRelease(),
         requeue: (items) => {
           if (foregroundOperation.isDisposed) return;
@@ -9468,6 +9557,8 @@ export async function launchTuiAgentShell(opts: {
             break;
           }
           const currentQuestion = next.question;
+          const sideSignal = sideSessionAbort.signal;
+          const canPaintSide = (): boolean => !sideSignal.aborted && !destroyed;
           sideWorkerRunning = true;
           if (sideClearTimeout !== undefined) {
             clearTimeout(sideClearTimeout);
@@ -9521,6 +9612,7 @@ export async function launchTuiAgentShell(opts: {
             // purely because the MAIN session happened to be joined, not
             // because this worker needs it.
             const base = await opts.makeAgentDeps(currentSel, liveSlateSession, undefined);
+            if (!canPaintSide()) continue;
             // Read-only: never allow shell/mutations from a side worker. `bus_send`
             // is excluded by name (`SIDE_WORKER_DENIED_TOOL_NAMES`) even though it
             // is `risk: "read"` — see that list's own doc comment.
@@ -9543,6 +9635,7 @@ export async function launchTuiAgentShell(opts: {
                 answer = text;
               },
               onToolCall: (name) => {
+                if (!canPaintSide()) return;
                 fleet.upsert({
                   id: SIDE_WORKER_ID,
                   label: sideWorkerLabelText,
@@ -9551,9 +9644,11 @@ export async function launchTuiAgentShell(opts: {
                 });
               },
               onToolResult: () => {
+                if (!canPaintSide()) return;
                 fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "running", detail: "waiting" });
               },
               onSystem: (text) => {
+                if (!canPaintSide()) return;
                 transcript.add(
                   new otui.TextRenderable(r, {
                     id: `side-sys${uid++}`,
@@ -9564,7 +9659,8 @@ export async function launchTuiAgentShell(opts: {
               // Side workers never get shell approval — tools are read-only only.
               requestApproval: async () => false,
             };
-            await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);
+            await runAgentTurn(sideIo, sideDeps, sideHistory, prompt, { signal: sideSignal });
+            if (!canPaintSide()) continue;
             const body = answer.trim().length > 0 ? answer.trim() : "(no reply)";
             appendUserEcho(otui, r, transcript, {
               id: `side-a${uid++}`,
@@ -9580,6 +9676,7 @@ export async function launchTuiAgentShell(opts: {
               detail: "answered",
             });
           } catch (cause) {
+            if (!canPaintSide()) continue;
             const msg = cause instanceof Error ? cause.message : String(cause);
             transcript.add(
               new otui.TextRenderable(r, {
@@ -9620,8 +9717,21 @@ export async function launchTuiAgentShell(opts: {
       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
       source?: typeof TG_SOURCE | "hub",
       skipSlashRouting = false,
+      draft = line,
     ): void => {
       if (line.length === 0 && origin === "operator") {
+        return;
+      }
+      // Exit still owns the shutdown path while a session transfer is pending.
+      if (sessionTransferInProgress && !(origin === "operator" && source !== "hub" &&
+        !skipSlashRouting && findAgentCommand(line, "agent")?.name === "/exit")) {
+        if (source === undefined && (origin === "operator" || origin === "agent-message")) {
+          const currentDraft = input.value;
+          input.value = currentDraft.length === 0 ? draft : `${draft}\n${currentDraft}`;
+          chrome.showToast(sessionTransferNotice);
+        } else if (source === TG_SOURCE) {
+          io.onSystem?.(`${sessionTransferNotice}\n`);
+        }
         return;
       }
       // AC14 (flow 268): a new turn supersedes the previous next-step suggestion.
@@ -9926,42 +10036,12 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
-        void (async () => {
-          let blockedByOpenDialog = false;
-          const chosen = await journaledPick(
-            sessionCwd,
-            {
-              source: DECISION_SOURCES.queueRoute,
-              // the message text stays out of the journal: only the choice is recorded
-              question: "The main agent is busy. Where should this message go?",
-              recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
-              cancelId: "side",
-              options: [
-                { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
-                { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
-              ],
-            },
-            (options, dismissId) =>
-              showComposerChoice(otui, r, chrome.dock, {
-                title: "Main agent is busy",
-                subtitle: line,
-                options,
-                cancelId: dismissId,
-                enqueue: false,
-                onBusy: () => {
-                  blockedByOpenDialog = true;
-                  chrome.showToast("Answer the open approval first, then resend.");
-                },
-              }),
-          );
-          if (blockedByOpenDialog) {
-            // Don't silently pick "side" for a message the user never routed —
-            // hand it back to the composer so nothing is lost.
-            input.value = line;
-            input.focus();
-            return;
-          }
-          if (chosen === "main") {
+        const recipientSession = sideSessionAbort.signal;
+        void routeBusyMessage(otui, chrome, sessionCwd, line, draft, {
+          blockedReason: () => recipientSession.aborted
+            ? "Session changed. Review the draft before sending it again."
+            : sessionTransferInProgress ? sessionTransferNotice : undefined,
+          main: () => {
             turnLoop.enqueue(line, displayLine);
             // The recipient choice is asynchronous. The turn may have settled
             // while its dock was open, before the settle handler saw this item.
@@ -9969,12 +10049,14 @@ export async function launchTuiAgentShell(opts: {
             turnLoop.drainAfterRecipientChoice(
               () =>
                 !destroyed &&
+                !sessionTransferInProgress &&
                 !chrome.isBusy() &&
                 !foregroundOperation.isActive &&
                 !forceHandoff.isAwaitingSettlement &&
                 leaseView()?.held() !== true,
             );
-          } else {
+          },
+          side: () => {
             appendUserEcho(otui, r, transcript, {
               id: `side-q${uid++}`,
               line: displayLine,
@@ -9982,8 +10064,8 @@ export async function launchTuiAgentShell(opts: {
               marginTop: 0,
             });
             spawnSideWorker(line, displayLine);
-          }
-        })();
+          },
+        });
         return;
       }
 
@@ -10040,7 +10122,7 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: `/new`/`/clear` abandon the current session
           // dir for a fresh one — archive whatever slate it was building
           // before switching away (parity with runAgentRepl in shell.ts).
-          void sessionSwitches.run(async (signal) => {
+          void sessionSwitches.run((signal) => withSessionTransfer(async () => {
             // Creates a NEW session id; previous transcript stays on disk for /resume.
             if (!await startNewSession(signal)) {
               return;
@@ -10066,7 +10148,7 @@ export async function launchTuiAgentShell(opts: {
             io.onSystem?.(
               `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
             );
-          });
+          }));
           return;
         }
         if (command.name === "/schedule") {
@@ -11424,7 +11506,7 @@ export async function launchTuiAgentShell(opts: {
     // slash work (flow 441, F-025); the bus-wake controller's own `isIdle`
     // right below does, via `drainSites.workInFlight()`.
     deps.jobRegistry?.onCompletion(() => {
-      const busy = chrome.isBusy() || foregroundOperation.isActive;
+      const busy = sessionTransferInProgress || chrome.isBusy() || foregroundOperation.isActive;
       const idle = !busy && turnLoop.queue.length === 0 && leaseView()?.held() !== true;
       if (!idle) {
         return;
@@ -11602,6 +11684,9 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`Permission mode: ${formatModeInForce(modeForTurn(true))} (ask, trust or auto)\n`);
         });
       }
+      if (sessionTransferInProgress && name !== "/exit") {
+        return { ok: false, output: sessionTransferNotice };
+      }
       return await captureShellOutput(() => runLine(line, "operator", TG_SOURCE));
     };
 
@@ -11613,6 +11698,7 @@ export async function launchTuiAgentShell(opts: {
     // from Telegram enters the session exactly like a typed one: idle, `runLine`; busy, the
     // ordinary main queue (the same `qN` rows, labelled `[tg]`).
     const shellIsBusy = (): boolean =>
+      sessionTransferInProgress ||
       chrome.isBusy() ||
       foregroundOperation.isActive ||
       forceHandoff.isAwaitingSettlement ||
@@ -11703,7 +11789,7 @@ export async function launchTuiAgentShell(opts: {
           isBusy: hubShellBusy,
           turnId: currentHubTurn,
           submit: (text) => {
-            if (destroyed || !sessionLease.canPersist()) return false;
+            if (destroyed || sessionTransferInProgress || !sessionLease.canPersist()) return false;
             runLine(text, "operator", "hub");
             return true;
           },
@@ -11925,11 +12011,16 @@ export async function launchTuiAgentShell(opts: {
     onKeypress(r, (key) => {
       handleQueueNavKey(key);
     });
+    chrome.onEscapeInterrupt(() => {
+      if (!foregroundOperation.cancel("interrupted by Escape")) return false;
+      io.onSystem?.("◇ main turn interrupted (Esc).\n");
+      return true;
+    });
 
     // Both a composer Enter and a `/`-menu selection arrive here: the chrome has
     // already trimmed the line, cleared the composer and closed the dropdown.
-    chrome.onSubmit((line) => {
-      runLine(line);
+    chrome.onSubmit((line, draft) => {
+      runLine(line, "operator", undefined, false, draft);
     });
     // Text pasted into an open dialog (herdr-core types a child's report that way) never answers it; it is
     // queued the way a busy agent-shaped line is, framed as text of unknown authorship (HC_PASTED_HEADER).

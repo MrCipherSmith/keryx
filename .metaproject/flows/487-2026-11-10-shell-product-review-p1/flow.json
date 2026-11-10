@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "487",
+  "slug": "shell-product-review-p1",
+  "title": "Fix five P1 findings from the Keryx Shell product review",
+  "status": "in-progress",
+  "createdAt": "2026-11-10T17:10:03.872Z",
+  "updatedAt": "2026-11-10T18:53:06.373Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a6e6a2be44d6e32ce23fd0dce5d5253b03d81195e2ec2fcddba9c2b56bdb8e47",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Reviewed the frozen ACs, code and test context, original product evidence, and base branch changes before the draft."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented all five P1s in T5–T7 and addressed final review findings in 5c8358bfa."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Regressions and final checks passed: 2687 tests across 179 files, 7 macOS PTY checks, typecheck, scoped ESLint."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent logic, security/key routing, and test reviews completed. All findings resolved and rechecked. Draft PR body and nine live PTY images prepared."
+    },
+    {
+      "id": "T5",
+      "title": "Preserve model context and reset the TUI on session switch",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-10T18:13:35.600Z",
+            "outcome": "started",
+            "detail": "Restore full session context and replace the TUI surface on successful switch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "3cf25647b. AC1/AC2 red-green PTY tests and live session switch evidence. Full context and archive preserved; successful switch resets transcript, block registry and usage."
+    },
+    {
+      "id": "T6",
+      "title": "Restore draft on route dismissal and default shell approval to denial",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-10T17:57:44.320Z",
+            "outcome": "started",
+            "detail": "S01 and S02 only, with red-green regressions and a live PTY pass"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "58790c9c5. S01 and S02 regressions red then green. 2634 tests passed, plus typecheck and scoped ESLint. Live PTY verified deny on Enter/Esc, explicit Allow once, exact draft restoration, and both recipient routes. Screenshots in journal."
+    },
+    {
+      "id": "T7",
+      "title": "Interrupt active Agent and Chat turns with Escape",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-10T18:13:36.031Z",
+            "outcome": "started",
+            "detail": "Route Escape to active Agent and Chat streams when available"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "a111bb965. AC4 regressions green; live Agent and Chat provider disconnect and successful follow-up, with overlay precedence."
+    },
+    {
+      "id": "T8",
+      "title": "Repeat all five P1 scenarios in an isolated PTY",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-10T18:25:32.622Z",
+            "outcome": "started",
+            "detail": "Final live replay of S01–S05 from source. 29 captured PNGs and provider, file and checkpoint assertions recorded."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "S01–S05 passed in isolated 120×36 PTYs against a loopback provider. 29 PNGs and reproduction details in journal. Broad tests 2679 pass, macOS PTY suite 7 pass."
+    },
+    {
+      "id": "T9",
+      "title": "Fix PR #1160 CI regressions and verify the published head",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-10T18:50:39.788Z",
+            "outcome": "started",
+            "detail": "Fix startup-prompt source assertions and refresh native command coverage after the Shell changes."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-10T17:10:03.872Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-10T17:10:32.155Z",
+      "event": "origin-set",
+      "detail": "unknown -> agent-finding; source: Keryx Shell product review in this Codex chat, PTY and code evidence (Track the five reproduced P1 findings)"
+    },
+    {
+      "at": "2026-11-10T17:10:32.380Z",
+      "event": "task-added",
+      "detail": "T5: Preserve model context and reset the TUI on session switch"
+    },
+    {
+      "at": "2026-11-10T17:10:32.610Z",
+      "event": "task-added",
+      "detail": "T6: Restore draft on route dismissal and default shell approval to denial"
+    },
+    {
+      "at": "2026-11-10T17:10:32.844Z",
+      "event": "task-added",
+      "detail": "T7: Interrupt active Agent and Chat turns with Escape"
+    },
+    {
+      "at": "2026-11-10T17:10:33.237Z",
+      "event": "task-added",
+      "detail": "T8: Repeat all five P1 scenarios in an isolated PTY"
+    },
+    {
+      "at": "2026-11-10T17:10:33.486Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-10T17:10:33.720Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-10T17:11:23.991Z",
+      "event": "blocked",
+      "detail": "Operator requested a review and evidence collection phase before starting fixes"
+    },
+    {
+      "at": "2026-11-10T17:57:43.864Z",
+      "event": "unblocked",
+      "detail": "resumed as in-progress"
+    },
+    {
+      "at": "2026-11-10T17:57:44.320Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — S01 and S02 only, with red-green regressions and a live PTY pass"
+    },
+    {
+      "at": "2026-11-10T18:07:33.246Z",
+      "event": "task-done",
+      "detail": "T6: Restore draft on route dismissal and default shell approval to denial"
+    },
+    {
+      "at": "2026-11-10T18:13:35.600Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Restore full session context and replace the TUI surface on successful switch"
+    },
+    {
+      "at": "2026-11-10T18:13:36.031Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — Route Escape to active Agent and Chat streams when available"
+    },
+    {
+      "at": "2026-11-10T18:25:32.622Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — Final live replay of S01–S05 from source. 29 captured PNGs and provider, file and checkpoint assertions recorded."
+    },
+    {
+      "at": "2026-11-10T18:26:59.127Z",
+      "event": "task-done",
+      "detail": "T5: Preserve model context and reset the TUI on session switch"
+    },
+    {
+      "at": "2026-11-10T18:26:59.373Z",
+      "event": "task-done",
+      "detail": "T7: Interrupt active Agent and Chat turns with Escape"
+    },
+    {
+      "at": "2026-11-10T18:26:59.621Z",
+      "event": "task-done",
+      "detail": "T8: Repeat all five P1 scenarios in an isolated PTY"
+    },
+    {
+      "at": "2026-11-10T18:35:36.616Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-10T18:35:36.861Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-10T18:35:37.091Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-10T18:35:37.319Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-10T18:50:23.434Z",
+      "event": "task-added",
+      "detail": "T9: Fix PR #1160 CI regressions and verify the published head"
+    },
+    {
+      "at": "2026-11-10T18:50:39.788Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — Fix startup-prompt source assertions and refresh native command coverage after the Shell changes."
+    },
+    {
+      "at": "2026-11-10T18:53:06.373Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (Operator explicitly assigned flow 487 ownership during the PR #1160 handoff.)"
+    }
+  ],
+  "origin": {
+    "kind": "agent-finding",
+    "source": "Keryx Shell product review in this Codex chat, PTY and code evidence"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "judged"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "judged"
+    }
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  }
+}

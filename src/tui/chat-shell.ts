@@ -124,6 +124,8 @@ export interface ChatBridge {
   submit(line: string): ChatSubmitResult;
   /** End the line stream so `runShell` returns and the shell tears down. */
   close(): void;
+  /** Stop the current model stream while keeping the line stream open. */
+  interruptTurn(): boolean;
   /** True between a line reaching the driver and the driver asking for the next. */
   turnActive(): boolean;
   /** Lines accepted but not yet consumed by the driver. */
@@ -149,6 +151,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
   let closed = false;
   let turn = false;
   let streaming = false;
+  let interruptTurn: (() => void) | undefined;
   /**
    * A `"\n\n"` that arrived before this turn produced anything else, held back
    * because it is ambiguous: it is either the trailing separator of a turn that
@@ -180,6 +183,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
       return;
     }
     closed = true;
+    interruptTurn = undefined;
     queue.length = 0;
     const resolve = waiting;
     waiting = undefined;
@@ -194,6 +198,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
         if (turn) {
           turn = false;
           streaming = false;
+          interruptTurn = undefined;
           heldSeparator = false; // the turn is over; it was the trailing one
           hooks.onTurnSettled?.();
         }
@@ -244,7 +249,8 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
       streaming = true;
       hooks.onText?.(s);
     },
-    onTurnStart: () => {
+    onTurnStart: (interrupt) => {
+      interruptTurn = interrupt;
       // A separator held from the previous turn was that turn's trailing one:
       // nothing followed it. Drop it before the new turn can flush it.
       heldSeparator = false;
@@ -284,6 +290,13 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
       return "accepted";
     },
     close,
+    interruptTurn: () => {
+      const interrupt = interruptTurn;
+      if (interrupt === undefined) return false;
+      interruptTurn = undefined;
+      interrupt();
+      return true;
+    },
     turnActive: () => turn,
     pending: () => queue.length,
   };
@@ -465,6 +478,7 @@ export async function mountChatShell(
       append(body.includes("[error]") ? otui.t`${roleChunk(otui, "error", body)}` : otui.t`${dimChunk(otui, body)}`);
     },
   });
+  chrome.onEscapeInterrupt(bridge.interruptTurn);
 
   // `/models` and `/connect` route through the TUI picker (inside the chrome's
   // overlay guard, so the `/`-menu key router stays inert while it is up) rather

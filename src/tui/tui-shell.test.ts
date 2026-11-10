@@ -39,6 +39,7 @@ import {
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
+  routeBusyMessage,
   recordTurnTaskCostBestEffort,
   shouldAutoApproveReadOnlySpawn,
   pickSearchProviderStep,
@@ -68,6 +69,7 @@ import { applyThemeId, getTheme, getThemeId } from "./theme";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
 import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
+import { createForegroundOperationOwner } from "./foreground-operation";
 import { executePlanCommand } from "../session/commands/plan";
 import { executeReasoningCommand } from "../session/commands/reasoning";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
@@ -1609,6 +1611,69 @@ otuiTest("AC4: nav keys stay inert while the /-menu or an overlay owns the keybo
   h.destroy();
 });
 
+otuiTest("flow 487 AC4: Escape aborts the Agent provider and a new foreground turn can reply", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
+  const chrome = await createShellChrome(otui.core, setup.renderer, {
+    title: "keryx · agent",
+    status: "scripted/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  const io = createTuiAgentIo(otui.core, setup.renderer, chrome.transcript);
+  const foreground = createForegroundOperationOwner();
+  chrome.onEscapeInterrupt(() => foreground.cancel("interrupted by Escape"));
+  const started = Promise.withResolvers<AbortSignal | undefined>();
+  const release = Promise.withResolvers<void>();
+  const next = scriptedProvider([[{ kind: "text_delta", text: "Fresh agent reply" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider: {
+      describe: next.describe,
+      stream(request, opts) {
+        if (request.messages.at(-1)?.content !== "Slow question") return next.stream(request, opts);
+        const aborted = new Promise<void>((resolve) => {
+          if (opts.signal?.aborted) resolve();
+          else opts.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        started.resolve(opts.signal);
+        return (async function* (): AsyncGenerator<NormalizedEvent> {
+          await Promise.race([aborted, release.promise]);
+          yield { sequence: 0, attemptId: opts.attemptId, kind: "model_end" };
+        })();
+      },
+    },
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  const operation = foreground.begin();
+  const pending = runAgentTurn(io, deps, history, "Slow question", { signal: foreground.signal })
+    .finally(() => foreground.settle(operation));
+  try {
+    const firstSignal = await started.promise;
+    expect(firstSignal?.aborted).toBe(false);
+    await pressEscapeAndSettle(setup);
+    expect(firstSignal?.aborted).toBe(true);
+    await pending;
+    expect(foreground.isActive).toBe(false);
+
+    const followUp = foreground.begin();
+    await runAgentTurn(io, deps, history, "Next question", { signal: foreground.signal })
+      .finally(() => foreground.settle(followUp));
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("Fresh agent reply");
+  } finally {
+    release.resolve();
+    await pending;
+    chrome.destroy();
+    setup.renderer.destroy();
+  }
+});
+
 otuiTest("AC5: a ```ts fence renders as a framed block whose header carries the language tag (headless)", async () => {
   const otui = requireOtui();
   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 20 });
@@ -2198,6 +2263,33 @@ async function settleMicrotasks(): Promise<void> {
     await Promise.resolve();
   }
 }
+
+otuiTest("shell approval denies on bare Enter", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  try {
+    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "printf fixture", async () => "");
+    await h.flush();
+    h.mockInput.pressEnter();
+    expect(await choice).toBe("deny");
+  } finally {
+    h.renderer.destroy();
+  }
+});
+
+otuiTest("shell approval allows once after explicitly selecting Allow once", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  try {
+    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "printf fixture", async () => "");
+    await h.flush();
+    h.mockInput.pressArrow("down");
+    h.mockInput.pressEnter();
+    expect(await choice).toBe("once");
+  } finally {
+    h.renderer.destroy();
+  }
+});
 
 otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)", async () => {
   const otui = requireOtui();
@@ -2936,7 +3028,7 @@ describe("PR 992 round 3 — tui-shell.ts refusal memory and self-answer line (s
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
   test.each([
-    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
+    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = opened.history;"],
     ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
     ["a permission-mode change (commitPermissionMode)", "paintModeRow();\n      resetOperatorDenials();\n      chrome.showToast(`Permission mode:"],
   ])("%s clears the remembered refusals", (_site, snippet) => {
@@ -4167,7 +4259,7 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
     );
   });
 
-  test("a new turn starting (runLine) cancels the suggestion gate before anything else runs", () => {
+  test("a dispatched line cancels the suggestion gate before routing", () => {
     const runLineStart = nextStepSource.indexOf("const runLine = (\n");
     const bodyStart = nextStepSource.indexOf("): void => {", runLineStart);
     const dispatchStart = nextStepSource.indexOf("if (chrome.isBusy()) {", bodyStart);
@@ -4178,12 +4270,14 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
       'origin: "operator" | "task-notification" | "bus-message" | "agent-message" = "operator"',
     );
 
-    // An empty operator line starts no turn. Every dispatched line must cancel
-    // before any other work, including the busy/side-worker dispatch.
+    // Empty lines and drafts held during a session switch are not dispatched.
+    // Once past these guards, even busy and slash dispatch cancel the suggestion.
     const beforeDispatch = nextStepSource.slice(bodyStart + "): void => {".length, dispatchStart);
     const withoutComments = beforeDispatch.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
+    const cancellation = withoutComments.indexOf('suggestionGate.cancel("new turn started");');
+    expect(cancellation).toBeGreaterThan(withoutComments.indexOf("if (sessionTransferInProgress &&"));
     expect(withoutComments).toMatch(
-      /^\s*if \(line\.length === 0 && origin === "operator"\) \{\s*return;\s*\}\s*suggestionGate\.cancel\("new turn started"\);/,
+      /suggestionGate\.cancel\("new turn started"\);\s*const fromHub/,
     );
   });
 
@@ -4341,7 +4435,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
     const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
-    const applied = block.indexOf("applyOpened(opened, true);");
+    const applied = block.indexOf("applyOpened(opened);");
     expect(applied).toBeGreaterThanOrEqual(0);
     expect(block.indexOf("bindSlateToLiveSession();", applied)).toBeGreaterThan(applied);
   });
@@ -4617,4 +4711,91 @@ test("session replacement paths revoke foreground callbacks before replacing the
   const finalizer = source.slice(source.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);"));
   expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("remoteQueue.turnSettled"));
   expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("flushSessionCheckpoint()"));
+});
+
+otuiTest("busy recipient Escape restores the draft and only explicit recipients deliver it", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+  const { renderer, mockInput, mockMouse, flush, captureCharFrame } = setup;
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-busy-route-"));
+  const chrome = await createShellChrome(otui.core, renderer, {
+    title: "keryx · agent",
+    status: "scripted/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  const draft = "  follow-up draft\n  with a second line  ";
+  const delivered: string[] = [];
+  let recipientSessionChanged = false;
+  let pending: Promise<void> | undefined;
+  chrome.onSubmit((line, originalDraft) => {
+    pending = routeBusyMessage(otui.core, chrome, cwd, line, originalDraft, {
+      blockedReason: () => recipientSessionChanged ? "Session changed." : undefined,
+      main: () => { delivered.push(`main:${line}`); },
+      side: () => { delivered.push(`side:${line}`); },
+    });
+  });
+  const openPicker = async (textWhileOpening = "") => {
+    mockInput.pressEnter();
+    // These keys reach the composer before the asynchronous journal takes focus.
+    await mockInput.pressKeys([...textWhileOpening]);
+    // The renderer can be idle while the decision journal is still writing.
+    for (let attempt = 0; attempt < 100; attempt++) {
+      await flush();
+      const frame = captureCharFrame();
+      if (frame.includes("Main agent is busy") && frame.includes("Side-1")) return frame;
+      await Bun.sleep(20);
+    }
+    throw new Error("The busy recipient picker did not open");
+  };
+  try {
+    chrome.startBusy();
+    chrome.input.value = draft;
+    await openPicker();
+    expect(chrome.input.value).toBe("");
+    await pressEscapeAndSettle(setup);
+    await pending;
+    expect(delivered).toEqual([]);
+    expect(chrome.isBusy()).toBe(true);
+    expect(chrome.input.value).toBe(draft);
+    expect(chrome.textarea.focused).toBe(true);
+
+    await openPicker("new draft");
+    expect(chrome.input.value).toBe("new draft");
+    await pressEscapeAndSettle(setup);
+    await pending;
+    expect(delivered).toEqual([]);
+    expect(chrome.input.value).toBe(`${draft}\nnew draft`);
+    expect(chrome.textarea.focused).toBe(true);
+
+    for (const [route, label] of [["main", "Main queue"], ["side", "Side-1"]] as const) {
+      chrome.input.value = draft;
+      const lines = (await openPicker()).split("\n");
+      const row = lines.findIndex((line) => line.includes(label));
+      expect(row).toBeGreaterThanOrEqual(0);
+      await mockMouse.click(lines[row]!.indexOf(label), row);
+      await pending;
+      expect(delivered).toEqual([`${route}:${draft.trim()}`]);
+      expect(chrome.input.value).toBe("");
+      delivered.length = 0;
+    }
+
+    for (const label of ["Main queue", "Side-1"]) {
+      recipientSessionChanged = false;
+      chrome.input.value = draft;
+      const lines = (await openPicker("new draft")).split("\n");
+      const row = lines.findIndex((line) => line.includes(label));
+      expect(row).toBeGreaterThanOrEqual(0);
+      recipientSessionChanged = true;
+      await mockMouse.click(lines[row]!.indexOf(label), row);
+      await pending;
+      expect(delivered).toEqual([]);
+      expect(chrome.input.value).toBe(`${draft}\nnew draft`);
+    }
+  } finally {
+    chrome.destroy();
+    renderer.destroy();
+    await rm(cwd, { recursive: true, force: true });
+  }
 });
