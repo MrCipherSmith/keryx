@@ -546,7 +546,7 @@ describe("wiring (source audit)", () => {
     const queued = tuiSource.indexOf('if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source, "agent-message");');
     expect(defined).toBeGreaterThan(-1);
     expect(busy).toBeGreaterThan(defined);
-    const dialog = tuiSource.indexOf('title: "Main agent is busy",');
+    const dialog = tuiSource.indexOf("void routeBusyMessage(");
     expect(busy).toBeGreaterThan(-1);
     expect(queued).toBeGreaterThan(busy);
     expect(dialog).toBeGreaterThan(queued);

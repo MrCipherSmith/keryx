@@ -157,11 +157,13 @@ test("a late choice honours forced priority, FIFO, hold, and disposed guards", (
 
 test("the busy recipient choice wires the idle drain after adding to the main queue", () => {
   const source = readFileSync(new URL("./tui-shell.ts", import.meta.url), "utf8");
-  const chosenIdx = source.indexOf('if (chosen === "main")');
-  const choiceEnd = source.indexOf("} else {", chosenIdx);
-  expect(chosenIdx).toBeGreaterThan(-1);
-  expect(choiceEnd).toBeGreaterThan(chosenIdx);
-  const choice = source.slice(chosenIdx, choiceEnd).replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ");
+  const routeIdx = source.indexOf("void routeBusyMessage(");
+  const mainIdx = source.indexOf("main: () => {", routeIdx);
+  const sideIdx = source.indexOf("side: () => {", mainIdx);
+  expect(routeIdx).toBeGreaterThan(-1);
+  expect(mainIdx).toBeGreaterThan(routeIdx);
+  expect(sideIdx).toBeGreaterThan(mainIdx);
+  const choice = source.slice(mainIdx, sideIdx).replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ");
   expect(choice).toContain("turnLoop.enqueue(line, displayLine);");
   expect(choice).toContain("turnLoop.drainAfterRecipientChoice(");
   expect(choice.indexOf("turnLoop.enqueue(")).toBeLessThan(choice.indexOf("turnLoop.drainAfterRecipientChoice("));

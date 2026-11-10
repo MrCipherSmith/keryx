@@ -1781,6 +1781,48 @@ async function pickWikiEnrichMode(
   return id === "drafts" || id === "force" || id === "cancel" ? id : "cancel";
 }
 
+/** Ask where a message submitted during the main turn should go. */
+export async function routeBusyMessage(
+  otui: OpenTui,
+  chrome: ShellChrome,
+  cwd: string,
+  line: string,
+  draft: string,
+  deliver: { main(): void; side(): void },
+): Promise<void> {
+  const chosen = await journaledPick(
+    cwd,
+    {
+      source: DECISION_SOURCES.queueRoute,
+      // The message text stays out of the journal: only the choice is recorded.
+      question: "The main agent is busy. Where should this message go?",
+      recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
+      cancelId: "cancel",
+      options: [
+        { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
+        { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
+      ],
+    },
+    (options, dismissId) =>
+      showComposerChoice(otui, chrome.renderer, chrome.dock, {
+        title: "Main agent is busy",
+        subtitle: line,
+        options,
+        cancelId: dismissId,
+        enqueue: false,
+        onBusy: () => chrome.showToast("Answer the open approval first, then resend."),
+      }),
+  );
+  if (chosen === "main") {
+    deliver.main();
+  } else if (chosen === "side") {
+    deliver.side();
+  } else {
+    chrome.input.value = draft;
+    if (!chrome.overlayActive()) chrome.input.focus();
+  }
+}
+
 /** Resolves the short advisory approval context for a proposed shell command. */
 export type ApprovalContextLoader = (command: string) => Promise<string>;
 
@@ -1869,7 +1911,6 @@ export async function pickShellApproval(
       id: "once",
       label: "Allow once",
       description: "Run only this time",
-      recommended: true,
     },
     ...(canOfferExact
       ? [
@@ -1893,6 +1934,7 @@ export async function pickShellApproval(
       id: "deny",
       label: "Deny",
       description: "Do not run",
+      recommended: true,
     },
   ];
   // Not journaled: a pure allow/deny has no recommendation to follow or ignore, so an arm would measure nothing.
@@ -9617,6 +9659,7 @@ export async function launchTuiAgentShell(opts: {
       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
       source?: typeof TG_SOURCE | "hub",
       skipSlashRouting = false,
+      draft = line,
     ): void => {
       if (line.length === 0 && origin === "operator") {
         return;
@@ -9923,42 +9966,8 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
-        void (async () => {
-          let blockedByOpenDialog = false;
-          const chosen = await journaledPick(
-            sessionCwd,
-            {
-              source: DECISION_SOURCES.queueRoute,
-              // the message text stays out of the journal: only the choice is recorded
-              question: "The main agent is busy. Where should this message go?",
-              recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
-              cancelId: "side",
-              options: [
-                { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
-                { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
-              ],
-            },
-            (options, dismissId) =>
-              showComposerChoice(otui, r, chrome.dock, {
-                title: "Main agent is busy",
-                subtitle: line,
-                options,
-                cancelId: dismissId,
-                enqueue: false,
-                onBusy: () => {
-                  blockedByOpenDialog = true;
-                  chrome.showToast("Answer the open approval first, then resend.");
-                },
-              }),
-          );
-          if (blockedByOpenDialog) {
-            // Don't silently pick "side" for a message the user never routed —
-            // hand it back to the composer so nothing is lost.
-            input.value = line;
-            input.focus();
-            return;
-          }
-          if (chosen === "main") {
+        void routeBusyMessage(otui, chrome, sessionCwd, line, draft, {
+          main: () => {
             turnLoop.enqueue(line, displayLine);
             // The recipient choice is asynchronous. The turn may have settled
             // while its dock was open, before the settle handler saw this item.
@@ -9971,7 +9980,8 @@ export async function launchTuiAgentShell(opts: {
                 !forceHandoff.isAwaitingSettlement &&
                 leaseView()?.held() !== true,
             );
-          } else {
+          },
+          side: () => {
             appendUserEcho(otui, r, transcript, {
               id: `side-q${uid++}`,
               line: displayLine,
@@ -9979,8 +9989,8 @@ export async function launchTuiAgentShell(opts: {
               marginTop: 0,
             });
             spawnSideWorker(line, displayLine);
-          }
-        })();
+          },
+        });
         return;
       }
 
@@ -11933,8 +11943,8 @@ export async function launchTuiAgentShell(opts: {
 
     // Both a composer Enter and a `/`-menu selection arrive here: the chrome has
     // already trimmed the line, cleared the composer and closed the dropdown.
-    chrome.onSubmit((line) => {
-      runLine(line);
+    chrome.onSubmit((line, draft) => {
+      runLine(line, "operator", undefined, false, draft);
     });
     // Text pasted into an open dialog (herdr-core types a child's report that way) never answers it; it is
     // queued the way a busy agent-shaped line is, framed as text of unknown authorship (HC_PASTED_HEADER).

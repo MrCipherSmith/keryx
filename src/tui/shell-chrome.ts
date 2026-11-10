@@ -516,8 +516,8 @@ export interface ShellChrome {
   setStatus(text: string): void;
   setHeaderMeta(text: string): void;
 
-  /** Subscribe to submitted lines (composer Enter + `/`-menu selection). */
-  onSubmit(handler: (line: string) => void): () => void;
+  /** Subscribe to the submitted line and the original text for draft restoration. */
+  onSubmit(handler: (line: string, draft: string) => void): () => void;
 
   /**
    * Show a model-suggested "next step" in the composer placeholder while the
@@ -1456,8 +1456,8 @@ export async function createShellChrome(
   syncComposerHeight();
 
   // --- submit hook --------------------------------------------------------
-  const submitHandlers = new Set<(line: string) => void>();
-  const emitSubmit = (line: string): void => {
+  const submitHandlers = new Set<(line: string, draft: string) => void>();
+  const emitSubmit = (line: string, draft = line): void => {
     // Flow 269 AC5: sending something jumps the transcript to its end and
     // re-arms auto-follow, so the reply is on screen. A bare Enter on an empty
     // composer sends nothing and leaves an operator reading history in place.
@@ -1466,7 +1466,7 @@ export async function createShellChrome(
       scroll.stickyScroll = true;
     }
     for (const handler of [...submitHandlers]) {
-      handler(line);
+      handler(line, draft);
     }
   };
 
@@ -1487,7 +1487,8 @@ export async function createShellChrome(
       debugEvent("composer.submit-blocked", { reason: "overlay active", dockVisible: dock.visible, overlayDepth });
       return;
     }
-    const line = input.value.trim();
+    const draft = input.value;
+    const line = draft.trim();
     debugEvent("composer.submit", { chars: line.length, slash: line.startsWith("/") });
     input.value = "";
     hideMenu();
@@ -1497,7 +1498,7 @@ export async function createShellChrome(
     // empty composer with no suggestion at all (`emitSubmit("")`, which
     // `runLine` in tui-shell.ts no-ops on for an operator-origin line). Only
     // Tab/Right (below) accepts a suggestion into the composer.
-    emitSubmit(line);
+    emitSubmit(line, draft);
   };
 
   // Route printable keys / Backspace / Esc for the open dropdown — via the

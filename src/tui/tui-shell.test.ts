@@ -39,6 +39,7 @@ import {
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
+  routeBusyMessage,
   recordTurnTaskCostBestEffort,
   shouldAutoApproveReadOnlySpawn,
   pickSearchProviderStep,
@@ -2198,6 +2199,33 @@ async function settleMicrotasks(): Promise<void> {
     await Promise.resolve();
   }
 }
+
+otuiTest("shell approval denies on bare Enter", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  try {
+    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "printf fixture", async () => "");
+    await h.flush();
+    h.mockInput.pressEnter();
+    expect(await choice).toBe("deny");
+  } finally {
+    h.renderer.destroy();
+  }
+});
+
+otuiTest("shell approval allows once after explicitly selecting Allow once", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  try {
+    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "printf fixture", async () => "");
+    await h.flush();
+    h.mockInput.pressArrow("down");
+    h.mockInput.pressEnter();
+    expect(await choice).toBe("once");
+  } finally {
+    h.renderer.destroy();
+  }
+});
 
 otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)", async () => {
   const otui = requireOtui();
@@ -4617,4 +4645,64 @@ test("session replacement paths revoke foreground callbacks before replacing the
   const finalizer = source.slice(source.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);"));
   expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("remoteQueue.turnSettled"));
   expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("flushSessionCheckpoint()"));
+});
+
+otuiTest("busy recipient Escape restores the draft and only explicit recipients deliver it", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+  const { renderer, mockInput, mockMouse, waitForFrame } = setup;
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-busy-route-"));
+  const chrome = await createShellChrome(otui.core, renderer, {
+    title: "keryx · agent",
+    status: "scripted/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  const draft = "  follow-up draft\n  with a second line  ";
+  const delivered: string[] = [];
+  let pending: Promise<void> | undefined;
+  chrome.onSubmit((line, originalDraft) => {
+    pending = routeBusyMessage(otui.core, chrome, cwd, line, originalDraft, {
+      main: () => { delivered.push(`main:${line}`); },
+      side: () => { delivered.push(`side:${line}`); },
+    });
+  });
+  const openPicker = () => {
+    mockInput.pressEnter();
+    return waitForFrame(async (frame) => {
+      if (frame.includes("Main agent is busy") && frame.includes("Side-1")) return true;
+      // The decision is written to disk before the menu opens.
+      await Bun.sleep(10);
+      return false;
+    }, { maxPasses: 200 });
+  };
+  try {
+    chrome.startBusy();
+    chrome.input.value = draft;
+    await openPicker();
+    expect(chrome.input.value).toBe("");
+    await pressEscapeAndSettle(setup);
+    await pending;
+    expect(delivered).toEqual([]);
+    expect(chrome.isBusy()).toBe(true);
+    expect(chrome.input.value).toBe(draft);
+    expect(chrome.textarea.focused).toBe(true);
+
+    for (const [route, label] of [["main", "Main queue"], ["side", "Side-1"]] as const) {
+      chrome.input.value = draft;
+      const lines = (await openPicker()).split("\n");
+      const row = lines.findIndex((line) => line.includes(label));
+      expect(row).toBeGreaterThanOrEqual(0);
+      await mockMouse.click(lines[row]!.indexOf(label), row);
+      await pending;
+      expect(delivered).toEqual([`${route}:${draft.trim()}`]);
+      expect(chrome.input.value).toBe("");
+      delivered.length = 0;
+    }
+  } finally {
+    chrome.destroy();
+    renderer.destroy();
+    await rm(cwd, { recursive: true, force: true });
+  }
 });
