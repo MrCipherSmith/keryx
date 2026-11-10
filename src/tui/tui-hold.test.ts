@@ -136,7 +136,7 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     for (const field of [
       "forced: forceHandoff,",
       "paint: () => paintMainQueue(),",
-      "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "turnWorkInFlight: () => foregroundOperation.isDisposed || chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
       "onSettle: () => busWakeController?.onSettle(),",
       // The reply path to the topic, the label of a queued line, the composer, the transcript line,
       // the Telegram source on a drained line and the report of a failed detached command.

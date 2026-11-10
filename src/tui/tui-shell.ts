@@ -4802,6 +4802,8 @@ export async function launchTuiAgentShell(opts: {
     },
   });
   const foregroundOperation = createForegroundOperationOwner();
+  let sessionTransferInProgress = false;
+  const sessionTransferNotice = "Session switch in progress. Try again when it finishes.";
   const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
@@ -6076,7 +6078,7 @@ export async function launchTuiAgentShell(opts: {
       paint: () => paintMainQueue(),
       say: (text) => io.onSystem?.(text),
       runLine: (line, origin, source) => runLine(line, origin, source),
-      turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
+      turnWorkInFlight: () => foregroundOperation.isDisposed || chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
       onSettle: () => busWakeController?.onSettle(),
       onDetachedFailure: (error) => {
         const reason = error instanceof Error ? error.message : String(error);
@@ -8188,6 +8190,15 @@ export async function launchTuiAgentShell(opts: {
       return opened;
     };
 
+    // Keep the outgoing session idle until its Slate, lease and visible surface have all
+    // transferred. A foreground turn must not start after the outgoing Slate begins closing.
+    const withSessionTransfer = (action: () => Promise<void>): Promise<void> => {
+      sessionTransferInProgress = true;
+      const work = action().finally(() => { sessionTransferInProgress = false; });
+      turnLoop.drain.detach(work);
+      return work;
+    };
+
     const startNewSession = async (signal: AbortSignal, note?: string): Promise<boolean> => {
       let opened: ReturnType<typeof openLeasedSession>;
       try {
@@ -8236,45 +8247,47 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.("That session is already open.\n");
         return;
       }
-      // Guarded, and deliberately NOT by falling back to a new session the way
-      // the startup path does. The operator asked to resume a specific session;
-      // losing the live one as a side effect of that request would be a second
-      // failure on top of the first. Unguarded, the throw escaped an async
-      // handler with no rejection boundary.
-      //
-      // Flow 271 (§6.2, AC6): the target's lease is taken before the current
-      // one is released. A session another shell holds is refused here with the
-      // lease error, which names the holder and `--fork`; the current session
-      // and its lease stay exactly as they were.
-      let opened: ReturnType<typeof openLeasedSession>;
-      try {
-        opened = await preservedOpen(signal, { resumeId: found.id });
-      } catch (cause) {
-        const hint =
-          cause instanceof SessionLeasedError
-            ? `To continue it in this shell, start one with: keryx shell -r ${shortSessionId(found.id)} --fork\n`
-            : "";
+      await withSessionTransfer(async () => {
+        // Guarded, and deliberately NOT by falling back to a new session the way
+        // the startup path does. The operator asked to resume a specific session;
+        // losing the live one as a side effect of that request would be a second
+        // failure on top of the first. Unguarded, the throw escaped an async
+        // handler with no rejection boundary.
+        //
+        // Flow 271 (§6.2, AC6): the target's lease is taken before the current
+        // one is released. A session another shell holds is refused here with the
+        // lease error, which names the holder and `--fork`; the current session
+        // and its lease stay exactly as they were.
+        let opened: ReturnType<typeof openLeasedSession>;
+        try {
+          opened = await preservedOpen(signal, { resumeId: found.id });
+        } catch (cause) {
+          const hint =
+            cause instanceof SessionLeasedError
+              ? `To continue it in this shell, start one with: keryx shell -r ${shortSessionId(found.id)} --fork\n`
+              : "";
+          io.onSystem?.(
+            `Could not resume ${shortSessionId(found.id)}: ${cause instanceof Error ? cause.message : String(cause)}\n` +
+              hint +
+              `Staying in the current session.\n`,
+          );
+          return;
+        }
+        resetSessionSurface();
+        applyOpened(opened);
+        // Outgoing history and Slate were preserved before ownership transfer.
+        bindSlateToLiveSession();
+        // After the rebind: it reads the bound workspace from the slate ref.
+        void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
+        paintSessionHeader();
+        if (opened.archiveDegraded !== undefined) {
+          io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
+        }
         io.onSystem?.(
-          `Could not resume ${shortSessionId(found.id)}: ${cause instanceof Error ? cause.message : String(cause)}\n` +
-            hint +
-            `Staying in the current session.\n`,
+          `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
         );
-        return;
-      }
-      resetSessionSurface();
-      applyOpened(opened);
-      // Outgoing history and Slate were preserved before ownership transfer.
-      bindSlateToLiveSession();
-      // After the rebind: it reads the bound workspace from the slate ref.
-      void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
-      paintSessionHeader();
-      if (opened.archiveDegraded !== undefined) {
-        io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
-      }
-      io.onSystem?.(
-        `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
-      );
-      showSessionPreview();
+        showSessionPreview();
+      });
     });
 
     paintSessionHeader();
@@ -9373,6 +9386,10 @@ export async function launchTuiAgentShell(opts: {
     const forceMainQueue = (index: number): void => {
       const item = turnLoop.queue[index];
       if (item === undefined) return;
+      if (sessionTransferInProgress) {
+        chrome.showToast(sessionTransferNotice);
+        return;
+      }
       // Flow 275 T7 (specification §4.3, AC4): "/queue force" — and the
       // Ctrl+Q queue-nav force action and the queue-dock force button, which
       // both call this SAME function — must not be the back door around a
@@ -9402,7 +9419,7 @@ export async function launchTuiAgentShell(opts: {
         // `runQueued` goes through `runLine`, whose busy branch diverts the line
         // to the recipient dock or a side worker. Ask before dispatching, and hand
         // the line back to the queue while the chrome is still busy.
-        isBusy: () => chrome.isBusy(),
+        isBusy: () => chrome.isBusy() || sessionTransferInProgress,
         resume: () => drainSites.onLeaseRelease(),
         requeue: (items) => {
           if (foregroundOperation.isDisposed) return;
@@ -9693,6 +9710,18 @@ export async function launchTuiAgentShell(opts: {
       draft = line,
     ): void => {
       if (line.length === 0 && origin === "operator") {
+        return;
+      }
+      // Exit still owns the shutdown path while a session transfer is pending.
+      if (sessionTransferInProgress && !(origin === "operator" && source !== "hub" &&
+        !skipSlashRouting && findAgentCommand(line, "agent")?.name === "/exit")) {
+        if (source === undefined && (origin === "operator" || origin === "agent-message")) {
+          const currentDraft = input.value;
+          input.value = currentDraft.length === 0 ? draft : `${draft}\n${currentDraft}`;
+          chrome.showToast(sessionTransferNotice);
+        } else if (source === TG_SOURCE) {
+          io.onSystem?.(`${sessionTransferNotice}\n`);
+        }
         return;
       }
       // AC14 (flow 268): a new turn supersedes the previous next-step suggestion.
@@ -10006,6 +10035,7 @@ export async function launchTuiAgentShell(opts: {
             turnLoop.drainAfterRecipientChoice(
               () =>
                 !destroyed &&
+                !sessionTransferInProgress &&
                 !chrome.isBusy() &&
                 !foregroundOperation.isActive &&
                 !forceHandoff.isAwaitingSettlement &&
@@ -10078,7 +10108,7 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: `/new`/`/clear` abandon the current session
           // dir for a fresh one — archive whatever slate it was building
           // before switching away (parity with runAgentRepl in shell.ts).
-          void sessionSwitches.run(async (signal) => {
+          void sessionSwitches.run((signal) => withSessionTransfer(async () => {
             // Creates a NEW session id; previous transcript stays on disk for /resume.
             if (!await startNewSession(signal)) {
               return;
@@ -10104,7 +10134,7 @@ export async function launchTuiAgentShell(opts: {
             io.onSystem?.(
               `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
             );
-          });
+          }));
           return;
         }
         if (command.name === "/schedule") {
@@ -11462,7 +11492,7 @@ export async function launchTuiAgentShell(opts: {
     // slash work (flow 441, F-025); the bus-wake controller's own `isIdle`
     // right below does, via `drainSites.workInFlight()`.
     deps.jobRegistry?.onCompletion(() => {
-      const busy = chrome.isBusy() || foregroundOperation.isActive;
+      const busy = sessionTransferInProgress || chrome.isBusy() || foregroundOperation.isActive;
       const idle = !busy && turnLoop.queue.length === 0 && leaseView()?.held() !== true;
       if (!idle) {
         return;
@@ -11651,6 +11681,7 @@ export async function launchTuiAgentShell(opts: {
     // from Telegram enters the session exactly like a typed one: idle, `runLine`; busy, the
     // ordinary main queue (the same `qN` rows, labelled `[tg]`).
     const shellIsBusy = (): boolean =>
+      sessionTransferInProgress ||
       chrome.isBusy() ||
       foregroundOperation.isActive ||
       forceHandoff.isAwaitingSettlement ||
@@ -11741,7 +11772,7 @@ export async function launchTuiAgentShell(opts: {
           isBusy: hubShellBusy,
           turnId: currentHubTurn,
           submit: (text) => {
-            if (destroyed || !sessionLease.canPersist()) return false;
+            if (destroyed || sessionTransferInProgress || !sessionLease.canPersist()) return false;
             runLine(text, "operator", "hub");
             return true;
           },

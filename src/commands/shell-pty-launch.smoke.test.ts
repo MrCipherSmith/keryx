@@ -39,9 +39,11 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildGovernanceReport, writeGovernanceArtifacts } from "../governance/service";
+import { withFileLock } from "../lib/fs";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { uniqueTestRoot } from "../lib/test-tmp";
-import { createSession, loadArchive, loadContext, persistHistory } from "../session";
+import { createSession, listSessions, loadArchive, loadContext, persistHistory, sessionDir } from "../session";
+import { readSlate, slateLockPath, writeSlate } from "../session/slate";
 
 const REAL_SUBPROCESS_FLAG = process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1";
 /** BSD `script`. The util-linux spelling takes `-c "<cmd>" <file>` instead. */
@@ -288,7 +290,7 @@ test("the pty assertions stay coupled to the renderer's real options", () => {
 describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
   "keryx shell on an allocated pty (macOS; KERYX_ALLOW_REAL_SUBPROCESS=1)",
   () => {
-    test.each(["full context", "destination preview"])(
+    test.each(["full context", "destination preview", "draft submitted during Slate preservation"])(
       "switching sessions restores the %s",
       async (check) => {
         const root = uniqueTestRoot(tmpdir(), "keryx-pty-session-switch");
@@ -348,11 +350,11 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
           },
         });
         const terminal = proc.terminal;
-        const waitFor = async (marker: string, since = 0): Promise<void> => {
+        const waitFor = async (marker: string | RegExp, since = 0): Promise<void> => {
           const deadline = Date.now() + 8000;
           while (Date.now() < deadline && proc.exitCode === null) {
             const text = visibleText(Buffer.concat(output.slice(since)).toString("utf8"));
-            if (text.includes(marker)) return;
+            if (typeof marker === "string" ? text.includes(marker) : marker.test(text)) return;
             await Bun.sleep(25);
           }
           throw new Error(`PTY never printed ${marker}. Tail: ${visibleText(Buffer.concat(output).toString("utf8")).slice(-1000)}`);
@@ -377,7 +379,37 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
           await waitFor("Session Switcher", pickerFrame);
           terminal?.write("\u001b[B");
           const switchFrame = output.length;
-          terminal?.write("\r");
+          const draft = "Draft for the destination";
+          if (check === "draft submitted during Slate preservation") {
+            const outgoing = listSessions(cwd, dataDir).find((row) => row.id !== target.summary.id);
+            expect(outgoing).toBeDefined();
+            const outgoingDir = sessionDir(cwd, outgoing!.id, dataDir);
+            const slate = await writeSlate(outgoingDir, () => ({ anchors: { root: cwd, touched: ["outgoing.ts"] }, course: {}, seeds: [] }));
+            const held = Promise.withResolvers<void>();
+            const release = Promise.withResolvers<void>();
+            const holding = withFileLock(slateLockPath(outgoingDir), async () => {
+              held.resolve();
+              await release.promise;
+            });
+            try {
+              await Promise.race([held.promise, holding]);
+              terminal?.write("\r");
+              await waitFor("Enter send", switchFrame);
+              terminal?.write(draft);
+              await waitFor(draft, switchFrame);
+              const submitFrame = output.length;
+              terminal?.write("\r");
+              // A reply also wakes the wait so a misrouted prompt fails at the request assertion.
+              await waitFor(/Session switch in progress|Destination answer/, submitFrame);
+              expect(requests).toHaveLength(1);
+              expect(await readSlate(outgoingDir)).toEqual(slate);
+            } finally {
+              release.resolve();
+              await holding;
+            }
+          } else {
+            terminal?.write("\r");
+          }
           await waitFor("Resumed", switchFrame);
 
           if (check === "destination preview") {
@@ -397,17 +429,28 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
             await waitFor("Destination answer", interruptFrame);
             return;
           }
-          terminal?.write("After switch\r");
+          let destinationPrompt = "After switch";
+          if (check === "draft submitted during Slate preservation") {
+            expect(requests).toHaveLength(1);
+            // Editing the retained draft also distinguishes this submission from an automatic send.
+            const suffix = " now";
+            terminal?.write(`${suffix}\r`);
+            destinationPrompt = draft + suffix;
+          } else {
+            terminal?.write(`${destinationPrompt}\r`);
+          }
           await waitFor("Destination answer", switchFrame);
           await waitFor("worked for", switchFrame);
           expect(requests[1]?.slice(1, -1)).toEqual(messages.map((message) => message.content));
+          expect(requests[1]?.at(-1)).toBe(destinationPrompt);
           terminal?.write("/exit\r");
           expect(await proc.exited).toBe(0);
+          expect(requests).toHaveLength(2);
           const savedContext = loadContext(cwd, target.summary.id, dataDir);
           const savedArchive = loadArchive(cwd, target.summary.id, dataDir);
           expect(savedContext.slice(0, -2)).toEqual(messages);
           expect(savedArchive.slice(0, -2)).toEqual(archive);
-          expect(savedContext.slice(-2).map((message) => message.content)).toEqual(["After switch", "Destination answer"]);
+          expect(savedContext.slice(-2).map((message) => message.content)).toEqual([destinationPrompt, "Destination answer"]);
           expect(savedArchive.slice(-2)).toEqual(savedContext.slice(-2));
         } finally {
           if (proc.exitCode === null) proc.kill();

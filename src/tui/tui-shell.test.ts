@@ -4259,7 +4259,7 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
     );
   });
 
-  test("a new turn starting (runLine) cancels the suggestion gate before anything else runs", () => {
+  test("a dispatched line cancels the suggestion gate before routing", () => {
     const runLineStart = nextStepSource.indexOf("const runLine = (\n");
     const bodyStart = nextStepSource.indexOf("): void => {", runLineStart);
     const dispatchStart = nextStepSource.indexOf("if (chrome.isBusy()) {", bodyStart);
@@ -4270,12 +4270,14 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
       'origin: "operator" | "task-notification" | "bus-message" | "agent-message" = "operator"',
     );
 
-    // An empty operator line starts no turn. Every dispatched line must cancel
-    // before any other work, including the busy/side-worker dispatch.
+    // Empty lines and drafts held during a session switch are not dispatched.
+    // Once past these guards, even busy and slash dispatch cancel the suggestion.
     const beforeDispatch = nextStepSource.slice(bodyStart + "): void => {".length, dispatchStart);
     const withoutComments = beforeDispatch.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
+    const cancellation = withoutComments.indexOf('suggestionGate.cancel("new turn started");');
+    expect(cancellation).toBeGreaterThan(withoutComments.indexOf("if (sessionTransferInProgress &&"));
     expect(withoutComments).toMatch(
-      /^\s*if \(line\.length === 0 && origin === "operator"\) \{\s*return;\s*\}\s*suggestionGate\.cancel\("new turn started"\);/,
+      /suggestionGate\.cancel\("new turn started"\);\s*const fromHub/,
     );
   });
 

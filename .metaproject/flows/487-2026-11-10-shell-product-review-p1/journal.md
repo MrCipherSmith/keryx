@@ -148,3 +148,7 @@ Draft [PR #1160](https://github.com/MrCipherSmith/keryx/pull/1160) targets `main
 - 2026-11-10T18:50:23.434Z - task-added: T9: Fix PR #1160 CI regressions and verify the published head
 - 2026-11-10T18:50:39.788Z - task-attempt: T9: started (attempt 1) — Fix startup-prompt source assertions and refresh native command coverage after the Shell changes.
 - 2026-11-10T18:53:06.373Z - owner-set: not set -> MrCipherSmith (Operator explicitly assigned flow 487 ownership during the PR #1160 handoff.)
+
+The PR run exposed stale startup routing assertions and native command receipts. The assertions now cover typed routing with the original draft, and the generator reproduced all 147 required command variants. The local terminal matrix passed 2,930 tests.
+
+The follow-up review found a remaining S04 race: with the outgoing Slate lock held, a new prompt could start a turn during a session switch. The switch could then refuse after already archiving the live Slate. The shell now holds the transfer through preservation and visible adoption. A local submission during that interval stays editable in the composer and requires a second Enter after the switch. The allocated macOS PTY regression reproduced an extra provider request on the prior commit. With the fix it observed no request during preservation, retained the draft, and sent it exactly once to the destination after explicit submission. The complete PTY suite passed eight tests, and 367 related tests passed.

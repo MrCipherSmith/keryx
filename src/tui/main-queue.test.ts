@@ -167,9 +167,9 @@ test("the busy recipient choice wires the idle drain after adding to the main qu
   expect(choice).toContain("turnLoop.enqueue(line, displayLine);");
   expect(choice).toContain("turnLoop.drainAfterRecipientChoice(");
   expect(choice.indexOf("turnLoop.enqueue(")).toBeLessThan(choice.indexOf("turnLoop.drainAfterRecipientChoice("));
-  // One needle for the whole predicate, operators included: five separate substrings let `&&` become `||`.
+  // One needle for the whole predicate, operators included: separate substrings let `&&` become `||`.
   expect(choice).toContain(
-    "() => !destroyed && !chrome.isBusy() && !foregroundOperation.isActive && !forceHandoff.isAwaitingSettlement && leaseView()?.held() !== true,",
+    "() => !destroyed && !sessionTransferInProgress && !chrome.isBusy() && !foregroundOperation.isActive && !forceHandoff.isAwaitingSettlement && leaseView()?.held() !== true,",
   );
 });
 
