@@ -45,6 +45,7 @@ import type { SlashCommandOption } from "../commands/agent-commands";
 import { formatVersionUpdateAdvisory, type VersionCheckResult } from "../lib/version-check";
 import { deriveTranscriptPalette, getTheme, onThemeChange, type Theme } from "./theme";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
+import type { UsageSegment } from "./usage-format";
 import { destroyModalHost } from "./modal-host";
 import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
@@ -502,7 +503,7 @@ export interface ShellChrome {
    */
   setBusyFooter(info: BusyFooterInfo | undefined): void;
   /** Flow 483: live usage text (turn + session) shown in the footer; undefined hides it. */
-  setUsageSource(source: (() => string | undefined) | undefined): void;
+  setUsageSource(source: (() => readonly UsageSegment[] | undefined) | undefined): void;
   isBusy(): boolean;
   /** Repaint the footer status (after something changed the override). */
   repaintStatus(): void;
@@ -1317,7 +1318,15 @@ export async function createShellChrome(
     return Math.max(1, room - 1 >= BUSY_FOOTER_MIN_HINT.length ? room - 1 : room);
   };
 
-  let usageSource: (() => string | undefined) | undefined;
+  let usageSource: (() => readonly UsageSegment[] | undefined) | undefined;
+  // Flow 483: the usage figures carry colour (tokens in/out, cost, cache); the rest of the footer stays dim.
+  const usageContent = (segments: readonly UsageSegment[], suffix?: string) =>
+    new otui.StyledText([
+      ...segments.map((segment) =>
+        segment.role === "muted" ? dimChunk(otui, segment.text) : roleChunk(otui, segment.role, segment.text),
+      ),
+      ...(suffix !== undefined ? [dimChunk(otui, suffix)] : []),
+    ]);
   const paintBusyStatus = (): void => {
     // The busy line (spinner, phase, timer) is painted ONCE, in the transcript
     // above the composer; the footer never repeats it (flow 468 AC20).
@@ -1335,7 +1344,9 @@ export async function createShellChrome(
     }
     if (!busy) {
       const usageIdle = usageSource?.();
-      footerLeft.content = otui.t`${dimChunk(otui, usageIdle ? `${opts.footerHint} \u00b7 ${usageIdle}` : opts.footerHint)}`;
+      // Once there are figures they replace the key hints (`/ commands`, `Ctrl+C`) instead of sharing the line.
+      footerLeft.content =
+        usageIdle !== undefined ? usageContent(usageIdle) : otui.t`${dimChunk(otui, opts.footerHint)}`;
       footerRight.content = otui.t`${dimChunk(otui, status)}`;
       return;
     }
@@ -1345,7 +1356,10 @@ export async function createShellChrome(
     const right = perm !== undefined && perm.length > 0 ? `mode ${perm}` : status;
     footerRight.content = otui.t`${dimChunk(otui, right)}`;
     const usageBusy = usageSource?.();
-    footerLeft.content = otui.t`${dimChunk(otui, usageBusy ? `${usageBusy} \u00b7 ${BUSY_FOOTER_MIN_HINT}` : formatBusyFooter(busyFooterInfo, footerLeftBudget(right)))}`;
+    footerLeft.content =
+      usageBusy !== undefined
+        ? usageContent(usageBusy, ` \u00b7 ${BUSY_FOOTER_MIN_HINT}`)
+        : otui.t`${dimChunk(otui, formatBusyFooter(busyFooterInfo, footerLeftBudget(right)))}`;
   };
 
   // The footer's width is known only after layout; refit the busy parts when it moves.

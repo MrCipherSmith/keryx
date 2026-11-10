@@ -311,7 +311,8 @@ import {
 // dispatch into one rule rather than growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import { runTasksCommand } from "./tasks-command";
-import { formatUsageFooter, formatUsageLine, formatUsageTable } from "./usage-format";
+import { formatUsageLine, formatUsageTable, usageFooterSegments } from "./usage-format";
+import { createTurnUsage, installTurnUsageSink } from "./turn-usage";
 import { createUsageTracker } from "./usage-tracker";
 import {
   applyThemeId,
@@ -5072,7 +5073,7 @@ export async function launchTuiAgentShell(opts: {
     // Flow 483: per-turn + session usage (tokens, cache, cost, active time) for the footer and /status Usage.
     let usageTracker = createUsageTracker();
     let usageTurnOpen = false;
-    chrome.setUsageSource(() => formatUsageFooter(usageTracker.snapshot()));
+    chrome.setUsageSource(() => usageFooterSegments(usageTracker.snapshot()));
     let contextTotal = 0;
     const pushBusyFooter = (): void => {
       if (!chrome.isBusy()) return;
@@ -5951,6 +5952,8 @@ export async function launchTuiAgentShell(opts: {
       lastUsage = usage;
       recordedUsage?.(usage);
     };
+    // Flow 483: the ONE hook that feeds the per-turn usage accounting (see `turn-usage.ts`).
+    const turnUsageSlot = installTurnUsageSink(io);
     // Reasoning / tool call / tool result all render as collapsed BLOCKS whose
     // full text is retained (AC1). The event → block mapping itself lives in the
     // exported `attachBlockIo` (headlessly testable); the closure contributes
@@ -11028,43 +11031,34 @@ export async function launchTuiAgentShell(opts: {
         }
         prevOnSystem?.(text);
       };
-      // Flow 341 (AC3): THIS turn's own input/output tokens, summed
-      // independently of the session's cumulative counter (`attachUsageIo`'s
-      // `totalIn`/`totalOut`, wired once at shell setup — never reset
-      // per-turn). Same wrap-and-call-through idiom as `io.onSystem` right
-      // above: captured fresh on every `runLine`, never restored, harmless
-      // once this turn's own closure stops being read (see that block's own
-      // note on why an ever-growing chain here is fine).
-      let turnInputTokens = 0;
-      let turnOutputTokens = 0;
-      // Flow 354 (L-11): summed the same way as `turnInputTokens`/
-      // `turnOutputTokens` above — `usage.cacheReadTokens` is a SUBSET of
-      // `inputTokens`, so this is never added to `turnInputTokens` itself.
-      let turnCacheReadTokens = 0;
-      let turnCacheWriteTokens = 0; // flow 387 T16 — also a subset of `turnInputTokens`
-      const prevOnUsageForCost = io.onUsage;
-      io.onUsage = (usage) => {
-        turnInputTokens += usage.inputTokens ?? 0;
-        turnOutputTokens += usage.outputTokens ?? 0;
-        turnCacheReadTokens += usage.cacheReadTokens ?? 0;
-        turnCacheWriteTokens += usage.cacheWriteTokens ?? 0;
+      // Flow 341 (AC3) / flow 483: THIS turn's own token sums, kept apart from the session's
+      // cumulative counter (`attachUsageIo`'s `totalIn`/`totalOut`, wired once at shell setup).
+      // Flow 354 (L-11): `cacheReadTokens` is a SUBSET of `inputTokens` and is never added to it;
+      // flow 387 T16: so is `cacheWriteTokens`. The shell's single usage hook (`turnUsageSlot`)
+      // forwards to this turn's handler; `io` is NOT wrapped again here, or each turn would stack
+      // another wrapper and count usage once per earlier turn.
+      const turnUsage = createTurnUsage({
+        tracker: () => usageTracker,
+        cost: (t) =>
+          estimateTurnCostUsd({
+            providerId: deps.providerId,
+            modelId: deps.modelId,
+            inputTokens: t.input,
+            outputTokens: t.output,
+            cacheReadTokens: t.cacheRead,
+            cacheWriteTokens: t.cacheWrite,
+          }),
         // Flow 468 (AC20): the busy footer shows THIS turn's tokens, and the
         // cost only when the stored model profile prices the model.
-        turnFooter.tokensIn = turnInputTokens;
-        turnFooter.tokensOut = turnOutputTokens;
-        turnFooter.costUsd = estimateTurnCostUsd({
-          providerId: deps.providerId,
-          modelId: deps.modelId,
-          inputTokens: turnInputTokens,
-          outputTokens: turnOutputTokens,
-          cacheReadTokens: turnCacheReadTokens,
-          cacheWriteTokens: turnCacheWriteTokens,
-        });
-        usageTracker.addUsage(usage);
-        usageTracker.setTurnCost(turnFooter.costUsd);
-        prevOnUsageForCost?.(usage);
-        pushBusyFooter();
-      };
+        onUpdate: (t, costUsd) => {
+          turnFooter.tokensIn = t.input;
+          turnFooter.tokensOut = t.output;
+          turnFooter.costUsd = costUsd;
+          pushBusyFooter();
+        },
+      });
+      const turnUsageSink = (usage: NormalizedUsage): void => turnUsage.onUsage(usage);
+      turnUsageSlot.set(turnUsageSink);
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
       // After a settled main turn with an empty queue, ask the model for ONE
       // short follow-up and show it as the composer placeholder. Fail-closed:
@@ -11329,6 +11323,7 @@ export async function launchTuiAgentShell(opts: {
         // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       })).finally(() => {
+        turnUsageSlot.clear(turnUsageSink);
         const accepted = settleForegroundOperation(foregroundOperation, operation);
         if (!accepted) {
           if (!foregroundOperation.isDisposed) stopBusy();
@@ -11395,10 +11390,10 @@ export async function launchTuiAgentShell(opts: {
         void recordTurnTaskCostBestEffort({
           providerId: deps.providerId,
           modelId: deps.modelId,
-          inputTokens: turnInputTokens,
-          outputTokens: turnOutputTokens,
-          ...(turnCacheReadTokens > 0 ? { cacheReadTokens: turnCacheReadTokens } : {}),
-          ...(turnCacheWriteTokens > 0 ? { cacheWriteTokens: turnCacheWriteTokens } : {}),
+          inputTokens: turnUsage.totals.input,
+          outputTokens: turnUsage.totals.output,
+          ...(turnUsage.totals.cacheRead > 0 ? { cacheReadTokens: turnUsage.totals.cacheRead } : {}),
+          ...(turnUsage.totals.cacheWrite > 0 ? { cacheWriteTokens: turnUsage.totals.cacheWrite } : {}),
           success: !turnFailed,
           ...(turnCategory !== undefined ? { category: turnCategory } : {}),
         });
