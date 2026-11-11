@@ -208,7 +208,7 @@ describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattend
     await rm(homeMarkerDir, { recursive: true, force: true });
   });
 
-  function runInside(command: string, network = false): { code: number; out: string } {
+  function runInside(command: string, network = false, timeout?: number): { code: number; out: string } {
     const plan = planUnattendedSandbox({
       worktree,
       scratchHome: scratch,
@@ -220,10 +220,11 @@ describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattend
     if (!plan.ok) throw new Error(plan.reason);
     const argv = plan.wrap(["/bin/sh", "-c", command]);
     try {
-      const out = execFileSync(argv[0]!, argv.slice(1), { cwd: worktree, env: plan.env, stdio: ["ignore", "pipe", "pipe"] });
+      const out = execFileSync(argv[0]!, argv.slice(1), { cwd: worktree, env: plan.env, stdio: ["ignore", "pipe", "pipe"], timeout });
       return { code: 0, out: out.toString() };
     } catch (error) {
-      const e = error as { status?: number; stdout?: Buffer; stderr?: Buffer };
+      const e = error as { code?: string; status?: number; stdout?: Buffer; stderr?: Buffer };
+      if (e.code === "ETIMEDOUT") throw new Error(`Sandbox probe exceeded ${timeout} ms: ${command}`, { cause: error });
       return { code: e.status ?? 1, out: `${e.stdout?.toString() ?? ""}${e.stderr?.toString() ?? ""}` };
     }
   }
@@ -275,7 +276,7 @@ describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattend
   // -------------------------------------------------------------------------
 
   test(
-    "T14: no unix socket anywhere is visible inside the sandbox (find / -type s is empty); /run is empty",
+    "T14: no host Unix sockets are visible in the filesystem scan; /run is empty",
     () => {
       const control = runInside("echo alive");
       expect(control.code).toBe(0);
@@ -308,18 +309,16 @@ describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattend
       // slow. Everywhere else — `/run`, `/var/run`, `/home`, `/var/lib`,
       // `/opt`, `/srv`, `/mnt`, the worktree, etc. — is walked in full.
       const found = runInside(
-        "find / \\( -path /proc -o -path /sys -o -path /usr -o -path /dev -o -path /nix/store -o -path /snap \\) -prune -o -type s -print 2>/dev/null; echo end",
+        "command -v find >/dev/null || exit 1; find / \\( -path /proc -o -path /sys -o -path /usr -o -path /dev -o -path /nix/store -o -path /snap \\) -prune -o -type s -print -quit 2>/dev/null; echo end",
+        false,
+        75_000,
       );
-      expect(found.out.trim()).toBe("end");
-      expect(runInside("ls -A /run").out.trim()).toBe("");
+      expect(found).toEqual({ code: 0, out: "end\n" });
+      expect(runInside("ls -A /run")).toEqual({ code: 0, out: "" });
     },
-    // This still shells out to a real bwrap sandbox and a real `find` over
-    // live filesystem state (not test-controlled), so it is not a pure
-    // in-process assertion bun's 5s default was sized for — kept generous to
-    // absorb a genuinely slower or busier CI host without masking a real
-    // hang; a sandbox or `find` that is actually stuck would still fail
-    // loudly well before this.
-    20_000,
+    // Ubuntu runners can need more than 20 seconds for the host filesystem
+    // walk. Let the subprocess deadline report a hang before Bun's deadline.
+    90_000,
   );
 
   test.each([
