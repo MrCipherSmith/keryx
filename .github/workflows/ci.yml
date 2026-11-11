@@ -485,8 +485,7 @@ jobs:
       # required-fail-closed profile, and the serve-path trial resolves the
       # production `remote-restricted` profile, which refuses `containment-missing`
       # without a launcher. Both files skip exactly those tests where no launcher
-      # exists (the ubuntu `check` and AC8 jobs), so this zero-skip run is what
-      # proves them on every PR. The Linux bwrap leg of these files is not run yet.
+      # exists, so this zero-skip run proves the macOS behavior on every PR.
       - name: Hub remote-session legs — native parity, serve-path trial (fail on skip)
         run: |
           bun ./scripts/opentui-tests-no-skips.ts \
@@ -562,6 +561,12 @@ jobs:
             src/harness/process/real-process-adapter.smoke.test.ts \
             src/commands/harness-exec.smoke.test.ts \
             src/commands/harness-exec-restricted.smoke.test.ts
+
+      - name: Hub serve-path and unattended sandbox (fail on skip)
+        run: |
+          bun ./scripts/opentui-tests-no-skips.ts \
+            src/lib/hub-machine/trial.process.test.ts \
+            src/harness/process/sandbox/unattended.test.ts
 
   opentui-native-matrix:
     # O-3 (flow 114). PRD N1 claims prebuilt `@opentui/core` native binaries
