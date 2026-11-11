@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.4.26] - 2026-11-12
+
+### Fixed
+
+- **Shell approval and draft recovery.** A command runs only after an explicit allow choice. Esc dismisses approval, and Enter defaults to denial. Esc in the busy recipient picker restores the draft without submitting it to Main or Side-1. [#1160](https://github.com/MrCipherSmith/keryx/pull/1160)
+- **Session resume and switching.** Resumed sessions keep their full conversation and archive. Switching clears the previous transcript and usage, preserves pending input for explicit submission, and keeps delayed replies in their original session. [#1160](https://github.com/MrCipherSmith/keryx/pull/1160)
+- **Escape interrupts active Agent and Chat turns.** The shell remains available for a follow-up. An open modal handles Escape before it reaches the active turn. [#1160](https://github.com/MrCipherSmith/keryx/pull/1160)
+
+### Verification
+
+- CI runs the Hub recovery and unattended sandbox suites on Ubuntu 26.04 and fails if they are skipped. The Hub tests track the supervised shell across restarts, and the socket scan has its own deadline. [#1162](https://github.com/MrCipherSmith/keryx/pull/1162)
+- The flow 487 journal records closure and links to the final terminal captures. [#1161](https://github.com/MrCipherSmith/keryx/pull/1161)
+
 ## [0.4.25] - 2026-11-10
 
 ### Fixed
