@@ -28,7 +28,7 @@ export const TRIAL_CONTEXT={path:'wiki/trial-context.md',content:'# Trial shared
 /** An operator turn in this trial starts with this prefix; anything else the harness adds as a user message is not the operator's. */
 const OPERATOR_TURN=/^keryx-trial-turn-(\d+): /;
 export const trialTurn=(ordinal:number,text:string)=>`keryx-trial-turn-${ordinal}: ${text}`;
-export const supervisedMarker=(machine:string,ordinal:number)=>`keryx-trial-supervised-${machine}-${ordinal}`;
+export const supervisedMarker=(machine:string,ordinal:number)=>`keryx-trial-supervised-${process.pid}-${machine}-${ordinal}`;
 export function trialSelection(messages:NormalizedMessage[]):{ordinal:number;toolName:'shell_exec'|'read_file'|'apply_patch'}{
  const users=messages.filter(isOperatorMessage),text=users.at(-1)?.content.toLowerCase()??'';
  return{ordinal:users.length,toolName:text.includes('sleep')||text.includes('cancel')?'shell_exec':text.includes('read')?'read_file':'apply_patch'};

@@ -23,7 +23,16 @@ function hubClient(trial:Trial){
  return{raw,call,wait,login:()=>call('/hub/v1/session',{token:readFileSync(trial.credentialsFile,'utf8')})};
 }
 const processCommand=(pid:number)=>Bun.spawnSync(['ps','-o','command=','-p',String(pid)]).stdout.toString().trim();
-const processesWith=(marker:string)=>Bun.spawnSync(['ps','-axo','pid=,command=']).stdout.toString().split('\n').filter(line=>line.includes(marker));
+function supervisedShellPids(marker: string): number[] {
+  const snapshot = Bun.spawnSync(["ps", "-axww", "-o", "pid=,command="]);
+  expect(snapshot.exitCode).toBe(0);
+  return snapshot.stdout.toString().split("\n").flatMap((line) => {
+    // Bubblewrap also carries the script in its argv. Only count the shell
+    // that is running the script, and retain its PID across a Hub restart.
+    const shell = /^\s*(\d+)\s+\/bin\/sh -c (.*)$/.exec(line);
+    return shell?.[2]?.endsWith(`; echo ${marker}`) ? [Number(shell[1])] : [];
+  });
+}
 /** The process group of the supervised shell carrying `marker`, which the native runtime starts as its own group leader. */
 const processGroup=(marker:string)=>{const line=Bun.spawnSync(['ps','-axo','pgid=,command=']).stdout.toString().split('\n').find(l=>l.includes(marker));return line===undefined?undefined:Number(line.trim().split(/\s+/)[0]);};
 const killGroup=(marker:string)=>{const pgid=processGroup(marker);if(pgid!==undefined){try{process.kill(-pgid,'SIGKILL');}catch{/* The group is already gone. */}}};
@@ -121,10 +130,10 @@ test.skipIf(catalogueGaps.length>0||!launcher.available)(`two serve machines run
   const readEvents=await events(read.runId);expect(readEvents.events.some(e=>e.kind==='log'&&e.text.includes('read_file'))).toBe(true);expect(readEvents.events.some(e=>e.kind==='approval-request')).toBe(false);expect(calls(target,2)).toEqual([{reply:'tool',toolName:'read_file'},{reply:'text'}]);
   // A real supervised shell child: it is visible as an OS process while the run waits, and the Hub cancel stops it.
   const sleeper=await send(3,'cancel supervised sleep work');await approveOnce(sleeper.runId);const marker=supervisedMarker(target.machine,3);
-  await hub.wait(async()=>processesWith(marker),found=>found.length>0);
+  expect(await hub.wait(async()=>supervisedShellPids(marker),found=>found.length>0)).toHaveLength(1);
   const running=await hub.call<{version:number}>(`${runs}/${sleeper.runId}`),session=await hub.call<Control['SessionRecord']>(base);
   await hub.call(`${runs}/${sleeper.runId}/cancel`,{expectedRunVersion:running.version,expectedSessionVersion:session.version,controller,reason:'Stop the supervised trial sleep'});
-  await hub.wait(()=>hub.call<{state:string}>(`${runs}/${sleeper.runId}`),r=>r.state==='cancelled');await hub.wait(async()=>processesWith(marker),found=>found.length===0,5000);
+  await hub.wait(()=>hub.call<{state:string}>(`${runs}/${sleeper.runId}`),r=>r.state==='cancelled');await hub.wait(async()=>supervisedShellPids(marker),found=>found.length===0,5000);
   expect(calls(target,3)).toEqual([{reply:'tool',toolName:'shell_exec'}]);
   // Hooks are on in the shipped composition: the user-scope observer saw every tool call this serve child made.
   const hooks=readFileSync(target.hookLog,'utf8');for(const tool of ['apply_patch','read_file','shell_exec'])expect(hooks).toContain(`"keryxToolName":"${tool}"`);
@@ -144,7 +153,8 @@ test.skipIf(catalogueGaps.length>0||!launcher.available)(`a serve killed mid-run
  const patch=await s.send(1,'write an approved native patch');await s.approveOnce(patch.runId);await hub.wait(()=>s.run(patch.runId),r=>r.state==='succeeded'&&r.result?.checksKind==='RunChecks');
  const owned=checkoutState(target);expect(owned).toEqual({index:TRIAL_INDEX,status:'?? trial-edit-1.txt\n'});
  // Turn 2 runs a supervised sleep in its own process group; turn 3 waits behind it in the durable session queue.
- const crashed=await s.send(2,'crash supervised sleep work');await s.approveOnce(crashed.runId);await hub.wait(async()=>processesWith(marker),found=>found.length>0);
+ const crashed=await s.send(2,'crash supervised sleep work');await s.approveOnce(crashed.runId);
+ const shellPids=await hub.wait(async()=>supervisedShellPids(marker),found=>found.length>0);expect(shellPids).toHaveLength(1);
  const queued=await s.message(3,'read seed.txt',await s.read());expect(queued.status).toBe('queued');
  // The machine durably queued it: Hub's queue projection comes from the serve child's own session events.
  await hub.wait(()=>hub.call<Control['QueuePage']>(`${s.base}/queue`),q=>q.items.some(i=>i.operationId===queued.operationId&&i.state==='queued'));
@@ -154,8 +164,11 @@ test.skipIf(catalogueGaps.length>0||!launcher.available)(`a serve killed mid-run
  await hub.wait(async()=>hubCommandReceipt(trial.hubDataDir,s.created.sessionId,queued.operationId)??null,receipt=>receipt?.status==='applied');
  const history=await hub.call<Control['HistoryPage']>(`${s.base}/history`);expect(history.messages.map(m=>m.role)).toEqual(['human','tool-summary','assistant','human']);
  const before=await s.run(crashed.runId);expect(before.state).toBe('running');
- // SIGKILL: serve drains nothing and stops nothing. Its supervised child outlives it in its own process group.
- const crashedPid=target.serve.pid;expect(await trial.crashServe(target)).toBe(137);expect(processCommand(crashedPid)).toBe('');expect(processesWith(marker)).toHaveLength(1);
+ // SIGKILL leaves no result receipt. Bubblewrap reaps the shell with
+ // --die-with-parent on Linux; the detached Seatbelt child survives on macOS.
+ const crashedPid=target.serve.pid;expect(await trial.crashServe(target)).toBe(137);expect(processCommand(crashedPid)).toBe('');
+ if(process.platform==='linux')await hub.wait(async()=>supervisedShellPids(marker),found=>found.length===0,6000);
+ else expect(supervisedShellPids(marker)).toEqual(shellPids);
  // While the machine is offline Hub keeps the last-known run: never succeeded, cancelled, failed or closed, its session never idle or closed, its controller never released.
  const lastKnown={state:'running',version:before.version};
  const unsettled=async(expected:{state:string;version:number})=>{const run=await s.run(crashed.runId),session=await s.read();expect({state:run.state,version:run.version}).toEqual(expected);expect({state:session.state,activeRunId:session.activeRunId}).toEqual({state:'busy',activeRunId:crashed.runId});expect(session.controller?.state).not.toBe('released');};
@@ -177,11 +190,14 @@ test.skipIf(catalogueGaps.length>0||!launcher.available)(`a serve killed mid-run
  const restarted=(await machine()).inventory!;expect(restarted.inventoryVersion).toBeGreaterThan(published.inventoryVersion);
  expect(restarted.checkouts.find(c=>c.checkoutId===target.checkoutId)).toMatchObject({headSha:head,clean:false,available:true,agentProfiles:[{readiness:'ready'}]});
  const inspected=await recover(trial,target,[]);if(!inspected.ok)throw new Error(inspected.code);expect(inspected.value).toMatchObject({kind:'inspection',sessions:[],uncertainRuns:[{runId:crashed.runId,daemonId:lock.value.daemonId}]});
- // Operator step 2 refuses while the crashed run's process group lives, and Hub has no local receipt a human could resolve with.
- expect(await recover(trial,target,['--action','confirm-run-absence','--run',crashed.runId,'--request-id','confirm-while-live'])).toEqual({ok:false,code:'owned-process-live'});
+ // The surviving macOS group must block local confirmation until it stops.
+ if(process.platform==='darwin'){
+  expect(await recover(trial,target,['--action','confirm-run-absence','--run',crashed.runId,'--request-id','confirm-while-live'])).toEqual({ok:false,code:'owned-process-live'});
+  killGroup(marker);
+  await hub.wait(async()=>supervisedShellPids(marker),found=>found.length===0);
+ }
+ // On either platform, Hub still requires the operator's local proof.
  expect(await hub.raw(`/hub/v2/machines/${target.machineId}/resolve-run`,{runId:crashed.runId,expectedRunVersion:shownUnknown.version,localReconciliationId:'none',decision:'lost',reason:'No local proof'})).toMatchObject({status:409,data:{error:{code:'recovery-required'}}});await unsettled(shownUnknown);
- // The operator stops the leftover group; absence is then proven by recorded identity against the run Hub already shows unknown.
- killGroup(marker);await hub.wait(async()=>processesWith(marker),found=>found.length===0);
  const confirmed=await recover(trial,target,['--action','confirm-run-absence','--run',crashed.runId,'--request-id','confirm-absent']);if(!confirmed.ok)throw new Error(confirmed.code);
  expect(confirmed.value).toMatchObject({kind:'run-absence-confirmed',runId:crashed.runId,sessionId:s.created.sessionId,expectedRunVersion:shownUnknown.version});const reconciliationId=confirmed.value.reconciliationId as string;
  const uncertain=await s.run(crashed.runId);expect(uncertain.state).toBe('unknown');expect((await s.events(crashed.runId)).events.filter(e=>e.kind==='state').at(-1)).toMatchObject({state:'unknown',reasonCode:'recovery-required'});
@@ -271,19 +287,20 @@ test.skipIf(catalogueGaps.length>0||!launcher.available)(`a Hub restart while bo
  const pids=trial.targets.map(t=>t.serve.pid);const reconnected=()=>Promise.all(trial.targets.map(t=>hub.wait(()=>hub.call<Inventory>(`/hub/v2/machines/${t.machineId}`),v=>v.connected,30000)));
  const s=await controlledSession(trial,hub,target,'Hub restart');
  // A supervised sleep is running on the machine when Hub goes away.
- const sleeper=await s.send(1,'sleep supervised work across a Hub restart');await s.approveOnce(sleeper.runId);await hub.wait(async()=>processesWith(marker),found=>found.length>0);
+ const sleeper=await s.send(1,'sleep supervised work across a Hub restart');await s.approveOnce(sleeper.runId);
+ const shellPids=await hub.wait(async()=>supervisedShellPids(marker),found=>found.length>0);expect(shellPids).toHaveLength(1);
  const running=await s.run(sleeper.runId);expect(running.state).toBe('running');
  await trial.restartHub(async()=>{
   // While Hub is down both serve processes and the owned child keep running: the machine neither stops nor restarts work.
-  for(const pid of pids)expect(processCommand(pid)).toContain(`${SERVE_ENTRY} serve`);expect(processesWith(marker)).toHaveLength(1);await Bun.sleep(1000);});
+  for(const pid of pids)expect(processCommand(pid)).toContain(`${SERVE_ENTRY} serve`);expect(supervisedShellPids(marker)).toEqual(shellPids);await Bun.sleep(1000);});
  await hub.login();await reconnected();
  // Reconnect reconciles the same run: still running at its version, one supervised child, one provider round, the same serve processes.
  const reconciled=await s.run(sleeper.runId);expect({state:reconciled.state,version:reconciled.version}).toEqual({state:'running',version:running.version});expect(reconciled.lastLocalSeq).toBeGreaterThanOrEqual(running.lastLocalSeq);
- expect(processesWith(marker)).toHaveLength(1);expect(calls(1)).toEqual([{reply:'tool',toolName:'shell_exec'}]);expect(trial.targets.map(t=>t.serve.pid)).toEqual(pids);
+ expect(supervisedShellPids(marker)).toEqual(shellPids);expect(calls(1)).toEqual([{reply:'tool',toolName:'shell_exec'}]);expect(trial.targets.map(t=>t.serve.pid)).toEqual(pids);
  // No implicit takeover: the human controller is unchanged, and a cancel after the restart stops exactly the owned child.
  const current=await s.read();expect(current.controller?.controllerLeaseId).toBe(s.controller.controllerLeaseId);
  await hub.call(`${s.runs}/${sleeper.runId}/cancel`,{expectedRunVersion:reconciled.version,expectedSessionVersion:current.version,controller:s.controller,reason:'Stop after the Hub restart'});
- await hub.wait(()=>s.run(sleeper.runId),r=>r.state==='cancelled');await hub.wait(async()=>processesWith(marker),found=>found.length===0,6000);
+ await hub.wait(()=>s.run(sleeper.runId),r=>r.state==='cancelled');await hub.wait(async()=>supervisedShellPids(marker),found=>found.length===0,6000);
  // An approval pending across a second restart applies once afterwards: no effect before Allow once, exactly one patch and one final round after.
  const patch=await s.send(2,'write an approved native patch');await hub.wait(()=>s.run(patch.runId),r=>r.state==='waiting-approval');
  await trial.restartHub(async()=>{await Bun.sleep(500);});await hub.login();await reconnected();
