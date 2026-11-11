@@ -156,6 +156,8 @@ export function presentSubagentInspector(
     initialTab: "work",
     footer: SUBAGENT_INSPECTOR_FOOTER,
     renderTab: (tabId, body) => {
+      workNode = undefined;
+      metaNode = undefined;
       const renderer = options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;
       const current = options.store.get(options.id);
       if (current === undefined) {
@@ -170,6 +172,8 @@ export function presentSubagentInspector(
     },
     onClose: () => {
       unsubscribe?.();
+      workNode = undefined;
+      metaNode = undefined;
     },
   });
   if (handle === undefined) {
