@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "487",
+  "slug": "spawn-subagent-parent-call-never-returns",
+  "title": "spawn_subagent parent call never returns after all child subagents complete; timeout_ms does not fire",
+  "status": "ready",
+  "createdAt": "2026-11-12T09:32:56.216Z",
+  "updatedAt": "2026-11-12T09:37:13.020Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:db15170ee68d5e622a98327bd4486da5e9d752f715d4220516b86adb5378c92b",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-12T09:32:56.216Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-12T09:37:13.020Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/harness/tool/builtin/spawn-subagent-backstop.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun run typecheck"
+    }
+  }
+}

@@ -253,6 +253,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/diag",
+    group: "Working in keryx shell",
+    summary: "Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file for a bug report — /diag.",
+  },
+  {
+    kind: "slash",
     name: "/notes",
     group: "Working in keryx shell",
     summary: "The notes the model keeps for itself (the facts that survive older rounds) — /notes [key].",

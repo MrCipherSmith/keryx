@@ -226,6 +226,7 @@ import {
 } from "./external-command";
 import { isRenderingCommand, runRenderingCommand } from "./rendering-command";
 import { isNotesCommand, isTrailCommand, runNotesCommand, runTrailCommand } from "./working-memory-command";
+import { isDiagCommand, maybeDumpOnInterrupt, runDiagCommand } from "./diag-command";
 import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
 import { loadExternalProvidersConfig } from "../lib/external-providers";
 import { resolveJevApiKey } from "../harness/decision/jev-client";
@@ -5847,7 +5848,10 @@ export async function launchTuiAgentShell(opts: {
       // A turn already told to stop but not yet unwound counts as idle, so a wedged one cannot trap the user.
       const action = ctrlCPolicy.press(foregroundOperation.isActive && !foregroundOperation.signal.aborted);
       if (action === "cancel-turn") {
+        // Flow 487: dump first; cancelling unwinds the calls the snapshot describes.
+        const diagNote = maybeDumpOnInterrupt();
         foregroundOperation.cancel("interrupted by Ctrl+C");
+        if (diagNote !== undefined) io.onSystem?.(diagNote);
         io.onSystem?.("◇ main turn interrupted (Ctrl+C).\n");
       } else if (action === "arm-exit") {
         chrome.showToast(CTRL_C_EXIT_HINT);
@@ -9836,7 +9840,9 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "interrupt": {
+            const diagNote = foregroundOperation.isActive ? maybeDumpOnInterrupt() : undefined;
             if (requestSessionInterrupt(foregroundOperation)) {
+              if (diagNote !== undefined) io.onSystem?.(diagNote);
               io.onSystem?.("◇ main turn interrupted.\n");
               return;
             }
@@ -10612,6 +10618,11 @@ export async function launchTuiAgentShell(opts: {
           trackCommandWork(() =>
             (isTrailCommand(command.name) ? runTrailCommand(arg, dir) : runNotesCommand(arg, dir)).then((text) => io.onSystem?.(text)),
           );
+          return;
+        }
+        if (isDiagCommand(command.name)) {
+          // flow 487: dump the tool-call diagnostics and say where.
+          io.onSystem?.(runDiagCommand());
           return;
         }
         if (isExternalAgentsCommand(command.name)) {
