@@ -137,7 +137,7 @@ import { keryxConfigDir } from "../lib/config-dir";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
-import { isHistoryCommand, isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { conversationHistoryText } from "../tui/conversation-history";
 import { ChannelsClient } from "../remote/channels-client";
 import { loadRemoteConfig } from "../remote/config";
@@ -177,7 +177,7 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
-import { commandsForMode, describeUnavailableCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
+import { commandsForMode, describeUnavailableCommand, isHistoryCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
 // Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
 // ONLY through this core facade (see the zone note in
 // `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
@@ -847,6 +847,11 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
   const readConversation = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
+  const resetConversation = (): void => {
+    history = [];
+    archive = [];
+    io.onConversationReady?.(readConversation, false);
+  };
   let resumed = false;
   // The session lease this loop holds (specification §6). Mirrored into the
   // caller's `leaseBox` so a signal handler outside the loop can release it.
@@ -1138,8 +1143,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
             system(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
             continue;
           }
-          history = [];
-          archive = [];
+          resetConversation();
           // AC8: presence.sessionId follows every in-process session switch.
           // review r1 F5: the client already reports a write failure through
           // `onError` and never rejects; this catch is a defensive second
@@ -1151,7 +1155,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           }
           system(`New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`);
         } else {
-          history.length = 0;
+          resetConversation();
         }
         continue;
       }

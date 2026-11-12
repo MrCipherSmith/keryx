@@ -13,12 +13,18 @@ function displayText(text: string): string {
     .replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, "");
 }
 
+function agentMessageEcho(message: NormalizedMessage): ReturnType<typeof hcHistoryEcho> {
+  return message.role === "user" && message.provenance === "tool" && message.injected !== true
+    ? hcHistoryEcho(message.content)
+    : undefined;
+}
+
 export function conversationHistory(history: readonly NormalizedMessage[]): ConversationEntry[] {
   const entries: ConversationEntry[] = [];
   for (const message of history) {
     const { role } = message;
-    if (role !== "assistant" && (role !== "user" || !isOperatorMessage(message))) continue;
-    const agentEcho = role === "user" ? hcHistoryEcho(message.content) : undefined;
+    const agentEcho = agentMessageEcho(message);
+    if (role !== "assistant" && agentEcho === undefined && !isOperatorMessage(message)) continue;
     const text = displayText(agentEcho?.line ?? message.content);
     if (text.trim().length > 0) {
       const label = agentEcho === undefined ? (role === "user" ? "You" : "Assistant") : displayText(agentEcho.marker);
@@ -29,10 +35,11 @@ export function conversationHistory(history: readonly NormalizedMessage[]): Conv
 }
 
 export function resumedConversation(history: readonly NormalizedMessage[]): ConversationEntry[] {
-  // A real operator prompt starts a turn, even when its text is empty.
+  // An operator prompt or a visible agent message starts a turn.
   let start = history.length;
-  while (start > 0 && !isOperatorMessage(history[--start]!)) {
-    // Walk back past assistant/tool rounds and injected context.
+  while (start > 0) {
+    const message = history[--start]!;
+    if (isOperatorMessage(message) || agentMessageEcho(message) !== undefined) break;
   }
   return conversationHistory(history.slice(start)).slice(-20);
 }

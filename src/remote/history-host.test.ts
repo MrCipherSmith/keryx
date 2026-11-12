@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { HISTORY_COMMAND, isHistoryCommand } from "../tui/remote-control-surface";
+import { HISTORY_COMMAND, isHistoryCommand } from "../commands/agent-commands";
 import { openSession, persistHistory } from "../session";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "./history-host";
 import { parseHistoryArgs } from "./history";

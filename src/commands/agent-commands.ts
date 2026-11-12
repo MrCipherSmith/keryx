@@ -51,6 +51,7 @@ export interface AgentSlashCommand {
 const CHAT_ONLY: readonly ShellMode[] = ["chat"];
 const AGENT_ONLY: readonly ShellMode[] = ["agent"];
 const BOTH: readonly ShellMode[] = ["chat", "agent"];
+export const HISTORY_COMMAND = "/history";
 
 /**
  * The commands, in menu order. Filtering this list to `agent` reproduces the
@@ -177,7 +178,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
-    name: "/history",
+    name: HISTORY_COMMAND,
     description: "View the session conversation · Ctrl+Shift+H in the full-screen shell",
     modes: BOTH,
   },
@@ -714,6 +715,10 @@ function commandToken(line: string): string {
     return "/interrupt";
   }
   return token === "/quit" ? "/exit" : token;
+}
+
+export function isHistoryCommand(line: string): boolean {
+  return commandToken(line) === HISTORY_COMMAND;
 }
 
 /** Look a token up across ALL modes, ignoring availability. Pure. */

@@ -3,7 +3,7 @@
 // and the `tg` label on Telegram lines are all built from one `RemoteStatus`.
 
 import { expect, test } from "bun:test";
-import { commandsForMode } from "../commands/agent-commands";
+import { commandsForMode, HISTORY_COMMAND, isHistoryCommand } from "../commands/agent-commands";
 import { postureLines, postureSidebarText } from "../commands/remote-policy-command";
 import type { NormalizedMessage } from "../harness/provider/types";
 import type { RemoteBridgeHost, RemoteClientLike, RemoteEvent, RemoteStatus } from "../remote/shell-bridge";
@@ -23,11 +23,9 @@ import {
   TG_ECHO_MARKER,
   TG_LABEL,
   commandEchoText,
-  HISTORY_COMMAND,
   HISTORY_POSTING_NOTE,
   formatAge,
   formatHistoryStatus,
-  isHistoryCommand,
   formatRemoteCommandLines,
   formatRemoteEventLines,
   formatRemoteStatusLines,

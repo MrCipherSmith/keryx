@@ -7,6 +7,7 @@
 // it: `presentRemoteControl` and the panel only ask the host to (`onToggle`,
 // `onOpen`), and the host runs the same code the typed command runs.
 
+import { HISTORY_COMMAND } from "../commands/agent-commands";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { waitingCardsText } from "./operator-confirmations";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
@@ -58,13 +59,6 @@ export const REMOTE_FOOTER = [
 
 export function isRemoteControlCommand(line: string): boolean {
   return (line.trim().split(/\s+/)[0] ?? "") === REMOTE_CONTROL_COMMAND;
-}
-
-export const HISTORY_COMMAND = "/history";
-
-/** `/history [N]` (flow 399): post the session's last messages to the topic. */
-export function isHistoryCommand(line: string): boolean {
-  return (line.trim().split(/\s+/)[0] ?? "") === HISTORY_COMMAND;
 }
 
 export type RemoteControlRequest =

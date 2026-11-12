@@ -28,8 +28,11 @@ test("a long last turn shows its last 20 messages in order", () => {
 });
 
 test("archived agent messages keep their sender and display the original body", () => {
+  const framed = frameSubmittedLine('<hc from="t7 review">Review complete</hc>');
   const history: NormalizedMessage[] = [
-    { role: "user", content: frameSubmittedLine('<hc from="t7 review">Review complete</hc>') },
+    { role: "user", content: framed, provenance: "project" },
+    { role: "user", content: "A tool notification", provenance: "tool" },
+    { role: "user", content: framed, provenance: "tool" },
     { role: "assistant", content: "Acknowledged" },
   ];
   const entries = [
@@ -37,6 +40,6 @@ test("archived agent messages keep their sender and display the original body", 
     { label: "Assistant", text: "Acknowledged" },
   ];
   expect(resumedConversation(history)).toEqual(entries);
-  expect(conversationHistory(history)).toEqual(entries);
+  expect(conversationHistory(history)).toEqual([{ label: "You", text: framed }, ...entries]);
   expect(conversationHistoryText(history)).toContain("◂ t7 review ❯: Review complete");
 });

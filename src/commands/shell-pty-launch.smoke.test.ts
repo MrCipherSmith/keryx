@@ -423,15 +423,12 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
             await waitFor("Session history", historyFrame);
             terminal?.write("Archived before compaction");
             await waitFor("1/1", historyFrame);
-            terminal?.write("\u001b");
-            await Bun.sleep(80);
             const shortcutFrame = output.length;
-            terminal?.write("\u001b[104;6u");
-            await waitFor("Session history", shortcutFrame);
-            terminal?.write("\u001b");
-            await Bun.sleep(80);
+            // CSI-u encodes Escape without the timeout for an incomplete sequence.
+            terminal?.write("\u001b[27u\u001b[104;6u");
+            await waitFor("Search history", shortcutFrame);
             const expandFrame = output.length;
-            terminal?.write("/expand\r");
+            terminal?.write("\u001b[27u/expand\r");
             await waitFor("Nothing to expand", expandFrame);
             terminal?.write("Hold an Agent stream\r");
             await waitFor("Agent stream started", expandFrame);

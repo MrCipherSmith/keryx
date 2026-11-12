@@ -114,8 +114,6 @@ import {
   parseChannelsArgs,
 } from "./channels-surface";
 import {
-  HISTORY_COMMAND,
-  isHistoryCommand,
   isRemoteControlCommand,
   commandEchoText,
   hubShareUsage,
@@ -305,6 +303,8 @@ import {
   removedCommandHint,
   filterCommands,
   findAgentCommand,
+  HISTORY_COMMAND,
+  isHistoryCommand,
   parseDelegateCommand,
   parseDemoteCommand,
   renderCommandHelp,
@@ -4695,6 +4695,11 @@ export async function launchTuiAgentShell(opts: {
   // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
   // topic) on every exit path.
   let remoteBridge: RemoteBridge | undefined;
+  let historyModal: ModalHandle | undefined;
+  const closeHistory = (): void => {
+    historyModal?.close();
+    historyModal = undefined;
+  };
   let hubShare: LiveShellShare | undefined;
   let startingHubShare: AbortController | undefined;
   const closeHubShare = () => {
@@ -6528,6 +6533,7 @@ export async function launchTuiAgentShell(opts: {
       );
     };
     const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
+      closeHistory();
       const dockSignal = race?.signal ?? foregroundOperation.signal;
       const hubControls = (summary: string, allowOption: string, eligible: boolean) => {
         const turnId = currentHubTurn();
@@ -7170,6 +7176,7 @@ export async function launchTuiAgentShell(opts: {
       question: string;
       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
     }): Promise<AskUserAnswer> => {
+      closeHistory();
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       setMainAgent("blocked", "ask", { kind: "question", text: req.question });
       setBusyPhase("waiting for your answer (menu above input)");
@@ -7451,7 +7458,6 @@ export async function launchTuiAgentShell(opts: {
     let liveSession!: SessionHandle;
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
-    let historyModal: ModalHandle | undefined;
     const nativeHistory = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
     // Flow 399: the live session was opened with `-r`/`-c`/`/resume` (not started fresh). The
     // topic's automatic history restore reads it when remote control creates a new topic.
@@ -7582,8 +7588,6 @@ export async function launchTuiAgentShell(opts: {
         splash?.removeIfShown();
       }
       invalidateForegroundSession();
-      historyModal?.close();
-      historyModal = undefined;
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       const entry = sessionEntryOf(opened.resumed);
@@ -8145,6 +8149,7 @@ export async function launchTuiAgentShell(opts: {
     };
     refreshRewindSidebar();
     const resetSessionSurface = (): void => {
+      closeHistory();
       sideQueue.length = 0;
       sideSessionAbort.abort();
       sideSessionAbort = new AbortController();
