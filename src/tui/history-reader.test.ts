@@ -77,3 +77,22 @@ test("can page across a single large message and jump to a match spanning fragme
     await reader.close();
   }
 });
+
+test("finds the final fragment of a multi-megabyte line without requiring a newline", async () => {
+  const prefix = "x".repeat(8 * 1024 * 1024);
+  const signal = new AbortController().signal;
+  const reader = await HistoryReader.open(historySnapshot([{ role: "assistant", content: prefix + "Last hit" }]), signal);
+  try {
+    const last = reader.length - 1;
+    const page = await reader.page(last - 1, reader.length, signal);
+    expect(page.map(({ start, text }) => [start, text.length])).toEqual([
+      [prefix.length - 4096, 4096], [prefix.length, "Last hit".length],
+    ]);
+    const search = await reader.search("Last hit", signal);
+    expect(await search.locate(0, signal)).toEqual({
+      entry: 0, fragment: last, start: prefix.length, end: prefix.length + "Last hit".length,
+    });
+  } finally {
+    await reader.close();
+  }
+});

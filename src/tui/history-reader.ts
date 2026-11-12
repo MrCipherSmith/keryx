@@ -121,8 +121,11 @@ export class HistoryReader {
         for (let start = 0; start < entry.text.length;) {
           let end = Math.min(start + FRAGMENT_CHARS, entry.text.length);
           if (end < entry.text.length) {
-            const newline = entry.text.lastIndexOf("\n", end - 1);
-            if (newline > start + FRAGMENT_CHARS / 2) end = newline + 1;
+            // A long line may have no newline at all. Only scan the part of
+            // this fragment where a break could actually change the split.
+            const searchFrom = start + FRAGMENT_CHARS / 2 + 1;
+            const newline = entry.text.slice(searchFrom, end).lastIndexOf("\n");
+            if (newline >= 0) end = searchFrom + newline + 1;
             const code = entry.text.charCodeAt(end);
             if (code >= 0xdc00 && code <= 0xdfff) end--;
           }
