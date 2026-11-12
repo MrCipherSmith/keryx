@@ -101,6 +101,8 @@ import { exportCallerSession } from "../lib/caller-session";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
+import { conversationHistory } from "../session/conversation-history";
+import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
 import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";
 import {
@@ -359,7 +361,7 @@ import {
 } from "../harness/provider-catalog";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
-import { frameSubmittedLine, HC_PASTED_HEADER, hcHistoryEcho, hcTranscriptEcho, keyboardApprovalLine, looksLikeHcMessage } from "./hc-message";
+import { frameSubmittedLine, HC_PASTED_HEADER, hcTranscriptEcho, keyboardApprovalLine, looksLikeHcMessage } from "./hc-message";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
 import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
@@ -7449,6 +7451,7 @@ export async function launchTuiAgentShell(opts: {
     let liveSession!: SessionHandle;
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
+    let historyModal: ModalHandle | undefined;
     const nativeHistory = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
     // Flow 399: the live session was opened with `-r`/`-c`/`/resume` (not started fresh). The
     // topic's automatic history restore reads it when remote control creates a new topic.
@@ -7579,6 +7582,8 @@ export async function launchTuiAgentShell(opts: {
         splash?.removeIfShown();
       }
       invalidateForegroundSession();
+      historyModal?.close();
+      historyModal = undefined;
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       const entry = sessionEntryOf(opened.resumed);
@@ -7638,22 +7643,7 @@ export async function launchTuiAgentShell(opts: {
     const leaseState = leaseStateLookup(sessionCwd);
 
     const showSessionPreview = (): void => {
-      const recentPrompts = history.filter((message) => message.role === "user").slice(-5);
-      if (recentPrompts.length === 0) return;
-      transcript.add(new otui.TextRenderable(r, {
-        id: `sesspreview${uid++}`,
-        content: otui.t`${dimChunk(otui, "Recent prompts")}`,
-      }));
-      for (const message of recentPrompts) {
-        // A framed hc message uses the same sender marker as its live echo.
-        const hc = hcHistoryEcho(message.content);
-        const text = hc?.line ?? message.content;
-        const preview = text.length > 100 ? `${text.slice(0, 97)}…` : text;
-        transcript.add(new otui.TextRenderable(r, {
-          id: `sessu${uid++}`,
-          content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${preview}`)}`,
-        }));
-      }
+      appendConversationPreview(otui, chrome, nativeHistory());
     };
 
     /** The transcript lines an opened session announces: skipped, degraded, resumed. */
@@ -8463,7 +8453,16 @@ export async function launchTuiAgentShell(opts: {
         liveRemotePanel?.refresh();
       }
     };
-    const runHistoryCommand = (line: string): void => {
+    const showHistory = (): void => {
+      if (chrome.overlayActive() || sessionTransferInProgress) return;
+      const snapshot = [...archive, ...history.slice(nextArchiveIndex)];
+      historyModal = openHistoryModal(otui, chrome, conversationHistory(snapshot));
+    };
+    const runHistoryCommand = (line: string, source?: typeof TG_SOURCE | "hub"): void => {
+      if (source !== TG_SOURCE) {
+        showHistory();
+        return;
+      }
       void postHistoryFor(line).then((answer) => {
         if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
       });
@@ -9938,7 +9937,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "history": {
-            runHistoryCommand(line);
+            runHistoryCommand(line, source);
             return;
           }
           case "channels": {
@@ -10356,7 +10355,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (isHistoryCommand(command.name)) {
-          runHistoryCommand(line);
+          runHistoryCommand(line, source);
           return;
         }
         if (isChannelsCommand(command.name)) {
@@ -12000,6 +11999,12 @@ export async function launchTuiAgentShell(opts: {
     // that is left here is subscribing it. Registered through the `onKeypress`
     // wrapper rather than by reaching for the private `_internalKeyInput` symbol
     // directly (risk R2); the chrome's `/`-menu router is the other consumer.
+    onKeypress(r, (key) => {
+      if (!isHistoryShortcut(key) || chrome.overlayActive() || sessionTransferInProgress) return;
+      key.preventDefault();
+      key.stopPropagation();
+      showHistory();
+    });
     onKeypress(r, (key) => {
       nav.handleKey(key);
     });

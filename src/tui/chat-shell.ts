@@ -41,6 +41,10 @@ import { loadSessionLimits } from "../commands/model-limits";
 import { saveShellConfig } from "../lib/shell-config";
 import { summarizeSubmittedLine } from "../lib/md-blocks";
 import { latestSession } from "../session";
+import type { NormalizedMessage } from "../harness/provider/types";
+import { conversationHistory } from "../session/conversation-history";
+import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
+import { isHistoryCommand } from "./remote-control-surface";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
@@ -280,7 +284,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
         close();
         return "exit";
       }
-      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value)) {
+      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value) || isHistoryCommand(value)) {
         return "local";
       }
       if ((turn || queue.length > 0) && value.startsWith("/")) {
@@ -466,7 +470,7 @@ export async function mountChatShell(
       // while Enter submitted the raw filter text instead of selecting the
       // highlighted command. Same shape as the agent shell's block-nav guard
       // (`nav.restoreComposerFocus()`).
-      if (!chrome.menuActive()) {
+      if (!chrome.menuActive() && !chrome.overlayActive()) {
         chrome.focusComposer();
       }
     },
@@ -479,6 +483,20 @@ export async function mountChatShell(
     },
   });
   chrome.onEscapeInterrupt(bridge.interruptTurn);
+  let readConversation = (): readonly NormalizedMessage[] => [];
+  bridge.io.onConversationReady = (read, resumed) => {
+    readConversation = read;
+    if (resumed) appendConversationPreview(otui, chrome, read());
+  };
+  const showHistory = (): void => {
+    if (!chrome.overlayActive()) openHistoryModal(otui, chrome, conversationHistory(readConversation()));
+  };
+  const unsubscribeHistoryKey = onKeypress(r, (key) => {
+    if (!isHistoryShortcut(key) || chrome.overlayActive()) return;
+    key.preventDefault();
+    key.stopPropagation();
+    showHistory();
+  });
 
   // `/models` and `/connect` route through the TUI picker (inside the chrome's
   // overlay guard, so the `/`-menu key router stays inert while it is up) rather
@@ -515,6 +533,10 @@ export async function mountChatShell(
       return;
     }
     if (result === "local") {
+      if (isHistoryCommand(line)) {
+        showHistory();
+        return;
+      }
       const cwd = opts.deps.session?.cwd;
       const keys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
       if (isThemeCommand(line)) {
@@ -595,6 +617,7 @@ export async function mountChatShell(
     bridge,
     done,
     destroy: () => {
+      unsubscribeHistoryKey();
       bridge.close();
       r.off("theme_mode", onThemeMode);
       chrome.destroy();

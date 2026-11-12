@@ -137,7 +137,8 @@ import { keryxConfigDir } from "../lib/config-dir";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
-import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { isHistoryCommand, isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { conversationHistoryText } from "../session/conversation-history";
 import { ChannelsClient } from "../remote/channels-client";
 import { loadRemoteConfig } from "../remote/config";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
@@ -310,6 +311,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/setup",
   "/reviews",
   "/remote-control",
+  "/history",
   "/channels",
   "/intake",
   "/rendering",
@@ -844,6 +846,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
+  const readConversation = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
+  let resumed = false;
   // The session lease this loop holds (specification §6). Mirrored into the
   // caller's `leaseBox` so a signal handler outside the loop can release it.
   let lease: SessionLeaseHandle | undefined;
@@ -874,6 +878,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         system(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
       }
       if (opened.resumed) {
+        resumed = true;
         system(
           `Resumed session ${shortSessionId(live.summary.id)} · ${live.summary.title} (${history.length} context msgs)\n`,
         );
@@ -892,6 +897,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       system(`${cause instanceof Error ? cause.message : String(cause)}\nStarting a new session.\n`);
     }
   }
+  io.onConversationReady?.(readConversation, resumed);
   const releaseLease = (): void => {
     releaseSessionLease(lease);
     holdLease(undefined);
@@ -1147,6 +1153,10 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         } else {
           history.length = 0;
         }
+        continue;
+      }
+      if (isHistoryCommand(command)) {
+        system(conversationHistoryText(readConversation()));
         continue;
       }
       if (command === "/compact") {
@@ -2913,8 +2923,7 @@ export async function runAgentRepl(
         // Flow 376: the readline shell has no remote control; status as text, enabling explained.
         agentIo.onSystem?.(readlineRemoteControlText(line));
       } else if (isHistoryCommand(command)) {
-        // Flow 399: no topic here; the text says where `/history` works.
-        agentIo.onSystem?.(readlineHistoryText(line));
+        agentIo.onSystem?.(conversationHistoryText(archive.length > 0 ? archive : history));
       } else if (isChannelsCommand(command)) {
         // Flow 377: the state as text; Connect needs the hidden token entry of the full-screen shell.
         agentIo.onSystem?.(readlineChannelsText(line, await loadChannelsSnapshot(new ChannelsClient())));

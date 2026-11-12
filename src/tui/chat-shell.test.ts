@@ -204,12 +204,22 @@ otuiTest("AC10: a chat turn runs end to end through the real runShell and the re
   expect(second).toContain("Second answer here.");
   expect(second).toMatch(/~\d/); // the D-A2 estimated context counter
 
+  h.handle.chrome.input.value = "/history";
+  await h.flush();
+  h.mockInput.pressEnter();
+  await settle(h);
+  expect(h.captureCharFrame()).toContain("Session history");
+  expect(h.captureCharFrame()).toContain("Second answer here.");
+  h.mockInput.pressEscape();
+  await settle(h, 24);
+  expect(h.handle.chrome.overlayActive()).toBe(false);
+
   // A slash command is handled by `runShell` itself and never reaches a model.
   h.handle.chrome.input.value = "/help";
   await h.flush();
   h.mockInput.pressEnter();
   await settle(h);
-  expect(h.captureCharFrame()).toContain("/compact");
+  expect(h.captureCharFrame()).toContain("/history");
 
   // …and an agent-only command fails with the wrong-mode explanation (S4/AC8).
   h.handle.chrome.input.value = "/expand";

@@ -1037,11 +1037,11 @@ Refusals print a named message, exit non-zero and write nothing:
   readline shell (`--no-tui`) can only print that it is off. Each time it is
   turned on or off is recorded in the session's history (see
   [sessions](#sessions)).
-  `/history [N]` posts the last N messages of this session (1 to 20, default 10:
-  what you typed and the agent's final answer of each turn, redacted, one message
-  each) into the topic; typed in the shell, sent from the topic, or key `h` in the
-  modal. A resumed session whose topic `/remote-control <name>` just created gets
+  In the Telegram topic, `/history [N]` posts the last N messages (1 to 20, default 10)
+  with one redacted message per prompt or final answer. In the remote-control
+  modal, press `h` to post the last 10. A resumed session whose topic `/remote-control <name>` just created gets
   the last 10 by itself, once.
+
   Slash commands typed in the topic run only if they are on a fixed list
   (`/help` and the Telegram menu show it): text commands such as `/status`, `/new`
   and `/clear` (same topic, one separator line), button pickers (`/model`,
@@ -1058,6 +1058,12 @@ Refusals print a named message, exit non-zero and write nothing:
   button (see `/permissions` and `/remote-policy`). The modal
   has a Commands tab with the recent ones. Full list and rules:
   [Drive keryx remotely](guides/drive-keryx-remotely.md#commands-from-the-topic).
+- `/history` in the local shell opens the current session conversation, including
+  archived messages. In the full-screen shell, `Ctrl+Shift+H` opens the same
+  window. Type to find text, click **Find** or press Enter to jump to the match,
+  and use ↑/↓ to move between matches. Readline prints the conversation as text.
+  When you resume a session, the full-screen transcript starts with up to 20
+  messages from the most recent turn.
 - `/channels [status]` connects Telegram to this machine, from any shell. The modal
   lists Telegram: when it is not connected there is one button, Connect; when it is,
   Test and Disconnect. Connect asks for the bot token (hidden, paste works, never in

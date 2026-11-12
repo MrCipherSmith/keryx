@@ -177,11 +177,9 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
-    // Flow 399: post the session's last messages to the remote-control topic. Needs remote control
-    // on; the readline agent REPL has no topic and says so.
     name: "/history",
-    description: "Post the last messages of this session to the Telegram topic: /history [N], 1 to 20",
-    modes: AGENT_ONLY,
+    description: "View the session conversation · Ctrl+Shift+H in the full-screen shell",
+    modes: BOTH,
   },
   {
     // Flow 377: the machine's Telegram connection. Connect needs the hidden token entry of the

@@ -413,9 +413,23 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
           await waitFor("Resumed", switchFrame);
 
           if (check === "destination preview") {
-            await waitFor("Destination history 206", switchFrame);
+            await waitFor("Destination history 207", switchFrame);
             const preview = Buffer.concat(output.slice(switchFrame)).toString("utf8");
-            expect(visibleText(preview)).toContain("Recent prompts");
+            expect(visibleText(preview)).toContain("Last turn");
+            expect(visibleText(preview)).toContain("Destination history 206");
+            expect(visibleText(preview)).not.toContain("Destination history 204");
+            const historyFrame = output.length;
+            terminal?.write("/history\r");
+            await waitFor("Session history", historyFrame);
+            terminal?.write("Archived before compaction");
+            await waitFor("1/1", historyFrame);
+            terminal?.write("\u001b");
+            await Bun.sleep(80);
+            const shortcutFrame = output.length;
+            terminal?.write("\u001b[104;6u");
+            await waitFor("Session history", shortcutFrame);
+            terminal?.write("\u001b");
+            await Bun.sleep(80);
             const expandFrame = output.length;
             terminal?.write("/expand\r");
             await waitFor("Nothing to expand", expandFrame);

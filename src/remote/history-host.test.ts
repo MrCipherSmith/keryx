@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { HISTORY_COMMAND, isHistoryCommand, readlineHistoryText } from "../tui/remote-control-surface";
+import { HISTORY_COMMAND, isHistoryCommand } from "../tui/remote-control-surface";
 import { openSession, persistHistory } from "../session";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "./history-host";
 import { parseHistoryArgs } from "./history";
@@ -86,11 +86,9 @@ describe("historyArgsOf: the one reading of a /history line", () => {
     expect(historyArgsOf("/history 5 extra")).toBe("5 extra");
   });
 
-  test("what the readline shell and the full-screen shell read is the same", () => {
+  test("Telegram history still recognises the command and its optional count", () => {
     expect(isHistoryCommand(HISTORY_COMMAND)).toBe(true);
     expect(parseHistoryArgs(historyArgsOf("/history 5")).ok).toBe(true);
     expect(parseHistoryArgs(historyArgsOf("/history lots")).ok).toBe(false);
-    expect(readlineHistoryText("/history lots")).toContain("Usage: /history");
-    expect(readlineHistoryText("/history 5")).toContain("full-screen shell");
   });
 });

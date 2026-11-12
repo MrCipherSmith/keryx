@@ -1,6 +1,6 @@
 import type { BusClient } from "../bus/client";
 import type { PresenceSurface } from "../bus/schema";
-import type { ProviderPort } from "../harness/provider/types";
+import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import type { OpenLeasedSessionOptions, OpenLeasedSessionResult, SessionLeaseHandle } from "../session/lease";
 
 /** Async line source + write sink; no real stdio is reached by `runShell`. */
@@ -16,6 +16,7 @@ export interface ShellIO {
   onTurnStart?: (interrupt?: () => void) => void;
   onTurnEnd?: (full: string) => void;
   onSystem?: (text: string) => void;
+  onConversationReady?: (read: () => readonly NormalizedMessage[], resumed: boolean) => void;
   /** Flush queued asynchronous notices only while terminal output is safe. */
   onSafeBoundary?: () => void;
 }

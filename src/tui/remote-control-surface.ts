@@ -7,8 +7,6 @@
 // it: `presentRemoteControl` and the panel only ask the host to (`onToggle`,
 // `onOpen`), and the host runs the same code the typed command runs.
 
-import { parseHistoryArgs } from "../remote/history";
-import { historyArgsOf } from "../remote/history-host";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { waitingCardsText } from "./operator-confirmations";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
@@ -69,16 +67,6 @@ export function isHistoryCommand(line: string): boolean {
   return (line.trim().split(/\s+/)[0] ?? "") === HISTORY_COMMAND;
 }
 
-/**
- * The readline shell's whole `/history`: it has no session bridge, so there is no topic to post
- * to. The usage error still reads the same as in the full-screen shell.
- */
-export function readlineHistoryText(line: string): string {
-  const parsed = parseHistoryArgs(historyArgsOf(line));
-  if (!parsed.ok) return `${parsed.message}\n`;
-  return "/history posts to the Telegram topic of remote control, which starts only in the full-screen shell (run `keryx shell`, then /remote-control <name>). Here it is off.\n";
-}
-
 export type RemoteControlRequest =
   | { action: "status" }
   | { action: "off" }
@@ -122,8 +110,8 @@ const STATE_WORDS: Record<RemoteState, string> = { off: "off", on: "on", offline
 /** `History: 10 messages posted at 06:52:11 (restored automatically)`, or how to post it. */
 export function formatHistoryStatus(status: RemoteStatus): string {
   const history = status.history;
-  if (history === undefined) return `History: not posted yet. Use ${HISTORY_COMMAND} [N], or press h here.`;
-  return `History: ${history.count} message${history.count === 1 ? "" : "s"} posted at ${clock(history.at)} (${history.auto ? "restored automatically" : HISTORY_COMMAND}). Again: ${HISTORY_COMMAND} [N], or press h here.`;
+  if (history === undefined) return `History: not posted yet. Press h here or send ${HISTORY_COMMAND} [N] in the topic.`;
+  return `History: ${history.count} message${history.count === 1 ? "" : "s"} posted at ${clock(history.at)} (${history.auto ? "restored automatically" : HISTORY_COMMAND}). Press h here to post again.`;
 }
 
 /** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */

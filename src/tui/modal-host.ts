@@ -31,11 +31,14 @@ export type ModalTabContext = {
   width: number;
   /** Rows available inside the panel body (the scrollbox viewport). */
   height: number;
+  toolbar?: { controls: Box; scroll: ScrollBox };
 };
 
 export type OpenModalInput = {
   title: string;
   tabs: readonly ModalTab[];
+  /** Use the fixed tab-strip row for the active tab's controls. */
+  toolbar?: boolean;
   initialTab?: string;
   /** Footer key-hints. Default: tab switch + Esc close. */
   footer?: readonly ModalFooterAction[];
@@ -343,6 +346,7 @@ function innerWidthOf(state: HostState): number {
 
 function paintTabs(state: HostState): void {
   clearTranscriptChildren(state.tabStrip);
+  if (state.input?.toolbar === true) return;
   const theme = getTheme();
   for (const [index, tab] of state.tabs.entries()) {
     const active = tab.id === state.active;
@@ -418,6 +422,7 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
     // renderer wrapped the rest onto a blank-looking extra row (flow 270).
     width: resolveModalInnerWidth(panelWidth) - MODAL_BODY_SCROLLBAR_COLS,
     height: modalBodyRows(size.height),
+    ...(input.toolbar === true ? { toolbar: { controls: state.tabStrip, scroll: state.scroll } } : {}),
   });
   state.tabCleanup = typeof cleanup === "function" ? cleanup : undefined;
 }
@@ -427,6 +432,7 @@ function closeHost(state: HostState, opts: { restoreFocus: boolean; runOnClose: 
     return;
   }
   unmountActiveTab(state);
+  if (state.input?.toolbar === true) clearTranscriptChildren(state.tabStrip);
   state.open = false;
   state.input = undefined;
   state.backdrop.visible = false;
@@ -618,7 +624,8 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
       return;
     }
     const focused = r.currentFocusedRenderable;
-    const inBody = focused !== null && containsNode(state.scroll, focused);
+    const inBody = focused !== null && (containsNode(state.scroll, focused)
+      || (state.input.toolbar === true && containsNode(state.tabStrip, focused)));
     if (key.name === "escape") {
       const parent = state.temporaryParents.get(state.active);
       if (parent !== undefined && state.tabs.some((tab) => tab.id === parent)) {
@@ -828,7 +835,8 @@ export function openModal(
   paintFooter(state, input.footer);
   mountTab(state, input, resolveInitialTab(input.tabs, input.initialTab));
   const focused = chrome.renderer.currentFocusedRenderable;
-  if (focused === null || !containsNode(state.scroll, focused)) {
+  if (focused === null || (!containsNode(state.scroll, focused)
+    && !(input.toolbar === true && containsNode(state.tabStrip, focused)))) {
     state.tabStrip.focus();
   }
   // A modal opened from a promise continuation — the next wizard step after
