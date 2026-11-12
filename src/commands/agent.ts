@@ -5744,14 +5744,15 @@ async function executeCallRegistered(
   name: string,
   run: () => Promise<InteractiveToolResult>,
 ): Promise<InteractiveToolResult> {
-  callDiagnostics.begin(id, name);
+  // Not watched: a plain tool never reports stages, so its stay in "start" is its whole legitimate run.
+  const key = callDiagnostics.begin(id, name, { watched: false });
   let kind: "ok" | "error" = "error";
   try {
     const result = await run();
     kind = result.isError === true ? "error" : "ok";
     return result;
   } finally {
-    callDiagnostics.end(id, kind);
+    callDiagnostics.end(key, kind);
   }
 }
 

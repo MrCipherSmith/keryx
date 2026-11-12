@@ -24,6 +24,8 @@ export interface DiagCall {
   readonly id: string;
   readonly name: string;
   readonly startedAt: number;
+  /** Reports its stage changes, so a long stay in one stage means something. False for plain tool calls. */
+  readonly watched: boolean;
   stage: string;
   stageSince: number;
   stageChanges: number;
@@ -91,9 +93,16 @@ export const DEFAULT_STALL_MS = 10 * 60_000;
 export const DEFAULT_REPEAT_MS = 15 * 60_000;
 export const DEFAULT_MAX_FILE_BYTES = 1_000_000;
 const SNAPSHOT_RECENT = 120;
+/** An operator may legitimately take a while to answer a dialog; wait this many stall windows. */
+const HUMAN_STAGE_FACTOR = 3;
+const HUMAN_STAGES: ReadonlySet<string> = new Set(["approval"]);
 
 export interface CallDiagnostics {
-  begin(id: string, name: string): void;
+  /**
+   * Register a call. Returns the key to pass to `stage`/`end`: the id itself, or `id~n` when
+   * another in-flight call already holds it (provider call ids are not unique across turns).
+   */
+  begin(id: string, name: string, opts?: { watched?: boolean }): string;
   stage(id: string, stage: string): void;
   end(id: string, outcome: DiagOutcome): void;
   /** A countable moment (also lands in the ring buffer). */
@@ -211,11 +220,11 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
     }
     if (sink === undefined) return snap;
     try {
-      metrics.dumps += 1;
-      sink(JSON.stringify({ ...snap, metrics: { ...snap.metrics, dumps: metrics.dumps } }));
+      sink(JSON.stringify({ ...snap, metrics: { ...snap.metrics, dumps: metrics.dumps + 1 } }));
     } catch {
       return undefined;
     }
+    metrics.dumps += 1;
     return snap;
   };
 
@@ -228,7 +237,11 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       if (lag > metrics.maxLoopLagMs) metrics.maxLoopLagMs = lag;
     }
     lastTickAt = at;
-    const suspects = [...calls.values()].filter((c) => at - c.stageSince >= stallMs);
+    // Only calls that report stages can be judged by how long they sit in one; a plain tool
+    // call (a long build) stays in "start" for its whole legitimate run.
+    const suspects = [...calls.values()].filter(
+      (c) => c.watched && at - c.stageSince >= (HUMAN_STAGES.has(c.stage) ? stallMs * HUMAN_STAGE_FACTOR : stallMs),
+    );
     if (suspects.length === 0) {
       lastDumpIds = new Set();
       return;
@@ -244,10 +257,13 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
   };
 
   return {
-    begin(id, name) {
+    begin(id, name, opts) {
       const at = now();
-      calls.set(id, { id, name, startedAt: at, stage: "start", stageSince: at, stageChanges: 0 });
+      let key = id;
+      for (let n = 2; calls.has(key); n += 1) key = `${id}~${n}`;
+      calls.set(key, { id: key, name, startedAt: at, watched: opts?.watched !== false, stage: "start", stageSince: at, stageChanges: 0 });
       metrics.callsStarted += 1;
+      return key;
     },
     stage(id, next) {
       const call = calls.get(id);
@@ -295,11 +311,14 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
             const dir = ensureKeryxSubdir(["diagnostics"], opts.configDir);
             file = path.join(dir, `${opts.sessionId.replace(/[^A-Za-z0-9._-]/g, "_")}.ndjson`);
           }
+          let size = 0;
           try {
-            if (statSync(file).size >= cap) return;
+            size = statSync(file).size;
           } catch {
             // not created yet
           }
+          // Throwing (not returning) so dump() reports "not written" instead of claiming a save.
+          if (size >= cap) throw new Error("diagnostics file is at its size cap");
           appendOwnerOnlyLine(file, line);
         };
       }

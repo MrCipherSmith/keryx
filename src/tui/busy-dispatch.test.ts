@@ -229,6 +229,19 @@ test("flow 300: /governance and /triggers are read-only while busy — never def
   expect(classifyBusyDispatch({ line: "/triggers nightly", commandName: "/triggers", ...base })).toBe("triggers");
 });
 
+// Flow 487: /diag exists for a stuck turn, so it answers at once instead of queueing behind it.
+test("classifyBusyDispatch: /diag routes to diag while main is busy, never deferred", () => {
+  expect(classifyBusyDispatch({ line: "/diag", commandName: "/diag", ...base })).toBe("diag");
+});
+
+test("tui-shell.ts's busy 'diag' case runs the dump at once", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const caseIdx = source.indexOf('case "diag": {');
+  expect(caseIdx).toBeGreaterThan(-1);
+  const body = source.slice(caseIdx, source.indexOf("return;", caseIdx)).replace(/\s+/g, " ");
+  expect(body).toContain("io.onSystem?.(runDiagCommand());");
+});
+
 // AC5 (flow 418): a slash line sent while main is busy is queued, not dropped.
 for (const name of ["/route", "/external", "/model", "/goal", "/connect", "/compact"]) {
   test(`busy slash ${name} is deferred by the classifier and QUEUED for the turn's end`, () => {

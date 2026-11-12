@@ -9983,6 +9983,11 @@ export async function launchTuiAgentShell(opts: {
             routeExternalDiffCommand(line, externalDiff);
             return;
           }
+          case "diag": {
+            // flow 487: a stuck turn is exactly when this is needed; it never waits for the turn.
+            io.onSystem?.(runDiagCommand());
+            return;
+          }
           case "mcp": {
             showTools();
             return;

@@ -39,6 +39,8 @@ export async function runWithCallWatchdog<T extends CallResult>(
   // Concurrent calls of one tool interleave in the trace; the id tells them apart.
   const tag = callId === undefined ? name : `${name}#${callId}`;
   let currentStage = "start";
+  // The registry's key for this call (the id, or a suffixed one if the id was already in flight).
+  let diagKey: string | undefined;
   const stage: CallStage = {
     get current(): string {
       return currentStage;
@@ -46,11 +48,11 @@ export async function runWithCallWatchdog<T extends CallResult>(
     set current(next: string) {
       currentStage = next;
       tracePhase(`${tag} stage ${next}`);
-      if (callId !== undefined) callDiagnostics.stage(callId, next);
+      if (diagKey !== undefined) callDiagnostics.stage(diagKey, next);
     },
   };
   tracePhase(`${tag} call start (watchdog ${capMs}ms)`);
-  if (callId !== undefined) callDiagnostics.begin(callId, name);
+  if (callId !== undefined) diagKey = callDiagnostics.begin(callId, name);
   if (capMs <= 0) {
     let kind: DiagOutcome = "error";
     try {
@@ -58,7 +60,7 @@ export async function runWithCallWatchdog<T extends CallResult>(
       kind = result.isError ? "error" : "ok";
       return result;
     } finally {
-      if (callId !== undefined) callDiagnostics.end(callId, kind);
+      if (diagKey !== undefined) callDiagnostics.end(diagKey, kind);
     }
   }
 
@@ -122,7 +124,7 @@ export async function runWithCallWatchdog<T extends CallResult>(
     tracePhase(`${tag} call settled`);
     return outcome;
   } finally {
-    if (callId !== undefined) callDiagnostics.end(callId, kind);
+    if (diagKey !== undefined) callDiagnostics.end(diagKey, kind);
     if (timer !== undefined) clearTimeout(timer);
     if (graceTimer !== undefined) clearTimeout(graceTimer);
     if (onAbort !== undefined) options.signal?.removeEventListener("abort", onAbort);

@@ -53,6 +53,18 @@ describe("call registry and metrics", () => {
     expect(snap.recent.some((l) => l.endsWith("event approval.rearm spawn_subagent#c1"))).toBe(true);
   });
 
+  test("two in-flight calls with one id keep separate entries", () => {
+    const { diag } = setup();
+    const a = diag.begin("dup", "spawn_subagent");
+    const b = diag.begin("dup", "spawn_subagent");
+    expect(a).toBe("dup");
+    expect(b).not.toBe(a);
+    diag.end(a, "ok");
+    expect(diag.inFlight().map((c) => c.id)).toEqual([b]);
+    diag.end(b, "ok");
+    expect(diag.inFlight()).toEqual([]);
+  });
+
   test("ring buffer is bounded", () => {
     const diag = createCallDiagnostics({ ringSize: 5 });
     for (let i = 0; i < 20; i++) diag.record(`label ${i}`);
@@ -94,14 +106,14 @@ describe("stall watcher", () => {
   test("dumps once when a call sits in one stage past the limit, again only after the repeat window", () => {
     const { diag, clock, lines } = setup();
     diag.begin("c1", "spawn_subagent");
-    diag.stage("c1", "approval");
+    diag.stage("c1", "invoke");
     diag.probe("dock", () => ({ queueDepth: 9, holderAgeMs: 123 }));
     clock.advance(10 * MIN);
     diag.tick();
     expect(lines).toHaveLength(1);
     const first = JSON.parse(lines[0] as string);
     expect(first.reason).toBe("stall");
-    expect(first.calls[0]).toMatchObject({ id: "c1", stage: "approval" });
+    expect(first.calls[0]).toMatchObject({ id: "c1", stage: "invoke" });
     expect(first.probes.dock).toEqual({ queueDepth: 9, holderAgeMs: 123 });
     clock.advance(5 * MIN);
     diag.tick();
@@ -124,6 +136,27 @@ describe("stall watcher", () => {
       diag.tick();
     }
     expect(lines).toHaveLength(0);
+  });
+
+  test("a call waiting on the operator is a stall only after three windows", () => {
+    const { diag, clock, lines } = setup();
+    diag.begin("c1", "spawn_subagent");
+    diag.stage("c1", "approval");
+    clock.advance(29 * MIN);
+    diag.tick();
+    expect(lines).toHaveLength(0);
+    clock.advance(1 * MIN);
+    diag.tick();
+    expect(lines).toHaveLength(1);
+  });
+
+  test("a call that does not report stages is never judged by its stay in one", () => {
+    const { diag, clock, lines } = setup();
+    diag.begin("c1", "shell_exec", { watched: false });
+    clock.advance(60 * MIN);
+    diag.tick();
+    expect(lines).toHaveLength(0);
+    expect(diag.inFlight()).toHaveLength(1);
   });
 
   test("records event-loop lag when a tick arrives far later than asked", () => {
@@ -168,5 +201,7 @@ describe("file sink", () => {
     stop();
     const lines = readFileSync(diag.dumpPath() as string, "utf8").trim().split("\n");
     expect(lines.length).toBeLessThan(10);
+    // a dump the sink refused is reported as not written
+    expect(diag.dump("manual")).toBeUndefined();
   });
 });
