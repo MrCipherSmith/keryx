@@ -8,16 +8,16 @@ import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
 import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
-import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
+import { REPORT_FIELD_EVIDENCE_LEVEL } from "./evidence-level";
+import { evaluateCloseGates } from "./close-gates";
 import { packageCoverageWarnings, packageRolesNotRun } from "./coverage";
 import { optionalRolesLine, upsertOptionalRolesLine } from "./role-switches";
 import { packageParityWarnings } from "./parity";
-import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { withSpendSection } from "./dispatch-usage";
 import { renderCoverageMd } from "./coverage-md";
-import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type DispatchRun, type IngestScreened } from "./research";
-import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
+import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, packageResearchErrorsTagged, type DispatchRun, type IngestScreened } from "./research";
+import { waiveReadiness, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
@@ -89,6 +89,7 @@ import {
   type FindingClassification,
   type FindingDispositionState,
   type FlowMatchResult,
+  type HeadOverride,
   type ManagedReviewInput,
   type ManagedReviewManifest,
   type ManagedReviewMode,
@@ -961,6 +962,12 @@ export type CompleteManagedReviewOptions = {
    * to name it and say the PR moved.
    */
   head?: string | undefined;
+  /**
+   * The operator's own words for a `head` that differs from the one `review start` recorded (`--head-reason`). Required
+   * then, and refused otherwise: relabelling the reviewed head is the operator's act, not the agent's. The manifest keeps
+   * both heads and the quote in `head_override`.
+   */
+  headReason?: string | undefined;
   /** Readiness items the operator waives in their own words (`--waive <item> "<quote>"`), one entry per flag. */
   waiveReadiness?: ReadonlyArray<{ items: readonly string[]; quote: string }> | undefined;
   /** Reads the PR's own file list for readiness item 9; absent means that comparison is not made. */
@@ -1035,11 +1042,9 @@ async function completeManagedReviewLocked(
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
-  // Flow 458: the round record decides what the round reviewed; one edited after `review start` is refused here too.
-  const tampered = roundRecordTampered(packageDir);
-  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);
   const warnings: string[] = [];
   let manifest = stored;
+  let headOverride: HeadOverride | undefined;
   if (options.head !== undefined) {
     if (!isPrBound(stored.target)) {
       throw new Error(`--head applies to a pull request package; ${stored.reviewId} targets a ${stored.target.kind}.`);
@@ -1050,9 +1055,15 @@ async function completeManagedReviewLocked(
     }
     const recordedHead = stored.target.head;
     if (typeof recordedHead === "string" && recordedHead !== "" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())) {
-      warnings.push(`--head ${head.slice(0, 7)} replaces the head recorded when the round started (${recordedHead.slice(0, 7)}); the manifest now records ${head.slice(0, 7)}`);
+      // Flow 488: a head other than the recorded one is a relabel of what the round reviewed; the operator says so in their own words.
+      const quote = (options.headReason ?? "").replace(/-{0,2}head-reason/gi, "").trim();
+      if (quote.length < 8 || !/[\p{L}\p{N}]/u.test(quote)) {
+        throw new Error(`Cannot complete managed review; --head ${head} differs from the head recorded when the round started (${recordedHead}). Relabelling the reviewed head is the operator's decision: give their own words with --head-reason "<operator quote>" (at least 8 characters; a terminal, or --answered-by from a host question), or complete without --head to keep ${recordedHead.slice(0, 7)}.`);
+      }
+      headOverride = { from: recordedHead, to: head, operator_quote: quote, time: (options.now ?? new Date()).toISOString(), ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const }) };
+      warnings.push(`--head ${head.slice(0, 7)} replaces the head recorded when the round started (${recordedHead.slice(0, 7)}), on the operator's word; the manifest records head_override`);
     }
-    manifest = { ...stored, target: { ...stored.target, head } };
+    manifest = { ...stored, target: { ...stored.target, head }, ...(headOverride === undefined ? {} : { head_override: headOverride }) };
   }
   const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
   if (options.hostQuestion !== undefined) {
@@ -1066,20 +1077,16 @@ async function completeManagedReviewLocked(
       decisions: await readFile(path.join(packageDir, "decisions.md"), "utf8"),
       coverage: JSON.parse(snapshot) as Record<string, string | null>,
       dispositions: options.dispositions ?? [], waiveReadiness: options.waiveReadiness ?? [], waiveCoverage: options.waiveCoverage,
+      ...(headOverride === undefined ? {} : { headOverride: { from: headOverride.from, to: headOverride.to, quote: headOverride.operator_quote } }),
     };
     const confirmation = validateCompletionHost(context, options.hostQuestion, stored.completionConfirmations ?? []);
     if (!confirmation.ok) throw new Error(`review complete refused: ${confirmation.reason}`);
   }
 
-  if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: withoutPartialHeader(reportText), lookup: options.prLookup })).warnings);
-  const evidence = parseEvidenceLevel(reportText);
-  if (!evidence.ok) {
-    const problem = `the report's evidence level is missing or invalid: ${evidence.reason}`;
-    if (manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {
-      throw new Error(`Cannot complete managed review; ${problem}. Add a line \`Evidence level: static only — did not run: <what>\` or \`Evidence level: ran — <what>\` to report.md`);
-    }
-    warnings.push(`${problem} (this package predates the field, so it is a warning)`);
-  }
+  // The head gate reports instead of throwing: the operator's waiver of item `head` is applied below, then the checklist decides.
+  // Its result is handed to the checklist so a refusal is a failing item a waiver covers, and the tracker is asked once.
+  const headGate = options.prLookup === undefined ? undefined : await completeHeadGate({ manifest, lookup: options.prLookup });
+  if (headGate !== undefined) warnings.push(...headGate.warnings);
   // A warning, never a refusal: leftovers (Not run candidates, held severities, open follow-ups) the report does not name.
   warnings.push(...(await packageParityWarnings(packageDir, reportText).catch(() => [])));
   warnings.push(...(await packageCoverageWarnings(packageDir)));
@@ -1098,18 +1105,28 @@ async function completeManagedReviewLocked(
   await assertUnchanged();
   try {
     coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now, options.hostQuestion === undefined ? undefined : "host-question", options.hostQuestion === undefined ? undefined : { hostQuestion: options.hostQuestion }, writeCompletion);
-    for (const waiver of options.waiveReadiness ?? []) {
-      await waiveReadiness(packageDir, waiver.items, waiver.quote, { ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const, hostQuestion: options.hostQuestion }), prFiles: options.prFiles, headChecked: options.prLookup !== undefined, writeCompletion, ...(options.now === undefined ? {} : { now: options.now }) });
-    }
-    if ((options.waiveReadiness ?? []).length > 0) manifest = { ...(JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest), ...(options.head === undefined ? {} : { target: manifest.target }) };
-    const waivedRadius = (manifest.readiness_waivers ?? []).some((waiver) => ["files-covered", "blast-radius", "reviewers", "ledger"].includes(waiver.item));
-    // The operator's quoted waiver of one of these items replaces the research gate's refusal for it; the checklist below still names it.
-    const researchProblems = waivedRadius ? [] : await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
-    if (researchProblems.length) {
-      throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
-    }
-    readiness = await computeReadiness(packageDir, { prLookup: options.prLookup, prFiles: options.prFiles, headChecked: options.prLookup !== undefined });
-    if (readiness.verdict !== "READY") throw new Error(readinessRefusal(readiness, "complete the review"));
+    const gates = await evaluateCloseGates(packageDir, {
+      manifest,
+      report: reportText,
+      readiness: { prLookup: options.prLookup, prFiles: options.prFiles, ...(headGate === undefined ? {} : { headGate }) },
+      action: "complete the review",
+      beforeReadiness: async () => {
+        for (const waiver of options.waiveReadiness ?? []) {
+          await waiveReadiness(packageDir, waiver.items, waiver.quote, { ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const, hostQuestion: options.hostQuestion }), prFiles: options.prFiles, ...(headGate === undefined ? {} : { headGate }), writeCompletion, ...(options.now === undefined ? {} : { now: options.now }) });
+        }
+        if ((options.waiveReadiness ?? []).length > 0) manifest = { ...(JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest), ...(options.head === undefined ? {} : { target: manifest.target, ...(headOverride === undefined ? {} : { head_override: headOverride }) }) };
+        // The operator's quoted waiver of an item replaces the research gate's refusal for that item only; the checklist below still names it.
+        const waivedItems = new Set((manifest.readiness_waivers ?? []).map((waiver) => waiver.item));
+        const researchProblems = (await packageResearchErrorsTagged(packageDir, manifest.artifacts, researchFindings))
+          .filter((error) => !error.items.some((item) => waivedItems.has(item)))
+          .map((error) => error.message);
+        if (researchProblems.length) {
+          throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
+        }
+      },
+    });
+    readiness = gates.readiness;
+    warnings.push(...gates.warnings);
     await assertUnchanged();
     const dispositions = options.dispositions ?? [];
     if (dispositions.length > 0) {

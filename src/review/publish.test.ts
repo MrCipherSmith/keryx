@@ -112,6 +112,43 @@ describe("publishReview", () => {
     expect(body.replace(/\n<!-- keryx:round .* -->\n$/, "")).toBe("# Review\n\nRequest changes.\n");
   });
 
+  describe("flow 488 AC6: a decision recorded from the agent's host question is said not to be verified by keryx", () => {
+    const hostQuestion = { source: "claude-code", ref: "q-1", questionText: "Complete?", answerText: "yes", time: "2026-11-12T09:00:00Z" };
+    const withManifest = (extra: Record<string, unknown>): void => {
+      makePackage({ ready: true });
+      write("manifest.json", { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), ...extra });
+    };
+
+    test("a readiness waiver confirmed via host-question puts the notice in the posted body, naming the waiver", async () => {
+      withManifest({ readiness_waivers: [{ item: "verifier", operator_quote: "the operator accepts it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question", hostQuestion }] });
+      const io = seams();
+      await publishReview(pkg, { post: io.post, confirm: io.confirm });
+      const body = io.posts[0]!.body;
+      expect(body).toContain("Decisions recorded from the agent's host question");
+      expect(body).toContain("readiness waiver of verifier");
+      expect(body).toContain("keryx did not verify the operator's answer");
+      expect(io.shown[0]).toContain("keryx did not verify the operator's answer");
+    });
+
+    test("a head override and a coverage waiver confirmed via host-question are named too", async () => {
+      withManifest({ head_override: { from: "a".repeat(40), to: "b".repeat(40), operator_quote: "the operator moved it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question" } });
+      write("research.json", { dispatch: { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } } });
+      const io = seams();
+      await publishReview(pkg, { post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).toContain("head change aaaaaaa to bbbbbbb");
+      expect(io.posts[0]!.body).toContain("coverage waiver");
+      expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
+    });
+
+    test("a waiver pressed on a card or typed at a terminal carries no such notice", async () => {
+      withManifest({ readiness_waivers: [{ item: "verifier", operator_quote: "the operator accepts it", time: "2026-11-12T09:00:00Z", confirmedVia: "tui-card" }] });
+      const io = seams();
+      await publishReview(pkg, { post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).not.toContain("host question");
+      expect(io.posts[0]!.body).not.toContain("did not verify");
+    });
+  });
+
   test("flow 458: the round block round-trips publish -> parse, and published.json records head and review id", async () => {
     makePackage({ ready: true });
     const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));

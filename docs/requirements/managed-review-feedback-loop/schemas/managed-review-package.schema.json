@@ -264,6 +264,42 @@
         }
       }
     },
+    "head_override": {
+      "type": "object",
+      "description": "The operator's act of relabelling the reviewed head at `review complete --head`: the head recorded at review start, the head recorded instead, and the operator's own words.",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "operator_quote",
+        "time"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator_quote": {
+          "type": "string",
+          "minLength": 1
+        },
+        "time": {
+          "type": "string"
+        },
+        "confirmedVia": {
+          "type": "string",
+          "enum": [
+            "tui-card",
+            "remote-card",
+            "host-question"
+          ]
+        }
+      }
+    },
     "readiness_waivers": {
       "type": "array",
       "description": "Readiness checklist items the operator waived in their own words.",

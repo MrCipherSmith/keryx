@@ -770,7 +770,7 @@ certifies the flow is the one that checked the least.
 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. Then bring in what the passes found: `merge` lists the findings and how many `findings.json` lacks; `keryx review ingest --review-id <id>` records them as `review-regression/<chunk>`; ingest and the report are repeated when a pass finished after the report was written. `review complete` warns about a pass finding still out of `findings.json` and does not refuse. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
-4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
+4. `verifier` — the verifier checked every blocker/major finding, or the operator waived the item; a `Not verified: N` line in the report no longer passes it.
 5. `ledger` — the ledger is READY.
 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
 7. `head` — the report's head is the PR head.

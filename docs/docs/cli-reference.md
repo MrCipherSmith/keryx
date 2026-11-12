@@ -5088,7 +5088,7 @@ keryx review layers status  --package <review-dir> [--json]
 keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
 keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
 keryx review coverage --package <review-dir> [--json]
-keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [--waive <item> "<operator quote>"]...   (card review_complete)
+keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha> --head-reason "<operator quote>"] [--waive <item> "<operator quote>"]...   (card review_complete)
 keryx review readiness <review-id-or-path> [--json]
 keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
 ```
@@ -5118,13 +5118,16 @@ left off and the gate reports it as unobserved.
 
 `review complete --head <sha>` names the commit the round actually reviewed when the one recorded
 at start is wrong or missing. The completion gate then checks that commit and the closed manifest
-records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
-head that is not the pull request's head still needs the first line of `report.md` to name it and
-say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
+records it. A `--head` that differs from the recorded head is the operator's act: it needs
+`--head-reason "<operator quote>"` (a terminal, or `--answered-by` from a host question), the refusal
+names both SHAs, and the manifest records `head_override` (previous head, new head, quote, time). A
+`--head` equal to the recorded head needs nothing. The gate is not loosened: a head that is not the
+pull request's head fails readiness item `head`, and the SHA must be 7-40 hex characters on a package
+bound to a pull request.
 
 A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
 
-`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA; a quote absent from that file, or in it more than once, is kept with no line and flagged `quote_unlocated` (readiness item `quotes-located` lists it until it has a disposition), and only a quote it could not check at all (commit not in the checkout, no file named, or a size bound) refuses the round; ingest also adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
+`review complete` on a package bound to a pull request fails readiness item `head` on a merged PR or a moved head (nothing in `report.md` lifts it; the operator waives `head`), and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA; a quote absent from that file, or in it more than once, is kept with no line and flagged `quote_unlocated` (readiness item `quotes-located` lists it until it has a disposition), and only a quote it could not check at all (commit not in the checkout, no file named, or a size bound) refuses the round; ingest also adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
 
 `review start|attach|ingest` of a pull request target also record the base the depth gate measures. Without `--base`, the
 pull request's own base branch is read with `gh pr view` and stored as `target.base` (`origin/<branch>`; nothing is

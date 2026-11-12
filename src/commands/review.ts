@@ -602,7 +602,7 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--head-reason", "--waive", "--answered-by", "--answer-text", "--question-text"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
@@ -4937,6 +4937,10 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   if (headFlag !== undefined && (headFlag.value === undefined || headFlag.value.trim() === "")) {
     throw new Error("--head needs a commit SHA: --head <sha> (the commit this round ran against, 7-40 hex characters).");
   }
+  const headReason = flagTokens(args).find((token) => token.name === "--head-reason");
+  if (headReason !== undefined && (headReason.value === undefined || headReason.value.trim() === "")) {
+    throw new Error("--head-reason needs the operator's own words: --head-reason \"<operator quote>\".");
+  }
   const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
   if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
     throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
@@ -4946,6 +4950,9 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
   if (waiver !== undefined && hostQuestion === undefined && !isTerminal()) {
     throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
+  }
+  if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {
+    throw new Error("--head-reason needs a terminal: relabelling the reviewed head is the operator's own statement and is refused when stdin or stdout is not a TTY. Outside a terminal, ask the operator with the host's question tool and pass --answered-by. Outside keryx shell, run this command in a terminal.");
   }
   const readinessWaivers = parseReadinessWaivers(args);
   if (readinessWaivers.length > 0 && hostQuestion === undefined && !isTerminal()) {
@@ -4961,7 +4968,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     rolesNotRun,
     warnings,
     estimateLine,
-  } = await completeReviewGated(process.cwd(), ref, { hostQuestion, dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+  } = await completeReviewGated(process.cwd(), ref, { hostQuestion, dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }), ...(headReason?.value === undefined ? {} : { headReason: headReason.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
@@ -5047,7 +5054,7 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
     }
-    if (["--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"].includes(token.name)) {
+    if (["--waive-coverage", "--head", "--head-reason", "--waive", "--answered-by", "--answer-text", "--question-text"].includes(token.name)) {
       continue;
     }
     if (token.name === "--finding") {
@@ -5338,11 +5345,12 @@ with --json, --brief or --out; --degradation-cap is refused without --degradatio
 
 function printCompleteHelp(): void {
   console.log(`keryx review complete <review-id-or-path> [--finding <id>] [--disposition <value>] [--evidence <text>]
-                      [--waive-coverage "<reason>"] [--waive "<reason>"] [--head <sha>]
+                      [--waive-coverage "<reason>"] [--waive "<reason>"] [--head <sha> --head-reason "<operator quote>"]
 
 Marks the review complete once scope, raw reconciliation, dispatch evidence and coverage hold. --finding, --disposition
 and --evidence record one finding's disposition (repeatable); --waive-coverage and --waive record an operator waiver;
---head is the pull request head the round must match. A chunk-pass finding that findings.json does not hold is a warning, in the
+--head is the pull request head the round must match; a --head that differs from the head recorded at review start needs
+--head-reason with the operator's own words (a terminal or --answered-by) and is recorded as head_override. A chunk-pass finding that findings.json does not hold is a warning, in the
 output and in report.md, never a refusal: "keryx review ingest --review-id <id>" brings it in.
 
 It also writes one line, "Plan estimate vs actual:", into report.md and prints it: the plan range from plan.json (else
@@ -5651,7 +5659,8 @@ ${COMMENTS_USAGE}
                         each failing item. The body is shown before it is posted.
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
-                        [--waive-coverage "<operator quote>"] [--head <sha>]
+                        [--waive-coverage "<operator quote>"]
+                        [--head <sha> --head-reason "<operator quote>"]
                         [--waive <item> "<operator quote>"]...
   keryx review lightweight
 

@@ -127,6 +127,9 @@ export function hostQuestionFields(source: { hostQuestion?: HostQuestion | undef
 
 export type ReadinessWaiver = { hostQuestion?: HostQuestion; item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
+/** The operator's act of relabelling the reviewed head: the head recorded at start, the one recorded instead, their words. */
+export type HeadOverride = { from: string; to: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined };
+
 export type ManagedReviewManifest = {
   schemaVersion: 1;
   completionConfirmations?: HostQuestion[];
@@ -166,6 +169,8 @@ export type ManagedReviewManifest = {
   filter_stats?: ReviewFilterStats | undefined;
   /** Readiness items waived by the operator; each also heads report.md as a "Partial review" line. */
   readiness_waivers?: ReadinessWaiver[] | undefined;
+  /** Set when `review complete --head` recorded a head other than the one `review start` recorded (flow 488). */
+  head_override?: HeadOverride | undefined;
   /**
    * Flow 457: the operator-gate version `review start|attach` created the package with (see review/run-profile.ts).
    * Absent on ingest packages and on packages that predate the gate.

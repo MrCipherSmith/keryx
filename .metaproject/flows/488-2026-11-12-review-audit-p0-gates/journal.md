@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-11-12T09:58:46.961Z - flow created
+- 2026-11-12T10:01:11.628Z - task-added: T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text
+- 2026-11-12T10:01:25.706Z - task-added: T6: review complete --head accepts only the recorded head or its ancestor
+- 2026-11-12T10:01:32.644Z - task-added: T7: A readiness waiver removes only the research errors of the waived item
+- 2026-11-12T10:01:40.140Z - task-added: T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body
+- 2026-11-12T10:01:48.034Z - task-added: T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills
+- 2026-11-12T10:35:00.000Z - premise: review-premise verdicts in premise/1.json — A-01 challenged, A-02 challenged, A-03 owner-decision, A-04 downgraded to minor, A-05/A-06/A-07 upheld
+- 2026-11-12T10:35:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): A-01 answer "Operator waiver" (uphold: unverified blocker/major need an operator waiver)
+- 2026-11-12T10:35:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): A-02 answer "Operator waiver" (uphold: moved/merged head needs an operator waiver)
+- 2026-11-12T10:35:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): A-03 answer "Operator act if different" (a differing --head needs an operator quote; flow 448 recovery kept); AC3 rewritten accordingly before freeze
+- 2026-11-12T10:35:09.915Z - frozen: 8 criteria; checksum recorded
+- 2026-11-12T10:35:13.573Z - started
+- 2026-11-12T10:35:22.227Z - task-done: T1: Collect remaining context
+- 2026-11-12T10:35:23.300Z - task-done: T2: Implement per plan
+- 2026-11-12T10:35:24.315Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-11-12T10:38:11.909Z - task-done: T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills
+- 2026-11-12T11:22:30.393Z - task-done: T6: review complete --head accepts only the recorded head or its ancestor
+- 2026-11-12T11:22:31.512Z - task-done: T7: A readiness waiver removes only the research errors of the waived item
+- 2026-11-12T11:22:32.343Z - task-done: T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body
+- 2026-11-12T11:22:36.333Z - task-done: T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text

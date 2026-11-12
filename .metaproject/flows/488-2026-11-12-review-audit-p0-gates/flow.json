@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "488",
+  "slug": "review-audit-p0-gates",
+  "title": "Review gates: close the agent-text and waiver bypasses (audit P0)",
+  "status": "in-progress",
+  "createdAt": "2026-11-12T09:58:46.961Z",
+  "updatedAt": "2026-11-12T11:22:36.333Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9ca2895e0914d3d592d503ed3c73daf0de40a274e8726220504ddb6fe9eee711",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "origin": {
+    "kind": "agent-finding",
+    "source": "docs/analysis/review-process-audit-2026-11-12.md"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context.md written with gate locations, tests and constraints; premise checked"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 per plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written inside each of T5-T9, one test file per AC"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "verifierCheck no longer passes on the report line; moved-PR gate lost its report escape; both need an operator waiver (readiness-verifier-waiver.test.ts, complete-head-gate.test.ts)"
+    },
+    {
+      "id": "T6",
+      "title": "review complete --head accepts only the recorded head or its ancestor",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "operator chose 'operator act if different' (journal): differing --head needs --head-reason quote via TTY or --answered-by, recorded as head_override (complete-head-relabel.test.ts); ancestor rule from the title dropped"
+    },
+    {
+      "id": "T7",
+      "title": "A readiness waiver removes only the research errors of the waived item",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "packageResearchErrorsTagged tags errors by readiness item; complete drops only waived items' errors; integrity errors never dropped (complete-waiver-scope.test.ts)"
+    },
+    {
+      "id": "T8",
+      "title": "One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "evaluateCloseGates in src/review/close-gates.ts shared by complete and publish; publish body names host-question decisions as unverified (publish-gate-parity.test.ts, publish.test.ts)"
+    },
+    {
+      "id": "T9",
+      "title": "Orchestrator skill uses model_class; contract test for spawn fields named by review skills",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "SKILL.md:118 names model_class (light/standard/expert), both copies; contract test src/gdskills/review-spawn-field-contract.test.ts fails on restored model_tier"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-12T09:58:46.961Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-12T10:01:11.628Z",
+      "event": "task-added",
+      "detail": "T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text"
+    },
+    {
+      "at": "2026-11-12T10:01:25.706Z",
+      "event": "task-added",
+      "detail": "T6: review complete --head accepts only the recorded head or its ancestor"
+    },
+    {
+      "at": "2026-11-12T10:01:32.644Z",
+      "event": "task-added",
+      "detail": "T7: A readiness waiver removes only the research errors of the waived item"
+    },
+    {
+      "at": "2026-11-12T10:01:40.140Z",
+      "event": "task-added",
+      "detail": "T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body"
+    },
+    {
+      "at": "2026-11-12T10:01:48.034Z",
+      "event": "task-added",
+      "detail": "T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills"
+    },
+    {
+      "at": "2026-11-12T10:35:09.915Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-12T10:35:13.573Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-12T10:35:22.227Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-12T10:35:23.300Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-12T10:35:24.315Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-12T10:38:11.909Z",
+      "event": "task-done",
+      "detail": "T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills"
+    },
+    {
+      "at": "2026-11-12T11:22:30.393Z",
+      "event": "task-done",
+      "detail": "T6: review complete --head accepts only the recorded head or its ancestor"
+    },
+    {
+      "at": "2026-11-12T11:22:31.512Z",
+      "event": "task-done",
+      "detail": "T7: A readiness waiver removes only the research errors of the waived item"
+    },
+    {
+      "at": "2026-11-12T11:22:32.343Z",
+      "event": "task-done",
+      "detail": "T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body"
+    },
+    {
+      "at": "2026-11-12T11:22:36.333Z",
+      "event": "task-done",
+      "detail": "T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/readiness-verifier-waiver.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-head-gate.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-head-relabel.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-waiver-scope.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/publish-gate-parity.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/publish.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-spawn-field-contract.test.ts"
+    },
+    "AC8": {
+      "kind": "judged"
+    }
+  }
+}

@@ -281,8 +281,10 @@ describe("a disposition and a finding key survive the round trip", () => {
   test("round 2's dispatch carries what round 1 decided, and validates", async () => {
     await withTempRoot(async (root) => {
       const findings = await round1Findings(root);
-      const reportFile = path.join(root, ".metaproject/reviews/2026-08-29-round-1/report.md");
-      await writeFile(reportFile, `${await readFile(reportFile, "utf8")}\nNot verified: ${findings.length}\n`);
+      // The verifier's result on each finding, not a line in the report (flow 488: a `Not verified: N` line passes nothing).
+      const findingsFile = path.join(root, ".metaproject/reviews/2026-08-29-round-1/findings.json");
+      const stored = JSON.parse(await readFile(findingsFile, "utf8")) as Array<Record<string, unknown>>;
+      await writeFile(findingsFile, JSON.stringify(stored.map((finding) => ({ ...finding, verification: { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" } })), null, 2));
       await completeManagedReview(root, ".metaproject/reviews/2026-08-29-round-1", {
         dispositions: [
           {

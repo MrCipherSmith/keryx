@@ -15,7 +15,7 @@ import { isCapDrop, isReasonedDrop } from "./blast-radius";
 import { computeCoverage } from "./coverage-complete";
 import { hasChunkPlan } from "./chunks";
 import { packageScopeFiles } from "./coverage";
-import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
+import { completeHeadGate, isPrBound, type HeadGateResult, type PrLookup } from "./complete-head-gate";
 import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
@@ -33,7 +33,7 @@ export const READINESS_ITEMS = [
   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },
   { number: 3, id: "reviewers", title: "every planned reviewer was dispatched and its result ingested" },
-  { number: 4, id: "verifier", title: "the verifier checked every finding it should, or the report says how many it did not" },
+  { number: 4, id: "verifier", title: "the verifier checked every blocker and major finding, or the operator waived it" },
   { number: 5, id: "ledger", title: "the ledger is READY: every obligation has a closure" },
   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
   { number: 7, id: "head", title: "the report's head matches the PR head" },
@@ -73,8 +73,12 @@ export type ReadinessOptions = {
   prLookup?: PrLookup | undefined;
   /** Reads the PR's own file list; absent means item 9 checks the recorded scope against the blast-radius record only. */
   prFiles?: ((ref: string) => Promise<string[] | null>) | undefined;
-  /** True when the caller has already run the head gate against the head it will record (`review complete --head`). */
-  headChecked?: boolean | undefined;
+  /**
+   * The head gate's result, when the caller already ran it against the head it will record (`review complete --head`).
+   * Item 7 reports exactly this result, so a refusal is a failing item an operator waiver of `head` covers, and the
+   * tracker is not asked twice.
+   */
+  headGate?: HeadGateResult | undefined;
 };
 
 /** A recount whose changed-file count exceeds this multiple of the PR's own list was made against the wrong base. */
@@ -225,17 +229,17 @@ async function reviewersCheck(ctx: Context): Promise<Verdict> {
 
 const pathExists = (file: string): Promise<boolean> => stat(file).then(() => true, () => false);
 
-const NOT_VERIFIED = /not\s+verified\s*[:=]?\s*(\d+)/i;
-
+/**
+ * A blocker or major finding without a verification stays a failing item. A line the agent writes into report.md
+ * ("Not verified: N") is not an answer: only the verifier's result, or the operator's waiver, lifts it.
+ */
 function verifierCheck(ctx: Context): Verdict {
   const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
   const unverified = heavy.filter((finding) => record(finding.verification) === undefined);
   if (unverified.length === 0) return ok(`${heavy.length} blocker/major finding(s), all verified`);
-  const stated = NOT_VERIFIED.exec(ctx.report);
-  if (stated !== null && Number(stated[1]) >= unverified.length) return ok(`${unverified.length} of ${heavy.length} blocker/major finding(s) unverified, and the report says so`);
   return bad(
-    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification and the report does not state the count`,
-    `run the verifier (review-verifier) on them, or add the line \`Not verified: ${unverified.length}\` to report.md`,
+    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification`,
+    `run the verifier (review-verifier) on them, or the operator waives it: in keryx shell call the review_waive_readiness tool with item verifier; in a terminal run keryx review complete ${ctx.arg} --waive verifier "<operator quote>"`,
   );
 }
 
@@ -342,15 +346,16 @@ function coverageMdCheck(ctx: Context): Verdict {
 
 async function headCheck(ctx: Context, options: ReadinessOptions): Promise<Verdict> {
   if (!isPrBound(ctx.manifest.target)) return ok("not a pull-request package");
-  if (options.headChecked === true) return ok("the head gate ran at this close");
-  if (options.prLookup === undefined) return ok("the PR head was not read (no tracker available)");
-  try {
-    const { warnings } = await completeHeadGate({ manifest: ctx.manifest, report: withoutPartialHeader(ctx.report), lookup: options.prLookup });
-    return ok(warnings.length === 0 ? "the reviewed head is the PR head" : warnings.join("; "));
-  } catch (error) {
-    const message = (error instanceof Error ? error.message : String(error)).replace(/^Cannot complete managed review;\s*/, "");
-    return bad(message, `edit the first line of report.md to name the reviewed SHA and say the PR moved, or re-run the round on the new head`);
+  let gate = options.headGate;
+  if (gate === undefined) {
+    if (options.prLookup === undefined) return ok("the PR head was not read (no tracker available)");
+    gate = await completeHeadGate({ manifest: ctx.manifest, lookup: options.prLookup });
   }
+  if (gate.refusal === undefined) return ok(gate.warnings.length === 0 ? "the reviewed head is the PR head" : gate.warnings.join("; "));
+  return bad(
+    gate.refusal,
+    `re-run the round on the PR's current head, or the operator waives it: in keryx shell call the review_waive_readiness tool with item head; in a terminal run keryx review complete ${ctx.arg} --waive head "<operator quote>"`,
+  );
 }
 
 async function reportNamesCheck(ctx: Context): Promise<Verdict> {

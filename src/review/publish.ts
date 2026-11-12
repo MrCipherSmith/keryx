@@ -10,8 +10,9 @@ import { readRunProfile } from "./run-profile";
 import { renderRoundBlock, ROUND_BLOCK_VERSION, type RoundBlock, type RoundBlockFinding } from "./pr-comments";
 import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
-import { computeVerdict, type VerdictFinding } from "./verdict";
-import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
+import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
+import { evaluateCloseGates } from "./close-gates";
+import { failingItems, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import { cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest } from "./types";
 
 export const REVIEW_EVENTS = ["COMMENT", "REQUEST_CHANGES", "APPROVE"] as const;
@@ -56,6 +57,24 @@ function runModeHeader(packageDir: string): string {
   const profile = readRunProfile(packageDir);
   if (profile?.mode !== "unattended") return "";
   return `**Unattended review** (${profile.declaredVia}): nobody was at the keyboard; a mutation pass may be recorded as Not run.\n\n`;
+}
+
+/**
+ * Flow 488. A decision the agent recorded from its host's own question (`confirmedVia: "host-question"`) is reported
+ * provenance: keryx cannot tell the operator's answer from the agent's claim of one. A body that carries such a decision
+ * says so, and names which decisions, so a reader of the pull request does not take it for a card press or a TTY.
+ */
+async function hostQuestionNotice(packageDir: string, manifest: ManagedReviewManifest): Promise<string> {
+  const named: string[] = [];
+  for (const waiver of manifest.readiness_waivers ?? []) if (waiver.confirmedVia === "host-question") named.push(`readiness waiver of ${waiver.item}`);
+  if (manifest.head_override?.confirmedVia === "host-question") named.push(`head change ${manifest.head_override.from.slice(0, 7)} to ${manifest.head_override.to.slice(0, 7)}`);
+  const research = await readJsonFileOr<{ dispatch?: { coverageWaiver?: { confirmedVia?: string } }; coverageWaiver?: { confirmedVia?: string } } | undefined>(path.join(packageDir, "research.json"), undefined);
+  if ((research?.dispatch?.coverageWaiver ?? research?.coverageWaiver)?.confirmedVia === "host-question") named.push("coverage waiver");
+  const premise = await premiseRecords(packageDir).catch(() => undefined);
+  const premiseCount = (premise?.decisions ?? []).filter((decision) => decision.confirmedVia === "host-question").length;
+  if (premiseCount > 0) named.push(`${premiseCount} premise decision(s)`);
+  if (named.length === 0) return "";
+  return `**Decisions recorded from the agent's host question:** ${named.join("; ")}. keryx did not verify the operator's answer to these; they are reported provenance, not a card press or a terminal confirmation.\n\n`;
 }
 
 /** The most a posted body may hold. GitHub refuses a review body over 65536 characters; this leaves room for headers. */
@@ -150,16 +169,17 @@ export async function publishReview(packageDir: string, options: PublishOptions)
     throw new Error(`Review ${manifest.reviewId} is not bound to a pull request (target ${manifest.target.kind} ${manifest.target.ref}); there is nothing to publish to.`);
   }
   const event = options.event ?? "COMMENT";
-  const readiness = await computeReadiness(packageDir, options.readiness ?? {});
+  const reportText = await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "");
+  if (reportText.trim() === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
+  // The same gate evaluation `review complete` runs: round-record tamper, evidence level, readiness. `--partial` relaxes readiness only.
+  const { readiness } = await evaluateCloseGates(packageDir, { manifest, report: reportText, readiness: options.readiness, action: "publish", relaxReadiness: options.partial === true });
   const failing = failingItems(readiness);
   const partial = failing.length > 0;
-  if (partial && options.partial !== true) throw new Error(readinessRefusal(readiness, "publish"));
   if (partial && event === "APPROVE") {
     throw new Error(`A partial review cannot approve: ${failing.length} readiness item(s) are failing (${failing.map((item) => item.id).join(", ")}). Use --event COMMENT or REQUEST_CHANGES, or repair the items.`);
   }
-  const report = (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")).trim();
-  if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
-  const head = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
+  const report = reportText.trim();
+  const head = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${await hostQuestionNotice(packageDir, manifest)}${report}\n`;
   const foot = runModeFooter(packageDir);
   const minors = minorSection((await computeVerdict(packageDir)).minors, report, PUBLISHED_BODY_LIMIT - head.length - foot.length - ROUND_BLOCK_LIMIT);
   const visible = `${head}${minors}${foot}`;

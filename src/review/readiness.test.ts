@@ -58,6 +58,14 @@ function writeResearch(kind: "broken" | "repaired"): void {
   });
 }
 
+/** The verifier's result on every blocker/major finding of the fixture: what makes item 4 pass without a waiver. */
+const verifyHeavyFindings = (): void =>
+  writeJson("findings.json", [
+    { id: "f-1", severity: "major", title: "raw finding", verification: { verdict: "confirmed" } },
+    { id: "f-2", severity: "blocker", title: "another", verification: { verdict: "confirmed" } },
+    { id: "f-3", severity: "minor", title: "small" },
+  ]);
+
 function writeBlastRadius(changed: string[], dropped: string[]): void {
   writeJson("blast-radius.json", {
     schemaVersion: 1,
@@ -117,7 +125,8 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
     expect(byId["blast-radius"]?.repair).toContain("keryx review chunks plan --package");
     expect(byId["reviewers"]?.evidence).toContain("review-security-code");
     expect(byId["reviewers"]?.evidence).toContain("result file missing from raw/: review-logic");
-    expect(byId["verifier"]?.repair).toContain("Not verified: 2");
+    expect(byId["verifier"]?.repair).toContain("--waive verifier");
+    expect(byId["verifier"]?.repair).not.toContain("Not verified");
     expect(byId["ledger"]?.evidence).toContain("unresolved research");
     expect(byId["coverage-md"]?.evidence).toContain("review-regression");
     expect(byId["coverage-md"]?.repair).toContain("keryx review ingest");
@@ -128,7 +137,8 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
   test("is READY after the repairs, with no item waived", async () => {
     writeResearch("repaired");
     for (const name of REVIEWERS) writeFileSync(path.join(pkg, "raw", `${name}.txt`), "reply");
-    writeFileSync(path.join(pkg, "report.md"), "# Review\n\nRequest changes.\n\nNot verified: 2\n");
+    writeFileSync(path.join(pkg, "report.md"), "# Review\n\nRequest changes.\n");
+    verifyHeavyFindings();
     writeCoverageMd(Object.fromEntries(REVIEWERS.map((name) => [name, "run"])));
     const plan = await ensureChunkPlan(pkg, root);
     expect(plan?.chunks.length).toBeGreaterThan(0);
@@ -138,6 +148,15 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
     expect(report.verdict).toBe("READY");
     expect(report.items.every((item) => item.status === "pass")).toBe(true);
     expect(CHUNK_REVIEWER).toBeTruthy();
+  });
+
+  test("a `Not verified: N` line in report.md no longer passes item 4; only the verifier's result or a waiver does", async () => {
+    writeFileSync(path.join(pkg, "report.md"), "# Review\n\nRequest changes.\n\nNot verified: 2\n");
+    const failing = (await computeReadiness(pkg)).items.find((item) => item.id === "verifier");
+    expect(failing?.status).toBe("fail");
+    expect(failing?.evidence).toContain("2 of 2 blocker/major finding(s) carry no verification");
+    await waiveReadiness(pkg, ["verifier"], "the operator accepts unverified findings");
+    expect((await computeReadiness(pkg)).items.find((item) => item.id === "verifier")?.status).toBe("waived");
   });
 
   test("is read-only: computing it twice leaves every file as it was", async () => {
@@ -406,9 +425,8 @@ describe("keryx review complete goes through the checklist (AC3)", () => {
     expect(process.exitCode).toBe(1);
     const out = errors.join("\n");
     expect(out).toContain("verifier");
-    expect(out).toContain("Not verified: 2");
-    expect(out).toContain("--waive");
-    expect(out).toContain("--waive");
+    expect(out).toContain("--waive verifier");
+    expect(out).not.toContain("Not verified");
     expect(status()).toBe("draft");
     expect(() => readFileSync(path.join(pkg, "published.json"))).toThrow();
   });
@@ -445,7 +463,8 @@ describe("keryx review complete goes through the checklist (AC3)", () => {
   });
 
   test("a READY package closes without any published review, so the report-only path is held to the same checklist", async () => {
-    writeFileSync(path.join(pkg, "report.md"), "# Review\n\nEvidence level: static only — did not run: tests\n\nRequest changes.\n\nNot verified: 2\n");
+    writeFileSync(path.join(pkg, "report.md"), "# Review\n\nEvidence level: static only — did not run: tests\n\nRequest changes.\n");
+    verifyHeavyFindings();
     expect(failingItems(await computeReadiness(pkg))).toEqual([]);
     await reviewCommand(["complete", pkg], seams(true));
     expect(errors.join("\n")).not.toContain("readiness checklist");
