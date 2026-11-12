@@ -42,7 +42,7 @@ import { saveShellConfig } from "../lib/shell-config";
 import { summarizeSubmittedLine } from "../lib/md-blocks";
 import { latestSession } from "../session";
 import type { NormalizedMessage } from "../harness/provider/types";
-import { conversationHistory } from "../session/conversation-history";
+import { conversationHistory } from "./conversation-history";
 import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
 import { isHistoryCommand } from "./remote-control-surface";
 import packageJson from "../../package.json" with { type: "json" };

@@ -138,7 +138,7 @@ import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
-import { conversationHistoryText } from "../session/conversation-history";
+import { conversationHistoryText } from "../tui/conversation-history";
 import { ChannelsClient } from "../remote/channels-client";
 import { loadRemoteConfig } from "../remote/config";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";

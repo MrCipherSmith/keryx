@@ -101,7 +101,7 @@ import { exportCallerSession } from "../lib/caller-session";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
-import { conversationHistory } from "../session/conversation-history";
+import { conversationHistory } from "./conversation-history";
 import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
 import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";

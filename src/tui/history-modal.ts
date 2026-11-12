@@ -1,5 +1,5 @@
 import type { NormalizedMessage } from "../harness/provider/types";
-import { resumedConversation, type ConversationEntry } from "../session/conversation-history";
+import { resumedConversation, type ConversationEntry } from "./conversation-history";
 import { openModal, type ModalChrome, type ModalHandle } from "./modal-host";
 import { getTheme } from "./theme";
 import { boldChunk } from "./theme-text";
@@ -19,7 +19,7 @@ export function appendConversationPreview(otui: OpenTui, chrome: ModalChrome & {
     content: text, fg, width: "100%", wrapMode: "word", flexShrink: 0,
   }));
   add("Last turn", getTheme().muted);
-  for (const entry of entries) add(`${entry.role === "user" ? "You" : "Assistant"}: ${entry.text}`, getTheme().text);
+  for (const { label, text } of entries) add(`${label}: ${text}`, getTheme().text);
 }
 
 export function openHistoryModal(otui: OpenTui, chrome: ModalChrome, entries: readonly ConversationEntry[]): ModalHandle | undefined {
@@ -61,7 +61,7 @@ export function openHistoryModal(otui: OpenTui, chrome: ModalChrome, entries: re
       const rows = entries.map((entry, index) => {
         body.add(new otui.TextRenderable(r, {
           id: `history-role-${index}`,
-          content: otui.t`${boldChunk(otui, entry.role === "user" ? "You" : "Assistant")}`,
+          content: otui.t`${boldChunk(otui, entry.label)}`,
           marginTop: index === 0 ? 0 : 1,
           flexShrink: 0,
         }));

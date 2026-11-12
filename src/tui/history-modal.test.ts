@@ -9,9 +9,9 @@ test.skipIf(otui === undefined)("search jumps to individual hits in long archive
   try {
     const previousFocus = h.renderer.currentFocusedRenderable;
     openHistoryModal(otui!.core, h.chrome, [
-      { role: "user", text: "First Needle" },
+      { label: "You", text: "First Needle" },
       {
-        role: "assistant",
+        label: "Assistant",
         text: [...Array.from({ length: 60 }, (_, i) => `Archive line ${i}`),
           `${"word ".repeat(150)}Later needle`, ...Array(40).fill("More archive"), "Last NEEDLE"].join("\n"),
       },
