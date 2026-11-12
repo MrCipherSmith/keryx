@@ -229,6 +229,11 @@ test("flow 300: /governance and /triggers are read-only while busy — never def
   expect(classifyBusyDispatch({ line: "/triggers nightly", commandName: "/triggers", ...base })).toBe("triggers");
 });
 
+// Flow 487: /diag exists for a stuck turn, so it answers at once instead of queueing behind it.
+test("classifyBusyDispatch: /diag routes to diag while main is busy, never deferred", () => {
+  expect(classifyBusyDispatch({ line: "/diag", commandName: "/diag", ...base })).toBe("diag");
+});
+
 // AC5 (flow 418): a slash line sent while main is busy is queued, not dropped.
 for (const name of ["/route", "/external", "/model", "/goal", "/connect", "/compact"]) {
   test(`busy slash ${name} is deferred by the classifier and QUEUED for the turn's end`, () => {

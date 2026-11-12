@@ -224,6 +224,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 487: dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file.
+    name: "/diag",
+    description: "Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file: /diag",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
     // the OpenTUI surface. Reads the index; never rebuilds it.
     name: "/product",

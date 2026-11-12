@@ -1,9 +1,12 @@
 import { appendFileSync } from "node:fs";
+import { callDiagnostics } from "./call-diagnostics";
 
 export const ENV_PHASE_TRACE = "KERYX_PHASE_TRACE";
 
 /** Appends one timestamped line to the file named by `KERYX_PHASE_TRACE`; a no-op without it. */
 export function tracePhase(label: string, env: Record<string, string | undefined> = process.env): void {
+  // Always kept in the in-memory ring (no file, no env needed): a stall dump replays the last labels.
+  callDiagnostics.record(label);
   const target = env[ENV_PHASE_TRACE];
   if (target === undefined || target === "") return;
   try {

@@ -241,6 +241,9 @@ import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from 
 import { detachSlateSession } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { journaledAskUser } from "../tui/ask-user-bridge";
+import { callDiagnostics } from "../lib/call-diagnostics";
+import { composerDockDiagnostics } from "../tui/composer-choice";
+import { isDiagCommand, maybeDumpOnInterrupt, runDiagCommand } from "../tui/diag-command";
 
 
 let resolvedKeryxPath: string | undefined;
@@ -316,6 +319,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/remote-policy",
   "/trail",
   "/notes",
+  "/diag",
   "/theme",
   "/settings",
   "/mode",
@@ -2932,6 +2936,8 @@ export async function runAgentRepl(
         agentIo.onSystem?.(await runTrailCommand(rest, slateSession?.dir));
       } else if (isNotesCommand(command)) {
         agentIo.onSystem?.(await runNotesCommand(rest, slateSession?.dir));
+      } else if (isDiagCommand(command)) {
+        agentIo.onSystem?.(runDiagCommand());
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([
@@ -3834,6 +3840,8 @@ export interface SignalShutdownParts {
   readonly closeMcp: () => Promise<void> | undefined;
   readonly closeReadline: () => void;
   readonly abortTurn?: () => void;
+  /** Flow 487: runs once, first, before the turn is aborted, so a stuck call can still be described. Must not throw. */
+  readonly beforeAbort?: () => void;
   readonly releaseLease: (lease: SessionLeaseHandle | undefined) => void;
   readonly exit: (code: number) => void;
   readonly preserve?: () => Promise<void>;
@@ -3871,6 +3879,7 @@ export function makeSignalShutdown(parts: SignalShutdownParts, code: number): ()
       return;
     }
     state.startedAt = Date.now();
+    try { parts.beforeAbort?.(); } catch { /* diagnostics never delay the shutdown */ }
     parts.abortTurn?.();
     if (parts.preserve === undefined) release();
     void (async (): Promise<void> => {
@@ -4077,6 +4086,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // with a consume-once notices getter fixes both the redundant rebuild and
   // the redundant print, without changing what a single surface prints.
   const shellHookSessionId = randomUUID();
+  // Flow 487: always-on tool-call diagnostics. In memory until a call stalls (or /diag), then one
+  // NDJSON dump per session under <config>/diagnostics. The timer is unref'd: it never keeps the
+  // process alive.
+  callDiagnostics.start({ sessionId: shellHookSessionId });
+  callDiagnostics.probe("dock", () => composerDockDiagnostics());
+  callDiagnostics.probe("env", () => ({
+    version: packageJson.version,
+    spawnCallWatchdogMs: process.env.KERYX_SPAWN_CALL_WATCHDOG_MS ?? null,
+    phaseTrace: process.env.KERYX_PHASE_TRACE !== undefined,
+  }));
   let shellHooks: ShellHookContext | undefined;
   const getShellHooks = (): ShellHookContext | undefined => {
     if (shellHooks === undefined) {
@@ -4607,6 +4626,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         preserve: async () => { await finalizerBox.current?.(); },
         closeMcp: () => readlineMcp?.close(),
         closeReadline: () => rl.close(),
+        beforeAbort: () => {
+          // Flow 487: Ctrl-C here is the only interrupt the readline shell has; dump what a long wait left.
+          const note = maybeDumpOnInterrupt();
+          if (note !== undefined) process.stderr.write(note);
+        },
         abortTurn: () => readlineAbort.abort("shell shutdown"),
         releaseLease: releaseSessionLease,
         exit: (c) => process.exit(c),

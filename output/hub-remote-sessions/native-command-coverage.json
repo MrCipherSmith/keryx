@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "registryDigest": "286041ef4394afd4de97b4da37e31ccb2728c485cd32488c737a2686c244fbca",
+  "registryDigest": "4ffeed70558759232f3fac63b783e33fdbca8b8fd59cee7059d2c58836a0a0fc",
   "commands": [
     {
       "commandName": "help",
@@ -11,12 +11,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/help"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -56,12 +56,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/model"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -106,12 +106,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/connect"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -152,12 +152,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/search-provider"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -197,12 +197,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/search-connect"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -244,12 +244,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/think"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -293,12 +293,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/expand"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -337,12 +337,56 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/copy"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
+          "anchor": "line:1"
+        },
+        {
+          "path": "src/session/commands/handlers.ts",
+          "sha256": "81e668f228b25b4b13179a7b3b0e6446183183b8314defa0c5ad4bd979b8e098",
+          "anchor": "line:1"
+        },
+        {
+          "path": "src/session/host.ts",
+          "sha256": "5b18863ca7a2571d213440a3910010fb26205ab520cef68811358dad4a57b0f4",
+          "anchor": "line:1"
+        },
+        {
+          "path": "src/session/native-runtime.ts",
+          "sha256": "90d23c875786b75d02fe35b33bab9495837816b17c97f48fbc4f8579e1b00560",
+          "anchor": "line:1"
+        },
+        {
+          "path": "src/session/commands/terminal-adapter.ts",
+          "sha256": "1049138941f5f043db1259cdf1f5a90602dcfa32dfa7ff994d7f23ca98710129",
+          "anchor": "line:1"
+        },
+        {
+          "path": "src/session/commands/terminal-grammar.ts",
+          "sha256": "5a53d3bc775113120d2cb220c62ca78b15bf05a9f49accfd756c571490ba3ece",
+          "anchor": "line:1"
+        }
+      ]
+    },
+    {
+      "commandName": "diag",
+      "audited": true,
+      "expectedVariants": [
+        "diag.default"
+      ],
+      "sources": [
+        {
+          "path": "src/commands/agent-commands.ts",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
+          "anchor": "/diag"
+        },
+        {
+          "path": "src/tui/tui-shell.ts",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -381,12 +425,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/new"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -437,12 +481,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/goal"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -481,12 +525,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/resume"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -538,12 +582,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/sessions"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -594,12 +638,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/status"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -652,12 +696,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/flows"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -701,12 +745,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/doctor"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -751,12 +795,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/setup"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -797,12 +841,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/ac"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -849,12 +893,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/workspace"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -905,12 +949,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/review"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -963,12 +1007,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/reviews"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1015,12 +1059,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/remote-control"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1064,12 +1108,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/history"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1109,12 +1153,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/channels"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1163,12 +1207,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/intake"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1215,12 +1259,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/rendering"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1268,12 +1312,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/remote-policy"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1326,12 +1370,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/trail"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1375,12 +1419,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/notes"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1425,12 +1469,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/product"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1478,12 +1522,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/governance"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1531,12 +1575,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/triggers"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1584,12 +1628,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/routing"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1643,12 +1687,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/schedule"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1697,12 +1741,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/schedules"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1752,12 +1796,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/autoreview"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1803,12 +1847,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/approvals"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1849,12 +1893,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/permissions"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1907,12 +1951,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/decisions"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -1956,12 +2000,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/integrate"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2004,12 +2048,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/ci"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2060,12 +2104,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/conform"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2109,12 +2153,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/risk"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2158,12 +2202,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/scenarios"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2207,12 +2251,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/jevrules"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2256,12 +2300,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/staledocs"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2308,12 +2352,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/flow"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2362,12 +2406,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/opencomments"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2411,12 +2455,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/contract"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2460,12 +2504,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/triage"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2513,12 +2557,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/guard"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2570,12 +2614,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/route"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2628,12 +2672,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/editguard"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2688,12 +2732,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/projectctx"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2749,12 +2793,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/external"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2805,12 +2849,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/external-agents"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2860,12 +2904,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/external-diff"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2908,12 +2952,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/jevprofile"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -2963,12 +3007,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/mcp"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3013,12 +3057,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/compact"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3063,12 +3107,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/rewind"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3112,12 +3156,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/theme"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3162,12 +3206,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/settings"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3221,12 +3265,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/game"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3270,12 +3314,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/mode"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3331,12 +3375,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/reasoning"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3383,12 +3427,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/plan"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3432,12 +3476,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/clear"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3486,12 +3530,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/interrupt"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3536,12 +3580,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/queue"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3580,12 +3624,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/delegate"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3628,12 +3672,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/tasks"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3677,12 +3721,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/demote"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3735,12 +3779,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/bus"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -3785,12 +3829,12 @@
       "sources": [
         {
           "path": "src/commands/agent-commands.ts",
-          "sha256": "786216c190034d95fd3dc74a79f1da22c836bad9b9166c62a47f1134df2366d5",
+          "sha256": "0cc29c309817624432e26d0f82e760f33dcef31dc9c90dfdb4c78fd5e4b47df8",
           "anchor": "/exit"
         },
         {
           "path": "src/tui/tui-shell.ts",
-          "sha256": "c2de18f73ed707fd9c7a63e9959e7d7e72901e9401872011c404c6c28893ae4b",
+          "sha256": "87bb569e83aa37e02d0db087d15bcb511f80e0630037bf554550238fea900776",
           "anchor": "line:1"
         },
         {
@@ -4429,6 +4473,30 @@
       "id": "copy.default",
       "commandName": "copy",
       "handlerName": "copy",
+      "classification": "presentation",
+      "status": "boundary",
+      "reason": "This operation changes only the client renderer, clipboard, terminal display or Telegram message formatting; it does not execute native domain work.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "resultSchema": {
+        "type": "string",
+        "maxLength": 32768
+      },
+      "busyPolicy": "read-only",
+      "confirmation": "none",
+      "proofIds": [],
+      "testPaths": [
+        "src/session/host.test.ts"
+      ]
+    },
+    {
+      "id": "diag.default",
+      "commandName": "diag",
+      "handlerName": "diag",
       "classification": "presentation",
       "status": "boundary",
       "reason": "This operation changes only the client renderer, clipboard, terminal display or Telegram message formatting; it does not execute native domain work.",
@@ -12569,21 +12637,21 @@
     "Task 19: required status and pins are derived from executed receipts (scripts/verify-native-coverage.ts): each variant runs through the local terminal adapter and the headless host of a production-assembled native runtime in an isolated synthetic-config child. The subject has no machine-bridge lifecycle, Hub project-context, MCP, bus, rewind or Jev owners, so those rows refuse on both paths and stay required gaps. The expectedVariants parser audit itself is not re-derived from TUI source; catalogue-advertised nested actions are checked automatically."
   ],
   "summary": {
-    "registered": 74,
-    "variants": 261,
+    "registered": 75,
+    "variants": 262,
     "earned": 147,
     "requiredGaps": 0,
     "releaseReady": true
   },
   "catalogueSubject": {
-    "digest": "819a324bfef3387bf464f5c78d4831751b03c9c4f3cb636471e2d8f4bd88d6cc",
-    "contractDigest": "43cd83cfbd494ce63e1f6c86a5a0c057a160f4a537d8119358e0f262412a96c9",
-    "entryCount": 143
+    "digest": "39b3d93af99ce611a29a3cd27c69290f9d870eb32fb698df2d69fd05c512cccd",
+    "contractDigest": "7a7b7002ec177255f9709940457a0dfd9010a2385cac47fa2317ffb09b4371e7",
+    "entryCount": 144
   },
   "lastCheck": {
     "ready": true,
-    "registeredCommands": 74,
-    "auditedVariants": 261,
+    "registeredCommands": 75,
+    "auditedVariants": 262,
     "blockers": []
   },
   "receipts": [
@@ -12593,7 +12661,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "89f43b580a9edd5eeaf2d8b8e74a692dc7c493051f212b23aed2cc5b27eda3dc"
+      "receiptDigest": "c0c4d3fbc90f974b19c749d4ffbd419cb2b15853ac2b855383132e7a964b5839"
     },
     {
       "variantId": "model.list",
@@ -12601,7 +12669,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "4f240b4d495cb516d88a00d03cb7012d0cc49eaa08bf28de33e13827764f3a33"
+      "receiptDigest": "46223dad9d364e97b413bfdd8b905f0ea1584054c2ae57a586cd6b2f79b7d2dd"
     },
     {
       "variantId": "model.select",
@@ -12609,7 +12677,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6a8c23d803015c82bae810df92d482d177fcb18f8e045bfc1bfdc58806b80899"
+      "receiptDigest": "a22fa3525776a01d9f81f44558ee463d6f19cb14e3e667a2e08a546032099c38"
     },
     {
       "variantId": "connect.list",
@@ -12617,7 +12685,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c7be20bb089591b904d6f63b25ebaf293936c043b1643659e349c47f25a3d103"
+      "receiptDigest": "34147cc58d00c2603b34124e59795e3a1c2dd7b6de0596fc92da6167f9bc4976"
     },
     {
       "variantId": "connect.test",
@@ -12625,7 +12693,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "bb7313b6a61a45d106d6242ae67d138c5cbb2121b0a742a868f9fb784ecb4756"
+      "receiptDigest": "59d083e2e977034b8b49eaff22aa27595bc75486ab11c8106269ca4c6ecfe6bd"
     },
     {
       "variantId": "connect.select",
@@ -12633,7 +12701,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "e35e42be4d2061c079fcef0bc6667a500e0f63591041b07aca478afe4f7f68b0"
+      "receiptDigest": "9bf21517b4ca61fe8f98146750e8f2fd91deed472ed55f15527dc505f14eca99"
     },
     {
       "variantId": "connect.disconnect",
@@ -12641,7 +12709,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "51d0254184e0014a47a16aa8461868ca96414175fd726529d484eeb2dc74bf31"
+      "receiptDigest": "c68c046fc2074d912f4fc4a3d1959c34489cbab40545c28332ead5685f4da038"
     },
     {
       "variantId": "connect.add-key",
@@ -12649,7 +12717,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "e66163971b45025edd7b3e1fac99d6a74c53c795410d6f539c1fdeceed448446"
+      "receiptDigest": "7deb5bd5678b27cc32c73c8904cec9a1beb480a5ce6661198a6ce590afbed38f"
     },
     {
       "variantId": "connect.device-login",
@@ -12657,7 +12725,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "b4d630d4aa07e5a2c2f90320f93856643a1ab978b920c573499bbdd6ebf25811"
+      "receiptDigest": "30a8419e2c57f87db8d8b8f333133f54bf2962b058b763a0f4cdab850b8b8294"
     },
     {
       "variantId": "search-provider.list",
@@ -12665,7 +12733,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "06d2521fe0e6d3333ba1f589e6f825e73d044f6ff670bc03509492be30477a80"
+      "receiptDigest": "97b359e7762d0a207a040a7461a4c667a8ade58925b3ff3e329f135097a8df0f"
     },
     {
       "variantId": "search-provider.configure",
@@ -12673,7 +12741,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "05351c40377fd0c2b12b5221b03d78a2dbd3e3d21f0d225c7bb5d538dad8f63e"
+      "receiptDigest": "a93db2d5f7b95921cb4730cee1e26240c2031c27c2998341617a79071516958d"
     },
     {
       "variantId": "search-provider.test-configuration",
@@ -12681,7 +12749,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "bd7995fd5c1850bd7474a1ae4dc057c78fbf169863945250b7b1bb1163a3d4bc"
+      "receiptDigest": "1430bc276505d155ae908646b0a23ed303c4f4381126e4aea9365f5112e8583d"
     },
     {
       "variantId": "search-connect.list",
@@ -12689,7 +12757,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "7edcdaa836cb4187c0e99406dbbbe28b5c236892616e1f7f74ecb821cad3766f"
+      "receiptDigest": "f6c69c856460bc40948ef4aa6379f4e7f521da0dbeafef014a15f935fb8fd6ea"
     },
     {
       "variantId": "search-connect.select",
@@ -12697,7 +12765,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "b955cf747b266f05b08cf33d0264b00478032dd2209cc4e7d61e110aa5d591f3"
+      "receiptDigest": "083e7582836e095a87fbdd46f43d789bc06a735c8ec3b636ec3e2cb3921af5d7"
     },
     {
       "variantId": "think.auto",
@@ -12705,7 +12773,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "bef48544349f4a2d758af09c1830e5f8c7e72a07f08644a98d8acf295012d460"
+      "receiptDigest": "2b814c84919827037d3fbda021113b221ce62159e9f5fd97daaa807a3917a233"
     },
     {
       "variantId": "think.expand",
@@ -12713,7 +12781,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "7870b37744b78dc9dcf33d41a9b585cfd4fdb43099b74a71c83cea55b794b961"
+      "receiptDigest": "7ae49b570a13a8392e7afe0d80a210c84f2beff417ce3fb610f228a64b2c0af7"
     },
     {
       "variantId": "think.hide",
@@ -12721,7 +12789,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "a7618f27aab1a053ae05c4b97d2ae4a345e74d75b9c01b2b25efec4599614324"
+      "receiptDigest": "b5b5fb3e03851a055975cb72646f921f91c58786a2bdde37a0a546ba5848f50e"
     },
     {
       "variantId": "think.collapse",
@@ -12729,7 +12797,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "a7f4dec0d1cb76e6f06b13a99c672b4ff0a6c762f392fdebb7c462cdfd991f6c"
+      "receiptDigest": "afbc9c7d1b6de913e808129c690644c70cafffa2909ee2d0f7d15c3e7abbfcc0"
     },
     {
       "variantId": "expand.default",
@@ -12737,7 +12805,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "50b28228bded6fbfe3959494f3f171fe22daef83910b15bb448285724cbdc691"
+      "receiptDigest": "1c08096479f8d267895c6537d9bd27ba7e566075cc68407623058bbcc31fcf3e"
     },
     {
       "variantId": "copy.default",
@@ -12745,7 +12813,15 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "f4dbac1f7161454b7ba3a29ef3fb0f6182807ac45f1109e7bfccc0f9002b1615"
+      "receiptDigest": "2e83ba26c8c9982a59b8d0f19f1df5762538bdae3b716ff14cca0689debdedad"
+    },
+    {
+      "variantId": "diag.default",
+      "local": "/diag",
+      "localOutcome": "rejected/forbidden",
+      "headlessOutcome": "rejected/forbidden",
+      "matched": true,
+      "receiptDigest": "8e428f3fd72bbf1a1bfe92540f34a14b7db9030b9c210bc96f1e03b4b11e4b58"
     },
     {
       "variantId": "new.default",
@@ -12753,7 +12829,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6086c0edcded89bb6b2003663392bc1663edb382994aff76ef395254655ee991"
+      "receiptDigest": "e89b02eb200ab79abd61003a2c5af3f44dd0f201d6572368547a2f6e28e6e4f9"
     },
     {
       "variantId": "goal.-workspace",
@@ -12761,7 +12837,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "86f99fb9b9d2d60c1cbc1ceedee6f91b38c7f5b51e284f3675198f5ff61875cb"
+      "receiptDigest": "286f2f9e69dd0e03a0e0b4a79469fc3d2d6440e16196cba443e4dbf5344e4239"
     },
     {
       "variantId": "goal.-auto",
@@ -12769,7 +12845,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "7ec3372ab88d7ae080f1fa3ebc04a79d6c04e2857493310742ad9793f18ecb96"
+      "receiptDigest": "a83cb9f01ae09bb31527ca0c245efaca6466a2ec2d2e21f7c538409fdb16c9f6"
     },
     {
       "variantId": "resume.picker",
@@ -12777,7 +12853,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "27bf22daddd793793a38245cd489f72d29ed23915d3745dda12f02bf0b290db4"
+      "receiptDigest": "adb8724033909ff9082e414da212680b08b0ad7e4bfeb035d34b1d1beaad2850"
     },
     {
       "variantId": "sessions.picker",
@@ -12785,7 +12861,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "f96b4ade6d89c094c241a0c88be92747065a26ee03c6bc30b8009e19fc812856"
+      "receiptDigest": "82490ea9d8e4599e0dc52b66620ec1b1944e075c3228e053bdf37044de8e9c06"
     },
     {
       "variantId": "sessions.open",
@@ -12793,7 +12869,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5773f47836496132149546e1c8903fb7ac580d1193bb8a0624b4b0ab7ca1e507"
+      "receiptDigest": "74cd27505798492cbbede7b4f7bf1bb8ab823b7d11e5df9616cef6eaaafaaf73"
     },
     {
       "variantId": "sessions.resume",
@@ -12801,7 +12877,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "07856abe12410e8dd1405ddd6f0f2c779e76c7891acccf8138916dcd607544c0"
+      "receiptDigest": "48a7109e856ad8761ba0e1cd9201a84fe3edccc923be5a4bdae734c957e87037"
     },
     {
       "variantId": "sessions.fork",
@@ -12809,7 +12885,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "55e90e6631b095fe4af303db77ae578fd3b741da10e9534be43ab411b5256fb0"
+      "receiptDigest": "e4e32837f0a60462965699048e79d9c1545bc5ac3f5a03f0a7c1bb8b4bef7e9d"
     },
     {
       "variantId": "status.default",
@@ -12817,7 +12893,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "7ce8ffd8ade8eab4ac3f35bc454604c195ddfe1ecdcdacc5de846a742838420f"
+      "receiptDigest": "4d243551d66c04692ae4a4e9ff5d904f289cc9ec03a9edb545d5ba22ce426298"
     },
     {
       "variantId": "flows.list",
@@ -12825,7 +12901,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "77e5dc548069d62587b7b9e180770e0041f5706a7c41f641ed942219640f7a52"
+      "receiptDigest": "ddac9f25e7e169fa517fb13261f4eb1eaf1071e2e47e37d8633b8b2d3a7fcef5"
     },
     {
       "variantId": "flows.detail",
@@ -12833,7 +12909,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5e05aaf0311c38e9951f16a86882a40c7a69f685969eb6d2d0a608c9f59c3c00"
+      "receiptDigest": "f4db30ceecd317a58768927c289d88bb941829eda76469b2e82bf50a1df2caf7"
     },
     {
       "variantId": "flows.ac-cached",
@@ -12841,7 +12917,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "84e3d8f0ab444daa1b1d55dd04986c93bc277c654702dcd3b2cae66c6d790e60"
+      "receiptDigest": "512702dc5df79425932ebe6f40cae88376b7d1845a96f2cc9c0e49893ea03f05"
     },
     {
       "variantId": "flows.ac-check",
@@ -12849,7 +12925,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "4c617476c806b04b32fa0a3e76fbb6df7fdc0597f06816dca4a4433824acea20"
+      "receiptDigest": "0b2c16ac2bbbe586d7417e30cc65591b51353d3167b2e700daea12ec85d80d61"
     },
     {
       "variantId": "doctor.report",
@@ -12857,7 +12933,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "cf3e46446db8e2dbba6dfb9560f665407bd6db5b91eac1db6719c211754a63b5"
+      "receiptDigest": "87f4dffba2b4eb886ce2456fa77eeaeb23c1510979c12fa3b259b8a5dbb307f7"
     },
     {
       "variantId": "setup.init",
@@ -12865,7 +12941,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "7a814f9a7d0ce7e178468991d367ffcfb4928c75243e10abe351f2fff73124de"
+      "receiptDigest": "7d4c97c459e3ccef2068a584f81c17a53d775d68b6f35c00d428e1f495948370"
     },
     {
       "variantId": "setup.refresh",
@@ -12873,7 +12949,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d276a454db5ab9b626937e0c66b8e7be122452c36d998c39028057a8ba86a37e"
+      "receiptDigest": "d3881aa59ea2e5b6c38d2f2c741b78f401db223f8c23741b6cdcbb8aef38288b"
     },
     {
       "variantId": "setup.repair",
@@ -12881,7 +12957,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6c9bc3baffbf86d27308ca4256cc9df650838108bd62b0613594511cca5e40d8"
+      "receiptDigest": "209f34397283ddf55daf3d09049acaa0dbb39e86809c785f72ec0e056dd6c880"
     },
     {
       "variantId": "ac.cached",
@@ -12889,7 +12965,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "a29d25933e99e428e6535267f5227fafe5c01a7caf8438543d5bc57679bef852"
+      "receiptDigest": "61cc2aaaab2edc1a69bde1f740edc08529085cbeb8bb78933b655fc4f5fabcd1"
     },
     {
       "variantId": "ac.check",
@@ -12897,7 +12973,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1c40b3da950416f66729e1f59e3d42df3e0b3f4326bcf31aeac99b5928f684dc"
+      "receiptDigest": "40b194efd4e4f594c656319d0441eb2eef3a122fbcd86871cf2cd037451e1c06"
     },
     {
       "variantId": "workspace.overview",
@@ -12905,7 +12981,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "2935b3e400aa5374d46bb341fe3365108b4b8b403e558d53a2ddc1f13d9ee473"
+      "receiptDigest": "33df8e162b1fd359d065e1bd9c231244da8e0c4d97c36a9ac288c77956422f41"
     },
     {
       "variantId": "workspace.slates",
@@ -12913,7 +12989,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "58281943d4aa1d355e057b45122dac32046e18981d2e7b406b14d7f2f3dcbcfb"
+      "receiptDigest": "3f5e85816e93b08295c2d9827c85a73e8a724cb19f2ae89e8aed8885dde8a175"
     },
     {
       "variantId": "workspace.slate-detail",
@@ -12921,7 +12997,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5dbb648d38e63e3c67ec15004f5420d96afe1e921230e7aafffd59f580286544"
+      "receiptDigest": "56f69d1bcfcf8e6f3872ac6af8c04950f09ce1f27b84e6f17ccfb04141020981"
     },
     {
       "variantId": "review.catch-up",
@@ -12929,7 +13005,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "f26d1d352dc1554feb19c95954d2de5192ed20747b50e558b78fd4f2f38131d6"
+      "receiptDigest": "2b95ea74ef43c9f6c45a851e3a7a2b6a3ddcf296eb369181db4ba68bff631b3e"
     },
     {
       "variantId": "review.layers",
@@ -12937,7 +13013,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "0b61a5c1b0c676c866457cf5481af3a4881dcc3b84b967839ac4a78bfac3b889"
+      "receiptDigest": "093959a8cc855f9959ad69a2b5cea3244d607b40f56ef52e0b7aa983acf5599c"
     },
     {
       "variantId": "review.parity",
@@ -12945,7 +13021,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d62b2bdb3f0c6709b22806dfefcd803ab857e897c9a0b1dddf4cf303f1feda66"
+      "receiptDigest": "bb422f3151b97f95c6a7c727e447ecb300ef1921b1b9447666eefdb347eb1206"
     },
     {
       "variantId": "review.readiness",
@@ -12953,7 +13029,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d68775fe35b0ad9f6115f54f892aa76321c7b08a2341f9285fbb01f0af466af6"
+      "receiptDigest": "9499730e8e2a7954ed5971e17157a7265f64f966ee0ffcf30239c672341f9460"
     },
     {
       "variantId": "review.proposal.accept",
@@ -12961,7 +13037,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "3bafb04e9080a5e34c4131756ede91d83325a28c5e243da213cc1d920d0ed000"
+      "receiptDigest": "bcba3f21af22a02bb108c92bd61ea86dbb7035284c780dc5510be2b948f55172"
     },
     {
       "variantId": "review.proposal.accept-acknowledged",
@@ -12969,7 +13045,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "d00c63bb99a376096e5df4809c7f9f7e4a64346f737e8b5f205a7c71ba0c3535"
+      "receiptDigest": "390c16b8f69a6a31ef7996f644106bc1bcb9e25b9396f199d425fa1bb578bf02"
     },
     {
       "variantId": "review.proposal.decline",
@@ -12977,7 +13053,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "72aabaabdeee3e0707f3a3b2078bed854265570f580609b156b5b295ea0c6bf3"
+      "receiptDigest": "3a7de5e4fbcead692928ffa08bbc82844b24838e0e0756d5f0a80efd2f65c089"
     },
     {
       "variantId": "reviews.metrics",
@@ -12985,7 +13061,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "3995d93e29a8efc570b03294e9988e7c45df46bf38847a8a3662db64e63f83c1"
+      "receiptDigest": "c89d2b363a2de6d6334f14311f227fb8555c3d869c0b70e669bd41ae31d15267"
     },
     {
       "variantId": "reviews.depth",
@@ -12993,7 +13069,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "daabebe957f384639f4fac6219aaf5e5b4251ba3497e0c4ae2df647c094a8f84"
+      "receiptDigest": "ef6674f7b709a5b88ead8771246b711c47e983acdccc9d8ac3e3baba3d49b78c"
     },
     {
       "variantId": "reviews.refresh-layers",
@@ -13001,7 +13077,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "6240a849980b66271d5b233a57e3f025277396caf0e0a3ac0b78e2c64a9d5c54"
+      "receiptDigest": "81bcd38a8c8be4be2bdb6edf3198a3687eaebef3375200bf351dcfe14d1c1c5f"
     },
     {
       "variantId": "reviews.prepare-missing-chunks",
@@ -13009,7 +13085,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "ac83bbd99e3f484950e158940904f0d215207b11947b117e4717aa8b7395e895"
+      "receiptDigest": "7e0e7e10d572a103117627056a6b85c91ab49315e2380d3daa93e20ed4ef9fd6"
     },
     {
       "variantId": "remote-control.name",
@@ -13017,7 +13093,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "8a74623c3415f324cff889836592f802b707388ed14f46e2aa4fdabdec74ff37"
+      "receiptDigest": "1d3b37437d9e80749c8e97aa8ca2d4f4bf9e801f6afb9fc7f6deda63a83e9d5b"
     },
     {
       "variantId": "remote-control.off",
@@ -13025,7 +13101,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "3aa79054f06a4ae9f631b9464b34e76147532197ebb85cf64f0ed55d669493ff"
+      "receiptDigest": "39c98ce0ececf50d6674f388c1a87e435380b567e2a09d1f6044abfdf82ac055"
     },
     {
       "variantId": "remote-control.status",
@@ -13033,7 +13109,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "ea3c3459ff568f6f6a98e439274fa925b0bf8927ae76c05226ba7ba8e4ee4426"
+      "receiptDigest": "06f577b65cba31c2e23a066d58376bfdb371a4f5d21dec2b784c9afb214161fa"
     },
     {
       "variantId": "remote-control.on",
@@ -13041,7 +13117,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "7155ba3261e98b98359fcdc4f98bc78f9442bc4f09f0f3598f79cadffccd61b2"
+      "receiptDigest": "eb53346e899beff5be6b474f2f0b74cae5562e26324100d7329b7dd9678bc939"
     },
     {
       "variantId": "history.N-1-20",
@@ -13049,7 +13125,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "f4831ab06fba15086b1a2b58ebaafd0989585439e47d3837df283288c5cc55fd"
+      "receiptDigest": "44f9d6aef14a808fb1616d0950c21b967f873746a6ee41c300226947ffd41a15"
     },
     {
       "variantId": "channels.status",
@@ -13057,7 +13133,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "38cec3c4ecfa507836de5aec0c4f72ccca374cd4f9107aee111484dc1d372fe6"
+      "receiptDigest": "2bac74c4c0cd9241ed74f6ce923c888bbc55a2b13b1445fe111947dd06509a94"
     },
     {
       "variantId": "intake.status",
@@ -13065,7 +13141,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "083bcfd2693c54e1f2eaa1e418565e973f7da1ca8f5d71976cccd729b8b8ff52"
+      "receiptDigest": "8860200b81e37a969b3bffc5db797101a0a34292b9c023849c4715eaa4721bb8"
     },
     {
       "variantId": "intake.list",
@@ -13073,7 +13149,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "ee720fe3d7f417f02719e4a4d878f9288429bfe17ab10dc715c800c50c9672c2"
+      "receiptDigest": "866a3ea52c84128df29665651f94efb41895321d91fc9b45e9a986f4193135ad"
     },
     {
       "variantId": "intake.pause",
@@ -13081,7 +13157,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "379904ae2d3cfaf32ebb30f77e0a6e04fa2868da0ee618144ac8b924c7f64ffc"
+      "receiptDigest": "775f97c174ac18185c2a9e3a46fb07ef1fb8eb361446585260e7dc5bb268c207"
     },
     {
       "variantId": "intake.resume",
@@ -13089,7 +13165,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "7126dce0b6fc8723e4697e55369ea3fd35803baabf3e6fe0b877a2d6c9fa4b7b"
+      "receiptDigest": "764f7489300dfb240c5445ea485eae5bb914f9e0ccf1030070548e55abb52e14"
     },
     {
       "variantId": "intake.poll",
@@ -13097,7 +13173,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "5748ebf4c720123f9499e237f2bbdc630ac997759f656b8997b35ccfb985f9b5"
+      "receiptDigest": "cc6e91977895d0ca0a212d27861943a2e45cd7e5c4c4d00bce6eeabcc4d011c3"
     },
     {
       "variantId": "rendering.auto",
@@ -13105,7 +13181,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "b68eb81b1a842ea62502c846db141bec306b2872481d35380c322a20a98a5afe"
+      "receiptDigest": "d36cdf1722940d8aafd894d077551f91411e3024fb9088c578e2b0db01593158"
     },
     {
       "variantId": "rendering.rich",
@@ -13113,7 +13189,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "b62cf8fcdd9036cc0286bfedf19c05a20e8a1d9e4599f164960fbffa41935432"
+      "receiptDigest": "fc8368020584c8928c0d675c9471e2e5e6fac24567cdcbd3616257cba5317eee"
     },
     {
       "variantId": "rendering.html",
@@ -13121,7 +13197,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "16ff86326d3f0f391e52cf7e280a1443566fb60dce2c909d912a255391360e3e"
+      "receiptDigest": "16da143ad3e92eced1c37e1a97829369fa7b01a4e97d84439a6911a85c51f44f"
     },
     {
       "variantId": "rendering.plain",
@@ -13129,7 +13205,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "33e2880f763fe2e686f67154d55cc7bf1782fda8edf7cab1424bab403e67fd71"
+      "receiptDigest": "cf32a806629176d01592c97496356c37a995162778c0ca41afc2b073f8a15f8d"
     },
     {
       "variantId": "remote-policy.mode-ask",
@@ -13137,7 +13213,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "1a0db97a03d5440488759dc2298fde4a98bc6ba236b19ddc0df765dab1c3172a"
+      "receiptDigest": "d521dce7947384609d6e1761ffde6789eb02d0afb4ab46c990fae8eb5d06d049"
     },
     {
       "variantId": "remote-policy.mode-trust",
@@ -13145,7 +13221,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "14bebe6abb13c9fd9f028d21a7569fcf6116b6388c351e37214c64efe6e6b1bf"
+      "receiptDigest": "f99afcc9859da9d8ddd8bb5478e8814443372a0bdbc8ecf092c800d00b92e0af"
     },
     {
       "variantId": "remote-policy.limit-none",
@@ -13153,7 +13229,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "4f860f2d3db85f583539e3a2cc446bdf4a8a46fd5d523e49596aa56dfe1609d2"
+      "receiptDigest": "9fd789e6b8036a93b24001f44c73d1a1eee6e3b1293ead1813466a2c26cac51d"
     },
     {
       "variantId": "remote-policy.limit-minutes",
@@ -13161,7 +13237,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "aba8d2d04d06cb02bb701f3341665ced505b6aa05b6d309616e756a4aca41bd7"
+      "receiptDigest": "cf7fb5781ca809f3d78891d8d900491b7101cc21cdf9aca041b51aaf679ec3ab"
     },
     {
       "variantId": "remote-policy.wait-minutes",
@@ -13169,7 +13245,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "46817790b0830406c943621e4e0dd2ccac469b11c3cfbe9c4628380d41ee2817"
+      "receiptDigest": "3cc72790a56b1cf2f38f21c2963b8f0d83a35b6d2d4bc8e282f906531b54e3a2"
     },
     {
       "variantId": "trail.count",
@@ -13177,7 +13253,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "07ad4a0b86b5b5126f2f3e74b06d3e014d882a8e9294e611a64519291edf8543"
+      "receiptDigest": "e0d628a0bfa1c36596b0d1fa9560547153d882e978653b25c3ff490eec6396c4"
     },
     {
       "variantId": "trail.tool-NAME",
@@ -13185,7 +13261,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "995e02151d66e21d6c4a4ca37c8f3226b8de65e8fd68d721115bf870d87a7fd9"
+      "receiptDigest": "9e5ffd9b52138e60a45231dd98b02e9dcfdb7fd7ac98c6262809e2b6c216d258"
     },
     {
       "variantId": "trail.file-TEXT",
@@ -13193,7 +13269,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "a9d975e24c489a7575afbee38ddf8803ae7a8dc3075491f5a48bc5c1c4d9c263"
+      "receiptDigest": "2854b977f6e91d4cd99d01943e8fc7e219daac726e10398383350999434b405d"
     },
     {
       "variantId": "trail.from-STEP",
@@ -13201,7 +13277,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "af5e9d368bc8d6d653a8d09c7667fe289147c348939198233a555e939da8f868"
+      "receiptDigest": "241bb7f28b78ee497d14fd67a1e1dfcee994d431128d337b398154c2dd949e11"
     },
     {
       "variantId": "trail.to-STEP",
@@ -13209,7 +13285,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1854d581a5471a1c2536d82d6e1f7913e04c4617b48ebfed4716e05c3d1f312d"
+      "receiptDigest": "9b133e04992b9a257d2f33e307ea60649bb4f69c419ee646bf9c3866d08f4a74"
     },
     {
       "variantId": "notes.key",
@@ -13217,7 +13293,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c689a34382e466da184fbdfde65fbc3dd7f19c48223e3cb955a597b6a310c63c"
+      "receiptDigest": "9a1be9d6236de69c3ffa658425f82181bb55cf90f869b3828d3243c1f6a91536"
     },
     {
       "variantId": "product.report",
@@ -13225,7 +13301,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "86fc096cd1571f907bad611be4246f6b3a40424c6fb5d8e8c0bb122564666fbb"
+      "receiptDigest": "bc3f6285e55918d5080abb83ca5eca429ae2cfd3659ccd8d93dc2723a5fb9d82"
     },
     {
       "variantId": "governance.inspection",
@@ -13233,7 +13309,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "52e4d8bd78ec65a3d82076b26b256a55a3a74756f2ca67854b84c2be1c6dc2cd"
+      "receiptDigest": "f37ec1abe0efcdfad9a181d96d0442e37b68224123e3d0318d6ce6e8928e3a1b"
     },
     {
       "variantId": "governance.check",
@@ -13241,7 +13317,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "5c6f7f6a877c60df480014d524be325447f4276cece07851f445747c8d63e798"
+      "receiptDigest": "dc368ba6b63868597543060908ecade3fc1f5776206981a43cf94bba5668ded9"
     },
     {
       "variantId": "governance.complete",
@@ -13249,7 +13325,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "c339246360311dfed450a6a523a5e517ed981d76fbea8d6eb0a79e0b5dc6f340"
+      "receiptDigest": "1bfb965e4024b62612cb9bb12e1ce3cf207e43568174e86738d32d296e6f4717"
     },
     {
       "variantId": "governance.rerun",
@@ -13257,7 +13333,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "caa8409b442a7284e813e82f982f5231a3399c074eca52901a6087d491994141"
+      "receiptDigest": "f845bf38150f984f8c53f847b56e3aedea2130f785d28c85909cb6c103ac3f6d"
     },
     {
       "variantId": "triggers.list",
@@ -13265,7 +13341,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d3d364f1a530bee808645ce397d746825f0239a8b1418ea073206cce6b2d06b5"
+      "receiptDigest": "49df37427018fef59b3430831636b542050541467bb997e307a902405829ef74"
     },
     {
       "variantId": "triggers.detail",
@@ -13273,7 +13349,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c28ab37b89de1ac7b470318b2b818ef605000c6afc18b16afaab46a4f8369b6c"
+      "receiptDigest": "fd3f80a68af71f03d1fa0654b99cf191462d718e6f7067a6247311505d22077c"
     },
     {
       "variantId": "triggers.run",
@@ -13281,7 +13357,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "0f1cbcc4a51ba407110e6f4f9f3ea8e4d1dfb64a05625850ba45c38536ee592c"
+      "receiptDigest": "5fa6c679d6dd76075cf61663c7c0d3edcb5c27bff51a5b86602e6991d00e27d5"
     },
     {
       "variantId": "triggers.confirm-run",
@@ -13289,7 +13365,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "cc7478c1540634fed798443ac7bf46e1da6442730dc34978a15cf7085e2d6597"
+      "receiptDigest": "6057bd16fce4ba5b5e263ae7ae616dc7ac699508ce269ebeb64737b0f67f5b38"
     },
     {
       "variantId": "routing.inspection",
@@ -13297,7 +13373,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c84bc06cd318be95eedcbe6825652a7f5a107ade53497dc1361ada4e53b54a0d"
+      "receiptDigest": "62e16db72c98d776a8bb0c09ca3437d70b62e538f7380f8965db45d007d54542"
     },
     {
       "variantId": "routing.configure",
@@ -13305,7 +13381,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "cad19c170eacf6f1ddc9d9f0bed775cc402afb3c0fa79cbbd9d7550bcad37c6c"
+      "receiptDigest": "e6c89fe6f1da2a8f1fdf7f266b8636dbc34f31c42a8e30b5d689ab24c247fb9b"
     },
     {
       "variantId": "routing.trust-project-file",
@@ -13313,7 +13389,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "32106e06ba1ee07eba841ae78985d974f99c5354da0f0d3994616e93947f2b5f"
+      "receiptDigest": "c0028516bfa23559f0fe8dfd3e8577ee8f9fd39d97094947074d3e00a04b98b7"
     },
     {
       "variantId": "schedule.add-confirmed",
@@ -13321,7 +13397,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "c56b015ee001d889382b335d951753328e8330e64a94cb9a9963faab75d26038"
+      "receiptDigest": "0634a2f2dd9c0e5c621b018766e02c847ef51805ea6e42029164405c8ea6bcea"
     },
     {
       "variantId": "schedules.list",
@@ -13329,7 +13405,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "ccb030ae43ef10ff289114b9abd39f987799f6607a46a53d1479cf1202f960e2"
+      "receiptDigest": "82b45a4d5f94718c7974e8cbfcc3a4d711ba9601ab7630d19f8144498f40a591"
     },
     {
       "variantId": "schedules.pause",
@@ -13337,7 +13413,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "ce91b8673ddf53a1ba78157bedda3da8c054c73d2ef41485ffc995f60ae6092b"
+      "receiptDigest": "e589caaa9ae13bb0644392a37993e7914999dbd69c336afb16d4813da408c237"
     },
     {
       "variantId": "schedules.resume",
@@ -13345,7 +13421,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "0755415d9a22d52b81ece0e07fbafecec68c4be947c5ca8b16daa959f071caed"
+      "receiptDigest": "87facbd23e5d5d6015b01239c04db38bc07e1f50399cf49b15053022b088b774"
     },
     {
       "variantId": "schedules.run",
@@ -13353,7 +13429,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "3ef66cb185592b462c3e9f3c352f5f7dc855486f4e8fc52f9881c7d24ac39fb5"
+      "receiptDigest": "e330e94a10f46823f5051d14295353bbb3ee0b4d1321eb0821d292955f69fff3"
     },
     {
       "variantId": "schedules.delete",
@@ -13361,7 +13437,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "7663616a62b3b56a6c03a44349d65557299c2c7671c8dca632d33ffbb2e26dac"
+      "receiptDigest": "04c4202617b93aa2550733ed45969d09a4d19ba71339ad861e7aa3706f39f560"
     },
     {
       "variantId": "autoreview.list",
@@ -13369,7 +13445,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "cd5ad7559c0bb94288250d3f0b7a37d09b85badf25cde465e22cf8c599e5c820"
+      "receiptDigest": "c24d13a5947c2e00a96b65289445c5cab265a9f7eb083d224f341f6458c5310b"
     },
     {
       "variantId": "autoreview.ls",
@@ -13377,7 +13453,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "116f6083f29b0f5fd4d2de20bfe2a81546beb7f9a80a2ef47d0bb438594880ad"
+      "receiptDigest": "6044bc8fb4c086f204eb04530783c2469de21dbb083df90615c9c86d90c58f3f"
     },
     {
       "variantId": "autoreview.start-budget-minutes-budget-tokens",
@@ -13385,7 +13461,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "61d086cbeeb6b4e37440f599deee7271c5bcc5509a52a39fa600f35dbc3dc633"
+      "receiptDigest": "79c46a8a8bf55d93bcfbf9c64430fb8ed66a3b0c0ef45cccd55e8ff124dbcd0e"
     },
     {
       "variantId": "autoreview.stop",
@@ -13393,7 +13469,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "a014eca7180acfcc847e6e1bb83a81d416f67b2b2100cc49dbb36b6db7aa9853"
+      "receiptDigest": "602d796fea5bd84476b8632f42ff8247b720a651004bae2eec132f39bccd70b0"
     },
     {
       "variantId": "autoreview.arbiter",
@@ -13401,7 +13477,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "74d75d6ee4f1f53fdc12eebd2c437ffe455b3b912c0c4193d9deb5134c9b9323"
+      "receiptDigest": "3d884489330f4d4807fc772c22018e2da15607a975a91a1a28ba2476ffba24f5"
     },
     {
       "variantId": "autoreview.start",
@@ -13409,7 +13485,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "a3a8278fa967a1fdcae0c1adfa3dbb470af3d1e8db41f108236f3d29afbb6114"
+      "receiptDigest": "ba4ad667cb292d283d67714c4eea6e2982bdac462aedf54dc03cc6835dd74395"
     },
     {
       "variantId": "approvals.list",
@@ -13417,7 +13493,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5a3a8d0916166937e4a81aca2118ae3b80d401c963eb842064b79c42aaa624b0"
+      "receiptDigest": "c5835da60a6d7dda91b956f5b64425ad18d177328d9098985c59eff9e760f555"
     },
     {
       "variantId": "approvals.allow-once",
@@ -13425,7 +13501,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "25838aae7e276cdf48863d07a314cff14f77b1080e86ea300d59b7d76a673f79"
+      "receiptDigest": "ea9ccf8f22619a13db304053ad19f2926763f5b6aed2cbf86177dff2892f42b6"
     },
     {
       "variantId": "approvals.deny",
@@ -13433,7 +13509,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "2cb35ddc8adacbd3a41be07dfafc83264849ad13b227e7d45c3e57202fac46eb"
+      "receiptDigest": "b11be6e5f3503839c39b63743678f21ab71a60c351d5de3077febb619d31ace0"
     },
     {
       "variantId": "permissions.list",
@@ -13441,7 +13517,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "bfa6496b8400c84ef137bb2921f4eb754dfe5c25b02e57f3a8c8609149089ca8"
+      "receiptDigest": "54c9d7894088004dd1dd66b71eed6eb0eb0b42cd58aceec95dd6013c354ac341"
     },
     {
       "variantId": "permissions.remove",
@@ -13449,7 +13525,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "58bbf8bdb1aa6711e4840c556174e2b1bbb036e2565c882a82f71bd9cbaab262"
+      "receiptDigest": "590649e807041de80b1ca73e09056a0134e6623ccf9c0ecae2bcba76a3476efc"
     },
     {
       "variantId": "decisions.show",
@@ -13457,7 +13533,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "3d9c161e5c70def26c1f0241af58353552abec77b305b9455d2aa34ca375fa7d"
+      "receiptDigest": "6f0aa1347df2fd54e6074fd226687386a114fd7b51a3f58559927bc6d346bfea"
     },
     {
       "variantId": "decisions.arms",
@@ -13465,7 +13541,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "fd4a1265cbc5184ada3a6335030f41eeca5ca6153e70b72bf7bd48061e3764a6"
+      "receiptDigest": "2bac1ac627afc599ea41e8589918386e4a9e9423257ef43de359566bf7339e29"
     },
     {
       "variantId": "decisions.reason",
@@ -13473,7 +13549,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "60750ee38eabdf06df2d847a3c2fccec59554c24968991fe06b90cf3e42f1db9"
+      "receiptDigest": "6533ef5f56802955e8c6a57abe8154faff4ddddaf1b1b493ea6b64e472538884"
     },
     {
       "variantId": "decisions.change",
@@ -13481,7 +13557,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "8f2f5c7ba30c219af57062e3d408b71af632ad9d5fcf84e80ce23e9c09af170d"
+      "receiptDigest": "3576d3926427e3ca844fd5a9ceb615c64f01cba93b59cb6d00f7eedb288bfdfc"
     },
     {
       "variantId": "integrate.default",
@@ -13489,7 +13565,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "c372c6e891a116e48c466eeeab58fda7456dd80575c6be88f0daaf67ce9d3342"
+      "receiptDigest": "3daaa02ae9ac21d70f1366c377fc5220d7d0bd79d3739c094a22d1d4a2872cb7"
     },
     {
       "variantId": "ci.list",
@@ -13497,7 +13573,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "05d9335df3f1bfad13cc26bd8e159f4dd22fe6a9769c06a12d53b6911fd17040"
+      "receiptDigest": "cd79cc3a1fd3ef09140856e46752dae88bf39e76d43308e45db63254beb613c4"
     },
     {
       "variantId": "ci.detail",
@@ -13505,7 +13581,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "64a91f4679980c069f69cbe8fa38915be4459d372fc2620210b422075b5e8bf2"
+      "receiptDigest": "801753e236218868fd387fa83eb37ff49bf2b263aad52e981190a7231429808a"
     },
     {
       "variantId": "ci.triage",
@@ -13513,7 +13589,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "d7224881acc2c248a775d37aaf874d6c31e8a215f1885230accbe724bbb1f897"
+      "receiptDigest": "817764e3bc2e3aaa6506fcdf84535efaf7534323071a936a10c7463ba2cb6d92"
     },
     {
       "variantId": "ci.retry",
@@ -13521,7 +13597,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "7799c960cb6f49b77e9204579f35605192c25fa76d78d6c3fbbbbb5c63883247"
+      "receiptDigest": "bcfe152007c40cf5a2e45a608457a543a38572a635427f6bf14f2c480a4fc63b"
     },
     {
       "variantId": "conform.setup",
@@ -13529,7 +13605,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "398d94a6da924c6d3f91309953528e7bd2c92fe427d110331614a89ffc6ac850"
+      "receiptDigest": "1820f3087c1e507a8b43f9d7866f5a0aab331de2e3ae456cabe838cc597b349b"
     },
     {
       "variantId": "conform.reference-select",
@@ -13537,7 +13613,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "c86fad4355f94e10d249c23dbfccc13e7e0bcd5b6e65ccc8c8f0dd315e65f026"
+      "receiptDigest": "b93f0e1aa75351775568e2152175e22e8cd6f6c12e35b1199e9526d6edcb864a"
     },
     {
       "variantId": "conform.target-diff",
@@ -13545,7 +13621,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "320c8142ff6269198f9cddcad90a52ee8445532dc5d21b0ddc05cc62086d0876"
+      "receiptDigest": "f564990bd64f623bf5813eeaa71fb3bd02e6979468afeca82cf2965cb05cc2c8"
     },
     {
       "variantId": "conform.target-pr",
@@ -13553,7 +13629,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "d4898bb413713a0fa6ceaffe8c00742bf0d866eda06f570a2bfdb517b7748901"
+      "receiptDigest": "c7084e467df3ad1b62a16ec8049555212b0e756adb341ae9a987348430b01d10"
     },
     {
       "variantId": "conform.target-report",
@@ -13561,7 +13637,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "c1363d60aea8fcb20543533cce60031f267bf0c30ea58acf354a9b0247fd8aff"
+      "receiptDigest": "2440011b2d80a557fd05e3f95a280bfd6c53a6ae6c8f9062ebfc7c22af055f09"
     },
     {
       "variantId": "conform.run",
@@ -13569,7 +13645,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "aae9a8169396472830634ea2dcdcfb8b4709a4d7185a4bce169806ebb0621d52"
+      "receiptDigest": "84418ffbc0376e5fe9bf403c5c96ba8b4bdd31eca8fef7c016be94880a2f87ca"
     },
     {
       "variantId": "conform.clause-detail",
@@ -13577,7 +13653,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "f61882ea5b05d26d3bce775aff295a164dfc410d619106a0225ef061cd38377e"
+      "receiptDigest": "9465b6b28922a5147772e882b1c8909b0fec8ead14558f31c05ca0ac9b09f2c1"
     },
     {
       "variantId": "risk.working-diff",
@@ -13585,7 +13661,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "10cba13857379dbe7597f9ff7c19908f34c37cf3d1a11ff765944f45111fc73d"
+      "receiptDigest": "fd86f34453a9e91425758f88e08f68cb4b2a6f9e6e4899690cb98b593ca22845"
     },
     {
       "variantId": "scenarios.working-diff",
@@ -13593,7 +13669,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "7d0d64df3b0bb24431f61d90db860c8a7b67e46ede0b911fbbcdf55ef3b83abb"
+      "receiptDigest": "9d419cc418b1594832613a199176e746d1e1f99403f8df81ac6c680dde986c55"
     },
     {
       "variantId": "jevrules.working-diff",
@@ -13601,7 +13677,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "b66964826ecaa2648f306d893838172992eb76f3fac93f30c5a1e4a85587ac60"
+      "receiptDigest": "4d6a414d7475cc594ccbee3670cd97dadbf8f6f44c609f65e4bb0e3745d5cfec"
     },
     {
       "variantId": "staledocs.working-diff",
@@ -13609,7 +13685,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "25ab9437488703a59508a25c15d3ea6c832ac0ceffad53562dd3b850f915d8a4"
+      "receiptDigest": "1f076ab25faad78386da6d092f4f4bedb66e03d751d817d26cb3b098093e052a"
     },
     {
       "variantId": "flow.origin-show",
@@ -13617,7 +13693,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "bff4568fe5211d0e5ad1825ea7095df91836ca609fa03db30dc3a4b30017734d"
+      "receiptDigest": "ae59d68028c2c0c0ce0d1f904a7b9eab62ca09f01dc6160972436fe2f48d555b"
     },
     {
       "variantId": "flow.origin-set-reason",
@@ -13625,7 +13701,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "0da7ffd351254cd48810629e6bd9be8a296478b987e639ee1db5d791c530deb4"
+      "receiptDigest": "8cd29d70cbcac292aac6519e92b5adadef7931bfe3ee07b5e9332d279f80c6d4"
     },
     {
       "variantId": "opencomments.repo-pr",
@@ -13633,7 +13709,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "d4923d411412c97114969019b40167a4fc23df42bb71b9be9f3b6de3aefe3359"
+      "receiptDigest": "901af95963456346fbd2107072bf0d0deb4a6d6ba7d4b4f48428f8976ef9e208"
     },
     {
       "variantId": "contract.working-diff",
@@ -13641,7 +13717,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "91c109ea712fde9c8f7840034b5f969eddf1a1df15d4922c754ff2054b9831de"
+      "receiptDigest": "c30573aa82a945c0815c30cf4ee1b2bdfae267744a7d7ac87e3bc776a2987def"
     },
     {
       "variantId": "triage.latest-review",
@@ -13649,7 +13725,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "c3647b313b121c19bf116bdbcb9f5f0a72d971560b053cf295f65500f54fd82b"
+      "receiptDigest": "5463f9919a0c9b4b4ffe6e3c189cb89b5313e5231009214fa24a22908a431ddf"
     },
     {
       "variantId": "guard.inspection",
@@ -13657,7 +13733,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "40a5b914370a5858fceb95185afeed0ba01a414ebbe863e7b0f8c9aa9f8b66b7"
+      "receiptDigest": "dac81dce4c3e9f9d375d7b0f4fd1aa14bd43593995620cd95389e7f6b568d7ce"
     },
     {
       "variantId": "guard.on",
@@ -13665,7 +13741,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "5245adcc7d53a7383ee2091b8f190bd12c16fc53f958aef321aa2a64502d4bd9"
+      "receiptDigest": "79b5fdcbf51bf6f453215c8572bdf74bd1cedcae94171cf27071d499c5012ddb"
     },
     {
       "variantId": "guard.off",
@@ -13673,7 +13749,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "3896c0e0e5eef6af2a96ffb5bf0f28d854f1438647fd007f96623cb65468936d"
+      "receiptDigest": "8c052d1210a09eca0648e484352abf974cec6386ad608903d997b9ab494afb32"
     },
     {
       "variantId": "route.inspection",
@@ -13681,7 +13757,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "bd0570122555d09294057742609352d7395af86dca4ca5b7a1f71f1b511b5709"
+      "receiptDigest": "e87b89b52ff47b3c2a6468981c1a9cd5d2f7e2d8a7c73b58954b243e1fe333e6"
     },
     {
       "variantId": "route.on",
@@ -13689,7 +13765,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "ef0829c5e5621f0992738d1fa04dabced1cd7d2b9b5503b50ebc2fca0baaec30"
+      "receiptDigest": "497819e9894c3ee8ea3640712c50782ad7bac2ea31bd54d850a709495f3e4cef"
     },
     {
       "variantId": "route.off",
@@ -13697,7 +13773,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1111782b157f4a6c890c34f5fafa888681dac01818964b64040d052fb0d540f3"
+      "receiptDigest": "26af0851d08225092d7eccb2399c50503c1136e64a434eff727e0543de428236"
     },
     {
       "variantId": "route.set",
@@ -13705,7 +13781,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "8a168218485c06618326a50a272a1b90c8a2887cbc10d39ad8c16739bfabf20d"
+      "receiptDigest": "aa4d952796b40c99b6647fc3c3d121a314482c861978061da75c74e692f42a67"
     },
     {
       "variantId": "editguard.inspection",
@@ -13713,7 +13789,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "a7bcd365c9f51183e67b3fb20700ccf6239ed44fbe69f616e16611ee8984f379"
+      "receiptDigest": "4d3e7a29f190317e5f3f32656ebb27bb242465a9f021669c8b38774d85fe461a"
     },
     {
       "variantId": "editguard.on",
@@ -13721,7 +13797,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "f446aa1a375a283137a133d3ab42ccfdb2dcfcb2dea8e1cf6ecfa02b23c0647c"
+      "receiptDigest": "edd85b139761d180ad6e0134e66eec15d4fbdc4d723dcbf4d45becbc5caf1ba1"
     },
     {
       "variantId": "editguard.off",
@@ -13729,7 +13805,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "405eddccbf1d76fd28e73ca22923508271ea0f55f2b70d8d207089e396ebe285"
+      "receiptDigest": "ba6c4b2eb9e1548d28ebb251fa8acd4a66c5dc10a91bcc44f878c9695991055b"
     },
     {
       "variantId": "projectctx.status",
@@ -13737,7 +13813,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "ae54cf8f2fd2756954497249d89aab555aabd63c1ff4994119dec9595eb67417"
+      "receiptDigest": "793866afa38ee3149ee7467bc49f9fab45da278612b20493fe3d92c53a18c4be"
     },
     {
       "variantId": "projectctx.refs",
@@ -13745,7 +13821,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6e4e65147e0dbd9fdf0c7769352938b74f10d19f4b0ca88fba8a9dd568dcfe26"
+      "receiptDigest": "dd41220aee3bbc4a0aa216fbfd4d59674d248c005f53cf94c6a6eaf6ee0dda38"
     },
     {
       "variantId": "projectctx.warn",
@@ -13753,7 +13829,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "882fbf85465784ff539f3f1343c31610ebf44425a2983ec87f327c64851f1759"
+      "receiptDigest": "518d52cb673101981367b102e447112a51d4aa676453a7210b1050d6659348ca"
     },
     {
       "variantId": "projectctx.block",
@@ -13761,7 +13837,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "ecd06fa537c6dbd25474e73fb8a97d744e43bd357df97090b85d3ca497fea832"
+      "receiptDigest": "5a080930b1093022ede79588ab9bd13f5b7c340f892dfda63f7e2029da658d80"
     },
     {
       "variantId": "external.status",
@@ -13769,7 +13845,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c6d597728f965522b815622dc17e3e683e9ca95d509a07a956e16474e7d22b0e"
+      "receiptDigest": "e152b4c56428fef644089ea5bdca55a7f063006c5162fe34efca502ecd02ee26"
     },
     {
       "variantId": "external.on",
@@ -13777,7 +13853,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "50a6cc288dc92aea6263d4aa44ab548f700de9ef4c532e60e426b316bc7e9a78"
+      "receiptDigest": "99b4cc9644caba427bf9af4d9aa720b5a6bdb495c4cf4addedb20cb4d2f9ce49"
     },
     {
       "variantId": "external.off",
@@ -13785,7 +13861,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "5a0ad3cb8818752fdcc9e9f6f8eb45160f95db564919263991135488f0d8aebb"
+      "receiptDigest": "ee1e52727b96448e0d592c53e1147cdbaea85c20026124e383d0c91602294bea"
     },
     {
       "variantId": "external-agents.status",
@@ -13793,7 +13869,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "9a8ed6af565962b11a1e21b0b0d42db4d2a52740f79e49f8036d23e6fd613c58"
+      "receiptDigest": "e1e4b2d2a7cf037062a078031e1ea55990d354c7c970c553c93247c299a04413"
     },
     {
       "variantId": "external-agents.on",
@@ -13801,7 +13877,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "48b6b5fe8caac0a13983ff99a1a8f32a3ca5b41d8d34b5a6741ff3d8d7884e6d"
+      "receiptDigest": "b923946081f5055700a3b64ec0058e0b8e625cb26e68d21c29c842d28a28a1b3"
     },
     {
       "variantId": "external-agents.off",
@@ -13809,7 +13885,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "eecb51d332023ecf0a583813472cf2329f173c724fdec6f26d36e6c5aabb3201"
+      "receiptDigest": "ca0202cfd7acf628b998aa243b55fab7593292bb40ffe6d3b31059e55a4d0627"
     },
     {
       "variantId": "external-diff.inspection",
@@ -13817,7 +13893,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "ce1b6e97deff1791c8aa97d6a1a9fc9a11ff3f4e2f4b6188f938c7a961042fcf"
+      "receiptDigest": "17e75d7aadc1e54bc27b516c07434dcc9e01ca59f71feb2440e4e544d2722da0"
     },
     {
       "variantId": "external-diff.vendor-execution",
@@ -13825,7 +13901,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "ea56353b1812bd5ce0dfe872247a20ed6885641cde9558505be126536ffccc05"
+      "receiptDigest": "ff9fbc73b58c37aa781dec630773689b9d90c57259c4b31fddab7a97eea615e0"
     },
     {
       "variantId": "jevprofile.inspection",
@@ -13833,7 +13909,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d05c333971f325fa4b519c99c652ff2ebf6c2bdeaadd7ad0a00f3da3ccaa52e5"
+      "receiptDigest": "34e4e830e6297a576cf6b36ce0feee6e675832b2cff3d367f9d3b33a6eb836d8"
     },
     {
       "variantId": "jevprofile.toggle",
@@ -13841,7 +13917,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "8099c49b1eff781e8a93abae927e7284cd9094486dd26c78f128da8caa354957"
+      "receiptDigest": "28ffd0dd7ad94bf69a8cf53e5777846397f89651d68c8a7e786a63ae1e349b7e"
     },
     {
       "variantId": "jevprofile.apply-recommended",
@@ -13849,7 +13925,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "7ddbafdcefa71da02df0eef4c049c52ea8aef3c6eab7f3c1d7819fd67198643b"
+      "receiptDigest": "d11da45aca13e1cef0765b80e2bd9f1e6fa4735e2fa7f3aefb613df9a3a22b26"
     },
     {
       "variantId": "mcp.status",
@@ -13857,7 +13933,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "7ea0cb4e10bee44159fb0bcfe84b930d4e2b77ab5212bd7369392d9ae78fe83c"
+      "receiptDigest": "26b8e788d0a6cb261ffd5dacb1a48303a3059c4a77db5ed00c5950ad75f33858"
     },
     {
       "variantId": "mcp.connect",
@@ -13865,7 +13941,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "91c89ef661ff8a06f0eed5ef2cf4cc754c18032a73c74a65daea1b9e6eff3e43"
+      "receiptDigest": "eaedea36e5e08e85b1f7a9976859480b323ab33a6c2105d60019ff0ec3734dbd"
     },
     {
       "variantId": "mcp.disconnect",
@@ -13873,7 +13949,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "133b6f0f8c7d575215c4939eae6fdec2a339660b305b698b157e61c308849c16"
+      "receiptDigest": "008bc1274de62b1e21e23c67f7881ddd14b3ed66c0d4f21180a0ca928009cb08"
     },
     {
       "variantId": "mcp.trust-list",
@@ -13881,7 +13957,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c26057b9e14c06719534b2dc7d1077c3c5e69b7229847706bc38acb12c691f7a"
+      "receiptDigest": "466ea4d74767ae835ba29ac8cfd62bb18176e18bde98c7a6b858979bf0bc1a0e"
     },
     {
       "variantId": "mcp.trust-revoke-fqn",
@@ -13889,7 +13965,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "b5acd6dad392f62e3ba6c638179e2a5245e96b92474d548505e7c46fca6c25df"
+      "receiptDigest": "762bb213b30c2d64e47c86ad5523e469cd1945d4f7167861f287340c618eaac6"
     },
     {
       "variantId": "mcp.trust-revoke-all",
@@ -13897,7 +13973,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "2d14f46c51e90139bc9909462aa19b29c30d530a1a6532626d309921b41c2e0e"
+      "receiptDigest": "37f0f1fe94a4b97e670f2837513b97b297fed44b39b7ebfb3c18022a3b19011a"
     },
     {
       "variantId": "compact.focus",
@@ -13905,7 +13981,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "34285dd5fb5caa275786754cfed30446931323ea65c177023afce297d5129aed"
+      "receiptDigest": "95d82c0da9e2e492174c920bf3ba0948d28222ab7dc8e7593781b7e772a3550f"
     },
     {
       "variantId": "compact.default",
@@ -13913,7 +13989,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "39eafeea9592e7f5fca0bc1301ba113f38f3e6b5f18affb0979d13ec8616d02a"
+      "receiptDigest": "a83394fae1b33f8938154fd6078fc13907916950c3e9962bb7e4d4692dceb3cf"
     },
     {
       "variantId": "rewind.picker",
@@ -13921,7 +13997,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "0046cac36a6db5913b2cf43a4a210b10f74576d5441e37ec562f0cf5be5d2f66"
+      "receiptDigest": "19da9bd3adca5d3fa4284917b81b484f1d825bf500d02f8d43d16da5006776d0"
     },
     {
       "variantId": "rewind.files",
@@ -13929,7 +14005,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "ac0cdbf572fb3bf2c144b603468f0a4eb0e69386ee263aaba89eb32cbca7b705"
+      "receiptDigest": "98469af7dc36797312d4715e5490b232ac24516a6bc9e59739aae35363e1de5b"
     },
     {
       "variantId": "rewind.history",
@@ -13937,7 +14013,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c9356e5fa9f0790524caee57c9a308fb6e2acdfd25702c429b91f1104c83adcf"
+      "receiptDigest": "ca50d2bccd28cb1e382871cf98b2c69f490b2ac513c96a335040f649c07212da"
     },
     {
       "variantId": "rewind.both",
@@ -13945,7 +14021,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6a55acd9c1921a08794c847f33afa9575dc22ce9fc0c4cc2968c2f173779a58f"
+      "receiptDigest": "800baf758b50355f9cd0ec136bd8a068bf832335f6f76906f5aff9ae29dc6ab9"
     },
     {
       "variantId": "rewind.preview",
@@ -13953,7 +14029,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "124054ca444876755cfc3848f2cff5f1622dccd8c664569d19f32fb39f9ec704"
+      "receiptDigest": "4031d7915e66f4481d13277c038f66bc8c708d54c764bb786d7ea48235d4682c"
     },
     {
       "variantId": "rewind.apply",
@@ -13961,7 +14037,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "aa8edd0d18ab4456457daacfc1bf11ba3eb311b2bdc0746066a8640ed0d76d0c"
+      "receiptDigest": "5baccd7c2d3771b7d399b9cf5dda1dcde30d4735242854715387f63664c9791b"
     },
     {
       "variantId": "theme.name",
@@ -13969,7 +14045,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "0673402d31c6ec4bb5604a6c913cc173aed1e9fb58349b563145ad703bb69f73"
+      "receiptDigest": "2baa9d64798865d4bacdb1ebb6d7bff0b0d1d78d4bce95556fa3a31d62e18e59"
     },
     {
       "variantId": "settings.read",
@@ -13977,7 +14053,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "996e299a40e3b20124c8396dd1f6f8eba375fd74a3c46bb9c6a74fac50ddbb8a"
+      "receiptDigest": "b95e4d2dd8a71bc2848ce867c88e751ec24340cdb158849cc0a8eb4bb2cf463f"
     },
     {
       "variantId": "game.seconds",
@@ -13985,7 +14061,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "ddb7c52d041d3a54e716cac744e70e0f38e497291fdbaf9c310905f9fc848f89"
+      "receiptDigest": "8559fa5cd55e459c2415337cd9f0ea33a361d263c5161f083fd03cf7bb884cc2"
     },
     {
       "variantId": "mode.show",
@@ -13993,7 +14069,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "eeac53d8588cf0c47b98da878c5cef9c3dc5c05680bed512a2b0392dd39c0f54"
+      "receiptDigest": "b381d41fc311bc8b9d98641ed8fd53fca641ccb8c3d40b03cda459eec3e4ac89"
     },
     {
       "variantId": "mode.ask",
@@ -14001,7 +14077,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "b5ef7091243357b233ff402c5f12c742e149798834a73ee542810d89373b162d"
+      "receiptDigest": "62879a3b2772fcd40985081eaebc0b04d3fc4dbcbd31ed0ade1511208ff61d20"
     },
     {
       "variantId": "mode.trust",
@@ -14009,7 +14085,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "4d1405644d66ab404eadf8b49b93df1937d6e4b063f4f854e3f634554a0be7e8"
+      "receiptDigest": "9efe05fb8302df99d756a141013a76b0c1cf6265dc44ff5781008c9900ace128"
     },
     {
       "variantId": "mode.auto",
@@ -14017,7 +14093,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "c575639652149cb68379c4f13ec5d369a55221b766e0b761c68567afe8b4d8f9"
+      "receiptDigest": "16fab0e32b3d926ace9e3f304ee36d7d4a762d6713d08db2142f8fb3dae2c60e"
     },
     {
       "variantId": "reasoning.show",
@@ -14025,7 +14101,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "969c30bd8b9e33de24171d097cb656bb1f10da790554a604217af7e9b6a4bd86"
+      "receiptDigest": "ee29c33739c6f80a759f6196b325d8af9b1c808686fa1ae8652575057172a51f"
     },
     {
       "variantId": "reasoning.off",
@@ -14033,7 +14109,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1b0735320bd18e83e62ef4e9dbb46be1c418068b469c75a6ab1feaaa31de003f"
+      "receiptDigest": "d55dcd94a300580c643e66ea6ef5438c6dbb727706dbe0b38c6a9688491a821c"
     },
     {
       "variantId": "reasoning.minimal",
@@ -14041,7 +14117,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "9c2dbe0bd21e3e2270530b1fca236da99cc31eaa6141f27c268980c1bac4b89e"
+      "receiptDigest": "f5a6ad23c701c87f620034ac5dc659c2e2037d96acc274783b64c108a63db612"
     },
     {
       "variantId": "reasoning.low",
@@ -14049,7 +14125,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "7b407814552b91f1387ffb6c5a9f0302b4be81ed5989d4ab0da8bffa9572fd67"
+      "receiptDigest": "8b8fb0eb99b81c1e6fd03c0a665086990cf7d07c7fe0be8dc7d9216ecc1fba7a"
     },
     {
       "variantId": "reasoning.medium",
@@ -14057,7 +14133,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "bed27f4323b70bb48ac58815b170751c4adad5bf361b31b77cf366d649ca2283"
+      "receiptDigest": "69c9415b0cbd93bd7fb18c4182bbacaaa77ad8727c1b0fa5a6d642e1b75b9d96"
     },
     {
       "variantId": "reasoning.high",
@@ -14065,7 +14141,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "c8b7b695ae85d63bf587bff6481c6ebf71113d937165b9d3d14ea2c68ee644e6"
+      "receiptDigest": "4c9ad6eda1cfd950570377c9de90e648bc7d2f94859186293783cf20ffaf515f"
     },
     {
       "variantId": "reasoning.xhigh",
@@ -14073,7 +14149,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "8aab4ad289e806bd0db1e408c80941f9089e33a5674828140fd9af6fa33c3243"
+      "receiptDigest": "49284b1eaf4a38d028c5def8dd4fab76bf96f86a612318dbe9d0715344766c31"
     },
     {
       "variantId": "reasoning.max",
@@ -14081,7 +14157,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "ebaa9e4e5dd284103881eb3ae712e33053237c1c554760007908a7ccb160fce6"
+      "receiptDigest": "2e2010a82a163b012bc655b209121f9729203b43118ac46ff4af804bbc46fb5c"
     },
     {
       "variantId": "plan.show",
@@ -14089,7 +14165,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "2ebdc0d62e04797ad75db1425017d9b6035cf3b738aa9197784048418d198edd"
+      "receiptDigest": "e30db91c892cb1ee19ed3e10ec92f1f5395955b4d55888f48a2342c54978b57c"
     },
     {
       "variantId": "plan.on",
@@ -14097,7 +14173,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "e34a193cbbce9b78b8d5bd993e584ebcb62abb858f77b6828e1ade43b22277de"
+      "receiptDigest": "03406b14b4dd16bcb35299367bc77f6bd082004ddd37a858f9698757e5d6932a"
     },
     {
       "variantId": "plan.off",
@@ -14105,7 +14181,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "e29bb8d0525064a8874334e50a9bd9bd2e7e0e44276cf382036bda578759bd5c"
+      "receiptDigest": "633076cdf952e3927b3e5f0d47fda519292ce7c75f7d2f2f2bfa6649c68a7e4f"
     },
     {
       "variantId": "plan.set",
@@ -14113,7 +14189,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "645166e9c38c9a959b4acc82cf9dd283ce26fbc40dca69483e3076a390755a04"
+      "receiptDigest": "6c4d6d66054957c0c68e8442eff0a94bec7d5d59a18ddac6c23947626db0b57c"
     },
     {
       "variantId": "clear.default",
@@ -14121,7 +14197,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "f3a85fac3ca8b9f6c85e8f03e220dd4bbf5713f2054f2ea556f36a39bb58cf87"
+      "receiptDigest": "9303b4bdd606989665a50cd1cae833a786c892d3d12b442b262c20ba650e468e"
     },
     {
       "variantId": "interrupt.default",
@@ -14129,7 +14205,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "327e4eb688c37918c3aa6ca975fe36dfb1b05fb5a2286feff8d4f6834d63c2ea"
+      "receiptDigest": "db2388877151e0561fb174e2c2a7267e2d4191cb93d31ba3a906369284d67316"
     },
     {
       "variantId": "queue.remove-N",
@@ -14137,7 +14213,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "314be571f14274eb095ddb24ac8e9585652c6d2fb5fc571d92f0e4031e762fe1"
+      "receiptDigest": "dfcb2bcbbfed7b05ed9465b6422dbacb3602f44dae1f0374d5ce56ee2c452515"
     },
     {
       "variantId": "queue.edit-N",
@@ -14145,7 +14221,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1a5c04fa1b7b1e9ddf9bb4e5fe9fe6d0f57091db1f4551ce58d33a43ae6f33dc"
+      "receiptDigest": "77e0a5cc21de27bed20ec86caadffaf8ee54cf871137cdc887cd741c4325ad1f"
     },
     {
       "variantId": "queue.force-N",
@@ -14153,7 +14229,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "104406d0a3eb0c9d1f55e1cc14f13c28646944e3a58dbd7c25450a7524808c12"
+      "receiptDigest": "274263e38f0008257ef4d0305796d64a39b9e2477893a63e2475d6bddfcb2a05"
     },
     {
       "variantId": "delegate.agent-task",
@@ -14161,7 +14237,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "7c6cf8a3d36aae684a84c845f86365e6425decdb389aec1d96bdf9569d3842d6"
+      "receiptDigest": "fbfd66aa89ce736091868cc8a7017b27a97a6d3680a4d9ba79fd22f67b7982b7"
     },
     {
       "variantId": "tasks.list",
@@ -14169,7 +14245,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "e00bb2bcd25ec4f2fd8cdf40327ff3400c9d405a5e23d79c81fb6962fa82d55b"
+      "receiptDigest": "69dde83b99a41284e7905b2e82478c9894830cc75689e822c59cdfa89cd90c3c"
     },
     {
       "variantId": "tasks.output-task-id-cursor",
@@ -14177,7 +14253,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "eb6bccb7694004ddfa402a3cad4756821ef2ab92409cca3469c0b6b996419071"
+      "receiptDigest": "46f8224adbfe4db627adee6453598357b9e0ccc209184a661b069fe9fb4b1cd4"
     },
     {
       "variantId": "tasks.kill-task-id",
@@ -14185,7 +14261,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "8f829b51c4101e443a4b8dd027a1f28c97a5f110e11c0eaa38d88366c421e943"
+      "receiptDigest": "0ebc19f1407090722444e3ac18da2b9f93d03bd4266d2a553c98fdb5c76f52cc"
     },
     {
       "variantId": "tasks.output",
@@ -14193,7 +14269,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d42cddc6813ed8e2d300d1aa1ba5edf0e1ee610bb90f939c79c2ecc3e4fb2ac5"
+      "receiptDigest": "7d4d2cbb6691d38a8cec25cb80505148a2a890a71890e417ba7dba7154d6f440"
     },
     {
       "variantId": "tasks.kill",
@@ -14201,7 +14277,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "bd84cb1e76ec92405020b0011e25c8e3dcfb3e092cd04d6548b5cc7060a7370f"
+      "receiptDigest": "86460bf76c3639f257856b2e8632fe36803ec06185fd71d15911abf1a4a186fa"
     },
     {
       "variantId": "demote.task-id",
@@ -14209,7 +14285,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "593be7ed709a477c8a4b6077cb6e7f64570b42ff8b38c5b73fc00e5c2180c3a0"
+      "receiptDigest": "ff0cfef42b88a5d2c3a896f7a48cc72d84ef81095113633992d1320c318ea609"
     },
     {
       "variantId": "bus.modal",
@@ -14217,7 +14293,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5ae76eef1ea6a8405444346a6a3ec3b24b42df24f8f646d38303fb4abc83298f"
+      "receiptDigest": "ce3115c5b6c5f9470747657faf8c541a221125bd152752da4ab50edb86f2d95f"
     },
     {
       "variantId": "bus.-name-text",
@@ -14225,7 +14301,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "0794b4166937ec3741cbbafd7f38fa5384b7d9cb12680f6a8618093d6e4308f7"
+      "receiptDigest": "ed912a47e14e731a6b84f88ea47844b041f0e72c7b0e98cebd19f3306b0dc1b4"
     },
     {
       "variantId": "bus.send",
@@ -14233,7 +14309,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "4a2029ffd34798e7fe09b5d6513be223bb529a5157c4b57dbdbabaabef5344c7"
+      "receiptDigest": "45b6a16338314410e5cc197e84e15f5638dcad94e61e1d87ed0db08b3ab0ed07"
     },
     {
       "variantId": "bus.ask",
@@ -14241,7 +14317,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "e161a8499b264f599992e58aea3e4e109bd099fc70638a2209f7ab1639e150b9"
+      "receiptDigest": "c049903233040eefe8af11cd7f450b27c4101c80f0bc17db653e4300b743cd4a"
     },
     {
       "variantId": "bus.reply",
@@ -14249,7 +14325,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "dfa66a8311527e9870fe8d3a9181774093920b3fc9ab63b2b8a52e4156278a89"
+      "receiptDigest": "288d3eb5a4295ffa811871edd6fae56f1818d6fe693a6b298a6fa28bb4214a88"
     },
     {
       "variantId": "bus.name",
@@ -14257,7 +14333,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "6f61d4a79b68bfaee40dd25a58c5ffb95428722a115139e6641528831b502fc4"
+      "receiptDigest": "26e5cdfce9d78f01938409b032a7674f42b707a186d3dccd28a4b3e958a4d32b"
     },
     {
       "variantId": "bus.pause-scope-ttl",
@@ -14265,7 +14341,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "c694ff292d8b04179e75fb171203fd72be439f9c5a8fc6c3825f7f4bdcbec71e"
+      "receiptDigest": "2419c69601b81e9a01cc9d3c5df53b2608cbe56f212cd04b04087924c81b3f6e"
     },
     {
       "variantId": "bus.resume",
@@ -14273,7 +14349,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "7901056689eb7f8cb7d19a7b07accdd997c310236ccdf28815e1dd7ed3cee598"
+      "receiptDigest": "797bc6851cf14416697a30c4f248d247b38057707d46f39a06e941e7d5731c9f"
     },
     {
       "variantId": "bus.override",
@@ -14281,7 +14357,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "f6db29d989bf5bd8a89cb028851a670012325be1b5a323ccd88494bda4631336"
+      "receiptDigest": "98ef4da0612be2c609c4452c00c6269bc7d463a0c816bad1a218634797b5da66"
     },
     {
       "variantId": "bus.pause",
@@ -14289,7 +14365,7 @@
       "localOutcome": "confirmation-required",
       "headlessOutcome": "confirmation-required",
       "matched": true,
-      "receiptDigest": "56d42e324b4a3bdb5bc91964d879ce9e0059bc47ccfb538ecf78670a6f0e9a9e"
+      "receiptDigest": "1275764877aaf59ebc7c4819f02db031ffaac792ba2123d4a885be64dca2a4bd"
     },
     {
       "variantId": "exit.default",
@@ -14297,7 +14373,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "28b240abf9c45f5a2702ae0785b9214a25806f335b6aa639bba23149a675d5b9"
+      "receiptDigest": "7a3b9df46e3b3d0176a89caf48a431b529d462a72b2b78192d793b6427f5c513"
     },
     {
       "variantId": "exit.quit-alias",
@@ -14305,7 +14381,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "0768babb1bfb2e15677c0be40098ac3fcae385187eb1038a49053ab8a213b747"
+      "receiptDigest": "adf9c5b9851ab55c6dc6788287d713817a185fe1a971aace527b3be40e51021a"
     },
     {
       "variantId": "status.questions-list",
@@ -14313,7 +14389,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "045dd483c08b8467f66837779eec629c3ea012bb995400426268b9b15d92c925"
+      "receiptDigest": "7b5ce8dcba842b575499bf5a5468af882482699c6442d41350e17e3ff2746645"
     },
     {
       "variantId": "status.questions-answer",
@@ -14321,7 +14397,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "550472f18e2d898bd4836c7f1e20197013fda58929672939749851f233459965"
+      "receiptDigest": "b0af2d69d602508b9fecdcba0f88fa155b35a066764685928c9de5f4fe164095"
     },
     {
       "variantId": "flow.origin-summary",
@@ -14329,7 +14405,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "e42b45637546e142eca5cfc300f650507d314b94e0ded16e8f838d688ff37869"
+      "receiptDigest": "1ba3b99a2517c42abd58e331ecd7afc7b1f8617f22bf441b20909f911f2226a3"
     },
     {
       "variantId": "flow.origin-set-reason-quote-source",
@@ -14337,7 +14413,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "37b7640eee047ab36c326d38bc72ff41fda590ae4ef114ed72cad6e13aa1fe6f"
+      "receiptDigest": "e4ec4fc92d76df2c0284722311aa83d773acc8caf0bed924d6028b65c8a6482d"
     },
     {
       "variantId": "setup.execute-init",
@@ -14345,7 +14421,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "9538cd4526752decef62716107fa7225120809c7735428277dc03e4105080bdc"
+      "receiptDigest": "30aef763080d4ac06a1c4a3682bbb5b091d824880fe777003ce2ec5e9b49db60"
     },
     {
       "variantId": "setup.execute-refresh",
@@ -14353,7 +14429,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "107e3768debd0226da526077860833f8c3757abc7302db2e0443e44754e2d385"
+      "receiptDigest": "80f42ae48f695e49a72dd94f6dfa18fbccc6924380ad0349ca79179048c85715"
     },
     {
       "variantId": "setup.execute-repair",
@@ -14361,7 +14437,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "0701a9a29620dde6909ce61b7a6c0f92c323492675990e6dd64223348573ed91"
+      "receiptDigest": "e662ce56994d9e4a93f509f58c214482f649a5bce14d93905d493158d5ed8e2f"
     },
     {
       "variantId": "mode.save",
@@ -14369,7 +14445,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "ac4f8ca730e98523c09b03debe5d0864ce483ae97bb985ee5e78d9bcc3523899"
+      "receiptDigest": "8385d53e64072346276d387fac2849cfdfd0291aa9725bda9ced4cfbb71c6aa8"
     },
     {
       "variantId": "mode.clear",
@@ -14377,7 +14453,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "4b1de3db0f9fd85a51211c57362a0a3f60fbcc23a8a4f2ffd172bbecb9cf7c20"
+      "receiptDigest": "93aaa4168bdb680396ae87b3ae5794c27c7a1064a39ea6861c8741e25dd3cbba"
     },
     {
       "variantId": "goal.auto-rounds",
@@ -14385,7 +14461,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "ff9a007613300feadf180401551042d47c175cd4fa9e82cde46b941d57d84d72"
+      "receiptDigest": "8b157360e3547f62dbb5a572b5595ef5e7dbd4412f6fce3579444edd25ed754b"
     },
     {
       "variantId": "queue.list",
@@ -14393,7 +14469,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "957e33f8fca09df2ff58fa96355ae1b12463157a283c7c6391b6275a6bf2ac75"
+      "receiptDigest": "915fc1028af6507b1ec2b74dc2b8155ddd2682c1e0205fbb90de261594ddc871"
     },
     {
       "variantId": "queue.edit",
@@ -14401,7 +14477,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "f0cca235ac9817c5fbc3c357bbbe386519f054a1d99c6dbf67207547b3e00616"
+      "receiptDigest": "2d0bff499192335b46a99783f4d219a056adacdc3d40c9a9091379d09a6f096b"
     },
     {
       "variantId": "queue.remove",
@@ -14409,7 +14485,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c2b7953935a5ea79ded52ede136d71191a50a09db73e0a40787b774e3ea47a3c"
+      "receiptDigest": "dae3f49436b5b98c282cd5bb05bd31946e21121f4920b14d197547e2b88148b9"
     },
     {
       "variantId": "queue.force",
@@ -14417,7 +14493,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "014f74f6d4368f6ab0533929eeb3642571e7f0fc3e4cd3f4f3e3eb2d230e269e"
+      "receiptDigest": "41e31fbaf4cfeb8970e5de22b2809b7538e86a3005d6702acbeabdc20a2cd54e"
     },
     {
       "variantId": "guard.measured-details",
@@ -14425,7 +14501,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "938d984bce40aedf16572b632e2a8594fddf6416ee2b657fb86a6fa3fcabd7b3"
+      "receiptDigest": "a04ad2f1c033d99d42a3bfdd5002108fd910aa34105c29b058fcdda6d7880627"
     },
     {
       "variantId": "editguard.threshold-and-recent-flags",
@@ -14433,7 +14509,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "ed9ecf59d0ce15cbc73dc67c3cdaaaff8aee5eb87ebe7b8a18c5dd529fbd3d55"
+      "receiptDigest": "abcee286dd95a97d61161b73269e6e8fb3729a1f32d7b2765921106db4c46c3a"
     },
     {
       "variantId": "projectctx.last-resolve-details",
@@ -14441,7 +14517,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "167f41fc6c2030cfba5bbbd02989f81e6a265b3b165db12aae9ea25f2c2a7667"
+      "receiptDigest": "f63eb21fd0f05cf20ebe1ffb023b55e0dbf8720e1a00f5ba54fb775da1588960"
     },
     {
       "variantId": "projectctx.reference-details",
@@ -14449,7 +14525,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1a4bbc9394a16ddc9e57c036457eee175c853c25c14eb33431958f6832fcbf28"
+      "receiptDigest": "6d87245b0016973b0ff969ebdffcb271ba0465a805cf4a30fc6cd2bd7039d651"
     },
     {
       "variantId": "jevprofile.entries",
@@ -14457,7 +14533,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d013bf369f86cacca72186ef767e929aaf704019fc44382f5bc6ba30c57b99c7"
+      "receiptDigest": "a3f84a2740bf1a4e896105e3228bdb89928039acbd43148a0079cb1a14fd3fa2"
     },
     {
       "variantId": "routing.category-assignments",
@@ -14465,7 +14541,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "62e3fd4c8db36daabf5b5b38431df6d317358d6ef336dcd9af0e1e3a73706236"
+      "receiptDigest": "a3a1033646e6d29c0aa0b7c53ba0a3e37948bb0fb7793c4eb988abd07d4fa00e"
     },
     {
       "variantId": "flows.navigate",
@@ -14473,7 +14549,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "e51f2cd9ff4abb48c2fa68aeacb09eac625704d7fc0433958cbed7ef17837bac"
+      "receiptDigest": "43e7031a87b683f7d4d2be6df2f1224d4ae3c2b69dccda25f6ea6b683625910f"
     },
     {
       "variantId": "ac.navigate",
@@ -14481,7 +14557,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "6283fb3d5a521bb646b9a872f248b05942994d07513b29f16cc2a75d49c1b960"
+      "receiptDigest": "4e2bde250d72e5248aa1089aa58f2481c8cf4b37b87133ea51935f6d95213016"
     },
     {
       "variantId": "workspace.navigate",
@@ -14489,7 +14565,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "019a05c9b4236e0f0c8d376eb412939a3f673556b2034445d9dd3e5f0967bdbd"
+      "receiptDigest": "78211506f590a92adaacfb7ef4592ce717a28f64d88ddf1da352e19c36f0595e"
     },
     {
       "variantId": "review.navigate",
@@ -14497,7 +14573,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "5be293b5159fe8b70fa59333e272241136c2608a9d9d80b29529ffb03ac6a3e1"
+      "receiptDigest": "a17f76fd3140bf62762e81887e55cbe4e378d5fb89db4f053b0648a44c454ecc"
     },
     {
       "variantId": "reviews.navigate",
@@ -14505,7 +14581,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "6f42f382b9283bf8945aeddbe7552e51c42c2e1200b5dc285cad26e7149af265"
+      "receiptDigest": "c8f5fb431c1f2b572d39fa2f902a89c52f9181c593c1e8753df9d8f1993fcbb5"
     },
     {
       "variantId": "product.navigate",
@@ -14513,7 +14589,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "5ee02aa4631f992ca2bbb5ff5b1fc4857e7ad8881e5b6f527cab00609f7447ff"
+      "receiptDigest": "ab04ceb6b6c370496217b773046919ff45670f49fba705b79f8f5c767fa613cb"
     },
     {
       "variantId": "governance.navigate",
@@ -14521,7 +14597,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "43ba5bf52ce69ce27b99914f04c85545b2cce56a6f1ccee47eab5e1cd9387180"
+      "receiptDigest": "3091811e9e81b72938f483478344cb0f42b7b69ee658c5d821399df6624c728a"
     },
     {
       "variantId": "triggers.navigate",
@@ -14529,7 +14605,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "7ec14b1aac9b2b8c76e1059ab57b690a33beaf1e5a2a6e58e575b5a4a831c6fa"
+      "receiptDigest": "2fc0a821c908f189ed7a40f4ae7400feb054c70c14ac58c14e791932a54f1a43"
     },
     {
       "variantId": "routing.navigate",
@@ -14537,7 +14613,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "e3ee25fab61ec67c07bc1f568f52dff0c610d957818546567a31a08d61ef565c"
+      "receiptDigest": "bca184a3166e79d6daf519c6b89c1189d167d032d971e44f2bc796266e748181"
     },
     {
       "variantId": "guard.navigate",
@@ -14545,7 +14621,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "700b11aa6d864363ad57d0a07f9397d7c6f43927225478fe999a742929e5709a"
+      "receiptDigest": "cf03af9d19d64d0d42d8edf7ea2b71cc39de4136d565da9eb7649a49752fef26"
     },
     {
       "variantId": "editguard.navigate",
@@ -14553,7 +14629,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "59b542308949a99f6a9a06939ecc45d39e57350e60f9184bd2ff4aa05dfe60c1"
+      "receiptDigest": "3da99ade668a977c7c5590377ed5ba3ec650e27a4e9d56900245bcbe75d91829"
     },
     {
       "variantId": "projectctx.navigate",
@@ -14561,7 +14637,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "462003b0b2a6c7f97dbf9979082eb938276b03a56fa0bee93d3b4208817e4d16"
+      "receiptDigest": "3599bdc957481bbe1b4646cd14fb64c318f04ac49eeee962de42d8fdb109cfba"
     },
     {
       "variantId": "jevprofile.navigate",
@@ -14569,7 +14645,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "ef8ff5447a27b53fb0ba95741140b4ffff6c412aae1340bdf180360c0610f095"
+      "receiptDigest": "541f0df4bd1cfb9594a36c906f675edaa477114df5421ca9d2e53d191b584565"
     },
     {
       "variantId": "permissions.navigate",
@@ -14577,7 +14653,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "706d037d2b4fb78411c5359e9f4e9267254df231288be9b1038417f1a50955f2"
+      "receiptDigest": "7318c0dc455320fb34c48e145b266cd7bb449cc5e980dc81fac348e7660383b3"
     },
     {
       "variantId": "ci.navigate",
@@ -14585,7 +14661,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "8412e8d761f0c377fa05a7304ca9f9605860b9b18e22203354bdafac731c1afd"
+      "receiptDigest": "a644ef6b736586cdfbfcb5d81f9e47ad2b812dcf0ffaa917bbf5a050c4ae1860"
     },
     {
       "variantId": "conform.navigate",
@@ -14593,7 +14669,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "2bd272d75096c31b4a1db757e2500b9df7a9e1f09742d8875c8b6fd8e3f1b2b3"
+      "receiptDigest": "22072549f6755122d61a8a7ece40a7d49afa46d486ebf144497bf19c7d57f773"
     },
     {
       "variantId": "rewind.navigate",
@@ -14601,7 +14677,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "0143ffefb70f312c2b50755df1899811dfd98e9336a708c18c20899d4c5037b2"
+      "receiptDigest": "ac5917ab583f01079a016def0bb37012879fcbddeac36c3f7618f553bf557ddd"
     },
     {
       "variantId": "settings.navigate",
@@ -14609,7 +14685,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "c635396962844a1c1ac429ae5040b7641871387b1a73dd4cc0bf7f64a506494d"
+      "receiptDigest": "67cf4a75e50367b08c46f9daa7537c658cd3d6f19ef9b9177f3b422490bc117c"
     },
     {
       "variantId": "connect.navigate",
@@ -14617,7 +14693,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "2cf5ff678f38a81d6ec2fe787981def48f7a18a7c02861ce131030021fbae759"
+      "receiptDigest": "85f6a1522aaf536ef4da864a3d6dbcdb0e1c29bfb59b3019a7692aa9aeae7c25"
     },
     {
       "variantId": "mcp.navigate",
@@ -14625,7 +14701,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "7868759b20bdbfa0e27554197830df50964cd35958139ce6c74162917b83fdec"
+      "receiptDigest": "548754ea77a3258288d4a1b450a8a56190fdd1a2f3aaf06d003526d7aa630189"
     },
     {
       "variantId": "channels.navigate",
@@ -14633,7 +14709,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "eea68481dd77c6caf93b4715b0f5487afdb984235dcd2a397bf9a590e01ba659"
+      "receiptDigest": "77054fb5333b3e92cecd30736c241ed4286b5d973d4e2feb5377787cc7027694"
     },
     {
       "variantId": "intake.navigate",
@@ -14641,7 +14717,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "0cde6255488797f704e103dd1d85f65c51d4b75efb43726ed8cae56d9993ca55"
+      "receiptDigest": "3bb1d1dc0c7d81720c854c3dfe454f12b462b7af18b93d7be320162e94877f9b"
     },
     {
       "variantId": "schedules.navigate",
@@ -14649,7 +14725,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "66985fc0242b0ad5b74ab818d2f41149213cad23a1d60f910c507ee4dd1a2a40"
+      "receiptDigest": "9d628e1c7e32f18682929b74ffecaa488161e871351de740c692b3d7d766f976"
     },
     {
       "variantId": "autoreview.navigate",
@@ -14657,7 +14733,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "cf115e81192a21a9fad1dc359ded5bf2782277371c6b1f27b37537c07e8af47c"
+      "receiptDigest": "695724fc5eeec86ce21ef8b12a7ec3aeb7c10f004e73ca0bbaf7a395b37d73e8"
     },
     {
       "variantId": "decisions.navigate",
@@ -14665,7 +14741,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "39f5b67414d2d104bdfe5b9762a57bb5253b35c3caf2cf775e73238f2a328238"
+      "receiptDigest": "8d17131cb033b45782c4d423787126f0ba4c300db4abf49c7c5fb80ffa8ad24c"
     },
     {
       "variantId": "setup.navigate",
@@ -14673,7 +14749,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "153c2ee0907274decafcc5f96ac6f080c0d20e132e3dde464b9263e5308ee67f"
+      "receiptDigest": "1bc090dbb0dc0dc55c4eb8efe3d72398a49a830848effb188e320c509507463e"
     }
   ]
 }
