@@ -385,7 +385,7 @@ const dockDepth = new WeakMap<object, number>();
 let diagWaiting = 0;
 let diagHolders = 0;
 let diagHeldSince = 0;
-let diagQueuedSince: number[] = [];
+const diagQueuedSince: number[] = [];
 
 export function composerDockDiagnostics(now: number = Date.now()): {
   holders: number;

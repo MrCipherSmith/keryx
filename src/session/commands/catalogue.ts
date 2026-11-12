@@ -22,7 +22,7 @@ import { routingCategoryCommands } from "./routing-categories";
 
 export const sharedCommandIds = new Set(["help", "status", "models", "routing", "reasoning", "history", "compact", "tasks", "queue"]);
 /** specification.md 3.1: "Pure terminal display functions are client concerns." `/think` only chooses how reasoning blocks are shown. */
-const presentation = new Set(["theme", "copy", "expand", "rendering", "game", "think"]);
+const presentation = new Set(["theme", "copy", "expand", "rendering", "game", "think", "diag"]);
 /** specification.md 3.1: "unimplemented vendor adapters are explicit capability boundaries" and external-vendor execution "[is] not admitted by this Flow". */
 const externalVendor = new Set(["delegate", "external-diff"]);
 const localSetup = new Set(["connect", "search-connect", "setup", "permissions", "mode", "remote-policy", "remote-control"]);
