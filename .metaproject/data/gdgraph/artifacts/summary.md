@@ -2,49 +2,52 @@
 
 ## Stats
 
-- Source files indexed: 3253
-- Imported asset files indexed: 14
-- Total nodes: 3267
-- Edges: 11703
-- Import edges: 11550
-- Asset edges: 31
-- Unresolved imports: 122
-- Import resolution: 99%
-- Skipped generated/static directories: 18
+- Source files indexed: 4002
+- Imported asset files indexed: 35
+- Total nodes: 4037
+- Edges: 15080
+- Import edges: 14841
+- Asset edges: 55
+- Unresolved imports: 184
+- Import resolution: 98.8%
+- Skipped generated/static directories: 17
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| commands | 404 |
-| harness | 400 |
-| tui | 310 |
-| review | 280 |
-| lib | 212 |
-| gdskills | 137 |
+| harness | 458 |
+| commands | 446 |
+| review | 342 |
+| tui | 338 |
+| lib | 274 |
+| hub | 187 |
+| apps | 161 |
+| gdskills | 141 |
+| session | 135 |
 | remote | 132 |
-| flow | 92 |
-| security | 88 |
+| flow | 94 |
+| security | 93 |
+| scripts | 88 |
 | wiki | 70 |
-| scripts | 67 |
-| sac | 65 |
+| sac | 66 |
+| learning | 65 |
 | health | 57 |
-| learning | 57 |
 | mcp-servers | 56 |
 | gdgraph | 55 |
 | memory | 49 |
-| session | 46 |
-| acp | 42 |
-| metrics | 39 |
 
 ## Unresolved By Type
 
 | Type | Count |
 |---|---:|
-| relative-code | 94 |
-| package | 17 |
-| .js | 3 |
+| relative-code | 97 |
+| package | 68 |
+| .js | 4 |
+| .util | 3 |
+| .mock | 3 |
 | . | 2 |
+| .parse | 1 |
 | .css | 1 |
 | .slice(4, -3)} | 1 |
 | .scanner | 1 |
@@ -55,16 +58,15 @@
 ## Skipped Directories
 
 - `.claude`
-- `.git`
 - `.metaproject`
+- `apps/hub-web/public`
 - `bench/jev-review/fixtures/conform-project/.metaproject`
-- `dist`
 - `docs/requirements/keryx-mcp-client/.metaproject`
 - `fixtures/memory-reliability-p0/.metaproject`
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
-- `node_modules`
 - `src/bundle/fixtures/roundtrip/project/.metaproject`
+- `src/remote-control/generated`
 - `src/security/audit-harness/fixtures/agents/.metaproject`
 - `src/security/audit-harness/fixtures/baseline-indefinite/.metaproject`
 - `src/security/audit-harness/fixtures/baseline-tampered/.metaproject`
