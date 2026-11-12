@@ -126,6 +126,11 @@ export type BusyDispatchTarget =
    * branch in a throwaway worktree, so it never touches the main turn's checkout.
    */
   | "external-diff"
+  /**
+   * `/diag` (flow 487): dumps the in-flight tool-call registry. It exists for the moment a turn is
+   * stuck, so it must answer while the main turn is busy, never queue behind it.
+   */
+  | "diag"
   | "deferred"
   | "not-a-command";
 
@@ -175,6 +180,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/permissions") return "permissions";
   if (commandName === "/decisions") return "decisions";
   if (commandName === "/external-diff") return "external-diff";
+  if (commandName === "/diag") return "diag";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";

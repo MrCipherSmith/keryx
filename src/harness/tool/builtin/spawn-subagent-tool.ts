@@ -7,6 +7,7 @@
 //
 // Risk: `delegate` (agent driver requires approval when an approver is present).
 
+import { callDiagnostics } from "../../../lib/call-diagnostics";
 import { tracePhase } from "../../../lib/phase-trace";
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -573,10 +574,12 @@ export async function invokeWithBackstop(
     timer = setTimeout(() => resolve("expired"), Math.min(capMs, MAX_TIMER_DELAY_MS));
   });
   tracePhase(`spawn backstop armed ${capMs}ms`);
+  callDiagnostics.event("backstop.armed", `${capMs}ms`);
   const run = invoke(input, { ...ctx, signal: composed.signal });
   try {
     const outcome = await Promise.race([run, expired]);
     tracePhase(`spawn backstop ${outcome === "expired" ? "expired" : "settled"}`);
+    if (outcome === "expired") callDiagnostics.event("backstop.expired", `${capMs}ms`);
     if (outcome !== "expired") return outcome;
     cap.abort();
     void run.catch(() => {

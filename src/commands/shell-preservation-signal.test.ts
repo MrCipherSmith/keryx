@@ -61,3 +61,22 @@ test("handlers sharing one guard start a single shutdown; a later signal forces 
   expect(started).toEqual(["130", "release"]);
   expect(exits).toEqual([143]);
 });
+
+test("beforeAbort runs once, before the turn is aborted, and a throw never blocks the shutdown", async () => {
+  const order: string[] = [];
+  let done: (code: number) => void = () => {};
+  const exited = new Promise<number>((resolve) => { done = resolve; });
+  const shutdown = makeSignalShutdown({
+    guard: { startedAt: undefined },
+    busBox: { current: undefined }, leaseBox: { current: undefined },
+    jobRegistryBox: { current: undefined },
+    beforeAbort: () => { order.push("dump"); throw new Error("sink refused"); },
+    abortTurn: () => { order.push("abort"); },
+    releaseLease: () => {}, closeMcp: async () => {},
+    closeReadline: () => {}, exit: done,
+  }, 130);
+  shutdown(); shutdown();
+  expect(await exited).toBe(130);
+  expect(order).toEqual(["dump", "abort"]);
+});
+

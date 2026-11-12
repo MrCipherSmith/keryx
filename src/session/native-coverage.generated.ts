@@ -3,18 +3,18 @@
 export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "schema": 1,
   "generator": "scripts/verify-native-coverage.ts",
-  "registryDigest": "286041ef4394afd4de97b4da37e31ccb2728c485cd32488c737a2686c244fbca",
-  "contractDigest": "43cd83cfbd494ce63e1f6c86a5a0c057a160f4a537d8119358e0f262412a96c9",
-  "subjectCatalogueDigest": "0acadb75d0264de7edf173be63ef12e443cef2fcfd39e3d1a3bfb54c88b200ab",
-  "inventoryDigest": "e0ce396e35a7dc5e102bb24072a0be4c5b1dc0974ed6cda5741ff522c568852e",
+  "registryDigest": "4ffeed70558759232f3fac63b783e33fdbca8b8fd59cee7059d2c58836a0a0fc",
+  "contractDigest": "7a7b7002ec177255f9709940457a0dfd9010a2385cac47fa2317ffb09b4371e7",
+  "subjectCatalogueDigest": "89c424a37e4532cab5db70d462ad03a2b42a77c44981e26051c8af90da60b2f2",
+  "inventoryDigest": "843b14466df0152607ffd41915ac36ccfb8de94b1e8c104b7c8e0e1e1dcd4194",
   "releaseReady": true,
   "counts": {
-    "registeredCommands": 74,
-    "variants": 261,
+    "registeredCommands": 75,
+    "variants": 262,
     "required": 147,
     "earned": 147,
     "requiredGaps": 0,
-    "boundaries": 114,
+    "boundaries": 115,
     "otherBlockers": 0
   },
   "earned": [
@@ -190,6 +190,7 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "copy.default",
     "decisions.navigate",
     "delegate.agent-task",
+    "diag.default",
     "editguard.navigate",
     "editguard.off",
     "editguard.on",
@@ -284,5 +285,5 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "8e0e355284ffbc1a3482f8a5f50de73036b754d92fe0c7a9eb79a401132378d6"
+  "descriptorDigest": "9aee636208a1059a6f695246b0e656ad8db9a52a98aaf3e01caabaa7853da5c4"
 };

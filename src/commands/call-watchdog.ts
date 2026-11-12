@@ -1,4 +1,5 @@
 import { composeAbortSignals } from "../lib/abort-compose";
+import { callDiagnostics, type DiagOutcome } from "../lib/call-diagnostics";
 import { tracePhase } from "../lib/phase-trace";
 
 export type CallStage = { current: string };
@@ -31,21 +32,37 @@ type CallResult = { output: string; isError: boolean };
 export async function runWithCallWatchdog<T extends CallResult>(
   name: string,
   run: (signal: AbortSignal | undefined, stage: CallStage) => Promise<T>,
-  options: { signal?: AbortSignal | undefined; capMs?: number; abortGraceMs?: number } = {},
+  options: { signal?: AbortSignal | undefined; capMs?: number; abortGraceMs?: number; callId?: string } = {},
 ): Promise<T | CallResult> {
   const capMs = options.capMs ?? resolveCallWatchdogMs();
+  const callId = options.callId;
+  // Concurrent calls of one tool interleave in the trace; the id tells them apart.
+  const tag = callId === undefined ? name : `${name}#${callId}`;
   let currentStage = "start";
+  // The registry's key for this call (the id, or a suffixed one if the id was already in flight).
+  let diagKey: string | undefined;
   const stage: CallStage = {
     get current(): string {
       return currentStage;
     },
     set current(next: string) {
       currentStage = next;
-      tracePhase(`${name} stage ${next}`);
+      tracePhase(`${tag} stage ${next}`);
+      if (diagKey !== undefined) callDiagnostics.stage(diagKey, next);
     },
   };
-  tracePhase(`${name} call start (watchdog ${capMs}ms)`);
-  if (capMs <= 0) return run(options.signal, stage);
+  tracePhase(`${tag} call start (watchdog ${capMs}ms)`);
+  if (callId !== undefined) diagKey = callDiagnostics.begin(callId, name);
+  if (capMs <= 0) {
+    let kind: DiagOutcome = "error";
+    try {
+      const result = await run(options.signal, stage);
+      kind = result.isError ? "error" : "ok";
+      return result;
+    } finally {
+      if (diagKey !== undefined) callDiagnostics.end(diagKey, kind);
+    }
+  }
 
   const graceMs = options.abortGraceMs ?? ABORT_GRACE_MS;
   const inner = new AbortController();
@@ -53,15 +70,19 @@ export async function runWithCallWatchdog<T extends CallResult>(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let graceTimer: ReturnType<typeof setTimeout> | undefined;
   let onAbort: (() => void) | undefined;
+  let firedKind = undefined as DiagOutcome | undefined;
 
   const stalled = new Promise<CallResult>((resolve) => {
     const arm = (): void => {
       timer = setTimeout(() => {
         if (HUMAN_STAGES.has(stage.current)) {
+          callDiagnostics.event("approval.rearm", tag);
           arm();
           return;
         }
-        tracePhase(`${name} watchdog fired at stage ${stage.current}`);
+        tracePhase(`${tag} watchdog fired at stage ${stage.current}`);
+        callDiagnostics.event("watchdog.fired", `${tag} stage=${stage.current}`);
+        firedKind = "watchdog";
         resolve({
           output:
             `${name} did not finish within ${capMs}ms and was abandoned by the harness watchdog ` +
@@ -79,11 +100,14 @@ export async function runWithCallWatchdog<T extends CallResult>(
     if (options.signal !== undefined) {
       onAbort = (): void => {
         graceTimer = setTimeout(
-          () =>
+          () => {
+            firedKind = "aborted";
+            callDiagnostics.event("abort.abandoned", `${tag} stage=${stage.current}`);
             resolve({
               output: `${name} was cancelled by the operator and did not stop on its own (stage "${stage.current}"); the call was abandoned.`,
               isError: true,
-            }),
+            });
+          },
           graceMs,
         );
       };
@@ -93,11 +117,14 @@ export async function runWithCallWatchdog<T extends CallResult>(
   });
 
   const running = run(composed.signal, stage);
+  let kind: DiagOutcome = "error";
   try {
     const outcome = await Promise.race([running, stalled]);
-    tracePhase(`${name} call settled`);
+    kind = firedKind ?? (outcome.isError ? "error" : "ok");
+    tracePhase(`${tag} call settled`);
     return outcome;
   } finally {
+    if (diagKey !== undefined) callDiagnostics.end(diagKey, kind);
     if (timer !== undefined) clearTimeout(timer);
     if (graceTimer !== undefined) clearTimeout(graceTimer);
     if (onAbort !== undefined) options.signal?.removeEventListener("abort", onAbort);
