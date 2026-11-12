@@ -137,7 +137,8 @@ import { keryxConfigDir } from "../lib/config-dir";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
-import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { conversationHistoryText } from "../tui/conversation-history";
 import { ChannelsClient } from "../remote/channels-client";
 import { loadRemoteConfig } from "../remote/config";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
@@ -176,7 +177,7 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
-import { commandsForMode, describeUnavailableCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
+import { commandsForMode, describeUnavailableCommand, isHistoryCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
 // Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
 // ONLY through this core facade (see the zone note in
 // `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
@@ -313,6 +314,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/setup",
   "/reviews",
   "/remote-control",
+  "/history",
   "/channels",
   "/intake",
   "/rendering",
@@ -848,6 +850,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
+  const readConversation = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
+  const resetConversation = (): void => {
+    history = [];
+    archive = [];
+    io.onConversationReady?.(readConversation, false, live?.dir);
+  };
+  let resumed = false;
   // The session lease this loop holds (specification §6). Mirrored into the
   // caller's `leaseBox` so a signal handler outside the loop can release it.
   let lease: SessionLeaseHandle | undefined;
@@ -878,6 +887,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         system(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
       }
       if (opened.resumed) {
+        resumed = true;
         system(
           `Resumed session ${shortSessionId(live.summary.id)} · ${live.summary.title} (${history.length} context msgs)\n`,
         );
@@ -896,6 +906,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       system(`${cause instanceof Error ? cause.message : String(cause)}\nStarting a new session.\n`);
     }
   }
+  io.onConversationReady?.(readConversation, resumed, live?.dir);
   const releaseLease = (): void => {
     releaseSessionLease(lease);
     holdLease(undefined);
@@ -1136,8 +1147,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
             system(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
             continue;
           }
-          history = [];
-          archive = [];
+          resetConversation();
           // AC8: presence.sessionId follows every in-process session switch.
           // review r1 F5: the client already reports a write failure through
           // `onError` and never rejects; this catch is a defensive second
@@ -1149,8 +1159,12 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           }
           system(`New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`);
         } else {
-          history.length = 0;
+          resetConversation();
         }
+        continue;
+      }
+      if (isHistoryCommand(command)) {
+        system(conversationHistoryText(readConversation()));
         continue;
       }
       if (command === "/compact") {
@@ -2917,8 +2931,7 @@ export async function runAgentRepl(
         // Flow 376: the readline shell has no remote control; status as text, enabling explained.
         agentIo.onSystem?.(readlineRemoteControlText(line));
       } else if (isHistoryCommand(command)) {
-        // Flow 399: no topic here; the text says where `/history` works.
-        agentIo.onSystem?.(readlineHistoryText(line));
+        agentIo.onSystem?.(conversationHistoryText(archive.length > 0 ? archive : history));
       } else if (isChannelsCommand(command)) {
         // Flow 377: the state as text; Connect needs the hidden token entry of the full-screen shell.
         agentIo.onSystem?.(readlineChannelsText(line, await loadChannelsSnapshot(new ChannelsClient())));

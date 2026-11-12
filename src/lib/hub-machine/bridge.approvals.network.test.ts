@@ -129,7 +129,11 @@ test(`R5.2 ${label}`,async()=>{
   const turn=await s.turn(lease,'Spawn descendants that ignore TERM');await wait(async()=>{try{return readFileSync(pids,'utf8').trim().split('\n').length;}catch{return 0;}},v=>v>=2);list=readFileSync(pids,'utf8').trim().split('\n').map(Number);
   const started=Date.now();await success(await s.cancel(lease,turn.runId!));
   const run=await s.waitRun(turn.runId!,v=>TERMINAL.includes(v.state),2000);const elapsed=Date.now()-started;expect(run.state).toBe(expected);
-  if(expected==='cancelled'){expect(elapsed).toBeGreaterThanOrEqual(5000);expect(list.map(alive)).toEqual([false,false]);expect(await cancelReceipts()).toEqual([{status:'applied',errorCode:'none'}]);expect((await wait(s.read,v=>v.state==='idle')).activeRunId).toBeNull();}
-  else{expect(alive(list[0]!)).toBe(true);expect(alive(list[1]!)).toBe(false);expect((await wait(s.read,v=>v.state==='recovery-required')).state).toBe('recovery-required');expect(await cancelReceipts()).not.toContainEqual({status:'applied',errorCode:'none'});}
+  if(expected==='cancelled') expect(elapsed).toBeGreaterThanOrEqual(5000);
+  expect(list.map(alive)).toEqual([expected==='unknown',false]);
+  // Hub can project the terminal run event before recording the command receipt.
+  const receipts=await wait(cancelReceipts,values=>values.some(receipt=>receipt.errorCode!==null));
+  if(expected==='cancelled'){expect(receipts).toEqual([{status:'applied',errorCode:'none'}]);expect((await wait(s.read,v=>v.state==='idle')).activeRunId).toBeNull();}
+  else{expect((await wait(s.read,v=>v.state==='recovery-required')).state).toBe('recovery-required');expect(receipts).toEqual([{status:'not-applied',errorCode:'recovery-required'}]);}
  }finally{for(const pid of list){try{process.kill(pid,'SIGKILL');}catch{/* already gone */}}rmSync(dir,{recursive:true,force:true});}
 },40000);

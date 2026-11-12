@@ -230,7 +230,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     serial = previous.then(() => unlocked).catch(() => undefined);
     return previous.then(() => task(release)).finally(release);
   };
-  let active: { runId: string; turnId: string; historyVersionAtAdmission: number; abort: AbortController; done: Promise<void> } | undefined;
+  let active: { runId: string; turnId: string; historyVersionAtAdmission: number; abort: AbortController; done: Promise<boolean> } | undefined;
   let selecting: { operationId: string; payloadDigest: string; runId: string; turnId: string; abort: AbortController; done: Promise<SessionHostReceipt> } | undefined;
   /** An admitted when-idle close: new work is sealed and the close applies at the current turn's boundary (protocol "close when-idle", D15). */
   let pendingClose: Extract<SessionHostOperation, { kind: "close-session" }> | undefined;
@@ -536,6 +536,7 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
         // A pending when-idle close owns this boundary: it is the next serialized step, and every admission stays sealed until it settles.
         if (pendingClose !== undefined) void serialized(settlePendingClose);
       }
+      return terminal.outcome !== "unknown";
     }));
     active = { runId: operation.runId, turnId: operation.turnId, historyVersionAtAdmission, abort, done };
     return receipt;
@@ -821,11 +822,14 @@ export async function createSessionHost(options: SessionHostOptions): Promise<Se
     requestSessionInterrupt({ isActive: true, cancel: () => current.abort.abort(new SessionHostError("cancelled")) });
     questions.denyAll("turn-cancelled"); approvals.denyAll("turn-cancelled");
     await options.runtime.stop({ kind: "run", identity: current.runId });
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const completed = await Promise.race([current.done.then(() => true, () => false), new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), 2000); })]);
-    if (timer !== undefined) clearTimeout(timer);
+    // A later process-group probe can succeed after the turn already recorded
+    // unproven cessation. The receipt must preserve that terminal outcome.
+    const completedWithKnownOutcome = await within(current.done.catch(() => false), false, SETTLE_BOUND_MS);
     const final = await options.runtime.stop({ kind: "run", identity: current.runId });
-    if (!completed || final.status !== "stopped") { record.state = "recovery-required"; state(); return "unknown"; }
+    if (!completedWithKnownOutcome || final.status !== "stopped") {
+      if (record.state !== "recovery-required") { record.state = "recovery-required"; state(); }
+      return "unknown";
+    }
     return "stopped";
   };
   const resumeOwnedSession = async (request: Control["SessionResume"]): Promise<Control["SessionRecord"]> => {

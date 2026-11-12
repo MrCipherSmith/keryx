@@ -524,9 +524,8 @@ describe("wiring (source audit)", () => {
     expect(tuiSource).toContain("hcTranscriptEcho(line, agentShaped)");
     expect(tuiSource).toContain("frameSubmittedLine(line)");
     expect(tuiSource).toMatch(/runAgentTurn\(foregroundIo, deps, history, modelLine,/);
-    // The scroll pin carries the same label as the echo; the resume summary decodes stored frames.
+    // The scroll pin carries the same label as the echo.
     expect(tuiSource).toContain("chrome.registerUserPrompt(userEcho, echoLine, hcEcho?.marker);");
-    expect(tuiSource).toContain("const hc = hcHistoryEcho(message.content);");
   });
 
   test("a Telegram line is the operator's: its tg mark wins and it is never framed", () => {

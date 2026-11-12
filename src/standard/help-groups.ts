@@ -604,7 +604,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/history",
     group: "Automation",
-    summary: "Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default.",
+    summary: "View the current session conversation. In the full-screen shell, open with Ctrl+Shift+H and search with ↑/↓ to navigate matches.",
   },
   {
     kind: "slash",

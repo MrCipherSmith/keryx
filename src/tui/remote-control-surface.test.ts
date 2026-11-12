@@ -3,7 +3,7 @@
 // and the `tg` label on Telegram lines are all built from one `RemoteStatus`.
 
 import { expect, test } from "bun:test";
-import { commandsForMode } from "../commands/agent-commands";
+import { commandsForMode, HISTORY_COMMAND, isHistoryCommand } from "../commands/agent-commands";
 import { postureLines, postureSidebarText } from "../commands/remote-policy-command";
 import type { NormalizedMessage } from "../harness/provider/types";
 import type { RemoteBridgeHost, RemoteClientLike, RemoteEvent, RemoteStatus } from "../remote/shell-bridge";
@@ -23,12 +23,9 @@ import {
   TG_ECHO_MARKER,
   TG_LABEL,
   commandEchoText,
-  HISTORY_COMMAND,
   HISTORY_POSTING_NOTE,
   formatAge,
   formatHistoryStatus,
-  isHistoryCommand,
-  readlineHistoryText,
   formatRemoteCommandLines,
   formatRemoteEventLines,
   formatRemoteStatusLines,
@@ -838,10 +835,4 @@ test("/history: recognised by name only, runs while a turn runs, listed for the 
     isMcpConsumer: false,
   });
   expect(target).toBe("history");
-});
-
-test("readline /history: always off here, says where it works, and rejects a bad number with usage", () => {
-  expect(readlineHistoryText("/history")).toContain("full-screen shell");
-  expect(readlineHistoryText("/history 5")).toContain("full-screen shell");
-  expect(readlineHistoryText("/history lots")).toContain("Usage: /history");
 });

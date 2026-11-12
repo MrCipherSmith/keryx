@@ -152,7 +152,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
 | `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed. To share this full-screen shell and its recent conversation with Team Hub, use /remote-control hub on\|off\|status. |
-| `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
+| `/history` | View the current session conversation. In the full-screen shell, open with Ctrl+Shift+H and search with ↑/↓ to navigate matches. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
 | `/intake` | GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status\|list\|pause\|resume\|poll]. |
 | `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |

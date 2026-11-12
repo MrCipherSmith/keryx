@@ -126,9 +126,11 @@ async function settle(h: { flush: TestSetup["flush"] }, rounds = 6): Promise<voi
 
 async function mountChat(
   otui: OtuiBundle,
-  opts: { replies: readonly string[]; width?: number; height?: number; versionCheck?: Promise<VersionCheckResult> },
+  opts: { replies: readonly string[]; width?: number; height?: number; kittyKeyboard?: boolean; versionCheck?: Promise<VersionCheckResult> },
 ): Promise<TestSetup & { handle: ChatShellHandle; destroy: () => void }> {
-  const setup = await otui.testing.createTestRenderer({ width: opts.width ?? 90, height: opts.height ?? 26 });
+  const setup = await otui.testing.createTestRenderer({
+    width: opts.width ?? 90, height: opts.height ?? 26, kittyKeyboard: opts.kittyKeyboard ?? false,
+  });
   const handle = await mountChatShell(otui.core, setup.renderer, {
     deps: chatDeps(opts.replies),
     runShell, // the REAL driver — not a stand-in (AC10)
@@ -174,7 +176,7 @@ otuiTest("flow 142 AC4: chat TUI receives the shared persistent version notice",
 
 otuiTest("AC10: a chat turn runs end to end through the real runShell and the reply is on the frame", async () => {
   const otui = requireOtui();
-  const h = await mountChat(otui, { replies: ["Keryx is a metaproject CLI.", "Second answer here."] });
+  const h = await mountChat(otui, { replies: ["Keryx is a metaproject CLI.", "Second answer here."], kittyKeyboard: true });
 
   // Mount state: the chat chrome, its own mode label, and a focused composer.
   const mounted = h.captureCharFrame();
@@ -204,12 +206,21 @@ otuiTest("AC10: a chat turn runs end to end through the real runShell and the re
   expect(second).toContain("Second answer here.");
   expect(second).toMatch(/~\d/); // the D-A2 estimated context counter
 
+  h.handle.chrome.input.value = "/history";
+  await h.flush();
+  h.mockInput.pressEnter();
+  await settle(h);
+  expect(h.captureCharFrame()).toContain("Session history");
+  expect(h.captureCharFrame()).toContain("Second answer here.");
+  h.mockInput.pressEscape();
+  await h.waitFor(() => !h.handle.chrome.overlayActive());
+
   // A slash command is handled by `runShell` itself and never reaches a model.
   h.handle.chrome.input.value = "/help";
   await h.flush();
   h.mockInput.pressEnter();
   await settle(h);
-  expect(h.captureCharFrame()).toContain("/compact");
+  expect(h.captureCharFrame()).toContain("/history");
 
   // …and an agent-only command fails with the wrong-mode explanation (S4/AC8).
   h.handle.chrome.input.value = "/expand";
@@ -373,9 +384,9 @@ otuiTest("flow 487 AC4: Escape dismisses local UI, then aborts the Chat stream a
   }
 });
 
-otuiTest("/new resets the estimated context counter instead of letting it keep climbing", async () => {
+otuiTest("/new resets the estimate and closes history opened while the session changes", async () => {
   const otui = requireOtui();
-  const h = await mountChat(otui, { replies: ["A fairly long scripted answer about keryx."] });
+  const h = await mountChat(otui, { replies: ["A fairly long scripted answer about keryx."], kittyKeyboard: true });
   expect(h.captureCharFrame()).toContain("~0 tokens (est)");
 
   h.handle.chrome.input.value = "a question long enough to move the estimate";
@@ -389,9 +400,14 @@ otuiTest("/new resets the estimated context counter instead of letting it keep c
   h.handle.chrome.input.value = "/new";
   await h.flush();
   h.mockInput.pressEnter();
+  h.mockInput.pressKey("h", { ctrl: true, shift: true });
+  expect(h.handle.chrome.overlayActive()).toBe(true);
   await settle(h);
+  expect(h.handle.chrome.overlayActive()).toBe(false);
   expect(h.captureCharFrame()).toContain("~0 tokens (est)");
   expect(h.captureCharFrame()).not.toContain("a question long enough to move the estimate");
+  h.mockInput.pressKey("h", { ctrl: true, shift: true });
+  await h.waitForFrame((frame) => frame.includes("This session has no messages yet."));
   h.destroy();
 });
 

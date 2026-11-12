@@ -36,11 +36,15 @@
 // Only its types are imported (erased at compile time).
 import type { ShellDeps, ShellIO } from "../commands/shell-types";
 import type { DetectedProvider } from "../commands/select";
-import { commandsForMode, filterCommands } from "../commands/agent-commands";
+import { commandsForMode, filterCommands, isHistoryCommand } from "../commands/agent-commands";
 import { loadSessionLimits } from "../commands/model-limits";
 import { saveShellConfig } from "../lib/shell-config";
 import { summarizeSubmittedLine } from "../lib/md-blocks";
 import { latestSession } from "../session";
+import type { NormalizedMessage } from "../harness/provider/types";
+import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
+import { historySnapshot } from "./history-reader";
+import type { ModalHandle } from "./modal-host";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
 import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
@@ -280,7 +284,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
         close();
         return "exit";
       }
-      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value)) {
+      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value) || isHistoryCommand(value)) {
         return "local";
       }
       if ((turn || queue.length > 0) && value.startsWith("/")) {
@@ -466,7 +470,7 @@ export async function mountChatShell(
       // while Enter submitted the raw filter text instead of selecting the
       // highlighted command. Same shape as the agent shell's block-nav guard
       // (`nav.restoreComposerFocus()`).
-      if (!chrome.menuActive()) {
+      if (!chrome.menuActive() && !chrome.overlayActive()) {
         chrome.focusComposer();
       }
     },
@@ -479,6 +483,25 @@ export async function mountChatShell(
     },
   });
   chrome.onEscapeInterrupt(bridge.interruptTurn);
+  let readConversation = (): readonly NormalizedMessage[] => [];
+  let historyDirectory: string | undefined;
+  let historyModal: ModalHandle | undefined;
+  bridge.io.onConversationReady = (read, resumed, directory) => {
+    historyModal?.close();
+    historyModal = undefined;
+    readConversation = read;
+    historyDirectory = directory;
+    if (resumed) appendConversationPreview(otui, chrome, read());
+  };
+  const showHistory = (): void => {
+    if (!chrome.overlayActive()) historyModal = openHistoryModal(otui, chrome, historySnapshot(readConversation(), [], historyDirectory));
+  };
+  const unsubscribeHistoryKey = onKeypress(r, (key) => {
+    if (!isHistoryShortcut(key) || chrome.overlayActive()) return;
+    key.preventDefault();
+    key.stopPropagation();
+    showHistory();
+  });
 
   // `/models` and `/connect` route through the TUI picker (inside the chrome's
   // overlay guard, so the `/`-menu key router stays inert while it is up) rather
@@ -515,6 +538,10 @@ export async function mountChatShell(
       return;
     }
     if (result === "local") {
+      if (isHistoryCommand(line)) {
+        showHistory();
+        return;
+      }
       const cwd = opts.deps.session?.cwd;
       const keys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
       if (isThemeCommand(line)) {
@@ -595,6 +622,7 @@ export async function mountChatShell(
     bridge,
     done,
     destroy: () => {
+      unsubscribeHistoryKey();
       bridge.close();
       r.off("theme_mode", onThemeMode);
       chrome.destroy();
