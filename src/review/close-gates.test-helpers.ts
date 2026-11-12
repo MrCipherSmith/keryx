@@ -5,6 +5,7 @@ import path from "node:path";
 import type { PrLookup } from "./complete-head-gate";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "./dispatch.test-helpers";
 import { createManagedReviewPackage } from "./managed";
+import type { ManagedReviewManifest } from "./types";
 
 export const HEAD = "a".repeat(40);
 export const MOVED = "b".repeat(40);
@@ -26,7 +27,7 @@ export async function ingestReady(cwd: string, report: string, target: { kind: "
 export const writeFindings = (cwd: string, ref: string, findings: unknown[]): Promise<void> =>
   writeFile(path.join(path.resolve(cwd, ref), "findings.json"), JSON.stringify(findings, null, 2));
 
-export const readManifest = async (cwd: string, ref: string): Promise<Record<string, any>> =>
+export const readManifest = async (cwd: string, ref: string): Promise<ManagedReviewManifest> =>
   JSON.parse(await readFile(path.join(path.resolve(cwd, ref), "manifest.json"), "utf8"));
 
 export function lookup(pr: { state?: string; headSha?: string } | null): PrLookup & { calls: string[] } {
