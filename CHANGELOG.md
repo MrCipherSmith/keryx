@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.4.27] - 2026-11-13
+
+### Added
+
+- **Searchable Shell history.** Open the current session archive with `/history` or `Ctrl+Shift+H` in Agent and Chat Shell. Search as you type, use Find or Enter to jump, and move between matches with Up and Down. Readline mode prints the conversation with `/history`. [#1167](https://github.com/MrCipherSmith/keryx/pull/1167)
+- **Diagnostics for stalled tool calls.** The Shell records snapshots of stalled calls and their current stages. Use `/diag` to capture a snapshot on demand. [#1165](https://github.com/MrCipherSmith/keryx/pull/1165)
+
+### Changed
+
+- **Session resume and switching.** The Shell restores up to 20 visible messages from the last turn, including assistant replies, and preserves agent attribution in the archive. History loads in chunks as you scroll, and search runs asynchronously across the archive, including long messages. [#1167](https://github.com/MrCipherSmith/keryx/pull/1167)
+
+### Fixed
+
+- **Hub cancellation receipts.** If Session Host cannot prove that a turn stopped, the receipt reports `recovery-required`. [#1167](https://github.com/MrCipherSmith/keryx/pull/1167)
+
 ## [0.4.26] - 2026-11-12
 
 ### Fixed
