@@ -4,6 +4,7 @@ import { isOperatorMessage } from "../session/compact";
 import { hcHistoryEcho } from "./hc-message";
 
 export type ConversationEntry = { label: string; text: string };
+const PREVIEW_CHARS = 2048;
 
 function displayText(text: string): string {
   return stripVTControlCharacters(text)
@@ -19,29 +20,32 @@ function agentMessageEcho(message: NormalizedMessage): ReturnType<typeof hcHisto
     : undefined;
 }
 
+export function conversationEntry(message: NormalizedMessage, limit = Infinity): ConversationEntry | undefined {
+  const { role } = message;
+  const agentEcho = agentMessageEcho(message);
+  if (role !== "assistant" && agentEcho === undefined && !isOperatorMessage(message)) return;
+  const content = agentEcho?.line ?? message.content;
+  const prefix = content.slice(0, limit);
+  const text = displayText(prefix);
+  if (text.trim().length === 0 && (prefix.length === content.length || content.trim().length === 0)) return;
+  const label = agentEcho === undefined ? (role === "user" ? "You" : "Assistant") : displayText(agentEcho.marker);
+  return { label, text: prefix.length < content.length ? `${text}…` : text };
+}
+
 export function conversationHistory(history: readonly NormalizedMessage[]): ConversationEntry[] {
-  const entries: ConversationEntry[] = [];
-  for (const message of history) {
-    const { role } = message;
-    const agentEcho = agentMessageEcho(message);
-    if (role !== "assistant" && agentEcho === undefined && !isOperatorMessage(message)) continue;
-    const text = displayText(agentEcho?.line ?? message.content);
-    if (text.trim().length > 0) {
-      const label = agentEcho === undefined ? (role === "user" ? "You" : "Assistant") : displayText(agentEcho.marker);
-      entries.push({ label, text });
-    }
-  }
-  return entries;
+  return history.flatMap((message) => conversationEntry(message) ?? []);
 }
 
 export function resumedConversation(history: readonly NormalizedMessage[]): ConversationEntry[] {
   // An operator prompt or a visible agent message starts a turn.
-  let start = history.length;
-  while (start > 0) {
-    const message = history[--start]!;
+  const entries: ConversationEntry[] = [];
+  for (let index = history.length - 1; index >= 0 && entries.length < 20; index--) {
+    const message = history[index]!;
+    const entry = conversationEntry(message, PREVIEW_CHARS);
+    if (entry !== undefined) entries.push(entry);
     if (isOperatorMessage(message) || agentMessageEcho(message) !== undefined) break;
   }
-  return conversationHistory(history.slice(start)).slice(-20);
+  return entries.reverse();
 }
 
 export function conversationHistoryText(history: readonly NormalizedMessage[]): string {

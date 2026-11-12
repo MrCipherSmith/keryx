@@ -286,7 +286,11 @@ const hosts = new WeakMap<Renderer, HostState>();
  * keeps writing onto boxes belonging to renderers nobody can reach anymore.
  */
 export function destroyModalHost(renderer: Renderer): void {
-  hosts.get(renderer)?.unsubTheme();
+  const state = hosts.get(renderer);
+  if (state === undefined) return;
+  state.unsubTheme();
+  state.tabCleanup?.();
+  state.tabCleanup = undefined;
 }
 
 
@@ -623,9 +627,6 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     if (state.input.ownsKeys?.() === true) {
       return;
     }
-    const focused = r.currentFocusedRenderable;
-    const inBody = focused !== null && (containsNode(state.scroll, focused)
-      || (state.input.toolbar === true && containsNode(state.tabStrip, focused)));
     if (key.name === "escape") {
       const parent = state.temporaryParents.get(state.active);
       if (parent !== undefined && state.tabs.some((tab) => tab.id === parent)) {
@@ -645,6 +646,9 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
       key.stopPropagation();
       return;
     }
+    const focused = r.currentFocusedRenderable;
+    const inBody = focused !== null && ((state.input.toolbar === true && containsNode(state.tabStrip, focused))
+      || containsNode(state.scroll, focused));
     if ((key.name === "x" || key.sequence === "x") && !inBody) {
       closeHost(state, { restoreFocus: true, runOnClose: true });
       key.preventDefault();

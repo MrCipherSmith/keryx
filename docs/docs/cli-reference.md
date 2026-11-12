@@ -1061,9 +1061,10 @@ Refusals print a named message, exit non-zero and write nothing:
 - `/history` in the local shell opens the current session conversation, including
   archived messages. In the full-screen shell, `Ctrl+Shift+H` opens the same
   window. Type to find text, click **Find** or press Enter to jump to the match,
-  and use ↑/↓ to move between matches. Readline prints the conversation as text.
-  When you resume a session, the full-screen transcript starts with up to 20
-  messages from the most recent turn.
+  and use ↑/↓ to move between matches across the archive. Use the mouse wheel
+  or Page Up/Page Down to load more of the conversation. Readline prints the
+  conversation as text. When you resume a session, the full-screen transcript
+  starts with previews of up to 20 messages from the most recent turn.
 - `/channels [status]` connects Telegram to this machine, from any shell. The modal
   lists Telegram: when it is not connected there is one button, Connect; when it is,
   Test and Disconnect. Connect asks for the bot token (hidden, paste works, never in

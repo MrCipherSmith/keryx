@@ -101,8 +101,8 @@ import { exportCallerSession } from "../lib/caller-session";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
-import { conversationHistory } from "./conversation-history";
 import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
+import { historySnapshot } from "./history-reader";
 import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";
 import {
@@ -8460,8 +8460,7 @@ export async function launchTuiAgentShell(opts: {
     };
     const showHistory = (): void => {
       if (chrome.overlayActive() || sessionTransferInProgress) return;
-      const snapshot = [...archive, ...history.slice(nextArchiveIndex)];
-      historyModal = openHistoryModal(otui, chrome, conversationHistory(snapshot));
+      historyModal = openHistoryModal(otui, chrome, historySnapshot(archive, history.slice(nextArchiveIndex), liveSession.dir));
     };
     const runHistoryCommand = (line: string, source?: typeof TG_SOURCE | "hub"): void => {
       if (source !== TG_SOURCE) {

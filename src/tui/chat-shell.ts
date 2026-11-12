@@ -42,8 +42,8 @@ import { saveShellConfig } from "../lib/shell-config";
 import { summarizeSubmittedLine } from "../lib/md-blocks";
 import { latestSession } from "../session";
 import type { NormalizedMessage } from "../harness/provider/types";
-import { conversationHistory } from "./conversation-history";
 import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
+import { historySnapshot } from "./history-reader";
 import type { ModalHandle } from "./modal-host";
 import packageJson from "../../package.json" with { type: "json" };
 import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
@@ -484,15 +484,17 @@ export async function mountChatShell(
   });
   chrome.onEscapeInterrupt(bridge.interruptTurn);
   let readConversation = (): readonly NormalizedMessage[] => [];
+  let historyDirectory: string | undefined;
   let historyModal: ModalHandle | undefined;
-  bridge.io.onConversationReady = (read, resumed) => {
+  bridge.io.onConversationReady = (read, resumed, directory) => {
     historyModal?.close();
     historyModal = undefined;
     readConversation = read;
+    historyDirectory = directory;
     if (resumed) appendConversationPreview(otui, chrome, read());
   };
   const showHistory = (): void => {
-    if (!chrome.overlayActive()) historyModal = openHistoryModal(otui, chrome, conversationHistory(readConversation()));
+    if (!chrome.overlayActive()) historyModal = openHistoryModal(otui, chrome, historySnapshot(readConversation(), [], historyDirectory));
   };
   const unsubscribeHistoryKey = onKeypress(r, (key) => {
     if (!isHistoryShortcut(key) || chrome.overlayActive()) return;

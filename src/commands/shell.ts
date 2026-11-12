@@ -850,7 +850,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   const resetConversation = (): void => {
     history = [];
     archive = [];
-    io.onConversationReady?.(readConversation, false);
+    io.onConversationReady?.(readConversation, false, live?.dir);
   };
   let resumed = false;
   // The session lease this loop holds (specification §6). Mirrored into the
@@ -902,7 +902,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       system(`${cause instanceof Error ? cause.message : String(cause)}\nStarting a new session.\n`);
     }
   }
-  io.onConversationReady?.(readConversation, resumed);
+  io.onConversationReady?.(readConversation, resumed, live?.dir);
   const releaseLease = (): void => {
     releaseSessionLease(lease);
     holdLease(undefined);
