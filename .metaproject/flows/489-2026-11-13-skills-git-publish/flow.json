@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "489",
+  "slug": "skills-git-publish",
+  "title": "Merge commit/push/pr into one git-publish skill and make Red Flags optional",
+  "status": "in-progress",
+  "createdAt": "2026-11-13T21:57:46.747Z",
+  "updatedAt": "2026-11-13T21:58:26.488Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:88a0ea197298d4677d9470465c318593c262950c10aa0fa2f304d36b1295d55d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "chore/skills-prune-dead",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Пошли по плану, но перепроверяй, что качество не упадет",
+    "source": "desktop session 2026-11-14"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Make the Red Flags section optional in the anatomy lint",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Replace commit/push/pr with quality/git-publish",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Re-run the git behaviour eval on the shipped skill",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-13T21:57:46.747Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-13T21:58:24.669Z",
+      "event": "task-added",
+      "detail": "T5: Make the Red Flags section optional in the anatomy lint"
+    },
+    {
+      "at": "2026-11-13T21:58:25.131Z",
+      "event": "task-added",
+      "detail": "T6: Replace commit/push/pr with quality/git-publish"
+    },
+    {
+      "at": "2026-11-13T21:58:25.584Z",
+      "event": "task-added",
+      "detail": "T7: Re-run the git behaviour eval on the shipped skill"
+    },
+    {
+      "at": "2026-11-13T21:58:26.034Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-13T21:58:26.488Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bash -c 'for s in commit push pr; do test ! -e src/gdskills/bundled/skills/quality/$s && test ! -e .metaproject/skills/gdskills/quality/$s || exit 1; done; cmp src/gdskills/bundled/skills/quality/git-publish/SKILL.md .metaproject/skills/gdskills/quality/git-publish/SKILL.md'"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/bundled-eval.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bash -c 'for q in \"commit this\" \"push my branch\" \"open a pull request\"; do bun ./src/cli.ts skills route \"$q\" --json | bun -e \"const r=JSON.parse(await Bun.stdin.text()); const top=(r.matches??r.results??r)[0]; if(!JSON.stringify(top).includes(\\\"git-publish\\\")) process.exit(1)\" || exit 1; done'"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bash -c 'bun run typecheck && bun ./src/cli.ts skills verify --bundled && bun ./src/cli.ts agents verify'"
+    }
+  }
+}
