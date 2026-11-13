@@ -10,7 +10,7 @@
 // content hash, and provenance is the whole point of W1-AC12 — so this is a
 // second walk of the same tree rather than a widened `BundledSkill`, on
 // purpose: `BUNDLED_GDSKILLS` also carries `renderedSkill()` entries with no
-// `SKILL.md` on disk at all (metaproject-router, context-router, …), which a
+// `SKILL.md` on disk at all (metaproject-router, entity-skill-creator, …), which a
 // governance gate that lints and hashes FILES has no way to evaluate. This
 // loader only ever returns entries backed by a real `SKILL.md`.
 //

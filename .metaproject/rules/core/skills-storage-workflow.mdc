@@ -55,16 +55,13 @@ path.
    excludes the harness reading it. This is the only field in the tree of
    which that is true.
 
-Case 2 is why fourteen shipped builds differ from their `SKILL.md` by exactly
-one line: the seven `gproject-*` subagent skills under `planning/`
-(`project-discovery`, `problem-definer`, `patterns-researcher`, `planner`,
-`consistency-checker`, `spec-writer`, `stack-advisor`) each ship a
-`SKILL.codex.md` and a `SKILL.cursor.md` that add
-`compatible_harnesses: "cursor,codex,zed,opencode"`. Their `SKILL.md` declares
-no harness list, because it is the Claude build and cannot carry one that
-excludes Claude. These builds are NOT identical copies and must not be deleted
-as such; `src/gdskills/build-parity.test.ts` exempts this one hunk, by name,
-for these seven skills only, and its allow-list is where any widening has to be
+Case 2 is why such a build may differ from its `SKILL.md` by exactly one line:
+it adds `compatible_harnesses: "cursor,codex,zed,opencode"`, while the
+`SKILL.md` declares no harness list, because it is the Claude build and cannot
+carry one that excludes Claude. No shipped skill has such a build today. Such a
+build is NOT an identical copy and must not be deleted as one;
+`src/gdskills/build-parity.test.ts` exempts this one hunk, by name, for the
+skills it lists only, and its allow-list is where any widening has to be
 argued. Every other difference between a build and its `SKILL.md` is drift and
 gets reconciled.
 

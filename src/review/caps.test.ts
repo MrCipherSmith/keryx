@@ -225,7 +225,7 @@ const REAL_FOURTEEN = [
   "review-style",
   "review-clean-code",
   "review-testing-practices",
-  "code-style-review",
+  "review-ui-ux",
 ];
 const TWENTY_REVIEWERS = [
   ...REAL_FOURTEEN,

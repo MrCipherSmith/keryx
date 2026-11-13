@@ -98,12 +98,17 @@ test("the sweep reads something — an empty denominator would pass vacuously", 
   // needed; it is cheaper than the fifth time it is missing.
   //
   // The floor was `> 100` while every skill shipped up to five builds. Flow 257
-  // deleted the byte-identical harness builds, so the documents are now every
-  // SKILL.md plus the few builds that genuinely differ: assert both halves.
+  // deleted the byte-identical harness builds and flow 488 removed the last
+  // skills that shipped a genuinely different one, so the documents are now
+  // exactly the SKILL.md files: assert the documents walk still covers every one
+  // (that it also returns harness builds is proved on a synthetic tree in
+  // bundled-eval.test.ts).
   const root = defaultBundledRoot();
   const canonical = bundledSkillFiles(root);
   expect(canonical.length).toBeGreaterThan(50);
-  expect(bundledSkillDocuments(root).length).toBeGreaterThan(canonical.length);
+  const documents = bundledSkillDocuments(root);
+  expect(documents.length).toBeGreaterThanOrEqual(canonical.length);
+  for (const file of canonical) expect(documents).toContain(file);
 });
 
 test("the detector fires on the exact line that shipped, and not on its correction", () => {

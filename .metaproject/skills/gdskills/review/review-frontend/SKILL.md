@@ -19,7 +19,7 @@ license: "MIT"
 
 Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
-This skill consolidates what was previously split between `code-style-review` (frontend parts) and `code-mobx-store-review`. It supersedes both for frontend changes.
+This skill consolidates what two earlier profiles (a style one and a MobX store one, both removed) used to split between them, so it is the one reviewer for frontend style, MobX and store changes.
 
 ---
 
@@ -47,7 +47,7 @@ This skill consolidates what was previously split between `code-style-review` (f
 | Cross-layer architecture (service layer design, module boundaries) | NO | `review-architecture` |
 | Security vulnerabilities (XSS, injection, auth gaps) | NO | `review-security-code` |
 | Performance bottlenecks (N+1, bundle size, re-render frequency) | NO | `review-performance` |
-| Code style, naming outside frontend conventions | NO | `code-style-review` |
+| Code style, naming outside frontend conventions | NO | `review-style` |
 
 ---
 
@@ -239,17 +239,19 @@ Flags:
 - `public` keyword on any member — **minor** (ESLint `no-public` already fails CI; a reviewer restating a lint rule is not a merge gate)
 - `onChangeX`, `onFireX`, `handleX`, `syncX` without `private` — **major**
 - Missing `private` on internal state or helper methods — **major**
-- Missing `private readonly` on injected dependencies — **minor**
+- Missing `private readonly` on a private field that is never reassigned (injected dependencies, immutable configuration) — **minor**
 
 #### B4. Observable Collections
 
 - [ ] `IObservableArray` MUST be mutated in place using MobX methods (`.replace()`, `.push()`, `.splice()`, etc.) inside `runInAction` — never reassigned
 - [ ] `ObservableMap` MUST be mutated using `.set()`, `.delete()`, `.merge()`, `.replace()` — never reassigned
 - [ ] Deep `@observable` on a large external object/instance should use `@observable.ref` instead
+- [ ] A list of plain items that is replaced whole and never mutated per element uses `@observable.shallow` (or `.ref`), not deep `@observable`
 
 Flags:
 - `IObservableArray` field reassigned instead of using `.replace()` — **major**
 - `ObservableMap` field reassigned instead of `.replace()` or `.merge()` — **major**
+- Deep `@observable` on a list of plain items that is only ever replaced whole — **minor**
 - Observable mutation outside `runInAction` in async context — **major**, or **blocker** where the interleaving can corrupt persisted state (frontend law 1)
 
 #### B5. Reactions and Disposers
@@ -345,12 +347,14 @@ Flags:
 - [ ] No `!` non-null assertion without a comment proving the value cannot be null/undefined at that point
 - [ ] Props interface MUST use `I` prefix: `interface IMyComponentProps { ... }`
 - [ ] Prefer optional chaining (`?.`) and nullish coalescing (`??`) over `!` assertions
+- [ ] A store's state and its public API are typed with explicit interfaces/types, not inferred object literals or `any`
 - [ ] `catch (err: unknown)` — typed error handling, not `catch (err)` or `catch (err: any)`
 
 Flags:
 - `any` type in new code — **major**
 - `!` non-null assertion without justification comment — **minor**
 - Props interface without `I` prefix — **minor**
+- Store state or public API left to an inferred object-literal type — **minor**
 - `catch (err: any)` — **minor**
 
 ---

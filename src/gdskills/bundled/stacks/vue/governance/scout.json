@@ -21,7 +21,7 @@
     "topMatch": "react/react-code-review",
     "recordedAt": "2026-09-25T06:25:34.017Z",
     "skillName": "vue-code-review",
-    "justification": "Overlap is with sibling vue/* skills (shared pack vocabulary) and existing review skills (review-frontend, code-mobx-store-review) that this description explicitly excludes (no MobX/React store review). This skill's scope -- Vue reactivity/prop-emit/Pinia boundary bugs in .vue diffs -- has no existing catalog equivalent. Confirmed distinct by clean trigger-accuracy eval."
+    "justification": "Overlap is with sibling vue/* skills (shared pack vocabulary) and existing review skills (review-frontend) that this description explicitly excludes (no MobX/React store review). This skill's scope -- Vue reactivity/prop-emit/Pinia boundary bugs in .vue diffs -- has no existing catalog equivalent. Confirmed distinct by clean trigger-accuracy eval."
   },
   {
     "query": "Use when resolving a vue-tsc template type error, an eslint-plugin-vue lint failure, or a Vite build error in a Vue 3 project -- covers template expression type mismatches, defineProps/defineEmits type errors, unresolved SFC/component imports, and Vite plugin/HMR build failures. Applies the smallest root-cause fix and never silences the checker with an any cast or an eslint-disable. Not for a generic tsc error in a .ts file with no .vue involved (use nodejs-build-fix) or a JSX/React build failure (use react-build-fix).",

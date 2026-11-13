@@ -60,7 +60,6 @@ this list is what says whether the bar moved.
 | `rules/core/subagent-status-protocol.md` | How the result is reported: `STATUS:` on line one, the five statuses, and the verification block every `DONE` response carries. |
 | `rules/core/git-concurrency.mdc` | Clause 5: a task is not done until its diff is committed, whether the worker or the orchestrator commits it. |
 | `.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md` | The worker-side reading of clause 3: skipped verification is a failed verification, and partial is not done. |
-| `rules/core/gproject-contracts.mdc` | The gproject return payload only. It is silent on clauses 2-5; that silence is not an exemption, and a gproject subagent reporting `DONE` still owes the verification block from `rules/core/subagent-status-protocol.md`. |
 | `rules/core/requirements-package-standard.mdc` | Clause 2 for a documentation package, where the gates are structural (required files, versions, links, honest status) rather than lint and tests. |
 
 Two readings of `DONE_WITH_CONCERNS` are in circulation, and this rule settles

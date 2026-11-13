@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "488",
+  "slug": "skills-prune-dead",
+  "title": "Prune dead and orphaned bundled skills (stage 1)",
+  "status": "implemented",
+  "createdAt": "2026-11-13T18:25:57.081Z",
+  "updatedAt": "2026-11-13T19:51:31.608Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:65f21cb7559a98e3477795fbd158fac2643a1d869ac587ae16d89baca8f86672",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1172"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Да, этап 1",
+    "source": "desktop session 2026-11-13, answer to the skills relevance audit"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Remove the seven planning-pipeline skills and gproject-contracts rule",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Remove job-documenter and feature-dev",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Remove the seven catalog-rendered stub skills",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Verify suites, typecheck and installed mirror",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-13T18:25:57.081Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-13T18:27:37.709Z",
+      "event": "task-added",
+      "detail": "T5: Remove the seven planning-pipeline skills and gproject-contracts rule"
+    },
+    {
+      "at": "2026-11-13T18:27:38.173Z",
+      "event": "task-added",
+      "detail": "T6: Remove job-documenter and feature-dev"
+    },
+    {
+      "at": "2026-11-13T18:27:38.689Z",
+      "event": "task-added",
+      "detail": "T7: Remove the seven catalog-rendered stub skills"
+    },
+    {
+      "at": "2026-11-13T18:27:39.179Z",
+      "event": "task-added",
+      "detail": "T8: Verify suites, typecheck and installed mirror"
+    },
+    {
+      "at": "2026-11-13T18:27:39.647Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-13T18:27:40.104Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-13T19:01:15.477Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"None of the sixteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" -> \"None of the fifteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`; `context-router` stays because the generated routing.md points at it. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" (context-router stays: src/lib/templates.ts:171,215 generates routing.md rows that point users at it, so removing the stub would route to a missing file)"
+    },
+    {
+      "at": "2026-11-13T19:01:16.006Z",
+      "event": "task-done",
+      "detail": "T5: Remove the seven planning-pipeline skills and gproject-contracts rule"
+    },
+    {
+      "at": "2026-11-13T19:01:16.465Z",
+      "event": "task-done",
+      "detail": "T6: Remove job-documenter and feature-dev"
+    },
+    {
+      "at": "2026-11-13T19:01:16.948Z",
+      "event": "task-done",
+      "detail": "T7: Remove the seven catalog-rendered stub skills"
+    },
+    {
+      "at": "2026-11-13T19:08:13.403Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1172 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-13T19:51:31.608Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"None of the fifteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`; `context-router` stays because the generated routing.md points at it. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" -> \"None of the sixteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" (owner chose to remove context-router together with the generated routing rows (2026-11-13))"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bash -c 'for r in src/gdskills/bundled/skills .metaproject/skills/gdskills; do for s in planning/project-discovery planning/problem-definer planning/stack-advisor planning/patterns-researcher planning/spec-writer planning/consistency-checker planning/planner orchestration/job-documenter orchestration/feature-dev; do test ! -e $r/$s || exit 1; done; done; test ! -e src/gdskills/bundled/rules/core/gproject-contracts.mdc && test ! -e .metaproject/rules/core/gproject-contracts.mdc'"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bash -c '! rg -q -e \"job-documenter|feature-dev|gproject-contracts|gproject-orchestrator\" src/gdskills/bundled/skills src/gdskills/bundled/rules'"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/gdskills src/commands/skills-route.test.ts src/commands/routing-corpus.test.ts src/commands/routing-baseline.test.ts src/commands/routing.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun run typecheck"
+    },
+    "AC6": {
+      "kind": "judged"
+    }
+  }
+}

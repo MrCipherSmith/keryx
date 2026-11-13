@@ -21,7 +21,7 @@ Proceed directly with your assigned task.
 
 # Interview
 
-Critical requirements interviewer that asks targeted clarifying questions before expensive operations begin. The goal is to eliminate ambiguity and gather precise context so downstream skills (job-orchestrator, feature-dev, prd-creator) produce accurate results.
+Critical requirements interviewer that asks targeted clarifying questions before expensive operations begin. The goal is to eliminate ambiguity and gather precise context so downstream skills (job-orchestrator, flow-orchestrator, prd-creator) produce accurate results.
 
 ## Input Contract
 
@@ -31,7 +31,7 @@ When called by another skill (orchestrated mode):
   "goal": "what needs to be done (issue title, feature description, task)",
   "context": "collected context from context-collector or another agent",
   "domain": "implement | review | design | migrate | custom",
-  "caller": "job-orchestrator | feature-dev | user | prd-creator",
+  "caller": "job-orchestrator | flow-orchestrator | user | prd-creator",
   "known_facts": ["already known facts or decisions"],
   "max_questions": null
 }
@@ -143,7 +143,7 @@ After all questions are answered:
 ### Phase 5: Handoff
 
 Return the output contract to the calling skill, or if standalone — ask what the user wants to do next:
-- "Start implementing? I can run `/feature-dev`"
+- "Start implementing? I can run the `job-orchestrator` pipeline"
 - "Create a PRD? I can run `/prd-creator`"
 - "Need more brainstorming? Try `/brainstorm`"
 
@@ -168,7 +168,6 @@ Skip options when:
 
 ```
 job-orchestrator → context-collector → interview → plan → execute
-feature-dev → interview (Phase 1) → design → implement
 prd-creator → interview → requirements document
 ```
 

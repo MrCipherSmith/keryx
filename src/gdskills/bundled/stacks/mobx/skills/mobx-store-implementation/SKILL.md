@@ -1,6 +1,6 @@
 ---
 name: mobx-store-implementation
-description: "Use when writing or extending a MobX store: adding observable state, actions, computed getters, or reactions (autorun/reaction/when), wiring a store into React via observer and a context hook, or fixing a component that stops re-rendering after a store change. Applies the makeObservable/action/runInAction/observer shape and the store's dispose lifecycle. Not for reviewing an already-written store's structure (use code-mobx-store-review) and not for plain React state/props work with no MobX involved (use react-implementation)."
+description: "Use when writing or extending a MobX store: adding observable state, actions, computed getters, or reactions (autorun/reaction/when), wiring a store into React via observer and a context hook, or fixing a component that stops re-rendering after a store change. Applies the makeObservable/action/runInAction/observer shape and the store's dispose lifecycle. Not for reviewing an already-written store's structure (use review-frontend) and not for plain React state/props work with no MobX involved (use react-implementation)."
 triggers:
   - "add a new observable field to this MobX store"
   - "write a MobX action for this store"
@@ -32,7 +32,7 @@ This skill is for **authoring** store code — a new store, a new
 observable/action/computed on an existing store, a new reaction, or the
 `observer`/context wiring that exposes a store to components. It is not
 for auditing an already-written store's structure or accessibility
-modifiers (`code-mobx-store-review` does that), and it does not cover
+modifiers (`review-frontend` does that), and it does not cover
 plain React component work that touches no MobX API.
 
 ## Workflow

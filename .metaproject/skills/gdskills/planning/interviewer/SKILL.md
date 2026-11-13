@@ -52,7 +52,7 @@ blockers?: string[]       — unresolved critical unknowns
 
 ## When to Use
 
-- Called by `job-orchestrator`, `brainstorm`, `feature-dev` at start of Phase 0
+- Called by `job-orchestrator` and `brainstorm` at start of Phase 0
 - Directly by user: `/interviewer <topic>` — runs context-collector first if no context provided
 - When requirements are vague or ambiguous
 

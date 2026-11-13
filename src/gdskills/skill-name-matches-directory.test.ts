@@ -16,18 +16,19 @@
 // # Why this guard did not exist until now
 //
 // Flow 207's skill evaluator found this class and deliberately did NOT ship a
-// check for it, because seven `planning/` skills disagreed — every `gproject-*`
-// subagent carried a prefix its directory lacked — and a rule that must be
-// excepted seven times on the day it ships is a rule somebody deletes rather than
-// understands. That was the right call then.
+// check for it, because seven `planning/` skills disagreed — every one carried a
+// prefix its directory lacked — and a rule that must be excepted seven times on
+// the day it ships is a rule somebody deletes rather than understands. That was
+// the right call then.
 //
-// The operator resolved the seven by removing the prefix, so the exemption list
-// is empty and the rule can be stated plainly. That ordering is the point: fix
-// the instances, THEN write the guard, rather than shipping a guard whose
+// Those seven skills have since been removed, so the exemption list is empty and
+// the rule can be stated plainly. That ordering is the point: fix the
+// instances, THEN write the guard, rather than shipping a guard whose
 // exceptions outnumber its enforcement.
 
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { bundledSkillFiles, defaultBundledRoot } from "./bundled-eval";
 
@@ -40,8 +41,8 @@ function frontmatterName(text: string): string | undefined {
   return match?.[1]?.trim().replace(/^["']|["']$/g, "");
 }
 
-test("every shipped skill's frontmatter name matches its directory", () => {
-  const root = defaultBundledRoot();
+/** One line per `SKILL.md` under `root` whose frontmatter name is not its directory's. */
+function nameDisagreements(root: string): string[] {
   const offenders: string[] = [];
   for (const file of bundledSkillFiles(root)) {
     const directory = path.basename(path.dirname(file));
@@ -52,7 +53,11 @@ test("every shipped skill's frontmatter name matches its directory", () => {
       );
     }
   }
-  expect(offenders).toEqual([]);
+  return offenders;
+}
+
+test("every shipped skill's frontmatter name matches its directory", () => {
+  expect(nameDisagreements(defaultBundledRoot())).toEqual([]);
 });
 
 test("the sweep reads the whole tree — an empty denominator would pass vacuously", () => {
@@ -63,12 +68,28 @@ test("the sweep reads the whole tree — an empty denominator would pass vacuous
 });
 
 test("the check fires on a disagreement, so it is not vacuously true", () => {
-  // Non-vacuity from the other side: the predicate must reject the exact shape
-  // that shipped for seven skills until today.
-  const shipped = ["---", "name: gproject-planner", "description: x", "---", ""].join("\n");
-  expect(frontmatterName(shipped)).toBe("gproject-planner");
-  expect(frontmatterName(shipped)).not.toBe("planner");
+  // Non-vacuity from the other side, on a synthetic tree: the sweep must reject
+  // the shape that once shipped for seven skills (a name carrying a prefix its
+  // directory lacks) and a file with no frontmatter name at all, and must pass
+  // a skill whose name is its directory.
+  const root = mkdtempSync(path.join(tmpdir(), "keryx-skill-name-"));
+  try {
+    const write = (directory: string, text: string): void => {
+      mkdirSync(path.join(root, "planning", directory), { recursive: true });
+      writeFileSync(path.join(root, "planning", directory, "SKILL.md"), text);
+    };
+    const frontmatter = (name: string): string => ["---", `name: ${name}`, "description: x", "---", ""].join("\n");
+    write("agrees", frontmatter("agrees"));
+    write("prefixed", frontmatter("acme-prefixed"));
+    write("unnamed", "# just a heading\n");
 
-  // And a file with no frontmatter at all is a disagreement, not a pass.
-  expect(frontmatterName("# just a heading\n")).toBeUndefined();
+    expect(frontmatterName(frontmatter("acme-prefixed"))).toBe("acme-prefixed");
+    expect(frontmatterName("# just a heading\n")).toBeUndefined();
+    expect(nameDisagreements(root)).toEqual([
+      'planning/prefixed/SKILL.md: installs as "prefixed" but answers to "acme-prefixed"',
+      'planning/unnamed/SKILL.md: installs as "unnamed" but answers to "(no name)"',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

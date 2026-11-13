@@ -22,12 +22,8 @@ const REVIEW_ROOT = path.join(import.meta.dir, "bundled", "skills", "review");
  * the point of listing them rather than filtering them out silently.
  */
 const EXEMPT: Record<string, string> = {
-  "code-ai-review":
-    "legacy opt-in profile (--legacy-profiles); emits a free-prose Russian report with no per-finding severity field, and carries four per-editor SKILL variants that would all have to be kept in step",
-  "code-learned-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
-  "code-mobx-store-review":
-    "legacy opt-in profile; does not use the blocker/major vocabulary at all",
-  "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+  "code-learned-review":
+    "legacy opt-in profile (--legacy-profiles); emits a free-prose report with no per-finding severity field",
   "review-pr-feedback":
     "reports on other people's findings rather than raising its own into the review pipeline, so it emits no finding that could carry a `class_scope` object. It does enumerate classes — Step 8 requires every plan item to name the shape and every site holding it, with how they were enumerated — but in plan items, under different field names, which this schema-field contract does not reach",
   "review-verifier":

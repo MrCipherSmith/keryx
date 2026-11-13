@@ -45,7 +45,8 @@ const renderedOnly = BUNDLED_GDSKILLS.filter(
  * query's in any order. So "review MobX" and "mobx review" are ONE trigger
  * wearing two spellings, and a phrase-equality check would call them distinct
  * and miss the collision — which is how `review-frontend` and
- * `code-mobx-store-review` came to claim the same request.
+ * a MobX-only review profile (since removed, flow 488) came to claim the same
+ * request.
  */
 function triggerKey(trigger: string): string {
   return [...new Set(normalizeRouteText(trigger).split(" ").filter(Boolean))].sort().join(" ");
@@ -56,7 +57,8 @@ test("the sweep has a real denominator: every skill is on exactly one source pat
   // and every assertion below would pass over nothing.
   expect(BUNDLED_GDSKILLS.length).toBe(fileBacked.length + renderedOnly.length);
   expect(fileBacked.length).toBeGreaterThan(60);
-  expect(renderedOnly.length).toBe(11);
+  // 11 until flow 488 removed six catalog-only stubs no product code named.
+  expect(renderedOnly.length).toBe(4);
   expect(existsSync(BUNDLED_ROOT)).toBe(true);
 });
 

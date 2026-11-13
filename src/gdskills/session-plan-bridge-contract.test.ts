@@ -38,7 +38,6 @@ const MAIN_SESSION_PIPELINES = [
   "orchestration/feature-analyzer",
   "planning/autodoc-orchestrator",
   "planning/docpack-orchestrator",
-  "orchestration/feature-dev",
   "review/review-pr-feedback",
 ] as const;
 
@@ -134,7 +133,6 @@ test("each pipeline names ids of its own, not a scheme invented for the plan", (
   const expected: Record<string, string> = {
     "orchestration/issue-analyzer": "`phase-1`…`phase-4`",
     "planning/docpack-orchestrator": "`phase-0`…`phase-5`",
-    "orchestration/feature-dev": "`phase-1`…`phase-8`",
     "review/review-pr-feedback": "publish each `Step N`",
   };
   for (const root of ROOTS) {
@@ -146,8 +144,7 @@ test("each pipeline names ids of its own, not a scheme invented for the plan", (
 
 test("the pipelines that stop to ask publish `proposed` at exactly that gate", () => {
   for (const root of ROOTS) {
-    // Two independent gates, named by the skill itself.
-    expect(read(skillPath(root, "orchestration/feature-dev"))).toContain("the items are `proposed`");
+    // The gate, named by the skill itself.
     expect(read(skillPath(root, "planning/docpack-orchestrator"))).toContain("Phase 0's location question is open");
   }
 });

@@ -48,13 +48,13 @@ describe("scoutSkill", () => {
   test("a short domain query against a covering skill reaches fork or use, never create (flow 309 T12 regression)", () => {
     // Before flow 309 T12 this scored review/review-frontend at 0.086
     // (symmetric Jaccard against its full ~40-token description) and decided
-    // "create" even though review-frontend/code-mobx-store-review plainly
-    // cover "review react components mobx". The IDF-weighted coverage
+    // "create" even though review-frontend (then with a MobX-only sibling,
+    // since removed) plainly covers "review react components mobx". The IDF-weighted coverage
     // scorer judges the query's own intent, not diluted by the rest of the
     // description, so a covering skill now clears at least the fork bar.
     const result = scoutSkill("review react components mobx", catalog);
     expect(result.decision).not.toBe("create");
-    const coveringIds = ["review/review-frontend", "review/code-mobx-store-review", "review/review-backend"];
+    const coveringIds = ["review/review-frontend", "review/review-backend"];
     const topMatchIsCovering = result.matches.some((match) => coveringIds.includes(match.skillId) && match.overlapScore >= SCOUT_FORK_THRESHOLD);
     expect(topMatchIsCovering).toBe(true);
   });
@@ -119,7 +119,7 @@ describe("scoutSkill", () => {
       if (self === undefined) return;
       const result = scoutSkill(self.description, catalog, { excludeIds: [self.id] });
       expect(result.matches.every((match) => match.skillId !== self.id)).toBe(true);
-      // A weaker neighbour (review/review-backend, review/code-mobx-store-review,
+      // A weaker neighbour (review/review-backend, review/review-frontend-conventions,
       // ... share "review"/"react"/"component" vocabulary) should now surface
       // as the top match instead, at a lower score than the self-match was.
       expect(result.matches[0]?.skillId).not.toBe(self.id);
