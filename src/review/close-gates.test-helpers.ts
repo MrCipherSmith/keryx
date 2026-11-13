@@ -31,6 +31,23 @@ export const writeFindings = (cwd: string, ref: string, findings: unknown[]): Pr
 export const readManifest = async (cwd: string, ref: string): Promise<ManagedReviewManifest> =>
   JSON.parse(await readFile(path.join(path.resolve(cwd, ref), "manifest.json"), "utf8"));
 
+/** A hand edit of manifest.json. Untyped on purpose: the tests write fields and shapes the manifest type forbids. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ManifestEdit = (manifest: Record<string, any>) => void;
+
+/** Applies `edit` to the package's manifest.json and writes it back: the hand edit a gate must catch. */
+export async function editManifest(cwd: string, ref: string, edit: ManifestEdit): Promise<void> {
+  const manifest = await readManifest(cwd, ref) as unknown as Parameters<ManifestEdit>[0];
+  edit(manifest);
+  await writeFile(path.join(path.resolve(cwd, ref), "manifest.json"), JSON.stringify(manifest, null, 2));
+}
+
+/** A `review publish` post/confirm pair that records each posted body and always confirms. */
+export const sink = () => {
+  const posts: string[] = [];
+  return { posts, post: async (_ref: string, _event: string, body: string) => { posts.push(body); return { ok: true, detail: "ok" }; }, confirm: async () => true };
+};
+
 export function lookup(pr: { state?: string; headSha?: string } | null): PrLookup & { calls: string[] } {
   const calls: string[] = [];
   const fn = (async (ref: string) => { calls.push(ref); return pr === null ? null : { exists: true, state: pr.state ?? "OPEN", headSha: pr.headSha ?? HEAD }; }) as PrLookup & { calls: string[] };

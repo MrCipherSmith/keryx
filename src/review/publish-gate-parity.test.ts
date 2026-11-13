@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { PR, UNVERIFIED_MAJOR, ingestReady, readManifest, writeFindings } from "./close-gates.test-helpers";
+import { PR, UNVERIFIED_MAJOR, editManifest as editManifestIn, ingestReady, readManifest, sink, writeFindings } from "./close-gates.test-helpers";
 import { evaluateCloseGates } from "./close-gates";
 import { completeManagedReview } from "./managed";
 import { publishReview } from "./publish";
@@ -16,16 +16,7 @@ let dir = "";
 beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-gate-parity-")); });
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
-const sink = () => {
-  const posts: string[] = [];
-  return { posts, post: async (_ref: string, _event: string, body: string) => { posts.push(body); return { ok: true, detail: "ok" }; }, confirm: async () => true };
-};
-
-async function editManifest(ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> {
-  const manifest = await readManifest(dir, ref);
-  edit(manifest);
-  await writeFile(path.join(path.resolve(dir, ref), "manifest.json"), JSON.stringify(manifest, null, 2));
-}
+const editManifest = (ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> => editManifestIn(dir, ref, edit);
 
 const messageOf = async (run: () => Promise<unknown>): Promise<string> => {
   const error = await run().then(() => undefined, (e: Error) => e);

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { OPERATOR_WORDS, PR, ingestReady, readManifest } from "./close-gates.test-helpers";
+import { OPERATOR_WORDS, PR, editManifest as editManifestIn, ingestReady, readManifest } from "./close-gates.test-helpers";
 import { completeManagedReview } from "./managed";
 import { packageResearchErrors, packageResearchErrorsTagged } from "./research";
 
@@ -23,12 +23,7 @@ async function openObligation(ref: string): Promise<void> {
   await writeFile(file, JSON.stringify({ ...research, obligations: [{ id: "ob-1", source: "raw", question: "is it real?", status: "open" }] }));
 }
 
-async function editManifest(ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> {
-  const file = path.join(path.resolve(dir, ref), "manifest.json");
-  const manifest = await readManifest(dir, ref);
-  edit(manifest);
-  await writeFile(file, JSON.stringify(manifest, null, 2));
-}
+const editManifest = (ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> => editManifestIn(dir, ref, edit);
 
 describe("a readiness waiver is scoped to its own item (AC4)", () => {
   test("the research errors are tagged by readiness item; integrity errors carry none", async () => {

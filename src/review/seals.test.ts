@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { EVIDENCE, HEAD, MOVED, OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, VERIFIED, ingestReady, lookup, readManifest, writeFindings } from "./close-gates.test-helpers";
+import { EVIDENCE, HEAD, MOVED, OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, VERIFIED, editManifest as editManifestIn, ingestReady, lookup, readManifest, sink, writeFindings } from "./close-gates.test-helpers";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "./dispatch.test-helpers";
 import { completeManagedReview, createManagedReviewPackage } from "./managed";
 import { publishReview } from "./publish";
@@ -27,18 +27,8 @@ const REVIEWER_RESULT = {
   }],
   stats: { blocker: 0, major: 1, minor: 0, info: 0 },
 };
+const editManifest = (ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> => editManifestIn(dir, ref, edit);
 const READY_RESEARCH ={ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH };
-
-const sink = () => {
-  const posts: string[] = [];
-  return { posts, post: async (_ref: string, _event: string, body: string) => { posts.push(body); return { ok: true, detail: "ok" }; }, confirm: async () => true };
-};
-
-async function editManifest(ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> {
-  const manifest = await readManifest(dir, ref) as unknown as Record<string, any>;
-  edit(manifest);
-  await writeFile(path.join(path.resolve(dir, ref), "manifest.json"), JSON.stringify(manifest, null, 2));
-}
 
 const messageOf = async (run: () => Promise<unknown>): Promise<string> => {
   const error = await run().then(() => undefined, (e: Error) => e);
