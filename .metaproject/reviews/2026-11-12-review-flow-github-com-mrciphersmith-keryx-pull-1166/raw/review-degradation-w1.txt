@@ -1,0 +1,32 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-02"],
+  "summary": "slice-02 is generated data (gdgraph summary, testing context), flow 488-491 records and three orchestrator skill/template text edits. No finding worse than base in behaviour, defaults or structure; one suspicion on the model_tier -> model_class mapping. Verified clean: (1) SKILL.md:118 model_class values light/standard/expert are all in MODEL_CLASSES (src/harness/routing/model-class.ts:1) and spawn_subagent validates them (spawn-subagent-tool.ts:1507-1509); on base the named field model_tier was ignored (SPAWN_SUBAGENT_IGNORED_FIELDS, spawn-subagent-tool.ts:1073), so base passed nothing the router read. (2) SKILL.detail.md item 4 and SKILL.md:293 / templates/review-report.md:78 now say the report line unlocks nothing; the installed copies match the bundled copies under src/gdskills/bundled/skills/review/review-orchestrator (same line numbers 118/293/773 in both trees by search). (3) Remaining `Not verified:` text in SKILL.detail.md:955 is the report-parity follow-up line, a different mechanism from readiness item 4; not a leftover of the removed escape. (4) SKILL.detail.md item 7 title 'the report's head is the PR head' matches the code's item title (src/review/readiness.ts:39), unchanged on both sides. (5) gdgraph summary: `.git`, `dist`, `node_modules` vanish from Skipped Directories because this is a worktree (`.git` is a file) without build/dependency dirs; counts grew with apps/hub-web and src/hub; regenerated artifact, not a behaviour change. testing/context.md adds src/hub/ and src/remote-control/ to test:core, read from package.json scripts. (6) Flows 489-491 are scaffold records only; plan/tasks templates, no code. Graph consumer list: this payload carries no `keryx review blast-radius --degradation` importer list and slice-02 changes no code export, so no consumer walk was possible or needed; not traced: the docs guide docs/docs/guides/review-with-a-record.md (outside this slice).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "publication": "question",
+      "degradation_class": "behaviour-delta",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "On `spawn_subagent` pass its tier as `model_class` on every reviewer",
+      "problem": "Step 6 (SKILL.md:104, unchanged) defines the review tier as relative: '`standard` = your session model'. Line 118 now passes the same tier as the ABSOLUTE `model_class` `standard`. In src/harness/routing/resolver.ts:104-110 an agent recommendation becomes `assignment: { mode: \"class\", modelClass }` when the subagents category is `auto`, replacing the per-task classifier. On a session whose own model ranks above the standard class (this round's payload: tier `standard`, model `claude-opus-5-5`, which model-profile.ts:257 profiles as tier `deep`), a normal reviewer would be routed to a standard-class model, not the session model `keryx review tier` printed. If true: minor, normal reviewers run on a smaller model than the tier command named, contradicting the flow's outcome 'the reviewer model class chosen by keryx review tier is the one the keryx shell child actually runs on'.",
+      "impact": "Reviewer quality may drop silently on keryx shell in auto routing mode; non-auto modes ignore the recommendation (resolver.ts:93-103), so they are unaffected.",
+      "suggested_fix": "Check: on keryx shell with routing category `subagents` in mode `auto` and an Opus session, dispatch one reviewer with `model_class: \"standard\"` and read the routing journal's resolved model for that child. If it is not the session model, map tier `standard` to the session model's own class (or omit model_class for `standard`) and align Step 6's wording.",
+      "evidence": "consumer-trace (partial): SKILL.md:118 -> spawn-subagent-tool.ts:1606-1608 (recommendation {modelClass, source: agent}) -> resolver.ts:104-110 (auto mode: class assignment). Not traced: how a class assignment selects a concrete model for the anthropic provider and which class claude-opus-5-5 holds (model-profile.ts records tier `deep`, not a class). Refute attempt: on base model_tier was ignored and auto mode ran the classifier, which could also pick `standard`, so base did not guarantee the session model either; the change is required by frozen AC7 and the operator. Hence a question, not a finding.",
+      "confidence": "low",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Summary: slice-02 holds no code; the skill text changes match the code they describe and the bundled copies. One suspicion: the absolute `model_class: standard` may route normal reviewers below the session model in auto routing mode, against Step 6's relative definition.

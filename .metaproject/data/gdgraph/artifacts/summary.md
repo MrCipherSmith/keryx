@@ -2,25 +2,25 @@
 
 ## Stats
 
-- Source files indexed: 4002
+- Source files indexed: 4015
 - Imported asset files indexed: 35
-- Total nodes: 4037
-- Edges: 15081
-- Import edges: 14842
+- Total nodes: 4050
+- Edges: 15145
+- Import edges: 14906
 - Asset edges: 55
 - Unresolved imports: 184
 - Import resolution: 98.8%
-- Skipped generated/static directories: 17
+- Skipped generated/static directories: 19
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 458 |
+| harness | 459 |
 | commands | 446 |
-| review | 342 |
-| tui | 338 |
-| lib | 274 |
+| tui | 346 |
+| review | 344 |
+| lib | 276 |
 | hub | 187 |
 | apps | 161 |
 | gdskills | 141 |
@@ -61,10 +61,12 @@
 - `.metaproject`
 - `apps/hub-web/public`
 - `bench/jev-review/fixtures/conform-project/.metaproject`
+- `dist`
 - `docs/requirements/keryx-mcp-client/.metaproject`
 - `fixtures/memory-reliability-p0/.metaproject`
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
+- `node_modules`
 - `src/bundle/fixtures/roundtrip/project/.metaproject`
 - `src/remote-control/generated`
 - `src/security/audit-harness/fixtures/agents/.metaproject`

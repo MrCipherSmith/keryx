@@ -1,0 +1,33 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-04 read in full (close-gates.ts, complete-head-gate.ts, completion-host.ts, managed.ts, publish.ts, readiness.ts, research.ts, types.ts and the tests). No blocker, major or minor. The change keeps the PR tracker to one lookup per close: completeHeadGate runs once in completeManagedReviewLocked and its result is passed as `headGate` to waiveReadiness and to computeReadiness via evaluateCloseGates, replacing the old `headChecked` flag without adding a network call (readiness.ts headCheck only calls the tracker when no headGate is supplied). publish now reads report.md once (before, it was read after the checklist) and adds roundRecordTampered, parseEvidenceLevel and hostQuestionNotice (one research.json read and one premiseRecords call), all once per publish invocation on small package files. One info: the research-error gate is now computed even when a waiver would cover every error, where before a radius waiver skipped it. All paths are one-shot CLI closes over a single package directory; no loop, render, request handler or unbounded collection is introduced.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "PERF-001",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "const researchProblems = (await packageResearchErrorsTagged(packageDir, manifest.artifacts, researchFindings))",
+      "problem": "Before flow 488, a waiver of files-covered/blast-radius/reviewers/ledger skipped packageResearchErrors entirely (`waivedRadius ? [] : ...`). Now packageResearchErrorsTagged always runs, including packageCoverageErrors and coverageGateErrors (scope files, changed lines, blast radius, pending mutants, layer/chunk completeness), and the result is filtered afterwards. computeReadiness then recomputes overlapping coverage checks (reviewersCheck -> coverageGateOf).",
+      "impact": "One extra coverage computation per `review complete` that carries a waiver; runs once per close on one package, so no hot path. The change is required for correctness (integrity errors must survive a waiver), so this is noted only, not a defect.",
+      "suggested_fix": "None needed. If close latency on large packages ever matters, compute the coverage errors once and share them between the research gate and computeReadiness.",
+      "evidence": "slice-04 managed.ts @@ 1025,1149: removed `const researchProblems = waivedRadius ? [] : await packageResearchErrors(...)`, added the unconditional packageResearchErrorsTagged call inside beforeReadiness; research.ts packageResearchErrorsTagged computes coverage and completeness whenever the dispatch is recorded.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff",
+      "degradation_class": "performance",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Clean areas checked: N+1/redundant external calls (tracker asked once per close; waiveReadiness and computeReadiness reuse the head-gate result), sync blocking (roundRecordTampered is a sync read of small package files in a CLI path, unchanged from before, only moved), unbounded collections (none added), large imports (none), React/MobX (not applicable), pagination (not applicable).
+Layers: not consulted beyond `keryx ctx rg` for headGate/prLookup/computeReadiness/premiseRecords call sites.

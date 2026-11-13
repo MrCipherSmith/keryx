@@ -1,0 +1,87 @@
+STATUS: DONE
+
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-02 holds the regenerated gdgraph and testing artifacts, the flow 488-491 records, and the installed copies of the review-orchestrator skill text. I found no structural violation. Two contract-consistency notes. First, the readiness checklist in SKILL.detail.md still describes item 7 `head` as a property of the report, which contradicts the new rule that report text unlocks nothing. Second, the new deep->expert model_class mapping sits beside the Step 6 wording 'most capable class', and spawn_subagent offers frontier above expert.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "7. `head` — the report's head is the PR head.",
+      "problem": "The PR moves the moved-head escape out of report text: SKILL.md now says the report's first line 'unlocks nothing' and only an operator waiver of `head` passes. In the same readiness checklist, the PR rewrote item 4 to say report text no longer passes it, but item 7 still defines `head` as 'the report's head is the PR head'. That reads as a property the agent can satisfy by editing report.md, which is the exact path this flow removes. Plan T5 lists 'items 4 and 7' for update; only item 4 changed.",
+      "impact": "Two parts of the same skill contract disagree about what satisfies the `head` gate. An agent reading the checklist alone is pointed back at the report line, so it hits a refusal it was told it could avoid. The code gate holds, so there is no bypass. The cost is one wasted close attempt and wording that drifts from the code.",
+      "suggested_fix": "Rewrite item 7 in the same style as item 4, for example: '7. `head` — the PR head has not moved or merged since the reviewed SHA, or the operator waived the item; the report's first line informs readers but no longer passes it.' Apply the same edit to the bundled copy under src/gdskills/bundled/skills/review/review-orchestrator/ so both copies stay byte-identical.",
+      "evidence": "slice-02 SKILL.detail.md hunk: the item 4 line is replaced (diff lines 1040-1041) and item 7 is unchanged context (diff line 1045). SKILL.md:131 (new) and templates/review-report.md (new lines) both say the report line no longer unlocks the gate. flows/488 plan.md T5: 'Update the guide checklist (... items 4 and 7 ...)'. The feature commit 7684b3dce changes SKILL.detail.md by one line in each copy (git show --stat), which confirms item 7 was not touched.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:776",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (byte-identical copy)"
+        ],
+        "enumeration_method": "Read the readiness checklist items 1-12 in the slice hunk. Only item 7 names report content as the pass condition. The bundled copy is byte-identical under the document:build-parity rule cited in flows/488 context.md. I did not read docs/docs/guides/review-with-a-record.md items 4/7 because they are outside this slice."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "complex reviewers and `review-premise` `expert` (tier `deep`; `keryx review tier --premise`)",
+      "problem": "The new dispatch line maps tier `deep` to model_class `expert`. Step 6 in the same file still tells the orchestrator that `deep` means 'your runtime's lighter/most capable class if its dispatch tool offers one'. spawn_subagent accepts light|standard|expert|frontier (spawn-subagent-tool.ts:1130), so its most capable class is `frontier`, not `expert`. The two instructions name different classes for the same tier on the same host.",
+      "impact": "Observation only: the plan picked deep->expert on purpose (flows/488 plan.md T9), and model_class is a recommendation capped by the configured subagents category. The open question is which instruction wins when the two disagree on keryx shell.",
+      "suggested_fix": "Either have Step 6 note that keryx shell maps deep to `expert`, or add the reason for expert over frontier to the dispatch line. Both are possible without adding a line, which respects the line ceiling.",
+      "evidence": "SKILL.md:105 (context, unchanged) vs SKILL.md:118 (changed). Accepted values per the spawn_subagent tool description at src/harness/tool/builtin/spawn-subagent-tool.ts:1129-1130. The plan's mapping is in flows/488 plan.md item 5.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/flow-488-review-gates`
+- Merge-base: `66ee001172e0d0c048a73727c3e6e099f9149b0a`, head `e9ac9253fde7`
+- Scope mode: slices (slice-02, read in full)
+- Stack detected: generic-ts. Slice-02 holds only docs, skill text and generated artifacts.
+
+### Summary
+slice-02 contains regenerated gdgraph and testing artifacts, the flow 488-491 records, and the installed copies of the orchestrator skill and report template. It introduces no layering, dependency-direction or module-boundary change. The two notes concern the consistency of the skill's own contract.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+**F-001 (minor), SKILL.detail.md:776.** Readiness item 7 `head` is still defined as "the report's head is the PR head". The new rule is that report text unlocks nothing. Item 4 was updated; item 7, which the plan also lists, was not.
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific
+N/A.
+
+### Other
+**F-002 (info), SKILL.md:118.** The deep->expert model_class mapping sits beside Step 6's "most capable class" wording, while spawn_subagent offers `frontier`. The mapping was a deliberate choice; the open point is which instruction wins.
+
+Notes: in this round's PR scope, the flows 489-491 are planning scaffolds only (draft plans, unstarted tasks); I did not raise that as a finding. History was read with `git show --stat 7684b3dce` only.
+
+Routing audit: graph_used: no (not-relevant: only doc and artifact text in slice); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg` on spawn-subagent-tool.ts); raw_rg_used: no.

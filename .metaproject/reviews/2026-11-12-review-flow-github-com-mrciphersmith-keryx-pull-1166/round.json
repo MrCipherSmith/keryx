@@ -1,0 +1,1898 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "66ee001172e0d0c048a73727c3e6e099f9149b0a",
+    "head": "e9ac9253fde7"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "startLine": 2,
+      "endLine": 4
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2,
+      "endLine": 164
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 185,
+      "endLine": 192
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 197,
+      "endLine": 197
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 289,
+      "endLine": 290
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 296,
+      "endLine": 296
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 298,
+      "endLine": 302
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 306,
+      "endLine": 306
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 308,
+      "endLine": 310
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 317,
+      "endLine": 322
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 326,
+      "endLine": 326
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 329,
+      "endLine": 330
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 338,
+      "endLine": 338
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 373,
+      "endLine": 373
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 499,
+      "endLine": 499
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 512,
+      "endLine": 514
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 531,
+      "endLine": 531
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 609,
+      "endLine": 611
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 614,
+      "endLine": 614
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 629,
+      "endLine": 629
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 645,
+      "endLine": 646
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 650,
+      "endLine": 654
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 669,
+      "endLine": 669
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 673,
+      "endLine": 675
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 712,
+      "endLine": 712
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 731,
+      "endLine": 731
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 747,
+      "endLine": 748
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 758,
+      "endLine": 770
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 783,
+      "endLine": 783
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 785,
+      "endLine": 785
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 788,
+      "endLine": 788
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 816,
+      "endLine": 816
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 845,
+      "endLine": 845
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 881,
+      "endLine": 881
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 883,
+      "endLine": 883
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 906,
+      "endLine": 906
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1078,
+      "endLine": 1079
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1327,
+      "endLine": 1328
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1332,
+      "endLine": 1332
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1340,
+      "endLine": 1340
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1524,
+      "endLine": 1525
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1545,
+      "endLine": 1550
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1562,
+      "endLine": 1562
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1570,
+      "endLine": 1571
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1592,
+      "endLine": 1592
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1662,
+      "endLine": 1665
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1668,
+      "endLine": 1670
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1672,
+      "endLine": 1672
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1675,
+      "endLine": 1679
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1682,
+      "endLine": 1683
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1686,
+      "endLine": 1712
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1721,
+      "endLine": 1721
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1732,
+      "endLine": 1732
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1764,
+      "endLine": 1764
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1776,
+      "endLine": 1776
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1780,
+      "endLine": 1780
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1782,
+      "endLine": 1782
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1807,
+      "endLine": 1807
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1824,
+      "endLine": 1824
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1896,
+      "endLine": 2084
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2191,
+      "endLine": 2191
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2211,
+      "endLine": 2217
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2262,
+      "endLine": 2263
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2269,
+      "endLine": 2269
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2276,
+      "endLine": 2277
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2314,
+      "endLine": 2365
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2377,
+      "endLine": 2378
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2384,
+      "endLine": 2384
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2489,
+      "endLine": 2489
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2520,
+      "endLine": 2520
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2721,
+      "endLine": 2721
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2743,
+      "endLine": 2751
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2898,
+      "endLine": 2928
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2961,
+      "endLine": 2962
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2972,
+      "endLine": 2973
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2981,
+      "endLine": 2982
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2985,
+      "endLine": 2992
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3020,
+      "endLine": 3023
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3032,
+      "endLine": 3034
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3049,
+      "endLine": 3049
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3153,
+      "endLine": 3153
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3159,
+      "endLine": 3159
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3190,
+      "endLine": 3193
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3231,
+      "endLine": 3232
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3236,
+      "endLine": 3237
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3322,
+      "endLine": 3322
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3401,
+      "endLine": 3402
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3421,
+      "endLine": 3421
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3428,
+      "endLine": 3428
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3432,
+      "endLine": 3432
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3479,
+      "endLine": 3520
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3529,
+      "endLine": 3540
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3545,
+      "endLine": 3570
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3581,
+      "endLine": 3584
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3586,
+      "endLine": 3588
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3605,
+      "endLine": 3606
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3706,
+      "endLine": 3706
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3739,
+      "endLine": 3739
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3754,
+      "endLine": 3754
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3768,
+      "endLine": 3768
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3800,
+      "endLine": 3800
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3835,
+      "endLine": 3836
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3841,
+      "endLine": 3842
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3901,
+      "endLine": 3901
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3908,
+      "endLine": 3909
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3936,
+      "endLine": 3936
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3941,
+      "endLine": 3941
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3966,
+      "endLine": 3966
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3974,
+      "endLine": 3978
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3980,
+      "endLine": 3981
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 4012,
+      "endLine": 4012
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 4025,
+      "endLine": 4027
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 4030,
+      "endLine": 4031
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 5,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 19,
+      "endLine": 27
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 29,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 33,
+      "endLine": 34
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 44,
+      "endLine": 48
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 50,
+      "endLine": 50
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 60,
+      "endLine": 60
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 62,
+      "endLine": 62
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 63,
+      "endLine": 63
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 67,
+      "endLine": 67
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 69,
+      "endLine": 69
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 7,
+      "endLine": 8
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 19,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 61,
+      "endLine": 62
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 69,
+      "endLine": 131
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 158,
+      "endLine": 158
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 161,
+      "endLine": 164
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 166,
+      "endLine": 166
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 170,
+      "endLine": 170
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 174,
+      "endLine": 174
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 193,
+      "endLine": 193
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 252,
+      "endLine": 252
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 258,
+      "endLine": 258
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 263,
+      "endLine": 263
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 318,
+      "endLine": 319
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 322,
+      "endLine": 322
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 331,
+      "endLine": 331
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 344,
+      "endLine": 344
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 347,
+      "endLine": 348
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 358,
+      "endLine": 358
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 360,
+      "endLine": 361
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 395,
+      "endLine": 395
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 408,
+      "endLine": 408
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 414,
+      "endLine": 416
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 424,
+      "endLine": 424
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 426,
+      "endLine": 426
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 429,
+      "endLine": 429
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 445,
+      "endLine": 445
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 463,
+      "endLine": 463
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 484,
+      "endLine": 484
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 486,
+      "endLine": 486
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 503,
+      "endLine": 503
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 605,
+      "endLine": 605
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 748,
+      "endLine": 749
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 753,
+      "endLine": 753
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 761,
+      "endLine": 761
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 851,
+      "endLine": 852
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 865,
+      "endLine": 867
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 874,
+      "endLine": 874
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 879,
+      "endLine": 879
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 892,
+      "endLine": 892
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 935,
+      "endLine": 936
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 938,
+      "endLine": 938
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 940,
+      "endLine": 941
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 943,
+      "endLine": 943
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 945,
+      "endLine": 956
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 989,
+      "endLine": 989
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 993,
+      "endLine": 993
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 995,
+      "endLine": 995
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1011,
+      "endLine": 1011
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1021,
+      "endLine": 1021
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1057,
+      "endLine": 1159
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1206,
+      "endLine": 1206
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1217,
+      "endLine": 1219
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1239,
+      "endLine": 1240
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1244,
+      "endLine": 1244
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1249,
+      "endLine": 1249
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1268,
+      "endLine": 1296
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1303,
+      "endLine": 1303
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1307,
+      "endLine": 1307
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1364,
+      "endLine": 1364
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1378,
+      "endLine": 1378
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1485,
+      "endLine": 1485
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1499,
+      "endLine": 1500
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1586,
+      "endLine": 1603
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1618,
+      "endLine": 1618
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1627,
+      "endLine": 1628
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1630,
+      "endLine": 1633
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1648,
+      "endLine": 1649
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1652,
+      "endLine": 1653
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1717,
+      "endLine": 1717
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1720,
+      "endLine": 1720
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1736,
+      "endLine": 1737
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1754,
+      "endLine": 1754
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1831,
+      "endLine": 1832
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1844,
+      "endLine": 1844
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1851,
+      "endLine": 1851
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1853,
+      "endLine": 1853
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1876,
+      "endLine": 1891
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1897,
+      "endLine": 1902
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1904,
+      "endLine": 1916
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1922,
+      "endLine": 1924
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1934,
+      "endLine": 1934
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1997,
+      "endLine": 1997
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2022,
+      "endLine": 2022
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2034,
+      "endLine": 2034
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2037,
+      "endLine": 2037
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2070,
+      "endLine": 2070
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2074,
+      "endLine": 2074
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2090,
+      "endLine": 2090
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2094,
+      "endLine": 2094
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2111,
+      "endLine": 2114
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2130,
+      "endLine": 2130
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2138,
+      "endLine": 2139
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2141,
+      "endLine": 2141
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2212,
+      "endLine": 2212
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2258,
+      "endLine": 2258
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2273,
+      "endLine": 2273
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2280,
+      "endLine": 2280
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 23,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 28,
+      "endLine": 29
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 37,
+      "endLine": 99
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": ".metaproject/data/testing/recommendations.md",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "startLine": 41,
+      "endLine": 41
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/context.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 1,
+      "endLine": 290
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md",
+      "startLine": 1,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/plan.md",
+      "startLine": 1,
+      "endLine": 29
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/1.json",
+      "startLine": 1,
+      "endLine": 73
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/input.json",
+      "startLine": 1,
+      "endLine": 92
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/description.md",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/flow.json",
+      "startLine": 1,
+      "endLine": 211
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/journal.md",
+      "startLine": 1,
+      "endLine": 9
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/plan.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/description.md",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 1,
+      "endLine": 221
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/journal.md",
+      "startLine": 1,
+      "endLine": 9
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/plan.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/flow.json",
+      "startLine": 1,
+      "endLine": 192
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/journal.md",
+      "startLine": 1,
+      "endLine": 8
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/plan.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 773,
+      "endLine": 773
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 293,
+      "endLine": 293
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/templates/review-report.md",
+      "startLine": 79,
+      "endLine": 80
+    },
+    {
+      "file": "docs/analysis/review-process-audit-2026-11-12.md",
+      "startLine": 1,
+      "endLine": 195
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5091,
+      "endLine": 5091
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5121,
+      "endLine": 5126
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5130,
+      "endLine": 5130
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 785,
+      "endLine": 785
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 788,
+      "endLine": 788
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 881,
+      "endLine": 881
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 883,
+      "endLine": 888
+    },
+    {
+      "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+      "startLine": 267,
+      "endLine": 302
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 237,
+      "endLine": 243
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 245,
+      "endLine": 247
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 252,
+      "endLine": 252
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 254,
+      "endLine": 254
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 605,
+      "endLine": 605
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4940,
+      "endLine": 4943
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4954,
+      "endLine": 4956
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4971,
+      "endLine": 4971
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5057,
+      "endLine": 5057
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5348,
+      "endLine": 5348
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5352,
+      "endLine": 5353
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5662,
+      "endLine": 5663
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 773,
+      "endLine": 773
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 293,
+      "endLine": 293
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md",
+      "startLine": 79,
+      "endLine": 80
+    },
+    {
+      "file": "src/gdskills/review-spawn-field-contract.test.ts",
+      "startLine": 1,
+      "endLine": 104
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1068,
+      "endLine": 1074
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1504,
+      "endLine": 1504
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 1,
+      "endLine": 40
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 1,
+      "endLine": 45
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 35,
+      "endLine": 37
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 39,
+      "endLine": 43
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 54,
+      "endLine": 54
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 56,
+      "endLine": 60
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 63,
+      "endLine": 81
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 111,
+      "endLine": 111
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 113,
+      "endLine": 114
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 131,
+      "endLine": 132
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 139,
+      "endLine": 144
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 149,
+      "endLine": 149
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 157,
+      "endLine": 157
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 162,
+      "endLine": 162
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 183,
+      "endLine": 183
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 189,
+      "endLine": 191
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 193,
+      "endLine": 193
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 25,
+      "endLine": 29
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 31,
+      "endLine": 32
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 34,
+      "endLine": 34
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 36,
+      "endLine": 36
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 1,
+      "endLine": 82
+    },
+    {
+      "file": "src/review/complete-waiver-scope.test.ts",
+      "startLine": 1,
+      "endLine": 80
+    },
+    {
+      "file": "src/review/completion-host.ts",
+      "startLine": 12,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/completion-host.ts",
+      "startLine": 26,
+      "endLine": 27
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 2173,
+      "endLine": 2173
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 2175,
+      "endLine": 2176
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 11,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 19,
+      "endLine": 20
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 92,
+      "endLine": 92
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 965,
+      "endLine": 970
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1044,
+      "endLine": 1044
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1047,
+      "endLine": 1047
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1058,
+      "endLine": 1064
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1066,
+      "endLine": 1066
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1080,
+      "endLine": 1080
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1086,
+      "endLine": 1089
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1108,
+      "endLine": 1129
+    },
+    {
+      "file": "src/review/publish-gate-parity.test.ts",
+      "startLine": 1,
+      "endLine": 91
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 115,
+      "endLine": 151
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 13,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 62,
+      "endLine": 79
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 172,
+      "endLine": 175
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 177,
+      "endLine": 177
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 181,
+      "endLine": 182
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 1,
+      "endLine": 77
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 61,
+      "endLine": 68
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 128,
+      "endLine": 129
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 140,
+      "endLine": 141
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 153,
+      "endLine": 161
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 428,
+      "endLine": 429
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 466,
+      "endLine": 467
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 36,
+      "endLine": 36
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 76,
+      "endLine": 81
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 232,
+      "endLine": 235
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 239,
+      "endLine": 239
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 241,
+      "endLine": 242
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 349,
+      "endLine": 352
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 354,
+      "endLine": 358
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 121,
+      "endLine": 135
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 137,
+      "endLine": 139
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 153,
+      "endLine": 159
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 161,
+      "endLine": 161
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "startLine": 284,
+      "endLine": 287
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 130,
+      "endLine": 132
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 172,
+      "endLine": 173
+    }
+  ],
+  "carried": [],
+  "mergeBase": "66ee001172e0d0c048a73727c3e6e099f9149b0a"
+}

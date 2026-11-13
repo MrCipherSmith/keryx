@@ -1,0 +1,20 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-03 read in full (1179 lines). No performance finding. The code changes are cold paths: `runComplete` (one CLI invocation per close) adds one more `flagTokens(args)` scan over a handful of argv tokens and a TTY check; `parseDispositions` adds one string to a 7-element skip list; `spawn-subagent-tool.ts` replaces `input.model_tier` with `input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]]` (a constant-index property read, once per spawn); the new contract test builds the tool once at module load, walks the bundled review skills directory once with readdirSync and scans each markdown line with a regex literal, which is test-only and bounded by the bundled skill count. The remaining files are docs, a JSON schema property and skill prose. Checked categories with nothing to report: N+1/DB queries (none touched), React re-renders (none), hot-path computation, indexes, memory leaks/unbounded collections (no new long-lived state; `SPAWN_SUBAGENT_IGNORED_FIELDS` is a frozen one-element constant), bundle imports, sync blocking in async contexts (readdirSync/readFileSync only in a test file), pagination, redundant API calls (the `prLookup`/`prFiles` seams are unchanged in count). History not read (no git command needed for any deliberate-looking site in this slice).",
+  "findings": [],
+  "slices": ["slice-03"],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+Performance review, slice-03: clean. All changed code is on cold paths (one `keryx review complete` invocation, one spawn per reviewer, a test-only directory scan); no N+1, leak, blocking I/O on a served path, or unbounded collection was introduced.

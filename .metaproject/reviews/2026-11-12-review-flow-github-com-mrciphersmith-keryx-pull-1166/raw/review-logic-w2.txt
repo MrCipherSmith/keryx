@@ -1,0 +1,52 @@
+STATUS: DONE
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-logic",
+    "status": "DONE",
+    "slices": ["slice-02"],
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "minor",
+        "title": "Readiness item 7 still describes the head check as a report-text check",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "line": 776,
+        "quote": "7. `head` — the report's head is the PR head.",
+        "problem": "This diff rewrote item 4 to say a report line no longer passes it, but left item 7 unchanged. After flow 488, `headCheck` (src/review/readiness.ts:347-359) compares the head recorded in the manifest at `review start` with the PR head through `completeHeadGate`, and nothing in report.md lifts it (complete-head-gate.ts:22-30). The item text still says the check is about 'the report's head', which is the escape this flow removed.",
+        "why_it_matters": "An agent reading the checklist is pointed at report.md as the thing to align, the exact behaviour AC2 retires; the same file's SKILL.md (line 131 of the hunk) and the report template already say the first line unlocks nothing, so the three texts disagree.",
+        "suggested_fix": "Reword item 7 to: \"`head` — the head recorded at `review start` is still the PR head and the PR is not merged; otherwise the operator waives `head`.\" Mirror it in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md to keep the copies byte-identical.",
+        "evidence": "readiness.ts:347-359 headCheck uses options.headGate / completeHeadGate on ctx.manifest; complete-head-gate.ts:52-53 returns a refusal on merged/moved with no report input.",
+        "confidence": "high",
+        "location_class": "in-diff"
+      },
+      {
+        "id": "F-002",
+        "severity": "info",
+        "title": "'An omitted tier runs the child on your own model' holds only when subagent routing is not auto",
+        "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "line": 118,
+        "quote": "an omitted tier runs the child on your own model.",
+        "problem": "With `model_class` omitted, spawn-subagent-tool.ts:1610-1612 runs `runProductionRoutingClassification` when `routingConfig.categories.subagents.mode === \"auto\"`, so the child's model is chosen by the classifier, not inherited. In this project the subagents category is not pinned, so today the sentence is true here; it is not true for a project that sets subagents routing to auto.",
+        "why_it_matters": "No observable defect in this repo; it would mislead an operator of a project with auto subagent routing about what an omitted model_class does.",
+        "suggested_fix": "Optional: 'an omitted model_class leaves the child to the project's subagent routing (your own model unless that category is auto)'. Settled by reading routing.config.json of a target project.",
+        "evidence": "spawn-subagent-tool.ts:1606-1612",
+        "confidence": "medium",
+        "location_class": "in-diff"
+      }
+    ],
+    "notes": [
+      "model_class mapping checked against spawn-subagent-tool.ts:1073 (model_tier ignored), 1507-1509 (light|standard|expert|frontier accepted), 1606-1607 (recommendation.modelClass): light/standard/expert are all accepted, deep->expert is valid.",
+      "verifier item 4 text matches verifierCheck (readiness.ts:236-244): only verification or an operator waiver lifts it.",
+      "SKILL.md head-gate sentence and review-report.md template match completeHeadGate (no report escape) and headCheck repair text (--waive head / review_waive_readiness).",
+      "Flow 489/490/491 files are scaffold/plan documents; no logic to check. Flow 488 journal task title T6 ('accepts only the recorded head or its ancestor') differs from frozen AC3 (operator quote when different); AC3 is the binding text and the journal records the operator's A-03 decision, so not reported.",
+      "gdgraph summary and testing context are regenerated artifacts; not reviewed for logic."
+    ]
+  }
+}
+```
+
+Logic review of slice-02 (docs, skills and flow scaffolding for flow 488). The skill and template edits agree with the code at head (readiness.ts verifierCheck/headCheck, complete-head-gate.ts, spawn-subagent-tool.ts model_class). One stale checklist line (item 7) still frames the head check as report text; one info note on the omitted-model_class wording. Stats: blocker 0 | major 0 | minor 1 | info 1.
+
+Routing audit: graph_used: no (not-relevant: docs slice, targets named in context.md); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.
