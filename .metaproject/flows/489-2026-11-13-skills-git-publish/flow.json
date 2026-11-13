@@ -9,9 +9,9 @@
   "id": "489",
   "slug": "skills-git-publish",
   "title": "Merge commit/push/pr into one git-publish skill and make Red Flags optional",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-13T21:57:46.747Z",
-  "updatedAt": "2026-11-13T22:17:50.253Z",
+  "updatedAt": "2026-11-13T22:21:22.597Z",
   "source": {
     "type": "description",
     "ref": null
@@ -40,7 +40,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1173"
   },
   "baseBranch": "chore/skills-prune-dead",
   "owner": {
@@ -232,6 +232,11 @@
       "at": "2026-11-13T22:17:50.253Z",
       "event": "ac-confirmed",
       "detail": "AC5: typecheck exit 0; skills verify --bundled 70 skills 0 findings; agents verify ok; targeted suites: same 159 environmental failures as the base, no new (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T22:21:22.597Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1173 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
