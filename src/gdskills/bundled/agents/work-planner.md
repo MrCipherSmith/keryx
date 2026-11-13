@@ -17,7 +17,7 @@ tools:
 model_tier: standard
 policy_profile: read-only
 skills:
-  - planner
+  - issue-analyzer
 output_contract: subagent-result
 isolation: none
 origin:
