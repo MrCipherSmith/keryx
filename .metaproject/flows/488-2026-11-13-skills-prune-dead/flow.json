@@ -11,12 +11,12 @@
   "title": "Prune dead and orphaned bundled skills (stage 1)",
   "status": "implemented",
   "createdAt": "2026-11-13T18:25:57.081Z",
-  "updatedAt": "2026-11-13T19:08:13.403Z",
+  "updatedAt": "2026-11-13T19:51:31.608Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:ba81eef754d00b05d38f854882805f380b64734f3b0d89917a125ad72d7691de",
+  "acChecksum": "sha256:65f21cb7559a98e3477795fbd158fac2643a1d869ac587ae16d89baca8f86672",
   "acConfirmed": {},
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/1172"
@@ -217,6 +217,11 @@
       "at": "2026-11-13T19:08:13.403Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1172 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-13T19:51:31.608Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"None of the fifteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`; `context-router` stays because the generated routing.md points at it. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" -> \"None of the sixteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" (owner chose to remove context-router together with the generated routing rows (2026-11-13))"
     }
   ],
   "acKinds": {
@@ -226,7 +231,7 @@
     },
     "AC2": {
       "kind": "exec",
-      "check": "bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'"
+      "check": "bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'"
     },
     "AC3": {
       "kind": "exec",
