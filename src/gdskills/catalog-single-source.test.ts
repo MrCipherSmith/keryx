@@ -45,7 +45,8 @@ const renderedOnly = BUNDLED_GDSKILLS.filter(
  * query's in any order. So "review MobX" and "mobx review" are ONE trigger
  * wearing two spellings, and a phrase-equality check would call them distinct
  * and miss the collision — which is how `review-frontend` and
- * `code-mobx-store-review` came to claim the same request.
+ * a MobX-only review profile (since removed, flow 488) came to claim the same
+ * request.
  */
 function triggerKey(trigger: string): string {
   return [...new Set(normalizeRouteText(trigger).split(" ").filter(Boolean))].sort().join(" ");

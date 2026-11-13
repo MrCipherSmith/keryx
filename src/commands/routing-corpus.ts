@@ -126,7 +126,7 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
   // skill already carries ("review my code", "full review", "review PR") — was
   // measured and rejected. Dropping it costs three `ok` entries in
   // ROUTING_BASELINE their top skill ("review" and "do a review" fall from
-  // review-orchestrator at 65 to code-ai-review at 10; "reviewing the diff now"
+  // review-orchestrator at 65 to code-ai-review at 10 (since removed, flow 488); "reviewing the diff now"
   // falls to perf-check at 20) and takes review-orchestrator's own positive
   // "reviewing the diff now, where are the problems" away from it. A skill whose
   // contract is to take the review request that names no specialist has to fire
@@ -245,11 +245,22 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * generated routing rows that pointed at it, with its 3 positives, all ranking
  * first: 299/302 - 3 = 296/299. No regression is recorded.
  *
+ * Finally it removed the three `code-*` review profiles — `code-ai-review`,
+ * `code-style-review` and `code-mobx-store-review` — whose checks are carried by
+ * `review-logic`, `review-frontend`, `review-style` and the other reviewers
+ * (flow 488's `code-profile-coverage.md`), with their 11 positives
+ * (4, 4 and 3), all ranking first: 296/299 - 11 = 285/288. The three misses are
+ * still the same three (`reviewer-skill-creator`, `review-pr-contract`,
+ * `pr-issue-documenter`); no regression is recorded. `review-frontend` and
+ * `code-learned-review` each lost a negative whose owner was a removed profile, so
+ * each gained one against a neighbour that still exists to stay at the two-negative
+ * floor.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 296;
-export const RANK1_TOTAL = 299;
+export const RANK1_FIRST = 285;
+export const RANK1_TOTAL = 288;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -503,7 +514,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
-      { prompt: "mobx store review of these actions and reactions", owner: "code-mobx-store-review" },
+      { prompt: "backend review of the new endpoints", owner: "review-backend" },
     ],
   },
   {
@@ -790,19 +801,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "code-ai-review",
-    positives: [
-      "run code-ai-review on this branch",
-      "do a strict AI review with the ai assistant profile",
-      "use the code review ai assistant profile on this branch",
-      "run a strict pass, ai baseline style, and go through this branch before any human review happens",
-    ],
-    negatives: [
-      { prompt: "review my code", owner: "review-orchestrator" },
-      { prompt: "review with our conventions learned from past PRs", owner: "code-learned-review" },
-    ],
-  },
-  {
     skill: "code-learned-review",
     positives: [
       "review with our conventions learned from past PRs",
@@ -811,33 +809,8 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "our own pull request history taught us some conventions, can you review this branch against everything we've learned from that",
     ],
     negatives: [
-      { prompt: "run code-ai-review on this branch", owner: "code-ai-review" },
       { prompt: "review my code", owner: "review-orchestrator" },
-    ],
-  },
-  {
-    skill: "code-style-review",
-    positives: [
-      "run code-style-review on my branch",
-      "check the architecture style with the code-style-patterns profile",
-      "use the legacy style and architecture profile on this branch",
-      "run the older architecture and style checks we still keep around for legacy branches",
-    ],
-    negatives: [
       { prompt: "style review, naming and readability only", owner: "review-style" },
-      { prompt: "architecture review of this module", owner: "review-architecture" },
-    ],
-  },
-  {
-    skill: "code-mobx-store-review",
-    positives: [
-      "review the mobx store",
-      "mobx store review of these actions and reactions",
-      "this store needs a review, the async runInAction looks wrong",
-    ],
-    negatives: [
-      { prompt: "frontend review of these components", owner: "review-frontend" },
-      { prompt: "review my code", owner: "review-orchestrator" },
     ],
   },
 
