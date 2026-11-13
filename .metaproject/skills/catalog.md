@@ -24,7 +24,6 @@ Resolution order:
 
 | Skill | Category | Purpose | Entry |
 |---|---|---|---|
-| context-router | core | Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads. | gdskills/core/context-router/SKILL.md |
 | entity-skill-creator | core | Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity. | gdskills/core/entity-skill-creator/SKILL.md |
 | entity-skill-verifier | core | Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step. | gdskills/core/entity-skill-verifier/SKILL.md |
 | metaproject-router | core | Choose which Metaproject module, working skill, or project-skill should be used for a user request. | gdskills/core/metaproject-router/SKILL.md |

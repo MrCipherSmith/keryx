@@ -39,20 +39,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Prefer project-local skills and module manifests before broad raw file search.",
     "Route to the narrowest applicable skill and record unavailable modules explicitly.",
   ], ["any repository task", "route context", "which skill should be used", "ordinary product-development request", "agent should decide tools", "pick the module"],
-    "Use when a request's routing to a Metaproject module, skill, or project-skill is unclear and needs deciding before any work starts. NOT for: picking between gdgraph, gdctx, gdwiki, memory, and health once the module is already known (see context-router)."),
-  renderedSkill("context-router", "core", ["minimal", "recommended", "full"], "Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads.", [
-    "Start from the user's goal, not from command names.",
-    "Use gdgraph for file relationships and affected context.",
-    "Use gdctx for compact command, search, diff, log, and large-read output.",
-    "Use gdwiki for architecture, domain, business rules, decisions, and scenarios.",
-    "Use memory for historical decisions, known constraints, lessons, and repeated mistakes.",
-    "Use health for normalized quality and gate status; use testing for test selection and test context.",
-    "Prefer MCP tools/resources for these capabilities when connected; otherwise use the matching skill and CLI command.",
-    "Use project-skills for known modules, components, stores, services, and domain entities.",
-    // No "collect context": that phrase is context-collector's, and a trigger
-    // two skills share settles nothing (flow 257 T6).
-  ], ["find files", "understand code", "what should I inspect", "agent routing"],
-    "Use when the Metaproject module or skill is already known and the next step is picking gdgraph, gdctx, gdwiki, memory, health, or project-skills before reading raw files. NOT for: deciding which top-level skill or module should handle a request (see metaproject-router)."),
+    "Use when a request's routing to a Metaproject module, skill, or project-skill is unclear and needs deciding before any work starts. NOT for: a request whose owning module or skill is already known."),
   renderedSkill("entity-skill-creator", "core", ["minimal", "recommended", "full"], "Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity.", [
     "Normalize the target into module, entity, files, symbols, and wiki references.",
     "Collect evidence from gdgraph, gdctx, gdwiki, health, and memory when available.",

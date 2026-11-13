@@ -12,7 +12,6 @@ Native bundled Metaproject working skills and orchestrators.
 
 ### core
 
-- `context-router`: Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads.
 - `entity-skill-creator`: Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity.
 - `entity-skill-verifier`: Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step.
 - `metaproject-router`: Choose which Metaproject module, working skill, or project-skill should be used for a user request.

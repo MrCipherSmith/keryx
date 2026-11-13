@@ -639,8 +639,8 @@ export const MAX_DESCRIPTION_LENGTH = 1024;
 // The three checks above each judge ONE description in isolation. None of
 // them can see two descriptions that read as near-duplicates of EACH OTHER —
 // a router scores both skills for the same request and an agent choosing
-// between them has no signal beyond a coin flip. `context-router`'s own
-// SKILL.md carries a comment (`catalog.ts`) explicitly carving "collect
+// between them has no signal beyond a coin flip. The catalog once carried a
+// hand-written comment (`catalog.ts`) explicitly carving "collect
 // context" out of its trigger list because `context-collector` already owns
 // that phrase; nothing before this check verified the tree does not have
 // OTHER pairs quietly reproducing what that one hand-written comment guards

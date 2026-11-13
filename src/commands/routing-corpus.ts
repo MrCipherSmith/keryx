@@ -241,11 +241,15 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * positives, all ranking first: 321/324 - 22 = 299/302. The three misses are
  * still the same three; no regression is recorded.
  *
+ * It then removed `context-router`, the last of those stubs, together with the
+ * generated routing rows that pointed at it, with its 3 positives, all ranking
+ * first: 299/302 - 3 = 296/299. No regression is recorded.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 299;
-export const RANK1_TOTAL = 302;
+export const RANK1_FIRST = 296;
+export const RANK1_TOTAL = 299;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -265,20 +269,8 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "just route this to whichever agent should decide on tools and context here",
     ],
     negatives: [
-      { prompt: "what should I inspect first to understand this code", owner: "context-router" },
+      { prompt: "collect the docs and references the workers will need", owner: "context-collector" },
       { prompt: "review my code", owner: "review-orchestrator" },
-    ],
-  },
-  {
-    skill: "context-router",
-    positives: [
-      "I need to find the files behind the auth store",
-      "what should I inspect first to understand this code",
-      "the module is settled, now do I reach for gdgraph or gdwiki",
-    ],
-    negatives: [
-      { prompt: "no idea which skill should be used for this, route it", owner: "metaproject-router" },
-      { prompt: "is this project skill stale or still fresh", owner: "entity-skill-verifier" },
     ],
   },
   {
@@ -355,7 +347,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "collect the docs and references the workers will need",
     ],
     negatives: [
-      { prompt: "the module is settled, now do I reach for gdgraph or gdwiki", owner: "context-router" },
+      { prompt: "no idea which skill should be used for this, route it", owner: "metaproject-router" },
       { prompt: "analyze the issue and turn it into tasks", owner: "issue-analyzer" },
     ],
   },

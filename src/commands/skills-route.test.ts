@@ -91,7 +91,7 @@ describe("rendered description reads as a trigger, not an echoed imperative", ()
   //
   // AC9 (flow 252, D7) was scoped to 11 core/platform skills; flow 488 removed six
   // of them (hook-manager, skill-catalog-manager, skill-runtime-exporter,
-  // skill-sync, entity-skill-router, entity-skill-learner), leaving these 5 —
+  // skill-sync, entity-skill-router, entity-skill-learner) and then context-router, leaving these 4 —
   // the ones a routing agent reaches for before any other skill has narrowed
   // the request, where an echoed imperative gives it nothing to route on.
   // Other categories (orchestration/review/quality/planning) and two more
@@ -100,21 +100,20 @@ describe("rendered description reads as a trigger, not an echoed imperative", ()
   // outside this frozen criterion's named set, so it is left untouched here.
   const AC9_SCOPED_SKILLS = [
     "metaproject-router",
-    "context-router",
     "entity-skill-creator",
     "entity-skill-verifier",
     "agent-entrypoint-manager",
   ];
   const echoedImperative = /^Use when (choose|create|update|select|verify|split|maintain|generate|export|sync|run|build)\b/i;
 
-  test("the AC9 scope still names exactly 5 skills, all present in the catalog", () => {
-    expect(AC9_SCOPED_SKILLS.length).toBe(5);
+  test("the AC9 scope still names exactly 4 skills, all present in the catalog", () => {
+    expect(AC9_SCOPED_SKILLS.length).toBe(4);
     for (const name of AC9_SCOPED_SKILLS) {
       expect(BUNDLED_GDSKILLS.some((entry) => entry.name === name), name).toBe(true);
     }
   });
 
-  test("none of the 5 rendered core/platform skills echoes its purpose as a bare imperative", () => {
+  test("none of the 4 rendered core/platform skills echoes its purpose as a bare imperative", () => {
     const offenders = BUNDLED_GDSKILLS.filter(
       (entry) => AC9_SCOPED_SKILLS.includes(entry.name) && echoedImperative.test(entry.description),
     ).map((entry) => entry.name);
