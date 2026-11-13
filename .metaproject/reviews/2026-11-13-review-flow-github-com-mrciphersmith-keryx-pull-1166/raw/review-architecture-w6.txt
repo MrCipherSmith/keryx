@@ -1,0 +1,40 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "reviewer": "review-architecture",
+  "slices": ["slice-06"],
+  "status": "DONE",
+  "summary": "Slice-06 is the removed (old-side) lines of c6d6f7a63 in src/review, src/commands/review.ts and the orchestrator skill. Read against head b076a85a6354, every removal has a replacement: the research gate moved from managed.ts into evaluateCloseGates (shared by complete and publish), the report-text head escape (SAYS_SO) is gone in favour of readiness item head plus sealed waivers, and publish's own readinessRefusal throw is now inside evaluateCloseGates. Dependency direction is clean: seals.ts imports only types, complete-head-gate, record and round-record, none of which import it back; readiness/close-gates/managed import seals; research.ts imports readiness as a type only. Two minor structural notes, no blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "title": "The 'closed package skips the live coverage gate' rule is spelled twice with different conditions",
+      "severity": "minor",
+      "file": "src/review/close-gates.ts",
+      "line": 53,
+      "quote": "const closedPublish = input.action === \"publish\" && manifest.status === \"closed\";",
+      "evidence": "close-gates.ts:53 turns the live coverage check off only when action is publish and the package is closed; its own comment (line 47) says this is the same rule as readiness.ts Context.liveCoverageGate. readiness.ts:470 spells that rule as `liveCoverageGate: manifest.status !== \"closed\"`, with no action term. For `review complete` on an already-closed package, readiness item 3 reads the recorded close while researchRefusals (close-gates.ts:54) re-runs coverage live, so the two halves of one gate evaluation disagree about which coverage verdict applies.",
+      "impact": "Maintainability: the rule lives in two places and the comment asserts they match when they do not. A later change to one will silently split complete and publish behaviour again, which is the class flow 488 ARCH-1 set out to remove. Re-completing a closed package is not a path I could show reaching a wrong result, so this is structural only.",
+      "suggested_fix": "Compute one `liveCoverage` boolean next to the manifest read (or export it from readiness.ts) and pass it to both packageResearchErrorsTagged and computeReadiness, instead of deriving it twice.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002",
+      "title": "research.ts, a lower-level ledger module, depends on readiness.ts vocabulary while readiness.ts imports research.ts at runtime",
+      "severity": "info",
+      "file": "src/review/research.ts",
+      "line": 9,
+      "quote": "import type { ReadinessItemId } from \"./readiness\";",
+      "evidence": "readiness.ts imports dispatchRuns, packageCoverageErrors and researchErrors from ./research at runtime; research.ts imports ReadinessItemId from ./readiness as a type. The import is type-only and the comment at research.ts:8 names the reason, so there is no runtime cycle and the choice is deliberate.",
+      "impact": "None at runtime. The item-id type belongs to the checklist, and the ledger now cannot be read or tested without readiness.ts compiling; moving READINESS_ITEMS ids into a small types module would restore a one-way dependency. Reported as info because the author's stated reason holds and nothing breaks.",
+      "suggested_fix": "Optional: export ReadinessItemId from types.ts (or a readiness-items.ts) and import it from there in both modules.",
+      "confidence": "high"
+    }
+  ],
+  "notes": [
+    "history: git show c6d6f7a63 read for the six non-test src files; the commit message states the removals' replacements and each was found at head.",
+    "routing audit: graph_used no (unavailable for a deletion-only slice; ctx rg used to enumerate manifest writers), wiki_used not-relevant, ctx_used yes, raw_rg_used no."
+  ]
+}
+```

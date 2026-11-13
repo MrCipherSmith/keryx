@@ -1,0 +1,34 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "slices": ["slice-04"],
+  "summary": "The seal design (seals.ts) and the ARCH-1 gate move (researchRefusals inside evaluateCloseGates) are sound for packages created after this change: ingest seals the target and the applied verifications, waiveReadiness seals each waiver, `complete --head` reseals the target and the override, and publish now runs the same research and seal gates as complete. One defect: a package with no seals (any package written before this change) that receives its first readiness waiver gets a `seals` object with `readinessWaivers` but no `target`, and `sealProblems` reads any present `seals` as 'target sealed', so the package is then refused by every later complete and publish with a misleading 'target does not match the seal' message. Session/help-groups hunks in the slice are from the main merge and were not reviewed.",
+  "findings": [
+    {
+      "id": "LOGIC-1",
+      "severity": "major",
+      "file": "src/review/readiness.ts",
+      "line": 613,
+      "quote": "seals: { ...(manifest.seals ?? {}), readinessWaivers } }",
+      "problem": "waiveReadiness creates `manifest.seals` as `{ readinessWaivers }` on a package that had none, with no `target` digest. seals.ts sealProblems treats the mere presence of `seals` as proof that the target was sealed: `manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)`. For such a package `seals.target` is undefined, so the comparison is always unequal and the gate reports 'manifest.json target (head ...) does not match the seal keryx wrote'. seals.ts's own header and the managed.ts comment at the close ('A package from before the seals is sealed only when this close records a head of its own (--head)') state the opposite intent: a pre-seal package's target is not checked.",
+      "evidence": "Path: open PR-bound package written before this change (no `seals`), then the operator waives any item (the review_waive_readiness card, or `review complete --waive <item> \"<quote>\"`). readiness.ts:613 writes `seals: { readinessWaivers }`. In the same `complete`, evaluateCloseGates ran sealProblems (close-gates.ts:65) BEFORE beforeReadiness, so this close passes; managed.ts:1148 then keeps `seals = manifest.seals` (stored.seals was undefined and no --head), so the closed manifest holds `seals` without `target`. `review publish` then runs evaluateCloseGates -> sealProblems (close-gates.ts:65) -> refuses. For a card waiver on a still-open package the next `complete` refuses at the same line, and `complete --head <sha> --head-reason ...` cannot repair it because sealProblems reads the on-disk manifest first. No test covers it: seals.test.ts waives only on packages made by ingestReady (which seals the target at ingest), and close-gates.test-helpers.ts line 57 papers over the shape with `manifest.seals?.target ?? sealTarget(manifest.target)` for hand-built fixtures.",
+      "impact": "A legitimately waived pre-seal package becomes unclosable (open case) or unpublishable (closed case) with a message that blames a manifest edit that never happened; the only way out is to hand-edit manifest.json, which is the act the seals exist to refuse. Scope is packages in flight across the upgrade, since packages created from now on carry a target seal from ingest.",
+      "suggested_fix": "Make the 'sealed target' test explicit instead of inferring it from the presence of `seals`: in sealProblems check the target only when `manifest.seals?.target !== undefined`. Alternatively have waiveReadiness leave a seal-less manifest seal-less for the target, or stamp `target: sealTarget(manifest.target)` only when the package already carried one. Add a seals.test.ts case: waive on a manifest with `seals` deleted, then complete and publish.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/readiness.ts:613",
+          "src/review/seals.ts:87",
+          "src/review/managed.ts:1148"
+        ],
+        "enumeration_method": "keryx ctx rg for `.seals`, withVerificationSeals, sealTarget( and seals writers over src (non-test): the writers of `manifest.seals` are managed.ts:521 (ingest, always sets target), managed.ts:1148-1150 (close; sets target only when stored.seals or --head), and readiness.ts:613 (waive; never sets target). Only readiness.ts:613 can create a `seals` object without `target`; the one reader that equates 'seals present' with 'target sealed' is seals.ts:87."
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "inputs_unreadable": []
+}
+```

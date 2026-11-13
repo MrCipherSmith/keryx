@@ -1,0 +1,29 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "slices": ["slice-06"],
+  "summary": "Slice-06 is the removal side of the round-2 delta: the report-text escapes for items 4 and 7, the partial-publish throw that evaluateCloseGates now owns, the duplicate tamper check in managed.ts, and the dead withoutPartialHeader. Each removal has a replacement at head (seals.ts verificationProblem, complete-head-gate, close-gates.ts relaxReadiness), and no caller of a removed symbol remains. One defect is in the new seal code the removals lean on: waiveReadiness can create a seals object with no target seal on a package from before the seals existed, and review publish then refuses that package for good.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/readiness.ts",
+      "line": 613,
+      "quote": "seals: { ...(manifest.seals ?? {}), readinessWaivers }",
+      "problem": "waiveReadinessLocked writes a `seals` object holding only `readinessWaivers` when the manifest has no seals yet. sealProblems (seals.ts:87) treats the mere presence of `seals` as 'this package carries a target seal' and compares `manifest.seals.target` (undefined) with sealTarget(target). The close path does not repair it: managed.ts:1148 adds `target` only when `stored.seals !== undefined || options.head !== undefined`, and `stored` is the manifest read before the waiver. A package started before the seals existed therefore ends up sealed without a target seal after its first waiver.",
+      "impact": "Package started with a pre-0.4.27 keryx and still open at upgrade, PR-bound. The operator runs `review complete <pkg> --waive memory-outside-stage \"...\"` (or answers the review_waive_readiness card). The close succeeds: sealProblems runs at close-gates.ts:65, before beforeReadiness records the waiver, and it sees no seals. The closed manifest holds `seals: { readinessWaivers }` with no `target`. `review publish` then runs evaluateCloseGates, sealProblems sees seals present and PR-bound, finds `seals.target !== sealTarget(...)`, and throws 'manifest.json target ... does not match the seal keryx wrote'. The message blames a manifest edit that never happened. sealProblems is not waivable and `--partial` does not relax it, so that package cannot be published at all. The same state arises when the card waives an item on an open legacy package and a later `review complete` runs. seals.ts:15-16 says a package with no seals has its target left unchecked, and this path breaks that promise.",
+      "suggested_fix": "Make the absent target seal mean 'target not checked' in sealProblems, with `manifest.seals?.target !== undefined && ... !== sealTarget(...)`. Or have waiveReadinessLocked record `target: manifest.seals?.target` only when it exists and never create a seals object that implies a target. Do not seal the current target there: that would bless whatever the file holds today. Add a test: a manifest with no seals, a waiver, a close, then publish.",
+      "evidence": "readiness.ts:613 (`seals: { ...(manifest.seals ?? {}), readinessWaivers }`) is the only writer of `readinessWaivers` seals and does not add `target`. managed.ts:1148-1150 (`stored.seals !== undefined || options.head !== undefined ? {...target...} : manifest.seals`) leaves seals as read from disk when no --head is given. seals.ts:87 (`manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)`) refuses. publish.ts:175 calls evaluateCloseGates, which calls sealProblems at close-gates.ts:65. Traced by reading, not run.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": ["src/review/readiness.ts:613", "src/review/managed.ts:1148", "src/review/seals.ts:87"],
+        "enumeration_method": "keryx ctx rg for `seals` over src excluding tests and seals.ts: 3 writers of a seals object (managed.ts:521 ingest, managed.ts:1149 complete, readiness.ts:613 waive). Ingest always sets `target`; complete sets it only under the stored.seals/--head condition; only waive can create seals with no `target`. One reader (sealProblems) that assumes it."
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```

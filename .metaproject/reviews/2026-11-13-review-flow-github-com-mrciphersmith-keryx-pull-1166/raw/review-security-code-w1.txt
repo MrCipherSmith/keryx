@@ -1,0 +1,69 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "slices": ["slice-01"],
+  "summary": "Fix slice checked against head b076a85a6354. Eleven of the twelve prior findings are closed (stale head/--help/JSDoc text, spawn_subagent doc block, model-selection.mdc, shared research gate, head test, verification fixtures, closed-package NOT READY now documented). SEC-1 is partial: waivers and verifications are now sealed and fail closed, but the head/target seal is skipped when manifest.seals is absent, so deleting one key from manifest.json defeats it. One new major finding for that.",
+  "findings": [
+    {
+      "id": "SEC-R2-1",
+      "severity": "major",
+      "file": "src/review/seals.ts",
+      "line": 87,
+      "quote": "if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)) {",
+      "problem": "The target seal that is meant to stop a hand-edited reviewed head is checked only when `manifest.seals` exists. The seals live inside manifest.json, the same file the seal protects, and a manifest with no `seals` key is treated as a pre-seal package whose target is not checked (seals.ts header: 'their target is not checked, since there is no record of it to check against'). The head gate (completeHeadGate in complete-head-gate.ts:44) compares whatever `target.head` manifest.json holds with the PR head. `roundRecordTampered` has the same shape: it returns undefined when the `roundRecord` stamp is absent (round-record.ts:277-278).",
+      "evidence": "seals.ts:87 guards the target comparison with `manifest.seals !== undefined`. managed.ts:521 writes `seals` on every new ingest, so a package from this release always carries it, and removing it is the only thing that switches the check off. close-gates.ts:65 calls sealProblems(manifest) and nothing else rechecks that a seal should exist. managed.ts:1148 re-seals on close only when `stored.seals !== undefined || options.head !== undefined`, so a package whose seals were stripped stays unsealed through `review complete`. readiness.ts:489 and seals.ts:72 fail closed for waivers and verifications when seals are missing, so those two are not affected; the target is the one decision that fails open.",
+      "impact": "Attack vector: an agent with a file tool, the actor this flow constrains, edits manifest.json: sets `target.head` to the PR's current head and deletes the `seals` object. `keryx review complete` then reads a head equal to the PR head, readiness item `head` passes, and no operator waiver or `--head-reason` is involved. That is the escape the PR set out to close (operator-only relabel of the reviewed head); it needs one extra deletion over the pre-fix edit, not a digest recomputation. A review of an older commit is certified as a review of the PR head. Exploitation requires write access to the package directory, which the flow's threat model grants the agent. The seals header states the intended level is tamper evidence, not a signature, and that level is met for waivers and verifications; the target is below it because the evidence can be removed rather than only forged.",
+      "suggested_fix": "Make the absence of seals a recorded fact keryx can distinguish from a legacy package. For example, stamp a `sealsVersion` (or the keryx version that wrote the package) into round.json/prior_findings.json-adjacent data that roundRecordTampered already hashes outside the manifest body, or into the flow journal, and have sealProblems report 'seals missing from a package that was written with them' when that anchor says seals were required. A cheaper partial step: refuse in sealProblems when `manifest.seals === undefined` and the manifest carries any field only the new writers set (`roundRecord` stamp with a version >= this release, `head_override`, `readiness_waivers` entries with a seal-era shape). Apply the same anchor to the missing `roundRecord` stamp in roundRecordTampered.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          "src/review/seals.ts:87",
+          "src/review/round-record.ts:277",
+          "src/review/managed.ts:1148"
+        ],
+        "enumeration_method": "keryx ctx rg for `seals` across src (non-test files) and for roundRecordTampered/readRoundStamp: three consumers decide on absence. seals.ts:87 skips the target check, round-record.ts:277 skips the round-record check, managed.ts:1148 skips sealing the target on close. Waivers (readiness.ts:489 via partitionWaivers) and verifications (seals.ts:72 via verificationProblem) treat absence as 'not honoured', so they are excluded."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "review-architecture-w1:F-001", "disposition": "closed" },
+    { "id": "review-logic-w2:F-001", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-001", "disposition": "closed" },
+    { "id": "review-logic-w3:F-002", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-003", "disposition": "closed" },
+    { "id": "review-architecture-w2:F-004", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-002", "disposition": "closed" },
+    { "id": "review-architecture-w3:ARCH-1", "disposition": "closed" },
+    { "id": "review-testing-practices-w1:F-001", "disposition": "closed" },
+    { "id": "review-testing-practices-w2:TP-2", "disposition": "closed" },
+    { "id": "review-logic-w4:F-001", "disposition": "closed" },
+    { "id": "review-security-code-w3:SEC-1", "disposition": "partial" }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```
+
+## Security review: slice-01 (fix round)
+
+### Prior findings against the code at head
+
+- **review-architecture-w1:F-001, review-logic-w2:F-001 (closed).** Item 7 of the readiness list in `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md` now says the head recorded at `review start` must still be the PR head and that only the operator's `head` waiver lifts it. `rg` finds no other copy of the old wording under `src` or `.metaproject/skills`. The user guide row (`docs/docs/guides/review-with-a-record.md:788`) still reads "the report's head is the PR head" but its right-hand column says a first line does not pass it, so it is consistent in effect.
+- **review-degradation-w2:F-001, review-logic-w3:F-002 (closed).** The `--head:` block of `keryx review --help` and the JSDoc of `CompleteManagedReviewOptions.head` (managed.ts:969-981) both describe the readiness item `head`, the operator waiver and `--head-reason`. No text anywhere still says the report's first line lifts it.
+- **review-architecture-w2:F-004, review-degradation-w2:F-002 (closed).** `SPAWN_SUBAGENT_IGNORED_FIELDS` and its JSDoc now sit at spawn-subagent-tool.ts:1061-1067, and the "Create the `spawn_subagent` tool" block is directly above `createSpawnSubagentTool` (1069-1079).
+- **review-degradation-w2:F-003 (closed).** model-selection.mdc:202-205 now names `model_class`, says `model_tier` is accepted but ignored, and points at the constant.
+- **review-architecture-w3:ARCH-1 (closed).** The research gate is `researchRefusals` inside `evaluateCloseGates` (close-gates.ts:49-78), called by both managed.ts:1125 and publish.ts:175. Untagged integrity errors always refuse; tagged ones refuse unless a sealed waiver covers them, and `publish --partial` relaxes only the tagged ones. The `beforeReadiness` hook now only records waivers.
+- **review-testing-practices-w1:F-001 (closed).** The test passes `headReason`, so the refusal comes from readiness item `head`, and it asserts the `--waive head` repair text and that the manifest is untouched (complete-head-gate.test.ts:163-174). A waiver-positive test follows at 176.
+- **review-testing-practices-w2:TP-2 (closed).** The fixture is now a full verification (`VERIFIED`), sealed through `writeSealedFindings`, and two tests pin that `{}` and `{verdict}` fail item 4 and that an unsealed hand-written one fails too (readiness.test.ts:166-182).
+- **review-logic-w4:F-001 (closed).** A package closed through the removed escapes still reads NOT READY, but the CHANGELOG (line 8) calls it breaking and seals.ts documents it as accepted. It is a recorded decision, not a defect.
+- **review-security-code-w3:SEC-1 (partial).** Points (1), (2) and (4) are fixed: waivers are honoured only when `manifest.seals.readinessWaivers[item]` matches (seals.ts:52-62, readiness.ts:489, close-gates.ts:55), and a verification needs verdict, method, evidence and a matching seal (seals.ts:67-74). Point (3), the reviewed head, is open: see SEC-R2-1. The digests are unkeyed sha256, which the seals header states openly as tamper evidence at the level of `roundRecordTampered`; I treat that as a recorded choice and do not file it.
+
+### New findings
+
+**SEC-R2-1 (major).** Removing `manifest.seals` switches off the target check. See the finding above. Clean on the other fix lines: the seal keying is by `global_id` with no clone in the ingest pipeline that would change object identity (`carriedVerification` comparison at managed.ts:519), and a re-ingest fails safe by dropping seals, not by honouring a forged one.
+
+### Clean areas
+Injection, path traversal, secrets, crypto primitive choice (sha256 under a domain tag), CSRF, open redirect and React patterns: nothing in this slice touches them. Auth/authz: the waiver and verification paths fail closed; the target path is SEC-R2-1.

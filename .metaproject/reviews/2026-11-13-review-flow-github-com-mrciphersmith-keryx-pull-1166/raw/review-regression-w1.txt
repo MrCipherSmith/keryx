@@ -1,0 +1,38 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-01"],
+  "summary": "Slice-01 (fix) read in full; 12 attached prior findings judged against head b076a85a6354. 11 closed, 1 partial (logic-w4:F-001, behaviour kept and disclosed). No new regression found. Regression check over the fix lines: close-gates.ts researchRefusals now runs for both complete and publish and its waivers come from sealed waivers only (seals.ts partitionWaivers); seals are written by every writer I found (managed.ts ingest 521, complete 1149, readiness.ts waiveReadiness 613). Limits: blast-radius.json (405KB) was not read in full, only the callers of the changed symbols were searched with keryx ctx rg; the radius is a code graph and cannot see the non-code half of this slice (SKILL.detail.md, model-selection.mdc), which I checked by reading them directly.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "prior_dispositions": [
+    { "id": "review-architecture-w1:F-001", "disposition": "closed" },
+    { "id": "review-logic-w2:F-001", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-001", "disposition": "closed" },
+    { "id": "review-logic-w3:F-002", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-003", "disposition": "closed" },
+    { "id": "review-architecture-w2:F-004", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-002", "disposition": "closed" },
+    { "id": "review-architecture-w3:ARCH-1", "disposition": "closed" },
+    { "id": "review-testing-practices-w1:F-001", "disposition": "closed" },
+    { "id": "review-testing-practices-w2:TP-2", "disposition": "closed" },
+    { "id": "review-logic-w4:F-001", "disposition": "partial" },
+    { "id": "review-security-code-w3:SEC-1", "disposition": "closed" }
+  ],
+  "dispositions_evidence": [
+    "review-architecture-w1:F-001 and review-logic-w2:F-001: SKILL.detail.md item 7 now reads 'the head recorded at `review start` is still the PR head ... only the operator's `head` waiver lifts it (no report line does)'. Closed.",
+    "review-degradation-w2:F-001 and review-logic-w3:F-002: src/commands/review.ts --head help block now says a differing head fails readiness item head, only the operator waives it, and names --head-reason (diff lines 5684+). The sibling JSDoc in src/review/managed.ts:973-981 was rewritten too ('nothing written into report.md lifts it. A head other than the recorded one also needs `headReason`'). Closed.",
+    "review-degradation-w2:F-003: src/gdskills/bundled/rules/core/model-selection.mdc:203-205 and the .metaproject copy now say model_class, ignored model_tier, SPAWN_SUBAGENT_IGNORED_FIELDS. The other model_tier hits in those files (line 33 frontmatter, line 38) are the rule's own tier vocabulary, not spawn_subagent input. Closed.",
+    "review-architecture-w2:F-004 and review-degradation-w2:F-002: spawn-subagent-tool.ts:1061-1067 holds the constant with its own JSDoc; the 'Create the spawn_subagent tool' JSDoc (1069-1078) sits directly above createSpawnSubagentTool (1079). Closed.",
+    "review-architecture-w3:ARCH-1: close-gates.ts:77 calls researchRefusals inside evaluateCloseGates, used by both complete and publish; the old beforeReadiness research block is gone (packageResearchErrorsTagged is now referenced only from close-gates.ts and research.ts). beforeReadiness remains but only records waivers, ordered before the research gate. Closed.",
+    "review-testing-practices-w1:F-001: complete-head-gate.test.ts:166 now passes headReason, so the relabel refusal at managed.ts:1070-1073 is cleared and the assertion on MOVED.slice(0,7) can only come from readiness item head. Closed.",
+    "review-testing-practices-w2:TP-2: readiness.test.ts VERIFIED fixture carries verdict, method, evidence, verifier and writeSealedFindings seals it; verifierCheck (readiness.ts:241-244) now calls verificationProblem (seals.ts:67-74), which rejects a missing shape or a missing seal. seals.test.ts covers hand-written verifications (describe 'seals keep hand-written gate inputs out'). Closed.",
+    "review-logic-w4:F-001: unchanged in behaviour. A package closed by <=0.4.26 through the removed escapes (Not verified line, first-line head) reads NOT READY, and unsealed legacy waivers are no longer honoured. It is now a recorded decision: seals.ts header says the operator accepted it, CHANGELOG.md:8 lists it as 'Breaking for packages closed through the removed escapes'. Partial: the defect is disclosed, not removed.",
+    "review-security-code-w3:SEC-1: waivers (readiness.ts:489-498 partitionWaivers, sealed only), research-gate waivers (close-gates.ts:55), target head (seals.ts sealTarget, sealProblems, written at managed.ts:521 and 1149) and verifications (verificationProblem) are now each checked against a sha256 seal keryx writes. A digest an agent recomputes is not stopped; seals.ts states this as tamper evidence, not a signature, and the flow description puts cryptography out of scope (law 4: reason read, not shown wrong). Closed."
+  ],
+  "inputs_unreadable": []
+}
+```

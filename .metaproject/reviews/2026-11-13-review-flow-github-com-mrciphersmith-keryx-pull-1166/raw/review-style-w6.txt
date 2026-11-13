@@ -1,0 +1,10 @@
+STATUS: DONE
+```json REVIEW_RESULT
+{
+  "reviewer": "review-style",
+  "slices": ["slice-06"],
+  "status": "DONE",
+  "findings": [],
+  "summary": "slice-06 is almost all deletions (report-text head escape hatch, NOT_VERIFIED line, roundRecordTampered call). Checked at head b076a85a6354: no orphaned constants or imports (SAYS_SO/MOVE_WORD/PR_WORD/NOT_VERIFIED/roundRecordTampered/researchFindings have no remaining references; USABLE_SHA still used; readinessRefusal is still exported), the head-gate test imports are all used, and the rewritten doc comments in review.ts:5683 and managed.ts:971 read coherently. No style findings."
+}
+```

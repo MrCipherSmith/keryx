@@ -1,0 +1,6124 @@
+{
+  "v": 1,
+  "round": 2,
+  "source": "local-package",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "found",
+      "detail": "1 round(s): 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166; 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166 trusted: local registry (complete at 2026-11-13T05:03:57.061Z; the files match what keryx recorded), though .metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166 was committed by b076a85a6354; chosen 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166 (e9ac9253fde7 is an ancestor of b076a85a6354)"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": {
+    "reviewId": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166",
+    "reviewedHead": "e9ac9253fde7",
+    "packagePath": ".metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166"
+  },
+  "mode": "delta",
+  "range": {
+    "base": "e9ac9253fde7",
+    "head": "b076a85a6354e6c9bf582cdb61fcdc3b5f9f5b98"
+  },
+  "fixHunks": [
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 776,
+      "endLine": 776,
+      "findingIds": [
+        "review-architecture-w1:F-001",
+        "review-logic-w2:F-001"
+      ]
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5684,
+      "endLine": 5688,
+      "findingIds": [
+        "review-degradation-w2:F-001",
+        "review-logic-w3:F-002"
+      ]
+    },
+    {
+      "file": "src/gdskills/bundled/rules/core/model-selection.mdc",
+      "startLine": 202,
+      "endLine": 206,
+      "findingIds": [
+        "review-degradation-w2:F-003"
+      ]
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1061,
+      "endLine": 1068,
+      "findingIds": [
+        "review-architecture-w2:F-004",
+        "review-degradation-w2:F-002"
+      ]
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 77,
+      "endLine": 78,
+      "findingIds": [
+        "review-architecture-w3:ARCH-1"
+      ]
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 165,
+      "endLine": 166,
+      "findingIds": [
+        "review-testing-practices-w1:F-001"
+      ]
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 62,
+      "endLine": 73,
+      "findingIds": [
+        "review-testing-practices-w2:TP-2"
+      ]
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 239,
+      "endLine": 244,
+      "findingIds": [
+        "review-logic-w4:F-001"
+      ]
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 497,
+      "endLine": 498,
+      "findingIds": [
+        "review-security-code-w3:SEC-1"
+      ]
+    }
+  ],
+  "newHunks": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "startLine": 4,
+      "endLine": 4
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1782,
+      "endLine": 1782
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2258,
+      "endLine": 2259
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3210,
+      "endLine": 3211
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3763,
+      "endLine": 3764
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3774,
+      "endLine": 3775
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3854,
+      "endLine": 3857
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 7,
+      "endLine": 9
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 21,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 69,
+      "endLine": 69
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": ".metaproject/data/testing/recommendations.md",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "startLine": 42,
+      "endLine": 44
+    },
+    {
+      "file": ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 21
+    },
+    {
+      "file": ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/context.md",
+      "startLine": 1,
+      "endLine": 125
+    },
+    {
+      "file": ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/description.md",
+      "startLine": 1,
+      "endLine": 34
+    },
+    {
+      "file": ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/flow.json",
+      "startLine": 1,
+      "endLine": 123
+    },
+    {
+      "file": ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/journal.md",
+      "startLine": 1,
+      "endLine": 4
+    },
+    {
+      "file": ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/plan.md",
+      "startLine": 1,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md",
+      "startLine": 24,
+      "endLine": 24
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 86,
+      "endLine": 86
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 94,
+      "endLine": 96
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 257,
+      "endLine": 271
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 305,
+      "endLine": 307
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md",
+      "startLine": 23,
+      "endLine": 36
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 183,
+      "endLine": 210
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 247,
+      "endLine": 256
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/journal.md",
+      "startLine": 10,
+      "endLine": 11
+    },
+    {
+      "file": ".metaproject/memory/review-notes/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166__review-security-code-w2-F-001.md",
+      "startLine": 1,
+      "endLine": 51
+    },
+    {
+      "file": ".metaproject/rules/core/model-selection.mdc",
+      "startLine": 202,
+      "endLine": 206
+    },
+    {
+      "file": ".metaproject/wiki/architecture/remote-control.md",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": "CHANGELOG.md",
+      "startLine": 5,
+      "endLine": 24
+    },
+    {
+      "file": "bun.lock",
+      "startLine": 28,
+      "endLine": 28
+    },
+    {
+      "file": "bun.lock",
+      "startLine": 31,
+      "endLine": 31
+    },
+    {
+      "file": "bun.lock",
+      "startLine": 62,
+      "endLine": 62
+    },
+    {
+      "file": "bun.lock",
+      "startLine": 348,
+      "endLine": 348
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1040,
+      "endLine": 1042
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1044,
+      "endLine": 1044
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 1061,
+      "endLine": 1067
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "startLine": 67,
+      "endLine": 67
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "startLine": 155,
+      "endLine": 155
+    },
+    {
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "startLine": 563,
+      "endLine": 565
+    },
+    {
+      "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+      "startLine": 267,
+      "endLine": 277
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 29,
+      "endLine": 29
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 59,
+      "endLine": 59
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 64,
+      "endLine": 64
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 74,
+      "endLine": 74
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 109,
+      "endLine": 109
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 114,
+      "endLine": 114
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 124,
+      "endLine": 124
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 155,
+      "endLine": 155
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 160,
+      "endLine": 160
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 170,
+      "endLine": 170
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 200,
+      "endLine": 200
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 205,
+      "endLine": 205
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 215,
+      "endLine": 215
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 247,
+      "endLine": 247
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 252,
+      "endLine": 252
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 267,
+      "endLine": 267
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 296,
+      "endLine": 296
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 301,
+      "endLine": 301
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 311,
+      "endLine": 311
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 340,
+      "endLine": 340
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 345,
+      "endLine": 345
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 355,
+      "endLine": 399
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 428,
+      "endLine": 428
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 433,
+      "endLine": 433
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 443,
+      "endLine": 443
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 484,
+      "endLine": 484
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 489,
+      "endLine": 489
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 499,
+      "endLine": 499
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 528,
+      "endLine": 528
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 533,
+      "endLine": 533
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 543,
+      "endLine": 543
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 585,
+      "endLine": 585
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 590,
+      "endLine": 590
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 600,
+      "endLine": 600
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 641,
+      "endLine": 641
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 646,
+      "endLine": 646
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 666,
+      "endLine": 666
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 699,
+      "endLine": 699
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 704,
+      "endLine": 704
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 719,
+      "endLine": 719
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 748,
+      "endLine": 748
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 753,
+      "endLine": 753
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 763,
+      "endLine": 763
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 798,
+      "endLine": 798
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 803,
+      "endLine": 803
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 813,
+      "endLine": 813
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 844,
+      "endLine": 844
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 849,
+      "endLine": 849
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 864,
+      "endLine": 864
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 896,
+      "endLine": 896
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 901,
+      "endLine": 901
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 916,
+      "endLine": 916
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 952,
+      "endLine": 952
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 957,
+      "endLine": 957
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 977,
+      "endLine": 977
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1010,
+      "endLine": 1010
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1015,
+      "endLine": 1015
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1030,
+      "endLine": 1030
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1062,
+      "endLine": 1062
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1067,
+      "endLine": 1067
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1072,
+      "endLine": 1072
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1082,
+      "endLine": 1082
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1111,
+      "endLine": 1111
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1116,
+      "endLine": 1116
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1126,
+      "endLine": 1126
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1156,
+      "endLine": 1156
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1161,
+      "endLine": 1161
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1176,
+      "endLine": 1176
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1210,
+      "endLine": 1210
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1215,
+      "endLine": 1215
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1230,
+      "endLine": 1230
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1262,
+      "endLine": 1262
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1267,
+      "endLine": 1267
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1282,
+      "endLine": 1282
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1315,
+      "endLine": 1315
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1320,
+      "endLine": 1320
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1340,
+      "endLine": 1340
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1373,
+      "endLine": 1373
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1378,
+      "endLine": 1378
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1393,
+      "endLine": 1393
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1422,
+      "endLine": 1422
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1427,
+      "endLine": 1427
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1442,
+      "endLine": 1442
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1472,
+      "endLine": 1472
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1477,
+      "endLine": 1477
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1492,
+      "endLine": 1492
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1525,
+      "endLine": 1525
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1530,
+      "endLine": 1530
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1545,
+      "endLine": 1545
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1578,
+      "endLine": 1578
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1583,
+      "endLine": 1583
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1598,
+      "endLine": 1598
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1631,
+      "endLine": 1631
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1636,
+      "endLine": 1636
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1656,
+      "endLine": 1656
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1690,
+      "endLine": 1690
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1695,
+      "endLine": 1695
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1710,
+      "endLine": 1710
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1744,
+      "endLine": 1744
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1749,
+      "endLine": 1749
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1764,
+      "endLine": 1764
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1799,
+      "endLine": 1799
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1804,
+      "endLine": 1804
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1819,
+      "endLine": 1819
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1850,
+      "endLine": 1850
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1855,
+      "endLine": 1855
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1865,
+      "endLine": 1865
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1896,
+      "endLine": 1896
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1901,
+      "endLine": 1901
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1921,
+      "endLine": 1921
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1954,
+      "endLine": 1954
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1959,
+      "endLine": 1959
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 1974,
+      "endLine": 1974
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2003,
+      "endLine": 2003
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2008,
+      "endLine": 2008
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2018,
+      "endLine": 2018
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2051,
+      "endLine": 2051
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2056,
+      "endLine": 2056
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2071,
+      "endLine": 2071
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2107,
+      "endLine": 2107
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2112,
+      "endLine": 2112
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2127,
+      "endLine": 2127
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2156,
+      "endLine": 2156
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2161,
+      "endLine": 2161
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2176,
+      "endLine": 2176
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2205,
+      "endLine": 2205
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2210,
+      "endLine": 2210
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2225,
+      "endLine": 2225
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2254,
+      "endLine": 2254
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2259,
+      "endLine": 2259
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2274,
+      "endLine": 2274
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2303,
+      "endLine": 2303
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2308,
+      "endLine": 2308
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2323,
+      "endLine": 2323
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2355,
+      "endLine": 2355
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2360,
+      "endLine": 2360
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2375,
+      "endLine": 2375
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2409,
+      "endLine": 2409
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2414,
+      "endLine": 2414
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2429,
+      "endLine": 2429
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2458,
+      "endLine": 2458
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2463,
+      "endLine": 2463
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2478,
+      "endLine": 2478
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2507,
+      "endLine": 2507
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2512,
+      "endLine": 2512
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2527,
+      "endLine": 2527
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2560,
+      "endLine": 2560
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2565,
+      "endLine": 2565
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2585,
+      "endLine": 2585
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2617,
+      "endLine": 2617
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2622,
+      "endLine": 2622
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2642,
+      "endLine": 2642
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2675,
+      "endLine": 2675
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2680,
+      "endLine": 2680
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2700,
+      "endLine": 2700
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2735,
+      "endLine": 2735
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2740,
+      "endLine": 2740
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2760,
+      "endLine": 2760
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2796,
+      "endLine": 2796
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2801,
+      "endLine": 2801
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2821,
+      "endLine": 2821
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2852,
+      "endLine": 2852
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2857,
+      "endLine": 2857
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2877,
+      "endLine": 2877
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2907,
+      "endLine": 2907
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2912,
+      "endLine": 2912
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2922,
+      "endLine": 2922
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2955,
+      "endLine": 2955
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2960,
+      "endLine": 2960
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 2975,
+      "endLine": 2975
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3010,
+      "endLine": 3010
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3015,
+      "endLine": 3015
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3030,
+      "endLine": 3030
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3060,
+      "endLine": 3060
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3065,
+      "endLine": 3065
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3075,
+      "endLine": 3075
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3110,
+      "endLine": 3110
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3115,
+      "endLine": 3115
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3130,
+      "endLine": 3130
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3159,
+      "endLine": 3159
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3164,
+      "endLine": 3164
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3179,
+      "endLine": 3179
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3209,
+      "endLine": 3209
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3214,
+      "endLine": 3214
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3239,
+      "endLine": 3239
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3268,
+      "endLine": 3268
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3273,
+      "endLine": 3273
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3283,
+      "endLine": 3283
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3317,
+      "endLine": 3317
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3322,
+      "endLine": 3322
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3337,
+      "endLine": 3337
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3378,
+      "endLine": 3378
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3383,
+      "endLine": 3383
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3398,
+      "endLine": 3398
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3430,
+      "endLine": 3430
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3435,
+      "endLine": 3435
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3450,
+      "endLine": 3450
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3479,
+      "endLine": 3479
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3484,
+      "endLine": 3484
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3494,
+      "endLine": 3494
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3533,
+      "endLine": 3533
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3538,
+      "endLine": 3538
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3548,
+      "endLine": 3548
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3583,
+      "endLine": 3583
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3588,
+      "endLine": 3588
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3598,
+      "endLine": 3598
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3627,
+      "endLine": 3627
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3632,
+      "endLine": 3632
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3642,
+      "endLine": 3642
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3675,
+      "endLine": 3675
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3680,
+      "endLine": 3680
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3695,
+      "endLine": 3695
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3724,
+      "endLine": 3724
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3729,
+      "endLine": 3729
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3744,
+      "endLine": 3744
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3782,
+      "endLine": 3782
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3787,
+      "endLine": 3787
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3802,
+      "endLine": 3802
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3832,
+      "endLine": 3832
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3837,
+      "endLine": 3837
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 3847,
+      "endLine": 3847
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 4496,
+      "endLine": 4519
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12640,
+      "endLine": 12641
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12647,
+      "endLine": 12649
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12653,
+      "endLine": 12654
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12664,
+      "endLine": 12664
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12672,
+      "endLine": 12672
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12680,
+      "endLine": 12680
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12688,
+      "endLine": 12688
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12696,
+      "endLine": 12696
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12704,
+      "endLine": 12704
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12712,
+      "endLine": 12712
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12720,
+      "endLine": 12720
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12728,
+      "endLine": 12728
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12736,
+      "endLine": 12736
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12744,
+      "endLine": 12744
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12752,
+      "endLine": 12752
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12760,
+      "endLine": 12760
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12768,
+      "endLine": 12768
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12776,
+      "endLine": 12776
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12784,
+      "endLine": 12784
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12792,
+      "endLine": 12792
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12800,
+      "endLine": 12800
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12808,
+      "endLine": 12808
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12816,
+      "endLine": 12824
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12832,
+      "endLine": 12832
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12840,
+      "endLine": 12840
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12848,
+      "endLine": 12848
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12856,
+      "endLine": 12856
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12864,
+      "endLine": 12864
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12872,
+      "endLine": 12872
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12880,
+      "endLine": 12880
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12888,
+      "endLine": 12888
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12896,
+      "endLine": 12896
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12904,
+      "endLine": 12904
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12912,
+      "endLine": 12912
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12920,
+      "endLine": 12920
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12928,
+      "endLine": 12928
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12936,
+      "endLine": 12936
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12944,
+      "endLine": 12944
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12952,
+      "endLine": 12952
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12960,
+      "endLine": 12960
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12968,
+      "endLine": 12968
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12976,
+      "endLine": 12976
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12984,
+      "endLine": 12984
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 12992,
+      "endLine": 12992
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13000,
+      "endLine": 13000
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13008,
+      "endLine": 13008
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13016,
+      "endLine": 13016
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13024,
+      "endLine": 13024
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13032,
+      "endLine": 13032
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13040,
+      "endLine": 13040
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13048,
+      "endLine": 13048
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13056,
+      "endLine": 13056
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13064,
+      "endLine": 13064
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13072,
+      "endLine": 13072
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13080,
+      "endLine": 13080
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13088,
+      "endLine": 13088
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13096,
+      "endLine": 13096
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13104,
+      "endLine": 13104
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13112,
+      "endLine": 13112
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13120,
+      "endLine": 13120
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13128,
+      "endLine": 13128
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13136,
+      "endLine": 13136
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13144,
+      "endLine": 13144
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13152,
+      "endLine": 13152
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13160,
+      "endLine": 13160
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13168,
+      "endLine": 13168
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13176,
+      "endLine": 13176
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13184,
+      "endLine": 13184
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13192,
+      "endLine": 13192
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13200,
+      "endLine": 13200
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13208,
+      "endLine": 13208
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13216,
+      "endLine": 13216
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13224,
+      "endLine": 13224
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13232,
+      "endLine": 13232
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13240,
+      "endLine": 13240
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13248,
+      "endLine": 13248
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13256,
+      "endLine": 13256
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13264,
+      "endLine": 13264
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13272,
+      "endLine": 13272
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13280,
+      "endLine": 13280
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13288,
+      "endLine": 13288
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13296,
+      "endLine": 13296
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13304,
+      "endLine": 13304
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13312,
+      "endLine": 13312
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13320,
+      "endLine": 13320
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13328,
+      "endLine": 13328
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13336,
+      "endLine": 13336
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13344,
+      "endLine": 13344
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13352,
+      "endLine": 13352
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13360,
+      "endLine": 13360
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13368,
+      "endLine": 13368
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13376,
+      "endLine": 13376
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13384,
+      "endLine": 13384
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13392,
+      "endLine": 13392
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13400,
+      "endLine": 13400
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13408,
+      "endLine": 13408
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13416,
+      "endLine": 13416
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13424,
+      "endLine": 13424
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13432,
+      "endLine": 13432
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13440,
+      "endLine": 13440
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13448,
+      "endLine": 13448
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13456,
+      "endLine": 13456
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13464,
+      "endLine": 13464
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13472,
+      "endLine": 13472
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13480,
+      "endLine": 13480
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13488,
+      "endLine": 13488
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13496,
+      "endLine": 13496
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13504,
+      "endLine": 13504
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13512,
+      "endLine": 13512
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13520,
+      "endLine": 13520
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13528,
+      "endLine": 13528
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13536,
+      "endLine": 13536
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13544,
+      "endLine": 13544
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13552,
+      "endLine": 13552
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13560,
+      "endLine": 13560
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13568,
+      "endLine": 13568
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13576,
+      "endLine": 13576
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13584,
+      "endLine": 13584
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13592,
+      "endLine": 13592
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13600,
+      "endLine": 13600
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13608,
+      "endLine": 13608
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13616,
+      "endLine": 13616
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13624,
+      "endLine": 13624
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13632,
+      "endLine": 13632
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13640,
+      "endLine": 13640
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13648,
+      "endLine": 13648
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13656,
+      "endLine": 13656
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13664,
+      "endLine": 13664
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13672,
+      "endLine": 13672
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13680,
+      "endLine": 13680
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13688,
+      "endLine": 13688
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13696,
+      "endLine": 13696
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13704,
+      "endLine": 13704
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13712,
+      "endLine": 13712
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13720,
+      "endLine": 13720
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13728,
+      "endLine": 13728
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13736,
+      "endLine": 13736
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13744,
+      "endLine": 13744
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13752,
+      "endLine": 13752
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13760,
+      "endLine": 13760
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13768,
+      "endLine": 13768
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13776,
+      "endLine": 13776
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13784,
+      "endLine": 13784
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13792,
+      "endLine": 13792
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13800,
+      "endLine": 13800
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13808,
+      "endLine": 13808
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13816,
+      "endLine": 13816
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13824,
+      "endLine": 13824
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13832,
+      "endLine": 13832
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13840,
+      "endLine": 13840
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13848,
+      "endLine": 13848
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13856,
+      "endLine": 13856
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13864,
+      "endLine": 13864
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13872,
+      "endLine": 13872
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13880,
+      "endLine": 13880
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13888,
+      "endLine": 13888
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13896,
+      "endLine": 13896
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13904,
+      "endLine": 13904
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13912,
+      "endLine": 13912
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13920,
+      "endLine": 13920
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13928,
+      "endLine": 13928
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13936,
+      "endLine": 13936
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13944,
+      "endLine": 13944
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13952,
+      "endLine": 13952
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13960,
+      "endLine": 13960
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13968,
+      "endLine": 13968
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13976,
+      "endLine": 13976
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13984,
+      "endLine": 13984
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 13992,
+      "endLine": 13992
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14000,
+      "endLine": 14000
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14008,
+      "endLine": 14008
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14016,
+      "endLine": 14016
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14024,
+      "endLine": 14024
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14032,
+      "endLine": 14032
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14040,
+      "endLine": 14040
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14048,
+      "endLine": 14048
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14056,
+      "endLine": 14056
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14064,
+      "endLine": 14064
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14072,
+      "endLine": 14072
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14080,
+      "endLine": 14080
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14088,
+      "endLine": 14088
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14096,
+      "endLine": 14096
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14104,
+      "endLine": 14104
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14112,
+      "endLine": 14112
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14120,
+      "endLine": 14120
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14128,
+      "endLine": 14128
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14136,
+      "endLine": 14136
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14144,
+      "endLine": 14144
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14152,
+      "endLine": 14152
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14160,
+      "endLine": 14160
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14168,
+      "endLine": 14168
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14176,
+      "endLine": 14176
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14184,
+      "endLine": 14184
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14192,
+      "endLine": 14192
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14200,
+      "endLine": 14200
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14208,
+      "endLine": 14208
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14216,
+      "endLine": 14216
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14224,
+      "endLine": 14224
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14232,
+      "endLine": 14232
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14240,
+      "endLine": 14240
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14248,
+      "endLine": 14248
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14256,
+      "endLine": 14256
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14264,
+      "endLine": 14264
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14272,
+      "endLine": 14272
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14280,
+      "endLine": 14280
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14288,
+      "endLine": 14288
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14296,
+      "endLine": 14296
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14304,
+      "endLine": 14304
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14312,
+      "endLine": 14312
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14320,
+      "endLine": 14320
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14328,
+      "endLine": 14328
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14336,
+      "endLine": 14336
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14344,
+      "endLine": 14344
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14352,
+      "endLine": 14352
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14360,
+      "endLine": 14360
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14368,
+      "endLine": 14368
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14376,
+      "endLine": 14376
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14384,
+      "endLine": 14384
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14392,
+      "endLine": 14392
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14400,
+      "endLine": 14400
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14408,
+      "endLine": 14408
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14416,
+      "endLine": 14416
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14424,
+      "endLine": 14424
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14432,
+      "endLine": 14432
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14440,
+      "endLine": 14440
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14448,
+      "endLine": 14448
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14456,
+      "endLine": 14456
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14464,
+      "endLine": 14464
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14472,
+      "endLine": 14472
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14480,
+      "endLine": 14480
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14488,
+      "endLine": 14488
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14496,
+      "endLine": 14496
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14504,
+      "endLine": 14504
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14512,
+      "endLine": 14512
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14520,
+      "endLine": 14520
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14528,
+      "endLine": 14528
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14536,
+      "endLine": 14536
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14544,
+      "endLine": 14544
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14552,
+      "endLine": 14552
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14560,
+      "endLine": 14560
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14568,
+      "endLine": 14568
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14576,
+      "endLine": 14576
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14584,
+      "endLine": 14584
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14592,
+      "endLine": 14592
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14600,
+      "endLine": 14600
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14608,
+      "endLine": 14608
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14616,
+      "endLine": 14616
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14624,
+      "endLine": 14624
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14632,
+      "endLine": 14632
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14640,
+      "endLine": 14640
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14648,
+      "endLine": 14648
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14656,
+      "endLine": 14656
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14664,
+      "endLine": 14664
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14672,
+      "endLine": 14672
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14680,
+      "endLine": 14680
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14688,
+      "endLine": 14688
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14696,
+      "endLine": 14696
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14704,
+      "endLine": 14704
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14712,
+      "endLine": 14712
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14720,
+      "endLine": 14720
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14728,
+      "endLine": 14728
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14736,
+      "endLine": 14736
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14744,
+      "endLine": 14744
+    },
+    {
+      "file": "output/hub-remote-sessions/native-command-coverage.json",
+      "startLine": 14752,
+      "endLine": 14752
+    },
+    {
+      "file": "package.json",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "package.json",
+      "startLine": 82,
+      "endLine": 82
+    },
+    {
+      "file": "package.json",
+      "startLine": 85,
+      "endLine": 85
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 55,
+      "endLine": 55
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 197,
+      "endLine": 197
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 259,
+      "endLine": 259
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 384,
+      "endLine": 384
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "startLine": 442,
+      "endLine": 442
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 54,
+      "endLine": 54
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 181,
+      "endLine": 183
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 225,
+      "endLine": 230
+    },
+    {
+      "file": "src/commands/agent-commands.ts",
+      "startLine": 726,
+      "endLine": 729
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 51,
+      "endLine": 51
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 5728,
+      "endLine": 5728
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 5737,
+      "endLine": 5737
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 5741,
+      "endLine": 5758
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 38,
+      "endLine": 40
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 42,
+      "endLine": 43
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 50,
+      "endLine": 51
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 54,
+      "endLine": 65
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 73,
+      "endLine": 73
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 79,
+      "endLine": 79
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 83,
+      "endLine": 85
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 103,
+      "endLine": 105
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 109,
+      "endLine": 110
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 120,
+      "endLine": 120
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 123,
+      "endLine": 124
+    },
+    {
+      "file": "src/commands/call-watchdog.ts",
+      "startLine": 127,
+      "endLine": 127
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 738,
+      "endLine": 738
+    },
+    {
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "startLine": 745,
+      "endLine": 745
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "startLine": 64,
+      "endLine": 82
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "startLine": 416,
+      "endLine": 416
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "startLine": 418,
+      "endLine": 429
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "startLine": 431,
+      "endLine": 431
+    },
+    {
+      "file": "src/commands/shell-types.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "src/commands/shell-types.ts",
+      "startLine": 19,
+      "endLine": 19
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 353,
+      "endLine": 353
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 358,
+      "endLine": 358
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 360,
+      "endLine": 360
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 362,
+      "endLine": 362
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "startLine": 373,
+      "endLine": 376
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 140,
+      "endLine": 141
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 180,
+      "endLine": 180
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 245,
+      "endLine": 247
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 317,
+      "endLine": 317
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 324,
+      "endLine": 324
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 853,
+      "endLine": 859
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 890,
+      "endLine": 890
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 909,
+      "endLine": 909
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 1150,
+      "endLine": 1150
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 1162,
+      "endLine": 1162
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 1166,
+      "endLine": 1169
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 2934,
+      "endLine": 2934
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 2952,
+      "endLine": 2953
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 3856,
+      "endLine": 3857
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 3895,
+      "endLine": 3895
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 4102,
+      "endLine": 4111
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "startLine": 4642,
+      "endLine": 4646
+    },
+    {
+      "file": "src/flow/verify-exec-files.test.ts",
+      "startLine": 22,
+      "endLine": 40
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 776,
+      "endLine": 776
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts",
+      "startLine": 1,
+      "endLine": 107
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 577,
+      "endLine": 577
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 582,
+      "endLine": 582
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1078,
+      "endLine": 1078
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1508,
+      "endLine": 1511
+    },
+    {
+      "file": "src/lib/call-diagnostics.test.ts",
+      "startLine": 1,
+      "endLine": 207
+    },
+    {
+      "file": "src/lib/call-diagnostics.ts",
+      "startLine": 1,
+      "endLine": 340
+    },
+    {
+      "file": "src/lib/hub-machine/bridge.approvals.network.test.ts",
+      "startLine": 132,
+      "endLine": 137
+    },
+    {
+      "file": "src/lib/phase-trace.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/lib/phase-trace.ts",
+      "startLine": 8,
+      "endLine": 9
+    },
+    {
+      "file": "src/remote/history-host.test.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/remote/history-host.test.ts",
+      "startLine": 89,
+      "endLine": 89
+    },
+    {
+      "file": "src/remote/history-host.test.ts",
+      "startLine": 92,
+      "endLine": 92
+    },
+    {
+      "file": "src/remote/topic-history.test.ts",
+      "startLine": 741,
+      "endLine": 743
+    },
+    {
+      "file": "src/remote/topic-history.test.ts",
+      "startLine": 745,
+      "endLine": 745
+    },
+    {
+      "file": "src/remote/topic-history.test.ts",
+      "startLine": 748,
+      "endLine": 748
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 8,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 31,
+      "endLine": 31
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 41,
+      "endLine": 56
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 2,
+      "endLine": 4
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 6,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 11,
+      "endLine": 11
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 24,
+      "endLine": 26
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 28,
+      "endLine": 29
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 35,
+      "endLine": 61
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 64,
+      "endLine": 66
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 72,
+      "endLine": 72
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 16,
+      "endLine": 17
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 42,
+      "endLine": 44
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 170,
+      "endLine": 170
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 187,
+      "endLine": 197
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 10,
+      "endLine": 11
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 62,
+      "endLine": 114
+    },
+    {
+      "file": "src/review/complete-waiver-scope.test.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/review/complete-waiver-scope.test.ts",
+      "startLine": 71,
+      "endLine": 112
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 20,
+      "endLine": 20
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 364,
+      "endLine": 366
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 516,
+      "endLine": 521
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 971,
+      "endLine": 973
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 978,
+      "endLine": 979
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1079,
+      "endLine": 1085
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1114,
+      "endLine": 1114
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1134,
+      "endLine": 1134
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1135,
+      "endLine": 1135
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1145,
+      "endLine": 1150
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1153,
+      "endLine": 1153
+    },
+    {
+      "file": "src/review/publish-gate-parity.test.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/review/publish-gate-parity.test.ts",
+      "startLine": 82,
+      "endLine": 111
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 14,
+      "endLine": 16
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 137,
+      "endLine": 139
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 148,
+      "endLine": 166
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 186,
+      "endLine": 186
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 72,
+      "endLine": 72
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 74,
+      "endLine": 75
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 76,
+      "endLine": 78
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 166,
+      "endLine": 183
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 30,
+      "endLine": 30
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 40,
+      "endLine": 40
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 246,
+      "endLine": 247
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 249,
+      "endLine": 249
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 487,
+      "endLine": 491
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 562,
+      "endLine": 562
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 609,
+      "endLine": 611
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 613,
+      "endLine": 613
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 8,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 131,
+      "endLine": 131
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 134,
+      "endLine": 134
+    },
+    {
+      "file": "src/review/round-record.ts",
+      "startLine": 159,
+      "endLine": 159
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "startLine": 283,
+      "endLine": 288
+    },
+    {
+      "file": "src/review/seals.test.ts",
+      "startLine": 1,
+      "endLine": 128
+    },
+    {
+      "file": "src/review/seals.ts",
+      "startLine": 1,
+      "endLine": 93
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 133,
+      "endLine": 144
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 186,
+      "endLine": 187
+    },
+    {
+      "file": "src/session/commands/catalogue.ts",
+      "startLine": 25,
+      "endLine": 25
+    },
+    {
+      "file": "src/session/commands/coverage.ts",
+      "startLine": 54,
+      "endLine": 54
+    },
+    {
+      "file": "src/session/host.ts",
+      "startLine": 233,
+      "endLine": 233
+    },
+    {
+      "file": "src/session/host.ts",
+      "startLine": 539,
+      "endLine": 539
+    },
+    {
+      "file": "src/session/host.ts",
+      "startLine": 825,
+      "endLine": 827
+    },
+    {
+      "file": "src/session/host.ts",
+      "startLine": 829,
+      "endLine": 832
+    },
+    {
+      "file": "src/session/native-coverage.generated.ts",
+      "startLine": 6,
+      "endLine": 9
+    },
+    {
+      "file": "src/session/native-coverage.generated.ts",
+      "startLine": 12,
+      "endLine": 13
+    },
+    {
+      "file": "src/session/native-coverage.generated.ts",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": "src/session/native-coverage.generated.ts",
+      "startLine": 193,
+      "endLine": 193
+    },
+    {
+      "file": "src/session/native-coverage.generated.ts",
+      "startLine": 288,
+      "endLine": 288
+    },
+    {
+      "file": "src/standard/help-groups.ts",
+      "startLine": 254,
+      "endLine": 259
+    },
+    {
+      "file": "src/standard/help-groups.ts",
+      "startLine": 607,
+      "endLine": 607
+    },
+    {
+      "file": "src/tui/busy-dispatch.test.ts",
+      "startLine": 232,
+      "endLine": 236
+    },
+    {
+      "file": "src/tui/busy-dispatch.ts",
+      "startLine": 129,
+      "endLine": 133
+    },
+    {
+      "file": "src/tui/busy-dispatch.ts",
+      "startLine": 183,
+      "endLine": 183
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 129,
+      "endLine": 129
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 131,
+      "endLine": 133
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 179,
+      "endLine": 179
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 209,
+      "endLine": 217
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 223,
+      "endLine": 223
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 387,
+      "endLine": 387
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 389,
+      "endLine": 389
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 403,
+      "endLine": 404
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 406,
+      "endLine": 406
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "startLine": 409,
+      "endLine": 410
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 44,
+      "endLine": 47
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 287,
+      "endLine": 287
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 473,
+      "endLine": 473
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 486,
+      "endLine": 504
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 541,
+      "endLine": 544
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "startLine": 625,
+      "endLine": 625
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "startLine": 618,
+      "endLine": 641
+    },
+    {
+      "file": "src/tui/composer-choice.ts",
+      "startLine": 384,
+      "endLine": 403
+    },
+    {
+      "file": "src/tui/composer-choice.ts",
+      "startLine": 410,
+      "endLine": 412
+    },
+    {
+      "file": "src/tui/composer-choice.ts",
+      "startLine": 423,
+      "endLine": 427
+    },
+    {
+      "file": "src/tui/composer-choice.ts",
+      "startLine": 429,
+      "endLine": 429
+    },
+    {
+      "file": "src/tui/conversation-history.test.ts",
+      "startLine": 1,
+      "endLine": 45
+    },
+    {
+      "file": "src/tui/conversation-history.ts",
+      "startLine": 1,
+      "endLine": 55
+    },
+    {
+      "file": "src/tui/diag-command.test.ts",
+      "startLine": 1,
+      "endLine": 44
+    },
+    {
+      "file": "src/tui/diag-command.ts",
+      "startLine": 1,
+      "endLine": 74
+    },
+    {
+      "file": "src/tui/hc-message.test.ts",
+      "startLine": 527,
+      "endLine": 527
+    },
+    {
+      "file": "src/tui/hc-message.test.ts",
+      "startLine": 528,
+      "endLine": 528
+    },
+    {
+      "file": "src/tui/history-modal.test.ts",
+      "startLine": 1,
+      "endLine": 118
+    },
+    {
+      "file": "src/tui/history-modal.ts",
+      "startLine": 1,
+      "endLine": 320
+    },
+    {
+      "file": "src/tui/history-reader.test.ts",
+      "startLine": 1,
+      "endLine": 98
+    },
+    {
+      "file": "src/tui/history-reader.ts",
+      "startLine": 1,
+      "endLine": 224
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 34,
+      "endLine": 34
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 40,
+      "endLine": 41
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 289,
+      "endLine": 293
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 353,
+      "endLine": 353
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 429,
+      "endLine": 429
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 439,
+      "endLine": 439
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 629,
+      "endLine": 629
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 649,
+      "endLine": 651
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "startLine": 842,
+      "endLine": 843
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "startLine": 25,
+      "endLine": 25
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "startLine": 28,
+      "endLine": 28
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "startLine": 838,
+      "endLine": 838
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 63,
+      "endLine": 63
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "startLine": 107,
+      "endLine": 108
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 104,
+      "endLine": 105
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 229,
+      "endLine": 229
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 307,
+      "endLine": 308
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 365,
+      "endLine": 365
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 4699,
+      "endLine": 4703
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5858,
+      "endLine": 5859
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 5861,
+      "endLine": 5861
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 6540,
+      "endLine": 6540
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 7183,
+      "endLine": 7183
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 7654,
+      "endLine": 7654
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 8156,
+      "endLine": 8156
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 8465,
+      "endLine": 8473
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 9846,
+      "endLine": 9846
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 9848,
+      "endLine": 9848
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 9950,
+      "endLine": 9950
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 9989,
+      "endLine": 9993
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10373,
+      "endLine": 10373
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 10631,
+      "endLine": 10635
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "startLine": 12022,
+      "endLine": 12027
+    }
+  ],
+  "carried": [
+    {
+      "findingId": "review-architecture-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-001",
+      "disposition": "dismissed-incorrect"
+    },
+    {
+      "findingId": "review-architecture-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w2:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:ARCH-2",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-architecture-w3:ARCH-3",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-degradation-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-degradation-w3:DEG-1",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-degradation-w3:DEG-2",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w3:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-logic-w4:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-performance-w3:PERF-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w1:F-001",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w2:F-001",
+      "disposition": "dismissed-incorrect"
+    },
+    {
+      "findingId": "review-security-code-w2:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-security-code-w3:SEC-2",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-002",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w1:F-003",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:TP-1",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:TP-3",
+      "disposition": "open"
+    },
+    {
+      "findingId": "review-testing-practices-w2:TP-4",
+      "disposition": "open"
+    }
+  ],
+  "mergeBase": "66ee001172e0d0c048a73727c3e6e099f9149b0a",
+  "modeReason": "e9ac9253fde7 is an ancestor of b076a85a6354",
+  "secondLookHunks": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2,
+      "endLine": 164
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 185,
+      "endLine": 192
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 197,
+      "endLine": 197
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 289,
+      "endLine": 290
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 296,
+      "endLine": 296
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 298,
+      "endLine": 302
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 306,
+      "endLine": 306
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 308,
+      "endLine": 310
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 317,
+      "endLine": 322
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 326,
+      "endLine": 326
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 329,
+      "endLine": 330
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 338,
+      "endLine": 338
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 373,
+      "endLine": 373
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 499,
+      "endLine": 499
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 512,
+      "endLine": 514
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 531,
+      "endLine": 531
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 609,
+      "endLine": 611
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 614,
+      "endLine": 614
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 629,
+      "endLine": 629
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 645,
+      "endLine": 646
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 650,
+      "endLine": 654
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 669,
+      "endLine": 669
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 673,
+      "endLine": 675
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 712,
+      "endLine": 712
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 731,
+      "endLine": 731
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 747,
+      "endLine": 748
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 758,
+      "endLine": 770
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 783,
+      "endLine": 783
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 785,
+      "endLine": 785
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 788,
+      "endLine": 788
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 816,
+      "endLine": 816
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 845,
+      "endLine": 845
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 881,
+      "endLine": 881
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 883,
+      "endLine": 883
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 906,
+      "endLine": 906
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1078,
+      "endLine": 1079
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1327,
+      "endLine": 1328
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1332,
+      "endLine": 1332
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1340,
+      "endLine": 1340
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1524,
+      "endLine": 1525
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1545,
+      "endLine": 1550
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1562,
+      "endLine": 1562
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1570,
+      "endLine": 1571
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1592,
+      "endLine": 1592
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1662,
+      "endLine": 1665
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1668,
+      "endLine": 1670
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1672,
+      "endLine": 1672
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1675,
+      "endLine": 1679
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1682,
+      "endLine": 1683
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1686,
+      "endLine": 1712
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1721,
+      "endLine": 1721
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1732,
+      "endLine": 1732
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1764,
+      "endLine": 1764
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1776,
+      "endLine": 1776
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1780,
+      "endLine": 1780
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1783,
+      "endLine": 1783
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1808,
+      "endLine": 1808
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1825,
+      "endLine": 1825
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 1897,
+      "endLine": 2085
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2192,
+      "endLine": 2192
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2212,
+      "endLine": 2218
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2265,
+      "endLine": 2266
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2272,
+      "endLine": 2272
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2279,
+      "endLine": 2280
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2317,
+      "endLine": 2368
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2380,
+      "endLine": 2381
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2387,
+      "endLine": 2387
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2492,
+      "endLine": 2492
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2523,
+      "endLine": 2523
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2724,
+      "endLine": 2724
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2746,
+      "endLine": 2754
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2901,
+      "endLine": 2931
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2964,
+      "endLine": 2965
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2975,
+      "endLine": 2976
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2984,
+      "endLine": 2985
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 2988,
+      "endLine": 2995
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3023,
+      "endLine": 3026
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3035,
+      "endLine": 3037
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3052,
+      "endLine": 3052
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3156,
+      "endLine": 3156
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3162,
+      "endLine": 3162
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3193,
+      "endLine": 3196
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3236,
+      "endLine": 3237
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3241,
+      "endLine": 3242
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3327,
+      "endLine": 3327
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3406,
+      "endLine": 3407
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3426,
+      "endLine": 3426
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3433,
+      "endLine": 3433
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3437,
+      "endLine": 3437
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3484,
+      "endLine": 3525
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3534,
+      "endLine": 3545
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3550,
+      "endLine": 3575
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3586,
+      "endLine": 3589
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3591,
+      "endLine": 3593
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3610,
+      "endLine": 3611
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3711,
+      "endLine": 3711
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3744,
+      "endLine": 3744
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3759,
+      "endLine": 3759
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3777,
+      "endLine": 3777
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3809,
+      "endLine": 3809
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3844,
+      "endLine": 3845
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3850,
+      "endLine": 3851
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3914,
+      "endLine": 3914
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3921,
+      "endLine": 3922
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3949,
+      "endLine": 3949
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3954,
+      "endLine": 3954
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3979,
+      "endLine": 3979
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3987,
+      "endLine": 3991
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 3993,
+      "endLine": 3994
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 4025,
+      "endLine": 4025
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 4038,
+      "endLine": 4040
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "startLine": 4043,
+      "endLine": 4044
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 10,
+      "endLine": 12
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 20,
+      "endLine": 20
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 24,
+      "endLine": 27
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 29,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 33,
+      "endLine": 34
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 44,
+      "endLine": 48
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 50,
+      "endLine": 50
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 60,
+      "endLine": 60
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 62,
+      "endLine": 62
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "startLine": 71,
+      "endLine": 71
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 7,
+      "endLine": 8
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 19,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 61,
+      "endLine": 62
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 69,
+      "endLine": 131
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 158,
+      "endLine": 158
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 161,
+      "endLine": 164
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 166,
+      "endLine": 166
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 170,
+      "endLine": 170
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 174,
+      "endLine": 174
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 193,
+      "endLine": 193
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 252,
+      "endLine": 252
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 258,
+      "endLine": 258
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 263,
+      "endLine": 263
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 318,
+      "endLine": 319
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 322,
+      "endLine": 322
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 331,
+      "endLine": 331
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 344,
+      "endLine": 344
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 347,
+      "endLine": 348
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 358,
+      "endLine": 358
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 360,
+      "endLine": 361
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 395,
+      "endLine": 395
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 408,
+      "endLine": 408
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 414,
+      "endLine": 416
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 424,
+      "endLine": 424
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 426,
+      "endLine": 426
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 429,
+      "endLine": 429
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 445,
+      "endLine": 445
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 463,
+      "endLine": 463
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 484,
+      "endLine": 484
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 486,
+      "endLine": 486
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 503,
+      "endLine": 503
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 605,
+      "endLine": 605
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 748,
+      "endLine": 749
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 753,
+      "endLine": 753
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 761,
+      "endLine": 761
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 851,
+      "endLine": 852
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 865,
+      "endLine": 867
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 874,
+      "endLine": 874
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 879,
+      "endLine": 879
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 892,
+      "endLine": 892
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 935,
+      "endLine": 936
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 938,
+      "endLine": 938
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 940,
+      "endLine": 941
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 943,
+      "endLine": 943
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 945,
+      "endLine": 956
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 989,
+      "endLine": 989
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 993,
+      "endLine": 993
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 995,
+      "endLine": 995
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1011,
+      "endLine": 1011
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1021,
+      "endLine": 1021
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1057,
+      "endLine": 1159
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1206,
+      "endLine": 1206
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1217,
+      "endLine": 1219
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1239,
+      "endLine": 1240
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1244,
+      "endLine": 1244
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1249,
+      "endLine": 1249
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1268,
+      "endLine": 1296
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1303,
+      "endLine": 1303
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1307,
+      "endLine": 1307
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1364,
+      "endLine": 1364
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1378,
+      "endLine": 1378
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1485,
+      "endLine": 1485
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1499,
+      "endLine": 1500
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1586,
+      "endLine": 1603
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1618,
+      "endLine": 1618
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1627,
+      "endLine": 1628
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1630,
+      "endLine": 1633
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1648,
+      "endLine": 1649
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1652,
+      "endLine": 1653
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1717,
+      "endLine": 1717
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1720,
+      "endLine": 1720
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1736,
+      "endLine": 1737
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1754,
+      "endLine": 1754
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1831,
+      "endLine": 1832
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1844,
+      "endLine": 1844
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1851,
+      "endLine": 1851
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1853,
+      "endLine": 1853
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1876,
+      "endLine": 1891
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1897,
+      "endLine": 1902
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1904,
+      "endLine": 1916
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1922,
+      "endLine": 1924
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1934,
+      "endLine": 1934
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 1997,
+      "endLine": 1997
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2022,
+      "endLine": 2022
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2034,
+      "endLine": 2034
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2037,
+      "endLine": 2037
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2070,
+      "endLine": 2070
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2074,
+      "endLine": 2074
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2090,
+      "endLine": 2090
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2094,
+      "endLine": 2094
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2111,
+      "endLine": 2114
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2130,
+      "endLine": 2130
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2138,
+      "endLine": 2139
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2141,
+      "endLine": 2141
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2212,
+      "endLine": 2212
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2258,
+      "endLine": 2258
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2273,
+      "endLine": 2273
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "startLine": 2280,
+      "endLine": 2280
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 23,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 28,
+      "endLine": 29
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 37,
+      "endLine": 99
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 116,
+      "endLine": 116
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "startLine": 41,
+      "endLine": 41
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/context.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 1,
+      "endLine": 11
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 15,
+      "endLine": 18
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 20,
+      "endLine": 21
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 23,
+      "endLine": 85
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 87,
+      "endLine": 93
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 97,
+      "endLine": 256
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 272,
+      "endLine": 304
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+      "startLine": 308,
+      "endLine": 310
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md",
+      "startLine": 1,
+      "endLine": 22
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/plan.md",
+      "startLine": 1,
+      "endLine": 29
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/1.json",
+      "startLine": 1,
+      "endLine": 73
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/input.json",
+      "startLine": 1,
+      "endLine": 92
+    },
+    {
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/description.md",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/flow.json",
+      "startLine": 1,
+      "endLine": 211
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/journal.md",
+      "startLine": 1,
+      "endLine": 9
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/plan.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 25
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/description.md",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 1,
+      "endLine": 13
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 15,
+      "endLine": 182
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 211,
+      "endLine": 246
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+      "startLine": 257,
+      "endLine": 259
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/journal.md",
+      "startLine": 1,
+      "endLine": 9
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/plan.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/context.md",
+      "startLine": 1,
+      "endLine": 58
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/description.md",
+      "startLine": 1,
+      "endLine": 31
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/flow.json",
+      "startLine": 1,
+      "endLine": 192
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/journal.md",
+      "startLine": 1,
+      "endLine": 8
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/plan.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/flows/491-2026-11-12-review-audit-p3-product/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 773,
+      "endLine": 773
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 293,
+      "endLine": 293
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/templates/review-report.md",
+      "startLine": 79,
+      "endLine": 80
+    },
+    {
+      "file": "docs/analysis/review-process-audit-2026-11-12.md",
+      "startLine": 1,
+      "endLine": 195
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5098,
+      "endLine": 5098
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5128,
+      "endLine": 5133
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5137,
+      "endLine": 5137
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 785,
+      "endLine": 785
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 788,
+      "endLine": 788
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 881,
+      "endLine": 881
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 883,
+      "endLine": 888
+    },
+    {
+      "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+      "startLine": 278,
+      "endLine": 313
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 237,
+      "endLine": 243
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 245,
+      "endLine": 247
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 252,
+      "endLine": 252
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "startLine": 254,
+      "endLine": 254
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 605,
+      "endLine": 605
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4940,
+      "endLine": 4943
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4954,
+      "endLine": 4956
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 4971,
+      "endLine": 4971
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5057,
+      "endLine": 5057
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5348,
+      "endLine": 5348
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5352,
+      "endLine": 5353
+    },
+    {
+      "file": "src/commands/review.ts",
+      "startLine": 5662,
+      "endLine": 5663
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 773,
+      "endLine": 773
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 118,
+      "endLine": 118
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 293,
+      "endLine": 293
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md",
+      "startLine": 79,
+      "endLine": 80
+    },
+    {
+      "file": "src/gdskills/review-spawn-field-contract.test.ts",
+      "startLine": 1,
+      "endLine": 104
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 1,
+      "endLine": 7
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 10,
+      "endLine": 30
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 32,
+      "endLine": 40
+    },
+    {
+      "file": "src/review/close-gates.test-helpers.ts",
+      "startLine": 57,
+      "endLine": 58
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 9,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 14,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 23,
+      "endLine": 23
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 27,
+      "endLine": 27
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 30,
+      "endLine": 34
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 62,
+      "endLine": 63
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 67,
+      "endLine": 71
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 73,
+      "endLine": 76
+    },
+    {
+      "file": "src/review/close-gates.ts",
+      "startLine": 79,
+      "endLine": 82
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 18,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 23,
+      "endLine": 27
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 38,
+      "endLine": 38
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 40,
+      "endLine": 41
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 45,
+      "endLine": 46
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 49,
+      "endLine": 67
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 97,
+      "endLine": 97
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 99,
+      "endLine": 100
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 102,
+      "endLine": 102
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 117,
+      "endLine": 118
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 125,
+      "endLine": 130
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 135,
+      "endLine": 135
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 143,
+      "endLine": 143
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 148,
+      "endLine": 148
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 176,
+      "endLine": 178
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 180,
+      "endLine": 180
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 25,
+      "endLine": 29
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 31,
+      "endLine": 32
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 34,
+      "endLine": 34
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 36,
+      "endLine": 36
+    },
+    {
+      "file": "src/review/complete-head-gate.ts",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 1,
+      "endLine": 4
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 6,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 12,
+      "endLine": 61
+    },
+    {
+      "file": "src/review/complete-head-relabel.test.ts",
+      "startLine": 115,
+      "endLine": 137
+    },
+    {
+      "file": "src/review/complete-waiver-scope.test.ts",
+      "startLine": 1,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-waiver-scope.test.ts",
+      "startLine": 7,
+      "endLine": 70
+    },
+    {
+      "file": "src/review/complete-waiver-scope.test.ts",
+      "startLine": 113,
+      "endLine": 122
+    },
+    {
+      "file": "src/review/completion-host.ts",
+      "startLine": 12,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/completion-host.ts",
+      "startLine": 26,
+      "endLine": 27
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 2173,
+      "endLine": 2173
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 2175,
+      "endLine": 2176
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 11,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 16,
+      "endLine": 16
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 93,
+      "endLine": 93
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 976,
+      "endLine": 977
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 980,
+      "endLine": 981
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1055,
+      "endLine": 1055
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1058,
+      "endLine": 1058
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1069,
+      "endLine": 1075
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1077,
+      "endLine": 1078
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1098,
+      "endLine": 1098
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1104,
+      "endLine": 1107
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1125,
+      "endLine": 1133
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1136,
+      "endLine": 1139
+    },
+    {
+      "file": "src/review/publish-gate-parity.test.ts",
+      "startLine": 1,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/publish-gate-parity.test.ts",
+      "startLine": 7,
+      "endLine": 81
+    },
+    {
+      "file": "src/review/publish-gate-parity.test.ts",
+      "startLine": 112,
+      "endLine": 121
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 118,
+      "endLine": 136
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 140,
+      "endLine": 147
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "startLine": 167,
+      "endLine": 175
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 13,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 62,
+      "endLine": 79
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 172,
+      "endLine": 175
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 177,
+      "endLine": 177
+    },
+    {
+      "file": "src/review/publish.ts",
+      "startLine": 181,
+      "endLine": 182
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 1,
+      "endLine": 7
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 9,
+      "endLine": 71
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 73,
+      "endLine": 73
+    },
+    {
+      "file": "src/review/readiness-verifier-waiver.test.ts",
+      "startLine": 76,
+      "endLine": 78
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 74,
+      "endLine": 75
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 79,
+      "endLine": 81
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 141,
+      "endLine": 142
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 153,
+      "endLine": 154
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 184,
+      "endLine": 192
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 459,
+      "endLine": 460
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 497,
+      "endLine": 498
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 37,
+      "endLine": 37
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 77,
+      "endLine": 82
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 233,
+      "endLine": 236
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 250,
+      "endLine": 250
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 357,
+      "endLine": 360
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 362,
+      "endLine": 366
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 123,
+      "endLine": 130
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 132,
+      "endLine": 133
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 135,
+      "endLine": 137
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 139,
+      "endLine": 141
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 155,
+      "endLine": 161
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 163,
+      "endLine": 163
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 130,
+      "endLine": 132
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 184,
+      "endLine": 185
+    }
+  ]
+}

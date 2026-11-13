@@ -1,0 +1,11 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "slices": ["slice-10"],
+  "findings": [],
+  "summary": "Second look at slice-10 (gate unification in close-gates.ts, head-gate refusal moved into readiness, --head-reason relabel, tagged research errors, host-question notice in publish). No new exploitable defect found. The agent-writable bypasses (report first line, 'Not verified: N') are removed; the head relabel requires operator words and seals are checked before research and readiness at src/review/close-gates.ts:65-66. Limit: the slice diff hunks were elided in places, so seals.ts was not read; evidence is the diff plus close-gates.ts at head."
+}
+```

@@ -1,0 +1,93 @@
+STATUS: DONE
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": ["slice-01"],
+  "summary": "Fix slice-01 read in full at head b076a85a6354, delta e9ac9253fde7..b076a85a6354; read-only. Ten of the twelve attached findings are closed, SEC-1 is partial and logic-w4:F-001 is regressed. The regression: the new seals turn every package closed before them NOT READY, not just the escape-closed ones the operator accepted (F-001). Verified clean, one line per check. (1) SKILL.detail.md item 7, in both the .metaproject and bundled copies, now names the head recorded at start; READINESS_ITEMS readiness.ts:40 is retitled to match. (2) review.ts --help and the CompleteManagedReviewOptions.head JSDoc (managed.ts:969-975) no longer describe the report-first-line escape. They say --head-reason is required for a relabel and refused without one, which matches managed.ts:1068-1085. (3) model-selection.mdc paragraph rewritten for model_class, in both the bundled and .metaproject/rules copies. (4) SPAWN_SUBAGENT_IGNORED_FIELDS (spawn-subagent-tool.ts:1067) now sits above the factory's JSDoc (1070), so createSpawnSubagentTool (1079) keeps its doc. (5) ARCH-1: the research gate moved into evaluateCloseGates (close-gates.ts:49-59, 77-78), so publish runs it. managed.ts no longer computes packageResearchErrorsTagged itself; its beforeReadiness only records waivers (managed.ts:1130-1136). The research filter reads sealed waivers only (close-gates.ts:55). (6) complete-head-gate.test.ts:163-174 now passes headReason, so it reaches readiness item head and asserts '--waive head' plus both SHAs. Deleting the PR-head check would turn it red. (7) readiness.test.ts VERIFIED (:63) carries verdict, method, evidence and verifier, sealed through writeSealedFindings. readiness.test.ts:168-172 pins a partial verification failing, and seals.test.ts:104-114 pins '{}' and an unsealed well-formed one failing. (8) SEC-1, all four sites are now sealed: waivers (readiness.ts:489-498), research filter (close-gates.ts:55), target and head_override (seals.ts:80-93), verifications (seals.ts:67-74). seals.test.ts (a)/(b)/(c) edit each file directly. Not traced: the remaining consumers of computeReadiness. I did not walk the TUI panel or operator-confirm-review beyond confirming they call computeReadiness. The graph layer was not queried, and consumers were found by keryx ctx rg (search-derived). graph_context: unavailable (not queried); ctx_used: yes; raw_rg_used: no.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-degradation",
+      "severity": "major",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "src/review/seals.ts",
+      "line": null,
+      "quote": "the operator accepted that such a closed package may read NOT READY",
+      "problem": "The seals make every package written before them read NOT READY. That covers any such package with a readiness waiver of any item, or with a verifier result on a blocker or major finding, and it includes ones closed legitimately through a TTY waiver or a real `ingest --verifications`. The operator accepted the break only for packages closed through the removed escapes. On base, such a package read READY. On head, verificationProblem (seals.ts:72) returns 'a verification keryx did not record' for every unsealed verification. partitionWaivers (seals.ts:57-62) puts every pre-seal waiver in `unsealed`, and computeReadiness (readiness.ts:489-498) fails the item with a note that the entry 'keryx did not record'. computeReadiness has no closed-package exemption (readiness.ts:459-471: only coverage items use liveCoverageGate/coverageMdGated). seals.ts:14-16 justifies this with 'the operator accepted that such a closed package may read NOT READY; the flow 488 CHANGELOG entry says so'. Neither record covers it. The operator's decision (flow 488 journal.md:28) is 'packages closed via the removed escapes stay NOT READY'. CHANGELOG.md:8 is 'A package that an earlier release closed on a `Not verified: N` line or a first-line head statement now reads NOT READY'.",
+      "impact": "Take a package closed with a real verifier result or a TTY waiver before this release. After the upgrade it shows NOT READY in `review readiness`, `review status` and the panel, with evidence that reads as forgery ('not honoured', 'keryx did not record'). `review publish` refuses it (close-gates.ts:79-80). The shell publish guard refuses `gh pr review` on that PR when that package is the newest one bound to it (publish-guard.ts:120-128: closed packages are candidates, since status is 'closed', not 'completed'). An open package ingested with `--verifications` on 0.4.27 and completed after the upgrade is refused at item verifier. Each case needs an operator waiver per package, or --partial, for a decision that was already made correctly.",
+      "suggested_fix": "Either narrow the break to what was accepted, or widen the record to what the code does. Narrowing: stamp a seal-schema marker into every manifest keryx writes from now on (for example `seals.version`). For a package without the marker, keep base behaviour for verifications and waivers: honour them as before, the way target is already left unchecked. Only the removed escapes still fail, since they are no longer read at all. A package with the marker but without matching seals is refused as now. Widening: rewrite CHANGELOG.md:8 to name every pre-seal package with a waiver or a verified heavy finding, correct seals.ts:14-16, and get the operator's decision on that wider scope. Add a test that builds a pre-seal closed package with a real verification and asserts the chosen behaviour.",
+      "evidence": "Read seals.ts:14-16, 57-62, 67-74; readiness.ts:241-251 (verifierCheck), 459-471, 487-501 (computeReadiness); close-gates.ts:49-59, 79-80; publish-guard.ts:112-133. Consumers of computeReadiness found by keryx ctx rg (search-derived): commands/review.ts:4735 and 4857, operator-confirm-review.ts:346 and 369, close-gates.ts:79, publish-guard.ts:124, tui/review-panel.ts:198. Refute: (a) Is there a closed-package exemption for items verifier or waivers? readiness.ts:459-471 has none; only coverage-md and the live coverage gate key on status. (b) Does a CHANGELOG line or operator decision cover the wider set? CHANGELOG.md:7-8 and journal.md:28 name only escape-closed packages, and journal.md:36 lists the known seal gaps without this one. (c) Does ingest re-seal old verifications? managed.ts:517-521 seals only what the verifier merge applied in this ingest, so an already-closed package is never re-sealed. The claim survives.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/seals.ts:72", "src/review/readiness.ts:489", "src/review/close-gates.ts:55", "src/review/publish-guard.ts:124", "src/commands/review.ts:4735", "src/commands/review.ts:4857", "src/commands/operator-confirm-review.ts:346", "src/tui/review-panel.ts:198"],
+        "enumeration_method": "search-derived: keryx ctx rg 'computeReadiness\\(' over src excluding tests (9 matches, 6 files), plus the two seal readers verificationProblem and partitionWaivers (keryx ctx rg over src/review); every caller reaches the unsealed-means-fail rule"
+      }
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-degradation",
+      "severity": "info",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "src/review/seals.ts",
+      "line": null,
+      "quote": "if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)) {",
+      "problem": "A hand edit to target.head is refused only while the manifest has a `seals` key. If an agent deletes `seals` from manifest.json and rewrites target.head to the PR head, sealProblems returns nothing. completeHeadGate then compares the forged head with the PR head and passes, and the close at managed.ts:1148-1150 writes no seals (stored.seals undefined, no --head). The agent gives up only unsealed waivers and verifications, which a package with no blocker/major findings and no waivers does not need. Deleting a key is a cheaper bypass than the recomputed digest that seals.ts:12-14 accepts as out of scope. journal.md:36 lists 'a package with no `seals` keeps its target unchecked' as a known gap, so this is recorded, not filed as a defect.",
+      "impact": "SEC-1's point (3), a hand-rewritten target.head, is still open on a package whose `seals` key is deleted. seals.test.ts (b) covers only the case where seals is present.",
+      "suggested_fix": "Record at review start something the agent cannot drop without notice, for example a seal-schema marker in round.json, which roundRecordTampered already hashes. Refuse a PR-bound package whose round record says it was sealed but whose manifest has no seals. Add a seals.test.ts case that deletes `seals` and rewrites target.head.",
+      "evidence": "Read seals.ts:80-93, managed.ts:521 (seals written only at ingest), managed.ts:1148-1150, close-gates.ts:62-66, seals.test.ts:81-85. Refute: journal.md:36 names the gap, so this stays info.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-degradation",
+      "severity": "info",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": null,
+      "quote": "| 7 | the report's head is the PR head |",
+      "problem": "The fix retitled readiness item 7 in both SKILL.detail.md copies and in READINESS_ITEMS (readiness.ts:40: 'the head recorded for the round matches the PR head'). The user guide's checklist table still titles the item 'the report's head is the PR head'. Its repair column does say a report line does not pass it. This is the last site of the class review-architecture-w1:F-001 and review-logic-w2:F-001 named.",
+      "impact": "The guide names the check by the property the flow removed, so a reader may still look to report.md for item 7.",
+      "suggested_fix": "Retitle the row as readiness.ts:40 does: 'the head recorded for the round matches the PR head'.",
+      "evidence": "keryx ctx rg for \"report's head\" over src and docs: one hit each in docs/docs/guides/review-with-a-record.md:788 and src/review/readiness.ts:40 (the new title).",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-degradation",
+      "severity": "info",
+      "location_class": "pre-existing",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "src/gdskills/model-tier.ts",
+      "line": null,
+      "quote": "// `model_tier` input into the `{ kind: \"tier\" }` request. From there",
+      "problem": "Pre-existing, the sibling of review-degradation-w2:F-003. model-selection.mdc was fixed, but the module header of model-tier.ts (lines 18-25) still says createSpawnSubagentTool turns the tool's `model_tier` input into a tier request. spawn_subagent now ignores model_tier (SPAWN_SUBAGENT_IGNORED_FIELDS, spawn-subagent-tool.ts:1067).",
+      "impact": "A maintainer reading the producer of the tier map is told about a wire that no longer carries the field.",
+      "suggested_fix": "Rewrite lines 18-25 to name model_class and model routing, as model-selection.mdc:201-206 now does.",
+      "evidence": "keryx ctx rg 'model_tier. input' over the repo: model-tier.ts:22 is the only remaining hit outside history.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-architecture-w1:F-001", "disposition": "closed"},
+    {"id": "review-logic-w2:F-001", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-002", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-003", "disposition": "closed"},
+    {"id": "review-architecture-w2:F-004", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-002", "disposition": "closed"},
+    {"id": "review-architecture-w3:ARCH-1", "disposition": "closed"},
+    {"id": "review-testing-practices-w1:F-001", "disposition": "closed"},
+    {"id": "review-testing-practices-w2:TP-2", "disposition": "closed"},
+    {"id": "review-logic-w4:F-001", "disposition": "regressed"},
+    {"id": "review-security-code-w3:SEC-1", "disposition": "partial"}
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 0, "info": 3}
+}
+```
+
+Dispositions: logic-w4:F-001 is regressed. The break the operator accepted for packages closed through the removed escapes now covers every package written before the seals that holds any waiver or verifier result (F-001). SEC-1 is partial: all four sites are sealed, but a target with its `seals` key deleted is still not checked. The flow journal already records that gap (F-002). The other ten are closed, checked against the code at head.

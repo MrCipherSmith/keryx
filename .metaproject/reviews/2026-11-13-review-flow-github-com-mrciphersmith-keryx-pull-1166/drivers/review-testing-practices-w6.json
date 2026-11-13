@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-testing-practices",
+  "wave": 6,
+  "waves": 6,
+  "slices": [
+    "slice-06"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-06",
+      "path": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166/slices/slice-06.diff",
+      "bytes": 15446
+    }
+  ],
+  "result": "raw/review-testing-practices-w6.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+}

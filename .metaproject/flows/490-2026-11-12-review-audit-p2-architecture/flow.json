@@ -11,7 +11,7 @@
   "title": "Review architecture: round state machine in code, byte ceiling for skills, staged modules, one host port (audit P2)",
   "status": "initializing",
   "createdAt": "2026-11-12T09:59:21.548Z",
-  "updatedAt": "2026-11-12T13:06:08.254Z",
+  "updatedAt": "2026-11-13T07:19:11.268Z",
   "source": {
     "type": "description",
     "ref": null
@@ -208,6 +208,20 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Delta round range subtracts base-branch merges: previous-head..head through a merge of main reviews main's code as the PR's (PR 1166 round 2: slice-03/05 were flow 487 and #1167)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -254,6 +268,11 @@
       "at": "2026-11-12T13:06:08.254Z",
       "event": "task-added",
       "detail": "T12: Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)"
+    },
+    {
+      "at": "2026-11-13T07:19:11.268Z",
+      "event": "task-added",
+      "detail": "T13: Delta round range subtracts base-branch merges: previous-head..head through a merge of main reviews main's code as the PR's (PR 1166 round 2: slice-03/05 were flow 487 and #1167)"
     }
   ]
 }

@@ -1,0 +1,19 @@
+# keryx review verify-run
+finding: seals-r2
+command: bun test /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-RGG1DI/24c35b9d-7964-4a40-a9a6-b3e3b97d14b7/scratchpad/r2-repro.test.ts
+cwd: /Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit
+time: 2026-11-13T07:41:33.112Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+A problems: ["manifest.json target (head b076a85a6354) does not match the seal keryx wrote when it last recorded the target: the reviewed head changes only through `keryx review complete <review> --head <sha> --head-reason \"<operator quote>\"`, never by editing manifest.json"]
+B problems: []
+--- stderr ---
+
+../../../../../../../private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-RGG1DI/24c35b9d-7964-4a40-a9a6-b3e3b97d14b7/scratchpad/r2-repro.test.ts:
+
+ 4 pass
+ 0 fail
+ 5 expect() calls
+Ran 4 tests across 1 file. [40.00ms]

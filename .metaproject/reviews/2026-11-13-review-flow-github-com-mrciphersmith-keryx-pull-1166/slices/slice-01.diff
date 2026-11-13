@@ -1,0 +1,317 @@
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 756,796 @@
+ 
+ ```bash
+ keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+ ```
+ 
+ It prints the decision and the reason, and reuses the previous record when
+ nothing moved. The final round recomputes whatever the file set did — otherwise a
+ fix introduced in round 3 gets no regression check at all, and the round that
+ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+ `keryx review readiness <review-id-or-path> [--json]` reads the package and prints every readiness item, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. Then bring in what the passes found: `merge` lists the findings and how many `findings.json` lacks; `keryx review ingest --review-id <id>` records them as `review-regression/<chunk>`; ingest and the report are repeated when a pass finished after the report was written. `review complete` warns about a pass finding still out of `findings.json` and does not refuse. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+ 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+ 4. `verifier` — the verifier checked every blocker/major finding, or the operator waived the item; a `Not verified: N` line in the report no longer passes it.
+ 5. `ledger` — the ledger is READY.
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+-7. `head` — the report's head is the PR head.
++7. `head` — the head recorded at `review start` is still the PR head and the PR is not merged; otherwise only the operator's `head` waiver lifts it (no report line does).
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+ 11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere ask the operator with the host's question tool and record the answer with `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>" --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>"` (SKILL.md "Wave D"; the record reads `confirmedVia: "host-question"`). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+ `keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic). An agent completes a review only through that card; `keryx review complete` is for a human in a terminal. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+ ### Every prior finding leaves the round with a disposition
+ 
+ A fix round that reports only new findings is unreadable: the author cannot tell
+ which of their fixes landed. Close the loop explicitly — one line per prior
+ finding, in the report, before the new findings:
+ 
+ | Disposition | Meaning |
+ |---|---|
+ | `closed` | Checked against the code, not against the commit message, and the defect is gone |
+ | `open` | The fix does not reach the defect; say what is still true |
+
+--- src/commands/review.ts
+@@ 5664,5708 @@
+                         [--waive <item> "<operator quote>"]...
+   keryx review lightweight
+ 
+ An unrecognised option is REFUSED, not ignored. A flag that is silently dropped
+ writes nothing and still reports success, which is how a round can close with
+ zero dispositions and still print \`status: closed\`.
+ 
+ Modes:
+   ${MANAGED_REVIEW_MODES.join(", ")}
+ 
+ --head:
+   The commit the round ran against, written to \`manifest.target.head\` and read
+   by the \`review\` completion gate, which refuses to complete a flow whose last
+   round cannot say which tree it read. Omitted, it is \`git rev-parse HEAD\` —
+   the tree the reviewers actually read, which is deliberately preferred over a
+   \`pr\` target's own head so that a round run against something other than what
+   will merge FAILS the gate instead of passing it.
+   \`review complete --head <sha>\` names the commit the round actually reviewed
+   when the one recorded at start is wrong or missing; the head gate then checks
+   that commit, and the manifest records it. The gate is not loosened: a head that
+-  is not the pull request's head still needs the report's first line to name it
+-  and say the PR moved.
++  is not the pull request's head fails readiness item \`head\`, which only the
++  operator waives (\`--waive head "<quote>"\` or the review_waive_readiness card);
++  nothing written into report.md lifts it. A --head other than the head recorded
++  at start also needs the operator's words in \`--head-reason "<quote>"\`, and
++  --head-reason without such a --head is refused.
+ 
+ scope:
+   Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,
+   vendored and minified paths, drops whitespace-only and comment-only change
+   blocks, and bounds each retained change to +/-${DEFAULT_CONTEXT_LINES} lines of context by default.
+   Prints the retained scope AND every drop with its reason; --append writes the
+   same record into the review package's scope.md, REPLACING a
+   \`## Pre-filter scope\` block already there rather than adding a second.
+ 
+ floor:
+   The guard against a diff that quietly lowers the bar. Deterministic, no model
+   call, over the same scoped regions \`review scope\` builds. Reports four edits:
+   a floor named on the line moving DOWN or a ceiling named on the line moving UP
+   (the rest of the line unchanged), a test disabled with .skip/.only/xit, a test
+   region that ends up with FEWER assertion-carrying lines, and a new suppression
+   comment (eslint-disable, @ts-expect-error, ts-ignore, type: ignore, noqa).
+   Each is individually defensible; the guard does not claim any is wrong, only
+   that the diff should say why. EXITS 1 when it finds anything — a question
+   asked with exit 0 is a question nobody answers — and 0 when it finds nothing.
+   EXITS 2 when it could not look at all: a ref that will not resolve, a --diff
+
+--- src/gdskills/bundled/rules/core/model-selection.mdc
+@@ 182,226 @@
+   the orchestrator holds.
+ - It must answer JSON, `{"order": [...]}`, best first, and must place the session's
+   own model. An id that was not discovered is dropped. An agent error, a
+   timeout, a malformed answer, or one that leaves out the session's model
+   resolves to the session's model, exactly as without an agent.
+ - It never places `standard` or `deep` below the session: `deep` is only ever taken
+   from above the session in its order, `standard` is never asked. A larger
+   class of an older generation that costs more than the session's model is
+   refused whatever it says.
+ - The result is cached by a hash of the candidate catalogue with prices, so an
+   identical catalogue asks once.
+ - It runs on the **light** tier of the session's own provider — the cheap step
+   below the session, or the session model itself when nothing sits below.
+ - A resolution it produced is recorded `tier_resolution: agent-ranked`.
+ 
+ ## Where this actually runs
+ 
+ Two places, and they are not the same shape:
+ 
+ - **`spawn_subagent`** (`src/harness/tool/builtin/spawn-subagent-tool.ts`) takes an
+-  optional `model_tier` input and does the rest in code: it builds the tier map
+-  with `buildTierMap` from its host's detection result, hands it to
+-  `resolveChildModel`, and records the outcome on the dispatch's run trace.
+-  Omitting `model_tier` inherits the parent's model, exactly as before the field
+-  existed.
++  optional `model_class` input (`light`, `standard`, `expert`, `frontier`) and lets
++  model routing choose the child's model from it. It still accepts `model_tier` but
++  ignores it and logs a migration notice (`SPAWN_SUBAGENT_IGNORED_FIELDS`). Omitting
++  `model_class` leaves the child to the project's subagent routing: the parent's
++  model unless that category is set to `auto`.
+ - **An orchestrator authoring a dispatch document** *runs a command*:
+   `keryx review tier`. It takes the signals below as flags and prints the `model`
+   block ready to paste — the tier, the ordered rule ids that produced it, the
+   resolved provider/model, `tier_resolution` and `model_discovery`. `--json`
+   prints the block alone.
+ 
+ An orchestrator is an agent following prose and **cannot call a TypeScript
+ function**: asked for a tier by hand it reads a table of signals and does the
+ arithmetic in its head — the exact mechanical work this programme moves out of
+ skills and into the code that consumes them. `keryx review tier` is that code's
+ entry point; `decideDispatchModel` is what it calls.
+ 
+ Nothing reads a recorded resolution back and checks it. These fields explain a
+ finished run; they do not gate one.
+ 
+ ## A third place: compiling a Claude Code subagent file
+ 
+ `keryx agents export --runtime claude` (`src/agents/compile.ts`'s
+ `renderClaudeExport`) is neither of the two shapes above — it never asks
+ `spawn_subagent` or `keryx review tier` anything, and it runs at EXPORT time,
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1041,1073 @@
+     }
+     const backLink = (await readFile(path.join(adminDir, "gitdir"), "utf8")).replace(/\r?\n$/, "");
+     const backTarget = await realpath(path.resolve(adminDir, backLink));
+     return backTarget === (await realpath(dotGit)) ? realCandidate : undefined;
+   } catch {
+     return undefined;
+   }
+ }
+ 
+ // The two profiles that used to be built here moved to
+ // `src/harness/policy/profiles.ts` when `keryx serve` needed a profile it could
+ // COMPARE against — and the source-level guard written for that comparison found
+ // these two, which the R4c launch prompt had recorded as not existing. Their
+ // fingerprint inputs are preserved verbatim there; nothing about either posture
+ // changed. They stay out of the operator-selectable name set, because
+ // `network: allow` with `delegate: allow` is not something a `serve.json` should
+ // be able to select by typing a name.
+ const parentShellPolicy = shellParentProfile;
+ const childReadOnlyPolicy = shellChildReadOnlyProfile;
+ 
++/**
++ * Schema fields `spawn_subagent` still accepts but never acts on. A skill that
++ * tells a model to pass one of these has instructed a no-op; the review-skill
++ * contract test reads this list, and the tool names every one present in its
++ * migration notice.
++ */
++export const SPAWN_SUBAGENT_IGNORED_FIELDS = ["model_tier"] as const;
++
+ /**
+  * Create the `spawn_subagent` tool bound to a live shell host.
+  *
+  * The child ledger (tool-call + runtime pool shared by every spawn) is
+  * PER-TURN, not per-tool-instance: `deps.onLedgerReady` (when supplied) hands
+
+--- src/review/close-gates.ts
+@@ 75,82 @@
+   }
+   await input.beforeReadiness?.();
++  const research = await researchRefusals(packageDir, input);
++  if (research.length > 0) throw new Error(`${REFUSAL} ${research.join("; ")}`);
+   const readiness = await computeReadiness(packageDir, input.readiness ?? {});
+   if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw new Error(readinessRefusal(readiness, input.action === "publish" ? "publish" : "complete the review"));
+   return { readiness, warnings };
+ }
+
+--- src/review/readiness.ts
+@@ 219,245 @@
+   const selected = Array.isArray(dispatch.selected) ? dispatch.selected.filter(text) : [];
+   const ran = new Set(runs.map((run) => run.reviewer));
+   const unfinished = runs.filter((run) => run.status !== "complete" || run.scopeComplete === false).map((run) => run.reviewer);
+   const unplanned = selected.filter((name) => !ran.has(name));
+   const lost = await runsMissingResultFile(ctx.dir, runs);
+   const gate = problems.length === 0 ? await coverageGateOf(ctx, dispatch) : { errors: [], note: "" };
+   if (problems.length === 0 && unfinished.length === 0 && unplanned.length === 0 && lost.length === 0 && gate.errors.length === 0) {
+     return ok(`${runs.length} reviewer run(s), all complete with their result on disk; ${gate.note}`);
+   }
+   return reviewersFailure({ unfinished, unplanned, lost, problems, coverage: gate.errors }, ctx.arg);
+ }
+ 
+ const pathExists = (file: string): Promise<boolean> => stat(file).then(() => true, () => false);
+ 
+ /**
+  * A blocker or major finding without a verification stays a failing item. A line the agent writes into report.md
+  * ("Not verified: N") is not an answer: only the verifier's result, or the operator's waiver, lifts it.
+  */
+ function verifierCheck(ctx: Context): Verdict {
+   const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
+-  const unverified = heavy.filter((finding) => record(finding.verification) === undefined);
++  // Flow 488 (AC9): a verification counts only in the verifier's shape (verdict, method, evidence) and with the seal
++  // `review ingest --verifications` wrote over it; an object written into findings.json by hand does not.
++  const unverified = heavy.flatMap((finding) => {
++    const problem = verificationProblem(ctx.manifest, finding);
++    return problem === undefined ? [] : [{ id: String(finding.global_id ?? finding.id), problem }];
++  });
+   if (unverified.length === 0) return ok(`${heavy.length} blocker/major finding(s), all verified`);
+
+--- src/review/readiness.ts
+@@ 495,518 @@
+     if (verdict.pass) return { ...spec, status: "pass", evidence: verdict.evidence };
+     if (waiver !== undefined) return { ...spec, status: "waived", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };
+-    return { ...spec, status: "fail", evidence: verdict.evidence, repair: verdict.repair };
++    const unsealedNote = unsealedItems.has(spec.id) ? `; manifest.json readiness_waivers holds an entry for ${spec.id} that keryx did not record (no matching seal), so it is not honoured` : "";
++    return { ...spec, status: "fail", evidence: `${verdict.evidence}${unsealedNote}`, repair: verdict.repair };
+   });
+   const testsNotRun = testsNotRunWarning(packageDir);
+   return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items, ...(testsNotRun === undefined ? {} : { warnings: [testsNotRun] }) };
+ }
+ 
+ export const failingItems = (report: ReadinessReport): ReadinessItem[] => report.items.filter((item) => item.status === "fail");
+ 
+ /** The checklist as the CLI, `review status` and the panel print it. */
+ export function renderReadiness(report: ReadinessReport): string[] {
+   const lines = [`readiness: ${report.verdict} (${report.review})`];
+   for (const item of report.items) {
+     const mark = item.status === "pass" ? "pass  " : item.status === "waived" ? "waived" : "FAIL  ";
+     lines.push(`  ${item.number}. [${mark}] ${item.id}: ${item.title}`);
+     lines.push(`       ${item.evidence}`);
+     if (item.id === "memory-outside-stage") lines.push(`       ${memoryLogNote(report)}`);
+     if (item.status === "waived" && item.waiver !== undefined) lines.push(`       waived by the operator: ${item.waiver.operatorQuote}`);
+     if (item.status === "fail" && item.repair !== undefined) lines.push(`       repair: ${item.repair}`);
+   }
+   for (const warning of report.warnings ?? []) lines.push(`  warning (not blocking): ${warning}`);
+   return lines;
+
+--- src/review/complete-head-gate.test.ts
+@@ 145,168 @@
+ 
+ test("--head names the reviewed commit: it replaces a wrong recorded head, passes the gate and is what the manifest keeps", async () => {
+   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: MOVED });
+   const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: HEAD.toUpperCase(), headReason: REASON });
+   expect(done.manifest.status).toBe("closed");
+   expect(done.manifest.target.head).toBe(HEAD);
+   expect(done.warnings.join(" ")).toContain(`replaces the head recorded when the round started (${MOVED.slice(0, 7)})`);
+   const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
+   expect(onDisk.target.head).toBe(HEAD);
+ });
+ 
+ test("--head fills a head the round never recorded, without a warning about replacing one", async () => {
+   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR });
+   const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: HEAD.slice(0, 7) });
+   expect(done.manifest.target.head).toBe(HEAD.slice(0, 7));
+   expect(done.warnings.join(" ")).not.toContain("replaces");
+ });
+ 
+ test("--head does not loosen the gate: a head that is not the PR's head still fails, and the manifest stays as it was", async () => {
+   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+-  const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED }).catch((e: Error) => e);
++  // With the relabel's reason given, what is left is readiness item head, which only the operator's waiver lifts.
++  const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED, headReason: REASON }).catch((e: Error) => e);
+   expect(error).toBeInstanceOf(Error);
+   expect((error as Error).message).toContain(MOVED.slice(0, 7));
+
+--- src/review/readiness.test.ts
+@@ 42,74 @@
+   writeFileSync(path.join(pkg, "coverage.md"), `# Reviewer Coverage\n\n${Object.entries(statuses).map(([reviewer, status]) => `reviewer: ${reviewer}\nstatus: ${status}\nreason: x`).join("\n\n")}\n`);
+ 
+ function writeResearch(kind: "broken" | "repaired"): void {
+   const broken = kind === "broken";
+   writeJson("research.json", {
+     version: 1,
+     scopeReviewed: !broken,
+     rawReconciled: !broken,
+     obligations: broken ? [{ id: "ob-1", source: "raw", question: "is it real?", status: "open" }] : [],
+     dispatch: {
+       version: 1,
+       mode: "all",
+       override: { operatorQuote: "synthetic fixture", reason: "readiness fixture" },
+       selected: REVIEWERS,
+       unresolvedRules: [],
+       runs: REVIEWERS.map((name, index) => (broken && index > 0 ? notRun(name) : run(name, { coveredSlices: [] }))),
+     },
+   });
+ }
+ 
++/** A verification in the shape the verifier merge writes (types.ts ReviewFindingVerification). */
++const VERIFIED = { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" };
++
++/** Writes findings.json and, as `review ingest --verifications` does, the seal over each verification (flow 488). */
++const writeSealedFindings = (findings: Array<Record<string, unknown>>): void => {
++  writeJson("findings.json", findings);
++  const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
++  const applied = findings.filter((finding) => finding.verification !== undefined).map((finding) => ({ key: findingKey(finding), verification: finding.verification }));
++  // An ingest seals the target in the same write.
++  writeJson("manifest.json", { ...manifest, seals: { ...withVerificationSeals(manifest.seals, applied), target: manifest.seals?.target ?? sealTarget(manifest.target) } });
++};
++
+ /** The verifier's result on every blocker/major finding of the fixture: what makes item 4 pass without a waiver. */

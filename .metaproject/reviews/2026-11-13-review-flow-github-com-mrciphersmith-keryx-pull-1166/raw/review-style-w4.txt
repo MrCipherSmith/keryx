@@ -1,0 +1,77 @@
+STATUS: DONE
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "slices": ["slice-04"],
+  "summary": "Style review of slice-04 (src/review seals, close gates, readiness, tests). Files under src/session/ and src/standard/help-groups.ts were skipped as merge content. Naming and layout are consistent; no major findings. One stringly-typed sentinel shared across two modules, duplicated test helpers, and a few low-value repeats.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": 246,
+      "quote": "const forged = unverified.filter((entry) => entry.problem !== \"no verification\");",
+      "problem": "readiness.ts decides which unverified findings get the 'not honoured' note by comparing entry.problem to the free-text literal \"no verification\", which is a separate string literal returned by verificationProblem in seals.ts (line 69). Two modules agree on a sentence, not on a named constant. The variable is also called `forged`, although the other problem texts (a verification without verdict, method and evidence) are malformed, not necessarily forged.",
+      "impact": "Rewording the message in seals.ts silently turns every 'no verification' finding into a 'forged' one in the item-4 evidence, with no type or compile error.",
+      "suggested_fix": "Export a constant (e.g. NO_VERIFICATION) from seals.ts and use it in both places, or have verificationProblem return a tagged value; rename `forged` to something like `rejected`.",
+      "evidence": "src/review/seals.ts:69 `return \"no verification\";` and src/review/readiness.ts:246 compare the same literal.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/review/seals.test.ts",
+      "line": 32,
+      "quote": "const sink = () => {",
+      "problem": "The same test scaffolding is copied across the flow 488 test files: the posting `sink` (publish-gate-parity.test.ts:19, seals.test.ts:32, and `io` in readiness-verifier-waiver.test.ts:17), `editManifest` (publish-gate-parity.test.ts:24, seals.test.ts:37, complete-waiver-scope.test.ts:26), and the open-obligation literal `{ id: \"ob-1\", source: \"raw\", question: \"is it real?\", status: \"open\" }` (publish-gate-parity.test.ts:103, complete-waiver-scope.test.ts:23, readiness.test.ts:50). close-gates.test-helpers.ts already exists as the shared home for this kind of fixture.",
+      "impact": "A change to the posting seam or the manifest edit shape has to be made in three places; the copies drift.",
+      "suggested_fix": "Move `sink`, `editManifest` and an `openObligation` helper into close-gates.test-helpers.ts and import them.",
+      "evidence": "keryx ctx rg for `^const sink = `, `^async function editManifest`, `id: \"ob-1\"` over src/review test files lists the sites above.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 1079,
+      "quote": "// Review F-001 (logic w3): a quote with nothing to relabel would be recorded nowhere while the close reports success.",
+      "problem": "Comments and test titles cite review-round ids (F-001 logic w3, SEC-1, ARCH-1, TP-1, TP-2, TP-3). These ids resolve only against a review package that is not part of the code, so a later reader cannot follow them. The sentences after the id explain the reason well and stand alone.",
+      "impact": "Noise that ages badly; the id adds nothing once the reason is stated.",
+      "suggested_fix": "Drop the review ids and keep the reason text (the flow 488 reference is enough as the anchor).",
+      "evidence": "Sites: src/review/managed.ts:1079, src/review/seals.ts:1, src/review/close-gates.ts:44, src/review/seals.test.ts:1, src/review/publish-gate-parity.test.ts:82, src/review/complete-waiver-scope.test.ts:71, src/review/publish.test.ts:148 and :156, src/review/readiness.test.ts:166.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/review/seals.ts",
+      "line": 64,
+      "quote": "const filled = (value: unknown): boolean => typeof value === \"string\" && value.trim() !== \"\";",
+      "problem": "`filled` is defined again here with the same body as the local `filled` inside isHostQuestion in src/review/types.ts:119.",
+      "impact": "Two copies of a one-line non-blank-string predicate; small, but the next tweak lands in one.",
+      "suggested_fix": "Export one predicate from a shared review util (or types.ts) and reuse it.",
+      "evidence": "keryx ctx rg `const filled` in src/review non-test files: seals.ts:64 and types.ts:119.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 1072,
+      "quote": "throw new Error(`Cannot complete managed review; --head ${head} differs from the head recorded when the round started",
+      "problem": "close-gates.ts now holds the refusal prefix in a module constant `REFUSAL = \"Cannot complete managed review;\"`, while managed.ts spells the same prefix out at three throw sites, two of them added or touched by this PR.",
+      "impact": "The prefix is a user-visible contract the parity tests compare; two spellings can diverge.",
+      "suggested_fix": "Export REFUSAL from close-gates.ts (or a small constants module) and use it in managed.ts.",
+      "evidence": "keryx ctx rg `Cannot complete managed review;`: managed.ts:1054, :1072, :1082 and close-gates.ts:35.",
+      "confidence": "high"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 3 }
+}
+```

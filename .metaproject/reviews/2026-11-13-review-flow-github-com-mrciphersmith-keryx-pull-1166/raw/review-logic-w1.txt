@@ -1,0 +1,52 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-01"],
+  "summary": "All 12 attached prior findings are closed against the code at b076a85a6354. Readiness item 7, the --head help block and the managed.ts JSDoc, the spawn_subagent doc block, model-selection.mdc, the research gate in close-gates.ts, the verification shape and seals, and the head and verifier tests all match the new contract. The fix lines show no new logic defect; one info observation records the residual limit of the unkeyed seals, which flow 488 states as accepted.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/review/seals.ts",
+      "line": 28,
+      "quote": "return createHash(\"sha256\").update(canonicalJson({ seal: SEAL_DOMAIN, kind, content })).digest(\"hex\");",
+      "problem": "The seal is an unkeyed sha256 over a public domain string and canonical JSON. An agent that reads seals.ts can recompute the digest for a hand-written readiness waiver, head_override or verification and write it into manifest.seals. The tamper evidence therefore stops edits made without knowing the scheme, not an agent that reproduces it.",
+      "evidence": "seals.ts:28 and the header comment (lines 14-17) say 'evidence that a file was edited outside keryx, not a signature' and 'cryptography is out of scope, flow 488 description'. The gates honour any entry whose digest matches (seals.ts waiverSealed, verificationProblem, sealProblems). Nothing in the code at head holds a secret.",
+      "impact": "SEC-1 is closed to the level the flow chose (hand edits are not honoured and the item names the unsealed entry). A deliberate forger who recomputes the digest still passes. This is recorded, not a defect in the fix.",
+      "suggested_fix": "None required for this PR. If the threat model ever includes an agent that reads the source, key the digest with a per-package secret held outside the package directory.",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-architecture-w1:F-001", "disposition": "closed"},
+    {"id": "review-logic-w2:F-001", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-002", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-003", "disposition": "closed"},
+    {"id": "review-architecture-w2:F-004", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-002", "disposition": "closed"},
+    {"id": "review-architecture-w3:ARCH-1", "disposition": "closed"},
+    {"id": "review-testing-practices-w1:F-001", "disposition": "closed"},
+    {"id": "review-testing-practices-w2:TP-2", "disposition": "closed"},
+    {"id": "review-logic-w4:F-001", "disposition": "withdrawn"},
+    {"id": "review-security-code-w3:SEC-1", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 1}
+}
+```
+
+Dispositions, judged at head:
+
+- review-architecture-w1:F-001 and review-logic-w2:F-001: SKILL.detail.md:776 (both the .metaproject copy and the bundled copy) now reads "the head recorded at `review start` is still the PR head and the PR is not merged; otherwise only the operator's `head` waiver lifts it". Closed.
+- review-degradation-w2:F-001 and review-logic-w3:F-002: review.ts help (lines ~5683-5688) now says a head that is not the PR's head fails readiness item `head` and needs `--waive head`, and documents `--head-reason`. managed.ts:971 JSDoc says the same. The report template (review-report.md:78-80) says the first line informs the reader only. Closed.
+- review-degradation-w2:F-002 and review-architecture-w2:F-004: spawn-subagent-tool.ts:1061-1067 holds the constant with its own doc block, and the factory doc block (1069-1078) sits directly above `createSpawnSubagentTool`. Closed.
+- review-degradation-w2:F-003: model-selection.mdc:201-206 now describes `model_class` and says `model_tier` is accepted but ignored. Closed.
+- review-architecture-w3:ARCH-1: close-gates.ts:49-59 `researchRefusals` runs inside `evaluateCloseGates` (line 77) for both complete and publish. It is filtered by sealed waivers, with `relaxReadiness` and `closedPublish` handled. `packageResearchErrorsTagged` has no other caller outside research.ts. Closed.
+- review-testing-practices-w1:F-001: the former test now passes `headReason`, so the relabel check is satisfied and what remains is readiness item `head`. The new assertions at complete-head-gate.test.ts:170-173 check `--waive head` and that the manifest is not closed. Closed.
+- review-testing-practices-w2:TP-2: readiness.test.ts:63 `VERIFIED` has verdict, method, evidence and verifier, and `writeSealedFindings` seals it as ingest does. seals.test.ts:62 (describe "seals keep hand-written gate inputs out (SEC-1)") covers hand-written input. Closed.
+- review-logic-w4:F-001: a closed package from an older release now reads NOT READY. That is deliberate and accepted by the operator, and it is stated in the CHANGELOG ("Breaking for packages closed through the removed escapes", CHANGELOG.md:8) and in the seals.ts header. Withdrawn as a defect.
+- review-security-code-w3:SEC-1: waivers, head override, target and verifications are now sealed (seals.ts). readiness.ts:489-498 honours only sealed waivers and names an unsealed one. verifierCheck (readiness.ts:237-252) requires verdict, method, evidence and a matching seal. close-gates.ts:55 filters research errors by sealed waivers only. Closed to the flow's stated level; the residual limit is F-001 (info).
