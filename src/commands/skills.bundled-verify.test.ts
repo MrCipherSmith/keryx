@@ -37,11 +37,12 @@ async function runCli(args: string[]): Promise<{ code: number; out: string; err:
 describe("keryx skills verify --bundled", () => {
   test("the shipped tree passes, over a non-zero denominator, and exits 0", async () => {
     const result = await runCli(["skills", "verify", "--bundled"]);
-    // 84: ui-direction, ui-craft and review-ui-ux added; 81 before them. 80: flow 459 added review-premise; before it 79: flow 446 added review-pr-contract; before it 78: flow 330 added review-jev-rules, flow 332 added
+    // 75: flow 488 removed nine shipped skills (seven planning-pipeline skills,
+    // job-documenter, feature-dev). 84: ui-direction, ui-craft and review-ui-ux added; 81 before them. 80: flow 459 added review-premise; before it 79: flow 446 added review-pr-contract; before it 78: flow 330 added review-jev-rules, flow 332 added
     // review-jev-risk/review-jev-scenarios, flow 333 added
     // review-jev-docs/review-jev-comments, and flow 335 added
     // review-jev-contract.
-    expect(result.out).toContain("skills_evaluated: 84");
+    expect(result.out).toContain("skills_evaluated: 75");
     expect(result.out).toContain("findings: 0");
     expect(result.code).toBe(0);
   });
@@ -55,7 +56,7 @@ describe("keryx skills verify --bundled", () => {
       findings: unknown[];
       skillNames: string[];
     };
-    expect(parsed.skills).toBe(84);
+    expect(parsed.skills).toBe(75);
     // The harness builds are read too, and the count says so. `skills` alone
     // read as full coverage while 100-odd builds went unopened.
     expect(parsed.documents).toBeGreaterThan(parsed.skills);
