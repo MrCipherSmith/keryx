@@ -54,8 +54,9 @@ suggestions with project patterns", Severity/Location/Problem format (L151-158),
 Job Context block (L187-202), and the Red Flags rows that say the profile's prose
 cannot be ingested, that its Russian is an accident, and that an unqualified review
 request belongs to `review-orchestrator`. Those describe the removed profile, not a
-defect in reviewed code. The rule `code-review-ai-assistant.mdc` stays: its verdict
-vocabulary is still cited by `code-review-learned-profile.mdc:65`.
+defect in reviewed code. The rule `code-review-ai-assistant.mdc` was loaded only by
+this profile, so it is retired through `src/gdskills/retired-rules.ts`;
+`code-review-learned-profile.mdc` keeps its verdict list inline and no longer cites it.
 
 ## 2. code-style-review
 
