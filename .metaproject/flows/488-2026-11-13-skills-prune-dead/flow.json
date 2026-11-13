@@ -9,9 +9,9 @@
   "id": "488",
   "slug": "skills-prune-dead",
   "title": "Prune dead and orphaned bundled skills (stage 1)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-13T18:25:57.081Z",
-  "updatedAt": "2026-11-13T19:01:16.948Z",
+  "updatedAt": "2026-11-13T19:08:13.403Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:ba81eef754d00b05d38f854882805f380b64734f3b0d89917a125ad72d7691de",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1172"
   },
   "baseBranch": "main",
   "owner": {
@@ -212,6 +212,11 @@
       "at": "2026-11-13T19:01:16.948Z",
       "event": "task-done",
       "detail": "T7: Remove the seven catalog-rendered stub skills"
+    },
+    {
+      "at": "2026-11-13T19:08:13.403Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1172 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
