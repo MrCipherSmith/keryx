@@ -11,13 +11,50 @@
   "title": "Review gates: close the agent-text and waiver bypasses (audit P0)",
   "status": "implemented",
   "createdAt": "2026-11-12T09:58:46.961Z",
-  "updatedAt": "2026-11-13T09:44:23.725Z",
+  "updatedAt": "2026-11-13T10:44:52.301Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-13T10:44:50.344Z",
+      "note": "exec: bun test src/review/readiness-verifier-waiver.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). Item verifier ignores a 'Not verified: N' line; only an operator waiver lifts it"
+    },
+    "AC2": {
+      "at": "2026-11-13T10:44:50.582Z",
+      "note": "exec: bun test src/review/complete-head-gate.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). A moved/merged PR head fails item head whatever report.md says; only an operator waiver of head lifts it"
+    },
+    "AC3": {
+      "at": "2026-11-13T10:44:50.814Z",
+      "note": "exec: bun test src/review/complete-head-relabel.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). A differing --head needs --head-reason; manifest records from/to/quote"
+    },
+    "AC4": {
+      "at": "2026-11-13T10:44:51.058Z",
+      "note": "exec: bun test src/review/complete-waiver-scope.test.ts passes (9 tests, incl. the coverage-tag test added in f7b7f73ad); bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run)"
+    },
+    "AC5": {
+      "at": "2026-11-13T10:44:51.350Z",
+      "note": "exec: bun test src/review/publish-gate-parity.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). complete and publish share evaluateCloseGates (src/review/close-gates.ts)"
+    },
+    "AC6": {
+      "at": "2026-11-13T10:44:51.607Z",
+      "note": "exec: bun test src/review/publish.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run)"
+    },
+    "AC7": {
+      "at": "2026-11-13T10:44:51.837Z",
+      "note": "exec: bun test src/gdskills/review-spawn-field-contract.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run)"
+    },
+    "AC8": {
+      "at": "2026-11-13T10:44:52.068Z",
+      "note": "judged from mutation passes: round 1 (PR 1166 package 2026-11-12, research-evidence/mutation-1.md) and round 2 (package 2026-11-13, mutation-1.md) killed the revert of each fix: AC1 w2-M-22, w6-mc-w6-10; AC2 w2-M-15, w2-M-16, w6-mc-w6-01/02; AC3 w1-M-06/07, w6-mc-w6-04, w4-M10; AC4 w2-M-14, w4-M8, w6-mc-w6-08; AC5 w2-M-01/02/03, w1-mc-01. The round-1 tag survivors w2-M-11/12/13 were re-run by hand on 2026-11-13: dispatch and completeness untagging are killed by complete-waiver-scope.test.ts; coverage untagging survived and is killed by the test added in f7b7f73ad. w2-M-10 targeted code that moved into close-gates.ts; its successors w4-M8 and w6-mc-w6-08 are killed. Remaining survivors concern AC6/AC7/AC9, outside this criterion"
+    },
+    "AC9": {
+      "at": "2026-11-13T10:44:52.301Z",
+      "note": "exec: bun test src/review/seals.test.ts passes (incl. deleted seals + rewritten head, lowered/deleted major, edited heavyFindings, unreadable findings.json); bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run); criterion rewritten in round 2 and re-confirmed after fixes 86dda760a"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/1166"
   },
@@ -274,6 +311,51 @@
       "at": "2026-11-13T09:44:23.725Z",
       "event": "ac-updated",
       "detail": "AC9: \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json, or a verification object written straight into findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal.\" -> \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json (with or without its seals removed), a verification object written straight into findings.json, or a blocker or major severity lowered in findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal. [verify: exec `bun test src/review/seals.test.ts`]\" (PR 1166 round 2: review-degradation-w2:F-003 and review-style-w2:F-001 (AC9 had no verify tag); review-security-code-w8:SEC-1/SEC-R2-1 (removed seals) and SEC-2 (severity, operator upheld))"
+    },
+    {
+      "at": "2026-11-13T10:44:50.344Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: exec: bun test src/review/readiness-verifier-waiver.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). Item verifier ignores a 'Not verified: N' line; only an operator waiver lifts it (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:50.582Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: exec: bun test src/review/complete-head-gate.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). A moved/merged PR head fails item head whatever report.md says; only an operator waiver of head lifts it (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:50.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: exec: bun test src/review/complete-head-relabel.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). A differing --head needs --head-reason; manifest records from/to/quote (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: exec: bun test src/review/complete-waiver-scope.test.ts passes (9 tests, incl. the coverage-tag test added in f7b7f73ad); bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.350Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: exec: bun test src/review/publish-gate-parity.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). complete and publish share evaluateCloseGates (src/review/close-gates.ts) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: exec: bun test src/review/publish.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.837Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: exec: bun test src/gdskills/review-spawn-field-contract.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:52.068Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: judged from mutation passes: round 1 (PR 1166 package 2026-11-12, research-evidence/mutation-1.md) and round 2 (package 2026-11-13, mutation-1.md) killed the revert of each fix: AC1 w2-M-22, w6-mc-w6-10; AC2 w2-M-15, w2-M-16, w6-mc-w6-01/02; AC3 w1-M-06/07, w6-mc-w6-04, w4-M10; AC4 w2-M-14, w4-M8, w6-mc-w6-08; AC5 w2-M-01/02/03, w1-mc-01. The round-1 tag survivors w2-M-11/12/13 were re-run by hand on 2026-11-13: dispatch and completeness untagging are killed by complete-waiver-scope.test.ts; coverage untagging survived and is killed by the test added in f7b7f73ad. w2-M-10 targeted code that moved into close-gates.ts; its successors w4-M8 and w6-mc-w6-08 are killed. Remaining survivors concern AC6/AC7/AC9, outside this criterion (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:52.301Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: exec: bun test src/review/seals.test.ts passes (incl. deleted seals + rewritten head, lowered/deleted major, edited heavyFindings, unreadable findings.json); bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run); criterion rewritten in round 2 and re-confirmed after fixes 86dda760a (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -312,5 +394,106 @@
       "kind": "exec",
       "check": "bun test src/review/seals.test.ts"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-13T10:44:50.344Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:50.582Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:50.814Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.058Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.350Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.607Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.837Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:52.068Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:52.301Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    }
+  ]
 }
