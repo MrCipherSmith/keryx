@@ -10,7 +10,7 @@ import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL } from "./evidence-level";
 import { evaluateCloseGates } from "./close-gates";
-import { findingKey, sealHeadOverride, sealTarget, withVerificationSeals } from "./seals";
+import { findingKey, heavyFindingsSeal, sealHeadOverride, sealTarget, withVerificationSeals } from "./seals";
 import { packageCoverageWarnings, packageRolesNotRun } from "./coverage";
 import { optionalRolesLine, upsertOptionalRolesLine } from "./role-switches";
 import { packageParityWarnings } from "./parity";
@@ -518,7 +518,7 @@ export async function createManagedReviewPackage(
     const key = findingKey(finding);
     return finding.verification !== undefined && carriedVerification.has(key) && carriedVerification.get(key) !== finding.verification ? [{ key, verification: finding.verification }] : [];
   });
-  manifest.seals = { ...withVerificationSeals(undefined, applied), target: sealTarget(manifest.target) };
+  manifest.seals = { ...withVerificationSeals(undefined, applied), target: sealTarget(manifest.target), heavyFindings: heavyFindingsSeal(findings) };
 
   const validation = await validateManagedReviewManifest(input.cwd, manifest);
   if (!validation.valid) {
@@ -1065,14 +1065,24 @@ async function completeManagedReviewLocked(
       throw new Error(`--head "${options.head}" is not a commit SHA. Give the commit this round ran against, 7-40 hex characters.`);
     }
     const recordedHead = stored.target.head;
+    const quote = (options.headReason ?? "").replace(/-{0,2}head-reason/gi, "").trim();
+    const quoted = quote.length >= 8 && /[\p{L}\p{N}]/u.test(quote);
+    const override = (from: string): HeadOverride => ({ from, to: head, operator_quote: quote, time: (options.now ?? new Date()).toISOString(), ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const }) });
     if (typeof recordedHead === "string" && recordedHead !== "" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())) {
       // Flow 488: a head other than the recorded one is a relabel of what the round reviewed; the operator says so in their own words.
-      const quote = (options.headReason ?? "").replace(/-{0,2}head-reason/gi, "").trim();
-      if (quote.length < 8 || !/[\p{L}\p{N}]/u.test(quote)) {
+      if (!quoted) {
         throw new Error(`Cannot complete managed review; --head ${head} differs from the head recorded when the round started (${recordedHead}). Relabelling the reviewed head is the operator's decision: give their own words with --head-reason "<operator quote>" (at least 8 characters; a terminal, or --answered-by from a host question), or complete without --head to keep ${recordedHead.slice(0, 7)}.`);
       }
-      headOverride = { from: recordedHead, to: head, operator_quote: quote, time: (options.now ?? new Date()).toISOString(), ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const }) };
+      headOverride = override(recordedHead);
       warnings.push(`--head ${head.slice(0, 7)} replaces the head recorded when the round started (${recordedHead.slice(0, 7)}), on the operator's word; the manifest records head_override`);
+    } else if (stored.seals?.target === undefined) {
+      // Review round 2 (SEC-1): with no target seal the recorded head is not keryx's record (an older package, or one whose
+      // seals were removed), so even the same head is recorded only on the operator's word, and that close seals it.
+      if (!quoted) {
+        throw new Error(`Cannot complete managed review; ${stored.reviewId} carries no target seal, so its recorded head (${recordedHead ?? "none"}) is not keryx's record. Recording the head is the operator's decision: give their own words with --head-reason "<operator quote>" (at least 8 characters; a terminal, or --answered-by from a host question).`);
+      }
+      headOverride = override(typeof recordedHead === "string" && recordedHead !== "" ? recordedHead : "(none recorded)");
+      warnings.push(`--head ${head.slice(0, 7)} is recorded and sealed on the operator's word: the package carried no target seal; the manifest records head_override`);
     }
     manifest = { ...stored, target: { ...stored.target, head }, ...(headOverride === undefined ? {} : { head_override: headOverride }) };
   }
@@ -1127,6 +1137,7 @@ async function completeManagedReviewLocked(
       report: reportText,
       readiness: { prLookup: options.prLookup, prFiles: options.prFiles, ...(headGate === undefined ? {} : { headGate }) },
       action: "complete the review",
+      headRecordedByOperator: headOverride !== undefined,
       beforeReadiness: async () => {
         for (const waiver of options.waiveReadiness ?? []) {
           await waiveReadiness(packageDir, waiver.items, waiver.quote, { ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const, hostQuestion: options.hostQuestion }), prFiles: options.prFiles, ...(headGate === undefined ? {} : { headGate }), writeCompletion, ...(options.now === undefined ? {} : { now: options.now }) });
@@ -1142,10 +1153,9 @@ async function completeManagedReviewLocked(
     if (dispositions.length > 0) {
       await recordDispositions(packageDir, dispositions, writeCompletion);
     }
-    // Flow 488 (AC9): the head this close records, and the operator's relabel, are sealed in the same write. A package
-    // from before the seals is sealed only when this close records a head of its own (--head), since its target was
-    // never checked against a record.
-    const seals = stored.seals !== undefined || options.head !== undefined
+    // Flow 488 (AC9): the head this close records, and the operator's relabel, are sealed in the same write. A target
+    // keryx never sealed is sealed only on the operator's word (headOverride), never from what manifest.json happens to hold.
+    const seals = stored.seals?.target !== undefined || headOverride !== undefined
       ? { ...(manifest.seals ?? {}), target: sealTarget(manifest.target), ...(headOverride === undefined ? {} : { headOverride: sealHeadOverride(headOverride) }) }
       : manifest.seals;
     updated = {

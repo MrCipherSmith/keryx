@@ -140,6 +140,8 @@ export type ReviewSeals = {
   readinessWaivers?: Record<string, string> | undefined;
   headOverride?: string | undefined;
   verifications?: Record<string, string> | undefined;
+  /** The keys of the blocker and major findings `review ingest` wrote, and a seal over them (review round 2, SEC-2). */
+  heavyFindings?: { keys: string[]; seal: string } | undefined;
 };
 
 export type ManagedReviewManifest = {

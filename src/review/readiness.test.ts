@@ -110,6 +110,8 @@ beforeEach(() => {
     target: { kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/7932" },
     artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md", research: "research.json", reviewerDispatch: "research.json" },
     coverage: [],
+    // As `review ingest` writes it: a pull-request package with no target seal is refused (seals.ts).
+    seals: { target: sealTarget({ kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/7932" }) },
   });
   writeJson("scope-files.json", { files: CHANGED });
   writeBlastRadius(CHANGED, CUT);

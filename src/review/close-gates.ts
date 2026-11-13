@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { readJsonFileOr } from "../lib/json";
 import { parseEvidenceLevel, REPORT_FIELD_EVIDENCE_LEVEL } from "./evidence-level";
-import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
+import { computeReadiness, failingItems, readinessRefusal, runsLiveCoverageGate, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import { packageResearchErrorsTagged } from "./research";
 import { roundRecordTampered } from "./round-record";
 import { partitionWaivers, sealProblems } from "./seals";
@@ -28,6 +28,8 @@ export type CloseGateInput = {
   relaxReadiness?: boolean | undefined;
   /** `review complete` only: records the operator's readiness waivers, before the research gate and the checklist read them. */
   beforeReadiness?: (() => Promise<void>) | undefined;
+  /** `review complete --head <sha> --head-reason`: the operator records the head in this close, which seals a target keryx never sealed (seals.ts). */
+  headRecordedByOperator?: boolean | undefined;
 };
 
 export type CloseGateResult = { readiness: ReadinessReport; warnings: string[] };
@@ -44,14 +46,21 @@ const readManifest = async (packageDir: string): Promise<ManagedReviewManifest> 
  * The research gate (flow 488, review ARCH-1): the research ledger's errors, each tagged with the readiness items that can
  * waive it. An error with no item always refuses; a tagged one refuses unless the operator's sealed waiver of one of its
  * items covers it, or `relax` (publish --partial) lets the checklist speak for it. A closed package is not re-held to the
- * live coverage gate at publish: it passed that gate at its close (readiness.ts Context.liveCoverageGate, same rule).
+ * live coverage gate: it passed that gate at its close (readiness.ts runsLiveCoverageGate, the one rule for both).
  */
-async function researchRefusals(packageDir: string, input: CloseGateInput): Promise<string[]> {
+const UNREADABLE_FINDINGS = "findings.json is missing or not JSON: the gates cannot read the findings this round recorded; re-run `keryx review ingest`";
+
+/**
+ * findings.json as parsed, or undefined when it is missing or not JSON. `.catch` after the parse, not `.then(parse, onError)`:
+ * the second argument of `.then` never sees what the first one throws, which is how a truncated file used to escape as a
+ * bare SyntaxError (review round 2, DEG-1).
+ */
+const readFindings = (packageDir: string): Promise<unknown> =>
+  readFile(path.join(packageDir, "findings.json"), "utf8").then((text): unknown => JSON.parse(text)).catch(() => undefined);
+
+async function researchRefusals(packageDir: string, input: CloseGateInput, findings: unknown): Promise<string[]> {
   const manifest = await readManifest(packageDir);
-  // Unreadable is not "no findings": undefined fails the ledger's "canonical findings must be an array" check.
-  const findings = await readFile(path.join(packageDir, "findings.json"), "utf8").then((text): unknown => JSON.parse(text), () => undefined);
-  const closedPublish = input.action === "publish" && manifest.status === "closed";
-  const errors = await packageResearchErrorsTagged(packageDir, manifest.artifacts, findings, closedPublish ? { coverage: false } : {});
+  const errors = await packageResearchErrorsTagged(packageDir, manifest.artifacts, findings, runsLiveCoverageGate(manifest) ? {} : { coverage: false });
   const waived = new Set<string>(partitionWaivers(manifest).sealed.map((waiver) => waiver.item));
   return errors
     .filter((error) => error.items.length === 0 || (input.relaxReadiness !== true && !error.items.some((item) => waived.has(item))))
@@ -60,9 +69,13 @@ async function researchRefusals(packageDir: string, input: CloseGateInput): Prom
 
 /** The tamper check, the seals, the evidence level, the research gate, then the readiness checklist. Throws the refusal; returns the checklist and the warnings. */
 export async function evaluateCloseGates(packageDir: string, input: CloseGateInput): Promise<CloseGateResult> {
+  // Review round 2 (DEG-1): an unreadable findings.json is an integrity failure like an unreadable ledger, so no waiver
+  // and no --partial lifts it. It is checked first: the round-record check and the ledger read findings.json too, and
+  // would otherwise fail on a bare parse error, or (the ledger) return an error tagged `ledger`, which a waiver covers.
+  if ((await readFindings(packageDir)) === undefined) throw new Error(`${REFUSAL} ${UNREADABLE_FINDINGS}`);
   const tampered = roundRecordTampered(packageDir);
   if (tampered !== undefined) throw new Error(`${REFUSAL} ${tampered}`);
-  const sealed = sealProblems(await readManifest(packageDir));
+  const sealed = sealProblems(await readManifest(packageDir), { headRecordedByOperator: input.headRecordedByOperator });
   if (sealed.length > 0) throw new Error(`${REFUSAL} ${sealed.join("; ")}`);
   const warnings: string[] = [];
   const evidence = parseEvidenceLevel(input.report);
@@ -74,7 +87,10 @@ export async function evaluateCloseGates(packageDir: string, input: CloseGateInp
     warnings.push(`${problem} (this package predates the field, so it is a warning)`);
   }
   await input.beforeReadiness?.();
-  const research = await researchRefusals(packageDir, input);
+  // Read again: beforeReadiness may have written since, and an unreadable file is refused with the same message.
+  const findings = await readFindings(packageDir);
+  if (findings === undefined) throw new Error(`${REFUSAL} ${UNREADABLE_FINDINGS}`);
+  const research = await researchRefusals(packageDir, input, findings);
   if (research.length > 0) throw new Error(`${REFUSAL} ${research.join("; ")}`);
   const readiness = await computeReadiness(packageDir, input.readiness ?? {});
   if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw new Error(readinessRefusal(readiness, input.action === "publish" ? "publish" : "complete the review"));

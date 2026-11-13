@@ -125,4 +125,102 @@ describe("seals keep hand-written gate inputs out (SEC-1)", () => {
     expect(findings.some((finding) => finding.severity === "major" && finding.verification !== undefined)).toBe(true);
     expect((await completeManagedReview(dir, result.path, { prLookup: lookup({}) })).manifest.status).toBe("closed");
   });
+
+  test("(c) a verification missing only its method, or only its evidence, does not pass item verifier", async () => {
+    for (const verification of [{ ...VERIFIED, method: "" }, { ...VERIFIED, evidence: " " }]) {
+      const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD }, `partial-${verification.method === "" ? "method" : "evidence"}`);
+      await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification }]);
+      await bothRefuse(ref, ["verifier", "without verdict, method and evidence"]);
+    }
+  });
+});
+
+/** A package ingested with one reviewer major (key `seal-round#F-001`), research and coverage ready. */
+async function ingestWithMajor(verifications: Array<Record<string, unknown>> = []): Promise<string> {
+  const result = await createManagedReviewPackage({
+    cwd: dir, mode: "ingest", reviewId: "seal-round", target: { kind: "pr", ref: PR, head: HEAD },
+    reportText: `# Review\nRequest changes.\n\n${EVIDENCE}\n\n## Major\n\n### [F-001] unverified claim\n- **Severity**: major\n\n\`\`\`json keryx:findings\n${JSON.stringify([REVIEWER_RESULT])}\n\`\`\`\n`,
+    verifications,
+  });
+  await writeFile(path.join(path.resolve(dir, result.path), "research.json"), JSON.stringify(READY_RESEARCH));
+  await writeFile(path.join(path.resolve(dir, result.path), "coverage.md"), READY_COVERAGE_MD);
+  return result.path;
+}
+
+const findingsOf = async (ref: string): Promise<Array<Record<string, unknown>>> => JSON.parse(await readFile(path.join(path.resolve(dir, ref), "findings.json"), "utf8"));
+
+describe("PR 1166 round 2: removed seals, pre-seal packages and the blocker/major record", () => {
+  test("SEC-1: seals deleted and target.head rewritten to the PR head is refused by complete and publish", async () => {
+    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+    await editManifest(ref, (manifest) => { delete manifest.seals; manifest.target.head = MOVED; });
+    await bothRefuse(ref, ["carries no target seal", "--head-reason"], lookup({ headSha: MOVED }));
+  });
+
+  test("cluster A: a waiver on a package with no seals is not reported as a target edit; the refusal names the missing seal", async () => {
+    const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
+    await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
+    await editManifest(ref, (manifest) => { delete manifest.seals; });
+    await waiveReadiness(path.resolve(dir, ref), ["verifier"], OPERATOR_WORDS);
+    const manifest = await readManifest(dir, ref);
+    expect(manifest.seals?.readinessWaivers?.verifier).toBeDefined();
+    expect(manifest.seals?.target).toBeUndefined();
+    const message = await messageOf(() => completeManagedReview(dir, ref, { prLookup: lookup({}) }));
+    expect(message).toContain("carries no target seal");
+    expect(message).not.toContain("does not match the seal");
+  });
+
+  test("a package with no target seal: --head of the same SHA without --head-reason is refused, with it the close seals the head", async () => {
+    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+    await editManifest(ref, (manifest) => { delete manifest.seals; });
+    expect(await messageOf(() => completeManagedReview(dir, ref, { prLookup: lookup({}), head: HEAD }))).toContain("carries no target seal");
+    expect((await readManifest(dir, ref)).seals).toBeUndefined();
+    const done = await completeManagedReview(dir, ref, { prLookup: lookup({}), head: HEAD, headReason: REASON });
+    expect(done.manifest.status).toBe("closed");
+    expect(done.manifest.seals?.target).toBeDefined();
+    expect(done.manifest.head_override?.operator_quote).toBe(REASON);
+    const out = sink();
+    expect((await publishReview(path.resolve(dir, ref), { readiness: { prLookup: lookup({}) }, post: out.post, confirm: out.confirm })).posted).toBe(true);
+  });
+
+  test("a close without --head does not seal a target keryx never sealed", async () => {
+    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+    await editManifest(ref, (manifest) => { manifest.seals = { readinessWaivers: {} }; });
+    await messageOf(() => completeManagedReview(dir, ref, { prLookup: lookup({}) }));
+    expect((await readManifest(dir, ref)).seals?.target).toBeUndefined();
+  });
+
+  test("SEC-2: lowering an unverified major to minor in findings.json does not pass item verifier", async () => {
+    const ref = await ingestWithMajor();
+    const findings = await findingsOf(ref);
+    expect(findings.some((finding) => finding.severity === "major")).toBe(true);
+    await writeFindings(dir, ref, findings.map((finding) => ({ ...finding, severity: "minor" })));
+    await bothRefuse(ref, ["verifier", "1 of 1 blocker/major"]);
+  });
+
+  test("SEC-2: deleting the major from findings.json does not pass item verifier", async () => {
+    const ref = await ingestWithMajor();
+    await writeFindings(dir, ref, []);
+    await bothRefuse(ref, ["verifier", "missing from findings.json"]);
+  });
+
+  test("SEC-2: an edited blocker/major record in manifest.json is refused", async () => {
+    const ref = await ingestWithMajor();
+    await editManifest(ref, (manifest) => { manifest.seals.heavyFindings.keys = []; });
+    await bothRefuse(ref, ["seals.heavyFindings"]);
+  });
+
+  test("SEC-2: a major verified through ingest still closes", async () => {
+    const ref = await ingestWithMajor([{ finding: "seal-round#F-001", ...VERIFIED }]);
+    expect((await completeManagedReview(dir, ref, { prLookup: lookup({}) })).manifest.status).toBe("closed");
+  });
+
+  test("DEG-1: an unreadable findings.json is an integrity refusal: complete, publish and publish --partial all refuse", async () => {
+    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+    await writeFile(path.join(path.resolve(dir, ref), "findings.json"), "[{ truncated");
+    await bothRefuse(ref, ["findings.json is missing or not JSON"]);
+    const out = sink();
+    const partial = await messageOf(() => publishReview(path.resolve(dir, ref), { partial: true, readiness: { prLookup: lookup({}) }, post: out.post, confirm: out.confirm }));
+    expect(partial).toContain("findings.json is missing or not JSON");
+    expect(out.posts).toEqual([]);
+  });
 });

@@ -6,14 +6,21 @@
 //                          the head (`--head`, with `--head-reason` when it relabels);
 //   - `readinessWaivers`   `review complete --waive` and the review_waive_readiness / review_complete cards (waiveReadiness);
 //   - `headOverride`       `review complete --head <sha> --head-reason "<quote>"` (terminal or --answered-by);
-//   - `verifications`      `review ingest --verifications`: only the verifications the verifier merge applied in that ingest.
+//   - `verifications`      `review ingest --verifications`: only the verifications the verifier merge applied in that ingest;
+//   - `heavyFindings`      `review ingest`: the keys of the blocker and major findings it wrote (review SEC-2, round 2),
+//                          so editing a severity in findings.json does not take a finding out of item `verifier`.
 //
 // The gates (close-gates.ts, readiness.ts) honour a waiver, a head override or a verification only when its digest
 // matches. This is the level of `roundRecordTampered`: evidence that a file was edited outside keryx, not a signature —
 // an agent that recomputes the digest the way this module does is not stopped (cryptography is out of scope, flow 488
-// description). Packages written before the seals existed carry none: their waivers and verifications are not honoured
-// (the operator accepted that such a closed package may read NOT READY; the flow 488 CHANGELOG entry says so), and their target
-// is not checked, since there is no record of it to check against.
+// description).
+//
+// Packages written before the seals existed carry none, and a missing seal is never read as "legacy, skip the check": an
+// agent can delete `seals` as easily as it can edit what they cover (review round 2, SEC-1). So on such a package no
+// waiver, head override or verification is honoured, and a pull-request package is refused until the operator records
+// its head (`review complete --head <sha> --head-reason "<quote>"`), which writes the target seal. The flow 488 CHANGELOG
+// entry names every case and its repair; the operator chose this strict reading over a legacy exemption (round 2,
+// review-degradation-w1:F-001).
 
 import { createHash } from "node:crypto";
 import { isPrBound } from "./complete-head-gate";
@@ -63,31 +70,77 @@ export function partitionWaivers(manifest: Pick<ManagedReviewManifest, "seals" |
 
 const filled = (value: unknown): boolean => typeof value === "string" && value.trim() !== "";
 
+/** verificationProblem's answer for a finding that carries no verification at all (as opposed to one that is not honoured). */
+export const NO_VERIFICATION = "no verification";
+
 /** Why a finding's verification does not count, or undefined when it does: the producer's shape, and keryx's seal over it. */
 export function verificationProblem(manifest: Pick<ManagedReviewManifest, "seals">, finding: Record<string, unknown>): string | undefined {
   const verification = record(finding.verification);
-  if (verification === undefined) return "no verification";
+  if (verification === undefined) return NO_VERIFICATION;
   if (!filled(verification.verdict) || !filled(verification.method) || !filled(verification.evidence)) return "a verification without verdict, method and evidence";
   const key = findingKey(finding);
   if (manifest.seals?.verifications?.[key] !== sealVerification(key, finding.verification)) return "a verification keryx did not record (no matching seal: it was not applied by `keryx review ingest --verifications`)";
   return undefined;
 }
 
+const HEAVY = new Set(["blocker", "major"]);
+
+/** The keys of the blocker and major findings in `findings`, sorted and unique: what `review ingest` seals. */
+export function heavyFindingKeys(findings: ReadonlyArray<unknown>): string[] {
+  return [...new Set(findings.filter((finding) => HEAVY.has(String(record(finding)?.severity))).map(findingKey))].sort();
+}
+
+export const sealHeavyFindings = (keys: readonly string[]): string => sealDigest("heavy-findings", [...keys]);
+
+/** The `heavyFindings` seal for the findings `review ingest` writes. */
+export function heavyFindingsSeal(findings: ReadonlyArray<unknown>): NonNullable<ReviewSeals["heavyFindings"]> {
+  const keys = heavyFindingKeys(findings);
+  return { keys, seal: sealHeavyFindings(keys) };
+}
+
 /**
- * Why the manifest's target or head override cannot be trusted, or undefined. Read by the close gates of both
- * `review complete` and `review publish`. A package with no seals at all predates them, and its target is not checked.
+ * The finding keys keryx recorded as blocker or major at ingest, when it recorded them and the record is intact; undefined
+ * for a package ingested before the record existed (its findings.json severities are all there is to read).
  */
-export function sealProblems(manifest: Pick<ManagedReviewManifest, "seals" | "target" | "head_override">): string[] {
+export function sealedHeavyKeys(manifest: Pick<ManagedReviewManifest, "seals">): string[] | undefined {
+  const heavy = manifest.seals?.heavyFindings;
+  if (heavy === undefined || !Array.isArray(heavy.keys) || heavy.seal !== sealHeavyFindings(heavy.keys)) return undefined;
+  return heavy.keys;
+}
+
+export type SealCheckOptions = {
+  /** `review complete --head <sha> --head-reason`: the operator records the head in this close, so a missing target seal is what this close repairs. */
+  headRecordedByOperator?: boolean | undefined;
+};
+
+/**
+ * Why the manifest's target, head override or blocker/major record cannot be trusted. Read by the close gates of both
+ * `review complete` and `review publish`. A pull-request package with no target seal is refused, whether it predates the
+ * seals or had them removed: the two look the same on disk, and only the operator can vouch for the head.
+ */
+export function sealProblems(manifest: Pick<ManagedReviewManifest, "seals" | "target" | "head_override">, options: SealCheckOptions = {}): string[] {
   const problems: string[] = [];
   if (manifest.head_override !== undefined && manifest.seals?.headOverride !== sealHeadOverride(manifest.head_override)) {
     problems.push(
       "manifest.json head_override does not match a seal keryx wrote: a head is relabelled only by `keryx review complete <review> --head <sha> --head-reason \"<operator quote>\"` (a terminal, or --answered-by), never by editing manifest.json",
     );
   }
-  if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)) {
-    problems.push(
-      `manifest.json target (head ${manifest.target.head ?? "not recorded"}) does not match the seal keryx wrote when it last recorded the target: the reviewed head changes only through \`keryx review complete <review> --head <sha> --head-reason "<operator quote>"\`, never by editing manifest.json`,
-    );
+  if (isPrBound(manifest.target)) {
+    if (manifest.seals?.target === undefined) {
+      if (options.headRecordedByOperator !== true) {
+        problems.push(
+          `manifest.json carries no target seal (the package was written before keryx sealed it, or its \`seals\` were removed), so the reviewed head ${manifest.target.head ?? "(not recorded)"} is not trusted: the operator records it with \`keryx review complete <review> --head <sha> --head-reason "<operator quote>"\` (a terminal, or --answered-by), which seals it`,
+        );
+      }
+    } else if (manifest.seals.target !== sealTarget(manifest.target)) {
+      problems.push(
+        `manifest.json target (head ${manifest.target.head ?? "not recorded"}) does not match the seal keryx wrote when it last recorded the target: it was edited outside keryx. Restore the recorded target; the reviewed head changes only through \`keryx review complete <review> --head <sha> --head-reason "<operator quote>"\``,
+      );
+    }
+  }
+  const heavy = manifest.seals?.heavyFindings;
+  if (heavy !== undefined && (!Array.isArray(heavy.keys) || heavy.seal !== sealHeavyFindings(heavy.keys))) {
+    problems.push("manifest.json seals.heavyFindings does not match the seal `review ingest` wrote over the blocker and major findings: it was edited outside keryx; re-run `keryx review ingest` to record the findings again");
   }
   return problems;
 }

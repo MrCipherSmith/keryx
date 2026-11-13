@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { ManagedReviewTarget } from "./types";
 import { reviewCommand } from "../commands/review";
 import { buildRoundBlock, mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, ROUND_BLOCK_LIMIT, type PostResult, type ReviewEvent } from "./publish";
 import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
@@ -26,14 +27,17 @@ let cwd: string;
 const write = (name: string, value: unknown): void => writeFileSync(path.join(pkg, name), typeof value === "string" ? value : JSON.stringify(value, null, 2));
 
 function makePackage(options: { ready: boolean; kind?: string }): void {
+  const target = { kind: (options.kind ?? "pr") as ManagedReviewTarget["kind"], ref: options.kind === "path" ? "src" : PR };
   write("manifest.json", {
     schemaVersion: 1,
     reviewId: "pr7932-r1",
     mode: "review-flow",
     status: "draft",
-    target: { kind: options.kind ?? "pr", ref: options.kind === "path" ? "src" : PR },
+    target,
     artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
     coverage: [],
+    // As `review ingest` writes it: a pull-request package with no target seal is refused (seals.ts).
+    seals: { target: sealTarget(target) },
   });
   write("findings.json", options.ready ? [] : [{ id: "f-1", severity: "major", title: "unverified claim" }]);
   write("report.md", "# Review\n\nRequest changes.\n");
@@ -176,7 +180,8 @@ describe("publishReview", () => {
   test("flow 458: the round block round-trips publish -> parse, and published.json records head and review id", async () => {
     makePackage({ ready: true });
     const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
-    write("manifest.json", { ...manifest, target: { ...manifest.target, head: "abcdef1234567" } });
+    const target = { ...manifest.target, head: "abcdef1234567" };
+    write("manifest.json", { ...manifest, target, seals: { ...manifest.seals, target: sealTarget(target) } });
     write("round.json", { v: 1, round: 3 });
     write("report.md", "# Review\n\nF-1 at `src/a.ts:12` still swallows the error.\n");
     write("findings.json", [

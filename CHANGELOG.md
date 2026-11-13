@@ -5,7 +5,13 @@
 ### Changed
 
 - **Review gate escapes need an operator act.** A `Not verified: N` line in report.md no longer passes unverified blocker or major findings, and a report first line saying the PR moved no longer passes readiness item `head`. Both need the operator's `--waive verifier` or `--waive head`. `review complete --head` with a head other than the recorded one needs `--head-reason "<operator quote>"`. A waiver now lifts only its own item's research errors. `review publish` runs the same close gates as `review complete`. [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
-- **Breaking for packages closed through the removed escapes.** A package that an earlier release closed on a `Not verified: N` line or a first-line head statement now reads NOT READY in `review readiness`, `status` and the panel, and `review publish` refuses it. Repair: the operator waives the item (`keryx review complete <package> --waive verifier|head "<their words>"`), or publish it with `--partial`. [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
+- **Operator decisions and verifier results are sealed.** keryx now records a digest beside each readiness waiver, head relabel and applied verifier result, beside the reviewed target, and over the set of blocker and major findings an ingest wrote. The close gates of `review complete` and `review publish` honour only what matches its seal. A waiver, a `head_override` or a `verification` written into manifest.json or findings.json by hand is refused, and so is a `target.head` rewritten there. Changing a finding's severity in findings.json does not take it out of the verifier item. [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
+- **Breaking for review packages written by an earlier release.** They carry no seals, and keryx cannot tell them from a package whose seals were removed, so none of their decisions is trusted. Each case and its repair:
+  - **A pull-request package is refused by `review complete` and `review publish` until the operator records its head.** Run `keryx review complete <package> --head <sha> --head-reason "<their words>"` in a terminal, or with `--answered-by`. That close seals the head.
+  - **A readiness waiver is no longer honoured.** This includes one closed on the removed `Not verified: N` line or first-line head statement. The waived item reads failing again. Repair: waive it again with `--waive <item> "<their words>"`.
+  - **A verifier result on a blocker or major finding is no longer honoured, and item `verifier` fails.** Repair: re-run `keryx review ingest --verifications <file>`, or the operator waives `verifier`.
+  - **The fallback for a package you will not repair:** publish it with `--partial`, after its head is recorded.
+  [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
 
 ## [0.4.27] - 2026-11-13
 

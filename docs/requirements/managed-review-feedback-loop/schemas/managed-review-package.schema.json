@@ -272,7 +272,17 @@
         "target": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "headOverride": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "readinessWaivers": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" } },
-        "verifications": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+        "verifications": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" } },
+        "heavyFindings": {
+          "type": "object",
+          "description": "PR 1166 round 2 (SEC-2): the keys of the blocker and major findings review ingest wrote, and a seal over them; item verifier keeps them heavy whatever findings.json now says.",
+          "additionalProperties": false,
+          "required": ["keys", "seal"],
+          "properties": {
+            "keys": { "type": "array", "items": { "type": "string" } },
+            "seal": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        }
       }
     },
     "head_override": {

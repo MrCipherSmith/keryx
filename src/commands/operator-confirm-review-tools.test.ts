@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { sealTarget } from "../review/seals";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "../review/dispatch.test-helpers";
@@ -184,6 +185,8 @@ describe("review_publish", () => {
       target: { kind: "pr", ref: PR },
       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
       coverage: [],
+      // As `review ingest` writes it: a pull-request package with no target seal is refused (review/seals.ts).
+      seals: { target: sealTarget({ kind: "pr", ref: PR }) },
     });
     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
     put("report.md", "# Review\n\nRequest changes.\n");
@@ -321,6 +324,8 @@ describe("review_publish", () => {
     const card = asked(await ask(t, input));
     const manifest = readJson("manifest.json");
     manifest["target"] = { kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" };
+    // Sealed as a keryx write would seal it: the subject here is the card's digest, not the target seal (seals.test.ts).
+    manifest["seals"] = { target: sealTarget({ kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" }) };
     put("manifest.json", manifest);
     const result = await t.invoke(input, { confirmationToken: card.token } as never);
     expect(result.isError).toBe(true);
@@ -417,6 +422,8 @@ describe("review_waive_readiness", () => {
       target: { kind: "pr", ref: PR },
       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
       coverage: [],
+      // As `review ingest` writes it: a pull-request package with no target seal is refused (review/seals.ts).
+      seals: { target: sealTarget({ kind: "pr", ref: PR }) },
     });
     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
     put("report.md", "# Review\n\nRequest changes.\n");

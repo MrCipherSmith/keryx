@@ -27,7 +27,9 @@ import { packageParityWarnings } from "./parity";
 import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
 import { asRecord as record } from "./record";
 import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
-import { partitionWaivers, sealWaiver, verificationProblem } from "./seals";
+import { findingKey, NO_VERIFICATION, partitionWaivers, sealedHeavyKeys, sealWaiver, verificationProblem } from "./seals";
+
+const HEAVY_SEVERITIES = ["blocker", "major"];
 import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
@@ -146,6 +148,9 @@ type Context = {
   liveCoverageGate: boolean;
 };
 
+/** The one rule for Context.liveCoverageGate, shared with the research gate in close-gates.ts (review round 2, ARCH F-001). */
+export const runsLiveCoverageGate = (manifest: Pick<ManagedReviewManifest, "status">): boolean => manifest.status !== "closed";
+
 async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verdict }> {
   const coverage = await computeCoverage(ctx.dir, ctx.research === undefined ? {} : { research: ctx.research });
   if (!coverage.tracked) {
@@ -235,18 +240,28 @@ const pathExists = (file: string): Promise<boolean> => stat(file).then(() => tru
  * ("Not verified: N") is not an answer: only the verifier's result, or the operator's waiver, lifts it.
  */
 function verifierCheck(ctx: Context): Verdict {
-  const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
+  // Review round 2 (SEC-2): a finding `review ingest` recorded as blocker or major stays heavy whatever findings.json now
+  // says its severity is, and one that has left findings.json counts as unverified. A package ingested before that record
+  // existed has only the severities in findings.json to go by.
+  const sealed = sealedHeavyKeys(ctx.manifest);
+  const sealedSet = new Set(sealed ?? []);
+  const heavy = ctx.findings.filter((finding) => HEAVY_SEVERITIES.includes(String(finding.severity)) || sealedSet.has(findingKey(finding)));
+  const present = new Set(ctx.findings.map(findingKey));
   // Flow 488 (AC9): a verification counts only in the verifier's shape (verdict, method, evidence) and with the seal
   // `review ingest --verifications` wrote over it; an object written into findings.json by hand does not.
-  const unverified = heavy.flatMap((finding) => {
-    const problem = verificationProblem(ctx.manifest, finding);
-    return problem === undefined ? [] : [{ id: String(finding.global_id ?? finding.id), problem }];
-  });
-  if (unverified.length === 0) return ok(`${heavy.length} blocker/major finding(s), all verified`);
-  const forged = unverified.filter((entry) => entry.problem !== "no verification");
+  const unverified = [
+    ...heavy.flatMap((finding) => {
+      const problem = verificationProblem(ctx.manifest, finding);
+      return problem === undefined ? [] : [{ id: String(finding.global_id ?? finding.id), problem }];
+    }),
+    ...(sealed ?? []).filter((key) => !present.has(key)).map((id) => ({ id, problem: "recorded as blocker/major by `review ingest`, but missing from findings.json" })),
+  ];
+  const total = heavy.length + (sealed ?? []).filter((key) => !present.has(key)).length;
+  if (unverified.length === 0) return ok(`${total} blocker/major finding(s), all verified`);
+  const forged = unverified.filter((entry) => entry.problem !== NO_VERIFICATION);
   const forgedNote = forged.length === 0 ? "" : `; findings.json holds ${some(forged.map((entry) => `${entry.id} (${entry.problem})`))}, which is not honoured`;
   return bad(
-    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification keryx recorded${forgedNote}`,
+    `${unverified.length} of ${total} blocker/major finding(s) carry no verification keryx recorded${forgedNote}`,
     `run the verifier (review-verifier) on them, or the operator waives it: in keryx shell call the review_waive_readiness tool with item verifier; in a terminal run keryx review complete ${ctx.arg} --waive verifier "<operator quote>"`,
   );
 }
@@ -467,7 +482,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
     coverageMd,
     coverageMdGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
-    liveCoverageGate: manifest.status !== "closed",
+    liveCoverageGate: runsLiveCoverageGate(manifest),
   };
   const { files, radius } = await filesChecks(ctx);
   const verdicts: Record<ReadinessItemId, Verdict> = {
@@ -607,6 +622,9 @@ async function waiveReadinessLocked(packageDir: string, selectors: readonly stri
   const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options), ...hostQuestionFields(options) }));
   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
   // Flow 488 (AC9): each waiver this call records is sealed; a kept waiver keeps the seal it had (an unsealed one stays unsealed).
+  // The target is deliberately not sealed here: a waiver says nothing about the head, and sealing whatever manifest.json holds
+  // would bless a hand-edited target (review round 2, cluster A). A package with no target seal stays refused, with a message
+  // that says so, until the operator records the head (seals.ts sealProblems).
   const keptSeals = Object.fromEntries(Object.entries(manifest.seals?.readinessWaivers ?? {}).filter(([item]) => !(ids as string[]).includes(item)));
   const readinessWaivers = { ...keptSeals, ...Object.fromEntries(added.map((waiver) => [waiver.item, sealWaiver(waiver)])) };
   const write = options.writeCompletion ?? writeFileAtomic;
