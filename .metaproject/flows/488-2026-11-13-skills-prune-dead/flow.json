@@ -11,12 +11,12 @@
   "title": "Prune dead and orphaned bundled skills (stage 1)",
   "status": "in-progress",
   "createdAt": "2026-11-13T18:25:57.081Z",
-  "updatedAt": "2026-11-13T18:27:40.104Z",
+  "updatedAt": "2026-11-13T19:01:16.948Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:65f21cb7559a98e3477795fbd158fac2643a1d869ac587ae16d89baca8f86672",
+  "acChecksum": "sha256:ba81eef754d00b05d38f854882805f380b64734f3b0d89917a125ad72d7691de",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -97,7 +97,7 @@
       "id": "T5",
       "title": "Remove the seven planning-pipeline skills and gproject-contracts rule",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -105,13 +105,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Remove job-documenter and feature-dev",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -121,13 +122,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Remove the seven catalog-rendered stub skills",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T2"
       ],
@@ -137,7 +139,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -189,6 +192,26 @@
     {
       "at": "2026-11-13T18:27:40.104Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-13T19:01:15.477Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"None of the sixteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" -> \"None of the fifteen removed skill names is registered in `src/gdskills/catalog.ts` or listed in `.metaproject/skills/catalog.md`; `context-router` stays because the generated routing.md points at it. [verify: exec `bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'`]\" (context-router stays: src/lib/templates.ts:171,215 generates routing.md rows that point users at it, so removing the stub would route to a missing file)"
+    },
+    {
+      "at": "2026-11-13T19:01:16.006Z",
+      "event": "task-done",
+      "detail": "T5: Remove the seven planning-pipeline skills and gproject-contracts rule"
+    },
+    {
+      "at": "2026-11-13T19:01:16.465Z",
+      "event": "task-done",
+      "detail": "T6: Remove job-documenter and feature-dev"
+    },
+    {
+      "at": "2026-11-13T19:01:16.948Z",
+      "event": "task-done",
+      "detail": "T7: Remove the seven catalog-rendered stub skills"
     }
   ],
   "acKinds": {
@@ -198,7 +221,7 @@
     },
     "AC2": {
       "kind": "exec",
-      "check": "bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|context-router|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'"
+      "check": "bash -c '! rg -q -e \"\\\"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|planner|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\\\"\" src/gdskills/catalog.ts && ! rg -q -e \"(project-discovery|problem-definer|stack-advisor|patterns-researcher|spec-writer|consistency-checker|job-documenter|feature-dev|hook-manager|skill-catalog-manager|skill-runtime-exporter|skill-sync|entity-skill-router|entity-skill-learner)\" .metaproject/skills/catalog.md'"
     },
     "AC3": {
       "kind": "exec",
