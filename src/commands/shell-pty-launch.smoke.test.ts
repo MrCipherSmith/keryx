@@ -413,11 +413,22 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
           await waitFor("Resumed", switchFrame);
 
           if (check === "destination preview") {
-            await waitFor("Destination history 206", switchFrame);
+            await waitFor("Destination history 207", switchFrame);
             const preview = Buffer.concat(output.slice(switchFrame)).toString("utf8");
-            expect(visibleText(preview)).toContain("Recent prompts");
+            expect(visibleText(preview)).toContain("Last turn");
+            expect(visibleText(preview)).toContain("Destination history 206");
+            expect(visibleText(preview)).not.toContain("Destination history 204");
+            const historyFrame = output.length;
+            terminal?.write("/history\r");
+            await waitFor("Session history", historyFrame);
+            terminal?.write("Archived before compaction");
+            await waitFor("1/1", historyFrame);
+            const shortcutFrame = output.length;
+            // CSI-u encodes Escape without the timeout for an incomplete sequence.
+            terminal?.write("\u001b[27u\u001b[104;6u");
+            await waitFor("Search history", shortcutFrame);
             const expandFrame = output.length;
-            terminal?.write("/expand\r");
+            terminal?.write("\u001b[27u/expand\r");
             await waitFor("Nothing to expand", expandFrame);
             terminal?.write("Hold an Agent stream\r");
             await waitFor("Agent stream started", expandFrame);

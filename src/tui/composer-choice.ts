@@ -381,12 +381,35 @@ const dockChain = new WeakMap<object, Promise<void>>();
 /** How many callers currently hold or wait for this dock (sync, for `enqueue:false`). */
 const dockDepth = new WeakMap<object, number>();
 
+/** Process-wide dock accounting for stall diagnostics (flow 487): who waits, and how long the holder has held it. */
+let diagWaiting = 0;
+let diagHolders = 0;
+let diagHeldSince = 0;
+const diagQueuedSince: number[] = [];
+
+export function composerDockDiagnostics(now: number = Date.now()): {
+  holders: number;
+  waiting: number;
+  holderAgeMs: number | null;
+  oldestWaitMs: number | null;
+} {
+  return {
+    holders: diagHolders,
+    waiting: diagWaiting,
+    holderAgeMs: diagHolders > 0 ? now - diagHeldSince : null,
+    oldestWaitMs: diagQueuedSince.length > 0 ? now - Math.min(...diagQueuedSince) : null,
+  };
+}
+
 function dockBusy(dock: object): boolean {
   return (dockDepth.get(dock) ?? 0) > 0;
 }
 
 function lockDock(dock: object): Promise<() => void> {
   dockDepth.set(dock, (dockDepth.get(dock) ?? 0) + 1);
+  const queuedAt = Date.now();
+  diagWaiting += 1;
+  diagQueuedSince.push(queuedAt);
   const prev = dockChain.get(dock) ?? Promise.resolve();
   let release!: () => void;
   const mine = new Promise<void>((resolve) => {
@@ -397,7 +420,13 @@ function lockDock(dock: object): Promise<() => void> {
     prev.then(() => mine),
   );
   return prev.then(() => {
+    diagWaiting -= 1;
+    const at = diagQueuedSince.indexOf(queuedAt);
+    if (at >= 0) diagQueuedSince.splice(at, 1);
+    diagHolders += 1;
+    diagHeldSince = Date.now();
     return (): void => {
+      diagHolders -= 1;
       const n = (dockDepth.get(dock) ?? 1) - 1;
       if (n <= 0) {
         dockDepth.delete(dock);

@@ -738,13 +738,14 @@ describe("/history from the topic", () => {
 
 describe("where /history is listed", () => {
   test("the topic's command list, the agent's slash commands and the help groups each carry its own entry", () => {
-    expect(REMOTE_COMMANDS.find((c) => c.name === "history")).toMatchObject({ kind: "builtin" });
+    const remote = REMOTE_COMMANDS.find((c) => c.name === "history");
+    expect(remote).toMatchObject({ kind: "builtin" });
+    expect(remote?.description).toContain("/history [N], 1 to 20");
     const slash = AGENT_SLASH_COMMANDS.find((c) => c.name === "/history");
-    expect(slash?.description).toContain("/history [N]");
+    expect(slash?.description).toContain("Ctrl+Shift+H");
     const help = HELP_GROUPS.find((e) => e.kind === "slash" && e.name === "/history");
     expect(help?.group).toBe("Automation");
-    expect(help?.summary).toContain("[N]");
-    expect(help?.summary).toContain("20");
+    expect(help?.summary).toContain("Ctrl+Shift+H");
   });
 });
 

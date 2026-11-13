@@ -7,7 +7,7 @@
 // UI callers pass `enqueue: false` to cancel immediately.
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
-import { choiceDisplayLabel, choicePasteDecision, decideChoicePaste, initialChoiceSelection, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
+import { choiceDisplayLabel, choicePasteDecision, composerDockDiagnostics, decideChoicePaste, initialChoiceSelection, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
 import { HC_PASTED_HEADER, HC_UNPARSED_HEADER, hcHistoryEcho } from "./hc-message";
 import { containsNode, modalHides, openModal } from "./modal-host";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
@@ -612,6 +612,30 @@ otuiTest("hand-back: queued choices pass the keyboard along, and the last one re
   expect(await second).toBe("once");
   await h.flush();
   expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("flow 487: dock diagnostics report the holder and the queued ask, and settle back to idle", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const idle = composerDockDiagnostics();
+  const first = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Diag A?", cancelId: "deny", options: ALLOW_DENY });
+  const second = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Diag B?", cancelId: "deny", options: ALLOW_DENY });
+  await h.flush();
+  const busy = composerDockDiagnostics();
+  expect(busy.holders).toBe(idle.holders + 1);
+  expect(busy.waiting).toBe(idle.waiting + 1);
+  expect(busy.holderAgeMs).not.toBeNull();
+  expect(busy.oldestWaitMs).not.toBeNull();
+  h.mockInput.pressEnter();
+  expect(await first).toBe("once");
+  await h.flush();
+  h.mockInput.pressEnter();
+  expect(await second).toBe("once");
+  await h.flush();
+  const after = composerDockDiagnostics();
+  expect(after.holders).toBe(idle.holders);
+  expect(after.waiting).toBe(idle.waiting);
   h.destroy();
 });
 

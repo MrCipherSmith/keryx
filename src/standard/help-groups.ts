@@ -253,6 +253,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/diag",
+    group: "Working in keryx shell",
+    summary: "Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file for a bug report — /diag.",
+  },
+  {
+    kind: "slash",
     name: "/notes",
     group: "Working in keryx shell",
     summary: "The notes the model keeps for itself (the facts that survive older rounds) — /notes [key].",
@@ -598,7 +604,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/history",
     group: "Automation",
-    summary: "Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default.",
+    summary: "View the current session conversation. In the full-screen shell, open with Ctrl+Shift+H and search with ↑/↓ to navigate matches.",
   },
   {
     kind: "slash",

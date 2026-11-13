@@ -51,7 +51,7 @@ export function checkRegisteredNativeCommandCoverage(options: Omit<Parameters<ty
   return checkNativeCommandCoverage({ ...options, registryNames: registeredNativeCommandNames() });
 }
 export function registeredNativeCommandNames(): string[] { return [...new Set(commandsForMode("agent").map(command => command.name.slice(1)))].sort(); }
-const presentation = new Set(["think", "expand", "copy", "theme", "rendering", "game"]);
+const presentation = new Set(["think", "expand", "copy", "theme", "rendering", "game", "diag"]);
 const standing = new Set(["schedule", "schedules", "intake", "remote-policy"]);
 const vendors = new Set(["delegate", "external-agents", "external-diff"]);
 /**

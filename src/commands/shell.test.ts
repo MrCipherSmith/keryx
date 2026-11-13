@@ -350,14 +350,16 @@ describe("AC1 — injectable runShell core: streaming + genuine multi-turn histo
 });
 
 describe("AC2 — slash commands + provider_error resilience", () => {
-  test("/clear resets history so the next turn's request carries only the new message", async () => {
+  test.each(["/clear", "/new"])("%s clears the conversation and model context in a nonpersistent session", async (command) => {
     const turnA = textTranscript("a", ["Ok"]);
     const turnB = textTranscript("b", ["Sure"]);
     const { provider, captured } = capturingFakeProvider([turnA, turnB]);
 
+    const systemLines: string[] = [];
     const io: ShellIO = {
-      lines: linesFrom("First", "/clear", "Second", "/exit"),
+      lines: linesFrom("First", "/history", command, "/history", "Second", "/exit"),
       write: () => {},
+      onSystem: (text) => systemLines.push(text),
     };
     const deps: ShellDeps = {
       makeProvider: () => provider,
@@ -368,6 +370,10 @@ describe("AC2 — slash commands + provider_error resilience", () => {
 
     await runShell(io, deps);
 
+    expect(systemLines).toHaveLength(2);
+    expect(systemLines[0]).toContain("You: First");
+    expect(systemLines[0]).toContain("Assistant: Ok");
+    expect(systemLines[1]).toBe("This session has no messages yet.\n");
     expect(captured.length).toBe(2);
     const secondReq = at(captured, 1);
     expect(secondReq.messages.map((m) => m.content)).toEqual(["Second"]);

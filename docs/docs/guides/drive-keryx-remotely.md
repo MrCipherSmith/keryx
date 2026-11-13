@@ -560,8 +560,9 @@ as before.
 **History in the topic.** A topic is archived when the shell exits (see
 [What happens when the shell closes](#what-happens-when-the-shell-closes)), so a session you resume
 with `keryx shell --continue` gets a new, empty one. `/history [N]` posts the session's last
-messages back, from the topic or from the shell (`N` is 1 to 20, and 10 when you give no
-number). Each message is posted on its own, oldest first, with a `You:` or `Agent:` label, about
+messages back when sent from the Telegram topic (`N` is 1 to 20, and 10 when you give no
+number). In the shell, open `/remote-control` and press `h` to post the last 10 messages.
+Each message is posted on its own, oldest first, with a `You:` or `Agent:` label, about
 two seconds apart so Telegram does not throttle the run; a message longer than 1,500 characters
 is cut with `…`. The messages are what you typed and the agent's final answer of each turn: no
 tool calls, no tool output, no reasoning and no narration written before a tool call. Anything

@@ -48,6 +48,7 @@ export {
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
+import { callDiagnostics } from "../lib/call-diagnostics";
 import { runWithCallWatchdog, type CallStage } from "./call-watchdog";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
@@ -5724,7 +5725,7 @@ async function executeCall(...args: Parameters<typeof executeCallUnbounded>): Pr
 
 function executeCallTraced(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
   const call = args[0];
-  if (call.name !== "spawn_subagent") return executeCallUnbounded(...args);
+  if (call.name !== "spawn_subagent") return executeCallRegistered(call.id, call.name, () => executeCallUnbounded(...args));
   return runWithCallWatchdog(
     call.name,
     (signal, stage) => {
@@ -5733,8 +5734,26 @@ function executeCallTraced(...args: Parameters<typeof executeCallUnbounded>): Pr
       next[18] = stage;
       return executeCallUnbounded(...next);
     },
-    { signal: args[9] },
+    { signal: args[9], callId: call.id },
   );
+}
+
+/** Every non-watchdogged tool still shows up in the in-flight registry so a stall dump names it. */
+async function executeCallRegistered(
+  id: string,
+  name: string,
+  run: () => Promise<InteractiveToolResult>,
+): Promise<InteractiveToolResult> {
+  // Not watched: a plain tool never reports stages, so its stay in "start" is its whole legitimate run.
+  const key = callDiagnostics.begin(id, name, { watched: false });
+  let kind: "ok" | "error" = "error";
+  try {
+    const result = await run();
+    kind = result.isError === true ? "error" : "ok";
+    return result;
+  } finally {
+    callDiagnostics.end(key, kind);
+  }
 }
 
 /** Whether a `false` from `approver` is a person's refusal: someone sits behind it, the turn is still current, and the turn was not interrupted. */

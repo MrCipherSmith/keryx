@@ -51,6 +51,7 @@ export interface AgentSlashCommand {
 const CHAT_ONLY: readonly ShellMode[] = ["chat"];
 const AGENT_ONLY: readonly ShellMode[] = ["agent"];
 const BOTH: readonly ShellMode[] = ["chat", "agent"];
+export const HISTORY_COMMAND = "/history";
 
 /**
  * The commands, in menu order. Filtering this list to `agent` reproduces the
@@ -177,11 +178,9 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
-    // Flow 399: post the session's last messages to the remote-control topic. Needs remote control
-    // on; the readline agent REPL has no topic and says so.
-    name: "/history",
-    description: "Post the last messages of this session to the Telegram topic: /history [N], 1 to 20",
-    modes: AGENT_ONLY,
+    name: HISTORY_COMMAND,
+    description: "View the session conversation · Ctrl+Shift+H in the full-screen shell",
+    modes: BOTH,
   },
   {
     // Flow 377: the machine's Telegram connection. Connect needs the hidden token entry of the
@@ -221,6 +220,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   {
     name: "/notes",
     description: "The notes the model keeps for itself: /notes [key]",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 487: dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file.
+    name: "/diag",
+    description: "Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file: /diag",
     modes: AGENT_ONLY,
   },
   {
@@ -716,6 +721,10 @@ function commandToken(line: string): string {
     return "/interrupt";
   }
   return token === "/quit" ? "/exit" : token;
+}
+
+export function isHistoryCommand(line: string): boolean {
+  return commandToken(line) === HISTORY_COMMAND;
 }
 
 /** Look a token up across ALL modes, ignoring availability. Pure. */

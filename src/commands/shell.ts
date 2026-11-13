@@ -137,7 +137,8 @@ import { keryxConfigDir } from "../lib/config-dir";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
-import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { conversationHistoryText } from "../tui/conversation-history";
 import { ChannelsClient } from "../remote/channels-client";
 import { loadRemoteConfig } from "../remote/config";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
@@ -176,7 +177,7 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
-import { commandsForMode, describeUnavailableCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
+import { commandsForMode, describeUnavailableCommand, isHistoryCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
 // Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
 // ONLY through this core facade (see the zone note in
 // `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
@@ -241,6 +242,9 @@ import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from 
 import { detachSlateSession } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { journaledAskUser } from "../tui/ask-user-bridge";
+import { callDiagnostics } from "../lib/call-diagnostics";
+import { composerDockDiagnostics } from "../tui/composer-choice";
+import { isDiagCommand, maybeDumpOnInterrupt, runDiagCommand } from "../tui/diag-command";
 
 
 let resolvedKeryxPath: string | undefined;
@@ -310,12 +314,14 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/setup",
   "/reviews",
   "/remote-control",
+  "/history",
   "/channels",
   "/intake",
   "/rendering",
   "/remote-policy",
   "/trail",
   "/notes",
+  "/diag",
   "/theme",
   "/settings",
   "/mode",
@@ -844,6 +850,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
+  const readConversation = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
+  const resetConversation = (): void => {
+    history = [];
+    archive = [];
+    io.onConversationReady?.(readConversation, false, live?.dir);
+  };
+  let resumed = false;
   // The session lease this loop holds (specification §6). Mirrored into the
   // caller's `leaseBox` so a signal handler outside the loop can release it.
   let lease: SessionLeaseHandle | undefined;
@@ -874,6 +887,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         system(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
       }
       if (opened.resumed) {
+        resumed = true;
         system(
           `Resumed session ${shortSessionId(live.summary.id)} · ${live.summary.title} (${history.length} context msgs)\n`,
         );
@@ -892,6 +906,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       system(`${cause instanceof Error ? cause.message : String(cause)}\nStarting a new session.\n`);
     }
   }
+  io.onConversationReady?.(readConversation, resumed, live?.dir);
   const releaseLease = (): void => {
     releaseSessionLease(lease);
     holdLease(undefined);
@@ -1132,8 +1147,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
             system(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
             continue;
           }
-          history = [];
-          archive = [];
+          resetConversation();
           // AC8: presence.sessionId follows every in-process session switch.
           // review r1 F5: the client already reports a write failure through
           // `onError` and never rejects; this catch is a defensive second
@@ -1145,8 +1159,12 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           }
           system(`New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`);
         } else {
-          history.length = 0;
+          resetConversation();
         }
+        continue;
+      }
+      if (isHistoryCommand(command)) {
+        system(conversationHistoryText(readConversation()));
         continue;
       }
       if (command === "/compact") {
@@ -2913,8 +2931,7 @@ export async function runAgentRepl(
         // Flow 376: the readline shell has no remote control; status as text, enabling explained.
         agentIo.onSystem?.(readlineRemoteControlText(line));
       } else if (isHistoryCommand(command)) {
-        // Flow 399: no topic here; the text says where `/history` works.
-        agentIo.onSystem?.(readlineHistoryText(line));
+        agentIo.onSystem?.(conversationHistoryText(archive.length > 0 ? archive : history));
       } else if (isChannelsCommand(command)) {
         // Flow 377: the state as text; Connect needs the hidden token entry of the full-screen shell.
         agentIo.onSystem?.(readlineChannelsText(line, await loadChannelsSnapshot(new ChannelsClient())));
@@ -2932,6 +2949,8 @@ export async function runAgentRepl(
         agentIo.onSystem?.(await runTrailCommand(rest, slateSession?.dir));
       } else if (isNotesCommand(command)) {
         agentIo.onSystem?.(await runNotesCommand(rest, slateSession?.dir));
+      } else if (isDiagCommand(command)) {
+        agentIo.onSystem?.(runDiagCommand());
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([
@@ -3834,6 +3853,8 @@ export interface SignalShutdownParts {
   readonly closeMcp: () => Promise<void> | undefined;
   readonly closeReadline: () => void;
   readonly abortTurn?: () => void;
+  /** Flow 487: runs once, first, before the turn is aborted, so a stuck call can still be described. Must not throw. */
+  readonly beforeAbort?: () => void;
   readonly releaseLease: (lease: SessionLeaseHandle | undefined) => void;
   readonly exit: (code: number) => void;
   readonly preserve?: () => Promise<void>;
@@ -3871,6 +3892,7 @@ export function makeSignalShutdown(parts: SignalShutdownParts, code: number): ()
       return;
     }
     state.startedAt = Date.now();
+    try { parts.beforeAbort?.(); } catch { /* diagnostics never delay the shutdown */ }
     parts.abortTurn?.();
     if (parts.preserve === undefined) release();
     void (async (): Promise<void> => {
@@ -4077,6 +4099,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // with a consume-once notices getter fixes both the redundant rebuild and
   // the redundant print, without changing what a single surface prints.
   const shellHookSessionId = randomUUID();
+  // Flow 487: always-on tool-call diagnostics. In memory until a call stalls (or /diag), then one
+  // NDJSON dump per session under <config>/diagnostics. The timer is unref'd: it never keeps the
+  // process alive.
+  callDiagnostics.start({ sessionId: shellHookSessionId });
+  callDiagnostics.probe("dock", () => composerDockDiagnostics());
+  callDiagnostics.probe("env", () => ({
+    version: packageJson.version,
+    spawnCallWatchdogMs: process.env.KERYX_SPAWN_CALL_WATCHDOG_MS ?? null,
+    phaseTrace: process.env.KERYX_PHASE_TRACE !== undefined,
+  }));
   let shellHooks: ShellHookContext | undefined;
   const getShellHooks = (): ShellHookContext | undefined => {
     if (shellHooks === undefined) {
@@ -4607,6 +4639,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         preserve: async () => { await finalizerBox.current?.(); },
         closeMcp: () => readlineMcp?.close(),
         closeReadline: () => rl.close(),
+        beforeAbort: () => {
+          // Flow 487: Ctrl-C here is the only interrupt the readline shell has; dump what a long wait left.
+          const note = maybeDumpOnInterrupt();
+          if (note !== undefined) process.stderr.write(note);
+        },
         abortTurn: () => readlineAbort.abort("shell shutdown"),
         releaseLease: releaseSessionLease,
         exit: (c) => process.exit(c),
