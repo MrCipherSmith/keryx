@@ -138,7 +138,7 @@ function stemLite(token: string): string {
  * checks, and `keryx skills scout`/`bundle/external.ts`'s candidate-vetting
  * callers, all pass a skill description as the query, and without this a
  * skill whose description names ANOTHER skill in its own "not for" clause
- * (`quality/pr`: "... NOT for rewriting the body of a pull request ... (use
+ * (`quality/git-publish`: "... NOT for documenting a pull request ... (use
  * `pr-issue-documenter`)") would have that sibling's name still counted as
  * QUERY intent even though it is no longer counted as the ENTRY's own
  * evidence.
@@ -182,8 +182,8 @@ function lexicalTokens(text: string, options: { stripExclusions?: boolean } = {}
 // SCOPE OF THE FIX, DELIBERATELY NARROW:
 //   - Excluded tokens are DROPPED, not counted as negative evidence. A
 //     negative-weight scheme risks penalizing a skill for a topic it
-//     explicitly disclaims (`push`'s "NOT for creating the commits" clause
-//     names "commit" — that should not make `push` score WORSE against an
+//     explicitly disclaims (a `push`-only skill's "NOT for creating the commits" clause
+//     would name "commit" — that should not make it score WORSE against an
 //     unrelated query that happens to say "commit" in passing) — trading
 //     one silent bias (over-counting) for a different one (under-counting)
 //     with no calibration data to justify where to set that weight. See

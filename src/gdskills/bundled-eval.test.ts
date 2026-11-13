@@ -122,8 +122,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // never shipped, and `job-documenter` and `feature-dev` (flow 488): 84 - 9 = 75.
     // Minus the three `code-*` review profiles (`code-ai-review`,
     // `code-style-review`, `code-mobx-store-review`; flow 488): 75 - 3 = 72.
+    // Minus `commit`, `push` and `pr`, plus the one `git-publish` that replaces
+    // them (flow 489): 72 - 3 + 1 = 70.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(72);
+    expect(files.length).toBe(70);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);
@@ -1162,7 +1164,7 @@ beforeAll(() => {
   // Two length fixtures, one per branch of `anatomy:length`.
   //
   // `oversized-no-ceiling` has no entry in SKILL_LENGTH_CEILINGS, so the
-  // default bounds it; `commit` deliberately reuses a real skill key, which is
+  // default bounds it; `git-publish` deliberately reuses a real skill key, which is
   // the only way to exercise the RECORDED branch — a ceiling exists for that
   // key and this fixture is longer than it.
   writeSkill(
@@ -1171,16 +1173,16 @@ beforeAll(() => {
     "oversized-no-ceiling",
     oversizedSkill(
       "oversized-no-ceiling",
-      "Use when a skill that nobody recorded a ceiling for grows past the default, so the fallback bound is what reports it. NOT for a skill whose ceiling is already recorded — see the commit fixture.",
+      "Use when a skill that nobody recorded a ceiling for grows past the default, so the fallback bound is what reports it. NOT for a skill whose ceiling is already recorded — see the git-publish fixture.",
       520,
     ),
   );
   writeSkill(
     fixtureRoot,
     "quality",
-    "commit",
+    "git-publish",
     oversizedSkill(
-      "commit",
+      "git-publish",
       "Use when a skill with a recorded ceiling grows past exactly that number, proving the recorded bound is read instead of the default. NOT for an unrecorded skill — see the oversized-no-ceiling fixture.",
       120,
     ),
@@ -1812,12 +1814,12 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   }
 
   test("a skill past its recorded ceiling is reported, naming that ceiling", () => {
-    // The fixture reuses the real `quality/commit` key precisely so the
+    // The fixture reuses the real `quality/git-publish` key precisely so the
     // RECORDED branch is what fires: a ceiling exists for it, and the fixture
     // is longer than that number.
-    const recorded = SKILL_LENGTH_CEILINGS.get("quality/commit");
+    const recorded = SKILL_LENGTH_CEILINGS.get("quality/git-publish");
     expect(recorded).toBeGreaterThan(0);
-    const found = findingsFor("commit").filter((finding) => finding.check === "anatomy:length");
+    const found = findingsFor("git-publish").filter((finding) => finding.check === "anatomy:length");
     expect(found).toHaveLength(1);
     expect(found[0]?.message).toContain(`recorded ceiling of ${recorded}`);
 
@@ -1911,9 +1913,9 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // …and a skill that grows past a ceiling nobody touched is the other
     // direction of the same equality, reported in the words that say what to
     // do about it.
-    const grown = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/push", 10));
+    const grown = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/git-publish", 10));
     expect(grown).toHaveLength(1);
-    expect(grown[0]).toContain("quality/push");
+    expect(grown[0]).toContain("quality/git-publish");
     expect(grown[0]).toContain("never raise the number");
 
     // An entry for a skill that no longer ships is a ceiling nothing is

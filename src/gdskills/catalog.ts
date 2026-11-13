@@ -367,20 +367,10 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Run verification before deployment unless explicitly skipped.",
     "Summarize deployment status, rollback path, and health checks.",
   ]),
-  skill("commit", "quality", ["full"], "Prepare conventional commits with scope, summary, and verification notes.", [
-    "Inspect staged and unstaged changes.",
-    "Group related changes without staging unrelated work.",
-    "Create a conventional commit message with verification summary.",
-  ]),
-  skill("push", "quality", ["full"], "Push branches with safety checks, upstream handling, and concise result summary.", [
-    "Check branch and remote state.",
-    "Push the current branch with upstream when needed.",
-    "Report remote branch and any follow-up needed.",
-  ]),
-  skill("pr", "quality", ["full"], "Prepare pull request creation or update context from local changes.", [
-    "Collect branch, commits, diff summary, tests, and risks.",
-    "Draft concise PR title and description.",
-    "Use project issue links when available.",
+  skill("git-publish", "quality", ["full"], "Write commits, push branches and open pull requests with explicit staging, hook, upstream, force and PR-body rules.", [
+    "Stage explicit paths and write a typed commit subject without trailers.",
+    "Push with upstream, never force without being told, and ask on a dirty tree or main.",
+    "Open the pull request over the whole branch and report its URL.",
   ]),
   skill("pr-issue-documenter", "quality", ["recommended", "full"], "Create PR descriptions and linked issue documentation from branch changes.", [
     "Analyze commits and changed files.",

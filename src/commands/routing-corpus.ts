@@ -136,15 +136,6 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
   // being quoted by it) and wins that prompt 95 to 65, with the orchestrator's
   // trigger untouched.
   {
-    prompt: "add a description to the PR and open a linked issue",
-    skill: "pr-issue-documenter",
-    collidesWith: "pr",
-    kind: "positive",
-    excluded: false,
-    reason:
-      "Arithmetically out of reach, not merely unfixed. `pr` cannot score below 105 here: its `open PR` trigger fires order-free on a sentence whose `open` governs the ISSUE (55), the query says `pr` so the skill-name bonus is earned (30), and `open` plus `issue` are both in its haystack for good — `issue` because its NOT-for clause names `pr-issue-documenter`, which the anatomy rules require it to keep. pr-issue-documenter has no name hit available and the query offers five tokens in all, so its ceiling is 55 + 50 = 105 — a tie, which the alphabetical tie-break gives to `pr`. Closing it means changing the order-free trigger path, which is the scorer, not the metadata.",
-  },
-  {
     prompt: "make a reviewer out of this conventions doc so review-orchestrator can dispatch it",
     skill: "reviewer-skill-creator",
     collidesWith: "review-orchestrator",
@@ -256,10 +247,20 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * each gained one against a neighbour that still exists to stay at the two-negative
  * floor.
  *
+ * Flow 489 merged `commit`, `push` and `pr` into `git-publish`. Their 11
+ * positives (3, 4 and 4) moved to the one new case unchanged, so the corpus
+ * keeps its size, 288, and `git-publish` wins all 11. The merge also closed
+ * one of the three misses: `pr`'s order-free `open PR` trigger was what beat
+ * `pr-issue-documenter` on "add a description to the PR and open a linked
+ * issue", and with `pr` gone that prompt ranks `pr-issue-documenter` first,
+ * so its KNOWN_ROUTING_GAPS entry was deleted rather than left to state a
+ * collision that no longer exists: 285/288 -> 286/288. The two misses left are
+ * `reviewer-skill-creator` and `review-pr-contract`. Nothing regressed.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 285;
+export const RANK1_FIRST = 286;
 export const RANK1_TOTAL = 288;
 
 /**
@@ -1018,33 +1019,29 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "let's get this build out and live for everyone, deploying it to production tonight",
     ],
     negatives: [
-      { prompt: "push branch to the remote with upstream tracking", owner: "push" },
+      { prompt: "push branch to the remote with upstream tracking", owner: "git-publish" },
       { prompt: "generate the release notes for this version", owner: "changelog" },
     ],
   },
   {
-    skill: "push",
+    // Flow 489: the three cases `commit`, `push` and `pr` carried, merged with
+    // their positives unchanged, when the three skills became one.
+    skill: "git-publish",
     positives: [
+      "commit these changes for me",
+      "commits are failing, write me a conventional commit message",
+      "save these changes with a proper commit message",
       "push branch to the remote with upstream tracking",
       "git push this branch",
       "push my changes to the remote branch",
       "can you get my local commits onto the branch that lives on the remote, then push it up with git",
-    ],
-    negatives: [
-      { prompt: "deploy to staging", owner: "deploy" },
-      { prompt: "open a PR", owner: "pr" },
-    ],
-  },
-  {
-    skill: "pr",
-    positives: [
       "open a PR",
       "create pull request for this branch",
       "make a draft PR please",
       "let's create a pull request from this branch so people can look at the diff, then open it when everything's ready",
     ],
     negatives: [
-      { prompt: "push branch to the remote with upstream tracking", owner: "push" },
+      { prompt: "deploy to staging", owner: "deploy" },
       { prompt: "what did reviewers say on my PR", owner: "review-pr-feedback" },
     ],
   },
@@ -1056,7 +1053,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "fill in the PR description, it is empty",
     ],
     negatives: [
-      { prompt: "open a PR", owner: "pr" },
+      { prompt: "open a PR", owner: "git-publish" },
       { prompt: "what did reviewers say on my PR", owner: "review-pr-feedback" },
     ],
   },
@@ -1274,7 +1271,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "run lint after every edit, set that up as a hook", owner: "hookify" },
-      { prompt: "commit changes", owner: "commit" },
+      { prompt: "commit changes", owner: "git-publish" },
     ],
   },
   {
@@ -1287,18 +1284,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "refresh the managed block in AGENTS.md", owner: "agent-entrypoint-manager" },
       { prompt: "split our huge CLAUDE.md into rules and project skills", owner: "agent-entrypoint-distiller" },
-    ],
-  },
-  {
-    skill: "commit",
-    positives: [
-      "commit these changes for me",
-      "commits are failing, write me a conventional commit message",
-      "save these changes with a proper commit message",
-    ],
-    negatives: [
-      { prompt: "push branch to the remote with upstream tracking", owner: "push" },
-      { prompt: "open a pull request for this branch", owner: "pr" },
     ],
   },
 ];
