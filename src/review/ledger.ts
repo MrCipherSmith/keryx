@@ -497,6 +497,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
 
   const runs: Array<Record<string, unknown>> = [];
   const complete = new Map<string, Set<string>>();
+  /** Reviewers slice routing gave no slice: never dispatched, so no driver names their rule file, and none is owed. */
+  const routedOutReviewers = new Set<string>();
   for (const reviewer of selected) {
     const mine = attributed.filter((r) => r.result!.reviewer === reviewer).sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
     const latest = mine[mine.length - 1];
@@ -510,6 +512,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     if (latest === undefined && manifest !== undefined && routedOut(manifest, reviewer)) {
       // Slice routing gave this role no slice: there is nothing for it to read, and the manifest's routing is the evidence.
       const anchor = `${input.manifestPath ?? "slices/manifest.json"}#roles`;
+      routedOutReviewers.add(reviewer);
       runs.push({ reviewer, executionId: `${reviewer}:routed-out:${routingHash(manifest)}`, status: "complete", scopeComplete: true, routedOut: true, coveredSlices: [], rawEvidence: anchor, ruleEvidence: [input.ruleFiles[reviewer] ?? anchor], executionRequired: false, executionReason: "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch", layersUsed: layersUsedFrom(undefined) });
       continue;
     }
@@ -588,7 +591,9 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   const fixCovered = new Set(fix.covered);
   gaps.push(...fix.gaps);
 
-  const unresolvedRules = selected.filter((r) => input.ruleFiles[r] === undefined);
+  // A routed-out reviewer's run cites the manifest's routing as its evidence, not a rule file; a dispatched reviewer
+  // whose driver names no rule file is still unresolved.
+  const unresolvedRules = selected.filter((r) => input.ruleFiles[r] === undefined && !routedOutReviewers.has(r));
   const notRun = [...(input.depth === "light" && input.mutationRecorded !== true ? ["Not run: mutation (light round)"] : []), ...skipped.map(skipLine)];
   const superseded = (input.superseded ?? []).map((entry) => ({ reviewer: entry.reviewer, reason: entry.reason }));
   const dispatch = { version: 1, mode: input.mode, ...(superseded.length === 0 ? {} : { superseded }), ...((input.supersedeNotes ?? []).length === 0 ? {} : { supersedeNotes: [...input.supersedeNotes!] }), ...(fixCovered.size === 0 ? {} : { fixSlicesCovered: [...fixCovered].sort() }), ...(priorDispositions.size === 0 ? {} : { priorDispositions: Object.fromEntries([...priorDispositions].sort(([a], [b]) => a.localeCompare(b))) }), ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
