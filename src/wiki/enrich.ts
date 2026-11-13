@@ -338,16 +338,34 @@ export async function planWikiEnrich(cwd: string): Promise<WikiEnrichPlan> {
   };
 }
 
+/** Longest line still read as a direct enrich request; anything longer is a prompt for the model. */
+const WIKI_ENRICH_INTENT_MAX_LENGTH = 200;
+
+/** "do not enrich", "don't enrich the wiki", "without enriching", "не обогащай", "без обогащения". */
+const WIKI_ENRICH_NEGATION =
+  /(?:\b(?:do\s+not|don'?t|never|without|no)\s+(?:[a-z]+\s+){0,2}enrich)|(?:(?:^|\s)(?:не|без)\s+(?:[а-яё]+\s+){0,2}обога[тщ])/;
+
 /**
  * True when the user message is an enrich-wiki intent (RU/EN).
  * Used by the TUI pre-router so the harness does not thrash read tools.
+ *
+ * The pre-router replaces the model turn, so this only accepts a short one-line
+ * request. A pasted multi-line prompt that merely mentions enrichment (the `/setup`
+ * prompt carries "Do not enrich wiki prose in this pass.") and a line that forbids
+ * it are the model's to read, not a picker's.
  */
 export function isWikiEnrichIntent(line: string): boolean {
   const t = line.trim().toLowerCase();
   if (t.length === 0) {
     return false;
   }
+  if (t.includes("\n") || t.length > WIKI_ENRICH_INTENT_MAX_LENGTH) {
+    return false;
+  }
   if (/^keryx\s+wiki\s+enrich(?:\s|$)/.test(t)) {
+    return false;
+  }
+  if (WIKI_ENRICH_NEGATION.test(t)) {
     return false;
   }
   const ru = t.includes("вики") && (t.includes("обогат") || t.includes("обогащ"));
