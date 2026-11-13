@@ -50,6 +50,7 @@ import {
   descriptionRouteTokens,
   evaluateBundledTree,
   hasNotForClause,
+  hasRedFlagsHeading,
   hasRedFlagsSection,
   hasVerificationSection,
   homePathOffenders,
@@ -572,13 +573,13 @@ the description and not the body, ever says what this skill excludes.
 `;
 
 /**
- * No Red Flags heading anywhere — trips exactly `red-flags`. The description
- * carries a NOT-for clause and the body a Verification heading, so those two
- * legs stay silent.
+ * No Red Flags heading anywhere — trips nothing, because Red Flags is optional
+ * (flow 489). The description carries a NOT-for clause and the body a
+ * Verification heading, so the two required legs are satisfied.
  */
 const NO_RED_FLAGS_SKILL = `---
 name: no-red-flags-example
-description: Use when a fixture must prove the anatomy sweep catches a document with no Red Flags table. NOT for anything real — this skill only exists to trip one check.
+description: Use when a fixture must prove the anatomy sweep accepts a document with no Red Flags table. NOT for anything real — this skill only exists to prove an optional section stays optional.
 metadata:
   version: 1.0.0
 ---
@@ -587,14 +588,14 @@ metadata:
 
 ## Verification
 
-Nothing to verify — this fixture exists only to trip \`anatomy:sections\` on
-its missing Red Flags table.
+Nothing to verify — this fixture exists only to show that a missing Red Flags
+table does not trip \`anatomy:sections\`.
 `;
 
 /**
  * A Red Flags heading with a table below the row threshold — still trips
- * `red-flags`, proving the check enforces the row count and not merely the
- * heading's presence. Two data rows, one short of \`ANATOMY_RED_FLAGS_MIN_ROWS\`.
+ * `anatomy:sections` as a malformed section, proving the check enforces the
+ * row count and not merely the heading's presence. Two data rows, one short of \`ANATOMY_RED_FLAGS_MIN_ROWS\`.
  */
 const TOO_FEW_RED_FLAGS_ROWS_SKILL = `---
 name: too-few-red-flags-rows-example
@@ -614,7 +615,7 @@ metadata:
 
 ## Verification
 
-- [ ] Confirms two data rows still trips \`anatomy:sections\` (\`red-flags\`)
+- [ ] Confirms two data rows still trips \`anatomy:sections\` (malformed Red Flags)
 `;
 
 /**
@@ -1562,7 +1563,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(found[0]?.message).toContain("NOT for");
 
     // Trips ONLY the trigger-not-for leg — its Red Flags table and
-    // Verification heading must stay silent, proving the three legs of
+    // Verification heading must stay silent, proving the legs of
     // `anatomy:sections` are independent.
     expect(found[0]?.message).not.toContain("Red Flags");
     expect(found[0]?.message).not.toContain("Verification");
@@ -1571,25 +1572,24 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(control).toEqual([]);
   });
 
-  test("a document with no Red Flags table is rejected ONCE, even when it also ships a harness build", () => {
-    // T19: `anatomy:sections` used to run per DOCUMENT, so a skill with four
-    // builds reported one missing section five times. `document:build-parity`
-    // already forces every build to carry its `SKILL.md`'s body, so the build
-    // is the same fact — the fixture ships a Codex build of this exact file to
-    // pin that. Before the guard this expectation read 2.
+  test("a document with no Red Flags table is NOT reported — the section is optional", () => {
+    // Flow 489: a 35-line text with no Red Flags table scored the same as the
+    // skills that carry one, so a missing table is no longer a finding.
     const found = findingsFor("no-red-flags-example").filter((finding) => finding.check === "anatomy:sections");
-    expect(found).toHaveLength(1);
-    expect(found[0]?.message).toContain("Red Flags");
-
-    // Located in the canonical file, not in the build — the build is where the
-    // defect is copied, `SKILL.md` is where it is fixed.
-    const located = fixtureTree().findings.filter(
-      (finding) => finding.check === "anatomy:sections" && finding.skill === "no-red-flags-example",
-    );
-    expect(located.map((finding) => finding.file)).toEqual(["quality/no-red-flags-example/SKILL.md"]);
-    // …and the build really is there to be over-reported, or this proves nothing.
+    expect(found).toEqual([]);
+    expect(hasRedFlagsHeading("# A skill\n\n## Verification\n\nDone.\n")).toBe(false);
+    // The fixture still ships a Codex build, so this covers the build too.
     expect(existsSync(path.join(fixtureRoot, "skills", "quality", "no-red-flags-example", skillBuildFileName("codex"))))
       .toBe(true);
+  });
+
+  test("a malformed Red Flags section is still reported once, in the canonical file", () => {
+    // `anatomy:sections` runs on the canonical SKILL.md only (T19): the
+    // builds carry the same body, so a defect is one finding, not five.
+    const located = fixtureTree().findings.filter(
+      (finding) => finding.check === "anatomy:sections" && finding.skill === "too-few-red-flags-rows-example",
+    );
+    expect(located.map((finding) => finding.file)).toEqual(["quality/too-few-red-flags-rows-example/SKILL.md"]);
   });
 
   test("a NOT-for clause is matched on word boundaries — \"not formatted\" is not a disambiguation", () => {
@@ -1651,6 +1651,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   });
 
   test("a Red Flags heading with fewer than the minimum rows still fails — the row count is enforced, not just the heading", () => {
+    expect(hasRedFlagsHeading("## Red Flags\n\nJust a paragraph.\n")).toBe(true);
     const found = findingsFor("too-few-red-flags-rows-example").filter(
       (finding) => finding.check === "anatomy:sections",
     );
@@ -1741,14 +1742,14 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(hasVerificationSection("# Nothing relevant here\n")).toBe(false);
   });
 
-  test("PERMANENT_ANATOMY_EXEMPTIONS is non-empty, every entry carries a reason, and none excuses red-flags or verification", () => {
+  test("PERMANENT_ANATOMY_EXEMPTIONS is non-empty, every entry carries a reason, and none excuses verification", () => {
     expect(PERMANENT_ANATOMY_EXEMPTIONS.size).toBeGreaterThan(0);
     for (const [key, entry] of PERMANENT_ANATOMY_EXEMPTIONS) {
       expect(entry.reason.length).toBeGreaterThan(0);
       expect(entry.sections.length).toBeGreaterThan(0);
       // The permanent exemption is scoped to the user-facing trigger only —
-      // AC9 requires every workflow skill to earn Red Flags and Verification
-      // outright, Phase subagents included.
+      // Every workflow skill must earn Verification outright, Phase subagents
+      // included; Red Flags is optional and needs no exemption.
       expect(entry.sections).toEqual(["trigger-not-for"]);
       expect(key).toMatch(/^planning\//);
     }

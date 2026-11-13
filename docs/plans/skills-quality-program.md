@@ -103,7 +103,7 @@ covers it), hand-maintained per-runtime copies (we already suffer from them).
 | Flow | Scope | Depends on |
 |---|---|---|
 | 256 skills-hygiene | duplicates, contradictions, dead references, metadata drift, git-safety rule, stack labelling of rules | - |
-| 257 skill-quality-gate | anatomy + description lint, length budget, routing evals + collision check, installed-tree xref, generated runtime variants, Red Flags/Verification backfill, rejected-change ledger | 256 |
+| 257 skill-quality-gate | anatomy + description lint, length budget, routing evals + collision check, installed-tree xref, generated runtime variants, Red Flags/Verification backfill, rejected-change ledger (flow 489 later made the Red Flags section optional: the lint requires a "NOT for" clause and Verification, and still validates a Red Flags table that is present) | 256 |
 | 258 skill-gaps | new skills and rules listed above, floor guard, task-implementer result fields, interviewer and perf mechanics | 257 (new skills must pass its gate) |
 | 259 skill-behavior-evals | behavioural eval runner with control arm and repeated runs on `scripts/benchmark/`, first corpus, honest update of the bundled-eval layer status | 257, 258 |
 
