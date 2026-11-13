@@ -79,6 +79,20 @@ describe("a readiness waiver is scoped to its own item (AC4)", () => {
     expect((await completeManagedReview(dir, ref, { waiveReadiness: waive("reviewers") })).manifest.status).toBe("closed");
   });
 
+  test("a waiver of reviewers closes a package whose only coverage error is a proposed mutant no pass has run", async () => {
+    const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
+    await mkdir(path.join(path.resolve(dir, ref), "research-evidence"), { recursive: true });
+    await writeFile(path.join(path.resolve(dir, ref), "research-evidence", "mutants.json"), JSON.stringify([{ id: "m-1", file: "a.ts", anchor: "x", replacement: "y", kind: "behavior" }]));
+    const manifest = await readManifest(dir, ref);
+    const errors = await packageResearchErrorsTagged(path.resolve(dir, ref), manifest.artifacts, []);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.every((error) => error.items.length === 1 && error.items[0] === "reviewers")).toBe(true);
+    await expect(completeManagedReview(dir, ref, {})).rejects.toThrow(/Cannot complete managed review/);
+    // report-names fails on the same unrun mutant; it is a checklist item, not the research gate this test is about.
+    const waived = [{ items: ["reviewers", "report-names"], quote: OPERATOR_WORDS }];
+    expect((await completeManagedReview(dir, ref, { waiveReadiness: waived })).manifest.status).toBe("closed");
+  });
+
   test("a waiver of blast-radius closes a package whose blast radius dropped a file", async () => {
     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
     await writeFile(path.join(path.resolve(dir, ref), "blast-radius.json"), JSON.stringify({ dropped: [{ file: "far.ts", reason: "cap" }] }));
