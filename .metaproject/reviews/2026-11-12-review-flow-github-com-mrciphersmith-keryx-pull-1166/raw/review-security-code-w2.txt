@@ -1,0 +1,52 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-03 read in full (audit doc, cli-reference and guide edits, managed-review-package schema `head_override`, `review complete --head-reason` parsing and TTY gate in src/commands/review.ts, orchestrator skill `model_class` edits, spawn-field contract test, SPAWN_SUBAGENT_IGNORED_FIELDS). Context read: src/review/managed.ts:1030-1140, src/review/completion-host.ts, src/review/complete-head-gate.ts. No injection, secrets, crypto, path traversal or auth bypass introduced. The new relabel gate is sound where a head was recorded: a differing --head needs a >=8-char quote, a TTY or a host question, and the host question binds the requested override into the digest-checked question text; nested/unattended runs are refused. One minor hardening gap: a package with no recorded head still accepts any --head with no reason, so the agent-authored relabel the flow set out to close remains open on that path. One info on provenance labelling. History not read (no git log/blame run).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "    if (typeof recordedHead === \"string\" && recordedHead !== \"\" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())) {",
+      "problem": "The operator-reason requirement for `review complete --head` applies only when a head was recorded at start. When `stored.target.head` is absent or empty, any well-formed `--head` is written to `manifest.target.head` with no `--head-reason`, no TTY check and no `head_override` record. `completeHeadGate` then compares that agent-supplied value with the PR head (`reviewed !== null && prHead !== null && !sameCommit(...)`), so passing the PR's current head makes item `head` pass whatever tree the reviewers actually read.",
+      "impact": "Attack vector: an agent (non-TTY, no operator) closing a PR-bound package whose start recorded no head (start ran with no checkout and no readable PR head, per the documented `--head` fallback) runs `keryx review complete <pkg> --head $(gh pr view --json headRefOid -q .headRefOid)`; the head gate and readiness item `head` pass and the closed manifest claims the round reviewed the PR head, with no operator act recorded. Precondition (no recorded head) is not established by this diff and is rare, hence minor: the relabel gate added by flow 488 is bypassable only on that path.",
+      "suggested_fix": "Treat a missing recorded head like a differing one: require `--head-reason` (TTY or host question) whenever `options.head` is set and `recordedHead` is absent, and record `head_override` with `from: null` (or `\"not recorded\"`). Alternatively refuse `--head` when nothing was recorded and send the operator to `--waive head`.",
+      "evidence": "src/review/managed.ts:1056-1066 (head override only built inside the recordedHead-present branch; `manifest = { ...stored, target: { ...stored.target, head } }` runs unconditionally); src/review/complete-head-gate.ts:44-50 (gate trusts `target.head`); docs/docs/cli-reference.md in this slice: 'Omitted ... with neither, the head is left off'.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "      headOverride = { from: recordedHead, to: head, operator_quote: quote, time: (options.now ?? new Date()).toISOString(), ...(options.hostQuestion === undefined ? {} : { confirmedVia: \"host-question\" as const }) };",
+      "problem": "On the host-question path the operator answers only a plain `yes` (validateCompletionHost); the `--head-reason` text is written by the agent and embedded in the question, yet it is stored as `operator_quote`. The record does carry `confirmedVia: host-question` and publish names it as unverified, so this is labelling, not a bypass.",
+      "impact": "A reader of manifest.json may take `operator_quote` as the operator's verbatim words when on this path it is agent text the operator said yes to. No attack beyond the already-documented host-question limitation.",
+      "suggested_fix": "On the host-question path store the quote as `requested_reason` (or add `quoteAuthor: \"agent\"`), or require the operator's answer text itself to carry the reason.",
+      "evidence": "src/review/completion-host.ts:34 (`/^(yes|y|да)$/iu` is the only accepted answer); src/review/managed.ts:1059-1063; src/review/publish.ts:70 names host-question head changes.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": [
+    "slice-03"
+  ],
+  "inputs_unreadable": [],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 1
+  }
+}
+```
+
+Clean areas checked: injection (no shell/SQL/template built from input; the `--head` SHA is regex-validated before use), secrets (none added), crypto (sha256 digest binding unchanged), path traversal (contract test reads only the bundled review skills dir), auth/authz (TTY gate added for `--head-reason`; nested `KERYX_TOOL_CALL`/unattended runs refuse `--answered-by`; question digest now binds the requested head override), spawn_subagent change (`input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]]` is a constant key, no dynamic property access from input).

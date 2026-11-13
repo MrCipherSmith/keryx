@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-degradation",
+  "wave": 1,
+  "waves": 6,
+  "slices": [
+    "slice-01"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-01",
+      "path": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166/slices/slice-01.diff",
+      "bytes": 22219
+    }
+  ],
+  "result": "raw/review-degradation-w1.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+}

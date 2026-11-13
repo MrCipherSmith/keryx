@@ -15,7 +15,7 @@ import { isCapDrop, isReasonedDrop } from "./blast-radius";
 import { computeCoverage } from "./coverage-complete";
 import { hasChunkPlan } from "./chunks";
 import { packageScopeFiles } from "./coverage";
-import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
+import { completeHeadGate, isPrBound, type HeadGateResult, type PrLookup } from "./complete-head-gate";
 import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
@@ -27,16 +27,19 @@ import { packageParityWarnings } from "./parity";
 import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
 import { asRecord as record } from "./record";
 import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
+import { findingKey, NO_VERIFICATION, partitionWaivers, sealedHeavyKeys, sealWaiver, verificationProblem } from "./seals";
 import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
+
+const HEAVY_SEVERITIES = ["blocker", "major"];
 
 export const READINESS_ITEMS = [
   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },
   { number: 3, id: "reviewers", title: "every planned reviewer was dispatched and its result ingested" },
-  { number: 4, id: "verifier", title: "the verifier checked every finding it should, or the report says how many it did not" },
+  { number: 4, id: "verifier", title: "the verifier checked every blocker and major finding, or the operator waived it" },
   { number: 5, id: "ledger", title: "the ledger is READY: every obligation has a closure" },
   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
-  { number: 7, id: "head", title: "the report's head matches the PR head" },
+  { number: 7, id: "head", title: "the head recorded for the round matches the PR head" },
   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
@@ -73,8 +76,18 @@ export type ReadinessOptions = {
   prLookup?: PrLookup | undefined;
   /** Reads the PR's own file list; absent means item 9 checks the recorded scope against the blast-radius record only. */
   prFiles?: ((ref: string) => Promise<string[] | null>) | undefined;
-  /** True when the caller has already run the head gate against the head it will record (`review complete --head`). */
-  headChecked?: boolean | undefined;
+  /**
+   * The head gate's result, when the caller already ran it against the head it will record (`review complete --head`).
+   * Item 7 reports exactly this result, so a refusal is a failing item an operator waiver of `head` covers, and the
+   * tracker is not asked twice.
+   */
+  headGate?: HeadGateResult | undefined;
+  /**
+   * `review complete` is closing the package now: item 3 runs the live coverage gate whatever manifest.json's `status`
+   * says. The closed-package relaxation belongs to readers of a package keryx closed (publish, the panel), and `status`
+   * carries no seal, so a hand-set "closed" must not turn the gate off for the close itself (review round 3, cluster B).
+   */
+  closing?: boolean | undefined;
 };
 
 /** A recount whose changed-file count exceeds this multiple of the PR's own list was made against the wrong base. */
@@ -140,6 +153,12 @@ type Context = {
    */
   liveCoverageGate: boolean;
 };
+
+/**
+ * The one rule for Context.liveCoverageGate, shared with the research gate in close-gates.ts (review round 2, ARCH F-001):
+ * always while `review complete` closes the package (`closing`), otherwise only while the package is not closed.
+ */
+export const runsLiveCoverageGate = (manifest: Pick<ManagedReviewManifest, "status">, closing = false): boolean => closing || manifest.status !== "closed";
 
 async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verdict }> {
   const coverage = await computeCoverage(ctx.dir, ctx.research === undefined ? {} : { research: ctx.research });
@@ -225,17 +244,34 @@ async function reviewersCheck(ctx: Context): Promise<Verdict> {
 
 const pathExists = (file: string): Promise<boolean> => stat(file).then(() => true, () => false);
 
-const NOT_VERIFIED = /not\s+verified\s*[:=]?\s*(\d+)/i;
-
+/**
+ * A blocker or major finding without a verification stays a failing item. A line the agent writes into report.md
+ * ("Not verified: N") is not an answer: only the verifier's result, or the operator's waiver, lifts it.
+ */
 function verifierCheck(ctx: Context): Verdict {
-  const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
-  const unverified = heavy.filter((finding) => record(finding.verification) === undefined);
-  if (unverified.length === 0) return ok(`${heavy.length} blocker/major finding(s), all verified`);
-  const stated = NOT_VERIFIED.exec(ctx.report);
-  if (stated !== null && Number(stated[1]) >= unverified.length) return ok(`${unverified.length} of ${heavy.length} blocker/major finding(s) unverified, and the report says so`);
+  // Review round 2 (SEC-2): a finding `review ingest` recorded as blocker or major stays heavy whatever findings.json now
+  // says its severity is, and one that has left findings.json counts as unverified. A package ingested before that record
+  // existed has only the severities in findings.json to go by.
+  const sealed = sealedHeavyKeys(ctx.manifest);
+  const sealedSet = new Set(sealed ?? []);
+  const heavy = ctx.findings.filter((finding) => HEAVY_SEVERITIES.includes(String(finding.severity)) || sealedSet.has(findingKey(finding)));
+  const present = new Set(ctx.findings.map(findingKey));
+  // Flow 488 (AC9): a verification counts only in the verifier's shape (verdict, method, evidence) and with the seal
+  // `review ingest --verifications` wrote over it; an object written into findings.json by hand does not.
+  const unverified = [
+    ...heavy.flatMap((finding) => {
+      const problem = verificationProblem(ctx.manifest, finding);
+      return problem === undefined ? [] : [{ id: String(finding.global_id ?? finding.id), problem }];
+    }),
+    ...(sealed ?? []).filter((key) => !present.has(key)).map((id) => ({ id, problem: "recorded as blocker/major by `review ingest`, but missing from findings.json" })),
+  ];
+  const total = heavy.length + (sealed ?? []).filter((key) => !present.has(key)).length;
+  if (unverified.length === 0) return ok(`${total} blocker/major finding(s), all verified`);
+  const forged = unverified.filter((entry) => entry.problem !== NO_VERIFICATION);
+  const forgedNote = forged.length === 0 ? "" : `; findings.json holds ${some(forged.map((entry) => `${entry.id} (${entry.problem})`))}, which is not honoured`;
   return bad(
-    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification and the report does not state the count`,
-    `run the verifier (review-verifier) on them, or add the line \`Not verified: ${unverified.length}\` to report.md`,
+    `${unverified.length} of ${total} blocker/major finding(s) carry no verification keryx recorded${forgedNote}`,
+    `run the verifier (review-verifier) on them, or the operator waives it: in keryx shell call the review_waive_readiness tool with item verifier; in a terminal run keryx review complete ${ctx.arg} --waive verifier "<operator quote>"`,
   );
 }
 
@@ -342,15 +378,16 @@ function coverageMdCheck(ctx: Context): Verdict {
 
 async function headCheck(ctx: Context, options: ReadinessOptions): Promise<Verdict> {
   if (!isPrBound(ctx.manifest.target)) return ok("not a pull-request package");
-  if (options.headChecked === true) return ok("the head gate ran at this close");
-  if (options.prLookup === undefined) return ok("the PR head was not read (no tracker available)");
-  try {
-    const { warnings } = await completeHeadGate({ manifest: ctx.manifest, report: withoutPartialHeader(ctx.report), lookup: options.prLookup });
-    return ok(warnings.length === 0 ? "the reviewed head is the PR head" : warnings.join("; "));
-  } catch (error) {
-    const message = (error instanceof Error ? error.message : String(error)).replace(/^Cannot complete managed review;\s*/, "");
-    return bad(message, `edit the first line of report.md to name the reviewed SHA and say the PR moved, or re-run the round on the new head`);
+  let gate = options.headGate;
+  if (gate === undefined) {
+    if (options.prLookup === undefined) return ok("the PR head was not read (no tracker available)");
+    gate = await completeHeadGate({ manifest: ctx.manifest, lookup: options.prLookup });
   }
+  if (gate.refusal === undefined) return ok(gate.warnings.length === 0 ? "the reviewed head is the PR head" : gate.warnings.join("; "));
+  return bad(
+    gate.refusal,
+    `re-run the round on the PR's current head, or the operator waives it: in keryx shell call the review_waive_readiness tool with item head; in a terminal run keryx review complete ${ctx.arg} --waive head "<operator quote>"`,
+  );
 }
 
 async function reportNamesCheck(ctx: Context): Promise<Verdict> {
@@ -453,8 +490,8 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     premise: await premiseRecords(packageDir),
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
     coverageMd,
-    coverageMdGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
-    liveCoverageGate: manifest.status !== "closed",
+    coverageMdGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed" || options.closing === true,
+    liveCoverageGate: runsLiveCoverageGate(manifest, options.closing === true),
   };
   const { files, radius } = await filesChecks(ctx);
   const verdicts: Record<ReadinessItemId, Verdict> = {
@@ -471,13 +508,18 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     "premise-decisions": premiseDecisionsCheck(ctx),
     "quotes-located": quotesLocatedCheck(ctx),
   };
-  const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
+  // Flow 488 (AC9): only a waiver keryx sealed when it recorded it is honoured; one written into manifest.json by hand
+  // (or one from before the seals existed) leaves its item failing, and the item says so.
+  const { sealed, unsealed } = partitionWaivers(manifest);
+  const waivers = new Map(sealed.map((waiver) => [waiver.item, waiver]));
+  const unsealedItems = new Set(unsealed.map((waiver) => waiver.item));
   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {
     const verdict = verdicts[spec.id];
     const waiver = waivers.get(spec.id);
     if (verdict.pass) return { ...spec, status: "pass", evidence: verdict.evidence };
     if (waiver !== undefined) return { ...spec, status: "waived", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };
-    return { ...spec, status: "fail", evidence: verdict.evidence, repair: verdict.repair };
+    const unsealedNote = unsealedItems.has(spec.id) ? `; manifest.json readiness_waivers holds an entry for ${spec.id} that keryx did not record (no matching seal), so it is not honoured` : "";
+    return { ...spec, status: "fail", evidence: `${verdict.evidence}${unsealedNote}`, repair: verdict.repair };
   });
   const testsNotRun = testsNotRunWarning(packageDir);
   return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items, ...(testsNotRun === undefined ? {} : { warnings: [testsNotRun] }) };
@@ -542,9 +584,6 @@ export function readinessRefusal(report: ReadinessReport, action: string): strin
 
 const PARTIAL_LINE = /^Partial review:/;
 
-/** The report without its waiver header, for checks that read the report's own first line. */
-export const withoutPartialHeader = (report: string): string => report.split(/\r?\n/).filter((line) => !PARTIAL_LINE.test(line)).join("\n");
-
 /** The first lines of report.md: one line per waived item, replacing any earlier set. */
 export function partialHeader(waivers: readonly ReadinessWaiver[]): string[] {
   return waivers.map((waiver) => `Partial review: ${waiver.item} waived by the operator: ${waiver.operator_quote}`);
@@ -591,8 +630,14 @@ async function waiveReadinessLocked(packageDir: string, selectors: readonly stri
   const kept = (manifest.readiness_waivers ?? []).filter((waiver) => !(ids as string[]).includes(waiver.item));
   const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options), ...hostQuestionFields(options) }));
   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
+  // Flow 488 (AC9): each waiver this call records is sealed; a kept waiver keeps the seal it had (an unsealed one stays unsealed).
+  // The target is deliberately not sealed here: a waiver says nothing about the head, and sealing whatever manifest.json holds
+  // would bless a hand-edited target (review round 2, cluster A). A package with no target seal stays refused, with a message
+  // that says so, until the operator records the head (seals.ts sealProblems).
+  const keptSeals = Object.fromEntries(Object.entries(manifest.seals?.readinessWaivers ?? {}).filter(([item]) => !(ids as string[]).includes(item)));
+  const readinessWaivers = { ...keptSeals, ...Object.fromEntries(added.map((waiver) => [waiver.item, sealWaiver(waiver)])) };
   const write = options.writeCompletion ?? writeFileAtomic;
-  await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
+  await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all, seals: { ...(manifest.seals ?? {}), readinessWaivers } }, null, 2)}\n`);
   await writePartialHeader(packageDir, all, write);
   return added;
 }

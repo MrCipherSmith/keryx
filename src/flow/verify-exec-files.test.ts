@@ -19,6 +19,25 @@ const KNOWN_MISSING: Record<string, readonly string[]> = {
     "src/product/board-model.test.ts",
     "src/product/board-dashboard.test.ts",
   ],
+  // Flows 489–491 (review audit, 2026-11-12) are planned but not started: their verify lines name the tests the
+  // implementing flow writes. Drop each entry when that test lands; the stale-list test below enforces it.
+  "489-2026-11-12-review-audit-p1-signal-cost": [
+    "src/review/readiness-usage.test.ts",
+    "src/review/report-cost-line.test.ts",
+    "src/gdskills/review-severity-rubric.test.ts",
+    "src/gdskills/review-finding-template.test.ts",
+    "src/review/report-bounded.test.ts",
+  ],
+  "490-2026-11-12-review-audit-p2-architecture": [
+    "src/review/round-state.test.ts",
+    "src/review/round-e2e.test.ts",
+    "src/review/jev-config.test.ts",
+    "src/review/host-port.test.ts",
+  ],
+  "491-2026-11-12-review-audit-p3-product": [
+    "src/commands/review-default.test.ts",
+    "src/docs/review-glossary.test.ts",
+  ],
 };
 
 function namedTestFiles(command: string): string[] {

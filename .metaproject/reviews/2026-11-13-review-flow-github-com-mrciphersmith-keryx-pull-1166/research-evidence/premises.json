@@ -1,0 +1,131 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "review-logic-w8:LOGIC-1",
+      "verdict": "upheld",
+      "reasoning": "Cluster A: review-logic-w8:LOGIC-1, review-logic-w10:F-001, review-degradation-w2:F-001, review-degradation-w4:F-001, review-regression-w4:F-001 (major) and review-architecture-w4:ARCH-4 (minor) share one root cause, confirmed by execution (verify-seals-r2-1.txt). waiveReadinessLocked (readiness.ts:613) creates `seals: { readinessWaivers }` on a seal-less manifest with no `target`. The close keeps that partial object when stored.seals was undefined and no --head was given (managed.ts:1148-1150). sealProblems (seals.ts:87) then sees `seals` present and `seals.target` undefined. It reports a target edit that never happened and refuses complete and publish, --partial included, before the --head repair can run. No intent signal supports this. The module's own design says the opposite: seals.ts:14-16 and :78 say a pre-seal package keeps its target unchecked. The trigger is keryx's sanctioned act, the card or --waive, and the CHANGELOG.md:8 repair names that path. Fix soundness: prefer the reviewers' second option. When keryx first creates `seals` on a package that has none (readiness.ts:613, and managed.ts:1148 whenever manifest.seals is defined), it should seal the current target. Do not key the check on `seals.target !== undefined`: that turns 'delete only `target`' into a second form of the cluster B bypass (review-security-code-w8:SEC-1). Add the test the findings name: a seal-less PR-bound package, a waiver through waiveReadiness, then complete and publish succeed."
+    },
+    {
+      "finding_id": "review-logic-w10:F-001",
+      "verdict": "upheld",
+      "reasoning": "Same root cause as review-logic-w8:LOGIC-1 (cluster A, with review-degradation-w2:F-001, review-degradation-w4:F-001, review-regression-w4:F-001 and review-architecture-w4:ARCH-4). readiness.ts:613 writes a target-less `seals` on a seal-less package, and seals.ts:87 then refuses the untouched target. This contradicts seals.ts:14-16. Fix by sealing the current target when keryx first creates `seals`, not by keying on `seals.target`, which would widen cluster B."
+    },
+    {
+      "finding_id": "review-degradation-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "Same root cause as review-logic-w8:LOGIC-1 (cluster A). This member adds that the CHANGELOG.md:8 repair (`review complete <package> --waive ...`, or publish --partial) is the exact path that dead-ends a PR-bound pre-seal package: close-gates.ts:65 throws before relaxReadiness is read. That makes the documented repair false, which raises the urgency without changing the premise. Seal the current target when keryx first creates `seals`, then make CHANGELOG.md:8 match."
+    },
+    {
+      "finding_id": "review-degradation-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "Same root cause as review-logic-w8:LOGIC-1 (cluster A): a waiver recorded the supported way on a seal-less package makes sealProblems (seals.ts:87) report a target edit that never happened. No intent signal; seals.ts:14-16 states the opposite design."
+    },
+    {
+      "finding_id": "review-regression-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "Same root cause as review-logic-w8:LOGIC-1 (cluster A). This member pins the second writer: managed.ts:1148 seals the target only when `stored.seals !== undefined || options.head !== undefined`, so the first close after a card waiver does not repair the partial `seals`. The fix belongs at both writers (readiness.ts:613 and managed.ts:1148): seal the current target whenever keryx writes a `seals` object that lacks one."
+    },
+    {
+      "finding_id": "review-architecture-w4:ARCH-4",
+      "verdict": "upheld",
+      "reasoning": "Minor duplicate of cluster A (review-logic-w8:LOGIC-1, review-logic-w10:F-001, review-degradation-w2:F-001, review-degradation-w4:F-001, review-regression-w4:F-001): 'seals present' and 'target sealed' are conflated at seals.ts:87. Upheld at its own severity. Of its two fixes, the second fits: seal the current target on the first seal write, as close-gates.test-helpers.ts already does with `manifest.seals?.target ?? sealTarget(...)`. The first fix, keying on `seals?.target`, widens the review-security-code-w8:SEC-1 bypass."
+    },
+    {
+      "finding_id": "review-security-code-w8:SEC-1",
+      "verdict": "upheld",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md:24",
+          "says": "AC9, added after the operator upheld round-1 SEC-1: 'a target.head rewritten in manifest.json ... is refused by both review complete and review publish'. Deleting `seals` and rewriting target.head is such a rewrite"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md:36",
+          "says": "the author lists 'a package with no `seals` keeps its target unchecked' as a known gap. This line is written by the branch under review in its fix round, and no operator answer covers it, so it does not ratify the gap"
+        },
+        {
+          "ref": "src/review/seals.ts:12-16",
+          "says": "accepts that recomputing the digest is not stopped (cryptography out of scope, description.md:29), and leaves a seal-less package's target unchecked. The file is new in this branch, so this is the change describing itself, not a prior choice"
+        }
+      ],
+      "reasoning": "Cluster B: review-security-code-w8:SEC-1 (blocker) and review-security-code-w1:SEC-R2-1 (major). Confirmed by execution (verify-seals-r2-1.txt). With `seals` deleted, a rewritten target.head gets [] from sealProblems, and headCheck then passes against the PR head. This is the scope question, and the intent is settled. The operator upheld round-1 SEC-1 for this PR (journal.md:27), and the AC9 that followed names 'a target.head rewritten in manifest.json' as refused. The only signal for leniency is the author's known-gaps note (journal.md:36) and the seals.ts header, both written by the branch itself. The operator never answered on them, so they cannot narrow AC9. The accepted out-of-scope line, 'evidence, not a signature', concedes a recomputed sha256. It does not concede deleting a key, which is a cheaper edit than the naive rewrite AC9 already refuses. As a security finding it is neither downgraded nor dismissed. Fix soundness: the legacy exemption must key on something an agent cannot clear by editing manifest.json. Two ways: record a seal-format marker in the round record that roundRecordTampered hashes, or refuse any PR-bound package without `seals.target` until `review complete --head <sha> --head-reason` re-seals it. Note review-architecture-w4:ARCH-5: an ingest package carries no roundRecord, so the marker route needs an anchor there too, and the refuse-until-resealed route may be simpler. Either route widens the pre-seal break, which ties into the review-degradation-w1:F-001 decision. The cluster A fix should seal the target on first seal write, so it neither depends on nor widens this one. review-degradation-w1:F-002 and review-architecture-w4:ARCH-5 are info and are not judged (below minor)."
+    },
+    {
+      "finding_id": "review-security-code-w1:SEC-R2-1",
+      "verdict": "upheld",
+      "reasoning": "Same mechanism as review-security-code-w8:SEC-1 (cluster B), confirmed by the same probe (deleting `seals` gives B problems: []). Upheld at its own severity: AC9 (acceptance-criteria.md:24) names a rewritten target.head as refused, and the author's known-gap note (journal.md:36) comes from the branch under review, with no operator answer behind it. See review-security-code-w8:SEC-1 for the fix constraints and how it interacts with cluster A."
+    },
+    {
+      "finding_id": "review-security-code-w8:SEC-2",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md:24",
+          "says": "AC9 lists what must be sealed: a readiness waiver, a head override, a verifier result on a blocker or major finding. A finding's own severity is not in that list"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md:24",
+          "says": "Effect: 'no completion or publish gate ... can be satisfied by text the reviewing agent wrote'. A severity string edited in findings.json satisfies item verifier, so read literally this line covers the finding"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md:30",
+          "says": "Out of Scope: widening the completion snapshot goes to flow 490, whose description.md:15 names 'the completion snapshot omits files that readiness reads'. That is the integrity of findings.json content as a whole"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md:16",
+          "says": "AC1: a package with unverified blocker or major findings fails item verifier. A one-word severity edit makes the finding disappear from that set"
+        }
+      ],
+      "reasoning": "Confirmed by execution (verify-sev-and-legacy-r2-1.txt). The fact stands: readiness.ts:238 picks heavy findings by the unsealed findings.json severity, so changing major to minor makes item verifier pass. The scope is genuinely split. AC9's enumerated list covers operator decisions and verification objects, not the reviewer's own severity. Flow 490 owns making what the gates read tamper-evident as a whole. But the Effect line and AC1's purpose cover this case, and the operator answered round-1 SEC-1 ('gates trust agent-written manifest/findings JSON') with 'close in this PR'. The fix is contained but not trivial. Every keryx writer of findings.json severity would have to re-seal: ingest, and a premise downgrade if it rewrites severity. Alternatively, verifierCheck could reconcile against the ingested raw reviewer results. As a security finding it is neither downgraded nor dismissed, so it is held for the operator to set the scope.",
+      "question": "review-security-code-w8:SEC-2: editing a finding's severity in findings.json from major to minor still passes item verifier. Seal severities in this PR (flow 488), or move it to flow 490's snapshot work?",
+      "options": [
+        "uphold — seal the blocker/major set at ingest (or reconcile with the raw results) and test the severity edit in this PR",
+        "dismiss for this PR — record it under flow 490 (completion snapshot over the files the gates read) and name it as a known gap in the flow 488 journal"
+      ]
+    },
+    {
+      "finding_id": "review-degradation-w1:F-001",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md:28",
+          "says": "the operator's 'keep + CHANGELOG' answer covers packages closed via the removed `Not verified` / first-line escapes only, not every pre-seal package with a real waiver or verification"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/plan.md:28",
+          "says": "Risk: 'Existing closed packages are not re-gated'. This argues for the finding"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md:24",
+          "says": "AC9: a waiver or verifier result counts 'only when ... its record matches a seal keryx wrote at that time'. Read literally, a pre-seal waiver has no seal and does not count, which argues against the finding"
+        },
+        {
+          "ref": "src/review/seals.ts:14-16",
+          "says": "claims the operator accepted this wider break and that the CHANGELOG says so. The file is new in this branch and neither record says so, so it is not a prior choice"
+        }
+      ],
+      "reasoning": "Confirmed by execution (verify-sev-and-legacy-r2-1.txt): a pre-seal package carrying a real, producer-shaped verification reads NOT READY at item verifier, and the same holds for its TTY or card waivers. The break is wider than the one the operator accepted (journal.md:28), and plan.md:28 promised no re-gating. AC9 itself requires a matching seal, though. The finding's narrowing fix also has a soundness problem. If waivers and verifications are honoured on 'no seals', an agent can delete `seals` and have hand-written waivers honoured again, which reopens round-1 SEC-1 the same way cluster B (review-security-code-w8:SEC-1) does. Grandfathering is therefore safe only behind a legacy marker an agent cannot clear, the same anchor cluster B needs. Whether to pay for that, or accept and document the wider break, is a product call the code cannot settle. The documentation minors (review-architecture-w1:F-001, review-degradation-w2:F-002, review-logic-w6:F-001) stand either way.",
+      "question": "review-degradation-w1:F-001: pre-seal packages with real verifier results or TTY/card waivers also read NOT READY, wider than the escape-closed break you accepted. Accept the wider break and document it, or grandfather them behind an unforgeable legacy marker?",
+      "options": [
+        "dismiss — keep strict per AC9 (no seal, not honoured); widen CHANGELOG.md:8 and correct seals.ts:14-16 to name every pre-seal package with a waiver or verification and its repair",
+        "uphold — honour pre-seal waivers and verifications only behind a legacy marker an agent cannot clear by editing manifest.json (for example one in the hashed round record), and test a pre-seal package with a real verification"
+      ]
+    },
+    {
+      "finding_id": "review-architecture-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "Covers review-architecture-w1:F-001, review-degradation-w2:F-002 and review-logic-w6:F-001 (all minor, same gap). seals.ts:14-16 says the flow 488 CHANGELOG entry documents that pre-seal waivers and verifications are no longer honoured, but CHANGELOG.md:7-8 names only packages closed through the removed escapes and never mentions seals. Whichever way the operator answers review-degradation-w1:F-001, the code comment and the release note disagree, and the note's repair currently dead-ends for PR-bound packages (cluster A). No intent signal favours the omission. The fix is to make the CHANGELOG entry and the seals.ts header describe the behaviour that actually ships: the wider break if the strict option is chosen, or the marker-based legacy rule if grandfathering is."
+    },
+    {
+      "finding_id": "review-degradation-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "Same documentation gap as review-architecture-w1:F-001 and review-logic-w6:F-001: CHANGELOG.md:8 does not describe the seals' effect on pre-seal waivers, verifications and hand-edited manifests, although seals.ts:14-15 says it does. The suggested extension is right, with the repair text matched to the code once cluster A is fixed."
+    },
+    {
+      "finding_id": "review-logic-w6:F-001",
+      "verdict": "upheld",
+      "reasoning": "Same documentation gap as review-architecture-w1:F-001 and review-degradation-w2:F-002: the CHANGELOG omits the seal-driven NOT READY that seals.ts:14-15 claims it records. Its fix also names the repairs for non-verifier/head items (files-covered, blast-radius, reviewers, ledger) and for old verifications (`review ingest --verifications`), and that addition is sound."
+    }
+  ]
+}

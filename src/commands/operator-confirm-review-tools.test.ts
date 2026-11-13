@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { heavyFindingsSeal, sealTarget } from "../review/seals";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "../review/dispatch.test-helpers";
@@ -184,6 +185,8 @@ describe("review_publish", () => {
       target: { kind: "pr", ref: PR },
       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
       coverage: [],
+      // As `review ingest` writes it: a pull-request package with no target seal is refused (review/seals.ts).
+      seals: { target: sealTarget({ kind: "pr", ref: PR }), heavyFindings: heavyFindingsSeal([]) },
     });
     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
     put("report.md", "# Review\n\nRequest changes.\n");
@@ -321,6 +324,8 @@ describe("review_publish", () => {
     const card = asked(await ask(t, input));
     const manifest = readJson("manifest.json");
     manifest["target"] = { kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" };
+    // Sealed as a keryx write would seal it: the subject here is the card's digest, not the target seal (seals.test.ts).
+    manifest["seals"] = { target: sealTarget({ kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" }), heavyFindings: heavyFindingsSeal([]) };
     put("manifest.json", manifest);
     const result = await t.invoke(input, { confirmationToken: card.token } as never);
     expect(result.isError).toBe(true);
@@ -346,6 +351,8 @@ describe("review_publish", () => {
 describe("review_waive_coverage", () => {
   const slice = (id: string, files: string[]) => ({ id, path: `slices/${id}`, bytes: 10, contentHash: id, files, domain: "d", split: "file" });
   function uncovered(): void {
+    // The package manifest the waiver's seal is written into (PR 1166 round 3).
+    put("manifest.json", { schemaVersion: 1, reviewId: "pr7932-r1", status: "draft", target: { kind: "pr", ref: PR } });
     put("scope-files.json", { files: ["src/a.ts", "src/b.ts", "src/c.ts"] });
     put("slice-manifest.json", {
       schemaVersion: 1,
@@ -417,6 +424,8 @@ describe("review_waive_readiness", () => {
       target: { kind: "pr", ref: PR },
       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
       coverage: [],
+      // As `review ingest` writes it: a pull-request package with no target seal is refused (review/seals.ts).
+      seals: { target: sealTarget({ kind: "pr", ref: PR }), heavyFindings: heavyFindingsSeal([]) },
     });
     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
     put("report.md", "# Review\n\nRequest changes.\n");
@@ -735,7 +744,7 @@ describe("review_complete", () => {
       cwd: root,
       mode: "ingest",
       reviewId: over.id ?? "2026-10-15-complete",
-      target: over.target ?? { kind: "report", ref: "review.md" },
+      target: over.target ?? { kind: "pr", ref: PR, head: HEAD },
       reportText: over.report ?? `# Round\n\nNo findings.\n${EVIDENCE}\n`,
       findings: (over.findings ?? []) as never,
       now: NOW,
@@ -743,7 +752,6 @@ describe("review_complete", () => {
     pkg = path.join(root, created.path);
     put("research.json", { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH });
     put("coverage.md", READY_COVERAGE_MD);
-    if (over.target === undefined) put("manifest.json", { ...readJson("manifest.json"), target: { kind: "pr", ref: PR, head: HEAD } });
     return pkg;
   }
 

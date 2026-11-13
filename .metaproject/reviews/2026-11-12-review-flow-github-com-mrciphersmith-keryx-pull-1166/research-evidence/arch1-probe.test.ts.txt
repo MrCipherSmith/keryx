@@ -1,0 +1,43 @@
+// ARCH-1 probe (review-verifier, round w1): a package `review complete` refuses for an untagged research integrity
+// error — is it posted by `review publish` without --partial? Each test PASSES when the defect reproduces.
+
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { PR, ingestReady, readManifest } from "../../../../src/review/close-gates.test-helpers";
+import { completeManagedReview } from "../../../../src/review/managed";
+import { publishReview } from "../../../../src/review/publish";
+
+let dir = "";
+beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-arch1-probe-")); });
+afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+
+async function editManifest(ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> {
+  const manifest = await readManifest(dir, ref);
+  edit(manifest);
+  await writeFile(path.join(path.resolve(dir, ref), "manifest.json"), JSON.stringify(manifest, null, 2));
+}
+
+async function probe(edit: (manifest: Record<string, any>) => void, completeMessage: string): Promise<void> {
+  const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR });
+  await editManifest(ref, edit);
+  const error = await completeManagedReview(dir, ref, {}).catch((e: Error) => e);
+  expect(error).toBeInstanceOf(Error);
+  expect((error as Error).message).toContain(completeMessage);
+  console.log(`complete refused: ${(error as Error).message}`);
+  console.log(`manifest.status after refusal: ${(await readManifest(dir, ref)).status}`);
+  const posts: string[] = [];
+  const result = await publishReview(path.resolve(dir, ref), { post: async (_r, _e, body) => { posts.push(body); return { ok: true, detail: "ok" }; }, confirm: async () => true });
+  console.log(`publish (no --partial): posted=${result.posted} partial=${result.partial} readiness=${result.readiness.verdict} posts=${posts.length}`);
+  expect(result.posted).toBe(true);
+  expect(result.partial).toBe(false);
+}
+
+test("invalid research artifact locator: complete refuses, publish posts", async () => {
+  await probe((manifest) => { manifest.artifacts.research = "elsewhere.json"; }, "invalid research artifact locator");
+});
+
+test("dispatch recorded in research.json but not declared in manifest: complete refuses, publish posts", async () => {
+  await probe((manifest) => { delete manifest.artifacts.reviewerDispatch; }, "manifest.json does not declare it");
+});

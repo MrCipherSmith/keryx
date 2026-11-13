@@ -9,6 +9,8 @@ export type ReviewCompletionContext = {
   dispositions: readonly unknown[]; waiveReadiness: readonly unknown[];
   waiveCoverage?: string | undefined;
   coverage?: Readonly<Record<string, string | null>>;
+  /** Flow 488: the head relabel (`--head` with `--head-reason`) the operator is asked to approve; absent when the head is unchanged. */
+  headOverride?: { from: string; to: string; quote: string } | undefined;
 };
 
 /** A question shows the decision and binds the remaining package content by digest. */
@@ -21,7 +23,8 @@ export function reviewCompletionQuestion(context: ReviewCompletionContext): stri
     readinessWaivers: manifest.readiness_waivers ?? [],
     coverageWaiver: research.dispatch?.coverageWaiver ?? research.coverageWaiver ?? null,
     requestedReadinessWaivers: context.waiveReadiness,
-    requestedCoverageWaiver: context.waiveCoverage ?? null, snapshot,
+    requestedCoverageWaiver: context.waiveCoverage ?? null,
+    ...(context.headOverride === undefined ? {} : { requestedHeadOverride: context.headOverride }), snapshot,
   });
 }
 

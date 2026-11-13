@@ -1,0 +1,1178 @@
+--- docs/analysis/review-process-audit-2026-11-12.md
+@@ 1,195 @@
++# Процесс ревью в keryx: архитектура, функциональность, продукт
++
++Срез: `origin/main` на `66ee00117` (v0.4.26), 2026-11-12. Только чтение: тесты не запускались, код не менялся.
++
++Пометки у находок: **[проверено]** — я сам прочитал код или файл, который это доказывает; **[со слов аудита]** — получено от одного из четырёх параллельных аудитов и мной не перепроверено.
++
++## Вердикт
++
++Идеи в основе процесса сильные и редкие: верификатор, который может только удалять и обязан что-то запустить; судья предпосылок; привязка находки к цитате, а не к номеру строки; запись каждого решения оператора. Но вокруг этих идей выросла система, которая не выполняет трёх собственных обещаний.
++
++1. **Гейты закрытия на хостах без карточек держатся на честности агента.** Три из них снимаются текстом, который пишет сам агент.
++2. **Стоимость и длительность раунда никто не знает**, а выбор модели для ревьюеров на keryx shell молча не работает.
++3. **Раунд не сходится и почти никогда не закрывается**: 2 закрытых пакета из 36, в среднем 3 раунда на PR, 79% находок — minor и info.
++
++Главный архитектурный диагноз: у раунда нет модели состояния в коде. Порядок шагов живёт в 233 КБ прозы оркестратора, а код — это 58 независимых подкоманд, каждая из которых заново выводит состояние из файлов пакета. Поэтому каждая новая проблема лечится новым абзацем в скиле и новым гейтом в CLI, а не изменением автомата.
++
++## Как раунд устроен на самом деле
++
++Раунд — это каталог `.metaproject/reviews/<id>/`. Каждая стадия — отдельный глагол CLI из одной цепочки `if` в `src/commands/review.ts:739-1000`. Диспетчеризацию ревьюеров делает агент-хост, а не keryx: keryx пишет драйверы, читает ответы из `raw/*.txt` и считает, что ещё не покрыто.
++
++Стадии: `start` (пакет, `round.json`) → `scope`, `blast-radius`, `slice`, `required`, `estimate` → волны A/B (ревьюеры), C (верификатор), D (судья предпосылок) → `ledger build` → `ingest` → `verdict` → `readiness` (12 пунктов) → `complete` → `publish`.
++
++Объём: `src/review` — 161 модуль без тестов, 52,5 тыс. строк, плюс 168 файлов тестов. `src/commands/review.ts` — 5 940 строк. Оркестратор — `SKILL.md` 147 КБ и `SKILL.detail.md` 86 КБ.
++
++## Критичные находки
++
++### 1. Три гейта закрытия снимаются текстом агента [проверено]
++
++- **Гейт верификатора.** `verifierCheck` пропускает неверифицированные blocker и major, если в `report.md` есть строка `Not verified: N` (`src/review/readiness.ts:228-235`). Отчёт пишет агент, а сообщение об отказе само подсказывает, какую строку добавить.
++- **Гейт сдвинутой головы PR.** Проходит, если первая строка отчёта называет SHA и содержит слово о том, что PR сдвинулся (`src/review/complete-head-gate.ts:56-58`).
++- **Перезапись проверенного коммита.** `--head <sha>` заменяет записанную при старте голову, оставляя только предупреждение (`src/review/managed.ts:1043-1055`). Если передать текущую голову PR, проверка сдвига становится ложной.
++- **Ответ оператора через вопрос хоста.** На Claude Code, Codex и прочих `--answered-by` принимает источник и текст ответа со слов модели. Блокировка есть только по переменным окружения keryx (`src/review/managed.ts:1059`), которых эти хосты не ставят.
++
++Почему важно: вся ценность записи «оператор решил» в том, что агент не может её подделать. На keryx shell карточки это обеспечивают, на остальных хостах — нет.
++
++Направление: приравнять текстовые аттестации в отчёте к вейверам с тем же доказательством (карточка или TTY); `--head` принимать только для коммита, который является предком записанного; в опубликованном теле помечать решения, принятые через вопрос хоста, как непроверенные.
++
++### 2. Вейвер одного пункта обнуляет все ошибки research-гейта [проверено]
++
++`src/review/managed.ts:1105-1107`: вейвер любого из `files-covered`, `blast-radius`, `reviewers`, `ledger` делает `researchProblems = []` целиком. Оператор снимает один пункт, а пропускаются все.
++
++Направление: фильтровать ошибки по тому пункту, который снят.
++
++### 3. Публикация не стоит после закрытия [проверено]
++
++`publishReview` (`src/review/publish.ts:146-180`) не смотрит на `manifest.status` и не берёт блокировку закрытия. Готовность она пересчитывает сама, но проверки подмены `round.json` и уровня доказательности (`managed.ts:1039`, `1075-1082`) есть только на пути `complete`. В GitHub может уйти ревью из пакета, который `complete` отказался бы закрыть.
++
++Направление: одна функция `evaluateGates(package, action)`, которую вызывают `complete`, `publish`, `status` и стоп-гейт сессии. Сейчас стоп-гейт проверяет строгое подмножество того, на чём отказывает `complete` (`managed.ts:922-932`) [со слов аудита].
++
++### 4. Выбор модели для ревьюеров на keryx shell не работает [проверено]
++
++Оркестратор велит передавать `model_tier: light|standard|deep` (`SKILL.md:118`). `spawn_subagent` это поле игнорирует и пишет уведомление о миграции (`src/harness/tool/builtin/spawn-subagent-tool.ts:1497-1498`). Рабочее поле — `model_class` со значениями `light|standard|expert|frontier`; в ревью-скилах оно не упоминается ни разу, а значения `deep` в нём нет.
++
++Следствие: `keryx review tier` и оценка стоимости плана описывают не то, что реально запускалось.
++
++Направление: перевести скил на `model_class` и добавить контрактный тест, который падает, когда скил называет поле спавна, игнорируемое схемой.
++
++### 5. «Кросс-семейная верификация» не исполняется [проверено частично]
++
++`keryx providers cross-family` никогда не запускает ревью, а только решает, допустимо ли оно, и печатает запись (`src/standard/command-registry.ts:1742-1743`, проверено). Что `checkCrossFamilyReview` проверяет лишь внутреннюю согласованность записи — со слов аудита. Раунд может нести `mode=cross-family`, хотя ни один ревьюер на другом семействе не работал.
++
++Направление: либо добавить шаг диспетчеризации и связать его `executionId` с записью, либо переименовать поле в «допустимость», чтобы отчёт не намекал на второе мнение.
++
++### 6. Стоимость и время раунда неизвестны [со слов аудита]
++
++Во всех современных пакетах `research.json` показывает usage `known=0`; время раунда не пишется нигде. Единственная цифра — от 2026-09-15: 552 тыс. токенов на раунд, 92 тыс. на сохранённую находку. При 22–26 диспатчах на раунд это главный вопрос пользователя, и на него нет ответа. На хостах без keryx shell учёт токенов вообще ручной: оркестратор должен сам дописать строку `KERYX_USAGE` (`SKILL.md:45`, проверено).
++
++Направление: сделать захват usage пунктом готовности либо убрать обещания о стоимости; первой строкой отчёта печатать время и токены.
++
++## Архитектура
++
++**Нет автомата раунда.** В перечислении статусов пять значений, а пишутся только `draft` и `closed`; `round-record.ts` ветвится по `reviewed|decided|learned`, которые никто не записывает [со слов аудита]. Состояние раунда — объединение файлов, выводимое заново при каждом вызове.
++
++**Правила продублированы в прозе и в коде.** Правило «нужен ли раунд» записано абзацем в `SKILL.md:29` и функцией `classifyRoundNeed`; сам скил признаёт, что CLI функцию не вызывает. Я проверил: у неё нет ни одного вызова вне тестов. Агент исполняет прозу, тест следит, чтобы проза и код не разошлись. Это должна быть команда.
++
++**Потолок длины скила измеряется в строках и только опускается** (`src/gdskills/skill-length-ceilings.ts`) [проверено]. Оркестратор стоит ровно на потолке в 1 571 строку, а растёт внутрь строк: 5 строк длиннее 1 500 символов, самая длинная — 5 023 символа (`SKILL.md:128`, один абзац про волны). Вторая отдушина — `SKILL.detail.md` без потолка. Метрика достигла обратного: текст стал плотнее и менее читаемым для модели.
++
++**Высокая текучесть.** 93 коммита в `SKILL.md` оркестратора за 60 дней [проверено]; 20% пунктов changelog за 30 релизов касаются ревью [со слов аудита]. В операционном промпте остаётся история: «одиннадцать раундов во flow 127 и 128», «исправлено с 0.2.70», цифры из arXiv. Это оплачивается токенами в каждом раунде и принадлежит ADR.
++
++**Бог-файлы и плоское пространство имён** [со слов аудита, размер `review.ts` проверен]. `review.ts` — 5 940 строк, `managed.ts` — 3 187 строк и 104 функции (создание пакета, ingest, устаревший парсер прозы, диспозиции, закрытие, рендер). Имена вводят в заблуждение: `completion-gate.ts` — это стоп-гейт сессии, а не гейт закрытия; `floor.ts` и `arbiter-floor.ts` — несвязанные понятия. Восемь `jev-*-config.ts` — один и тот же 25-строчный читатель с разным ключом.
++
++**Четыре несвязанные абстракции «хоста»** [со слов аудита]: `host-profile.ts` (перечисление из четырёх значений, управляет только размером волны), `completion-host.ts` (происхождение ответа оператора), иерархический движок `review/agents` (настоящий порт с флагами возможностей, только keryx shell, включается `--hierarchical`) и файловая сторона плоского пути. Первая и третья никак не соединены.
++
++**Конкурентность** [со слов аудита]: блокировку берут только закрытие и вейверы; `ingest` и `ledger build` пишут `findings.json` и `research.json` без неё. Снимок содержимого при закрытии не включает `verifications.json`, записи мутаций и `round.json`, которые читает готовность.
++
++**Сквозного теста нет** [со слов аудита, выведено из выборки]: тесты закрытия подают собранный вручную ledger, а не тот, что построил `ledger build`. Цепочку start → slice → ledger → ingest → complete → publish не гоняет ни один тест.
++
++## Функциональность: скилы и субагенты
++
++**Канонический рубрикатор серьёзности противоречит скилам, которые на него ссылаются** [проверено]. Оркестратор задаёт blocker как «ровно четыре формы». При этом `review-highload` ставит blocker по пунктам чек-листа 11 раз (например, строки 126, 283, 353), `review-backend` — 7 раз (строки 87–162). Это прямой источник завышенной серьёзности.
++
++**Скил учит тому, что запрещает схема** [проверено]. Отрицательное перечисление: `class_scope.sites: []` в `SKILL.md:1361`, а в `reviewer-finding.schema.json:158` у `sites` стоит `minItems: 1`. Как на это реагирует ingest, не проверялось.
++
++**Два конкурирующих шаблона находки** [со слов аудита]. Схема требует `impact`, `suggested_fix`, `evidence`, `confidence`; встроенные markdown-шаблоны в 18 скилах дают «Why it matters» и «Fix» без evidence и confidence.
++
++**Ревьюерам велят делать то, чего они не могут** [со слов аудита]. Скилы говорят «команд не запускаю», а в чек-листах остались «определи git-scope» и «собери diff». `review-layout` и `review-ui-ux` требуют измерений в браузере и dev-сервера при заявленном read-only.
++
++**Стековые допущения утекают в чужие проекты.** `stack_requires: "react,mobx"` срабатывает при любом из тегов (`SKILL.md:861`, проверено), так что React-проект без MobX получает всю MobX-ветку. Без всякого гейта остаются NestJS в `review-architecture` и `review-security-code`, префикс `I` для интерфейсов в `review-style`, жёстко зашитый `src/core/**` [со слов аудита].
++
++**Пересечения гарантируют дубликаты** [со слов аудита]: N+1 и индексы — в performance, highload и backend; naming и DRY — в style и clean-code. В прогоне PR 1058 из 109 сырых находок осталось 16 канонических, одну нашли независимо 11 ревьюеров.
++
++**Измерения без владельца** [со слов аудита]: зависимости и лицензии, совместимость публичного API, наблюдаемость, обработка ошибок, i18n.
++
++**Jev-скилы — это программы, а не ревьюеры** [со слов аудита]: они несут `model_tier`, триггеры и «общие законы» для LLM, ссылаются на внутренние номера flow и уезжают в чужие проекты, где без ключа инертны. По собственным замерам проекта они проигрывают сильной модели (recall рисков 21% против 44%) и выключены по умолчанию.
++
++**Пара «только удаление» спроектирована верно**, но с тремя дырами [со слов аудита]: слияние не проверяет, что `execution`-доказательство — действительно вывод команды (достаточно непустой строки); `site-check` может опровергнуть находку из-за того, что поиск пропускает скрытые каталоги; судья может временно убрать blocker из открытых, сославшись на гайдлайн, который никто не сверяет.
++
++## Харнесы
++
++Плоский путь с параллельными субагентами работает на keryx shell и Claude Code. Остальное — со слов аудита, кроме помеченного.
++
++- **Codex, opencode, Grok** не имеют инструмента спавна и уходят в `keryx review run --autonomous` (`SKILL.md:28`, проверено). Этот раннер поднимает вложенный `keryx shell` на провайдере keryx. Пользователь, выбравший Codex или Grok, получает ревью другой моделью и должен отдельно настроить ключи keryx.
++- **opencode и Grok** нигде не первоклассны: в перечислении хостов их нет, определяются как `other`; экспорта скилов для Grok нет.
++- **Claude Code**: нет карточек, поэтому закрытие и публикация — только в терминале оператора, а четыре акта идут через непроверяемый вопрос хоста. В прогоне PR 1124 все ревьюеры шли через `general-purpose`, то есть именованные агенты не использовались.
++- **CI-бот**: один проход ревьюера плюс верификатор, один провайдер, workflow существует только как пример в `docs/examples`; гайд признаёт, что против настоящего GitHub он не запускался.
++- **Три режима лимитов на одно ревью**: дедлайн ребёнка 5 минут на shell, собственные потолки иерархического движка (12 и 32), размер волны в байтах по хосту (60 000 против 150 000).
++
++## Продукт
++
++Цифры по 36 пакетам в `.metaproject/reviews/` — со слов аудита; это раунды примерно 12 предметов, а не 36 независимых ревью.
++
++| Метрика | Значение |
++|---|---|
++| Пакетов закрыто | 2 из 36 |
++| Пакетов только с планом | 13 из 36 |
++| Раундов на PR | в среднем 3, максимум 7 |
++| Находок сохранено | 739 |
++| Blocker / major / minor / info | 15 / 143 / 385 / 196 |
++| Опровергнуто верификатором | около 2% |
++| Оставлено судьёй предпосылок | 95% |
++| Находок с диспозицией | 17 из 739 |
++| Подкоманд `keryx review` | 58 |
++| Флагов | 154 |
++
++**Отчёт хоронит вердикт.** PR 1124: 1 major, 40 minor, 3 вопроса; многие minor озаглавлены «сегодня ничего не ломается». `report.md` весит 23 тыс. слов, потому что после читаемых ~150 строк в нём лежит весь JSON находок. При этом отчёт пришёл уже после слияния PR.
++
++**Фильтры почти ничего не отсеивают.** 2% и 5% отсева означают одно из двух: либо ревьюеры очень точны, либо фильтры не различают. Данных, чтобы выбрать, нет: диспозиция записана у 2% находок, базовой точности не существует, посеянных багов и сравнения с другим инструментом тоже.
++
++**Нет команды «отревьюй мою ветку».** Голый `keryx review start` только пишет `round.json`, а onboarding подаёт его как шаг ревью. Реальный путь — попросить агента загрузить скил. Из 58 подкоманд человек наберёт около восьми; остальные — сантехника оркестратора, перемешанная с ними в 568 строках справки.
++
++**Словарь без глоссария**: round, package, wave, slice, chunk, layers, ledger, floor, arbiter, premise, readiness, obligation, disposition, jev, tier.
++
++**Основной гайд продублирован** [проверено]: в `docs/docs/guides/review-with-a-record.md` пять разделов идут дважды (строки 588–921 и 965–1102).
++
++**Вики устарела**: страница `src-review.md` говорит о шести файлах [со слов аудита].
++
++## Что сделано хорошо
++
++- **Слияние верификатора — только удаление, по построению**: в схеме нет полей серьёзности и текста проблемы, в коде нет пути эскалации, каждое отклонение записывается с причиной.
++- **Закрытие транзакционно**: блокировка, снимок содержимого, сравнение перед каждым переименованием, откат только своих записей.
++- **Защита входов раунда от подмены**: `round.json` и `prior_findings.json` хэшируются в манифесте, а реестр завершённых раундов лежит вне репозитория, так что PR не может подделать прошлый раунд.
++- **Привязка по цитате вместо номера строки** — исправление измеренной проблемы (18,6% находок указывали на файл, которого не было на записанной голове).
++- **Честное самоизмерение**: документы прямо говорят, что Jev проигрывает сильной модели, что бот не запускался вживую, что точность по корпусу читать нельзя.
++- **Тесты на реальных путях**: временные каталоги, настоящий git и настоящая команда, а не моки.
++
++## Рекомендации по приоритету
++
++**P0 — корректность гейтов.** Малые правки с большим эффектом.
++
++1. Убрать снятие гейтов текстом отчёта: `Not verified: N` и первая строка про сдвиг головы становятся вейверами с карточкой или TTY.
++2. `--head` принимать только для предка записанного коммита.
++3. Вейвер снимает только свой пункт research-гейта.
++4. `publish` проходит те же проверки, что `complete`, через общую `evaluateGates`.
++5. Перевести скил на `model_class` и добавить контрактный тест на поля спавна.
++
++**P1 — сигнал и стоимость.**
++
++6. Захват usage и времени как пункт готовности; первая строка отчёта — время, токены, раунд.
++7. Убрать построчные «— blocker» из `review-highload`, `review-backend`, `review-frontend`, `review-logic`; оставить таблицы «условие → форма рубрикатора», как в `review-core-boundaries`.
++8. Свести `sites: []` и `minItems: 1` к одному правилу; убрать встроенные шаблоны находок в пользу схемы.
++9. Ограничить отчёт по умолчанию: вердикт, blocker и major, топ minor; остальное — одной строкой со ссылкой на пакет. JSON находок вынести из `report.md`.
++10. Посеянный бенчмарк на базовых ревьюерах в CI — без него нельзя осмысленно менять ни состав ревьюеров, ни фильтры.
++
++**P2 — архитектура.**
++
++11. Автомат раунда в коде: одна команда `keryx review step`, которая возвращает следующий шаг и его входы. Скил оркестратора сжимается до исполнения того, что вернула команда, а правила вроде «нужен ли раунд» уходят из прозы.
++12. Потолок скила в байтах, а не в строках, и общий на `SKILL.md` плюс `SKILL.detail.md`.
++13. Разбить `src/review` по стадиям (`package/`, `dispatch/`, `ledger/`, `gates/`, `publish/`, `jev/`), обработчики команд — в таблицу.
++14. Один порт хоста с флагами возможностей вместо четырёх абстракций; честная матрица возможностей в документации.
++
++**P3 — продукт.**
++
++15. `keryx review` без подкоманды — «отревьюй текущую ветку»; справку разделить на человеческую (5 команд) и агентскую.
++16. Глоссарий из десяти терминов и одна схема; гайд дедуплицировать и разрезать на quick-start и справочник.
++17. Заморозить поверхность на релизный цикл и измерять: раундов до зелёного, доля закрытых пакетов, стоимость раунда.
++
++## Чего этот аудит не покрыл
++
++- Тесты не запускались; ни одна находка не подтверждена воспроизведением, только чтением кода.
++- `SKILL.detail.md` и строки 420–1058 `SKILL.md` прочитаны только по заголовкам.
++- Тела `native-adapter.ts`, `external-adapter.ts`, `terminal-host.ts`, внутренности бота и `action.yml` не читались.
++- Десять длинных скилов-ревьюеров проверены по заголовкам и точечным поискам, а не построчно.
++- Числа по истории прогонов посчитаны скриптами аудита и мной не пересчитаны.
++
++Routing audit: `graph_used: no` (граф в worktree не построен), `wiki_used: yes` (страница `src-review.md`, устарела), `ctx_used: yes`, `raw_rg_used: no`.
+
+--- docs/docs/cli-reference.md
+@@ 5071,5150 @@
+ keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>" [--answered-by <source>:<ref> --answer-text "<words>" --question-text "<question>"]
+                                                                                      (terminal or host question; card review_decide_premise)
+ keryx review verify-run --package <review-dir> --finding <id> [--timeout <s>] -- <command…>
+ keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
+ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
+ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
+ keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                           [--package <review-dir>] [--json|--brief|--degradation [--degradation-cap <n>]] [--out <file>]
+ keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir> | --package <review-dir>] [--json]
+ keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
+ keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
+                         [--state <file>] [--dry-run] [--json]
+ keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+ keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+ keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+ keryx review layers status  --package <review-dir> [--json]
+ keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+ keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+ keryx review coverage --package <review-dir> [--json]
+-keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [--waive <item> "<operator quote>"]...   (card review_complete)
++keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha> --head-reason "<operator quote>"] [--waive <item> "<operator quote>"]...   (card review_complete)
+ keryx review readiness <review-id-or-path> [--json]
+ keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
+ ```
+ 
+ Review V3 uses one foreground owner process for ordinary terminals and external harnesses. `serve` prints an explicit
+ Unix-socket handshake containing `KERYX_REVIEW_AGENTS_ROOT_SOCKET`, `KERYX_REVIEW_AGENTS_ROOT_TOKEN`, and
+ `KERYX_REVIEW_AGENTS_ROOT_RUNS_ROOT`; export all three only into the controlling Codex CLI, Claude Code, or other harness.
+ The bearer grants the fixed host ceiling selected at `serve` startup, so do not persist it in configuration, logs, or
+ child-agent environments. Root commands fail closed on a partial environment. Descendant agents receive a different,
+ run-scoped bridge grant and cannot combine it with the root environment.
+ 
+ The operator-only steps here (`confirm-plan`, `waive-mutation`, `override-reviewers`, `decide-premise`, `chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal, except that the first four also accept a host question (below); plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8). Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
+ 
+ **A host question.** Outside keryx shell there is no card tool. For four acts the agent asks the operator with the host's own question tool (Claude Code's question tool, Codex's, a Telegram poll through Helyx), offering the verb's options (`yes` or `no` for `confirm-plan`, `waive` or `keep`, `override` or `keep`, `uphold` or `dismiss`) and naming the subject in the question (the plan numbers, the mutant ids or their count, the reviewer names, the finding id), and records the answer with `confirm-plan`, `waive-mutation`, `override-reviewers` or `decide-premise` and, with no terminal, `--answered-by <source>:<ref> --answer-text "<the operator's words, verbatim>" --question-text "<the question as asked>"`. `<source>` is `claude-code` or `codex` for the host harness's own question tool (`<ref>` its question id), `helyx-poll` for a Telegram poll (`<ref>` is `<poll-id>[:<message-id>]`), `keryx-shell` only for a plain question the shell itself asked (in keryx shell use the card first) or `other` (`<ref>` a message id or a short label). `decide-premise` still takes `--answer uphold|dismiss --reason "<why>"`; the other two still take `--reason`. `confirm-plan` refuses a stale plan: `--question-text` must show the plan's current dispatch count and minute range (as `keryx review estimate` prints them), otherwise ask the operator again with the current numbers. The record carries `confirmedVia: "host-question"` with the source, ref, question and answer, and a `keryx decisions` entry is written; the review report and `/decisions` show it apart from a card. keryx does not verify the answer: a host question is weaker than a card press (`tui-card`, `remote-card`), which stays the first choice where a card is available (TM-04 section 6b, [limitations](limitations.md)). Nothing is recorded, and the command exits non-zero, for an answer that is not one of the verb's options (free text is not a decision), a decline (words or `--answer`), `decide-premise` words that name the other choice or none, an empty answer or question, a malformed `--answered-by`, an unknown package, a finding that is not held, a stale plan or a missing `--reason`. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag. `review complete` and its `--waive` and `--waive-coverage` flags refuse these flags and stay on the terminal and card path. Without `--answered-by` the four verbs behave as before: a terminal question, refused without a TTY. `keryx review <verb> --help` prints the flags and names the card as the stronger path.
+ 
+ **An unrecognised option is refused, not ignored**, and the command exits 1. A
+ flag that is silently dropped writes nothing and still reports success.
+ 
+ `--head <sha>` is the commit the round ran against, written to
+ `manifest.target.head` and read by the `review` completion gate — which refuses
+ to complete a flow whose last round cannot say which tree it read. Omitted, it
+ is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
+ `pr` target's own head so that a round run against something other than what
+ will merge *fails* the gate instead of passing it. With no checkout to ask and a
+ `pr` target, the pull request's head is used instead; with neither, the head is
+ left off and the gate reports it as unobserved.
+ 
+ `review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+ at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+-records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+-head that is not the pull request's head still needs the first line of `report.md` to name it and
+-say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
++records it. A `--head` that differs from the recorded head is the operator's act: it needs
++`--head-reason "<operator quote>"` (a terminal, or `--answered-by` from a host question), the refusal
++names both SHAs, and the manifest records `head_override` (previous head, new head, quote, time). A
++`--head` equal to the recorded head needs nothing. The gate is not loosened: a head that is not the
++pull request's head fails readiness item `head`, and the SHA must be 7-40 hex characters on a package
++bound to a pull request.
+ 
+ A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+ 
+-`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA; a quote absent from that file, or in it more than once, is kept with no line and flagged `quote_unlocated` (readiness item `quotes-located` lists it until it has a disposition), and only a quote it could not check at all (commit not in the checkout, no file named, or a size bound) refuses the round; ingest also adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
++`review complete` on a package bound to a pull request fails readiness item `head` on a merged PR or a moved head (nothing in `report.md` lifts it; the operator waives `head`), and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA; a quote absent from that file, or in it more than once, is kept with no line and flagged `quote_unlocated` (readiness item `quotes-located` lists it until it has a disposition), and only a quote it could not check at all (commit not in the checkout, no file named, or a size bound) refuses the round; ingest also adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
+ 
+ `review start|attach|ingest` of a pull request target also record the base the depth gate measures. Without `--base`, the
+ pull request's own base branch is read with `gh pr view` and stored as `target.base` (`origin/<branch>`; nothing is
+ recorded when `gh` is missing, signed out, offline or names something that is not a branch). With `--base`, that value is
+ `target.base` and the pull request's own base is kept beside it as `target.prBase` when it differs. The light recheck
+ measures the widest of the recorded base, `target.prBase` and the default base, so a `--base` cannot narrow the diff.
+ A small pull request into a non-default branch (a stacked PR, a release-branch backport) therefore never reads as a light
+ round on its own base: the default-base diff, which carries everything the parent branch holds, is measured too and the
+ wider one counts. `KERYX_REVIEW_PR_BASE=off` skips the `gh` read.
+ 
+ | Subcommand | Description |
+ |---|---|
+ | `attach` | Create a managed package linked to an existing Task Manager flow. Like `start`, it marks the package active (`.metaproject/data/review-active/active-review.json`, not committed) so keryx writes `tool-calls/orchestrator.jsonl` itself; `review complete` removes the pointer when it closes the package. |
+ | `start` | Create a standalone managed review package, and mark it active: from then on `keryx memory` commands, the MCP memory tools and the keryx agent's memory calls append to the package's `tool-calls/orchestrator.jsonl` (the agent never writes that file). `--style` turns on the two readability roles (`review-clean-code`, `review-style`), which are off by default; `--with-role <role>` turns on one role that is off. The choice is stored in the package's `round-roles.json`, so `required --package`, `ledger build` and `complete` all see it; `attach` and `ingest` refuse both flags. |
+ | `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
+ | `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. After those it prints what the round left behind that no count shows, and nothing when there is none: `Not run: <n> candidates (cap <c>): <mutant ids>` for proposed mutants no pass has run, `held: <finding> stays <severity> (mutant <id>): <reason>` for a severity a presentation-only survivor did not raise, and `follow-up open: <id> <text>` (or `follow-up narrowed: … (remains: …)`) for each parent follow-up no disposition closes. |
+ | `readiness` | Print the twelve-item checklist that gates `completed` and publishing (`keryx review readiness <review-id-or-path> [--json]`): every changed file covered, no file the blast radius cut left unreviewed, every planned reviewer ingested, the verifier's coverage stated, the ledger READY, coverage.md truthful, the head matching the PR, leftovers named in the report, the changed-file count equal to the PR's own list, and the orchestrator's memory reads confined to its one memory stage (`memory-outside-stage`: any other orchestrator `keryx memory` call in `tool-calls/orchestrator.jsonl`, which keryx writes itself, fails it; a call by a reviewer's id passes, and a call with no caller is `unattributed`, which warns in the detail and never blocks. `orchestrator log: recorded` or `orchestrator log: none`, and the unattributed count, show on `review readiness`, `review status`, the Review depth tab and the sidebar. Limits: only calls through keryx are visible; unmarked calls outside the keryx shell are `unattributed`; the log is not a sandbox; the log is a plain editable file; `review start --memory-query "<query>"` records the stage query in the manifest's `cleanContext` block), every held finding answered by the operator (`premise-decisions`: a finding `review-premise` held as `challenged` or `owner-decision` without a recorded `decide-premise` answer fails it; not waivable, each held finding needs its own answer), and, last, every open finding whose quote ingest could not place answered (`quotes-located`: a finding flagged `quote_unlocated` with no disposition fails it, naming the reason and any candidate lines; waivable). Each failing item prints its evidence and the command that repairs it. It writes nothing and exits 1 when the verdict is NOT READY. `review complete` refuses `completed` while an item fails; only the operator waives one, any item but `premise-decisions`, in a terminal (`--waive <item> "<quote>"`, recorded with the time; a reviewer's own memory lookup is never judged). `review status`, the Review depth tab, the sidebar and `/review readiness` show the same verdict from the same projection. |
+ | `publish` | Post a package to its pull request as a GitHub review (`keryx review publish <review-id-or-path> [--event COMMENT\|REQUEST_CHANGES\|APPROVE] [--partial] [--yes]`). It refuses a package that is not READY. `--partial` posts it anyway under a "Partial review" header and never approves. The keryx shell guard refuses a raw `gh pr review` or `gh api` review post for a package that is not READY; a publisher outside the keryx shell (CI, another agent, a script file) is not stopped. |
+ | `report-parity` | Print the Markdown to paste into `report.md` so the leftovers of a round are named (`keryx review report-parity <review-id-or-path>`): a `## Review parity` block with one line each for `Not run: <n> candidates`, `Held severity:` and `Not verified:`; with nothing to carry it says so and prints no block. It reads the package and writes nothing. `review complete` adds a warning, never a refusal, for each kind of leftover the report does not name (a line that opens with `Not run`, `Held severity` or `Not verified`, or one that mentions the mutant or obligation id). `/review parity` in the shell, the readline `/reviews` and the sidebar show the same counts from the same projection. In an automatic review, `report-parity <this review>` runs without a prompt. |
+ | `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 765,808 @@
+ `review status` and the review panel (`/reviews`) show the same line, with `so far` while the round is open. The estimate
+ itself is not changed by this: `TYPICAL_DISPATCH_MINUTES`, `CHILD_DEADLINE_MINUTES`, `ASSUMED_PARALLEL_DISPATCHES` and the
+ confirmation thresholds keep their values.
+ 
+ ### Completed means ready — the checklist
+ 
+ A package cannot be marked `completed` while a file nobody read, a reviewer
+ that never reported, or a verifier that skipped findings is still in it. Ten
+ items are checked, offline except the ninth, and `keryx review complete` refuses
+ while any of them fails:
+ 
+ ```bash
+ keryx review readiness <review-id-or-path>   # NOT READY lists each failing item and its repair
+ ```
+ 
+ | # | Item | Repair |
+ |---|------|--------|
+ | 1 | every changed file is covered by a wave or a recorded waiver | run the missing wave |
+ | 2 | no file the blast radius cut is left unreviewed | `keryx review chunks plan`, `estimate`, `next`/`record`, `merge` |
+ | 3 | every planned reviewer was dispatched and ingested | dispatch it, save the reply, `ledger build` |
+-| 4 | the verifier checked every finding it should | run the verifier, or let the report state the count it did not |
++| 4 | the verifier checked every blocker and major finding | run the verifier, or you waive `verifier`; a `Not verified: N` line in the report does not pass it |
+ | 5 | the ledger is READY | close each obligation with a disposition |
+ | 6 | coverage.md does not list a reviewer as `run` that did not finish | re-run `keryx review ingest` |
+-| 7 | the report's head is the PR head | `--head <sha>` |
++| 7 | the report's head is the PR head | re-run the round on the PR's head, or you waive `head`; a first line in the report does not pass it |
+ | 8 | pending mutation candidates and parity warnings are named | add them to the report |
+ | 9 | the changed-file count equals the PR's own file list | recount from the PR's files |
+ 
+ When the blast radius is cut, `keryx review blast-radius --package <ref>` writes
+ the chunk plan next to it, so the waves are one command away. An unattended run
+ (`keryx review run --autonomous`) runs every wave without asking, up to the
+ 25-pass ceiling; an interactive run asks you once before the waves start.
+ 
+ Only you can waive an item, with your own words recorded beside the time. In keryx shell the agent calls the card and you answer it in the shell or, with remote control on, in the Telegram topic (an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell. The terminal form is the fallback:
+ 
+ ```bash
+ keryx review complete <ref> --waive blast-radius "the cut files are generated code"
+ ```
+ 
+ Publishing is held by the same checklist. `keryx review publish` refuses a
+ package that is not READY; `keryx review publish --partial` posts it with a
+ "Partial review" header and never approves. The same verdict shows in
+ `keryx review status`, in the TUI Review depth tab and sidebar, and as
+ `/review readiness`.
+ 
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 861,908 @@
+ Claude Code or Codex directly, is `unattributed`. It does not block: it adds
+ `warning: N unattributed memory call(s)` to the item's detail, and `review
+ readiness`, `review status`, the Review depth tab and the sidebar show
+ `orchestrator log: recorded, N unattributed`. A log that holds only its first line
+ passes with "no memory call recorded"; no file at all passes with "no orchestrator
+ tool log", as before, and those surfaces say `orchestrator log: none`.
+ 
+ **Named limits.** keryx cannot prevent an agent runtime that loads its memory
+ before the skill starts. The guarantee is instruction plus detection, not
+ isolation, and reads of the agent's personal memory outside `keryx memory` are not
+ visible to the log. Four things the automatic log does not do:
+ 
+ - Only calls through keryx are visible. A memory read through a tool keryx does not
+   wrap is not in the log.
+ - Unmarked calls outside the keryx shell are `unattributed`: keryx records them but
+   cannot say whether the orchestrator or a reviewer made them.
+ - The log is not a sandbox. It records the calls; it does not stop them.
+ - The log is a plain editable file. Anyone with write access to the package can
+   change it, so it is evidence of what keryx saw, not proof against tampering.
+ 
+-### Five gates that keep a report honest
++### Gates that keep a report honest
+ 
+-- **The PR moved.** `keryx review complete` on a PR-bound package asks the tracker for the PR. When it is merged or its head is no longer the reviewed SHA, completion is refused until the first line of `report.md` names the reviewed SHA and says so ("Reviewed `1a2b3c4` — the PR has since merged."). A package is PR-bound when it targets a pull request or when its `--ref` is a pull request URL, even if it was ingested with `--target report`; a package with no PR binding is not asked; a tracker that cannot be reached is a warning, not a refusal.
+-- **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` refuses a report without it. A package ingested before the field existed completes with a warning.
++- **The PR moved.** `keryx review complete` on a PR-bound package asks the tracker for the PR. When it is merged or its head is no longer the reviewed SHA, readiness item `head` fails and completion is refused. Nothing the agent writes into `report.md` lifts it: you waive `head` in your own words (`--waive head "<your words>"`, or the `review_waive_readiness` card), and the report then opens with a `Partial review:` line. `keryx review publish` fails the same item. A package is PR-bound when it targets a pull request or when its `--ref` is a pull request URL, even if it was ingested with `--target report`; a package with no PR binding is not asked; a tracker that cannot be reached is a warning, not a refusal.
++- **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` and `publish` refuse a report without it (`publish --partial` does not relax this, nor the round-record check below). A package ingested before the field existed completes with a warning.
++- **Round record.** `complete` and `publish` run one shared gate evaluation: a round record (`round.json`, `prior_findings.json`) edited after `review start` is refused by both, with the same message.
++- **Relabelled head.** `review complete --head <sha>` names the commit the round ran against. When it differs from the head `review start` recorded, it needs your own words (`--head-reason "<your words>"`, at a terminal or with `--answered-by` from a host question): the refusal names both SHAs, and the manifest records `head_override` with the previous head, the new head and your words. A `--head` equal to the recorded head needs nothing.
++- **Host questions.** A decision the agent recorded from its host's own question (`confirmedVia: host-question`) is reported provenance, not an attestation. The posted review says which decisions came that way and that keryx did not verify the operator's answer.
++- **A waiver covers its own item.** Waiving `files-covered`, `blast-radius`, `reviewers` or `ledger` removes only the research errors that belong to that item; an artifact-locator or manifest/dispatch mismatch error still refuses the close.
+ - **Citations.** When a dismissal's rebuttal cites a rule or document, `review ingest` looks the path up in the tree (at the reviewed commit and as it stands) and, if it is not there, adds a `citation not found: <path>` line to the finding's evidence. The finding is never deleted.
+ - **Narrowed.** A research obligation may close as `narrowed` with a `remains` text ("what is still open"). It counts as closed only with that text, and the report keeps it under "Refuted and narrowed" with its evidence.
+ - **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree. A quote absent from that file, or in it more than once, does not refuse the round (flow 460): the finding is kept with no line, never relocated by similarity, flagged `quote_unlocated` (with the candidate lines when ambiguous), listed in scope.md, and readiness item `quotes-located` fails until it has a disposition or the operator waives it. The ingest still refuses, naming the finding, a quote it could not check at all: the commit is not in the checkout, no file is named, or a size bound stopped the match. The report links the blob at that SHA.
+ 
+ ### The one dismissal that teaches something
+ 
+ `dismissed-incorrect` — and only that state — writes a note into
+ `.metaproject/memory/review-notes/`, naming the finding, the reviewer, why it was
+ dismissed, and the round and commit it came from:
+ 
+ ```console
+ $ keryx review complete <path> --finding F-002 --disposition dismissed-incorrect \
+     --evidence "human: alice ran the writer under umask 002; the mode is 0700"
+ review-note: 2026-08-03-round6#F-002 -> .metaproject/memory/review-notes/2026-08-03-round6__F-002.md (attested by human)
+ ```
+ 
+ The other three dismissals write nothing, deliberately. They say the finding was
+ *correct* and not worth doing now; feeding them into a learning signal teaches
+ the reviewer to stop raising true findings, and in the resulting `SKILL.md` that
+ is indistinguishable from having learned something real.
+
+--- docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json
+@@ 247,322 @@
+       "description": "Written by `keryx review start|attach` (flow 458) beside round.json: the sha256 of round.json and prior_findings.json as written (slice, ledger build and complete refuse a package whose files no longer match), the target's normalised key (pr:<owner/repo>#<n>, branch:<name> or range:<base>) and the base ref its merge-base was read from, so a later round finds this one however the target is spelled.",
+       "properties": {
+         "roundSha256": {
+           "type": "string",
+           "pattern": "^[0-9a-f]{64}$"
+         },
+         "priorFindingsSha256": {
+           "type": "string",
+           "pattern": "^[0-9a-f]{64}$"
+         },
+         "targetKey": {
+           "type": "string",
+           "minLength": 1
+         },
+         "targetBase": {
+           "type": "string",
+           "minLength": 1
+         }
+       }
+     },
++    "head_override": {
++      "type": "object",
++      "description": "The operator's act of relabelling the reviewed head at `review complete --head`: the head recorded at review start, the head recorded instead, and the operator's own words.",
++      "additionalProperties": false,
++      "required": [
++        "from",
++        "to",
++        "operator_quote",
++        "time"
++      ],
++      "properties": {
++        "from": {
++          "type": "string",
++          "minLength": 1
++        },
++        "to": {
++          "type": "string",
++          "minLength": 1
++        },
++        "operator_quote": {
++          "type": "string",
++          "minLength": 1
++        },
++        "time": {
++          "type": "string"
++        },
++        "confirmedVia": {
++          "type": "string",
++          "enum": [
++            "tui-card",
++            "remote-card",
++            "host-question"
++          ]
++        }
++      }
++    },
+     "readiness_waivers": {
+       "type": "array",
+       "description": "Readiness checklist items the operator waived in their own words.",
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": [
+           "item",
+           "operator_quote",
+           "time"
+         ],
+         "properties": {
+           "item": {
+             "type": "string"
+           },
+           "operator_quote": {
+             "type": "string",
+             "minLength": 1
+           },
+           "time": {
+
+--- src/commands/review.test.ts
+@@ 217,274 @@
+     "closed by 380bf3b0",
+     "--finding",
+     "F-002",
+     "--disposition",
+     "dismissed-incorrect",
+     "--evidence",
+     "ran the writer under umask 002; the mode is 0700",
+   ]);
+   expect(process.exitCode).toBe(0);
+ 
+   const findings = await findingsOf(pkg);
+   expect(findings.map((f) => f.disposition?.state)).toEqual(["acted-on", "dismissed-incorrect"]);
+ });
+ 
+ test("`review complete --head` reaches the gate: it is not read as a disposition flag, and a head that is not the PR's still fails", async () => {
+   const PR_URL = "https://github.com/acme/app/pull/7";
+   const RECORDED = "a".repeat(40);
+   const OTHER = "b".repeat(40);
+   const prLookup = async () => ({ exists: true, state: "OPEN", headSha: RECORDED });
+   const pkg = await ingest("2026-10-14-cli-complete-head", ["--target", "pr", "--ref", PR_URL, "--head", OTHER]);
+-  await reviewCommand(["complete", pkg, "--head", RECORDED], { prLookup });
++  const REASON = "the operator confirms the round ran against the PR head";
++  // Flow 488: a --head that differs from the recorded head is the operator's act: it needs the quote, and a terminal to carry it.
++  await reviewCommand(["complete", pkg, "--head", RECORDED], { prLookup, isTerminal: () => true });
++  expect(process.exitCode).toBe(1);
++  expect(errors.join("\n")).toContain("--head-reason");
++  process.exitCode = 0;
++  await reviewCommand(["complete", pkg, "--head", RECORDED, "--head-reason", REASON], { prLookup, isTerminal: () => true });
+   expect(process.exitCode).toBe(0);
+-  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).target.head).toBe(RECORDED);
++  const closed = JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8"));
++  expect(closed.target.head).toBe(RECORDED);
++  expect(closed.head_override).toMatchObject({ from: OTHER, to: RECORDED, operator_quote: REASON });
+   expect(errors.join("\n")).toContain("replaces the head recorded");
+ 
+   const strict = await ingest("2026-10-14-cli-complete-head-strict", ["--target", "pr", "--ref", PR_URL, "--head", RECORDED]);
+   process.exitCode = 0;
+-  await reviewCommand(["complete", strict, "--head", OTHER], { prLookup });
++  await reviewCommand(["complete", strict, "--head", OTHER, "--head-reason", REASON], { prLookup, isTerminal: () => true });
+   expect(process.exitCode).toBe(1);
+-  expect(errors.join("\n")).toContain("first line");
++  expect(errors.join("\n")).toContain("--waive head");
+ });
+ 
+ test("`review complete --head` with no value, or a value that is not a SHA, is refused", async () => {
+   const pkg = await ingest("2026-10-14-cli-complete-head-bad", ["--target", "pr", "--ref", "https://github.com/acme/app/pull/7", "--head", "a".repeat(40)]);
+   await reviewCommand(["complete", pkg, "--head"]);
+   expect(process.exitCode).toBe(1);
+   expect(errors.join("\n")).toContain("--head");
+   process.exitCode = 0;
+   errors = [];
+   await reviewCommand(["complete", pkg, "--head", "zzz"], { prLookup: async () => null });
+   expect(process.exitCode).toBe(1);
+   expect(errors.join("\n")).toContain("not a commit SHA");
+ });
+ 
+ test("an unknown disposition state is refused by name", async () => {
+   const pkg = await ingest("2026-08-29-cli-bad-state");
+   await reviewCommand(["complete", pkg, "--finding", "F-001", "--disposition", "dismissed", "--evidence", "x"]);
+   expect(process.exitCode).toBe(1);
+   expect(errors.join("\n")).toContain("dismissed-incorrect");
+ });
+
+--- src/commands/review.ts
+@@ 585,625 @@
+ ] as const;
+ 
+ const TIER_FLAGS = [
+   "--help",
+   "-h",
+   "--scope",
+   "--fix-attempt",
+   "--forced-strategy-change",
+   "--findings",
+   "--diff-lines",
+   "--verifier",
+   "--security",
+   "--premise",
+   "--session-provider",
+   "--session-model",
+   "--from-shell-config",
+   "--catalog",
+   "--json",
+ ] as const;
+ 
+-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"] as const;
++const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--head-reason", "--waive", "--answered-by", "--answer-text", "--question-text"] as const;
+ 
+ const STACK_FLAGS = ["--json"] as const;
+ const REVIEWERS_FLAGS = ["--json"] as const;
+ const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
+ const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--no-bail", "--json"] as const;
+ const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
+ const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
+ export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--style", "--with-role", "--package", "--json"] as const;
+ export const ESTIMATE_FLAGS = ["--package", "--manifest", "--confirm", "--quote", "--json"] as const;
+ const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
+ 
+ /**
+  * The `--name`s present in `args`, in order, with their values.
+  *
+  * Both spellings, matching {@link optionValue}: `--name value` and `--name=value`.
+  * A flag whose next token is another flag carries no value, so `--json --append
+  * f` reads as two flags rather than as `--json=--append`.
+  */
+ function flagTokens(args: readonly string[]): Array<{ name: string; value: string | undefined }> {
+   const tokens: Array<{ name: string; value: string | undefined }> = [];
+
+--- src/commands/review.ts
+@@ 4920,4991 @@
+     console.log(`published: ${result.event}${result.partial ? " (partial review)" : ""}`);
+   } else {
+     if (!shown) console.log(result.body.trimEnd());
+     console.log("review not published");
+     process.exitCode = 1;
+   }
+ }
+ 
+ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<void> {
+   rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
+   const ref = args[0];
+   if (!ref) {
+     throw new Error("Usage: keryx review complete <review-id-or-path>");
+   }
+   const dispositions = parseDispositions(args);
+   const hostQuestion = reviewCompletionHostAnswer(args);
+   const headFlag = flagTokens(args).find((token) => token.name === "--head");
+   if (headFlag !== undefined && (headFlag.value === undefined || headFlag.value.trim() === "")) {
+     throw new Error("--head needs a commit SHA: --head <sha> (the commit this round ran against, 7-40 hex characters).");
+   }
++  const headReason = flagTokens(args).find((token) => token.name === "--head-reason");
++  if (headReason !== undefined && (headReason.value === undefined || headReason.value.trim() === "")) {
++    throw new Error("--head-reason needs the operator's own words: --head-reason \"<operator quote>\".");
++  }
+   const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
+   if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
+     throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
+   }
+   // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
+   // statement, so a person has to be at the terminal that carries it.
+   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+   if (waiver !== undefined && hostQuestion === undefined && !isTerminal()) {
+     throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
+   }
++  if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {
++    throw new Error("--head-reason needs a terminal: relabelling the reviewed head is the operator's own statement and is refused when stdin or stdout is not a TTY. Outside a terminal, ask the operator with the host's question tool and pass --answered-by. Outside keryx shell, run this command in a terminal.");
++  }
+   const readinessWaivers = parseReadinessWaivers(args);
+   if (readinessWaivers.length > 0 && hostQuestion === undefined && !isTerminal()) {
+     throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
+   }
+   // completeReviewGated also refuses slice routing narrower than a slice's content needs (security review M3).
+   const {
+     manifest,
+     reviewNotes,
+     dispositions: tally,
+     coverageWaiver,
+     readiness,
+     rolesNotRun,
+     warnings,
+     estimateLine,
+-  } = await completeReviewGated(process.cwd(), ref, { hostQuestion, dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
++  } = await completeReviewGated(process.cwd(), ref, { hostQuestion, dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }), ...(headReason?.value === undefined ? {} : { headReason: headReason.value }) });
+   for (const warning of warnings) console.error(`warning: ${warning}`);
+   if (coverageWaiver !== undefined) {
+     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
+     console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > FIRST_FILES ? ", …" : ""}`);
+   }
+   console.log(`# managed review complete: ${manifest.reviewId}`);
+   console.log(`status: ${manifest.status}`);
+   if (readiness !== undefined) console.log(readinessLine(readiness));
+   if (estimateLine !== undefined) console.log(estimateLine);
+   const rolesLine = optionalRolesLine(rolesNotRun ?? []);
+   if (rolesLine !== undefined) console.log(rolesLine);
+   console.log(`dispositions recorded: ${dispositions.length}`);
+   // The price, now that both halves are known. This is the first moment the
+   // round's cost and what survived it are on the same screen, and it is the
+   // number the fan-out has to justify itself with. `not recorded` when nobody
+   // measured — never `0`, which would read as a round that was free.
+   for (const line of renderCostPerFinding(manifest.cost, manifest.filter_stats?.retained ?? 0)) {
+     console.log(line);
+   }
+   // Flow 207 AC5/AC6, on the attended path. A `dismissed-incorrect` whose
+
+--- src/commands/review.ts
+@@ 5037,5077 @@
+     if (open.state === undefined) {
+       throw new Error(
+         `--finding ${open.finding} was given no --disposition. Name one of ${FINDING_DISPOSITION_STATES.join(", ")}.`,
+       );
+     }
+     records.push(
+       open.evidence === undefined
+         ? { finding: open.finding, state: open.state }
+         : { finding: open.finding, state: open.state, evidence: open.evidence },
+     );
+     open = undefined;
+   };
+ 
+   for (const token of flagTokens(args)) {
+     if (!(COMPLETE_FLAGS as readonly string[]).includes(token.name)) {
+       continue;
+     }
+     if (token.value === undefined) {
+       throw new Error(`${token.name} needs a value.`);
+     }
+-    if (["--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"].includes(token.name)) {
++    if (["--waive-coverage", "--head", "--head-reason", "--waive", "--answered-by", "--answer-text", "--question-text"].includes(token.name)) {
+       continue;
+     }
+     if (token.name === "--finding") {
+       flush();
+       open = { finding: token.value };
+       continue;
+     }
+     if (open === undefined) {
+       throw new Error(
+         `${token.name} was given before any --finding. A disposition names ONE finding; write \`--finding <id> ${token.name} <value>\`.`,
+       );
+     }
+     if (token.name === "--disposition") {
+       if (!(FINDING_DISPOSITION_STATES as readonly string[]).includes(token.value)) {
+         throw new Error(
+           `Invalid --disposition: ${token.value}. Expected one of ${FINDING_DISPOSITION_STATES.join(", ")}.`,
+         );
+       }
+       open.state = token.value as FindingDispositionState;
+       continue;
+
+--- src/commands/review.ts
+@@ 5328,5373 @@
+ function printBlastRadiusHelp(): void {
+   console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
+                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                           [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief | --degradation [--degradation-cap <n>]] [--out <file>]
+ 
+ The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
+ --reach symbol (default) follows the changed exported names: importers that use none of them, and files behind a
+ high fan-in hub, are omitted with a reason instead of reviewed; --reach file walks every reverse import edge.
+ Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
+ --no-text-links. With --package the changed files are base...head at the package's pinned head.
+ --package stores the record in the package; --previous/--final carry the dropped files across rounds.
+ --degradation prints the review-degradation payload instead: the one-hop importers of the module that holds each changed
+ shared export (and of a barrel that re-exports it), from the code graph, under one cap shared by all of them
+ (--degradation-cap, default 40), with the cap stated and the files it dropped named (the first 20, then a count).
+ It always recomputes from the graph, also with --previous, never rewrites the package's record, and is refused together
+ with --json, --brief or --out; --degradation-cap is refused without --degradation.`);
+ }
+ 
+ function printCompleteHelp(): void {
+   console.log(`keryx review complete <review-id-or-path> [--finding <id>] [--disposition <value>] [--evidence <text>]
+-                      [--waive-coverage "<reason>"] [--waive "<reason>"] [--head <sha>]
++                      [--waive-coverage "<reason>"] [--waive "<reason>"] [--head <sha> --head-reason "<operator quote>"]
+ 
+ Marks the review complete once scope, raw reconciliation, dispatch evidence and coverage hold. --finding, --disposition
+ and --evidence record one finding's disposition (repeatable); --waive-coverage and --waive record an operator waiver;
+---head is the pull request head the round must match. A chunk-pass finding that findings.json does not hold is a warning, in the
++--head is the pull request head the round must match; a --head that differs from the head recorded at review start needs
++--head-reason with the operator's own words (a terminal or --answered-by) and is recorded as head_override. A chunk-pass finding that findings.json does not hold is a warning, in the
+ output and in report.md, never a refusal: "keryx review ingest --review-id <id>" brings it in.
+ 
+ It also writes one line, "Plan estimate vs actual:", into report.md and prints it: the plan range from plan.json (else
+ plan-confirmation.json), the time from the first to the last file in raw/, and the pauses longer than 10 minutes between
+ neighbouring raw replies. The line is replaced, never repeated, by a later close; it does not measure the time after the
+ last raw reply, and it says "actual not shown" when the raw files' times cannot be the round's (copied or restored).`);
+ }
+ 
+ function printStatusHelp(): void {
+   console.log("keryx review status <review-id-or-path>\n\nPrints the package's mode, status, target, head, flow, coverage, what the round left open and the plan estimate against the time of the raw replies. Takes no flags.");
+ }
+ 
+ function printRequiredHelp(): void {
+   console.log(`keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"]
+                       [--blast-radius <file>] [--pr-context <file>] [--depth auto|light|full] [--diff-lines <n>]
+                       [--all] [--gating] [--style] [--with-role <role>] [--package <review-dir>] [--json]
+ 
+ The reviewer set a round must dispatch. review-clean-code and review-style are off by default and listed under excluded
+ with the reason; --style or --with-role <role> turns them (or any role that is off) on, and with --package the choice is
+ kept in round-roles.json. reviewRoles.disabled in routing.config.json switches off any built-in role (a core role cannot
+
+--- src/commands/review.ts
+@@ 5642,5683 @@
+                        Findings acted on, dismissed, still open; precision; resolved-before-merge.
+   keryx review learn --pr <n> [--dry-run] [--json]
+   keryx review learn --reviewer <id> [--dry-run] [--json]
+   keryx review loop --flow <flow-id> [--task <Tn>]
+   keryx review stack [--json]
+   keryx review reviewers [--json]
+   keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
+   keryx review status <review-id-or-path>
+   keryx review report-parity <review-id-or-path>
+   keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
+   keryx review readiness <review-id-or-path> [--json]
+                         One checklist (10 items) that a review passes before it is
+                         completed or published; each failing item names its repair.
+   keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE]
+                        [--partial] [--yes]
+                         The only keryx path to GitHub: refuses while the checklist
+                         fails; --partial posts a "Partial review" header that lists
+                         each failing item. The body is shown before it is posted.
+   keryx review complete <review-id-or-path>
+                         [--finding <id> --disposition <state> --evidence <text>]...
+-                        [--waive-coverage "<operator quote>"] [--head <sha>]
++                        [--waive-coverage "<operator quote>"]
++                        [--head <sha> --head-reason "<operator quote>"]
+                         [--waive <item> "<operator quote>"]...
+   keryx review lightweight
+ 
+ An unrecognised option is REFUSED, not ignored. A flag that is silently dropped
+ writes nothing and still reports success, which is how a round can close with
+ zero dispositions and still print \`status: closed\`.
+ 
+ Modes:
+   ${MANAGED_REVIEW_MODES.join(", ")}
+ 
+ --head:
+   The commit the round ran against, written to \`manifest.target.head\` and read
+   by the \`review\` completion gate, which refuses to complete a flow whose last
+   round cannot say which tree it read. Omitted, it is \`git rev-parse HEAD\` —
+   the tree the reviewers actually read, which is deliberately preferred over a
+   \`pr\` target's own head so that a round run against something other than what
+   will merge FAILS the gate instead of passing it.
+   \`review complete --head <sha>\` names the commit the round actually reviewed
+   when the one recorded at start is wrong or missing; the head gate then checks
+   that commit, and the manifest records it. The gate is not loosened: a head that
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 753,793 @@
+ | final | yes | **yes, always** |
+ 
+ Do not decide this by memory:
+ 
+ ```bash
+ keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+ ```
+ 
+ It prints the decision and the reason, and reuses the previous record when
+ nothing moved. The final round recomputes whatever the file set did — otherwise a
+ fix introduced in round 3 gets no regression check at all, and the round that
+ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+ `keryx review readiness <review-id-or-path> [--json]` reads the package and prints every readiness item, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. Then bring in what the passes found: `merge` lists the findings and how many `findings.json` lacks; `keryx review ingest --review-id <id>` records them as `review-regression/<chunk>`; ingest and the report are repeated when a pass finished after the report was written. `review complete` warns about a pass finding still out of `findings.json` and does not refuse. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+ 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+-4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
++4. `verifier` — the verifier checked every blocker/major finding, or the operator waived the item; a `Not verified: N` line in the report no longer passes it.
+ 5. `ledger` — the ledger is READY.
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+ 7. `head` — the report's head is the PR head.
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+ 11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere ask the operator with the host's question tool and record the answer with `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>" --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>"` (SKILL.md "Wave D"; the record reads `confirmedVia: "host-question"`). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+ `keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic). An agent completes a review only through that card; `keryx review complete` is for a human in a terminal. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+ ### Every prior finding leaves the round with a disposition
+ 
+ A fix round that reports only new findings is unreadable: the author cannot tell
+ which of their fixes landed. Close the loop explicitly — one line per prior
+ finding, in the report, before the new findings:
+ 
+ | Disposition | Meaning |
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 98,138 @@
+ 
+ Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They are two commands for that reason: a caller that already runs collection per round would carry the posting along with it, and the reviewer would get six replies to one comment.
+ 
+ ### Step 6 — the model is computed, not chosen
+ 
+ Before dispatching each reviewer, run `keryx review tier` with the signals you hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`, `--verifier`, `--security`, `--forced-strategy-change`) and paste the `model` block it prints into that dispatch. The tier comes from the command, not from reading `rules/core/model-selection.mdc`.
+ 
+ It names a model only if you gave it your session (`--session-provider`/`--session-model` or `KERYX_SESSION_*`) and discovery found another. Otherwise it prints `inherit: true` with the tier — **adaptive**: pick your own runtime's model for that tier (`standard` = your session model; `light`/`deep` = your runtime's lighter/most capable class if its dispatch tool offers one, else the session model). A model id never goes into a dispatch by hand.
+ 
+ ### Step 6a — the plan bridge
+ 
+ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` and `step-10b` once, here, when scope and dispatch are fixed (keryx shell already published it as `pending` at the start — update it with `plan_update` instead; another host uses its own plan tool, "Hosts"). Publish each of steps 0–5 that ran as `completed` and each that did not run as `skipped`; publish steps 6–14 and 10b as `pending` (`in_progress` for the one starting now). From then on move each item with `plan_update` as its step completes — see the `session-plan-bridge` rule. `completed` means the step's artifact exists: steps 8–10 and 10b become `completed` (in the plan and in the report) only after `keryx review ingest` has recorded their results (10b: `--premises`), and a step whose reviewers were `BLOCKED` is `blocked`.
+ 
+ ## How to spawn (Steps 8 and 10)
+ 
+ - One `Agent` call per reviewer, all calls of a wave in a single message, so the wave runs in parallel.
+ - Reviewers are read-only: they read the diff and the files and run no command, except the read-only history commands `git log`, `git blame` and `git show` (law 4; `review-premise` too) where the host gives a read-only child git. keryx shell does not: a `spawn_subagent` child has no shell and no git tool, so you run `git log -L <start>,<end>:<file>` and `git blame -L <start>,<end> <file>` for each deliberate-looking site a reviewer must judge and pass the output in `context_files`; with neither, the reviewer says the history was not read. Only you (through `keryx review verify-run --timeout <seconds>`), the verifier and at most one testing reviewer run other commands, inside a time budget. Each payload carries `allowed_tools` (`read-only` or `run-tests`) and `exec_budget_s`.
+ - Use the reviewer's exact `subagent_type`. If the runtime has no such type, use `general-purpose` and name the reviewer's `SKILL.md` path in the prompt. Neither available: that reviewer is `BLOCKED`.
+ - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract. On keryx shell the slices travel in `context_files` instead (below). Run `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` on every payload before a mass dispatch; it fails `REVIEWER_INPUT_PATH_MISSING` on a missing `skill_path` or `context_doc`.
+ - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`. The one exception: a reply or dispatch error of `STATUS: RATE_LIMITED` is handled by the Rate limits rule under Control, never marked `BLOCKED`.
+-- The model comes from `keryx review tier` (Step 6). On `spawn_subagent` pass its tier as `model_tier` on every reviewer — `review-verifier` and simple reviewers `light`, normal `standard`, complex reviewers and `review-premise` `deep` (`keryx review tier --premise`); an omitted tier runs the child on your own model.
++- The model comes from `keryx review tier` (Step 6). On `spawn_subagent` pass its tier as `model_class` on every reviewer — `review-verifier` and simple reviewers `light`, normal `standard`, complex reviewers and `review-premise` `expert` (tier `deep`; `keryx review tier --premise`); an omitted tier runs the child on your own model.
+ 
+ ## Slices, waves and results — every host; keryx shell specifics marked
+ 
+ A reviewer starts in the project root and reads project files; a path outside the project root is unreadable to it. On keryx shell its `context_files` content reaches it wrapped as DATA, and slices and measurements travel only there (never pasted or retyped); elsewhere the prompt names the slice paths. `skill_path` and `pr_context` stay payload fields. The text reaches the reviewer in slices small enough to finish.
+ 
+ 0. **Publish the plan before anything else (keryx shell).** Your first tool call is `plan_set` with `step-0`…`step-14` and `step-10b` all `pending`. A shell turn that has open plan items is continued by the host; a turn that ends on a text reply is over, and a message saying the review "cannot be honestly completed" ends the run with nothing reviewed. Never end the turn while a step is `pending` or `in_progress`: mark it `blocked` only with a cause you cannot fix with a command, and otherwise keep working. Step 6a then updates this plan rather than creating it.
+ 1. **Slice first.** `keryx review slice --ref <base> --package <package> --host <host>` after `keryx review start`. It writes `<package>/slices/slice-NN.diff` files of at most 150000 bytes each and a `manifest.json` carrying a wave budget (`--wave-bytes`, never below the slice ceiling; default by `--host`: 60000 on keryx-shell, 150000 elsewhere): what ONE reviewer dispatch may total, so a role owning many slices is dispatched in slice waves that each fit the child deadline. On keryx shell with a large diff pass a small `--max-bytes` (for example 18000) and `--wave-bytes` (for example 54000) so no wave outruns a reviewer's five minutes; ledgers (csv, lockfiles, snapshots, generated files) are listed under `omissions` with a reason — list them in the report as not reviewed, never as clean.
+ 2. **Slices travel by path; on keryx shell, only by `context_files`.** The slices sit under the project (`<package>/slices`). On keryx shell pass each reviewer its slice paths in `spawn_subagent`'s `context_files`: the host copies the text into that reviewer's task, so you never paste or retype a slice. Elsewhere name the slice paths in the prompt. Put the `slices` ids in its reviewer-input. A dispatch that names a git range but no slice leaves the reviewer with nothing to read — that is `BLOCKED`, not a review.
+ 3. **Check before dispatch, every payload.** `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` for the wave; exit 1 means a payload names no slice, is over the wave ceiling (dispatch fewer slices, then the next wave), names a `skill_path` or `context_doc` that does not exist (`REVIEWER_INPUT_PATH_MISSING`), belongs to an unconfirmed over-threshold plan (`REVIEWER_INPUT_PLAN_UNCONFIRMED`), or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
+ 4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time. On keryx shell every round reviewer's `spawn_subagent` carries `review_wave: {"package": "<package>", "pass": "round"}` (a wave outside it counts against the turn's 32 children) and a `timeout_ms` that fits its wave: the default 300000 is sized for a wave of 60000 bytes, so a larger `--wave-bytes` needs a larger `timeout_ms`. Give each reviewer `max_rounds` of at least 40 (the default); a reviewer that spends its rounds reading the skill and the schema returns nothing. **Incomplete means the next wave while it makes progress, Not run when it stalls.** Every reviewer result lists the `slices` it covered, in its `REVIEW_RESULT` object, as ids (`"slices": ["slice-01", "slice-02"]`); an object with an `id` and an optional `coverage` note (`{"id": "slice-01", "coverage": "read in full"}`) is read the same way. An object with a `status` counts only when it is DONE, COMPLETE, COVERED or OK (any case); a slice marked NOT_READ, INCOMPLETE, SKIPPED or PARTIAL is not covered, so give a slice you did not read no `status` of that kind and leave it out. An entry with no id counts for nothing. **One driver file per dispatch.** Write `<package>/drivers/<reviewer>.json` with `{"reviewer": "<name>", "slices": [<ids dispatched>], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`: `ledger build` takes the reviewer's rule file from `definition` (a `skill_path` there, or inside a `payload` object, is read too) and the slices it was handed from `slices`. Only reviewer replies belong in `raw/`; a verification payload or a note filed there is reported as set aside and left in place, but it still costs a step. On `INCOMPLETE`, `BLOCKED` or `NEEDS_CONTEXT` (never accepted as a finished scope), and on a `DONE` that left slices open, `keryx review retry-plan --manifest <package>/slices/manifest.json --result <package>/raw/<reviewer>.txt --package <package>` decides and hands out the next wave of only the slices still uncovered (`--next-wave` plans one without a result). A result that covered a new slice spends no attempt; two results in a row with nothing new, or six failed rounds, print the `- **Not run:** …` line to paste into the report, and a result with nothing new first has its open slices cut in half. `keryx review slice --package <package>` already wrote one driver per reviewer x wave (`drivers/<reviewer>-w<n>.json`: slice ids, absolute slice paths, `result` path; the dispatcher adds `model`). Dispatch each wave in one batch, save each reply to its driver's `result`, and after each batch run `keryx review next --package <package>` (never `retry-plan` once per reviewer): it returns every reviewer's next wave at once, with reason `missing`, `retry`, `stalled` or `escalated`, or `done`. **While the plan is authorized, do not stop between batches.** The plan is authorized when `keryx review estimate` asks for no confirmation or the confirmation is recorded; `next` says so with the line "plan authorized; continue the loop without asking the operator; stop only for the card list, for plan growth, or on done / Not run" (`--json`: `planAuthorized`, `continue`). Then dispatch what it returned in the same turn: no "continue?", no "launch the next wave?", no "close with waivers or continue?", and no end of turn before `next` prints `done` or the reviewer is `Not run`. The stops are the closed list in `SKILL.detail.md` § "Between waves" and nothing else. After a crash or timeout run it first: it collects late results from `<package>/raw/` and never re-hands a finished slice. Only the operator can accept a smaller set than that (the `review_override_reviewers` card, or their answer to the host question recorded with `keryx review override-reviewers`, "Hosts"). An unfinished reviewer is never counted as a clean pass. **Persist every result, on every host.** On keryx shell pass each reviewer `save_result_to: <package>/raw/<reviewer>.txt`: the host writes its full final text there. Elsewhere the prompt tells the reviewer to write its whole reply to `<package>/raw/<reviewer>.txt` before it answers. Either way `review complete` has raw evidence after the transcript is cut, and you parse that file, never the tool output. Build `research.json` with `keryx review ledger build --package <package>` — never by hand: it reads the saved results, `scope-files.json` and the retry state, marks a reviewer complete only when its result is finished and its payloads cover the scope, and prints each gap with the exact next command and the waves left (a `retry-plan --next-wave` call, or a `--dispositions` entry for a raw finding). Run `keryx review ingest --research <package>/research.json` once it prints READY (exit 0). A refused `review_complete` card (or `keryx review complete` at a human's terminal) names what is missing: fix that with a command and close again; it is never `blocked`. `--head` wants a SHA (`git rev-parse HEAD`), not `HEAD`.
+ 5. **Never print a scope or a slice.** The tool output of one call is cut at about 20 KB and `keryx review scope` of a large PR prints hundreds of KB. Run it as `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json` and read the counts from the file (`keryx ctx read`, or `jq`); take `<base>` from `git symbolic-ref refs/remotes/origin/HEAD`, not a guessed `origin/main`. Create `.metaproject/data/review/` first (`mkdir -p`) — a missing directory is a command to run, not a blocker. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
+ 6. **Write mutants whole.** A testing reviewer's `mutant_candidates` cover every changed branch, code downstream of the diff included. Write them to `research-evidence/mutants.json` unchanged; you may not narrow them, and a candidate no pass has run still blocks the coverage gate (`SKILL.detail.md`, mutation pass).
+ 7. **Measure before `review-layout`.** Run the browser measurements (Playwright/Storybook) yourself and pass them in its first dispatch (`context_files` on keryx shell, by path elsewhere); they count as evidence when the command and viewport are named. A second `NEEDS_CONTEXT` from one role is Not run (`layout: no engine`), not another refill (`SKILL.detail.md`).
+ 
+ ## Control
+ 
+ - **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
+ - **Waves.** Split by diff domain (`core` = logic, security, architecture; `domain` = frontend, backend, conventions; `support` = style, tests), in that order; A/B/C/D below keep their dependency order, except Wave C, which starts early and overlaps A and B (see Wave C); Wave D runs after the last verifier pass. A full or `--all` round runs at most 10 reviewers per wave (`MAX_REVIEWERS_PER_WAVE_FULL`).
+ - **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`, at most 300 seconds (`MAX_RETRY_AFTER_SECONDS`). After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
+ - **Early verdict.** When every reviewer and the verifier are done, save every verifier pass to `research-evidence/verifications.json`, then run `keryx review verdict <package>` (it reads `<package>/raw`; the shared `.metaproject/data/review/raw` only when passed as `--raw`, which mixes in other rounds) and give the operator the verdict then; refuted findings are excluded only once `verifications.json` exists, held ones only once Wave D's claims are saved to `research-evidence/premises.json`. A verdict given before Wave D ran is provisional, and you say so: it counts as open the findings the judge may still hold or lower. The mutation pass, ledger and the `review_complete` card continue as the tail, and every managed round finishes them. The verdict is interim: the round is not done until `complete` (`SKILL.detail.md` § "Early verdict").
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 273,313 @@
+ - `.metaproject/reviews/blast-radius.json` (or `.metaproject/flows/<flow>/reviews/blast-radius.json` for a flow-attached round) — the handoff slot, read when no flag is passed. The ingest **consumes** it: copied into the package it screened and removed from the slot, so a later round cannot be screened against a set nobody recomputed.
+ 
+ Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
+ 
+ `review-degradation` (profile `full`, deep tier) asks what the regression screen does not: is the code worse than on the base, and can that be shown? It reads the diff plus the importers of the module that holds each changed shared export (and of a barrel that re-exports it), which `keryx review blast-radius --degradation [--degradation-cap <n>]` prints from the code graph under one cap shared by all exports; the model never picks the set. It has no severity floor and needs no `--blast-radius` record. A `major` or `blocker` of its with no `evidence_kind` is lowered to `info` at ingest and listed in `scope.md` under `## Degradation evidence screen`. A light round does not dispatch it. A delta round dispatches it on a fix slice that changes a source-code file (not a test, a document or a data file) and on every new deep slice; a fix slice's lines cannot tell whether they sit inside an exported function, so the payload settles it.
+ 
+ `--refuted` takes the findings this round **raised and then dismissed**, in the
+ same finding shape, each carrying `disposition: {state, evidence}` with one of
+ the `dismissed-*` states. Without it a package keeps only the survivors of an
+ unlogged triage — which is why precision measured over the recorded corpus
+ returns 100% whatever the reviewers actually got right.
+ 
+ The `review_complete` card records what became of a finding when the fix round closes: pass `dispositions`, a list of `{finding, disposition, evidence}`, one per finding; the operator sees each on the card.
+ At a human's terminal the same is `review complete --finding <id> --disposition <state> --evidence <ref>`, a triple repeatable per finding.
+ States: `unknown`, `acted-on`, `dismissed-incorrect`,
+ `dismissed-wont-fix`, `dismissed-out-of-scope`, `dismissed-deprioritised`.
+ Everything except `unknown` must cite where the outcome is written down — the
+ commit, the test, the decision. A recorded state and its citation cannot be
+ overwritten by a later close; record a correction as a new round.
+ 
+-`review complete` on a PR-bound package refuses a merged PR or a moved head unless `report.md`'s first line names the reviewed SHA and says so; a package with no PR binding is unaffected.
++`review complete` on a PR-bound package refuses a merged PR or a moved head unless the operator waives readiness item `head` (`review_waive_readiness` card, or `--waive head "<operator quote>"`); the report's first line still names the reviewed SHA for readers, but it unlocks nothing. A package with no PR binding is unaffected.
+ `review complete` refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed only warns.
+ `review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA (absent, or in several places) with no line, flagged `quote_unlocated`, instead of refusing the round (readiness item `quotes-located` lists it until it has a disposition); it still refuses, naming the finding, a quote it could not check at all (commit not in the checkout, no file named, or a size bound), and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
+ A finding may close as `narrowed` (research obligation `"status":"narrowed","remains":"<what remains>"`); it counts as closed only with that text, and the report keeps it under "Refuted and narrowed".
+ 
+ **Closing a fix round without dispositions leaves every finding reading `unknown`.** That is not "the reviewers were right"; it is "nobody wrote down what happened", and it is the single reason the precision figure cannot be read.
+ 
+ Managed modes:
+ 
+ - `lightweight`: report-only; no flow or managed review artifacts are created, and nothing is posted — no `comments reply`.
+ - `attach-review`: write under
+   `.metaproject/flows/<flow-dir>/reviews/<review-id>/`.
+ - `review-flow`: write under `.metaproject/reviews/<review-id>/`.
+ - `ingest`: convert an existing review report into managed findings, decisions,
+   and learning handoff, attached to a flow when one is explicit or matched.
+ 
+ Required artifacts for managed modes:
+ 
+ - `manifest.json`
+ - `scope.md`
+ - `coverage.md`
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md
+@@ 59,100 @@
+ 
+ | Machine `verdict` | First line |
+ |---|---|
+ | `REQUEST_CHANGES` | `**Changes requested — N Blocker, N Major, N Minor, N questions.**` |
+ | `APPROVE` | `**No blockers, merge-ready.**` |
+ | `APPROVE_WITH_SUGGESTIONS` | `**No blockers, merge-ready — N Minor, N questions.**` |
+ 
+ `N` counts findings **in the changed code** at that severity. A
+ `location_class: pre-existing` finding is not counted and does not flip the
+ verdict. Omit a zero count. A question is an `info` finding that needs an
+ author answer, rendered under Questions, not as a finding.
+ 
+ The second line is the context line: head, base, round, size, CI. If head moved
+ during the round, add `· unchecked: <commits>`.
+ 
+ The third line is the **evidence level** and is required: `Evidence level: static
+ only — did not run: <what>` when nothing was executed, or `Evidence level: ran —
+ <what ran>`. `keryx review complete` refuses a report without it.
+ 
+ When the PR was merged or its head moved after the review, the report's first line
+-says so and names the reviewed SHA, or `keryx review complete` refuses.
++says so and names the reviewed SHA. That line informs the reader only:
++`keryx review complete` still refuses until the operator waives readiness item `head`.
+ 
+ ### Refuted and narrowed
+ 
+ One line per finding that did not stand as reported, kept with its evidence so a
+ reader sees what was claimed and why it was set aside:
+ 
+ ```markdown
+ - **F-007. Dismissed** — <the author's rebuttal, quoted>. <citation not found: …> where the cited rule is not in the tree.
+ - **F-009. Narrowed** — <what the finding claimed>. **Remains:** <what is still open>. Evidence: <what was run>.
+ ```
+ 
+ A narrowed finding counts as closed only with its "Remains" text.
+ 
+ ## One finding
+ 
+ Blocker and Major as a paragraph, visible:
+ 
+ ```markdown
+ **F-012. The guard is not called on the save path.** [`src/store.ts:88`](https://github.com/<owner>/<repo>/blob/<head>/src/store.ts#L88), in the diff.
+ `save()` awaits `api.put` and then writes the form with no `runInAction`. A response that lands after unmount still mutates the store. Probe: <what was run, and what it printed>.
+
+--- src/gdskills/review-spawn-field-contract.test.ts
+@@ 1,104 @@
++import { readdirSync, readFileSync } from "node:fs";
++import path from "node:path";
++import { describe, expect, test } from "bun:test";
++import {
++  SPAWN_SUBAGENT_IGNORED_FIELDS,
++  createSpawnSubagentTool,
++} from "../harness/tool/builtin/spawn-subagent-tool";
++import { MODEL_CLASSES } from "../harness/routing/model-class";
++
++/**
++ * AC7 (flow 488): a bundled review skill must only tell the model to pass
++ * `spawn_subagent` fields the tool acts on. The orchestrator once told models to
++ * pass `model_tier`, which the tool accepts and silently ignores, so every
++ * reviewer ran on the parent's model. The accepted and ignored names are read
++ * from the tool's own schema and exported constant, not copied here.
++ */
++
++const REVIEW_SKILLS_ROOT = path.join(process.cwd(), "src", "gdskills", "bundled", "skills", "review");
++
++const tool = createSpawnSubagentTool({
++  cwd: process.cwd(),
++  getParentModel: () => ({ providerId: "anthropic", modelId: "claude-sonnet-5" }),
++  makeProvider: () => {
++    throw new Error("not used");
++  },
++  getDetectedProviders: () => [{ name: "anthropic" }],
++  idSeq: () => "id-0",
++  clock: () => "2026-01-01T00:00:00.000Z",
++});
++
++const schema = tool.definition.inputSchema as { properties: Record<string, unknown> };
++const IGNORED: readonly string[] = SPAWN_SUBAGENT_IGNORED_FIELDS;
++const ACCEPTED = new Set(Object.keys(schema.properties).filter((name) => !IGNORED.includes(name)));
++// Other snake_case tool names share lines with spawn_subagent (`review_complete`,
++// `memory_search`), so an unknown name is judged a mistyped spawn field only when it
++// shares the first word of a real one (`model_`, `max_`, `context_`, ...). `review_`
++// is left out: it prefixes the unrelated review tools.
++const FIELD_PREFIXES = new Set(
++  [...ACCEPTED, ...IGNORED].map((name) => name.split("_")[0]!).filter((word) => word !== "review"),
++);
++
++function isRejectedField(field: string): boolean {
++  if (IGNORED.includes(field)) return true;
++  if (ACCEPTED.has(field)) return false;
++  return FIELD_PREFIXES.has(field.split("_")[0]!);
++}
++
++function markdownFiles(dir: string): string[] {
++  const out: string[] = [];
++  for (const entry of readdirSync(dir, { withFileTypes: true })) {
++    const full = path.join(dir, entry.name);
++    if (entry.isDirectory()) out.push(...markdownFiles(full));
++    else if (entry.name.endsWith(".md")) out.push(full);
++  }
++  return out;
++}
++
++/** Backticked snake_case names on every line that mentions `spawn_subagent`. */
++function spawnFieldMentions(markdown: string): { line: number; field: string }[] {
++  const found: { line: number; field: string }[] = [];
++  markdown.split("\n").forEach((text, index) => {
++    if (!text.includes("spawn_subagent")) return;
++    for (const match of text.matchAll(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g)) {
++      if (match[1] === "spawn_subagent") continue;
++      found.push({ line: index + 1, field: match[1]! });
++    }
++  });
++  return found;
++}
++
++describe("bundled review skills only name spawn_subagent fields the tool acts on", () => {
++  test("the schema accepts model_class with every class and ignores model_tier", () => {
++    expect(ACCEPTED.has("model_class")).toBe(true);
++    expect(IGNORED).toContain("model_tier");
++    const modelClass = schema.properties.model_class as { enum: string[] };
++    expect(modelClass.enum).toEqual([...MODEL_CLASSES]);
++  });
++
++  test("the scanner flags an unknown field that looks like a spawn field", () => {
++    expect(isRejectedField("model_levl")).toBe(true);
++    expect(isRejectedField("model_class")).toBe(false);
++    expect(isRejectedField("memory_search")).toBe(false);
++  });
++
++  test("the scanner flags an ignored field", () => {
++    const hits = spawnFieldMentions("On `spawn_subagent` pass its tier as `model_tier` on every reviewer");
++    expect(hits.map((h) => h.field)).toEqual(["model_tier"]);
++    expect(isRejectedField("model_tier")).toBe(true);
++  });
++
++  const files = markdownFiles(REVIEW_SKILLS_ROOT);
++
++  test("there are review skill files to scan", () => {
++    expect(files.length).toBeGreaterThan(0);
++  });
++
++  for (const file of files) {
++    const rel = path.relative(process.cwd(), file);
++    test(`${rel}`, () => {
++      const bad = spawnFieldMentions(readFileSync(file, "utf8")).filter(({ field }) => isRejectedField(field));
++      expect(bad.map(({ line, field }) => `${rel}:${line} names \`${field}\``)).toEqual([]);
++    });
++  }
++});
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1048,1094 @@
+ // `src/harness/policy/profiles.ts` when `keryx serve` needed a profile it could
+ // COMPARE against — and the source-level guard written for that comparison found
+ // these two, which the R4c launch prompt had recorded as not existing. Their
+ // fingerprint inputs are preserved verbatim there; nothing about either posture
+ // changed. They stay out of the operator-selectable name set, because
+ // `network: allow` with `delegate: allow` is not something a `serve.json` should
+ // be able to select by typing a name.
+ const parentShellPolicy = shellParentProfile;
+ const childReadOnlyPolicy = shellChildReadOnlyProfile;
+ 
+ /**
+  * Create the `spawn_subagent` tool bound to a live shell host.
+  *
+  * The child ledger (tool-call + runtime pool shared by every spawn) is
+  * PER-TURN, not per-tool-instance: `deps.onLedgerReady` (when supplied) hands
+  * the caller a `resetBudget()` closure to call at each new parent turn, so a
+  * turn that spawns several subagents is never constrained by what earlier
+  * turns already spent. A caller that never invokes it keeps a single pool for
+  * the tool instance's whole lifetime, same as before.
+  */
++/**
++ * Schema fields `spawn_subagent` still accepts but never acts on. A skill that
++ * tells a model to pass one of these has instructed a no-op; the review-skill
++ * contract test reads this list.
++ */
++export const SPAWN_SUBAGENT_IGNORED_FIELDS = ["model_tier"] as const;
++
+ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubagentTool {
+   const idSeq = deps.idSeq ?? (() => randomUUID());
+   const clock = deps.clock ?? (() => new Date().toISOString());
+   const parentRunId = deps.parentRunId ?? idSeq();
+   const parentSessionId = deps.parentSessionId ?? idSeq();
+   const ledgerLimits = {
+     maxRuntimeMs: DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+   };
+   let ledger = new RemainingBudgetLedger(ledgerLimits, SUBAGENT_LEDGER_CAPS);
+   const routingBudgets = new Map<string, RoutingBudgetLedger>();
+   const emitFleetEvent = (event: SpawnSubagentFleetEvent): void => {
+     try {
+       deps.onFleetEvent?.(event);
+     } catch {
+       // A presentation host must never break the agent turn.
+     }
+   };
+   deps.onLedgerReady?.({
+     resetBudget: () => {
+       ledger = new RemainingBudgetLedger(ledgerLimits, SUBAGENT_LEDGER_CAPS);
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1484,1524 @@
+       try {
+       const parent = deps.getParentModel();
+       const detected = deps.getDetectedProviders();
+       const session = { providerId: parent.providerId, modelId: parent.modelId };
+       // The candidate set for tier resolution: whatever runtime detection
+       // reported, passed through verbatim. No table of model ids exists on this
+       // path — a provider that reported no models simply contributes none, and
+       // its tiers resolve to the session model.
+       const catalog: readonly (DiscoveredProvider & FlatPickerProvider)[] = detected.map((p) => ({
+         ...p,
+         models: p.models ?? [],
+       }));
+       let routingConfig: ReturnType<typeof loadRouting>;
+       try {
+         routingConfig = loadRouting(deps.cwd, deps.routingConfigDir);
+       } catch (error) {
+         // Malformed or unconvertible routing settings are surfaced, never routed around.
+         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
+         return { status: "Error", output: `spawn_subagent refused: routing settings are invalid: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+       }
+-      const legacyTierMigrationNotice = input.model_tier !== undefined
++      const legacyTierMigrationNotice = input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]] !== undefined
+         ? `ignored model_tier ${String(input.model_tier)} because model routing chooses the child's model; migrate the caller to model_class`
+         : undefined;
+       if (input.model_class !== undefined && !isModelClass(input.model_class)) {
+         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
+         return { status: "Error", output: "spawn_subagent model_class must be light, standard, expert, or frontier", isError: true };
+       }
+       if (legacyTierMigrationNotice !== undefined) {
+         emitFleetEvent({
+           kind: "log",
+           id: workerId,
+           entry: {
+             kind: "system",
+             text: `spawn_subagent ${legacyTierMigrationNotice}`,
+           },
+         });
+       }
+       if (isExternalRuntimeRequest && input.model_class !== undefined) {
+         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-unmanaged", task });
+         return {
+           status: "Error",

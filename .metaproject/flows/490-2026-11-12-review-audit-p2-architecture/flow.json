@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "490",
+  "slug": "review-audit-p2-architecture",
+  "title": "Review architecture: round state machine in code, byte ceiling for skills, staged modules, one host port (audit P2)",
+  "status": "initializing",
+  "createdAt": "2026-11-12T09:59:21.548Z",
+  "updatedAt": "2026-11-13T07:19:11.268Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "origin": {
+    "kind": "agent-finding",
+    "source": "docs/analysis/review-process-audit-2026-11-12.md"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Design record: round state machine, step command contract, phase split of this flow",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Round state machine and step command; end-to-end round test on a built ledger",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Round-need command replaces the prose rule; byte ceilings for skills; shrink the orchestrator skill",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Stage directories for src/review, table dispatch in review.ts, one Jev config reader",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "One host port with capability flags; opencode and Grok as named hosts",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Completion lock for ingest and ledger build; snapshot list derived from gate inputs; wiki page for src/review",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Delta round range subtracts base-branch merges: previous-head..head through a merge of main reviews main's code as the PR's (PR 1166 round 2: slice-03/05 were flow 487 and #1167)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-12T09:59:21.548Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-12T10:01:13.362Z",
+      "event": "task-added",
+      "detail": "T5: Design record: round state machine, step command contract, phase split of this flow"
+    },
+    {
+      "at": "2026-11-12T10:01:27.193Z",
+      "event": "task-added",
+      "detail": "T6: Round state machine and step command; end-to-end round test on a built ledger"
+    },
+    {
+      "at": "2026-11-12T10:01:34.164Z",
+      "event": "task-added",
+      "detail": "T7: Round-need command replaces the prose rule; byte ceilings for skills; shrink the orchestrator skill"
+    },
+    {
+      "at": "2026-11-12T10:01:42.063Z",
+      "event": "task-added",
+      "detail": "T8: Stage directories for src/review, table dispatch in review.ts, one Jev config reader"
+    },
+    {
+      "at": "2026-11-12T10:01:49.523Z",
+      "event": "task-added",
+      "detail": "T9: One host port with capability flags; opencode and Grok as named hosts"
+    },
+    {
+      "at": "2026-11-12T10:01:56.524Z",
+      "event": "task-added",
+      "detail": "T10: Completion lock for ingest and ledger build; snapshot list derived from gate inputs; wiki page for src/review"
+    },
+    {
+      "at": "2026-11-12T13:06:07.260Z",
+      "event": "task-added",
+      "detail": "T11: Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)"
+    },
+    {
+      "at": "2026-11-12T13:06:08.254Z",
+      "event": "task-added",
+      "detail": "T12: Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)"
+    },
+    {
+      "at": "2026-11-13T07:19:11.268Z",
+      "event": "task-added",
+      "detail": "T13: Delta round range subtracts base-branch merges: previous-head..head through a merge of main reviews main's code as the PR's (PR 1166 round 2: slice-03/05 were flow 487 and #1167)"
+    }
+  ]
+}

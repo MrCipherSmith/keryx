@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w3:SEC-1",
+      "answer": "uphold",
+      "reason": "Operator chose to close the agent-writable package JSON gap in this PR; flow 488 scope widened",
+      "quote": "uphold",
+      "at": "2026-11-12T13:03:16.995Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "major",
+        "verdict": "owner-decision",
+        "problemSha256": "0b827ab88223031cc352bbe52b3c5054ae6407a99df5237e5f38d5ad216d9a22"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-sec-1",
+        "questionText": "review-security-code-w3:SEC-1 (major, pre-existing): агент может сам дописать в JSON пакета waiver, target.head или verification:{}, и `review complete` закроет раунд READY. Uphold (чинить в этом PR) или dismiss?",
+        "answerText": "uphold",
+        "time": "2026-11-12T13:03:16.995Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w4:F-001",
+      "answer": "uphold",
+      "reason": "Operator keeps the stricter behaviour for packages closed through the removed escapes; break and repair go to the CHANGELOG",
+      "quote": "uphold",
+      "at": "2026-11-12T13:03:18.052Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "876a3ef4d90df51f845de8676680336b52967e6e9c99b6d45591cfdaa493351d"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-old-packages",
+        "questionText": "review-logic-w4:F-001 (minor): пакеты, закрытые через убранные обходы, теперь NOT READY и publish их отклоняет. Uphold (оставить поведение + запись в CHANGELOG) или dismiss?",
+        "answerText": "uphold",
+        "time": "2026-11-12T13:03:18.052Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-001",
+      "answer": "dismiss",
+      "reason": "Operator moved the tier-to-model_class code mapping to flow 490",
+      "quote": "dismiss",
+      "at": "2026-11-12T13:03:18.975Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "81772c2d1154ead7fc5a80e720624f0ab1d9ff82b63de03c5bac5ca7ed75f26b"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-model-class",
+        "questionText": "review-architecture-w2:F-001 (minor): таблица tier → model_class только в тексте skill. Uphold (переносить в код в этом PR) или dismiss (во flow 490)?",
+        "answerText": "dismiss",
+        "time": "2026-11-12T13:03:18.975Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-001",
+      "answer": "dismiss",
+      "reason": "Operator: no bypass (item head already passes with no recorded head); head_override from:null goes to flow 490",
+      "quote": "dismiss",
+      "at": "2026-11-12T13:03:19.698Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "55f83057aa4dab059157d8846dfcb8cd16a2346c9fef5524e43a21412865c1e9"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-empty-head",
+        "questionText": "review-security-code-w2:F-001 (minor): без записанного head `--head` принимается без причины. Uphold (чинить в этом PR) или dismiss (обхода нет, head_override from:null — во flow 490)?",
+        "answerText": "dismiss",
+        "time": "2026-11-12T13:03:19.698Z"
+      }
+    }
+  ]
+}

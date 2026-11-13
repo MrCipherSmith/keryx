@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 83,
+  "droppedKey": "c27c48eebf229150",
+  "fileBytes": {
+    "fixtures/routing-shell-pty.ts": 4860,
+    "scripts/benchmark/run-ablation-long.ts": 17715,
+    "scripts/benchmark/run-ablation-mutating.ts": 16269,
+    "scripts/benchmark/run-ablation-raw.ts": 7892,
+    "scripts/benchmark/run-ablation.ts": 12764,
+    "scripts/benchmark/run-containment.ts": 29628,
+    "scripts/benchmark/run-safety.ts": 24632,
+    "scripts/generate-commands-by-task.ts": 785,
+    "scripts/native-lifecycle-parity.ts": 24401,
+    "scripts/smoke/keryx-native-machine.ts": 7656,
+    "scripts/stress/keryx-shell-stress.ts": 38974,
+    "scripts/verify-native-coverage.ts": 77145,
+    "src/acp/commands.ts": 8741,
+    "src/acp/server-harness.test-helpers.ts": 3541,
+    "src/acp/server.ts": 79142,
+    "src/bus/client.ts": 34971,
+    "src/cli.ts": 10584,
+    "src/commands/acp.ts": 24208,
+    "src/commands/agents-external.ts": 42118,
+    "src/commands/bundle.ts": 29896,
+    "src/commands/help.ts": 2179,
+    "src/commands/hooks.ts": 56248,
+    "src/commands/hub-machine.ts": 13358,
+    "src/commands/learn-probe.ts": 6431,
+    "src/commands/operator-confirm-review.ts": 56667,
+    "src/commands/operator-confirm-tools.ts": 12425,
+    "src/commands/review-agents-runtime/host.ts": 44656,
+    "src/commands/review-agents-runtime/keryx-general-worker-entry.ts": 4575,
+    "src/commands/review-agents-runtime/keryx-general-worker.ts": 7956,
+    "src/commands/review-agents-runtime/native-adapter.ts": 19001,
+    "src/commands/review-bot.ts": 6943,
+    "src/commands/review-run.ts": 10809,
+    "src/commands/trigger-review.ts": 5088,
+    "src/commands/trigger.ts": 44378,
+    "src/commands/version.ts": 1534,
+    "src/flow/service.ts": 124637,
+    "src/governance/aggregate.ts": 6216,
+    "src/harness/probe/native-turn.ts": 6355,
+    "src/integrations/install-state.ts": 16709,
+    "src/lib/hub-machine/bridge.test-support.ts": 18767,
+    "src/lib/hub-machine/startup.ts": 3420,
+    "src/lib/routing-entrypoint.ts": 8035,
+    "src/review/bot/metrics.ts": 8276,
+    "src/review/bot/packages.ts": 3692,
+    "src/review/bot/post.ts": 15301,
+    "src/review/complete-gated.ts": 1273,
+    "src/review/completion-gate.ts": 48822,
+    "src/review/premise-question.ts": 12330,
+    "src/review/publish-guard.ts": 7471,
+    "src/session/commands/handlers.ts": 11302,
+    "src/session/commands/project-inspection.ts": 10039,
+    "src/session/host-types.ts": 12802,
+    "src/session/host.production.test-support.ts": 10994,
+    "src/session/native-runtime-production.ts": 16648,
+    "src/tui/approvals-inspector.ts": 8557,
+    "src/tui/approvals-sidebar.ts": 7997,
+    "src/tui/background-job-inspector.ts": 10662,
+    "src/tui/bus-panel.ts": 8324,
+    "src/tui/execution-plan-inspector.ts": 13940,
+    "src/tui/external-diff-sidebar.ts": 6125,
+    "src/tui/external-inspector.ts": 8766,
+    "src/tui/game-modal.ts": 23492,
+    "src/tui/games/modal.test-helpers.ts": 5238,
+    "src/tui/games/modal.ts": 10775,
+    "src/tui/governance-inspector.ts": 22024,
+    "src/tui/help-modal.ts": 13054,
+    "src/tui/jev-profile-inspector.ts": 6808,
+    "src/tui/mcp-consumer.ts": 24914,
+    "src/tui/permissions-inspector.ts": 7931,
+    "src/tui/review-layers-actions.ts": 4982,
+    "src/tui/rewind-inspector.ts": 8432,
+    "src/tui/routing-inspector.ts": 27533,
+    "src/tui/schedules-inspector.ts": 28661,
+    "src/tui/schedules-sidebar.ts": 8638,
+    "src/tui/session-info.ts": 13971,
+    "src/tui/setup-modal.ts": 12710,
+    "src/tui/subagent-inspector.ts": 7525,
+    "src/tui/theme-picker.ts": 11556,
+    "src/tui/triggers-inspector.ts": 18605,
+    "src/tui/turn-guard-inspector.ts": 7762,
+    "src/tui/workspace-inspector.ts": 11971,
+    "src/wiki/deep-enrich.ts": 20340,
+    "src/wiki/enrich.ts": 72632
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/tui/schedules-inspector.ts",
+        "src/tui/session-info.ts",
+        "src/acp/commands.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/review/bot/packages.ts"
+      ],
+      "bytes": 111732
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/review/completion-gate.ts",
+        "src/session/commands/project-inspection.ts",
+        "src/tui/background-job-inspector.ts",
+        "src/tui/execution-plan-inspector.ts",
+        "src/tui/external-inspector.ts",
+        "src/tui/games/modal.ts",
+        "src/tui/governance-inspector.ts",
+        "src/tui/mcp-consumer.ts"
+      ],
+      "bytes": 149942
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/tui/routing-inspector.ts",
+        "src/tui/schedules-sidebar.ts",
+        "src/tui/subagent-inspector.ts",
+        "src/tui/theme-picker.ts",
+        "scripts/benchmark/run-containment.ts",
+        "scripts/benchmark/run-safety.ts"
+      ],
+      "bytes": 109512
+    },
+    {
+      "id": "chunk-004",
+      "files": [
+        "scripts/verify-native-coverage.ts"
+      ],
+      "bytes": 77145
+    },
+    {
+      "id": "chunk-005",
+      "files": [
+        "src/acp/server.ts",
+        "src/commands/acp.ts",
+        "src/commands/bundle.ts",
+        "src/commands/help.ts"
+      ],
+      "bytes": 135425
+    },
+    {
+      "id": "chunk-006",
+      "files": [
+        "src/commands/hooks.ts",
+        "src/commands/review-agents-runtime/keryx-general-worker.ts",
+        "src/commands/review-agents-runtime/native-adapter.ts",
+        "src/commands/version.ts",
+        "src/harness/probe/native-turn.ts",
+        "src/review/complete-gated.ts",
+        "src/review/publish-guard.ts",
+        "src/tui/approvals-inspector.ts",
+        "src/tui/approvals-sidebar.ts",
+        "src/tui/bus-panel.ts",
+        "src/tui/external-diff-sidebar.ts",
+        "src/tui/help-modal.ts"
+      ],
+      "bytes": 143895
+    },
+    {
+      "id": "chunk-007",
+      "files": [
+        "src/tui/jev-profile-inspector.ts",
+        "src/tui/permissions-inspector.ts",
+        "src/tui/rewind-inspector.ts",
+        "src/tui/setup-modal.ts",
+        "src/tui/triggers-inspector.ts",
+        "src/tui/turn-guard-inspector.ts",
+        "src/tui/workspace-inspector.ts",
+        "src/wiki/deep-enrich.ts",
+        "scripts/benchmark/run-ablation-mutating.ts",
+        "scripts/benchmark/run-ablation-raw.ts",
+        "scripts/benchmark/run-ablation.ts",
+        "src/session/host.production.test-support.ts"
+      ],
+      "bytes": 142478
+    },
+    {
+      "id": "chunk-008",
+      "files": [
+        "src/tui/game-modal.ts",
+        "src/tui/games/modal.test-helpers.ts",
+        "fixtures/routing-shell-pty.ts",
+        "scripts/benchmark/run-ablation-long.ts",
+        "scripts/generate-commands-by-task.ts",
+        "scripts/smoke/keryx-native-machine.ts",
+        "scripts/stress/keryx-shell-stress.ts"
+      ],
+      "bytes": 98720
+    },
+    {
+      "id": "chunk-009",
+      "files": [
+        "src/flow/service.ts",
+        "src/session/commands/handlers.ts"
+      ],
+      "bytes": 135939
+    },
+    {
+      "id": "chunk-010",
+      "files": [
+        "src/bus/client.ts",
+        "src/commands/trigger.ts",
+        "src/cli.ts",
+        "src/commands/operator-confirm-tools.ts",
+        "src/session/host-types.ts",
+        "src/integrations/install-state.ts"
+      ],
+      "bytes": 131869
+    },
+    {
+      "id": "chunk-011",
+      "files": [
+        "src/wiki/enrich.ts",
+        "src/lib/hub-machine/bridge.test-support.ts",
+        "src/commands/review-agents-runtime/host.ts"
+      ],
+      "bytes": 136055
+    },
+    {
+      "id": "chunk-012",
+      "files": [
+        "src/session/native-runtime-production.ts",
+        "src/commands/agents-external.ts",
+        "src/review/bot/metrics.ts",
+        "src/acp/server-harness.test-helpers.ts",
+        "src/lib/hub-machine/startup.ts",
+        "src/review/premise-question.ts",
+        "src/commands/hub-machine.ts",
+        "src/commands/learn-probe.ts",
+        "src/lib/routing-entrypoint.ts",
+        "src/commands/review-agents-runtime/keryx-general-worker-entry.ts",
+        "src/tui/review-layers-actions.ts",
+        "src/commands/review-run.ts",
+        "src/review/bot/post.ts"
+      ],
+      "bytes": 149824
+    },
+    {
+      "id": "chunk-013",
+      "files": [
+        "scripts/native-lifecycle-parity.ts",
+        "src/commands/review-bot.ts",
+        "src/commands/trigger-review.ts",
+        "src/governance/aggregate.ts"
+      ],
+      "bytes": 42648
+    }
+  ]
+}

@@ -782,10 +782,10 @@ keryx review readiness <review-id-or-path>   # NOT READY lists each failing item
 | 1 | every changed file is covered by a wave or a recorded waiver | run the missing wave |
 | 2 | no file the blast radius cut is left unreviewed | `keryx review chunks plan`, `estimate`, `next`/`record`, `merge` |
 | 3 | every planned reviewer was dispatched and ingested | dispatch it, save the reply, `ledger build` |
-| 4 | the verifier checked every finding it should | run the verifier, or let the report state the count it did not |
+| 4 | the verifier checked every blocker and major finding | run the verifier, or you waive `verifier`; a `Not verified: N` line in the report does not pass it |
 | 5 | the ledger is READY | close each obligation with a disposition |
 | 6 | coverage.md does not list a reviewer as `run` that did not finish | re-run `keryx review ingest` |
-| 7 | the report's head is the PR head | `--head <sha>` |
+| 7 | the report's head is the PR head | re-run the round on the PR's head, or you waive `head`; a first line in the report does not pass it |
 | 8 | pending mutation candidates and parity warnings are named | add them to the report |
 | 9 | the changed-file count equals the PR's own file list | recount from the PR's files |
 
@@ -878,10 +878,14 @@ visible to the log. Four things the automatic log does not do:
 - The log is a plain editable file. Anyone with write access to the package can
   change it, so it is evidence of what keryx saw, not proof against tampering.
 
-### Five gates that keep a report honest
+### Gates that keep a report honest
 
-- **The PR moved.** `keryx review complete` on a PR-bound package asks the tracker for the PR. When it is merged or its head is no longer the reviewed SHA, completion is refused until the first line of `report.md` names the reviewed SHA and says so ("Reviewed `1a2b3c4` — the PR has since merged."). A package is PR-bound when it targets a pull request or when its `--ref` is a pull request URL, even if it was ingested with `--target report`; a package with no PR binding is not asked; a tracker that cannot be reached is a warning, not a refusal.
-- **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` refuses a report without it. A package ingested before the field existed completes with a warning.
+- **The PR moved.** `keryx review complete` on a PR-bound package asks the tracker for the PR. When it is merged or its head is no longer the reviewed SHA, readiness item `head` fails and completion is refused. Nothing the agent writes into `report.md` lifts it: you waive `head` in your own words (`--waive head "<your words>"`, or the `review_waive_readiness` card), and the report then opens with a `Partial review:` line. `keryx review publish` fails the same item. A package is PR-bound when it targets a pull request or when its `--ref` is a pull request URL, even if it was ingested with `--target report`; a package with no PR binding is not asked; a tracker that cannot be reached is a warning, not a refusal.
+- **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` and `publish` refuse a report without it (`publish --partial` does not relax this, nor the round-record check below). A package ingested before the field existed completes with a warning.
+- **Round record.** `complete` and `publish` run one shared gate evaluation: a round record (`round.json`, `prior_findings.json`) edited after `review start` is refused by both, with the same message.
+- **Relabelled head.** `review complete --head <sha>` names the commit the round ran against. When it differs from the head `review start` recorded, it needs your own words (`--head-reason "<your words>"`, at a terminal or with `--answered-by` from a host question): the refusal names both SHAs, and the manifest records `head_override` with the previous head, the new head and your words. A `--head` equal to the recorded head needs nothing.
+- **Host questions.** A decision the agent recorded from its host's own question (`confirmedVia: host-question`) is reported provenance, not an attestation. The posted review says which decisions came that way and that keryx did not verify the operator's answer.
+- **A waiver covers its own item.** Waiving `files-covered`, `blast-radius`, `reviewers` or `ledger` removes only the research errors that belong to that item; an artifact-locator or manifest/dispatch mismatch error still refuses the close.
 - **Citations.** When a dismissal's rebuttal cites a rule or document, `review ingest` looks the path up in the tree (at the reviewed commit and as it stands) and, if it is not there, adds a `citation not found: <path>` line to the finding's evidence. The finding is never deleted.
 - **Narrowed.** A research obligation may close as `narrowed` with a `remains` text ("what is still open"). It counts as closed only with that text, and the report keeps it under "Refuted and narrowed" with its evidence.
 - **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree. A quote absent from that file, or in it more than once, does not refuse the round (flow 460): the finding is kept with no line, never relocated by similarity, flagged `quote_unlocated` (with the candidate lines when ambiguous), listed in scope.md, and readiness item `quotes-located` fails until it has a disposition or the operator waives it. The ingest still refuses, naming the finding, a quote it could not check at all: the commit is not in the checkout, no file is named, or a size bound stopped the match. The report links the blob at that SHA.

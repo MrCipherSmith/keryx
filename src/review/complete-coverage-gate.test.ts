@@ -29,6 +29,8 @@ beforeEach(() => {
     JSON.stringify({ schemaVersion: 1, changedFiles: ["src/a.ts"], files: [], dropped: FAR.map((file) => ({ file, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason: "cap", detail: "over the cap" })) }),
   );
   mkdirSync(path.join(pkg, "slices"), { recursive: true });
+  // The package manifest the coverage waiver's seal is written into (review round 3).
+  writeFileSync(path.join(pkg, "manifest.json"), JSON.stringify({ reviewId: "gate", artifacts }));
   writeResearch();
 });
 afterEach(() => rmSync(pkg, { recursive: true, force: true }));
@@ -52,6 +54,25 @@ test("the only way past is the operator's own words, recorded with the time and 
   const saved = JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8"));
   expect(saved.dispatch.coverageWaiver).toEqual(waiver);
   expect(await packageResearchErrors(pkg, artifacts, [])).toEqual([]);
+});
+
+test("PR 1166 round 3: a coverage waiver written into research.json by hand is not honoured; the recorded one is sealed", async () => {
+  const forged = { operatorQuote: "skip the far files, they are generated", time: "2026-10-13T10:00:00.000Z", files: FAR };
+  writeResearch({ coverageWaiver: forged });
+  const errors = (await packageResearchErrors(pkg, artifacts, [])).join(" ");
+  expect(errors).toContain("8 in-scope file(s) are uncovered");
+  expect(errors).toContain("keryx did not record");
+
+  writeResearch();
+  await recordCoverageWaiver(pkg, "skip the far files, they are generated", new Date("2026-10-13T10:00:00Z"));
+  expect(JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")).seals.coverageWaiver).toMatch(/^[0-9a-f]{64}$/);
+  expect(await packageResearchErrors(pkg, artifacts, [])).toEqual([]);
+
+  // Widening the recorded waiver by hand breaks its seal.
+  const research = JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8"));
+  research.dispatch.coverageWaiver.files = [...FAR, "src/late.ts"];
+  writeFileSync(path.join(pkg, "research.json"), JSON.stringify(research));
+  expect((await packageResearchErrors(pkg, artifacts, [])).join(" ")).toContain("keryx did not record");
 });
 
 test("R2-18: the quote has a boundary of 8 characters of the operator's own text, and needs letters or digits", async () => {

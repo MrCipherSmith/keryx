@@ -2170,9 +2170,10 @@ test("R4-D2: once the finding is ingested the close says nothing and the report.
   await completeManagedReview(ROOT, pkg);
   await ingestFindings("2026-10-25-pass-clean", {
     blastRadius: RADIUS,
-    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\nNot verified: 1\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
   });
-  const after = await completeManagedReview(ROOT, pkg);
+  // The ingested finding is a major nobody verified; a `Not verified: N` line no longer passes it (flow 488), the operator's waiver does.
+  const after = await completeManagedReview(ROOT, pkg, { waiveReadiness: [{ items: ["verifier"], quote: "the operator accepts the unverified chunk-pass finding" }] });
   expect(after.warnings.join("\n")).not.toContain("chunk-pass finding");
   expect(await readFile(path.join(ROOT, pkg, "report.md"), "utf8")).not.toContain("## Chunk pass findings not in the round");
 });

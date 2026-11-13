@@ -234,16 +234,24 @@ test("`review complete --head` reaches the gate: it is not read as a disposition
   const OTHER = "b".repeat(40);
   const prLookup = async () => ({ exists: true, state: "OPEN", headSha: RECORDED });
   const pkg = await ingest("2026-10-14-cli-complete-head", ["--target", "pr", "--ref", PR_URL, "--head", OTHER]);
-  await reviewCommand(["complete", pkg, "--head", RECORDED], { prLookup });
+  const REASON = "the operator confirms the round ran against the PR head";
+  // Flow 488: a --head that differs from the recorded head is the operator's act: it needs the quote, and a terminal to carry it.
+  await reviewCommand(["complete", pkg, "--head", RECORDED], { prLookup, isTerminal: () => true });
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--head-reason");
+  process.exitCode = 0;
+  await reviewCommand(["complete", pkg, "--head", RECORDED, "--head-reason", REASON], { prLookup, isTerminal: () => true });
   expect(process.exitCode).toBe(0);
-  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).target.head).toBe(RECORDED);
+  const closed = JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8"));
+  expect(closed.target.head).toBe(RECORDED);
+  expect(closed.head_override).toMatchObject({ from: OTHER, to: RECORDED, operator_quote: REASON });
   expect(errors.join("\n")).toContain("replaces the head recorded");
 
   const strict = await ingest("2026-10-14-cli-complete-head-strict", ["--target", "pr", "--ref", PR_URL, "--head", RECORDED]);
   process.exitCode = 0;
-  await reviewCommand(["complete", strict, "--head", OTHER], { prLookup });
+  await reviewCommand(["complete", strict, "--head", OTHER, "--head-reason", REASON], { prLookup, isTerminal: () => true });
   expect(process.exitCode).toBe(1);
-  expect(errors.join("\n")).toContain("first line");
+  expect(errors.join("\n")).toContain("--waive head");
 });
 
 test("`review complete --head` with no value, or a value that is not a SHA, is refused", async () => {

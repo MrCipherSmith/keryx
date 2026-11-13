@@ -1,0 +1,97 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "slice-04 pulls the tamper check, evidence level and readiness checklist into one shared evaluateCloseGates (close-gates.ts), turns the head gate from a thrower into a result that readiness item `head` consumes, and tags research errors with the readiness items that can waive them. The direction is sound and the dependency graph stays acyclic: close-gates depends on readiness, round-record and evidence-level, and managed and publish depend on close-gates. One structural gap remains. The research-error gate, including the integrity errors that 'no waiver covers', lives in a complete-only `beforeReadiness` callback, not in the shared evaluation. So `review publish` still never runs it, which contradicts the module's stated contract that both commands get their refusals from it. Also, the item tags in research.ts are untyped strings duplicating READINESS_ITEMS ids.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "ARCH-1",
+      "severity": "major",
+      "file": "src/review/close-gates.ts",
+      "line": null,
+      "quote": "await input.beforeReadiness?.();",
+      "problem": "The shared close gate does not hold all of the close refusals. close-gates.ts says 'Both commands now get their refusals from here', but the research-error gate runs inside the `beforeReadiness` callback that only `review complete` passes (managed.ts: `const researchProblems = (await packageResearchErrorsTagged(packageDir, manifest.artifacts, researchFindings))`). That gate covers the untagged integrity errors research.ts documents as 'an integrity failure no waiver covers': an invalid research or dispatch artifact locator, and research.json recording a dispatch the manifest does not declare. `publishReview` calls `evaluateCloseGates` with no hook, so it never evaluates them. `computeReadiness` does not replace that gate either: it reads `research.json` by a fixed path (readiness.ts:448), and `ledgerCheck` runs only `researchErrors(ctx.research, ctx.findings)` (readiness.ts:316). Neither checks `manifest.artifacts` locators or the manifest/dispatch mismatch. The hook is a caller-specific side door into a function whose contract is 'one evaluation for both callers'.",
+      "impact": "A concrete path exists. complete-waiver-scope.test.ts sets `manifest.artifacts.research = \"elsewhere.json\"` (or deletes `artifacts.reviewerDispatch`) and asserts that `review complete` refuses, whatever is waived. The same package passes `keryx review publish` without `--partial`, because publish does not require a closed package (commands/review.ts runPublish) and its readiness never sees those errors. This is the same complete-refuses / publish-posts asymmetry that AC5 and this module were written to remove, now for the errors the PR itself classes as unwaivable.",
+      "suggested_fix": "Move the research-error evaluation into `evaluateCloseGates`, after `beforeReadiness` and before `computeReadiness`. Call `packageResearchErrorsTagged(packageDir, manifest.artifacts, findings)` on the manifest re-read from disk, filter by `manifest.readiness_waivers`, and always throw on untagged errors. With `relaxReadiness`, publish may skip the tagged ones, because those are also failing readiness items, but never the untagged ones. Reduce the complete-only hook to recording the operator's waivers (a write), so the shared function owns every refusal. Then add a publish case to complete-waiver-scope.test.ts or publish-gate-parity.test.ts for the invalid-locator and undeclared-dispatch packages.",
+      "evidence": "Read close-gates.ts:1-45 (head), managed.ts:1105-1130 (the beforeReadiness body with packageResearchErrorsTagged), publish.ts:165-180 (evaluateCloseGates call with no beforeReadiness), research.ts:120-160 (untagged locator/mismatch/unreadable errors), readiness.ts:313-319 and 445-463 (ledgerCheck and computeReadiness read research.json directly and never inspect manifest.artifacts), commands/review.ts:4881-4917 (runPublish has no closed-status precondition).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "class_scope": {
+        "sites": [
+          "src/review/close-gates.ts:41",
+          "src/review/managed.ts:1113",
+          "src/review/managed.ts:1120",
+          "src/review/publish.ts:177"
+        ],
+        "enumeration_method": "keryx ctx rg 'publishReview\\(' src (2 production callers: commands/review.ts:4911 and operator-confirm-review.ts:210/245, all through publishReview, which is the one evaluateCloseGates call without a hook); keryx ctx rg 'beforeReadiness' (one producer, managed.ts:1113); keryx ctx rg 'artifacts|packageResearchErrors|researchErrors\\(' over readiness.ts/publish.ts (no locator or mismatch check on the publish path)"
+      }
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "minor",
+      "file": "src/review/research.ts",
+      "line": null,
+      "quote": "...tagged(completeness, [\"files-covered\", \"blast-radius\"]),",
+      "problem": "research.ts now encodes readiness item ids (`ledger`, `reviewers`, `files-covered`, `blast-radius`) as untyped `readonly string[]` in `TaggedResearchError.items`. The ids are owned by `READINESS_ITEMS` / `ReadinessItemId` in readiness.ts, so this is a second, unchecked copy of a closed set. A renamed or split readiness item compiles cleanly and leaves its research errors permanently unwaivable. This fails closed, but nothing tells the author.",
+      "impact": "Maintainability: the coupling between the research gate and the readiness checklist that the PR introduces is invisible to the type checker.",
+      "suggested_fix": "Type the tags: `items: readonly ReadinessItemId[]` via `import type { ReadinessItemId } from \"./readiness\"`. The import is type-only, so readiness.ts importing research.ts at runtime creates no cycle. Alternatively, export the item-to-error mapping from readiness.ts next to READINESS_ITEMS.",
+      "evidence": "research.ts:128-160 (TaggedResearchError, tagged(...) call sites); readiness.ts:694-710 (READINESS_ITEMS and ReadinessItemId); readiness.ts imports from ./research, so a value import back would cycle and a type import would not.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "info",
+      "file": "src/review/publish.ts",
+      "line": null,
+      "quote": "if ((research?.dispatch?.coverageWaiver ?? research?.coverageWaiver)?.confirmedVia === \"host-question\") named.push(\"coverage waiver\");",
+      "problem": "`hostQuestionNotice` re-implements the research.json coverage-waiver lookup (`dispatch.coverageWaiver ?? coverageWaiver`) inline. completion-host.ts:24 already does the same lookup with its own ad-hoc cast. These are two readers of one storage shape, and neither goes through coverage-complete, which writes it.",
+      "impact": "If the waiver's storage location changes, both readers need the edit. Today they agree.",
+      "suggested_fix": "Export a `readCoverageWaiver(research)` from coverage-complete.ts (the writer) and use it in both publish.ts and completion-host.ts.",
+      "evidence": "keryx ctx rg 'dispatch\\?\\.coverageWaiver' src: exactly 2 sites, completion-host.ts:24 and publish.ts:72.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/flow-488-review-gates`
+- Merge-base: `66ee001172e0d0c048a73727c3e6e099f9149b0a`, head `e9ac9253fde7`
+- Scope mode: payload slices (slice-04 read in full)
+- Stack detected: generic-ts (Bun CLI)
+
+### Summary
+The PR turns the head gate into a value, makes readiness item `head` consume that value, and puts tamper, evidence level and readiness behind one `evaluateCloseGates`. That improves the structure, and no dependency-direction or cycle problem was introduced. The new abstraction is not yet the single gate it claims to be. The research-error gate, including its unwaivable integrity errors, sits in a complete-only callback, so `review publish` still skips it (ARCH-1).
+
+### Stats
+- blocker: 0 | major: 1 | minor: 1 | info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. close-gates depends on readiness, round-record and evidence-level; managed and publish depend on close-gates. No cycle.
+
+### Module Boundary Violations
+- ARCH-2 (minor): readiness item ids are duplicated as untyped strings in research.ts.
+- ARCH-3 (info): the coverage-waiver storage shape is read in two places.
+
+### Design Pattern Misuse
+- ARCH-1 (major): the shared gate leaves the research and integrity refusals in a caller-specific hook, so publish bypasses them.
+
+### SOLID Violations
+None beyond ARCH-1.
+
+### Framework-Specific
+N/A. No NestJS, React or MobX code is in this slice.
+
+Routing audit: graph_used: no (not-relevant: diff-bounded slice; callers enumerated with keryx ctx rg); wiki_used: no (not-relevant: the intent is stated in the module headers and payload summary); ctx_used: yes; raw_rg_used: no.

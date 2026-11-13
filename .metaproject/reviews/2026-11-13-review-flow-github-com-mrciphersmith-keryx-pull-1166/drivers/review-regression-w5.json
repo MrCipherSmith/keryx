@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-regression",
+  "wave": 5,
+  "waves": 6,
+  "slices": [
+    "slice-05"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-05",
+      "path": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166/slices/slice-05.diff",
+      "bytes": 140406
+    }
+  ],
+  "result": "raw/review-regression-w5.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+}

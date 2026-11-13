@@ -1,0 +1,46 @@
+STATUS: DONE
+
+Mutation pass: NOT RUN. The round-2 brief allows only `git log|blame|show` and `keryx ctx rg`, so no suite was executed and no mutation table exists. 0 of 12 candidate mutants were run; all 12 are listed in `mutant_candidates` for the main session. No result below is a predicted mutation presented as observed. Slice read in full except the merged-from-main files (src/session/**, src/standard/help-groups.ts), which were skipped as instructed.
+
+Checklist reading: the new suites (seals.test.ts, publish-gate-parity.test.ts additions, complete-waiver-scope.test.ts additions, readiness.test.ts additions, complete-head-relabel.test.ts CLI case) assert on thrown messages, manifest state on disk and posted bodies; no fixed sleeps, no network, fixtures built through the real `ingestReady`/`createManagedReviewPackage` producers. The seal fixture helper `sealVerificationsAsIngest` is documented as a stand-in and seals.test.ts goes through the real ingest path, so the fixture does not claim a shape the producer cannot emit. No convention finding.
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-04"],
+  "summary": "Test shape is sound; the mutation pass could not run (no run-tests permission), so five SEC-1/AC9 branches are reported as unpinned-by-reading (info) and 12 mutants are handed over.",
+  "findings": [
+    {
+      "id": "TP-1",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 519,
+      "quote": "carriedVerification.has(key) && carriedVerification.get(key) !== finding.verification",
+      "problem": "Several branches added for flow 488 AC9 appear to have no test that separates them from the condition beside them. Read from the test files, not run: (1) managed.ts:519 `carriedVerification.has(key) && carriedVerification.get(key) !== finding.verification` is the clause that keeps a verification carried INTO the merge from being sealed. seals.test.ts's reviewer result (REVIEWER_RESULT) carries no `verification`, so no fixture feeds an agent-supplied verification through ingest and asserts it stays unsealed. (2) seals.ts `verificationProblem` tests `!filled(verdict) || !filled(method) || !filled(evidence)`; the only inputs are `{}` and `{ verdict }` (readiness.test.ts), so a verdict+method record without evidence, or verdict+evidence without method, separates nothing. (3) readiness.ts:610 `keptSeals` (a waiver kept across a second `--waive` keeps its seal) has no test that waives a second item and then re-checks the first. (4) managed.ts:1148 `stored.seals !== undefined || options.head !== undefined` (a pre-seal package closed without `--head` gains no seals) has no test that closes such a package and reads back `seals`. (5) close-gates.ts:53-54 `closedPublish ? { coverage: false } : {}` has no fixture whose closed package fails the live coverage gate, so nothing separates it from the open-package path.",
+      "evidence": "keryx ctx rg over src/review/*.test.ts for `readinessWaivers|seals?.|unsealed|manifest.seals` returns one hit (readiness.test.ts:71, the fixture helper); `verification: {` / `verification: VERIFIED` appear in seals.test.ts only in post-ingest writeFindings calls and in the ingest-applied verification, never in a reviewer result; publish-gate-parity.test.ts and seals.test.ts name no closed-package coverage case. Not confirmed by execution: the mutants are in mutant_candidates (ids M1-M5) and unrun.",
+      "impact": "If a later edit drops one of these clauses, the suite may stay green while the SEC-1 property it implements (only a keryx-applied verification and a keryx-written waiver or head count) loosens. The gates themselves read correct at head.",
+      "suggested_fix": "Run M1-M5 first. For (1) add a seals.test.ts case whose reviewer result finding carries a well-formed `verification` and assert the item `verifier` still fails and `manifest.seals.verifications` has no key for it. For (2) add `{ verdict, method }` and `{ verdict, evidence }` to the readiness.test.ts loop. For (3) waive `verifier` then `files-covered` in two calls and assert both are honoured; then hand-edit one quote and assert only it is refused. For (4) close a package built without seals and assert `seals` stays undefined. For (5) a closed package with an uncovered scope file must still publish.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 },
+  "mutation_table": "not run: no run-tests permission in this dispatch; 0 of 12 candidates executed, 12 not reached",
+  "mutant_candidates": [
+    { "id": "M1", "file": "src/review/managed.ts", "anchor": "carriedVerification.has(key) && carriedVerification.get(key) !== finding.verification", "replacement": "true", "kind": "behavior" },
+    { "id": "M2", "file": "src/review/seals.ts", "anchor": "!filled(verification.method) || ", "replacement": "", "kind": "behavior" },
+    { "id": "M3", "file": "src/review/seals.ts", "anchor": " || !filled(verification.evidence)", "replacement": "", "kind": "behavior" },
+    { "id": "M4", "file": "src/review/readiness.ts", "anchor": ".filter(([item]) => !(ids as string[]).includes(item))", "replacement": "", "kind": "behavior" },
+    { "id": "M5", "file": "src/review/managed.ts", "anchor": "stored.seals !== undefined || options.head !== undefined", "replacement": "true", "kind": "behavior" },
+    { "id": "M6", "file": "src/review/close-gates.ts", "anchor": "closedPublish ? { coverage: false } : {}", "replacement": "{}", "kind": "behavior" },
+    { "id": "M7", "file": "src/review/close-gates.ts", "anchor": "input.relaxReadiness !== true && ", "replacement": "", "kind": "behavior" },
+    { "id": "M8", "file": "src/review/close-gates.ts", "anchor": "error.items.length === 0 || ", "replacement": "false || ", "kind": "behavior" },
+    { "id": "M9", "file": "src/review/seals.ts", "anchor": "manifest.seals !== undefined && isPrBound(manifest.target) && ", "replacement": "isPrBound(manifest.target) && ", "kind": "behavior" },
+    { "id": "M10", "file": "src/review/managed.ts", "anchor": "options.headReason !== undefined && headOverride === undefined", "replacement": "false", "kind": "behavior" },
+    { "id": "M11", "file": "src/review/readiness.ts", "anchor": "entry.problem !== \"no verification\"", "replacement": "true", "kind": "presentation" },
+    { "id": "M12", "file": "src/review/close-gates.ts", "anchor": "partitionWaivers(manifest).sealed", "replacement": "(manifest.readiness_waivers ?? [])", "kind": "behavior" }
+  ]
+}
+```
+
+Note on M12: likely an equivalent mutant end to end, because evaluateCloseGates then runs the readiness checklist, where an unsealed waiver leaves its item failing anyway (readiness.ts partitionWaivers). Run it last; a green result there is not a finding.

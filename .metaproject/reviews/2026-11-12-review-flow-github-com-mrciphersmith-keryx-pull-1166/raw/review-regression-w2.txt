@@ -1,0 +1,17 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-03"],
+  "summary": "Scope B regression check of slice-03 (review.ts runComplete --head-reason, COMPLETE_FLAGS/parseDispositions skip list, spawn-subagent-tool SPAWN_SUBAGENT_IGNORED_FIELDS, docs, orchestrator skill, new contract test). No regression in the blast-radius set. Dependents walked: (1) src/commands/operator-confirm-review.ts runCompletionGates calls completeReviewGated without head/headReason, so the review_complete card path never reaches the new head-relabel refusal in src/review/managed.ts:1057-1062 and is unchanged. (2) src/review/autonomous-profile.ts:157/162 tells the unattended agent to pass the same --head to start/ingest and complete; recorded == given, so the new --head-reason requirement and its TTY check in runComplete are not triggered; a range target is not PR-bound and was already refused by --head before this change. (3) src/review/completion-gate.ts VALUELESS_FLAGS: --head-reason takes a value, so the default value-taking rule parses it correctly; no list update needed. (4) parseDispositions now skips --head-reason, so it is not read as a disposition flag. (5) spawn-subagent-tool.ts: input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]] reads the same model_tier key as before; the migration notice and model_class handling are byte-for-byte the same in effect; consumers (src/commands/shell.ts, src/session/native-runtime.ts, scripts/keryx-shell-stress.ts) see no behaviour change. (6) No command registry or MCP descriptor lists review complete flags (searched src/standard, src/mcp, scripts for waive-coverage: no hits), so nothing else enumerates COMPLETE_FLAGS. The only intentional behaviour change for existing callers is that `review complete --head <sha>` differing from the recorded head now refuses without an operator --head-reason (and without a TTY or --answered-by); that is the PR's stated AC, covered by the updated test in src/commands/review.test.ts, not a regression. Blast-radius coverage: retained 39 files, droppedByCap 0 (cap did not drop files); 138 test consumers and 164 symbol/hub-damped candidates were pre-filtered out by design. 47 of 69 changed files are non-code (docs, skills, schema, graph artifacts) and have an unresolved (empty) radius: for the skill/doc edits in this slice (SKILL.md model_class instruction, SKILL.detail.md item 4, review-report template, cli-reference, guide) the radius cannot answer whether a host or agent that follows the old prose breaks; those are runtime/prose edges the code graph does not carry. Not judged here: managed.ts, readiness.ts, publish.ts and complete-head-gate.ts bodies, which belong to other slices.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Short summary: no regression found in slice-03's blast radius. The card close path does not pass `head`, the autonomous prompt passes an identical `--head` to start and complete, the session stop gate parses `--head-reason` as a value-taking flag by default, and the spawn_subagent change is a rename of the key lookup only. Cap dropped nothing; the non-code half of the change (skills, docs, schema) has an unresolved radius, so the graph could not answer for prose-driven agent behaviour.
+
+Routing audit: graph_used: yes (package blast-radius.json, computed from the graph at head), wiki_used: not-relevant (narrow regression check over a given set), ctx_used: yes (keryx ctx read / keryx ctx rg), raw_rg_used: no.

@@ -1,0 +1,171 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "review-architecture-w3:ARCH-1",
+      "verdict": "upheld",
+      "reasoning": "Confirmed by execution (verify-ARCH-1-1.txt). The frozen intent puts it in scope: description.md Expected Outcome says 'publish and complete evaluate the same gates', and AC5 says both commands 'obtain their refusals from one shared gate evaluation function'. The research and integrity gate sits in a complete-only beforeReadiness hook, so publish never evaluates it. Base publish.ts had no research check either, so the asymmetry predates the PR. But the PR claims to close exactly this class and documents these errors as unwaivable, so it is not a follow-up. No intent signal favours a complete-only research gate. The suggested fix is sound: move the evaluation into evaluateCloseGates, always throw on untagged errors, let --partial relax only the tagged ones (they are failing readiness items anyway), and add a publish case for the locator and dispatch-mismatch fixtures."
+    },
+    {
+      "finding_id": "review-security-code-w3:SEC-1",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": "66ee001172e0d0c048a73727c3e6e099f9149b0a:src/review/readiness.ts:474",
+          "says": "base already turned any manifest readiness_waivers entry into a waived item with no provenance check; the PR adds gates on that existing channel and does not create it"
+        },
+        {
+          "ref": "66ee001172e0d0c048a73727c3e6e099f9149b0a:src/review/readiness.ts:232",
+          "says": "base verifierCheck already accepted any verification object (record(finding.verification) === undefined); unchanged by this PR"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md:29",
+          "says": "Out of Scope: verifying host-question answers cryptographically; the flow accepts recorded but unverified operator channels and only discloses them (AC6)"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md:30",
+          "says": "Out of Scope: widening the completion snapshot is deferred to flow 490 (AC9 there: the snapshot is derived from the files the gates read)"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md:24",
+          "says": "Effect: no gate can be satisfied 'by text the reviewing agent wrote without an operator card or a TTY'. Read literally, this covers a hand-written readiness_waivers entry, so it argues for the finding"
+        }
+      ],
+      "reasoning": "The fact is real. An agent with file-write access can add a readiness_waivers entry, rewrite target.head or stub verification:{} in package JSON, and plain complete or publish then passes. Most of that trust predates the PR: base readiness.ts:474 and :232 already trusted those files. Flow 488 removed the sanctioned agent-text escapes in report.md, which the skill and repair text told agents to write. It did not set out to authenticate machine records against a same-privilege writer. The suggested fix (provenance stamps, an out-of-repo registry, target in the round stamp, verifying verification objects) is an architectural change that overlaps flow 490's snapshot work. The flow's Effect line can be read either way. As a security finding it is neither downgraded nor dismissed, so it is held for the operator to set the threat-model scope.",
+      "question": "Hand-editing package JSON (readiness_waivers, target.head, verification) can still pass the operator-only gates, as it already could at base. Fix it in this PR, or record it as a follow-up and reword the flow's Effect line?",
+      "options": [
+        "uphold — bind operator decisions to a provenance record in this PR (flow 488)",
+        "dismiss for this PR — open a follow-up (flow 490 snapshot/provenance) and reword the Effect line to name hand-edited package JSON as out of scope"
+      ]
+    },
+    {
+      "finding_id": "review-architecture-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "Covers review-architecture-w1:F-001 and review-logic-w2:F-001 (the same SKILL.detail.md item 7 wording). plan.md:19 (T5) lists items 4 and 7 for update; only item 4 changed, so the stale text is an omission, not a choice. One addition to the fix: the code's own item title at src/review/readiness.ts:39 is 'the report's head matches the PR head'. review-degradation-w1 noted the skill text currently mirrors that title. Rewording only the skill (both copies) would make it disagree with the title that readiness prints. Retitle readiness.ts:39 in the same change, together with the bundled and installed SKILL.detail.md and the guide item 7."
+    },
+    {
+      "finding_id": "review-logic-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "Covers review-logic-w3:F-001 (minor) and review-logic-w4:F-002 (info, same issue). Both say --head-reason is silently dropped when there is no differing --head to relabel. --head-reason is new in this PR. Its own JSDoc (managed.ts:966-968, 'refused otherwise') and the CLI help principle ('a flag that is silently dropped ... still reports success') both contradict the behaviour, and no intent signal supports dropping it. The fix is sound and small: refuse --head-reason without --head in runComplete, and refuse or warn when no relabel happened."
+    },
+    {
+      "finding_id": "review-degradation-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "Covers review-degradation-w2:F-001 and review-logic-w3:F-002: the stale `keryx review --help` --head paragraph (review.ts:5683-5685) and the CompleteManagedReviewOptions.head JSDoc (managed.ts:959-963) still describe the removed first-line escape. The PR updated every sibling text (cli-reference, guide, SKILL.md, report template, printCompleteHelp), so these two are omissions against AC2's intent. The fix is right. The help should also name --head-reason, which a differing --head now needs (AC3)."
+    },
+    {
+      "finding_id": "review-degradation-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "Covers review-degradation-w2:F-002 (minor) and review-architecture-w2:F-004 (info, same site). The new SPAWN_SUBAGENT_IGNORED_FIELDS export was inserted between createSpawnSubagentTool's JSDoc and the function. That orphans the factory's doc. The diff introduced it, nothing signals intent, and moving the constant above the JSDoc is the conventional fix."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/plan.md:23",
+          "says": "T9 deliberately puts the light->light, standard->standard, deep->expert mapping on SKILL.md:118 as prose ('same line count'), with a contract test on field names only"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md:22",
+          "says": "frozen AC7 asks only that the skill instruct model_class with accepted values and that a test catch ignored or rejected spawn fields; it does not ask for a coded tier->class mapping"
+        },
+        {
+          "ref": ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/description.md:21",
+          "says": "flow 490's expected outcome is moving rules from orchestrator prose into keryx commands; 'rules exist twice' (line 10) is that flow's named defect class"
+        }
+      ],
+      "reasoning": "The observation is accurate: the tier->model_class mapping exists only in prose. But the plan chose this on purpose, the frozen AC7 scope does not require code, and moving prose rules into commands is the declared scope of flow 490. The failure mode is loud: spawn_subagent refuses `deep`. Making `keryx review tier` print model_class is a sound improvement, but it is scope creep for this PR, not a defect in it.",
+      "question": "The tier->model_class mapping is prose by plan (T9) and AC7. Should this PR make `keryx review tier` print model_class, or should that go to flow 490's 'rules in code' work?",
+      "options": [
+        "dismiss — keep the prose mapping per T9/AC7 and track the coded mapping in flow 490",
+        "uphold — make `keryx review tier` emit model_class in this PR"
+      ]
+    },
+    {
+      "finding_id": "review-architecture-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "SPAWN_SUBAGENT_IGNORED_FIELDS is a list by contract, and the contract test reads every entry, but the tool uses only index 0 and hard-codes model_tier in the notice. Nothing signals that a single field is intended, and the PR's own goal is to stop silent no-ops. Either suggested fix is sound: iterate the list, or rename the constant to a single field."
+    },
+    {
+      "finding_id": "review-architecture-w3:ARCH-2",
+      "verdict": "upheld",
+      "reasoning": "The research-error tags introduced by this PR are untyped strings duplicating READINESS_ITEMS ids. A renamed item would leave errors permanently unwaivable, and nothing would tell the author. The type-only import fix is sound: it adds no runtime cycle and keeps AC4's mapping checked."
+    },
+    {
+      "finding_id": "review-degradation-w3:DEG-1",
+      "verdict": "upheld",
+      "reasoning": "This PR removed both callers of withoutPartialHeader (readiness.ts:551 is the only remaining hit in src/review). Its doc still describes the removed first-line check. Deleting the dead export while keeping PARTIAL_LINE is the right fix."
+    },
+    {
+      "finding_id": "review-degradation-w3:DEG-2",
+      "verdict": "upheld",
+      "reasoning": "The diff adds close-gates.test-helpers.ts but leaves identical private copies of the same fixture in complete-head-gate.test.ts, which it edits heavily. That makes two sources of truth for a ready package. Importing the helpers is the consistent fix."
+    },
+    {
+      "finding_id": "review-logic-w4:F-001",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md:16",
+          "says": "AC1 requires item verifier to fail 'in review complete and review publish' even with a `Not verified: N` line, so publish refusing an old closed package is intended"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/plan.md:28",
+          "says": "Risk: 'Existing closed packages are not re-gated; only new closes and publishes see the stricter items', so status surfaces calling an already-closed package NOT READY is not what the plan describes"
+        }
+      ],
+      "reasoning": "The publish half of the finding is the intent of AC1, and regression-w3 reached the same conclusion. The status half (review readiness, review status and the panel showing NOT READY for a package closed under the old rules) contradicts plan.md:28. The finding's own fix offers two branches, and only the operator can choose between them. No closed package in this repo depends on the old escape (regression-w3), so this is a product call, not a hidden break.",
+      "question": "Packages closed under the old `Not verified` or first-line rules now read NOT READY in status surfaces and are refused by publish. Keep that and add a release note, or grandfather closed packages in the status surfaces only?",
+      "options": [
+        "dismiss — strict everywhere per AC1, and note the break and its repair (waiver card or --partial) in the release CHANGELOG",
+        "uphold — grandfather items 4 and 7 on closed packages in readiness/status surfaces only, as plan.md:28 says; publish stays strict per AC1"
+      ]
+    },
+    {
+      "finding_id": "review-security-code-w2:F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/review/complete-head-gate.ts:44-50",
+          "says": "with no recorded head, reviewed is null, so moved is false and the gate passes WITHOUT any --head; supplying the PR head loosens nothing, and supplying a different SHA makes the gate stricter"
+        },
+        {
+          "ref": "ea03b8b91:.metaproject/flows/448-2026-10-14-review-run-keepalive/description.md",
+          "says": "flow 448 added complete --head to recover a package recorded without or against the wrong head (cited in premise/1.json A-03)"
+        },
+        {
+          "ref": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md:12",
+          "says": "operator chose 'Operator act if different' for A-03, with 'flow 448 recovery kept'; frozen AC3 gates only a --head that 'differs from the head recorded at review start'"
+        }
+      ],
+      "reasoning": "The claimed bypass does not hold. With no recorded head, complete-head-gate.ts:44-50 already passes item `head` without --head, so filling in the PR head makes no gate pass that would otherwise fail; review-logic-w4 reached the same conclusion. Filling an absent head is the flow 448 recovery, which the operator kept, and it is outside AC3's 'differs from the recorded head'. What remains is a record-quality point: the closed manifest names a head that no operator quote vouches for. That could be logged as head_override{from:null}, but it is not the access bypass the finding describes. As a security finding it is held, not dismissed.",
+      "question": "With no recorded head the head gate already passes, so `--head` there loosens nothing; it is flow 448's recovery. Keep it quote-free, or still log a head_override{from:null}?",
+      "options": [
+        "dismiss — keep flow 448's quote-free recovery for an absent recorded head",
+        "uphold — require --head-reason (or log head_override with from:null) whenever --head fills an absent head"
+      ]
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "complete-head-gate.test.ts:177 is named for the PR-head gate. Without headReason it is refused at the relabel-quote check (managed.ts:1060) before item `head` is evaluated, so it no longer pins its titled behaviour. AC8 (judged) needs regression tests that fail when their fix is reverted. Passing headReason and asserting the `--waive head` refusal is the right fix. review-testing-practices-w2:TP-4 (info) is the same loose-assertion shape at a sibling test and is not judged here."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:TP-1",
+      "verdict": "upheld",
+      "reasoning": "AC4 scopes research errors to items, and its verify test builds only the ledger tag and the untagged integrity errors. Three of the five tag groups (reviewers, files-covered, blast-radius) and the cross-item case have no fixture. AC8 makes this in scope, and the suggested cases are the right ones."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:TP-2",
+      "verdict": "upheld",
+      "reasoning": "The READY fixture's verification is {verdict} only, a shape the producer (types.ts:405, method and evidence required) cannot emit. It passes only through verifierCheck's any-object check, which already existed at base (readiness.ts:232). Building the fixture with the producer's shape is sound regardless of how SEC-1 is decided. The extra test of how item 4 treats verification:{} overlaps SEC-1 part (4) and should follow the operator's answer there."
+    },
+    {
+      "finding_id": "review-testing-practices-w2:TP-3",
+      "verdict": "upheld",
+      "reasoning": "AC6's hostQuestionNotice has four sources. publish.test.ts drives two of them plus dispatch.coverageWaiver. The premise-decision branch and the top-level coverageWaiver fallback are never exercised. AC6 and AC8 make this in scope, and the two added cases are the right fix."
+    }
+  ]
+}

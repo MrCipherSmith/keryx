@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "488",
+  "slug": "review-audit-p0-gates",
+  "title": "Review gates: close the agent-text and waiver bypasses (audit P0)",
+  "status": "implemented",
+  "createdAt": "2026-11-12T09:58:46.961Z",
+  "updatedAt": "2026-11-13T12:35:27.793Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:580b8d3d6b766b3e7a09bee95c6cf09f5214133f32324f41616b5e073be131c0",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1166"
+  },
+  "baseBranch": "main",
+  "origin": {
+    "kind": "agent-finding",
+    "source": "docs/analysis/review-process-audit-2026-11-12.md"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context.md written with gate locations, tests and constraints; premise checked"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 per plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written inside each of T5-T9, one test file per AC"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "draft PR https://github.com/MrCipherSmith/keryx/pull/1166 opened; review round follows"
+    },
+    {
+      "id": "T5",
+      "title": "Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "verifierCheck no longer passes on the report line; moved-PR gate lost its report escape; both need an operator waiver (readiness-verifier-waiver.test.ts, complete-head-gate.test.ts)"
+    },
+    {
+      "id": "T6",
+      "title": "review complete --head accepts only the recorded head or its ancestor",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "operator chose 'operator act if different' (journal): differing --head needs --head-reason quote via TTY or --answered-by, recorded as head_override (complete-head-relabel.test.ts); ancestor rule from the title dropped"
+    },
+    {
+      "id": "T7",
+      "title": "A readiness waiver removes only the research errors of the waived item",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "packageResearchErrorsTagged tags errors by readiness item; complete drops only waived items' errors; integrity errors never dropped (complete-waiver-scope.test.ts)"
+    },
+    {
+      "id": "T8",
+      "title": "One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "evaluateCloseGates in src/review/close-gates.ts shared by complete and publish; publish body names host-question decisions as unverified (publish-gate-parity.test.ts, publish.test.ts)"
+    },
+    {
+      "id": "T9",
+      "title": "Orchestrator skill uses model_class; contract test for spawn fields named by review skills",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "SKILL.md:118 names model_class (light/standard/expert), both copies; contract test src/gdskills/review-spawn-field-contract.test.ts fails on restored model_tier"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-12T09:58:46.961Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-12T10:01:11.628Z",
+      "event": "task-added",
+      "detail": "T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text"
+    },
+    {
+      "at": "2026-11-12T10:01:25.706Z",
+      "event": "task-added",
+      "detail": "T6: review complete --head accepts only the recorded head or its ancestor"
+    },
+    {
+      "at": "2026-11-12T10:01:32.644Z",
+      "event": "task-added",
+      "detail": "T7: A readiness waiver removes only the research errors of the waived item"
+    },
+    {
+      "at": "2026-11-12T10:01:40.140Z",
+      "event": "task-added",
+      "detail": "T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body"
+    },
+    {
+      "at": "2026-11-12T10:01:48.034Z",
+      "event": "task-added",
+      "detail": "T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills"
+    },
+    {
+      "at": "2026-11-12T10:35:09.915Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-12T10:35:13.573Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-12T10:35:22.227Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-12T10:35:23.300Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-12T10:35:24.315Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-12T10:38:11.909Z",
+      "event": "task-done",
+      "detail": "T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills"
+    },
+    {
+      "at": "2026-11-12T11:22:30.393Z",
+      "event": "task-done",
+      "detail": "T6: review complete --head accepts only the recorded head or its ancestor"
+    },
+    {
+      "at": "2026-11-12T11:22:31.512Z",
+      "event": "task-done",
+      "detail": "T7: A readiness waiver removes only the research errors of the waived item"
+    },
+    {
+      "at": "2026-11-12T11:22:32.343Z",
+      "event": "task-done",
+      "detail": "T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body"
+    },
+    {
+      "at": "2026-11-12T11:22:36.333Z",
+      "event": "task-done",
+      "detail": "T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text"
+    },
+    {
+      "at": "2026-11-12T12:17:12.713Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-12T12:17:16.675Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1166"
+    },
+    {
+      "at": "2026-11-12T13:04:00.142Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"(new)\" -> \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json, or a verification object written straight into findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal.\" (Round 1 review of PR 1166: review-security-code-w3:SEC-1 (major, confirmed by execution, pre-existing at base); the operator upheld it for this PR (host-question claude-code:premise-sec-1).)"
+    },
+    {
+      "at": "2026-11-13T09:44:23.725Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json, or a verification object written straight into findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal.\" -> \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json (with or without its seals removed), a verification object written straight into findings.json, or a blocker or major severity lowered in findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal. [verify: exec `bun test src/review/seals.test.ts`]\" (PR 1166 round 2: review-degradation-w2:F-003 and review-style-w2:F-001 (AC9 had no verify tag); review-security-code-w8:SEC-1/SEC-R2-1 (removed seals) and SEC-2 (severity, operator upheld))"
+    },
+    {
+      "at": "2026-11-13T10:44:50.344Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: exec: bun test src/review/readiness-verifier-waiver.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). Item verifier ignores a 'Not verified: N' line; only an operator waiver lifts it (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:50.582Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: exec: bun test src/review/complete-head-gate.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). A moved/merged PR head fails item head whatever report.md says; only an operator waiver of head lifts it (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:50.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: exec: bun test src/review/complete-head-relabel.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). A differing --head needs --head-reason; manifest records from/to/quote (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: exec: bun test src/review/complete-waiver-scope.test.ts passes (9 tests, incl. the coverage-tag test added in f7b7f73ad); bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.350Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: exec: bun test src/review/publish-gate-parity.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run). complete and publish share evaluateCloseGates (src/review/close-gates.ts) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: exec: bun test src/review/publish.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:51.837Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: exec: bun test src/gdskills/review-spawn-field-contract.test.ts passes; bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:52.068Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: judged from mutation passes: round 1 (PR 1166 package 2026-11-12, research-evidence/mutation-1.md) and round 2 (package 2026-11-13, mutation-1.md) killed the revert of each fix: AC1 w2-M-22, w6-mc-w6-10; AC2 w2-M-15, w2-M-16, w6-mc-w6-01/02; AC3 w1-M-06/07, w6-mc-w6-04, w4-M10; AC4 w2-M-14, w4-M8, w6-mc-w6-08; AC5 w2-M-01/02/03, w1-mc-01. The round-1 tag survivors w2-M-11/12/13 were re-run by hand on 2026-11-13: dispatch and completeness untagging are killed by complete-waiver-scope.test.ts; coverage untagging survived and is killed by the test added in f7b7f73ad. w2-M-10 targeted code that moved into close-gates.ts; its successors w4-M8 and w6-mc-w6-08 are killed. Remaining survivors concern AC6/AC7/AC9, outside this criterion (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T10:44:52.301Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: exec: bun test src/review/seals.test.ts passes (incl. deleted seals + rewritten head, lowered/deleted major, edited heavyFindings, unreadable findings.json); bun test run 2026-11-13, 8 verify files, 130 pass 0 fail (gdctx 2026-11-13T10-41-02-365Z-237bd4_run); criterion rewritten in round 2 and re-confirmed after fixes 86dda760a (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-13T12:35:27.793Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json (with or without its seals removed), a verification object written straight into findings.json, or a blocker or major severity lowered in findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal. [verify: exec `bun test src/review/seals.test.ts`]\" -> \"An operator decision the close gates honour (a readiness waiver, a coverage waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json or research.json, a target.head rewritten in manifest.json (with or without its seals removed), a verification object written straight into findings.json, a blocker or major severity lowered in findings.json (with or without the blocker/major record removed from manifest.json), or a status set to closed in manifest.json is refused by review complete (and, except for the status, by review publish), and a test edits each file directly and asserts the refusal. [verify: exec `bun test src/review/seals.test.ts src/review/complete-coverage-gate.test.ts`]\" (PR 1166 round 3: cluster A (deleted heavyFindings record), cluster B (hand-set closed status) and the operator's decision to seal the coverage waiver in this PR (review-architecture-w3:F-001, review-degradation-w3:F-001 upheld))"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/readiness-verifier-waiver.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-head-gate.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-head-relabel.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-waiver-scope.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/publish-gate-parity.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/publish.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-spawn-field-contract.test.ts"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/review/seals.test.ts src/review/complete-coverage-gate.test.ts"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-13T10:44:50.344Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:50.582Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:50.814Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.058Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.350Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.607Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:51.837Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:52.068Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    },
+    {
+      "at": "2026-11-13T10:44:52.301Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:9a49e7c834ef884a24abaf2dd40a0d589a1aecfd52a74b685a5ddb3528cccea8"
+    }
+  ]
+}
