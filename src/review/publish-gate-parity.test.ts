@@ -3,7 +3,7 @@
 // messages. `--partial` relaxes readiness only.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { PR, UNVERIFIED_MAJOR, ingestReady, readManifest, writeFindings } from "./close-gates.test-helpers";
@@ -77,6 +77,36 @@ describe("publish and complete obtain their refusals from one gate evaluation (A
     const result = await publishReview(path.resolve(dir, ref), { partial: true, post: out.post, confirm: out.confirm });
     expect(result.partial).toBe(true);
     expect(out.posts[0]).toStartWith("**Partial review.**");
+  });
+
+  // ARCH-1: the research-error evaluation lives in evaluateCloseGates, so publish refuses what complete refuses.
+  for (const probe of [
+    { name: "an invalid research artifact locator", text: "invalid research artifact locator", edit: (manifest: Record<string, any>) => { manifest.artifacts.research = "elsewhere.json"; } },
+    { name: "a dispatch the manifest does not declare", text: "manifest.json does not declare it", edit: (manifest: Record<string, any>) => { delete manifest.artifacts.reviewerDispatch; } },
+  ]) {
+    test(`${probe.name} is an untagged research error: complete and publish refuse it, --partial included`, async () => {
+      const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR });
+      await editManifest(ref, probe.edit);
+      const out = sink();
+      const completeMessage = await messageOf(() => completeManagedReview(dir, ref, {}));
+      expect(completeMessage).toContain(probe.text);
+      expect(await messageOf(() => publishReview(path.resolve(dir, ref), { post: out.post, confirm: out.confirm }))).toBe(completeMessage);
+      expect(await messageOf(() => publishReview(path.resolve(dir, ref), { partial: true, post: out.post, confirm: out.confirm }))).toBe(completeMessage);
+      expect(out.posts).toEqual([]);
+    });
+  }
+
+  test("a tagged research error (an open obligation) refuses a full publish, and --partial may skip it", async () => {
+    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR });
+    const file = path.join(path.resolve(dir, ref), "research.json");
+    const research = JSON.parse(await readFile(file, "utf8"));
+    await writeFile(file, JSON.stringify({ ...research, obligations: [{ id: "ob-1", source: "raw", question: "is it real?", status: "open" }] }));
+    const out = sink();
+    expect(await messageOf(() => completeManagedReview(dir, ref, {}))).toContain("unresolved research");
+    expect(await messageOf(() => publishReview(path.resolve(dir, ref), { post: out.post, confirm: out.confirm }))).toContain("unresolved research");
+    const result = await publishReview(path.resolve(dir, ref), { partial: true, post: out.post, confirm: out.confirm });
+    expect(result.posted).toBe(true);
+    expect(out.posts).toHaveLength(1);
   });
 
   test("the shared function refuses the readiness checklist unless relaxed, naming the action", async () => {

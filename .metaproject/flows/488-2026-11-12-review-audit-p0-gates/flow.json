@@ -9,17 +9,17 @@
   "id": "488",
   "slug": "review-audit-p0-gates",
   "title": "Review gates: close the agent-text and waiver bypasses (audit P0)",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-12T09:58:46.961Z",
-  "updatedAt": "2026-11-12T11:22:36.333Z",
+  "updatedAt": "2026-11-12T13:04:00.142Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:9ca2895e0914d3d592d503ed3c73daf0de40a274e8726220504ddb6fe9eee711",
+  "acChecksum": "sha256:c4c592ab022705927750a1782e2971a4be2572fec59a8abacff6601e3ccee365",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1166"
   },
   "baseBranch": "main",
   "origin": {
@@ -83,7 +83,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -91,7 +91,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "draft PR https://github.com/MrCipherSmith/keryx/pull/1166 opened; review round follows"
     },
     {
       "id": "T5",
@@ -252,6 +254,21 @@
       "at": "2026-11-12T11:22:36.333Z",
       "event": "task-done",
       "detail": "T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text"
+    },
+    {
+      "at": "2026-11-12T12:17:12.713Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-12T12:17:16.675Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1166"
+    },
+    {
+      "at": "2026-11-12T13:04:00.142Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"(new)\" -> \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json, or a verification object written straight into findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal.\" (Round 1 review of PR 1166: review-security-code-w3:SEC-1 (major, confirmed by execution, pre-existing at base); the operator upheld it for this PR (host-question claude-code:premise-sec-1).)"
     }
   ],
   "acKinds": {
@@ -285,6 +302,9 @@
     },
     "AC8": {
       "kind": "judged"
+    },
+    "AC9": {
+      "kind": "unclassified"
     }
   }
 }

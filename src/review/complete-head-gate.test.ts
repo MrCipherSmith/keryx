@@ -1,36 +1,20 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { READY_DISPATCH, READY_COVERAGE_MD } from "./dispatch.test-helpers";
+import { HEAD, MOVED, PR, ingestReady, lookup } from "./close-gates.test-helpers";
 import { completeHeadGate, type PrLookup } from "./complete-head-gate";
-import { completeManagedReview, createManagedReviewPackage } from "./managed";
+import { completeManagedReview } from "./managed";
 import { computeReadiness, waiveReadiness } from "./readiness";
 
-const ready = { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH };
-const HEAD = "a".repeat(40);
-const MOVED = "b".repeat(40);
-const EVIDENCE = "Evidence level: static only — did not run: tests";
-const PR = "https://github.com/acme/app/pull/7";
 const REASON = "the operator confirms this round ran against the PR head";
 
 let dir = "";
 beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-head-gate-")); });
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
-async function ingest(report: string, target: { kind: "pr" | "report"; ref: string; head?: string }): Promise<string> {
-  const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `${report}\n${EVIDENCE}\n`, reviewId: "head-gate", target });
-  await writeFile(path.join(path.resolve(dir, result.path), "research.json"), JSON.stringify(ready));
-  await writeFile(path.join(path.resolve(dir, result.path), "coverage.md"), READY_COVERAGE_MD);
-  return result.path;
-}
-
-function lookup(pr: { state?: string; headSha?: string } | null): PrLookup & { calls: string[] } {
-  const calls: string[] = [];
-  const fn = (async (ref: string) => { calls.push(ref); return pr === null ? null : { exists: true, state: pr.state ?? "OPEN", headSha: pr.headSha ?? HEAD }; }) as PrLookup & { calls: string[] };
-  fn.calls = calls;
-  return fn;
-}
+const ingest = (report: string, target: { kind: "pr" | "report"; ref: string; head?: string }, reviewId = "head-gate"): Promise<string> =>
+  ingestReady(dir, report, target, reviewId);
 
 const WAIVE_HEAD = [{ items: ["head"], quote: "the operator accepts that the PR moved after the round" }];
 
@@ -55,7 +39,9 @@ test("a first line that names the reviewed SHA and says the PR moved no longer l
   const ref = await ingest(`Reviewed ${HEAD.slice(0, 7)} — the PR has since merged.\nNo findings.`, { kind: "pr", ref: PR, head: HEAD });
   const error = await completeManagedReview(dir, ref, { prLookup: lookup({ state: "MERGED", headSha: MOVED }) }).catch((e: Error) => e);
   expect(error).toBeInstanceOf(Error);
-  expect((error as Error).message).toContain("head");
+  // The refusal is readiness item head's, and its repair is the operator's waiver: the report's line changed nothing.
+  expect((error as Error).message).toMatch(/merged/i);
+  expect((error as Error).message).toContain("--waive head");
   const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
   expect(onDisk.status).not.toBe("closed");
 });
@@ -176,11 +162,12 @@ test("--head fills a head the round never recorded, without a warning about repl
 
 test("--head does not loosen the gate: a head that is not the PR's head still fails, and the manifest stays as it was", async () => {
   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
-  const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED }).catch((e: Error) => e);
+  // With the relabel's reason given, what is left is readiness item head, which only the operator's waiver lifts.
+  const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED, headReason: REASON }).catch((e: Error) => e);
   expect(error).toBeInstanceOf(Error);
   expect((error as Error).message).toContain(MOVED.slice(0, 7));
   expect((error as Error).message).toContain(HEAD.slice(0, 7));
-  expect((error as Error).message).toContain("--head-reason");
+  expect((error as Error).message).toContain("--waive head");
   const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
   expect(onDisk.status).not.toBe("closed");
   expect(onDisk.target.head).toBe(HEAD);
@@ -197,10 +184,17 @@ test("--head must be a commit SHA and needs a pull request package", async () =>
   const pr = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
   await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "not-a-sha" })).rejects.toThrow(/not a commit SHA/);
   await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "abc" })).rejects.toThrow(/not a commit SHA/);
-  const report = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `# R\nNo findings.\n${EVIDENCE}\n`, reviewId: "head-report", target: { kind: "report", ref: "review.md" } });
-  await writeFile(path.join(path.resolve(dir, report.path), "research.json"), JSON.stringify(ready));
-  await writeFile(path.join(path.resolve(dir, report.path), "coverage.md"), READY_COVERAGE_MD);
-  await expect(completeManagedReview(dir, report.path, { head: HEAD })).rejects.toThrow(/pull request package/);
+  const report = await ingest("# R\nNo findings.", { kind: "report", ref: "review.md" }, "head-report");
+  await expect(completeManagedReview(dir, report, { head: HEAD })).rejects.toThrow(/pull request package/);
+});
+
+test("--head-reason without a relabel is refused: with no --head, and with --head naming the recorded head", async () => {
+  const bare = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+  await expect(completeManagedReview(dir, bare, { prLookup: lookup({}), headReason: REASON })).rejects.toThrow(/--head-reason applies only/);
+  await expect(completeManagedReview(dir, bare, { prLookup: lookup({}), head: HEAD.toUpperCase(), headReason: REASON })).rejects.toThrow(/--head-reason applies only/);
+  const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, bare), "manifest.json"), "utf8"));
+  expect(onDisk.status).not.toBe("closed");
+  expect(onDisk.head_override).toBeUndefined();
 });
 
 test("without --head the recorded head is what the gate checks, as before", async () => {

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Review gate escapes need an operator act.** A `Not verified: N` line in report.md no longer passes unverified blocker or major findings, and a report first line saying the PR moved no longer passes readiness item `head`. Both need the operator's `--waive verifier` or `--waive head`. `review complete --head` with a head other than the recorded one needs `--head-reason "<operator quote>"`. A waiver now lifts only its own item's research errors. `review publish` runs the same close gates as `review complete`. [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
+- **Breaking for packages closed through the removed escapes.** A package that an earlier release closed on a `Not verified: N` line or a first-line head statement now reads NOT READY in `review readiness`, `status` and the panel, and `review publish` refuses it. Repair: the operator waives the item (`keryx review complete <package> --waive verifier|head "<their words>"`), or publish it with `--partial`. [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
+
 ## [0.4.26] - 2026-11-12
 
 ### Fixed

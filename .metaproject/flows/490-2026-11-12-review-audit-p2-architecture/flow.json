@@ -11,7 +11,7 @@
   "title": "Review architecture: round state machine in code, byte ceiling for skills, staged modules, one host port (audit P2)",
   "status": "initializing",
   "createdAt": "2026-11-12T09:59:21.548Z",
-  "updatedAt": "2026-11-12T10:01:56.524Z",
+  "updatedAt": "2026-11-12T13:06:08.254Z",
   "source": {
     "type": "description",
     "ref": null
@@ -180,6 +180,34 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -216,6 +244,16 @@
       "at": "2026-11-12T10:01:56.524Z",
       "event": "task-added",
       "detail": "T10: Completion lock for ingest and ledger build; snapshot list derived from gate inputs; wiki page for src/review"
+    },
+    {
+      "at": "2026-11-12T13:06:07.260Z",
+      "event": "task-added",
+      "detail": "T11: Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)"
+    },
+    {
+      "at": "2026-11-12T13:06:08.254Z",
+      "event": "task-added",
+      "detail": "T12: Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)"
     }
   ]
 }

@@ -5,6 +5,7 @@ import path from "node:path";
 import type { PrLookup } from "./complete-head-gate";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "./dispatch.test-helpers";
 import { createManagedReviewPackage } from "./managed";
+import { findingKey, sealTarget, withVerificationSeals } from "./seals";
 import type { ManagedReviewManifest } from "./types";
 
 export const HEAD = "a".repeat(40);
@@ -35,6 +36,22 @@ export function lookup(pr: { state?: string; headSha?: string } | null): PrLooku
   const fn = (async (ref: string) => { calls.push(ref); return pr === null ? null : { exists: true, state: pr.state ?? "OPEN", headSha: pr.headSha ?? HEAD }; }) as PrLookup & { calls: string[] };
   fn.calls = calls;
   return fn;
+}
+
+/** A verification in the shape review-verifier's merge writes (verdict, method, evidence, verifier). */
+export const VERIFIED = { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" } as const;
+
+/**
+ * Stands in for `review ingest --verifications` in a test whose subject is not the seal: writes the seal keryx writes over
+ * every verification findings.json holds now. A test of the seal itself never calls this (see seals.test.ts).
+ */
+export async function sealVerificationsAsIngest(packageDir: string): Promise<void> {
+  const findings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8")) as Array<Record<string, unknown>>;
+  const file = path.join(packageDir, "manifest.json");
+  const manifest = JSON.parse(await readFile(file, "utf8")) as ManagedReviewManifest;
+  const applied = findings.filter((finding) => finding.verification !== undefined).map((finding) => ({ key: findingKey(finding), verification: finding.verification }));
+  // An ingest seals the target in the same write; a hand-built fixture that had no seals gets that one too.
+  await writeFile(file, JSON.stringify({ ...manifest, seals: { ...withVerificationSeals(manifest.seals, applied), target: manifest.seals?.target ?? sealTarget(manifest.target) } }, null, 2));
 }
 
 /** A blocker/major finding nobody verified: item 4 (`verifier`) fails on it. */

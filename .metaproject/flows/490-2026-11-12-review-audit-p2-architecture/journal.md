@@ -7,3 +7,5 @@
 - 2026-11-12T10:01:42.063Z - task-added: T8: Stage directories for src/review, table dispatch in review.ts, one Jev config reader
 - 2026-11-12T10:01:49.523Z - task-added: T9: One host port with capability flags; opencode and Grok as named hosts
 - 2026-11-12T10:01:56.524Z - task-added: T10: Completion lock for ingest and ledger build; snapshot list derived from gate inputs; wiki page for src/review
+- 2026-11-12T13:06:07.260Z - task-added: T11: Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)
+- 2026-11-12T13:06:08.254Z - task-added: T12: Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)

@@ -280,11 +280,12 @@ describe("a disposition and a finding key survive the round trip", () => {
 
   test("round 2's dispatch carries what round 1 decided, and validates", async () => {
     await withTempRoot(async (root) => {
-      const findings = await round1Findings(root);
-      // The verifier's result on each finding, not a line in the report (flow 488: a `Not verified: N` line passes nothing).
-      const findingsFile = path.join(root, ".metaproject/reviews/2026-08-29-round-1/findings.json");
-      const stored = JSON.parse(await readFile(findingsFile, "utf8")) as Array<Record<string, unknown>>;
-      await writeFile(findingsFile, JSON.stringify(stored.map((finding) => ({ ...finding, verification: { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" } })), null, 2));
+      // The verifier's result on each finding, applied the way the pipeline applies it (`review ingest --verifications`),
+      // not a line in the report and not a hand edit of findings.json (flow 488: neither passes item verifier).
+      const findings = await round1Findings(root, {
+        verifications: ["F-001", "F-002"].map((id) => ({ finding: `2026-08-29-round-1#${id}`, verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" })),
+      });
+      expect(findings.every((finding) => finding.verification?.verdict === "confirmed")).toBe(true);
       await completeManagedReview(root, ".metaproject/reviews/2026-08-29-round-1", {
         dispositions: [
           {

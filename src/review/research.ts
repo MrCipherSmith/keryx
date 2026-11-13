@@ -5,6 +5,8 @@ import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { asRecord, dispatchRunRecords } from "./record";
+// Type only: readiness.ts imports this module at runtime, so the item ids come across as a type and nothing else.
+import type { ReadinessItemId } from "./readiness";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
 
 /**
@@ -126,10 +128,10 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
  * tagged with it and no others; an error with no items (an artifact locator, a manifest/research mismatch, an unreadable
  * ledger) is an integrity failure no waiver covers.
  */
-export type TaggedResearchError = { message: string; items: readonly string[] };
+export type TaggedResearchError = { message: string; items: readonly ReadinessItemId[] };
 
 const untagged = (messages: readonly string[]): TaggedResearchError[] => messages.map((message) => ({ message, items: [] }));
-const tagged = (messages: readonly string[], items: readonly string[]): TaggedResearchError[] => messages.map((message) => ({ message, items }));
+const tagged = (messages: readonly string[], items: readonly ReadinessItemId[]): TaggedResearchError[] => messages.map((message) => ({ message, items }));
 
 /** The research errors of {@link packageResearchErrors}, each with the readiness items that can waive it. */
 export async function packageResearchErrorsTagged(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<TaggedResearchError[]> {

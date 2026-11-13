@@ -11,6 +11,9 @@ import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
 import { quoteSha256 } from "./round-record";
 import { computeReadiness } from "./readiness";
 import type { VerdictFinding } from "./verdict";
+import { sealVerificationsAsIngest } from "./close-gates.test-helpers";
+import { heldFinding, premiseAnswer } from "./premise-fixtures";
+import { sealHeadOverride, sealTarget } from "./seals";
 
 const minor = (id: string, problem = "a small thing"): VerdictFinding => ({ id, reviewer: "review-style", severity: "minor", problem, location: "src/a.ts:1", verification: "none" });
 
@@ -131,12 +134,33 @@ describe("publishReview", () => {
     });
 
     test("a head override and a coverage waiver confirmed via host-question are named too", async () => {
-      withManifest({ head_override: { from: "a".repeat(40), to: "b".repeat(40), operator_quote: "the operator moved it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question" } });
+      // The override as `review complete --head --head-reason --answered-by` writes it: with keryx's seal (flow 488 AC9).
+      const headOverride = { from: "a".repeat(40), to: "b".repeat(40), operator_quote: "the operator moved it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question" as const };
+      withManifest({ head_override: headOverride, seals: { target: sealTarget({ kind: "pr", ref: PR }), headOverride: sealHeadOverride(headOverride) } });
       write("research.json", { dispatch: { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } } });
       const io = seams();
       await publishReview(pkg, { post: io.post, confirm: io.confirm });
       expect(io.posts[0]!.body).toContain("head change aaaaaaa to bbbbbbb");
       expect(io.posts[0]!.body).toContain("coverage waiver");
+      expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
+    });
+
+    test("a top-level research.coverageWaiver confirmed via host-question is named (review TP-3)", async () => {
+      makePackage({ ready: true });
+      write("research.json", { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } });
+      const io = seams();
+      await publishReview(pkg, { partial: true, post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).toContain("Decisions recorded from the agent's host question:** coverage waiver.");
+    });
+
+    test("a premise decision confirmed via host-question is named, with the count (review TP-3)", async () => {
+      makePackage({ ready: true });
+      const held = heldFinding({ severity: "minor" });
+      write("findings.json", [held]);
+      write("operator-decisions.json", { schemaVersion: 1, decisions: [premiseAnswer(held, { confirmedVia: "host-question", hostQuestion: hostQuestion as never })] });
+      const io = seams();
+      await publishReview(pkg, { partial: true, post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).toContain("1 premise decision(s)");
       expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
     });
 
@@ -159,6 +183,7 @@ describe("publishReview", () => {
       { id: "F-1", reviewer: "review-logic", severity: "minor", problem: "swallows", file: "src/a.ts", line: 12, quote: "catch (e) { /* SECRET-QUOTE */ }", disposition: { state: "acted-on" } },
       { id: "F-2", reviewer: "review-logic", severity: "major", problem: "not in the body", file: "src/hidden.ts", line: 4, verification: { verdict: "confirmed", method: "reproduction", evidence: "ran it", verifier: "review-verifier" } },
     ]);
+    await sealVerificationsAsIngest(pkg);
     const io = seams();
     await publishReview(pkg, { event: "COMMENT", post: io.post, confirm: io.confirm, now: () => new Date("2026-10-16T00:00:00Z") });
     const body = io.posts[0]!.body;

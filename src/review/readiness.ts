@@ -27,6 +27,7 @@ import { packageParityWarnings } from "./parity";
 import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
 import { asRecord as record } from "./record";
 import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
+import { partitionWaivers, sealWaiver, verificationProblem } from "./seals";
 import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
@@ -36,7 +37,7 @@ export const READINESS_ITEMS = [
   { number: 4, id: "verifier", title: "the verifier checked every blocker and major finding, or the operator waived it" },
   { number: 5, id: "ledger", title: "the ledger is READY: every obligation has a closure" },
   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
-  { number: 7, id: "head", title: "the report's head matches the PR head" },
+  { number: 7, id: "head", title: "the head recorded for the round matches the PR head" },
   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
@@ -235,10 +236,17 @@ const pathExists = (file: string): Promise<boolean> => stat(file).then(() => tru
  */
 function verifierCheck(ctx: Context): Verdict {
   const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
-  const unverified = heavy.filter((finding) => record(finding.verification) === undefined);
+  // Flow 488 (AC9): a verification counts only in the verifier's shape (verdict, method, evidence) and with the seal
+  // `review ingest --verifications` wrote over it; an object written into findings.json by hand does not.
+  const unverified = heavy.flatMap((finding) => {
+    const problem = verificationProblem(ctx.manifest, finding);
+    return problem === undefined ? [] : [{ id: String(finding.global_id ?? finding.id), problem }];
+  });
   if (unverified.length === 0) return ok(`${heavy.length} blocker/major finding(s), all verified`);
+  const forged = unverified.filter((entry) => entry.problem !== "no verification");
+  const forgedNote = forged.length === 0 ? "" : `; findings.json holds ${some(forged.map((entry) => `${entry.id} (${entry.problem})`))}, which is not honoured`;
   return bad(
-    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification`,
+    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification keryx recorded${forgedNote}`,
     `run the verifier (review-verifier) on them, or the operator waives it: in keryx shell call the review_waive_readiness tool with item verifier; in a terminal run keryx review complete ${ctx.arg} --waive verifier "<operator quote>"`,
   );
 }
@@ -476,13 +484,18 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     "premise-decisions": premiseDecisionsCheck(ctx),
     "quotes-located": quotesLocatedCheck(ctx),
   };
-  const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
+  // Flow 488 (AC9): only a waiver keryx sealed when it recorded it is honoured; one written into manifest.json by hand
+  // (or one from before the seals existed) leaves its item failing, and the item says so.
+  const { sealed, unsealed } = partitionWaivers(manifest);
+  const waivers = new Map(sealed.map((waiver) => [waiver.item, waiver]));
+  const unsealedItems = new Set(unsealed.map((waiver) => waiver.item));
   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {
     const verdict = verdicts[spec.id];
     const waiver = waivers.get(spec.id);
     if (verdict.pass) return { ...spec, status: "pass", evidence: verdict.evidence };
     if (waiver !== undefined) return { ...spec, status: "waived", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };
-    return { ...spec, status: "fail", evidence: verdict.evidence, repair: verdict.repair };
+    const unsealedNote = unsealedItems.has(spec.id) ? `; manifest.json readiness_waivers holds an entry for ${spec.id} that keryx did not record (no matching seal), so it is not honoured` : "";
+    return { ...spec, status: "fail", evidence: `${verdict.evidence}${unsealedNote}`, repair: verdict.repair };
   });
   const testsNotRun = testsNotRunWarning(packageDir);
   return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items, ...(testsNotRun === undefined ? {} : { warnings: [testsNotRun] }) };
@@ -547,9 +560,6 @@ export function readinessRefusal(report: ReadinessReport, action: string): strin
 
 const PARTIAL_LINE = /^Partial review:/;
 
-/** The report without its waiver header, for checks that read the report's own first line. */
-export const withoutPartialHeader = (report: string): string => report.split(/\r?\n/).filter((line) => !PARTIAL_LINE.test(line)).join("\n");
-
 /** The first lines of report.md: one line per waived item, replacing any earlier set. */
 export function partialHeader(waivers: readonly ReadinessWaiver[]): string[] {
   return waivers.map((waiver) => `Partial review: ${waiver.item} waived by the operator: ${waiver.operator_quote}`);
@@ -596,8 +606,11 @@ async function waiveReadinessLocked(packageDir: string, selectors: readonly stri
   const kept = (manifest.readiness_waivers ?? []).filter((waiver) => !(ids as string[]).includes(waiver.item));
   const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options), ...hostQuestionFields(options) }));
   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
+  // Flow 488 (AC9): each waiver this call records is sealed; a kept waiver keeps the seal it had (an unsealed one stays unsealed).
+  const keptSeals = Object.fromEntries(Object.entries(manifest.seals?.readinessWaivers ?? {}).filter(([item]) => !(ids as string[]).includes(item)));
+  const readinessWaivers = { ...keptSeals, ...Object.fromEntries(added.map((waiver) => [waiver.item, sealWaiver(waiver)])) };
   const write = options.writeCompletion ?? writeFileAtomic;
-  await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
+  await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all, seals: { ...(manifest.seals ?? {}), readinessWaivers } }, null, 2)}\n`);
   await writePartialHeader(packageDir, all, write);
   return added;
 }

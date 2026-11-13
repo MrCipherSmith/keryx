@@ -10,13 +10,14 @@ import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL } from "./evidence-level";
 import { evaluateCloseGates } from "./close-gates";
+import { findingKey, sealHeadOverride, sealTarget, withVerificationSeals } from "./seals";
 import { packageCoverageWarnings, packageRolesNotRun } from "./coverage";
 import { optionalRolesLine, upsertOptionalRolesLine } from "./role-switches";
 import { packageParityWarnings } from "./parity";
 import { recordFinishedRound } from "./round-registry";
 import { withSpendSection } from "./dispatch-usage";
 import { renderCoverageMd } from "./coverage-md";
-import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, packageResearchErrorsTagged, type DispatchRun, type IngestScreened } from "./research";
+import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type DispatchRun, type IngestScreened } from "./research";
 import { waiveReadiness, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -360,6 +361,9 @@ export async function createManagedReviewPackage(
   // release — nothing is removed and a `refuted` verdict is recorded on a finding
   // that is still reported, so the drop rate is a measured number before it costs
   // a real finding.
+  // Flow 488 (AC9): the verification each finding carried INTO the merge. Only one the merge applied in this ingest is
+  // sealed below; a `verification` that arrived inside a reviewer's result (or anywhere but the verifier merge) is not.
+  const carriedVerification = new Map(reported.map((finding) => [findingKey(finding), finding.verification]));
   const merged = mergeVerifications(reported, verifications, {
     mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
   });
@@ -509,6 +513,12 @@ export async function createManagedReviewPackage(
     filterStats,
     repairs,
   });
+  // Flow 488 (AC9): keryx's record of the target it wrote and of the verifications its merge applied (./seals.ts).
+  const applied = findings.flatMap((finding) => {
+    const key = findingKey(finding);
+    return finding.verification !== undefined && carriedVerification.has(key) && carriedVerification.get(key) !== finding.verification ? [{ key, verification: finding.verification }] : [];
+  });
+  manifest.seals = { ...withVerificationSeals(undefined, applied), target: sealTarget(manifest.target) };
 
   const validation = await validateManagedReviewManifest(input.cwd, manifest);
   if (!validation.valid) {
@@ -958,14 +968,15 @@ export type CompleteManagedReviewOptions = {
   /**
    * The commit this round reviewed (`--head`), a 7-40 hex SHA. When given it is what the head gate
    * checks and what the closed manifest records as `target.head`, in place of the head recorded at
-   * start. The gate itself is unchanged: a head that is not the PR's head still needs the report
-   * to name it and say the PR moved.
+   * start. The gate itself is unchanged: a head that is not the PR's head fails readiness item `head`,
+   * which only the operator waives (`--waive head "<quote>"` or the review_waive_readiness card);
+   * nothing written into report.md lifts it. A head other than the recorded one also needs `headReason`.
    */
   head?: string | undefined;
   /**
    * The operator's own words for a `head` that differs from the one `review start` recorded (`--head-reason`). Required
-   * then, and refused otherwise: relabelling the reviewed head is the operator's act, not the agent's. The manifest keeps
-   * both heads and the quote in `head_override`.
+   * then, and refused otherwise (no `head`, or a `head` equal to the recorded one): relabelling the reviewed head is the
+   * operator's act, not the agent's. The manifest keeps both heads and the quote in `head_override`, sealed.
    */
   headReason?: string | undefined;
   /** Readiness items the operator waives in their own words (`--waive <item> "<quote>"`), one entry per flag. */
@@ -1065,6 +1076,13 @@ async function completeManagedReviewLocked(
     }
     manifest = { ...stored, target: { ...stored.target, head }, ...(headOverride === undefined ? {} : { head_override: headOverride }) };
   }
+  // Review F-001 (logic w3): a quote with nothing to relabel would be recorded nowhere while the close reports success.
+  if (options.headReason !== undefined && headOverride === undefined) {
+    throw new Error(
+      `Cannot complete managed review; --head-reason applies only with --head <sha> naming a commit other than the head recorded when the round started (${stored.target.head ?? "none recorded"}). ` +
+        "Nothing is relabelled here, so the quote would be recorded nowhere: drop --head-reason, or pass the --head it explains.",
+    );
+  }
   const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
   if (options.hostQuestion !== undefined) {
     if (process.env["KERYX_TOOL_CALL"] === "1" || process.env["KERYX_UNATTENDED"] === "1" || isAutonomousEnv(process.env) || readRunProfile(packageDir)?.mode === "unattended") {
@@ -1094,7 +1112,6 @@ async function completeManagedReviewLocked(
   const passGap = await passNotInRound(packageDir).catch(() => null);
   const passMissing = passGap?.missing ?? [];
   if (passMissing.length > 0) warnings.push(missingWarning(passMissing));
-  const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
   // so the next run does not pass the same gate without the flag.
   let coverageWaiver: CoverageWaiver | undefined;
@@ -1114,15 +1131,8 @@ async function completeManagedReviewLocked(
         for (const waiver of options.waiveReadiness ?? []) {
           await waiveReadiness(packageDir, waiver.items, waiver.quote, { ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const, hostQuestion: options.hostQuestion }), prFiles: options.prFiles, ...(headGate === undefined ? {} : { headGate }), writeCompletion, ...(options.now === undefined ? {} : { now: options.now }) });
         }
+        // The waivers (and their seals) are on disk now; the research gate and the checklist in evaluateCloseGates read them there.
         if ((options.waiveReadiness ?? []).length > 0) manifest = { ...(JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest), ...(options.head === undefined ? {} : { target: manifest.target, ...(headOverride === undefined ? {} : { head_override: headOverride }) }) };
-        // The operator's quoted waiver of an item replaces the research gate's refusal for that item only; the checklist below still names it.
-        const waivedItems = new Set((manifest.readiness_waivers ?? []).map((waiver) => waiver.item));
-        const researchProblems = (await packageResearchErrorsTagged(packageDir, manifest.artifacts, researchFindings))
-          .filter((error) => !error.items.some((item) => waivedItems.has(item)))
-          .map((error) => error.message);
-        if (researchProblems.length) {
-          throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
-        }
       },
     });
     readiness = gates.readiness;
@@ -1132,8 +1142,15 @@ async function completeManagedReviewLocked(
     if (dispositions.length > 0) {
       await recordDispositions(packageDir, dispositions, writeCompletion);
     }
+    // Flow 488 (AC9): the head this close records, and the operator's relabel, are sealed in the same write. A package
+    // from before the seals is sealed only when this close records a head of its own (--head), since its target was
+    // never checked against a record.
+    const seals = stored.seals !== undefined || options.head !== undefined
+      ? { ...(manifest.seals ?? {}), target: sealTarget(manifest.target), ...(headOverride === undefined ? {} : { headOverride: sealHeadOverride(headOverride) }) }
+      : manifest.seals;
     updated = {
       ...manifest,
+      ...(seals === undefined ? {} : { seals }),
       status: "closed",
       ...(options.hostQuestion === undefined ? {} : { completionConfirmations: [...(stored.completionConfirmations ?? []), options.hostQuestion] }),
       updatedAt: new Date().toISOString(),

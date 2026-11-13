@@ -773,7 +773,7 @@ certifies the flow is the one that checked the least.
 4. `verifier` — the verifier checked every blocker/major finding, or the operator waived the item; a `Not verified: N` line in the report no longer passes it.
 5. `ledger` — the ledger is READY.
 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
-7. `head` — the report's head is the PR head.
+7. `head` — the head recorded at `review start` is still the PR head and the PR is not merged; otherwise only the operator's `head` waiver lifts it (no report line does).
 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.

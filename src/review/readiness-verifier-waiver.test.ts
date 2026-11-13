@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, ingestReady, writeFindings } from "./close-gates.test-helpers";
+import { OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, VERIFIED, ingestReady, sealVerificationsAsIngest, writeFindings } from "./close-gates.test-helpers";
 import { completeManagedReview } from "./managed";
 import { publishReview } from "./publish";
 import { computeReadiness, waiveReadiness } from "./readiness";
@@ -69,9 +69,10 @@ describe("readiness item verifier (AC1)", () => {
     expect(result.readiness.items.find((item) => item.id === "verifier")?.status).toBe("waived");
   });
 
-  test("a finding that carries a verification passes without a line or a waiver", async () => {
+  test("a finding that carries a verification keryx recorded passes without a line or a waiver", async () => {
     const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR });
-    await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification: { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" } }]);
+    await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification: VERIFIED }]);
+    await sealVerificationsAsIngest(path.resolve(dir, ref));
     expect((await computeReadiness(path.resolve(dir, ref))).items.find((item) => item.id === "verifier")?.status).toBe("pass");
   });
 });

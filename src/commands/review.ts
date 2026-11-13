@@ -5681,8 +5681,11 @@ Modes:
   \`review complete --head <sha>\` names the commit the round actually reviewed
   when the one recorded at start is wrong or missing; the head gate then checks
   that commit, and the manifest records it. The gate is not loosened: a head that
-  is not the pull request's head still needs the report's first line to name it
-  and say the PR moved.
+  is not the pull request's head fails readiness item \`head\`, which only the
+  operator waives (\`--waive head "<quote>"\` or the review_waive_readiness card);
+  nothing written into report.md lifts it. A --head other than the head recorded
+  at start also needs the operator's words in \`--head-reason "<quote>"\`, and
+  --head-reason without such a --head is refused.
 
 scope:
   Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,

@@ -264,6 +264,17 @@
         }
       }
     },
+    "seals": {
+      "type": "object",
+      "description": "Flow 488: sha256 digests keryx writes over what the close gates honour, when its own command path records it (review start/ingest for the target and applied verifications, review complete --waive / the review_waive_readiness card for each readiness waiver, review complete --head with --head-reason for the head override). A waiver, head or verification with no matching seal is not honoured: tamper evidence, not a signature.",
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "headOverride": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "readinessWaivers": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" } },
+        "verifications": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+      }
+    },
     "head_override": {
       "type": "object",
       "description": "The operator's act of relabelling the reviewed head at `review complete --head`: the head recorded at review start, the head recorded instead, and the operator's own words.",

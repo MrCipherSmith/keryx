@@ -130,6 +130,18 @@ export type ReadinessWaiver = { hostQuestion?: HostQuestion; item: string; opera
 /** The operator's act of relabelling the reviewed head: the head recorded at start, the one recorded instead, their words. */
 export type HeadOverride = { from: string; to: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined };
 
+/**
+ * Flow 488 (AC9): the sha256 digests keryx writes over what the close gates honour, each when keryx's own command path
+ * recorded it: the target as last recorded (start/ingest, or `complete --head`), each readiness waiver by item, the head
+ * override, and each verification it applied, keyed by the finding's `global_id` (else `id`). See review/seals.ts.
+ */
+export type ReviewSeals = {
+  target?: string | undefined;
+  readinessWaivers?: Record<string, string> | undefined;
+  headOverride?: string | undefined;
+  verifications?: Record<string, string> | undefined;
+};
+
 export type ManagedReviewManifest = {
   schemaVersion: 1;
   completionConfirmations?: HostQuestion[];
@@ -171,6 +183,8 @@ export type ManagedReviewManifest = {
   readiness_waivers?: ReadinessWaiver[] | undefined;
   /** Set when `review complete --head` recorded a head other than the one `review start` recorded (flow 488). */
   head_override?: HeadOverride | undefined;
+  /** Flow 488 (AC9): digests keryx wrote over the decisions the close gates honour (see review/seals.ts). */
+  seals?: ReviewSeals | undefined;
   /**
    * Flow 457: the operator-gate version `review start|attach` created the package with (see review/run-profile.ts).
    * Absent on ingest packages and on packages that predate the gate.

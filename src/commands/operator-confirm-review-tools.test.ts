@@ -735,7 +735,7 @@ describe("review_complete", () => {
       cwd: root,
       mode: "ingest",
       reviewId: over.id ?? "2026-10-15-complete",
-      target: over.target ?? { kind: "report", ref: "review.md" },
+      target: over.target ?? { kind: "pr", ref: PR, head: HEAD },
       reportText: over.report ?? `# Round\n\nNo findings.\n${EVIDENCE}\n`,
       findings: (over.findings ?? []) as never,
       now: NOW,
@@ -743,7 +743,6 @@ describe("review_complete", () => {
     pkg = path.join(root, created.path);
     put("research.json", { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH });
     put("coverage.md", READY_COVERAGE_MD);
-    if (over.target === undefined) put("manifest.json", { ...readJson("manifest.json"), target: { kind: "pr", ref: PR, head: HEAD } });
     return pkg;
   }
 
