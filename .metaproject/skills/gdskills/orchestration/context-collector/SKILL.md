@@ -39,7 +39,7 @@ Collects and maintains a **unified context document** for a job. The context doc
 6. Keep the context document up-to-date as the job evolves (version-tracked updates)
 
 **Input:** Task description + job name + project path (from orchestrator or user)
-**Output:** `context.md` document in `.metaproject/jobs/<job-name>/ai/` and `.metaproject/jobs/<job-name>/man/`, documented via `job-documenter`
+**Output:** `context.md` document in `.metaproject/jobs/<job-name>/ai/` and `.metaproject/jobs/<job-name>/man/`, written straight into the job folder `keryx job init` created
 
 ## When to Use
 
@@ -55,7 +55,7 @@ Phase 1: RECEIVE     ->  Parse input, determine scope and focus areas
 Phase 2: LOCAL       ->  Scan local docs, jobs, rules, codebase for relevant context
 Phase 3: EXTERNAL    ->  Fetch external docs for libraries, APIs, best practices
 Phase 4: SYNTHESIZE  ->  Merge all findings into a single context document
-Phase 5: DOCUMENT    ->  Save via job-documenter, return result
+Phase 5: DOCUMENT    ->  Save into the job folder, return result
 ```
 
 ---
@@ -487,27 +487,18 @@ When updating an existing context:
 
 Save the context document and notify orchestrator.
 
-### 5.1 Save via job-documenter (when running within a job)
+### 5.1 Save into the job folder (when running within a job)
 
-If JOB_NAME is provided, dispatch `job-documenter`:
+If JOB_NAME is provided, the job folder already exists — `keryx job init` creates
+it, and the orchestrator owns it. Write the full context document, metadata block
+included, to `<JOBS_ROOT>/<JOB_NAME>/ai/context.md` and `<JOBS_ROOT>/<JOB_NAME>/man/context.md`.
 
-```
-ACTION: add-document
-JOB_NAME: <JOB_NAME>
-JOBS_ROOT: <JOBS_ROOT>
+Do not record it with `keryx job document`: that command takes only `analysis`,
+`implementation-report`, `review` and `verification-report`, and recording a type a
+second time replaces the first file, so filing a context document under
+`analysis` would overwrite the real analysis.
 
-DATA:
-  DOC_TYPE:    context
-  TARGET:      both
-  TITLE:       Context — <task description short>
-  CONTENT:     <full context document>
-  AGENT:       context-collector
-  TASK:        Collect context for <task description>
-  VERSION:     <1.0 for new, incremented for update>
-  DOC_STATUS:  final
-```
-
-For ACTION=update, use the same flow — `job-documenter` will overwrite the existing `context.md`.
+For ACTION=update, write to the same paths — the new revision replaces the existing `context.md`.
 
 ### 5.2 Save directly (when running standalone without a job)
 
@@ -667,5 +658,5 @@ Stop and re-read this skill if you are thinking:
 | "The task mentions React, so I should fetch React documentation." | Rule 10: no external fetch for well-known patterns already covered by project rules. External research is for the specific API, version gotcha or convention this task turns on — not for a topic overview. |
 | "This section of the existing context looks stale, so I'll drop it while updating." | 4.3 and Rule 4: preserve existing sections unless they are explicitly outdated. "Looks stale" from inside a scoped update usually means "I did not re-research it" — removing it silently deletes a decision another agent is relying on. |
 | "I fixed the small inconsistency I noticed in the source file while reading it." | Rule 11: this skill writes only into the job folder. An edit made during collection lands in a diff nobody attributed to a task, and the implementer inherits it without knowing. |
-| "The context is written, so I can return — job-documenter can be called later." | Phase 5 is part of the skill. A `context.md` that was never persisted through `job-documenter` is absent from the README index, and the next phase resolves the path to nothing. |
+| "The context is written, so I can return — saving it can happen later." | Phase 5 is part of the skill. A `context.md` that was never written to the job folder leaves the next phase resolving `CONTEXT_LOCATION` to nothing. |
 | "The content changed only slightly, so bumping the Version and update log is overkill." | Rule 12 and Rule 3: version, timestamp and update log are mandatory. Without them, two agents reading different revisions have no way to tell which one they have. |

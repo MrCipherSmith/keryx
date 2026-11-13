@@ -1,5 +1,5 @@
 ---
-description: "Job documentation structure and conventions for .metaproject/jobs (default) or $GDMETAPRO_JOBS_ROOT. Used by job-documenter skill and job-orchestrator."
+description: "Job documentation structure and conventions for .metaproject/jobs (default) or $GDMETAPRO_JOBS_ROOT. Used by job-orchestrator and the `keryx job` commands."
 alwaysApply: false
 ---
 
@@ -14,7 +14,7 @@ Jobs are the documentation artifacts produced by the `job-orchestrator` pipeline
 
 Apply when:
 - `job-orchestrator` creates a new job
-- `job-documenter` skill is invoked to create or update job documentation
+- `keryx job init` or `keryx job document` creates or updates job documentation
 - User asks about job documentation structure or conventions
 
 ## Relationship to `docs/`
@@ -45,7 +45,7 @@ The jobs root is resolved in this priority order:
 JOBS_ROOT="${GDMETAPRO_JOBS_ROOT:-.metaproject/jobs}"
 ```
 
-`PROJECT_DIR` is always known by Phase 0.2 of the orchestrator. Sub-agents (job-documenter, context-collector, task-implementer, etc.) **never resolve JOBS_ROOT themselves** — they receive it explicitly from the orchestrator in the dispatch prompt.
+`PROJECT_DIR` is always known by Phase 0.2 of the orchestrator. Sub-agents (context-collector, task-implementer, etc.) **never resolve JOBS_ROOT themselves** — they receive it explicitly from the orchestrator in the dispatch prompt.
 
 ## Job Folder Naming
 
@@ -215,7 +215,7 @@ Every document (in both `man/` and `ai/`) MUST end with a metadata block:
 
 ## Lifecycle
 
-1. **Init** — Orchestrator determines job name, calls documenter to create folder + README + plan
-2. **Active** — After each sub-agent completes, orchestrator sends results to documenter. Documents are added to `man/` and `ai/`. README is updated.
-3. **Finalize** — Orchestrator calls documenter to write final report, update README status to `completed`, add completion timestamp.
+1. **Init** — Orchestrator determines job name, then runs `keryx job init --name <slug>` to create the job folder and its plan
+2. **Active** — After each sub-agent completes, orchestrator writes its result to a file and records it with `keryx job document <job-name> --type <type> --file <path>`; the command copies it into the job package and lists it in the job state.
+3. **Finalize** — Orchestrator records the final report with `keryx job document` and closes the job with `keryx job complete <job-name>`.
 4. **Archived** — Job folder remains in `jobs/` indefinitely. Old jobs are NOT auto-deleted.

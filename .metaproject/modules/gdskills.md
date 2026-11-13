@@ -25,10 +25,8 @@ Native bundled Metaproject working skills and orchestrators.
 - `code-verifier`: Run and summarize verification gates: typecheck, lint, tests, build, imports, and changed-scope checks.
 - `context-collector`: Build compact task context from graph, ctx, wiki, memory, health, project-skills, and selected files.
 - `feature-analyzer`: Analyze a feature, module, branch, or migration area and produce an implementation map.
-- `feature-dev`: Run a guided feature workflow from requirements to implementation, verification, and PR-ready summary.
 - `flow-orchestrator`: Run Task Manager-backed implementation flows through keryx flow state, frozen acceptance criteria, an explicit completion choice, review, and Code Health.
 - `issue-analyzer`: Convert GitHub or local issues into atomic implementation tasks with acceptance criteria.
-- `job-documenter`: Create and maintain persistent job documentation for orchestrated analysis, implementation, and review work.
 - `job-orchestrator`: Run full task pipelines: clarify, collect context, plan, implement, verify, review, and summarize.
 - `task-implementer`: Implement one atomic task end to end using local project context and verification.
 

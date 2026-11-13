@@ -106,12 +106,6 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Delegate context, test, implementation, review, and docs work to existing gdskills while keeping flow state changes in the CLI.",
     "After verification, ask the user whether to create a draft PR and complete the managed flow, finish with a verified handoff without PR, or keep the flow open.",
   ]),
-  skill("job-documenter", "orchestration", ["recommended", "full"], "Create and maintain persistent job documentation for orchestrated analysis, implementation, and review work.", [
-    "Initialize job folders and state documents.",
-    "Write analysis, context, implementation, verification, and review reports.",
-    "Keep job README and status metadata current.",
-    "Finalize traceable job documentation for the user and follow-up agents.",
-  ]),
   skill("context-collector", "orchestration", ["recommended", "full"], "Build compact task context from graph, ctx, wiki, memory, health, project-skills, and selected files.", [
     "Start from the target question and list the minimum context needed.",
     "Use gdgraph for relationships and gdctx for compact outputs.",
@@ -142,22 +136,6 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Rank files by importance and risk.",
     "Produce a concise map of changes, dependencies, tests, and risks.",
   ]),
-  skill("feature-dev", "orchestration", ["full"], "Run a guided feature workflow from requirements to implementation, verification, and PR-ready summary.", [
-    "Clarify requirements and implementation scope.",
-    "Collect project context and relevant local patterns.",
-    "Implement in small verified slices.",
-    "Prepare review and PR-ready documentation.",
-  ]),
-
-  // Its SKILL.md triggers include a bare "review", which belongs to the
-  // ORCHESTRATOR — the description says so: use it when a review is requested
-  // and the user does NOT name a specialist. Safe only because a trigger cannot
-  // fire on fewer words than it was written with: before that, "ui review"
-  // degenerated to ["review"] and review-frontend took every review request.
-  // The same fact constrains its description and triggers: "review" fires on
-  // every review request, so a specialist's word in this skill's text (the
-  // `review --frontend` flag list it used to carry) ties it with the specialist
-  // that owns the word.
   skill("review-orchestrator", "review", ["recommended", "full"], "Route review requests to specialized reviewers and consolidate findings.", [
     "Detect changed scope and relevant review domains.",
     "Use gdgraph affected context for exported symbols and shared surfaces.",

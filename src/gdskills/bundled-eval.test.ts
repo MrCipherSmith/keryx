@@ -118,9 +118,9 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Plus `review-premise` (flow 459): a delete-only judge of findings' premises.
     // Plus `ui-direction`, `ui-craft` and `review-ui-ux`: the UI design trio.
     // Minus the seven `planning/` skills of a pipeline whose orchestrator was
-    // never shipped (flow 488): 84 - 7 = 77.
+    // never shipped, and `job-documenter` and `feature-dev` (flow 488): 84 - 9 = 75.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(77);
+    expect(files.length).toBe(75);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);

@@ -142,7 +142,7 @@ const CENSUS_FLOOR = 0;
  * pre-extraction inline scripts (`code-*-review`), a superseded output format
  * (`issue-analyzer`'s Gherkin against `SKILL.md`'s JSON), hard-coded
  * `.metaproject/jobs` where `SKILL.md` had moved to `<JOBS_ROOT>`, a
- * seven-phase pipeline against `SKILL.md`'s eight (`feature-dev`), and
+ * seven-phase pipeline against `SKILL.md`'s eight (`feature-dev`, since removed), and
  * pre-split monolithic bodies (`feature-analyzer`). Those are drift and were
  * reconciled by writing the canonical build into every variant. The text that
  * looked harness-specific pointed the WRONG way — `.cursor/rules/core/*.mdc` in

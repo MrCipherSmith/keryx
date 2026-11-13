@@ -24,7 +24,7 @@
 // into every installation. They were assumed correct, and were not. This sweep's
 // first clean run over the shipped tree returned 27 findings:
 //
-//   - 1 skill named but never bundled — `feature-dev` said "Launch `code-review`
+//   - 1 skill named but never bundled — `feature-dev` (since removed) said "Launch `code-review`
 //     skill", and no `code-review` has ever shipped;
 //   - 25 paths into the shipped tree that resolved to nothing, in 9 distinct
 //     forms, every one of them missing its category segment: four contract
@@ -128,9 +128,9 @@ export type BundledSkillCheck = (typeof BUNDLED_SKILL_CHECKS)[number];
 export interface BundledSkillFinding {
   /** Which rule fired. */
   readonly check: BundledSkillCheck;
-  /** Skill directory name, e.g. `feature-dev`. */
+  /** Skill directory name, e.g. `job-orchestrator`. */
   readonly skill: string;
-  /** Path relative to the swept root, e.g. `orchestration/feature-dev/SKILL.md`. */
+  /** Path relative to the swept root, e.g. `orchestration/job-orchestrator/SKILL.md`. */
   readonly file: string;
   /** 1-based line, or `null` when the defect is the absence of something. */
   readonly line: number | null;
@@ -874,7 +874,7 @@ export function hasNotForClause(text: string): boolean {
  * already shipped headings — "Red Flags" (11 skills), "Red Flags Table" (4
  * skills, all `review-*`) — and matched by heading text rather than by an
  * exact string so a heading such as `## Red Flags — Stop and re-read this
- * skill if you are thinking:` (task-implementer, feature-dev, issue-analyzer)
+ * skill if you are thinking:` (task-implementer, issue-analyzer)
  * still counts.
  *
  * WHAT MAKES IT A TABLE (OR A TWO-COLUMN LIST): the heading alone is not
@@ -1271,7 +1271,7 @@ export function pendingReasonNamesBackfillTask(reason: string): boolean {
  * with that false-positive rate is routed around within a week.
  *
  * The narrow form still catches the defect that actually shipped:
- * `feature-dev` said "Launch `code-review` skill" for a skill that was never
+ * `feature-dev` (since removed) said "Launch `code-review` skill" for a skill that was never
  * bundled.
  */
 const SKILL_REFERENCE_PATTERNS: readonly RegExp[] = [

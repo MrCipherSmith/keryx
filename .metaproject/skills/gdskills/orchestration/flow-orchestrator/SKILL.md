@@ -290,7 +290,7 @@ Recommended worker routing:
 | `test` | `tests-creator` or `test-gen` |
 | `implement` | `task-implementer` |
 | `review` | `review-orchestrator` |
-| `docs` | `job-documenter`, `prd-creator`, or documentation-specific project skill |
+| `docs` | `prd-creator`, a documentation-specific project skill, or `keryx job document` to file a document in a job folder |
 
 **Before the first `task-implementer` dispatch of the run:** when `review.jev.edit_guard` is on (`.metaproject/tasks.config.json`), confirm the guard is active — `keryx review jev-edit-guard status`, else `keryx review jev-edit-guard install` — and say why in one line.
 

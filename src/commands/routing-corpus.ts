@@ -230,11 +230,16 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * their 26 positives, all of which ranked first: 354/357 - 26 = 328/331. The
  * three misses are unchanged; no regression is recorded.
  *
+ * Flow 488 then removed `job-documenter` (job folders are made by `keryx job
+ * init` / `keryx job document`) and `feature-dev` (the end-to-end pipelines are
+ * `flow-orchestrator` and `job-orchestrator`) with their 7 positives, all
+ * ranking first: 328/331 - 7 = 321/324. Again no regression is recorded.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 328;
-export const RANK1_TOTAL = 331;
+export const RANK1_FIRST = 321;
+export const RANK1_TOTAL = 324;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -363,18 +368,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "job-documenter",
-    positives: [
-      "initialize the job folder for this work",
-      "save the job report into jobs/",
-      "put the findings for this job into its folder as a document",
-    ],
-    negatives: [
-      { prompt: "add a description to the PR and open a linked issue", owner: "pr-issue-documenter" },
-      { prompt: "document this codebase", owner: "autodoc-orchestrator" },
-    ],
-  },
-  {
     skill: "context-collector",
     positives: [
       "gather the context for this job before the subagents start",
@@ -383,7 +376,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "the module is settled, now do I reach for gdgraph or gdwiki", owner: "context-router" },
-      { prompt: "initialize the job folder for this work", owner: "job-documenter" },
+      { prompt: "analyze the issue and turn it into tasks", owner: "issue-analyzer" },
     ],
   },
   {
@@ -433,19 +426,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "break down issue 42 into atomic tasks", owner: "issue-analyzer" },
       { prompt: "does this change break anything else", owner: "review-regression" },
-    ],
-  },
-  {
-    skill: "feature-dev",
-    positives: [
-      "build this feature from scratch up to a merge-ready PR",
-      "develop the feature described in this issue end to end",
-      "take me through the guided feature workflow for this idea",
-      "spin up something brand new for this idea and carry it all the way to a pr I can merge",
-    ],
-    negatives: [
-      { prompt: "implement this issue", owner: "job-orchestrator" },
-      { prompt: "implement task 3 from the breakdown", owner: "task-implementer" },
     ],
   },
 
