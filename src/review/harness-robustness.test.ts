@@ -23,7 +23,7 @@ import { createManagedReviewPackage } from "./managed";
 import { planConfirmed, recordPlanConfirmation, type PlanNumbers } from "./plan-confirmation";
 import { computeReadiness, renderReadiness } from "./readiness";
 import { publishReview } from "./publish";
-import { sealTarget } from "./seals";
+import { heavyFindingsSeal, sealTarget } from "./seals";
 import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, unattendedStartRefusal, writeRunProfile } from "./run-profile";
 import { compareVersions, defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift, shellQuote, skillVersion } from "./skill-drift";
 import { computeVerdict, renderVerdict, writeVerdict } from "./verdict";
@@ -51,7 +51,7 @@ function manifest(): void {
     status: "draft",
     target,
     // A PR-bound package without a target seal is refused (flow 488, review round 2 SEC-1).
-    seals: { target: sealTarget(target) },
+    seals: { target: sealTarget(target), heavyFindings: heavyFindingsSeal([]) },
     artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
     coverage: [],
   });

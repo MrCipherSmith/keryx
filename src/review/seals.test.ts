@@ -3,7 +3,7 @@
 // `review ingest --verifications`) still close.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { EVIDENCE, HEAD, MOVED, OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, VERIFIED, editManifest as editManifestIn, ingestReady, lookup, readManifest, sink, writeFindings } from "./close-gates.test-helpers";
@@ -161,9 +161,10 @@ describe("PR 1166 round 2: removed seals, pre-seal packages and the blocker/majo
 
   test("a package with no target seal: --head of the same SHA without --head-reason is refused, with it the close seals the head", async () => {
     const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
-    await editManifest(ref, (manifest) => { delete manifest.seals; });
+    // Only the target seal is gone: a package with no blocker/major record is refused until re-ingested (round 3), which --head-reason does not repair.
+    await editManifest(ref, (manifest) => { delete manifest.seals.target; });
     expect(await messageOf(() => completeManagedReview(dir, ref, { prLookup: lookup({}), head: HEAD }))).toContain("carries no target seal");
-    expect((await readManifest(dir, ref)).seals).toBeUndefined();
+    expect((await readManifest(dir, ref)).seals?.target).toBeUndefined();
     const done = await completeManagedReview(dir, ref, { prLookup: lookup({}), head: HEAD, headReason: REASON });
     expect(done.manifest.status).toBe("closed");
     expect(done.manifest.seals?.target).toBeDefined();
@@ -197,6 +198,27 @@ describe("PR 1166 round 2: removed seals, pre-seal packages and the blocker/majo
     const ref = await ingestWithMajor();
     await editManifest(ref, (manifest) => { manifest.seals.heavyFindings.keys = []; });
     await bothRefuse(ref, ["seals.heavyFindings"]);
+  });
+
+  test("PR 1166 round 3 (cluster A): deleting seals.heavyFindings and lowering the unverified major is refused", async () => {
+    const ref = await ingestWithMajor();
+    await writeFindings(dir, ref, (await findingsOf(ref)).map((finding) => ({ ...finding, severity: "minor" })));
+    await editManifest(ref, (manifest) => {
+      expect(manifest.seals.target).toBeDefined();
+      delete manifest.seals.heavyFindings;
+    });
+    await bothRefuse(ref, ["carries no seals.heavyFindings"]);
+  });
+
+  test("PR 1166 round 3 (cluster B): a hand-set status closed does not turn the research gate off for complete", async () => {
+    const ref = await ingestReady(dir, "# Review\nNo findings.\n- Not run: mutation pass", { kind: "report", ref: "review.md" });
+    const pkg = path.resolve(dir, ref);
+    await mkdir(path.join(pkg, "research-evidence"), { recursive: true });
+    await writeFile(path.join(pkg, "research-evidence", "mutants.json"), JSON.stringify({ mutants: [{ id: "M1", file: "src/a.ts", anchor: "x", replacement: "y" }] }));
+    const open = await messageOf(() => completeManagedReview(dir, ref));
+    expect(open).toContain("proposed mutant");
+    await editManifest(ref, (manifest) => { manifest.status = "closed"; });
+    expect(await messageOf(() => completeManagedReview(dir, ref))).toContain("proposed mutant");
   });
 
   test("SEC-2: a major verified through ingest still closes", async () => {

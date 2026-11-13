@@ -8,17 +8,21 @@
 //   - `headOverride`       `review complete --head <sha> --head-reason "<quote>"` (terminal or --answered-by);
 //   - `verifications`      `review ingest --verifications`: only the verifications the verifier merge applied in that ingest;
 //   - `heavyFindings`      `review ingest`: the keys of the blocker and major findings it wrote (review SEC-2, round 2),
-//                          so editing a severity in findings.json does not take a finding out of item `verifier`.
+//                          so editing a severity in findings.json does not take a finding out of item `verifier`;
+//   - `coverageWaiver`     `review complete --waive-coverage` and the review_waive_coverage card (recordCoverageWaiver):
+//                          the waiver research.json holds under `dispatch.coverageWaiver` (review round 3).
 //
-// The gates (close-gates.ts, readiness.ts) honour a waiver, a head override or a verification only when its digest
-// matches. This is the level of `roundRecordTampered`: evidence that a file was edited outside keryx, not a signature —
+// The gates (close-gates.ts, readiness.ts, coverage-complete.ts) honour a waiver, a head override or a verification only
+// when its digest matches, and refuse a package whose blocker/major record is missing or does not match. This is the level of `roundRecordTampered`: evidence that a file was edited outside keryx, not a signature —
 // an agent that recomputes the digest the way this module does is not stopped (cryptography is out of scope, flow 488
 // description).
 //
 // Packages written before the seals existed carry none, and a missing seal is never read as "legacy, skip the check": an
 // agent can delete `seals` as easily as it can edit what they cover (review round 2, SEC-1). So on such a package no
-// waiver, head override or verification is honoured, and a pull-request package is refused until the operator records
-// its head (`review complete --head <sha> --head-reason "<quote>"`), which writes the target seal. The flow 488 CHANGELOG
+// waiver, head override or verification is honoured, a package with no blocker/major record is refused until it is
+// ingested again (round 3: deleting the record let a lowered severity skip item `verifier`), and a pull-request package
+// is refused until the operator records its head (`review complete --head <sha> --head-reason "<quote>"`), which writes
+// the target seal. The flow 488 CHANGELOG
 // entry names every case and its repair; the operator chose this strict reading over a legacy exemption (round 2,
 // review-degradation-w1:F-001).
 
@@ -39,6 +43,12 @@ export function sealDigest(kind: string, content: unknown): string {
 export const sealTarget = (target: ManagedReviewTarget): string => sealDigest("target", { kind: target.kind, ref: target.ref, head: target.head ?? null });
 export const sealWaiver = (waiver: ReadinessWaiver): string => sealDigest("readiness-waiver", waiver);
 export const sealHeadOverride = (override: HeadOverride): string => sealDigest("head-override", override);
+export const sealCoverageWaiver = (waiver: unknown): string => sealDigest("coverage-waiver", waiver);
+
+/** Whether keryx sealed this coverage waiver (research.json `dispatch.coverageWaiver`) as it now reads. */
+export function coverageWaiverSealed(manifest: Pick<ManagedReviewManifest, "seals"> | undefined, waiver: unknown): boolean {
+  return manifest?.seals?.coverageWaiver !== undefined && manifest.seals.coverageWaiver === sealCoverageWaiver(waiver);
+}
 
 /** The key a finding's verification seal is stored under: its `global_id`, else its display `id`. */
 export function findingKey(finding: unknown): string {
@@ -100,7 +110,8 @@ export function heavyFindingsSeal(findings: ReadonlyArray<unknown>): NonNullable
 
 /**
  * The finding keys keryx recorded as blocker or major at ingest, when it recorded them and the record is intact; undefined
- * for a package ingested before the record existed (its findings.json severities are all there is to read).
+ * otherwise. The close gates never reach readiness on undefined (sealProblems refuses a missing or broken record); the
+ * readers that report without closing (verdict, panel) then go by the severities in findings.json.
  */
 export function sealedHeavyKeys(manifest: Pick<ManagedReviewManifest, "seals">): string[] | undefined {
   const heavy = manifest.seals?.heavyFindings;
@@ -138,8 +149,12 @@ export function sealProblems(manifest: Pick<ManagedReviewManifest, "seals" | "ta
       );
     }
   }
+  // Review round 3 (cluster A): a missing record is refused like a broken one. Read as "ingested before the record existed",
+  // its absence let an agent delete it, lower a major in findings.json and close past item `verifier`.
   const heavy = manifest.seals?.heavyFindings;
-  if (heavy !== undefined && (!Array.isArray(heavy.keys) || heavy.seal !== sealHeavyFindings(heavy.keys))) {
+  if (heavy === undefined) {
+    problems.push("manifest.json carries no seals.heavyFindings, the record `review ingest` writes of the blocker and major findings (the package was ingested before keryx wrote it, or it was removed): re-run `keryx review ingest` to record the findings again");
+  } else if (!Array.isArray(heavy.keys) || heavy.seal !== sealHeavyFindings(heavy.keys)) {
     problems.push("manifest.json seals.heavyFindings does not match the seal `review ingest` wrote over the blocker and major findings: it was edited outside keryx; re-run `keryx review ingest` to record the findings again");
   }
   return problems;

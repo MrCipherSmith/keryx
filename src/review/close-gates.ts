@@ -36,18 +36,15 @@ export type CloseGateResult = { readiness: ReadinessReport; warnings: string[] }
 
 const REFUSAL = "Cannot complete managed review;";
 
+/** Whether this evaluation is `review complete` closing the package (as opposed to publishing one). */
+const closes = (input: Pick<CloseGateInput, "action">): boolean => input.action === "complete the review";
+
 const readManifest = async (packageDir: string): Promise<ManagedReviewManifest> => {
   const manifest = await readJsonFileOr<ManagedReviewManifest | undefined>(path.join(packageDir, "manifest.json"), undefined);
   if (manifest === undefined) throw new Error(`Managed review package has no readable manifest.json: ${packageDir}`);
   return manifest;
 };
 
-/**
- * The research gate (flow 488, review ARCH-1): the research ledger's errors, each tagged with the readiness items that can
- * waive it. An error with no item always refuses; a tagged one refuses unless the operator's sealed waiver of one of its
- * items covers it, or `relax` (publish --partial) lets the checklist speak for it. A closed package is not re-held to the
- * live coverage gate: it passed that gate at its close (readiness.ts runsLiveCoverageGate, the one rule for both).
- */
 const UNREADABLE_FINDINGS = "findings.json is missing or not JSON: the gates cannot read the findings this round recorded; re-run `keryx review ingest`";
 
 /**
@@ -58,9 +55,17 @@ const UNREADABLE_FINDINGS = "findings.json is missing or not JSON: the gates can
 const readFindings = (packageDir: string): Promise<unknown> =>
   readFile(path.join(packageDir, "findings.json"), "utf8").then((text): unknown => JSON.parse(text)).catch(() => undefined);
 
+/**
+ * The research gate (flow 488, review ARCH-1): the research ledger's errors, each tagged with the readiness items that can
+ * waive it. An error with no item always refuses; a tagged one refuses unless the operator's sealed waiver of one of its
+ * items covers it, or `relax` (publish --partial) lets the checklist speak for it. Publishing a closed package does not
+ * re-hold it to the live coverage gate: it passed that gate at its close. `review complete` always runs it, whatever
+ * manifest.json's unsealed `status` says (readiness.ts runsLiveCoverageGate, the one rule for both; review round 3).
+ */
 async function researchRefusals(packageDir: string, input: CloseGateInput, findings: unknown): Promise<string[]> {
   const manifest = await readManifest(packageDir);
-  const errors = await packageResearchErrorsTagged(packageDir, manifest.artifacts, findings, runsLiveCoverageGate(manifest) ? {} : { coverage: false });
+  const live = runsLiveCoverageGate(manifest, closes(input));
+  const errors = await packageResearchErrorsTagged(packageDir, manifest.artifacts, findings, live ? {} : { coverage: false });
   const waived = new Set<string>(partitionWaivers(manifest).sealed.map((waiver) => waiver.item));
   return errors
     .filter((error) => error.items.length === 0 || (input.relaxReadiness !== true && !error.items.some((item) => waived.has(item))))
@@ -92,7 +97,7 @@ export async function evaluateCloseGates(packageDir: string, input: CloseGateInp
   if (findings === undefined) throw new Error(`${REFUSAL} ${UNREADABLE_FINDINGS}`);
   const research = await researchRefusals(packageDir, input, findings);
   if (research.length > 0) throw new Error(`${REFUSAL} ${research.join("; ")}`);
-  const readiness = await computeReadiness(packageDir, input.readiness ?? {});
-  if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw new Error(readinessRefusal(readiness, input.action === "publish" ? "publish" : "complete the review"));
+  const readiness = await computeReadiness(packageDir, { ...(input.readiness ?? {}), closing: closes(input) });
+  if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw new Error(readinessRefusal(readiness, input.action));
   return { readiness, warnings };
 }

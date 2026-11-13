@@ -142,6 +142,8 @@ export type ReviewSeals = {
   verifications?: Record<string, string> | undefined;
   /** The keys of the blocker and major findings `review ingest` wrote, and a seal over them (review round 2, SEC-2). */
   heavyFindings?: { keys: string[]; seal: string } | undefined;
+  /** The operator's coverage waiver as research.json holds it (`dispatch.coverageWaiver`), sealed when keryx recorded it (review round 3). */
+  coverageWaiver?: string | undefined;
 };
 
 export type ManagedReviewManifest = {

@@ -12,6 +12,7 @@ import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
 import { evaluateCloseGates } from "./close-gates";
+import { readCoverageWaiver } from "./coverage-complete";
 import { failingItems, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import { cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest } from "./types";
 
@@ -68,8 +69,9 @@ async function hostQuestionNotice(packageDir: string, manifest: ManagedReviewMan
   const named: string[] = [];
   for (const waiver of manifest.readiness_waivers ?? []) if (waiver.confirmedVia === "host-question") named.push(`readiness waiver of ${waiver.item}`);
   if (manifest.head_override?.confirmedVia === "host-question") named.push(`head change ${manifest.head_override.from.slice(0, 7)} to ${manifest.head_override.to.slice(0, 7)}`);
-  const research = await readJsonFileOr<{ dispatch?: { coverageWaiver?: { confirmedVia?: string } }; coverageWaiver?: { confirmedVia?: string } } | undefined>(path.join(packageDir, "research.json"), undefined);
-  if ((research?.dispatch?.coverageWaiver ?? research?.coverageWaiver)?.confirmedVia === "host-question") named.push("coverage waiver");
+  // The owner's reader (coverage-complete.ts): the one shape recordCoverageWaiver writes (review round 3, ARCH-W5-1).
+  const research = await readJsonFileOr<{ dispatch?: unknown } | undefined>(path.join(packageDir, "research.json"), undefined);
+  if (readCoverageWaiver(research?.dispatch)?.confirmedVia === "host-question") named.push("coverage waiver");
   const premise = await premiseRecords(packageDir).catch(() => undefined);
   const premiseCount = (premise?.decisions ?? []).filter((decision) => decision.confirmedVia === "host-question").length;
   if (premiseCount > 0) named.push(`${premiseCount} premise decision(s)`);

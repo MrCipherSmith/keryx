@@ -28,9 +28,9 @@ import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun }
 import { asRecord as record } from "./record";
 import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
 import { findingKey, NO_VERIFICATION, partitionWaivers, sealedHeavyKeys, sealWaiver, verificationProblem } from "./seals";
+import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
 
 const HEAVY_SEVERITIES = ["blocker", "major"];
-import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
@@ -82,6 +82,12 @@ export type ReadinessOptions = {
    * tracker is not asked twice.
    */
   headGate?: HeadGateResult | undefined;
+  /**
+   * `review complete` is closing the package now: item 3 runs the live coverage gate whatever manifest.json's `status`
+   * says. The closed-package relaxation belongs to readers of a package keryx closed (publish, the panel), and `status`
+   * carries no seal, so a hand-set "closed" must not turn the gate off for the close itself (review round 3, cluster B).
+   */
+  closing?: boolean | undefined;
 };
 
 /** A recount whose changed-file count exceeds this multiple of the PR's own list was made against the wrong base. */
@@ -148,8 +154,11 @@ type Context = {
   liveCoverageGate: boolean;
 };
 
-/** The one rule for Context.liveCoverageGate, shared with the research gate in close-gates.ts (review round 2, ARCH F-001). */
-export const runsLiveCoverageGate = (manifest: Pick<ManagedReviewManifest, "status">): boolean => manifest.status !== "closed";
+/**
+ * The one rule for Context.liveCoverageGate, shared with the research gate in close-gates.ts (review round 2, ARCH F-001):
+ * always while `review complete` closes the package (`closing`), otherwise only while the package is not closed.
+ */
+export const runsLiveCoverageGate = (manifest: Pick<ManagedReviewManifest, "status">, closing = false): boolean => closing || manifest.status !== "closed";
 
 async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verdict }> {
   const coverage = await computeCoverage(ctx.dir, ctx.research === undefined ? {} : { research: ctx.research });
@@ -481,8 +490,8 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     premise: await premiseRecords(packageDir),
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
     coverageMd,
-    coverageMdGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
-    liveCoverageGate: runsLiveCoverageGate(manifest),
+    coverageMdGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed" || options.closing === true,
+    liveCoverageGate: runsLiveCoverageGate(manifest, options.closing === true),
   };
   const { files, radius } = await filesChecks(ctx);
   const verdicts: Record<ReadinessItemId, Verdict> = {

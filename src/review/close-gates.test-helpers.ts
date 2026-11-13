@@ -5,7 +5,7 @@ import path from "node:path";
 import type { PrLookup } from "./complete-head-gate";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "./dispatch.test-helpers";
 import { createManagedReviewPackage } from "./managed";
-import { findingKey, sealTarget, withVerificationSeals } from "./seals";
+import { findingKey, heavyFindingsSeal, sealTarget, withVerificationSeals } from "./seals";
 import type { ManagedReviewManifest } from "./types";
 
 export const HEAD = "a".repeat(40);
@@ -67,8 +67,8 @@ export async function sealVerificationsAsIngest(packageDir: string): Promise<voi
   const file = path.join(packageDir, "manifest.json");
   const manifest = JSON.parse(await readFile(file, "utf8")) as ManagedReviewManifest;
   const applied = findings.filter((finding) => finding.verification !== undefined).map((finding) => ({ key: findingKey(finding), verification: finding.verification }));
-  // An ingest seals the target in the same write; a hand-built fixture that had no seals gets that one too.
-  await writeFile(file, JSON.stringify({ ...manifest, seals: { ...withVerificationSeals(manifest.seals, applied), target: manifest.seals?.target ?? sealTarget(manifest.target) } }, null, 2));
+  // An ingest seals the target and the blocker/major record in the same write; a hand-built fixture that had no seals gets them too.
+  await writeFile(file, JSON.stringify({ ...manifest, seals: { ...withVerificationSeals(manifest.seals, applied), target: manifest.seals?.target ?? sealTarget(manifest.target), heavyFindings: manifest.seals?.heavyFindings ?? heavyFindingsSeal(findings) } }, null, 2));
 }
 
 /** A blocker/major finding nobody verified: item 4 (`verifier`) fails on it. */

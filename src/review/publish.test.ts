@@ -14,7 +14,7 @@ import { computeReadiness } from "./readiness";
 import type { VerdictFinding } from "./verdict";
 import { sealVerificationsAsIngest } from "./close-gates.test-helpers";
 import { heldFinding, premiseAnswer } from "./premise-fixtures";
-import { sealHeadOverride, sealTarget } from "./seals";
+import { heavyFindingsSeal, sealHeadOverride, sealTarget } from "./seals";
 
 const minor = (id: string, problem = "a small thing"): VerdictFinding => ({ id, reviewer: "review-style", severity: "minor", problem, location: "src/a.ts:1", verification: "none" });
 
@@ -28,6 +28,7 @@ const write = (name: string, value: unknown): void => writeFileSync(path.join(pk
 
 function makePackage(options: { ready: boolean; kind?: string }): void {
   const target = { kind: (options.kind ?? "pr") as ManagedReviewTarget["kind"], ref: options.kind === "path" ? "src" : PR };
+  const findings = options.ready ? [] : [{ id: "f-1", severity: "major", title: "unverified claim" }];
   write("manifest.json", {
     schemaVersion: 1,
     reviewId: "pr7932-r1",
@@ -36,10 +37,10 @@ function makePackage(options: { ready: boolean; kind?: string }): void {
     target,
     artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
     coverage: [],
-    // As `review ingest` writes it: a pull-request package with no target seal is refused (seals.ts).
-    seals: { target: sealTarget(target) },
+    // As `review ingest` writes it: a package with no target seal (pull request) or no blocker/major record is refused (seals.ts).
+    seals: { target: sealTarget(target), heavyFindings: heavyFindingsSeal(findings) },
   });
-  write("findings.json", options.ready ? [] : [{ id: "f-1", severity: "major", title: "unverified claim" }]);
+  write("findings.json", findings);
   write("report.md", "# Review\n\nRequest changes.\n");
   write("coverage.md", "# Reviewer Coverage\n\nreviewer: review-logic\nstatus: run\nreason: read the diff\n");
 }
@@ -140,7 +141,7 @@ describe("publishReview", () => {
     test("a head override and a coverage waiver confirmed via host-question are named too", async () => {
       // The override as `review complete --head --head-reason --answered-by` writes it: with keryx's seal (flow 488 AC9).
       const headOverride = { from: "a".repeat(40), to: "b".repeat(40), operator_quote: "the operator moved it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question" as const };
-      withManifest({ head_override: headOverride, seals: { target: sealTarget({ kind: "pr", ref: PR }), headOverride: sealHeadOverride(headOverride) } });
+      withManifest({ head_override: headOverride, seals: { target: sealTarget({ kind: "pr", ref: PR }), headOverride: sealHeadOverride(headOverride), heavyFindings: heavyFindingsSeal([]) } });
       write("research.json", { dispatch: { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } } });
       const io = seams();
       await publishReview(pkg, { post: io.post, confirm: io.confirm });
@@ -149,12 +150,12 @@ describe("publishReview", () => {
       expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
     });
 
-    test("a top-level research.coverageWaiver confirmed via host-question is named (review TP-3)", async () => {
+    test("a top-level research.coverageWaiver is not a waiver: nothing writes that shape, so it is not named (review round 3, ARCH-W5-1)", async () => {
       makePackage({ ready: true });
       write("research.json", { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } });
       const io = seams();
       await publishReview(pkg, { partial: true, post: io.post, confirm: io.confirm });
-      expect(io.posts[0]!.body).toContain("Decisions recorded from the agent's host question:** coverage waiver.");
+      expect(io.posts[0]!.body).not.toContain("coverage waiver");
     });
 
     test("a premise decision confirmed via host-question is named, with the count (review TP-3)", async () => {

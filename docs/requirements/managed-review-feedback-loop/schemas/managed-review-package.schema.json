@@ -282,6 +282,11 @@
             "keys": { "type": "array", "items": { "type": "string" } },
             "seal": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
           }
+        },
+        "coverageWaiver": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "PR 1166 round 3: the seal over the operator's coverage waiver as research.json holds it (dispatch.coverageWaiver), written by review complete --waive-coverage or the review_waive_coverage card; an unsealed waiver is not honoured."
         }
       }
     },

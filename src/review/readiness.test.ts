@@ -14,7 +14,7 @@ import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixture
 import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 import { packageCoverageErrors } from "./research";
 import { COVERAGE_MD_MARK } from "./coverage-md";
-import { findingKey, sealTarget, withVerificationSeals } from "./seals";
+import { findingKey, heavyFindingsSeal, sealTarget, withVerificationSeals } from "./seals";
 import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
@@ -68,7 +68,7 @@ const writeSealedFindings = (findings: Array<Record<string, unknown>>): void => 
   const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
   const applied = findings.filter((finding) => finding.verification !== undefined).map((finding) => ({ key: findingKey(finding), verification: finding.verification }));
   // An ingest seals the target in the same write.
-  writeJson("manifest.json", { ...manifest, seals: { ...withVerificationSeals(manifest.seals, applied), target: manifest.seals?.target ?? sealTarget(manifest.target) } });
+  writeJson("manifest.json", { ...manifest, seals: { ...withVerificationSeals(manifest.seals, applied), target: manifest.seals?.target ?? sealTarget(manifest.target), heavyFindings: manifest.seals?.heavyFindings ?? heavyFindingsSeal([]) } });
 };
 
 /** The verifier's result on every blocker/major finding of the fixture: what makes item 4 pass without a waiver. */
@@ -111,7 +111,7 @@ beforeEach(() => {
     artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md", research: "research.json", reviewerDispatch: "research.json" },
     coverage: [],
     // As `review ingest` writes it: a pull-request package with no target seal is refused (seals.ts).
-    seals: { target: sealTarget({ kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/7932" }) },
+    seals: { target: sealTarget({ kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/7932" }), heavyFindings: heavyFindingsSeal([]) },
   });
   writeJson("scope-files.json", { files: CHANGED });
   writeBlastRadius(CHANGED, CUT);

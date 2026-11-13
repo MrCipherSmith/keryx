@@ -14,6 +14,8 @@ import type { SliceManifest } from "./slice";
 import { cardPressFields, type CardPress, type ConfirmedVia, type HostQuestion, hostQuestionFields, isHostQuestion } from "./types";
 import { readJsonFileOr } from "../lib/json";
 import { asRecord as record, dispatchRunRecords } from "./record";
+import { coverageWaiverSealed, sealCoverageWaiver } from "./seals";
+import type { ManagedReviewManifest } from "./types";
 
 export const COVERAGE_FILE = "coverage.json";
 /** Where the ledger build leaves a copy of the slice manifest when the input directory is not the package. */
@@ -41,8 +43,11 @@ export type CoverageReport = {
   omissionReasons: Record<string, number>;
   files: CoverageFile[];
   omissions: Array<{ file: string; reason: string }>;
+  /** The operator's waiver, when research.json holds one and keryx sealed it as it reads now. */
   waiver?: CoverageWaiver;
-  /** True when a valid waiver names every uncovered file. */
+  /** True when research.json holds a waiver keryx did not seal (written by hand, or edited since): it is not honoured. */
+  waiverUnsealed?: true;
+  /** True when a valid, sealed waiver names every uncovered file. */
   waived: boolean;
 };
 
@@ -183,10 +188,14 @@ export async function computeCoverage(packageDir: string, options: ComputeCovera
   const omissionReasons: Record<string, number> = {};
   for (const entry of omissions) omissionReasons[entry.reason] = (omissionReasons[entry.reason] ?? 0) + 1;
   const uncovered = files.filter((entry) => entry.status === "uncovered");
-  const waiver = readCoverageWaiver(dispatch);
+  // Review round 3 (AC9, operator decision): the waiver counts only with the seal recordCoverageWaiver wrote over the raw
+  // record, like a readiness waiver; one written into research.json by hand is reported and not honoured.
+  const recorded = record(dispatch?.coverageWaiver);
+  const sealed = recorded !== undefined && coverageWaiverSealed(await readJson<Pick<ManagedReviewManifest, "seals">>(path.join(packageDir, "manifest.json")), recorded);
+  const waiver = sealed ? readCoverageWaiver(dispatch) : undefined;
   const waived = waiver !== undefined && uncovered.every((entry) => waiver.files.includes(entry.file));
   const counts = { inScope: files.length, covered: files.filter((entry) => entry.status === "covered").length, omitted: omissions.length, uncovered: uncovered.length };
-  return { schemaVersion: 1, tracked, counts, omissionReasons, files, omissions, ...(waiver === undefined ? {} : { waiver }), waived };
+  return { schemaVersion: 1, tracked, counts, omissionReasons, files, omissions, ...(waiver === undefined ? {} : { waiver }), ...(recorded !== undefined && !sealed ? { waiverUnsealed: true as const } : {}), waived };
 }
 
 export async function writeCoverage(packageDir: string): Promise<CoverageReport> {
@@ -232,7 +241,14 @@ async function recordCoverageWaiverLocked(packageDir: string, operatorQuote: str
   const uncovered = report.files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
   if (!report.tracked || uncovered.length === 0) return undefined;
   const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered, ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press), ...hostQuestionFields(press) };
+  // Sealed over the record exactly as written (round-tripped through JSON, as the gate reads it back), in the same
+  // completion write set, so a close that fails takes back the seal with the waiver.
+  const stored = JSON.parse(JSON.stringify(waiver)) as unknown;
+  const manifestFile = path.join(packageDir, "manifest.json");
+  const manifest = await readJson<ManagedReviewManifest>(manifestFile);
+  if (manifest === undefined) throw new Error(`--waive-coverage: the package has no readable manifest.json to seal the waiver in: ${packageDir}`);
   await write(file, `${JSON.stringify({ ...research, dispatch: { ...dispatch, coverageWaiver: waiver } }, null, 2)}\n`);
+  await write(manifestFile, `${JSON.stringify({ ...manifest, seals: { ...(manifest.seals ?? {}), coverageWaiver: sealCoverageWaiver(stored) } }, null, 2)}\n`);
   return waiver;
 }
 
@@ -252,7 +268,9 @@ export async function coverageGateErrors(packageDir: string, research?: unknown)
     ...(chunkWork ? [`keryx review chunks next --package ${dir}`] : []),
     ...(sliceWork ? [`keryx review ledger build <input-dir> --package ${dir}`] : []),
   ].join(" ; ");
-  const stale = report.waiver !== undefined ? " The recorded waiver does not name every uncovered file." : "";
+  const stale = report.waiverUnsealed === true
+    ? " research.json holds a coverage waiver keryx did not record (no matching seal in manifest.json): it is not honoured."
+    : report.waiver !== undefined ? " The recorded waiver does not name every uncovered file." : "";
   return [
     `${uncovered.length} in-scope file(s) are uncovered: ${first.join(", ")}${more}. Run the missing work with \`${commands}\`, or pass \`keryx review complete --waive-coverage "<operator quote>"\` with the operator's own words.${stale}`,
   ];

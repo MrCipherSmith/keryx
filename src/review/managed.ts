@@ -1132,6 +1132,11 @@ async function completeManagedReviewLocked(
   await assertUnchanged();
   try {
     coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now, options.hostQuestion === undefined ? undefined : "host-question", options.hostQuestion === undefined ? undefined : { hostQuestion: options.hostQuestion }, writeCompletion);
+    // recordCoverageWaiver sealed the waiver in manifest.json; the closed manifest written below is built from `manifest`, so carry the seal.
+    if (coverageWaiver !== undefined) {
+      const sealedOnDisk = (JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest).seals?.coverageWaiver;
+      if (sealedOnDisk !== undefined) manifest = { ...manifest, seals: { ...(manifest.seals ?? {}), coverageWaiver: sealedOnDisk } };
+    }
     const gates = await evaluateCloseGates(packageDir, {
       manifest,
       report: reportText,

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { sealTarget } from "../review/seals";
+import { heavyFindingsSeal, sealTarget } from "../review/seals";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "../review/dispatch.test-helpers";
@@ -186,7 +186,7 @@ describe("review_publish", () => {
       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
       coverage: [],
       // As `review ingest` writes it: a pull-request package with no target seal is refused (review/seals.ts).
-      seals: { target: sealTarget({ kind: "pr", ref: PR }) },
+      seals: { target: sealTarget({ kind: "pr", ref: PR }), heavyFindings: heavyFindingsSeal([]) },
     });
     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
     put("report.md", "# Review\n\nRequest changes.\n");
@@ -325,7 +325,7 @@ describe("review_publish", () => {
     const manifest = readJson("manifest.json");
     manifest["target"] = { kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" };
     // Sealed as a keryx write would seal it: the subject here is the card's digest, not the target seal (seals.test.ts).
-    manifest["seals"] = { target: sealTarget({ kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" }) };
+    manifest["seals"] = { target: sealTarget({ kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" }), heavyFindings: heavyFindingsSeal([]) };
     put("manifest.json", manifest);
     const result = await t.invoke(input, { confirmationToken: card.token } as never);
     expect(result.isError).toBe(true);
@@ -351,6 +351,8 @@ describe("review_publish", () => {
 describe("review_waive_coverage", () => {
   const slice = (id: string, files: string[]) => ({ id, path: `slices/${id}`, bytes: 10, contentHash: id, files, domain: "d", split: "file" });
   function uncovered(): void {
+    // The package manifest the waiver's seal is written into (PR 1166 round 3).
+    put("manifest.json", { schemaVersion: 1, reviewId: "pr7932-r1", status: "draft", target: { kind: "pr", ref: PR } });
     put("scope-files.json", { files: ["src/a.ts", "src/b.ts", "src/c.ts"] });
     put("slice-manifest.json", {
       schemaVersion: 1,
@@ -423,7 +425,7 @@ describe("review_waive_readiness", () => {
       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
       coverage: [],
       // As `review ingest` writes it: a pull-request package with no target seal is refused (review/seals.ts).
-      seals: { target: sealTarget({ kind: "pr", ref: PR }) },
+      seals: { target: sealTarget({ kind: "pr", ref: PR }), heavyFindings: heavyFindingsSeal([]) },
     });
     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
     put("report.md", "# Review\n\nRequest changes.\n");
