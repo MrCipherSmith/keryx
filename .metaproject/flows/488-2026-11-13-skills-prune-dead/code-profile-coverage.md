@@ -37,7 +37,7 @@ reviewer that has one.
 | A5 | Error handling completeness (L38) | covered | `LG:144`, `LG:149-153` (swallowed catch, lost stack, unchecked `response.ok`, partial success as full) |
 | A6 | Performance anti-patterns (L39) | covered | `PF:100-104`, `PF:114-117`, `PF:189-191` |
 | A7 | Output category "Architecture & State" (L127) | covered | `AR:102` (API call in a component), `AR:172-184` (logic in a component, store layer), `FE:148-155`, `FE:310-317` |
-| A8 | Output category "Readability & Style" (L130) | covered | `ST:79-192` (naming, dead code, complexity, DRY, imports, comments, file length, console), `CC:115-310` |
+| A8 | Output category "Readability & Style" (L130) | covered | `ST:79-193` (naming, dead code, complexity, DRY, imports, comments, file length, console), `CC:115-310` |
 | A9 | Output category "UX/UI" (L136) | covered | `UX:99-128` (usability, hierarchy and distinctiveness passes) |
 | A10 | Output category "A11y" (L139) | covered | `FE:181-192` (alt text, accessible name, label, keyboard support), `UX:80-98` |
 | A11 | Output category "Tests" (L142) | covered | `TP:107-134` (location and tiers, boundary mocking, behaviour assertions) and the mutation pass `TP:49-76` |
@@ -46,7 +46,7 @@ reviewer that has one.
 | A14 | One entry per occurrence is not more thorough: report the class once with every site (Red Flags L218) | covered | shared law 3, `FE:60`, and the same text in every surviving reviewer |
 | A15 | "The pattern is usually wrong" with no reachable path is an observation (Red Flags L219) | covered | shared laws 1 and 2, `FE:58-59` |
 | A16 | Every finding anchored to a line the branch slice changed (Verification L235) | covered | `ST:67`, `FE:96` (supplied text first, never rebuild the diff) |
-| A17 | A store problem or a naming problem is not this profile's finding (Red Flags L217) | covered | routing, not a defect: `FE:46-50` and `ST:313-323` send each to its reviewer |
+| A17 | A store problem or a naming problem is not this profile's finding (Red Flags L217) | covered | routing, not a defect: `FE:46-50` and `ST:314-324` send each to its reviewer |
 
 Not checks, so not rows: the verdict labels and the output structure
 (`code-review-ai-assistant.mdc` L14-29), "do not request massive refactors", "align
@@ -77,7 +77,7 @@ vocabulary is still cited by `code-review-learned-profile.mdc:65`.
 | S14 | API/IO not in the View: in Service/Store (L89) | covered | `FE:148`, `FE:152-153`, `FE:323`, `FE:327`, `AR:102`, `CSP:49` |
 | S15 | Interact with a Store through actions, no direct mutation outside one (L90) | covered | `FE:74-75` (frontend law 1), `AR:182`, `CSP:51` |
 | S16 | Critical: API in View, missing `observer`, direct store mutation, MobX async violations (L93) | covered | the same rows: S14, S10, S15, S5. Severity differs on purpose and is set by the canonical rubric (`FE:564-566`): missing `observer` is `major`, not `critical` |
-| S17 | Warning: `console.log` instead of `AppLogger` (L94) | covered | `ST:188-190` |
+| S17 | Warning: `console.log` instead of `AppLogger` (L94) | covered | `ST:189-191` |
 | S18 | Warning: inline object props without memo or const (L94) | covered | `PF:100-101`, `PF:103` |
 | S19 | Warning: heavy logic in render (L94) | covered | `PF:102`, `PF:114-117`, `FE:155` |
 | S20 | Warning: questionable types (L94) | covered | `LG:155-161`, `FE:350-358` |
@@ -85,7 +85,7 @@ vocabulary is still cited by `code-review-learned-profile.mdc:65`.
 | S22 | `public` keyword on a member is an ESLint error (Red Flags L183) | covered | `FE:81-84`, `FE:239`, `FE:582`, `MST:27` |
 | S23 | Missing `observer` is silent: check what the component reads through props and getters (Red Flags L184) | covered | `FE:76-78`, `FE:139` (conditional access still needs the wrapper) |
 | S24 | A "temporary" `any` is still rated; fix is `unknown` plus a guard (Red Flags L185) | covered | `FE:345`, `FE:354` |
-| S25 | A real bug found while reading for style goes to the logic reviewer (Red Flags L186) | covered | `ST:318` |
+| S25 | A real bug found while reading for style goes to the logic reviewer (Red Flags L186) | covered | `ST:319` |
 | S26 | Anchored to changed lines only; no discussion of legacy outside the slice (L26, L133) | covered | `ST:67`, `ST:146` |
 
 Not checks: Russian-language instructions, the Critical/Warnings/Suggestions report
@@ -130,7 +130,7 @@ block, and the Red Flags rows about routing and ingestion. The rule
 | M30 | Explicit interfaces for store state and public API (L189) | moved | `FE:350` and `FE:357` (new): store state and public API typed with explicit interfaces, `minor`. `FE:348` named props interfaces only |
 | M31 | `!` only with proof of initialisation (L190) | covered | `FE:347`, `FE:355`, `LG:133` |
 | M32 | Red Flags: absence of the guard is the finding, not the absence of a reproduction (L276) | covered | `FE:586`, `FE:315-316` |
-| M33 | Red Flags: a store problem and a naming problem go to other lanes (L280) | covered | `FE:46-50`, `ST:313-323` (routing) |
+| M33 | Red Flags: a store problem and a naming problem go to other lanes (L280) | covered | `FE:46-50`, `ST:314-324` (routing) |
 
 Not checks: the Russian-language framing, the Critical/Warnings/Suggestions report
 template, "no new libraries", the Job Context block and the Red Flags rows about

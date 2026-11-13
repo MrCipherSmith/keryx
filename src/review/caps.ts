@@ -363,7 +363,6 @@ const CORE_REVIEWERS = new Set([
   "review-degradation",
   "review-core-boundaries",
   "code-boss-reviewer",
-  "code-ai-review",
 ]);
 
 const SUPPORT_REVIEWERS = new Set([
@@ -374,7 +373,6 @@ const SUPPORT_REVIEWERS = new Set([
   "review-vantage-styling",
   "review-layout",
   "review-ui-ux",
-  "code-style-review",
 ]);
 
 /**

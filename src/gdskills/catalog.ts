@@ -287,25 +287,10 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Answer each comment once after the merge, in English, through `keryx review comments reply --final`.",
     "Propose a learning update for configured authors; never apply it.",
   ]),
-  skill("code-ai-review", "review", ["full"], "Run the legacy strict AI review profile.", [
-    "Load the AI review baseline rule.",
-    "Review branch changes from merge-base.",
-    "Report concrete findings first.",
-  ]),
   skill("code-learned-review", "review", ["full"], "Review against conventions this project learned from its own pull-request comments.", [
     "Read .metaproject/review-learning.config.json and the project skill it names.",
     "Apply that skill's learned lessons to the branch diff, citing the lesson behind each finding.",
     "Stop and say so when the project has no learned skill — this reviewer has no conventions of its own.",
-  ]),
-  skill("code-style-review", "review", ["full"], "Run the legacy code style and architecture review profile.", [
-    "Load code-style rules and local conventions.",
-    "Review naming, structure, boundaries, and TypeScript usage.",
-    "Separate style issues from correctness defects.",
-  ]),
-  skill("code-mobx-store-review", "review", ["full"], "Run focused MobX store and state logic review.", [
-    "Check actions, computed state, reactions, async boundaries, and view/store separation.",
-    "Load MobX store template and local conventions.",
-    "Report state bugs and maintainability risks.",
   ]),
 
   skill("security-audit", "quality", ["recommended", "full"], "Run dependency and secret/security checks and normalize findings.", [

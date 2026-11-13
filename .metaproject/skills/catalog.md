@@ -71,10 +71,7 @@ Resolution order:
 | test-gen | quality | Generate tests for a file or module using local patterns and existing test stack. | gdskills/quality/test-gen/SKILL.md |
 | tests-creator | quality | Create test scenarios before implementation from acceptance criteria and project patterns. | gdskills/quality/tests-creator/SKILL.md |
 | ui-craft | quality | Build or restyle UI from DESIGN.md: tokens first, every state, purposeful motion, WCAG 2.2 AA, verified in a browser. | gdskills/quality/ui-craft/SKILL.md |
-| code-ai-review | review | Run the legacy strict AI review profile. | gdskills/review/code-ai-review/SKILL.md |
 | code-learned-review | review | Review against conventions this project learned from its own pull-request comments. | gdskills/review/code-learned-review/SKILL.md |
-| code-mobx-store-review | review | Run focused MobX store and state logic review. | gdskills/review/code-mobx-store-review/SKILL.md |
-| code-style-review | review | Run the legacy code style and architecture review profile. | gdskills/review/code-style-review/SKILL.md |
 | review-architecture | review | Review boundaries, dependency direction, layering, and abstraction stability. | gdskills/review/review-architecture/SKILL.md |
 | review-backend | review | Review backend services, API contracts, DTOs, validation, persistence, and integration boundaries. | gdskills/review/review-backend/SKILL.md |
 | review-clean-code | review | Review function and class maintainability, SOLID issues, cohesion, naming, and complexity. | gdskills/review/review-clean-code/SKILL.md |

@@ -129,16 +129,13 @@ review: it is a fact about the review, not about the diff.
 
 ## Skills present only when installed
 
-SKILL.md names five skills that the `minimal` and `recommended` profiles do not
+SKILL.md names two skills that the `minimal` and `recommended` profiles do not
 install — they are in the `full` profile only (`src/gdskills/catalog.ts`):
 
 | Skill | Reached through |
 |---|---|
 | `review-pr-feedback` | "A round never answers a pull request another skill is answering" |
-| `code-ai-review` | `--code-ai`, `--legacy-profiles` |
 | `code-learned-review` | `--learned`, `--legacy-profiles` |
-| `code-style-review` | `--code-style`, `--legacy-profiles` |
-| `code-mobx-store-review` | `--mobx-store`, `--legacy-profiles` |
 
 Whether one is **present** is read from `keryx review reviewers --json`, and
 the answer depends on the inventory's `bundledSource`, which says which tree
@@ -153,12 +150,12 @@ which describes what keryx ships, not what this project has.
 
 `"package"` means the project has no `.metaproject/skills/gdskills/review`
 directory at all — a worktree or clone whose `.metaproject/` holds only data,
-for instance. The inventory then lists every review skill in the package, all
-five above included, whatever profile the project would install, and each
+for instance. The inventory then lists every review skill in the package, both
+above included, whatever profile the project would install, and each
 entry's `path` is relative to the keryx package (`src/gdskills/bundled/…`), not
 to the project. Nothing is installed in this project in that state, so a name
 being in the list is not evidence that it is, and a name missing from it is not
-what `not-installed` means either. Decide each of the five by what can actually
+what `not-installed` means either. Decide each of the two by what can actually
 be dispatched: if the runtime has an agent type of that exact name ("Agent
 Runtime Compatibility" in SKILL.md), the skill is usable and is dispatched as
 any other reviewer; if it does not, record `not-installed` with the command
@@ -187,15 +184,12 @@ Adding one. The commands are `keryx skills install` in its two forms
 (`src/commands/skills.ts`):
 
 ```bash
-# everything the full profile holds, including all five
+# everything the full profile holds, including both
 keryx skills install --profile full
 
-# manifest installer: the generic review module only — review-pr-feedback,
-# code-ai-review, code-learned-review and code-style-review among its skills
+# manifest installer: the generic review module only — review-pr-feedback
+# and code-learned-review among its skills
 keryx skills install --profile core --target keryx-shell
-
-# manifest installer: add the MobX component to a profile — code-mobx-store-review
-keryx skills install --profile <manifest-profile> --with capability:mobx --target keryx-shell
 ```
 
 What those flags do and do not reach:
@@ -206,7 +200,7 @@ What those flags do and do not reach:
 - `--with <id>` is repeatable and takes a **component** id from
   `install-manifest.json` (`capability:mobx`, `framework:react`, …). It has no
   single-skill form: the smallest unit the manifest installs is a module.
-  `review-pr-feedback` and the three `code-*` profile reviewers live in module
+  `review-pr-feedback` and `code-learned-review` live in module
   `review-core-skills`, which belongs to no component and arrives through a
   profile that lists it (`core`, `full`).
 - Add `--dry-run` first to read the plan. A file already on disk that the
@@ -1037,16 +1031,10 @@ Before any mass dispatch run `keryx review dispatch-check --payload <file> --man
 
 ```text
 Optional legacy/profile reviewers:
-  - code-ai-review: available via --code-ai or --legacy-profiles
   - code-learned-review: available via --learned or --legacy-profiles
-  - code-style-review: available via --code-style or --legacy-profiles
-  - code-mobx-store-review: auto-suggest when *.store.ts or MobX patterns are present; available via --mobx-store or --legacy-profiles
 
 Skipped reviewers:
-  - code-ai-review: profile reviewer, not selected unless --code-ai/--legacy-profiles
   - code-learned-review: profile reviewer, not selected unless --learned/--legacy-profiles
-  - code-style-review: legacy style profile, not selected unless --code-style/--legacy-profiles
-  - code-mobx-store-review: not selected unless --mobx-store/--legacy-profiles or MobX store files are detected
 ```
 
 ## Token and context budget

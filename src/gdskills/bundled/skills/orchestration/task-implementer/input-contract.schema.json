@@ -182,7 +182,7 @@
               "reviewer": {
                 "type": "string",
                 "description": "Which review skill found this",
-                "examples": ["code-ai-review", "code-learned-review", "code-style-review"]
+                "examples": ["review-logic", "review-frontend", "code-learned-review"]
               },
               "premise_verdict": {
                 "type": "string",

@@ -27,7 +27,7 @@
  * root parses perfectly and names `typescript` and `eslint`; `react` lives in
  * `packages/web`. Reading that root as "this repository does not use React"
  * excluded `review-frontend`, `review-frontend-conventions`, `review-backend`
- * and `code-mobx-store-review` from a React monorepo — the exact inversion of
+ * and `code-mobx-store-review` (since removed) from a React monorepo — the exact inversion of
  * the direction AC13 requires. A manifest declaring nothing has told you
  * nothing, and "nothing" is not "no".
  *

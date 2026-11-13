@@ -1455,7 +1455,7 @@ function stripTrailingSentencePeriod(raw: string): string {
  * skill's own name — and only when `<name>` is a skill this tree actually
  * ships (`known`). That is the same convention this tree already uses for
  * `rules/core/<file>.mdc` cross-references elsewhere (a citation, not a literal
- * read path), and closing it too would turn every "see the `code-style-review`
+ * read path), and closing it too would turn every "see the `review-style`
  * skill" mention into a rewrite this sweep cannot make on its own in a file it
  * does not own. A reference reaching INTO a skill — a specific file, one path
  * segment further — has no such excuse: it is either the installed prefix or

@@ -281,7 +281,6 @@
         "quality-skills",
         "review-core-skills",
         "react-review-skills",
-        "mobx-review-skill",
         "mobx-store-template-rule",
         "mobx-rules",
         "mobx-skills",
@@ -368,7 +367,6 @@
         "src/gdskills/bundled/rules/core/async-patterns.mdc",
         "src/gdskills/bundled/rules/core/clean-architecture.mdc",
         "src/gdskills/bundled/rules/core/cli-interface-design.mdc",
-        "src/gdskills/bundled/rules/core/code-review-ai-assistant.mdc",
         "src/gdskills/bundled/rules/core/code-review-learned-profile.mdc",
         "src/gdskills/bundled/rules/core/code-style-patterns.mdc",
         "src/gdskills/bundled/rules/core/commit-message-formatting.mdc",
@@ -475,9 +473,7 @@
         "src/gdskills/bundled/skills/review/review-verifier/**",
         "src/gdskills/bundled/skills/review/review-premise/**",
         "src/gdskills/bundled/skills/review/review-pr-feedback/**",
-        "src/gdskills/bundled/skills/review/code-ai-review/**",
-        "src/gdskills/bundled/skills/review/code-learned-review/**",
-        "src/gdskills/bundled/skills/review/code-style-review/**"
+        "src/gdskills/bundled/skills/review/code-learned-review/**"
       ],
       "targets": [
         "claude",
@@ -505,23 +501,6 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
-    },
-    "mobx-review-skill": {
-      "kind": "skill",
-      "description": "Focused MobX store/state-logic review skill.",
-      "paths": [
-        "src/gdskills/bundled/skills/review/code-mobx-store-review/**"
-      ],
-      "targets": [
-        "claude",
-        "keryx-shell"
-      ],
-      "dependencies": [
-        "core-common-rules"
-      ],
-      "defaultInstall": true,
-      "cost": "light",
       "stability": "stable"
     },
     "mobx-store-template-rule": {
@@ -980,7 +959,7 @@
     },
     "mobx-skills": {
       "kind": "skill",
-      "description": "MobX stack pack skills (store implementation, observable testing) from src/gdskills/bundled/stacks/mobx/skills/. Complements, does not replace, the existing mobx-review-skill (code-mobx-store-review).",
+      "description": "MobX stack pack skills (store implementation, observable testing) from src/gdskills/bundled/stacks/mobx/skills/. Complements the store checklist in review-frontend, which reviews MobX stores.",
       "paths": [
         "src/gdskills/bundled/stacks/mobx/skills/**"
       ],
@@ -1330,7 +1309,6 @@
     "capability:mobx": {
       "family": "capability",
       "modules": [
-        "mobx-review-skill",
         "mobx-store-template-rule",
         "mobx-rules",
         "mobx-skills"

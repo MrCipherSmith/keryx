@@ -74,10 +74,7 @@ Native bundled Metaproject working skills and orchestrators.
 
 ### review
 
-- `code-ai-review`: Run the legacy strict AI review profile.
 - `code-learned-review`: Review against conventions this project learned from its own pull-request comments.
-- `code-mobx-store-review`: Run focused MobX store and state logic review.
-- `code-style-review`: Run the legacy code style and architecture review profile.
 - `review-architecture`: Review boundaries, dependency direction, layering, and abstraction stability.
 - `review-backend`: Review backend services, API contracts, DTOs, validation, persistence, and integration boundaries.
 - `review-clean-code`: Review function and class maintainability, SOLID issues, cohesion, naming, and complexity.

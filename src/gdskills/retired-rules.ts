@@ -78,6 +78,17 @@ export const RETIRED_RULES: RetiredRuleEntry[] = [
     reason:
       "Served the gproject subagent skills, which were removed together with the orchestrator they were dispatched by; no shipped skill loads it anymore.",
   },
+  {
+    fileName: "code-review-ai-assistant.mdc",
+    // One content version, ever: created in fd43d35a (initial commit) and never
+    // modified before the deletion in flow 488. Its bytes equal those of
+    // `review-agent-profile.mdc` above, so the hash is the same one.
+    shippedSha256: [
+      "e29a832821e501fa8a0acb5130007db1e21f1cee29f8ab6b2a1a7b35f9945281",
+    ],
+    reason:
+      "Backed only the code-ai-review skill, which was removed in flow 488 (its checks live in review-logic, review-frontend and the other review-* skills); no shipped skill or rule loads it anymore.",
+  },
 ];
 
 /**
