@@ -14,8 +14,6 @@ Native bundled Metaproject working skills and orchestrators.
 
 - `context-router`: Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads.
 - `entity-skill-creator`: Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity.
-- `entity-skill-learner`: Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports.
-- `entity-skill-router`: Select relevant project-skills for known modules, components, stores, services, and domain entities.
 - `entity-skill-verifier`: Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step.
 - `metaproject-router`: Choose which Metaproject module, working skill, or project-skill should be used for a user request.
 - `reviewer-skill-creator`: Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard.
@@ -51,12 +49,8 @@ Native bundled Metaproject working skills and orchestrators.
 - `agent-entrypoint-distiller`: Split large AGENTS.md/CLAUDE.md files into high-priority Metaproject rules and project-specific skills.
 - `agent-entrypoint-manager`: Maintain AGENTS.md, CLAUDE.md, and local-first Metaproject references.
 - `claude-md-management`: Maintain CLAUDE.md and related agent entrypoint guidance.
-- `hook-manager`: Create and verify lightweight git hooks for graph, health, and skill verification.
 - `hookify`: Use hook guidance for safe hook design and installation.
 - `scheduled-tasks`: Propose operator-confirmed scheduled background agent tasks with schedule_create.
-- `skill-catalog-manager`: Generate `.metaproject/skills/catalog.md` and machine-readable skill registry.
-- `skill-runtime-exporter`: Export canonical skills to runtime-compatible Codex or Claude artifacts.
-- `skill-sync`: Sync exported runtime skills to configured local runtimes only when explicitly enabled.
 
 ### quality
 

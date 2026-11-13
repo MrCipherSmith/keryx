@@ -26,8 +26,6 @@ Resolution order:
 |---|---|---|---|
 | context-router | core | Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads. | gdskills/core/context-router/SKILL.md |
 | entity-skill-creator | core | Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity. | gdskills/core/entity-skill-creator/SKILL.md |
-| entity-skill-learner | core | Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports. | gdskills/core/entity-skill-learner/SKILL.md |
-| entity-skill-router | core | Select relevant project-skills for known modules, components, stores, services, and domain entities. | gdskills/core/entity-skill-router/SKILL.md |
 | entity-skill-verifier | core | Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step. | gdskills/core/entity-skill-verifier/SKILL.md |
 | metaproject-router | core | Choose which Metaproject module, working skill, or project-skill should be used for a user request. | gdskills/core/metaproject-router/SKILL.md |
 | reviewer-skill-creator | core | Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard. | gdskills/core/reviewer-skill-creator/SKILL.md |
@@ -54,12 +52,8 @@ Resolution order:
 | agent-entrypoint-distiller | platform | Split large AGENTS.md/CLAUDE.md files into high-priority Metaproject rules and project-specific skills. | gdskills/platform/agent-entrypoint-distiller/SKILL.md |
 | agent-entrypoint-manager | platform | Maintain AGENTS.md, CLAUDE.md, and local-first Metaproject references. | gdskills/platform/agent-entrypoint-manager/SKILL.md |
 | claude-md-management | platform | Maintain CLAUDE.md and related agent entrypoint guidance. | gdskills/platform/claude-md-management/SKILL.md |
-| hook-manager | platform | Create and verify lightweight git hooks for graph, health, and skill verification. | gdskills/platform/hook-manager/SKILL.md |
 | hookify | platform | Use hook guidance for safe hook design and installation. | gdskills/platform/hookify/SKILL.md |
 | scheduled-tasks | platform | Propose operator-confirmed scheduled background agent tasks with schedule_create. | gdskills/platform/scheduled-tasks/SKILL.md |
-| skill-catalog-manager | platform | Generate `.metaproject/skills/catalog.md` and machine-readable skill registry. | gdskills/platform/skill-catalog-manager/SKILL.md |
-| skill-runtime-exporter | platform | Export canonical skills to runtime-compatible Codex or Claude artifacts. | gdskills/platform/skill-runtime-exporter/SKILL.md |
-| skill-sync | platform | Sync exported runtime skills to configured local runtimes only when explicitly enabled. | gdskills/platform/skill-sync/SKILL.md |
 | api-truth | quality | Write dependency calls against the version installed here, and mark the ones that went out unchecked. | gdskills/quality/api-truth/SKILL.md |
 | changelog | quality | Generate changelog or release notes from commits, tags, or date ranges. | gdskills/quality/changelog/SKILL.md |
 | commit | quality | Prepare conventional commits with scope, summary, and verification notes. | gdskills/quality/commit/SKILL.md |

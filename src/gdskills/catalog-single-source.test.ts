@@ -56,7 +56,8 @@ test("the sweep has a real denominator: every skill is on exactly one source pat
   // and every assertion below would pass over nothing.
   expect(BUNDLED_GDSKILLS.length).toBe(fileBacked.length + renderedOnly.length);
   expect(fileBacked.length).toBeGreaterThan(60);
-  expect(renderedOnly.length).toBe(11);
+  // 11 until flow 488 removed six catalog-only stubs no product code named.
+  expect(renderedOnly.length).toBe(5);
   expect(existsSync(BUNDLED_ROOT)).toBe(true);
 });
 

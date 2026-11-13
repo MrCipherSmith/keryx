@@ -235,11 +235,17 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * `flow-orchestrator` and `job-orchestrator`) with their 7 positives, all
  * ranking first: 328/331 - 7 = 321/324. Again no regression is recorded.
  *
+ * Flow 488 last removed six catalog-only stubs that no product code named —
+ * `hook-manager`, `skill-catalog-manager`, `skill-runtime-exporter`,
+ * `skill-sync`, `entity-skill-router` and `entity-skill-learner` — with their 22
+ * positives, all ranking first: 321/324 - 22 = 299/302. The three misses are
+ * still the same three; no regression is recorded.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 321;
-export const RANK1_TOTAL = 324;
+export const RANK1_FIRST = 299;
+export const RANK1_TOTAL = 302;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -272,20 +278,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "no idea which skill should be used for this, route it", owner: "metaproject-router" },
-      { prompt: "load the project skill for the kanban store before touching it", owner: "entity-skill-router" },
-    ],
-  },
-  {
-    skill: "entity-skill-router",
-    positives: [
-      "load the project skill for the kanban store before touching it",
-      "is there already a skill describing this component pattern",
-      "we keep module-specific work notes for this service, open them",
-      "we already have a skill written for this component, load it instead of grepping",
-      "before we write new code, check if a skill already exists for this project or some past work specific to this module",
-    ],
-    negatives: [
-      { prompt: "create skill for src/core/flow", owner: "entity-skill-creator" },
       { prompt: "is this project skill stale or still fresh", owner: "entity-skill-verifier" },
     ],
   },
@@ -298,7 +290,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "there's no entity skill of any kind for this brand new module yet, can you generate one for it",
     ],
     negatives: [
-      { prompt: "load the project skill for the kanban store before touching it", owner: "entity-skill-router" },
+      { prompt: "is this project skill stale or still fresh", owner: "entity-skill-verifier" },
       { prompt: "create a reviewer from our team's review profile", owner: "reviewer-skill-creator" },
     ],
   },
@@ -323,20 +315,8 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "does this skill still match the code, or has it gone stale",
     ],
     negatives: [
-      { prompt: "the review found something, update the skill for that store", owner: "entity-skill-learner" },
-      { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
-    ],
-  },
-  {
-    skill: "entity-skill-learner",
-    positives: [
-      "learn from the review findings and update the skill",
-      "the review found something, update the skill for that store",
-      "a test failure showed this skill is out of date, fold the lesson in",
-    ],
-    negatives: [
-      { prompt: "is this project skill stale or still fresh", owner: "entity-skill-verifier" },
       { prompt: "create skill for src/core/flow", owner: "entity-skill-creator" },
+      { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
     ],
   },
 
@@ -1308,19 +1288,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "hook-manager",
-    positives: [
-      "install the post-commit git hook for graph rebuilds",
-      "install the hook that verifies skills",
-      "set up a git hook that runs health after a commit",
-      "can you install a hook so git fires something automatically the moment work gets committed",
-    ],
-    negatives: [
-      { prompt: "run lint after every edit, set that up as a hook", owner: "hookify" },
-      { prompt: "commit changes", owner: "commit" },
-    ],
-  },
-  {
     skill: "hookify",
     positives: [
       "run lint after every edit, set that up as a hook",
@@ -1328,7 +1295,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "hookify this: play a sound on finish",
     ],
     negatives: [
-      { prompt: "install the post-commit git hook for graph rebuilds", owner: "hook-manager" },
+      { prompt: "every morning at nine summarise the new github issues for me, unattended", owner: "scheduled-tasks" },
       { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
     ],
   },
@@ -1358,43 +1325,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "skill-catalog-manager",
-    positives: [
-      "the skill catalog is out of date, regenerate it",
-      "list the skills we have",
-      "rebuild the machine readable registry of skills",
-    ],
-    negatives: [
-      { prompt: "export this skill for the codex runtime", owner: "skill-runtime-exporter" },
-      { prompt: "sync the exported skills into my local runtimes", owner: "skill-sync" },
-    ],
-  },
-  {
-    skill: "skill-runtime-exporter",
-    positives: [
-      "export this skill for the codex runtime",
-      "turn the canonical packages into runtime skill artifacts",
-      "build the codex skill artifacts, stripped of management files",
-      "we need whatever codex uses at runtime, stripped down from the full skill package, ready to export",
-    ],
-    negatives: [
-      { prompt: "sync the exported skills into my local runtimes", owner: "skill-sync" },
-      { prompt: "the skill catalog is out of date, regenerate it", owner: "skill-catalog-manager" },
-    ],
-  },
-  {
-    skill: "skill-sync",
-    positives: [
-      "sync the exported skills into my local runtimes",
-      "install the runtime skills globally",
-      "global skill sync is enabled, push them out",
-    ],
-    negatives: [
-      { prompt: "export this skill for the codex runtime", owner: "skill-runtime-exporter" },
-      { prompt: "the skill catalog is out of date, regenerate it", owner: "skill-catalog-manager" },
-    ],
-  },
-  {
     skill: "commit",
     positives: [
       "commit these changes for me",
@@ -1403,7 +1333,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "push branch to the remote with upstream tracking", owner: "push" },
-      { prompt: "install the post-commit git hook for graph rebuilds", owner: "hook-manager" },
+      { prompt: "open a pull request for this branch", owner: "pr" },
     ],
   },
 ];
