@@ -731,36 +731,36 @@ describe("query-side stripping is conditional, never applied to a live routing/t
     const query = "Never mind the tests, push my branch";
     expect(stripExclusionClauses(query)).toBe(""); // stripExclusionClauses itself is still this aggressive by design —
     // the fix is that checkSkillSelected must never call it on a query.
-    const result = checkSkillSelected(query, "quality/push", catalog);
+    const result = checkSkillSelected(query, "quality/git-publish", catalog);
     expect(result.selected).toBe(true);
     expect(result.score).toBeGreaterThan(0);
   });
 
   test("checkSkillSelectedLeaveOneOut also never strips its query", () => {
     const query = "Never write a test for this, just push the branch";
-    const result = checkSkillSelectedLeaveOneOut(query, "quality/push", catalog);
+    const result = checkSkillSelectedLeaveOneOut(query, "quality/git-publish", catalog);
     expect(result.score).toBeGreaterThan(0);
   });
 
   test("scoutSkill DOES strip a description-shaped query's own exclusion clause (its real, documented use — dedupe against a candidate's own drafted description)", () => {
-    const prEntry = catalog.find((entry) => entry.id === "quality/pr");
-    expect(prEntry).toBeDefined();
-    if (prEntry === undefined) return;
-    expect(prEntry.description).toMatch(/not for.*pr-issue-documenter/i);
-    // pr's own description, scored as a scout query against ITSELF and its
-    // catalog, still resolves to pr — not pr-issue-documenter, named only
-    // inside pr's own disclaimer (this is also AC2's test below).
-    const result = scoutSkill(prEntry.description, catalog);
-    expect(result.matches[0]?.skillId).toBe("quality/pr");
+    const gitPublishEntry = catalog.find((entry) => entry.id === "quality/git-publish");
+    expect(gitPublishEntry).toBeDefined();
+    if (gitPublishEntry === undefined) return;
+    expect(gitPublishEntry.description).toMatch(/not for.*pr-issue-documenter/i);
+    // git-publish's own description, scored as a scout query against ITSELF and its
+    // catalog, still resolves to git-publish — not pr-issue-documenter, named only
+    // inside git-publish's own disclaimer (this is also AC2's test below).
+    const result = scoutSkill(gitPublishEntry.description, catalog);
+    expect(result.matches[0]?.skillId).toBe("quality/git-publish");
   });
 
   test("nearestSkills strips its own skill's exclusion clause too (it feeds eval.ts#synthesizeNegatives)", () => {
-    const prEntry = catalog.find((entry) => entry.id === "quality/pr");
-    expect(prEntry).toBeDefined();
-    if (prEntry === undefined) return;
-    const neighbours = nearestSkills("quality/pr", catalog, catalog.length);
+    const gitPublishEntry = catalog.find((entry) => entry.id === "quality/git-publish");
+    expect(gitPublishEntry).toBeDefined();
+    if (gitPublishEntry === undefined) return;
+    const neighbours = nearestSkills("quality/git-publish", catalog, catalog.length);
     // pr-issue-documenter must not be inflated to the very top purely
-    // because pr's own disclaimer names it — it may still be a genuine
+    // because git-publish's own disclaimer names it — it may still be a genuine
     // near neighbour (they are related skills), but not via the leak.
     expect(neighbours[0]?.skillId).not.toBe("quality/pr-issue-documenter");
   });
@@ -796,39 +796,39 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
   });
 
   // AC2 (flow 334 review round 1 fix): the ORIGINAL version of this test
-  // scored `quality/pr`'s own description as the query and asserted it
+  // scored `quality/git-publish`'s own description as the query and asserted it
   // matches itself at 1.0 — but that is true of ANY bag-of-words scorer,
   // negation-aware or not (a text trivially self-matches its own tokens),
   // so it could not tell the fix from unmodified `main` and never actually
   // exercised AC2. The real, falsifiable claim is: scoring an INDEPENDENT
-  // query that names `pr-issue-documenter`'s actual topic — words `pr`'s
+  // query that names `pr-issue-documenter`'s actual topic — words `git-publish`'s
   // OWN disclaimer happens to share — must resolve to `pr-issue-documenter`
-  // itself, not to `pr` (whose only connection to that topic is disclaiming
+  // itself, not to `git-publish` (whose only connection to that topic is disclaiming
   // it). Measured on unmodified `main` (flow 334 journal): this query
-  // scored `quality/pr` at a PERFECT 1.0 (rank 1) — a skill that explicitly
+  // scored `quality/git-publish` at a PERFECT 1.0 (rank 1) — a skill that explicitly
   // says it does NOT do this — while `pr-issue-documenter`, whose actual
   // job this is, scored lower (0.735).
   // RE-MEASURED after merging flow 335 (Wave 4 batch 3 — django, fastapi,
   // rust, java-kotlin-spring): the same top-5-truncation dilution as flow
-  // 336 documents below — `quality/pr` fell out of the returned window
+  // 336 documents below — `quality/git-publish` fell out of the returned window
   // once batch 3's own "request"-vocabulary-heavy packs (FastAPI's request
   // body/lifecycle terms) joined the catalog, not a change in which skill
   // wins.
   // Flow 336 (Wave 4 batch 4) re-pin: `scoutSkill`'s `matches` list is
   // capped to the top 5 (`scored.slice(0, 5)`), and with the larger batch-4
-  // catalog `quality/pr` no longer places in the top 5 at all for this
+  // catalog `quality/git-publish` no longer places in the top 5 at all for this
   // query (it fell to rank 7) -- `result.matches.find(...)` now returns
   // `undefined` for it, which is the fix working even MORE decisively than
   // before, not a regression. Switched to `checkSkillSelected` (uncapped
   // full-catalog ranking, the same grader trigger-accuracy scoring uses)
-  // so the assertion checks `quality/pr`'s real score/rank regardless of
+  // so the assertion checks `quality/git-publish`'s real score/rank regardless of
   // whether it clears the top-5 display cutoff.
   test("AC2: an independent query about a sibling's real topic resolves to the sibling, not to the skill whose own 'Not for' clause merely names it", () => {
     const query = "rewriting the body of an existing pull request";
-    // Flow 336 (Wave 4 batch 4) found `quality/pr` no longer places in
+    // Flow 336 (Wave 4 batch 4) found `quality/git-publish` no longer places in
     // `scoutSkill`'s top-5 `matches` at all once the batch-4 packs joined
     // the catalog (it fell further, the fix working even MORE decisively
-    // than before, not a regression) — so this also checks `quality/pr`'s
+    // than before, not a regression) — so this also checks `quality/git-publish`'s
     // real score/rank via `checkSkillSelected` (uncapped full-catalog
     // ranking, the same grader trigger-accuracy scoring uses) regardless of
     // whether it clears the top-5 display cutoff. Flow 338 (W4 batch 6)
@@ -836,12 +836,12 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     // CI-pipeline skills that genuinely share "pull"/"request" tokens (CI
     // pipelines do trigger on pull requests) — real overlap that must never
     // outrank the skill that actually owns this topic. Both checked here.
-    const prCheck = checkSkillSelected(query, "quality/pr", catalog, { field: "full" });
+    const gitPublishCheck = checkSkillSelected(query, "quality/git-publish", catalog, { field: "full" });
     const documenterCheck = checkSkillSelected(query, "quality/pr-issue-documenter", catalog, { field: "full" });
     expect(documenterCheck.selected).toBe(true);
     expect(documenterCheck.rank).toBe(1);
-    expect(documenterCheck.score).toBeGreaterThan(prCheck.score);
-    expect(prCheck.score).toBeLessThan(1); // was exactly 1.0 (a "perfect" match) pre-fix
+    expect(documenterCheck.score).toBeGreaterThan(gitPublishCheck.score);
+    expect(gitPublishCheck.score).toBeLessThan(1); // was exactly 1.0 (a "perfect" match) pre-fix
     const result = scoutSkill(query, catalog);
     for (const match of result.matches) {
       if (match.skillId.startsWith("ci-github-gitlab/")) {
@@ -850,12 +850,12 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     }
   });
 
-  test("scoutSkill's own-description self-check still resolves 'quality/pr' to itself despite the sibling reference in its disclaimer", () => {
-    const prEntry = catalog.find((entry) => entry.id === "quality/pr");
-    expect(prEntry).toBeDefined();
-    if (prEntry === undefined) return;
-    const result = scoutSkill(prEntry.description, catalog);
-    expect(result.matches[0]?.skillId).toBe("quality/pr");
+  test("scoutSkill's own-description self-check still resolves 'quality/git-publish' to itself despite the sibling reference in its disclaimer", () => {
+    const gitPublishEntry = catalog.find((entry) => entry.id === "quality/git-publish");
+    expect(gitPublishEntry).toBeDefined();
+    if (gitPublishEntry === undefined) return;
+    const result = scoutSkill(gitPublishEntry.description, catalog);
+    expect(result.matches[0]?.skillId).toBe("quality/git-publish");
     expect(result.matches[0]?.overlapScore).toBe(1);
     expect(result.decision).toBe("use");
   });
