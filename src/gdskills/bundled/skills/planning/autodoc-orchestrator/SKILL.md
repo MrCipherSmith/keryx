@@ -5,7 +5,7 @@ description: >
   and produces comprehensive developer documentation without user involvement after initial setup.
   Use when the user provides a repo path, asks to document existing code, or wants
   onboarding docs, an API reference, or an architecture overview generated automatically.
-  NOT for: writing new PRDs or planning new features (use gproject-orchestrator).
+  NOT for: writing new PRDs or planning new features (use docpack-orchestrator).
 triggers:
   - "autodoc"
   - "document codebase"

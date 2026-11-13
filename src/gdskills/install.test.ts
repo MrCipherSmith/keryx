@@ -132,36 +132,37 @@ test("a per-runtime build the bundle no longer ships is removed from an existing
   }
 });
 
-test("a per-runtime build the bundle still ships is replaced, not removed", async () => {
+test("a per-runtime build the bundle still ships is kept by the sweep, one it does not is removed", async () => {
+  // No shipped skill has a per-runtime build any more (flow 488 removed the
+  // last ones), so rule 3 of `removeStaleRuntimeBuilds` — a still-shipped name
+  // is left alone — is exercised against a synthetic bundle written to a temp
+  // directory and handed to the sweep through its `bundledSkillSource` seam.
   const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
   try {
-    const metaprojectRoot = path.join(root, ".metaproject");
-    // `planner` (a gproject-* subagent) is in the full profile and still ships
-    // its codex and cursor builds, which differ by `compatible_harnesses`.
-    await installGdskills(metaprojectRoot, "full");
-    const skillDir = path.join(metaprojectRoot, "skills", "gdskills", "planning", "planner");
-    const bundledDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "bundled", "skills", "planning", "planner");
-    expect(existsSync(path.join(bundledDir, "SKILL.codex.md"))).toBe(true);
-    expect(existsSync(path.join(bundledDir, "SKILL.zed.md"))).toBe(false);
+    const skillsRoot = path.join(root, ".metaproject", "skills", "gdskills");
+    const skillDir = path.join(skillsRoot, "orchestration", "job-orchestrator");
+    const bundledDir = path.join(root, "bundle", "orchestration", "job-orchestrator");
+    await mkdir(skillDir, { recursive: true });
+    await mkdir(bundledDir, { recursive: true });
+    for (const shipped of ["SKILL.md", "SKILL.codex.md", "SKILL.cursor.md"]) {
+      await writeFile(path.join(bundledDir, shipped), `# bundled ${shipped}\n`, "utf8");
+    }
+    for (const installed of ["SKILL.md", "SKILL.codex.md", "SKILL.cursor.md", "SKILL.zed.md"]) {
+      await writeFile(path.join(skillDir, installed), `# installed ${installed}\n`, "utf8");
+    }
 
-    await writeFile(path.join(skillDir, "SKILL.codex.md"), "# locally edited codex build\n", "utf8");
-    await writeFile(path.join(skillDir, "SKILL.zed.md"), "# stale zed build\n", "utf8");
+    const outcomes = await removeStaleRuntimeBuilds(skillsRoot, {
+      unlink: (target) => rm(target),
+      bundledSkillSource: (category, name) => path.join(root, "bundle", category, name),
+    });
 
-    const result = await installGdskills(metaprojectRoot, "full");
-
-    // Shipped: refreshed to the bundled bytes.
-    expect(await readFile(path.join(skillDir, "SKILL.codex.md"), "utf8"))
-      .toBe(await readFile(path.join(bundledDir, "SKILL.codex.md"), "utf8"));
-    expect(await readFile(path.join(skillDir, "SKILL.cursor.md"), "utf8"))
-      .toBe(await readFile(path.join(bundledDir, "SKILL.cursor.md"), "utf8"));
-    // Not shipped for this skill: removed, in the same run, and reported.
+    // Not shipped for this skill: removed, and reported.
+    expect(outcomes).toEqual([{ path: path.join(skillDir, "SKILL.zed.md"), action: "removed" }]);
     expect(existsSync(path.join(skillDir, "SKILL.zed.md"))).toBe(false);
-    const removals = result.notices.filter((notice) => notice.includes("was removed"));
-    expect(removals).toHaveLength(1);
-    expect(removals[0]).toContain(".metaproject/skills/gdskills/planning/planner/SKILL.zed.md was removed");
-    // The refreshed codex/cursor builds are not reported as anything.
-    expect(result.notices.filter((notice) => notice.includes("SKILL.codex.md"))).toEqual([]);
-    expect(result.warnings.filter((warning) => warning.includes("SKILL.codex.md"))).toEqual([]);
+    // Shipped: left alone by the sweep (the copy that precedes it refreshes them).
+    for (const kept of ["SKILL.md", "SKILL.codex.md", "SKILL.cursor.md"]) {
+      expect(await readFile(path.join(skillDir, kept), "utf8")).toBe(`# installed ${kept}\n`);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

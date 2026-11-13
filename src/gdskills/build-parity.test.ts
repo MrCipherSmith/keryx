@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "bun:test";
@@ -41,10 +42,19 @@ import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
  * Once flow 209 reconciled the drift, 88 of the 102 harness builds were
  * byte-identical to their own `SKILL.md` — copies that existed only to be kept
  * in sync. Export already falls back to `SKILL.md` for a runtime with no build
- * of its own, so flow 257 deleted them. What remains is the seven `gproject-*`
- * subagents' codex and cursor builds, which differ by the one allowed field.
- * The census below is that number, and the guard gains its other half: a build
- * that is byte-identical to `SKILL.md` must not ship at all.
+ * of its own, so flow 257 deleted them. What remained was the seven
+ * `gproject-*` subagents' codex and cursor builds, which differed by the one
+ * allowed field. The guard gained its other half: a build that is
+ * byte-identical to `SKILL.md` must not ship at all.
+ *
+ * FLOW 488: NO SHIPPED SKILL HAS A BUILD
+ *
+ * Those seven subagents belonged to a planning pipeline whose orchestrator was
+ * never shipped, and flow 488 removed them. No bundled skill ships a harness
+ * build now, so the real-tree sweep below enrols nothing and the census floor
+ * is zero. The mechanism is still live — a skill that gains a genuinely
+ * different build is enrolled automatically — so it is proved on a synthetic
+ * skill written to a temp directory, not on a shipped one.
  */
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -74,8 +84,7 @@ function shipsHarnessBuilds(dir: string): boolean {
  * so using it as the enrolment source would make the denominator depend on
  * which skills happen to be installed here.
  */
-function enrolledSkills(): SkillLocation[] {
-  const root = SKILL_ROOTS[0] as string;
+function enrolledSkills(root: string = SKILL_ROOTS[0] as string): SkillLocation[] {
   const out: SkillLocation[] = [];
   for (const category of readdirSync(root, { withFileTypes: true })) {
     if (!category.isDirectory()) continue;
@@ -93,20 +102,20 @@ function enrolledSkills(): SkillLocation[] {
 const PARITY_ENFORCED_SKILLS: readonly SkillLocation[] = enrolledSkills();
 
 /**
- * The skills still shipping a harness build after flow 257, pinned as a floor.
+ * The skills shipping a harness build, pinned as a floor.
  *
- * It was 37 (the 2026-08-31 census). Flow 257 removed every build that was a
- * byte-identical copy of its `SKILL.md`, leaving the seven `gproject-*`
- * subagents whose codex/cursor builds carry a different
- * `compatible_harnesses` — so the honest floor is 7, not 37.
+ * It was 37 (the 2026-08-31 census), then 7 once flow 257 removed every build
+ * that was a byte-identical copy of its `SKILL.md`, leaving the seven
+ * `gproject-*` subagents whose codex/cursor builds carried a different
+ * `compatible_harnesses`. Flow 488 removed those seven, so the floor is 0:
+ * nothing ships a build, and the real-tree sweep is empty by fact, not by
+ * a walker that stopped looking. The synthetic-fixture tests below are what
+ * prove the walker still finds a build when one exists.
  *
  * Not an equality: a new skill that ships a (genuinely different) build must
- * raise this number without anyone editing this file. A DROP is the failure
- * mode worth catching — a category renamed or a walker that stopped finding
- * builds would silently shrink the denominator toward zero, and the allow-list
- * checks below would then fail loudly rather than pass over nothing.
+ * raise this number without anyone editing this file.
  */
-const CENSUS_FLOOR = 7;
+const CENSUS_FLOOR = 0;
 
 /**
  * A documented, harness-specific difference that a build is allowed to carry.
@@ -140,7 +149,8 @@ const CENSUS_FLOOR = 7;
  * a Codex build is not a Cursor accommodation, it is an old path `SKILL.md` had
  * already replaced.
  *
- * The one surviving class is below. Seven `gproject-*` subagent skills declare
+ * The one surviving class is below. Seven `gproject-*` subagent skills (removed
+ * in flow 488) declared
  * `metadata.compatible_harnesses: "cursor,codex,zed,opencode"` in their
  * non-Claude builds. That field's entire purpose is to name harnesses
  * (`rules/core/skills-storage-workflow.mdc` defines it as the machine-readable
@@ -165,7 +175,7 @@ type ParityAllowance = {
  * about the same field, and a per-skill restatement would let six of them drift
  * from the seventh without anything noticing.
  */
-const HARNESS_FAMILY_DECLARATION: ParityAllowance = {
+export const HARNESS_FAMILY_DECLARATION: ParityAllowance = {
   anchor: 'compatible_harnesses: "cursor,codex,zed,opencode"',
   builds: HARNESS_BUILD_NAMES,
   reason:
@@ -173,15 +183,10 @@ const HARNESS_FAMILY_DECLARATION: ParityAllowance = {
 };
 
 const BUILD_PARITY_ALLOWANCES: Record<string, readonly ParityAllowance[]> = {
-  // The seven gproject-* subagents. Named one by one rather than matched by
-  // prefix: an allowance that covers a pattern covers skills nobody looked at.
-  "project-discovery": [HARNESS_FAMILY_DECLARATION],
-  "problem-definer": [HARNESS_FAMILY_DECLARATION],
-  "patterns-researcher": [HARNESS_FAMILY_DECLARATION],
-  planner: [HARNESS_FAMILY_DECLARATION],
-  "consistency-checker": [HARNESS_FAMILY_DECLARATION],
-  "spec-writer": [HARNESS_FAMILY_DECLARATION],
-  "stack-advisor": [HARNESS_FAMILY_DECLARATION],
+  // Empty: no shipped skill has a build that differs from its SKILL.md. A skill
+  // that gains one is named here one by one — never matched by prefix, because
+  // an allowance that covers a pattern covers skills nobody looked at — and
+  // takes HARNESS_FAMILY_DECLARATION.
 };
 
 // --- diff engine -----------------------------------------------------------
@@ -307,9 +312,13 @@ function firstMeaningfulLine(lines: string[]): string {
   return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
 }
 
-function isAllowed(skill: string, hunk: Hunk, builds: string[]): boolean {
+function isAllowed(
+  skill: string,
+  hunk: Hunk,
+  builds: string[],
+  allowances: readonly ParityAllowance[] = BUILD_PARITY_ALLOWANCES[skill] ?? [],
+): boolean {
   const text = hunk.lines.join("\n");
-  const allowances = BUILD_PARITY_ALLOWANCES[skill] ?? [];
   return allowances.some(
     (allowance) =>
       text.includes(allowance.anchor) &&
@@ -326,7 +335,11 @@ type SkillParityReport = { report: string; comparisons: number; buildsSeen: Set<
  * render an actionable report. Returns an empty report when the builds agree
  * (or differ only by an allowance).
  */
-function checkSkillDirectory(skill: string, dir: string): SkillParityReport {
+function checkSkillDirectory(
+  skill: string,
+  dir: string,
+  allowances: readonly ParityAllowance[] = BUILD_PARITY_ALLOWANCES[skill] ?? [],
+): SkillParityReport {
   const buildsSeen = new Set<string>();
   const canonicalPath = path.join(dir, "SKILL.md");
   if (!existsSync(canonicalPath)) {
@@ -362,7 +375,7 @@ function checkSkillDirectory(skill: string, dir: string): SkillParityReport {
   }
 
   const offenders = [...grouped.values()]
-    .filter(({ hunk, builds }) => !isAllowed(skill, hunk, builds))
+    .filter(({ hunk, builds }) => !isAllowed(skill, hunk, builds, allowances))
     .sort((left, right) => left.hunk.canonicalStart - right.hunk.canonicalStart);
 
   if (offenders.length === 0) {
@@ -441,10 +454,10 @@ test("build-parity: the enforced sweep has a real denominator", () => {
     expect(readdirSync(root).length).toBeGreaterThan(0);
   }
 
-  // The census floor: every skill that still ships a build (flow 257). Zero
-  // would mean enrolment has stopped working and every check below passes over
-  // nothing.
-  expect(CENSUS_FLOOR).toBeGreaterThan(0);
+  // The census floor (flow 488: zero, because no shipped skill has a build).
+  // That the walker still finds a build when one exists is proved on a
+  // synthetic skill further down, so an empty real tree is a fact, not a
+  // walker that stopped looking.
   expect(PARITY_ENFORCED_SKILLS.length).toBeGreaterThanOrEqual(CENSUS_FLOOR);
 
   // Named members, so a sweep that enrolled the right number of the wrong
@@ -474,6 +487,72 @@ test("build-parity: the enforced sweep has a real denominator", () => {
       expect(builds.length).toBeGreaterThan(0);
     }
   }
+});
+
+/**
+ * The mechanism, proved on a synthetic skill (flow 488). No shipped skill has a
+ * harness build, so nothing in the real tree exercises enrolment, the
+ * allow-list or the drift report; a temp directory does.
+ */
+describe("build-parity: the mechanism on a synthetic skill", () => {
+  const CODEX = skillBuildFileName("codex");
+  const canonicalBody = [
+    "---",
+    "name: synthetic",
+    "description: x",
+    "metadata:",
+    '  version: "1.0.0"',
+    "---",
+    "",
+    "# Synthetic",
+    "",
+    "Body line.",
+    "",
+  ].join("\n");
+  const withDeclaration = canonicalBody.replace(
+    '  version: "1.0.0"\n',
+    `  version: "1.0.0"\n  ${HARNESS_FAMILY_DECLARATION.anchor}\n`,
+  );
+
+  function withSkill(build: string | null, run: (root: string, dir: string) => void): void {
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-build-parity-"));
+    try {
+      const dir = path.join(root, "planning", "synthetic");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "SKILL.md"), canonicalBody);
+      if (build !== null) writeFileSync(path.join(dir, CODEX), build);
+      run(root, dir);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  test("a skill with a harness build is enrolled, one without is not", () => {
+    withSkill(withDeclaration, (root) => {
+      expect(enrolledSkills(root)).toEqual([{ category: "planning", skill: "synthetic" }]);
+    });
+    withSkill(null, (root) => {
+      expect(enrolledSkills(root)).toEqual([]);
+    });
+  });
+
+  test("the harness-family declaration is the one hunk an allowance can excuse", () => {
+    withSkill(withDeclaration, (_root, dir) => {
+      expect(checkSkillDirectory("synthetic", dir, [HARNESS_FAMILY_DECLARATION]).report).toBe("");
+      const unexcused = checkSkillDirectory("synthetic", dir, []);
+      expect(unexcused.comparisons).toBe(1);
+      expect(unexcused.report).toContain(`present ONLY in ${CODEX}`);
+      expect(unexcused.report).toContain(HARNESS_FAMILY_DECLARATION.anchor);
+    });
+  });
+
+  test("drift beyond the allowed hunk is reported even when the declaration is allowed", () => {
+    withSkill(`${withDeclaration}Extra drifted line.\n`, (_root, dir) => {
+      const result = checkSkillDirectory("synthetic", dir, [HARNESS_FAMILY_DECLARATION]);
+      expect(result.report).toContain("Extra drifted line.");
+      expect(result.report).not.toContain(`| ${HARNESS_FAMILY_DECLARATION.anchor}`);
+    });
+  });
 });
 
 /**
@@ -522,7 +601,7 @@ describe("build-parity: the allow-list", () => {
     // If a later change adds allowances, this assertion is where the widening
     // has to be argued for rather than absorbed.
     const entries = Object.values(BUILD_PARITY_ALLOWANCES).flat();
-    expect(entries.length).toBe(7);
+    expect(entries.length).toBe(0);
     for (const allowance of entries) {
       expect(allowance.anchor).toBe(HARNESS_FAMILY_DECLARATION.anchor);
     }

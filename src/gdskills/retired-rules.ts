@@ -66,17 +66,30 @@ export const RETIRED_RULES: RetiredRuleEntry[] = [
     reason:
       "Outlived the review-strict skill it backed; review-orchestrator's Step 6 now resolves the model tier directly via `keryx review tier` instead.",
   },
+  {
+    fileName: "gproject-contracts.mdc",
+    // Two content versions: the original from fd43d35a, and the revision
+    // from 74c097f3 that shipped until the planning pipeline it served was
+    // removed (flow 488).
+    shippedSha256: [
+      "1ebb040da6d00057c486229854e1450146dce59e6002b5b17e3e90e9b908ceac",
+      "c0ec8f1165ec2c228ae841fbe438a4ba2429bd7e181736674a94553b663070bd",
+    ],
+    reason:
+      "Served the gproject subagent skills, which were removed together with the orchestrator they were dispatched by; no shipped skill loads it anymore.",
+  },
 ];
 
 /**
- * Byte size of every content version `RETIRED_RULES` has ever shipped, across
- * both registered rules: `review-agent-profile.mdc`'s only version (1494
- * bytes, commit fd43d35a) and `review-strict-profile.mdc`'s two versions
- * (1994 bytes at commit fd43d35a, 2248 bytes at commit ff9dd071 — see the
- * comments above). Measured with `git cat-file -s <blob>` against each
- * commit's tree entry for this file.
+ * Byte size of the largest content version `RETIRED_RULES` has ever shipped,
+ * across the registered rules: `review-agent-profile.mdc`'s only version (1494
+ * bytes, commit fd43d35a), `review-strict-profile.mdc`'s two versions (1994
+ * bytes at commit fd43d35a, 2248 bytes at commit ff9dd071) and
+ * `gproject-contracts.mdc`'s two versions (6023 bytes at commit fd43d35a, 6031
+ * bytes at commit 74c097f3 — the largest). Measured with `git cat-file -s
+ * <blob>` against each commit's tree entry for the file.
  */
-const LARGEST_SHIPPED_RETIRED_RULE_BYTES = 2248;
+const LARGEST_SHIPPED_RETIRED_RULE_BYTES = 6031;
 
 /**
  * Size cap used by `removeUnmodifiedRetiredRules` (install.ts): an installed

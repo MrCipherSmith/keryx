@@ -224,11 +224,17 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * `review-ui-ux`, `ui-direction` and `ui-craft` added four positives each, all
  * ranking first: 342/345 + 12 = 354/357.
  *
+ * Flow 488 removed the seven `planning/` skills whose orchestrator was never
+ * shipped (`project-discovery`, `problem-definer`, `stack-advisor`,
+ * `patterns-researcher`, `spec-writer`, `consistency-checker`, `planner`) with
+ * their 26 positives, all of which ranked first: 354/357 - 26 = 328/331. The
+ * three misses are unchanged; no regression is recorded.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 354;
-export const RANK1_TOTAL = 357;
+export const RANK1_FIRST = 328;
+export const RANK1_TOTAL = 331;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -993,11 +999,11 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       // The two neighbours, each asked for in a user's own words. The first
-      // changes which versions the project is on; the second chooses patterns
-      // for a stack before any call exists. Neither reads the build on disk to
+      // changes which versions the project is on; the second weighs options
+      // for a design before any call exists. Neither reads the build on disk to
       // settle a signature, which is the only thing this skill does.
       { prompt: "upgrade our packages to the latest versions", owner: "dependency-update" },
-      { prompt: "which architecture patterns fit the stack we chose", owner: "patterns-researcher" },
+      { prompt: "brainstorm which of these two designs we should adopt", owner: "brainstorm" },
     ],
   },
   {
@@ -1191,83 +1197,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "clarify requirements", owner: "interviewer" },
-      { prompt: "write the implementation plan from the PRD", owner: "spec-writer" },
-    ],
-  },
-  {
-    skill: "project-discovery",
-    positives: [
-      "run project discovery for this new project",
-      "do the initial analysis of what we know so far",
-      "discover what this project is from the sources we have",
-      "let's take an initial look and figure out everything we can discover about this project from what's available, basically an analysis of where things stand",
-    ],
-    negatives: [
-      { prompt: "define the problem and the non-goals", owner: "problem-definer" },
-      { prompt: "create PRD for this feature", owner: "prd-creator" },
-    ],
-  },
-  {
-    skill: "problem-definer",
-    positives: [
-      "define the problem and the non-goals",
-      "what are the success metrics for this",
-      "write the goals and non goals section",
-    ],
-    negatives: [
-      { prompt: "run project discovery for this new project", owner: "project-discovery" },
-      { prompt: "create PRD for this feature", owner: "prd-creator" },
-    ],
-  },
-  {
-    skill: "stack-advisor",
-    positives: [
-      "help me choose the stack for an MVP",
-      "I need stack advice for a production service",
-      "which technology choice makes sense here, postgres or mongo",
-      "torn between two technology options for the stack here, what advice would help us choose",
-    ],
-    negatives: [
-      { prompt: "research the architecture patterns for this stack", owner: "patterns-researcher" },
-      { prompt: "brainstorming ideas for the caching layer", owner: "brainstorm" },
-    ],
-  },
-  {
-    skill: "patterns-researcher",
-    positives: [
-      "research the architecture patterns for this stack",
-      "what are the best practices for NestJS here",
-      "look into the patterns we should research before the PRD",
-      "before we lock in an architecture, can you dig up common patterns and see what practices actually work best for other teams handling this kind of research",
-    ],
-    negatives: [
-      { prompt: "help me choose the stack for an MVP", owner: "stack-advisor" },
-      { prompt: "architecture review of this module", owner: "review-architecture" },
-    ],
-  },
-  {
-    skill: "spec-writer",
-    positives: [
-      "write the implementation plan from the PRD",
-      "produce the technical specification for this module",
-      "write the spec and the plan for implementation from the PRD",
-      "this needs a technical write-up, think specification level detail, plus a plan for how the implementation will actually proceed",
-    ],
-    negatives: [
-      { prompt: "create PRD for this feature", owner: "prd-creator" },
-      { prompt: "check the PRD for consistency with the decisions registry", owner: "consistency-checker" },
-    ],
-  },
-  {
-    skill: "consistency-checker",
-    positives: [
-      "check the PRD for consistency with the decisions registry",
-      "validate the spec against the architecture doc",
-      "find the doc contradictions in this plan",
-    ],
-    negatives: [
-      { prompt: "write the implementation plan from the PRD", owner: "spec-writer" },
-      { prompt: "verify the requirements package for completeness", owner: "docpack-review" },
+      { prompt: "write the implementation plan from the PRD", owner: "docpack-orchestrator" },
     ],
   },
   {
@@ -1292,20 +1222,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "create requirements package for the billing module", owner: "docpack-orchestrator" },
-      { prompt: "check the PRD for consistency with the decisions registry", owner: "consistency-checker" },
-    ],
-  },
-  {
-    skill: "planner",
-    positives: [
-      "create the roadmap and the milestones from the PRD",
-      "give me the task breakdown with dependencies",
-      "plan out the milestones we need to create",
-      "can you create a plan, plus a breakdown of tasks, so we know what depends on what before we start",
-    ],
-    negatives: [
-      { prompt: "break down issue 42 into atomic tasks", owner: "issue-analyzer" },
-      { prompt: "write the implementation plan from the PRD", owner: "spec-writer" },
+      { prompt: "create PRD for this feature", owner: "prd-creator" },
     ],
   },
   {

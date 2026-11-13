@@ -482,36 +482,6 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Test the idea sentence against the nearest competitor and the logo-swap test.",
     "Plan palette with computed contrast, type, ASCII layout, motion, and exactly one signature element.",
   ]),
-  skill("project-discovery", "planning", ["full"], "Collect initial project facts, modules, constraints, stakeholders, and source references.", [
-    "Inventory available docs, code modules, and entrypoints.",
-    "Identify project purpose, users, constraints, and unknowns.",
-    "Produce a structured discovery summary for PRD/spec work.",
-  ]),
-  skill("problem-definer", "planning", ["full"], "Define goals, non-goals, risks, constraints, and success metrics.", [
-    "Separate problem, solution ideas, constraints, and open questions.",
-    "Make goals and non-goals explicit.",
-    "Define measurable success criteria.",
-  ]),
-  skill("stack-advisor", "planning", ["full"], "Recommend stack choices based on project level, constraints, team needs, and operational risk.", [
-    "Classify project level and constraints.",
-    "Compare stack options with trade-offs.",
-    "Recommend a conservative default and explain risks.",
-  ]),
-  skill("patterns-researcher", "planning", ["full"], "Find architecture and implementation patterns for selected stack, domain, and project constraints.", [
-    "Identify relevant existing local patterns first.",
-    "Compare candidate patterns against constraints.",
-    "Document chosen patterns and anti-patterns.",
-  ]),
-  skill("spec-writer", "planning", ["full"], "Write PRD, technical spec, or implementation plan constrained by decisions and evidence.", [
-    "Collect source requirements and decisions.",
-    "Write structured, testable sections.",
-    "Link assumptions, open questions, and acceptance criteria.",
-  ]),
-  skill("consistency-checker", "planning", ["full"], "Check PRD, specs, plans, wiki, and decisions for contradictions or stale assumptions.", [
-    "Compare documents against accepted decisions and current code context.",
-    "Flag contradictions, missing constraints, and unsupported claims.",
-    "Suggest minimal updates with provenance.",
-  ]),
   skill("docpack-orchestrator", "planning", ["recommended", "full"], "Create or update Metaproject requirements packages under docs/requirements with PRD, specification, README, optional protocols/schemas, verification, review, and roadmap updates. Use autodoc-orchestrator instead for reverse-engineering current codebase documentation.", [
     "Design the required file set from requirements-package-standard.",
     "Write or update README, PRD, specification, optional policies/protocols/schemas.",
@@ -521,11 +491,6 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Check every file in the package against requirements-package-standard.",
     "Report blockers, warnings, and audit trail without rewriting docs.",
     "Verify README/PRD/spec consistency and honest implementation status.",
-  ]),
-  skill("planner", "planning", ["full"], "Produce roadmap, milestones, task breakdown, dependency graph, and sequencing.", [
-    "Break goals into milestones and tasks.",
-    "Identify dependencies, risks, and verification gates.",
-    "Recommend execution order with small slices.",
   ]),
   skill("autodoc-orchestrator", "planning", ["full"], "Coordinate reverse-engineering documentation for an existing codebase.", [
     "Scan structure and identify documentation targets.",

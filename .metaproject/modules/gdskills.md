@@ -41,19 +41,12 @@ Native bundled Metaproject working skills and orchestrators.
 - `autodoc-scanner`: Scan an existing codebase to identify documentation targets and module boundaries.
 - `autodoc-writer`: Write Markdown documentation pages from autodoc analysis artifacts.
 - `brainstorm`: Explore architecture, product, or implementation options with trade-offs and recommendation.
-- `consistency-checker`: Check PRD, specs, plans, wiki, and decisions for contradictions or stale assumptions.
 - `docpack-orchestrator`: Create or update Metaproject requirements packages under docs/requirements with PRD, specification, README, optional protocols/schemas, verification, review, and roadmap updates. Use autodoc-orchestrator instead for reverse-engineering current codebase documentation.
 - `docpack-review`: Review Metaproject requirements packages for completeness, versioning, consistency, schema references, roadmap updates, and unsupported implementation claims.
 - `interview`: Clarify implementation ambiguities after context is collected and the goal is known (job-orchestrator 0.3, implement intent); to scope the request itself, use interviewer.
 - `interviewer`: Scope a vague or expensive request before any context is collected (job-orchestrator 0.1.5, custom intent); for implementation specifics after context exists, use interview.
-- `patterns-researcher`: Find architecture and implementation patterns for selected stack, domain, and project constraints.
-- `planner`: Produce roadmap, milestones, task breakdown, dependency graph, and sequencing.
 - `prd-creator`: Convert vague requests into structured PRD and acceptance criteria.
 - `ui-direction`: Choose a distinctive visual concept before UI code and persist it as DESIGN.md.
-- `problem-definer`: Define goals, non-goals, risks, constraints, and success metrics.
-- `project-discovery`: Collect initial project facts, modules, constraints, stakeholders, and source references.
-- `spec-writer`: Write PRD, technical spec, or implementation plan constrained by decisions and evidence.
-- `stack-advisor`: Recommend stack choices based on project level, constraints, team needs, and operational risk.
 
 ### platform
 
@@ -110,7 +103,6 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-jev-rules`: Check every changed hunk against every applicable project rule clause, scored by Jev, findings written deterministically by keryx.
 - `review-jev-scenarios`: Functional review — which user scenarios a diff likely changes, from gdwiki/PRD/README sources plus one Jev noul per touched scenario.
 - `review-layout`: Review rendered layout: flex/grid sizing, collapse and overflow, box model, logical properties and RTL, and locale-driven geometry.
-- `review-ui-ux`: Review UI/UX quality and AI-slop: usability heuristics, system states, forms, hierarchy, WCAG 2.2 AA floor, and a slop score.
 - `review-logic`: Review logic correctness, contracts, edge cases, nullability, and async behavior.
 - `review-orchestrator`: Route review requests to specialized reviewers and consolidate findings.
 - `review-performance`: Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.
@@ -121,6 +113,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-security-code`: Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure.
 - `review-style`: Review naming, readability, duplication, dead code, and maintainability.
 - `review-testing-practices`: Review test structure, coverage quality, determinism, and repository test conventions.
+- `review-ui-ux`: Review UI/UX quality and AI-slop: usability heuristics, system states, forms, hierarchy, WCAG 2.2 AA floor, and a slop score.
 - `review-verifier`: Verify reported findings by executing a check that fails if the finding is real; delete-only.
 
 ## Commands

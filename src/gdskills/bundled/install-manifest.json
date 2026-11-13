@@ -380,7 +380,6 @@
         "src/gdskills/bundled/rules/core/frontend-assistant.mdc",
         "src/gdskills/bundled/rules/core/git-concurrency.mdc",
         "src/gdskills/bundled/rules/core/git-rules.mdc",
-        "src/gdskills/bundled/rules/core/gproject-contracts.mdc",
         "src/gdskills/bundled/rules/core/implementation-doc-mandate.mdc",
         "src/gdskills/bundled/rules/core/implementation-plans.mdc",
         "src/gdskills/bundled/rules/core/jobs-documentation.mdc",

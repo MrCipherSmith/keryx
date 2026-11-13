@@ -139,8 +139,8 @@ test("a skill that ships only SKILL.md exports SKILL.md to every runtime, as the
 });
 
 test("export picks per-runtime: a partial build set uses SKILL.md only where no own build exists", async () => {
-  // The realistic middle case a blanket rule would get wrong — and the shape
-  // the bundled gproject-* skills have (codex + cursor builds only).
+  // The realistic middle case a blanket rule would get wrong: a skill that
+  // ships a build for only some runtimes.
   const { root, packageRoot } = await makeFixture(["SKILL.md", "SKILL.codex.md"]);
   try {
     const codex = await exportProjectSkill(root, { input: packageRoot, runtime: "codex" });

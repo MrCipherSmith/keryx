@@ -117,8 +117,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Plus `review-pr-contract` (flow 446): one more, an LLM reviewer.
     // Plus `review-premise` (flow 459): a delete-only judge of findings' premises.
     // Plus `ui-direction`, `ui-craft` and `review-ui-ux`: the UI design trio.
+    // Minus the seven `planning/` skills of a pipeline whose orchestrator was
+    // never shipped (flow 488): 84 - 7 = 77.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(84);
+    expect(files.length).toBe(77);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);
@@ -136,9 +138,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // 167 shipped documents and said nothing about the rest. That is how
     // `task-implementer` shipped four builds missing their whole reporting
     // contract with every check green. Flow 257 deleted the builds that were
-    // byte-identical to their SKILL.md, so fewer ship now (the seven gproject-*
-    // skills' codex/cursor builds) — which is why the named files below are
-    // derived from the tree instead of pinned to task-implementer.
+    // byte-identical to their SKILL.md, and flow 488 removed the last skills
+    // that shipped a genuinely different one, so no shipped skill has a build
+    // now — which is why the real-tree half below derives its builds from the
+    // tree and a synthetic tree (next test) proves the walker still finds one.
     const skillsRoot = path.join(defaultBundledRoot(), "skills");
     const canonical = bundledSkillFiles(skillsRoot);
     const documents = bundledSkillDocuments(skillsRoot);
@@ -147,8 +150,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // (see the dedicated companion-document tests below).
     const companions = bundledSkillCompanionDocuments(skillsRoot);
 
-    // Strictly more documents than skills, or the walker is still canonical-only.
-    expect(documents.length).toBeGreaterThan(canonical.length);
+    // At least as many documents as skills: no shipped skill has a build today,
+    // so equality is the truthful real-tree answer. The strict "more documents
+    // than skills" half is asserted on a synthetic tree in the next test.
+    expect(documents.length).toBeGreaterThanOrEqual(canonical.length);
     // Every canonical file is still in the set — a walker that swapped one set
     // for the other would satisfy the line above and check less than before.
     for (const file of canonical) expect(documents).toContain(file);
@@ -160,19 +165,38 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Named files, so a walker that finds builds "somewhere" cannot pass while
     // missing some. Every build that exists beside a SKILL.md, found per
     // directory by exact name rather than by the walker under test, is in the
-    // set — and there is at least one, or "strictly more" above is the only
-    // thing standing between this test and vacuity.
+    // set. There may be none (flow 488); the synthetic tree below is what
+    // keeps this from being vacuous.
     const shippedBuilds = canonical.flatMap((file) =>
       HARNESS_SKILL_RUNTIMES.map((runtime) => path.join(path.dirname(file), skillBuildFileName(runtime)))
         .filter((build) => build !== file && existsSync(build)),
     );
-    expect(shippedBuilds.length).toBeGreaterThan(0);
     for (const build of shippedBuilds) expect(documents).toContain(build);
     expect(documents.length).toBe(canonical.length + shippedBuilds.length);
     // …and the denominator is printed, not just returned.
     expect(renderBundledEvaluation(evaluation)).toContain(
       `documents_evaluated: ${documents.length + companions.length}`,
     );
+  });
+
+  test("the walker finds harness builds beside SKILL.md on a synthetic tree", () => {
+    // Flow 488: no shipped skill has a harness build, so the test above cannot
+    // prove the walker reads them. This one writes a skill with two builds to a
+    // temp directory and demands every one of them, plus the SKILL.md, back.
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-eval-builds-"));
+    try {
+      const dir = path.join(root, "planning", "synthetic");
+      mkdirSync(dir, { recursive: true });
+      const names = ["SKILL.md", ...["codex", "zed"].map((runtime) => skillBuildFileName(runtime as "codex" | "zed"))];
+      for (const name of names) writeFileSync(path.join(dir, name), "---\nname: synthetic\n---\n");
+      const canonical = bundledSkillFiles(root);
+      const documents = bundledSkillDocuments(root);
+      expect(canonical).toEqual([path.join(dir, "SKILL.md")]);
+      expect(documents.length).toBeGreaterThan(canonical.length);
+      expect(documents).toEqual(names.map((name) => path.join(dir, name)).sort());
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("companion documents (orchestrator-prompt.md, SKILL.detail.md) are read for cross-references", () => {
