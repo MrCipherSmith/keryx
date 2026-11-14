@@ -34,8 +34,12 @@ describe("review lens contract (flow 490)", () => {
   test("no lens runs tests, health checks or a dev server in the reviewed tree (AC2)", () => {
     const forbidden = [/keryx test run\b/, /keryx health run\b/, /\b(npm|bun|pnpm|yarn) (run )?dev\b/, /\b(npm|bun|pnpm|yarn) (run )?test\b/];
     // The verifier and the one testing reviewer run tests only under `run-tests`, in a scratch copy: they are the named exceptions.
+    // They are exempt from the test-runner patterns only, never from health checks or dev servers.
     const runners = new Set(["review-verifier", "review-testing-practices"]);
-    const hits = LENSES.filter((name) => !runners.has(name)).flatMap((name) => forbidden.filter((re) => re.test(read(name))).map((re) => `${name}: ${re.source}`));
+    const testRunners = new Set([forbidden[0], forbidden[3]]);
+    const hits = LENSES.flatMap((name) =>
+      forbidden.filter((re) => !(runners.has(name) && testRunners.has(re)) && re.test(read(name))).map((re) => `${name}: ${re.source}`),
+    );
     expect(hits).toEqual([]);
   });
 
@@ -57,9 +61,11 @@ describe("review lens contract (flow 490)", () => {
   });
 
   test("every lens that limits its commands also names the layer commands the orchestrator allows (AC2)", () => {
-    const narrow = LENSES.flatMap((name) => read(name).split("\n").filter((line) => /runs no command/.test(line)).map((line) => ({ name, line })));
-    expect(narrow.length).toBeGreaterThan(0);
-    const stale = narrow.filter(({ line }) => !(line.includes("keryx gdgraph affected") && line.includes("keryx ctx rg") && /never writes in the reviewed tree/.test(line)));
+    const narrow = LENSES.flatMap((name) => read(name).split("\n").filter((line) => /\bruns? no command\b|\brun nothing but\b/i.test(line)).map((line) => ({ name, line })));
+    // degradation ("You run no command") and premise ("run nothing but") phrase it differently; both must be caught.
+    expect(narrow.map(({ name }) => name)).toEqual(expect.arrayContaining(["review-degradation", "review-premise", "review-logic"]));
+    const layer = ["keryx gdgraph affected", "keryx test related", "keryx wiki ask", "keryx memory search", "keryx ctx rg"];
+    const stale = narrow.filter(({ line }) => !(layer.every((command) => line.includes(command)) && /never writes? in the reviewed tree/.test(line)));
     expect(stale.map(({ name }) => name)).toEqual([]);
   });
 
@@ -69,10 +75,21 @@ describe("review lens contract (flow 490)", () => {
     expect(read("review-backend")).not.toMatch(/NOT NULL[^\n(]*— \*\*blocker\*\*/);
     expect(read("review-frontend")).toMatch(/`any` type in new code — \*\*minor\*\*/);
     expect(read("review-frontend")).toMatch(/`useEffect` calls `store\.loadX\(\)`[^\n]*? — \*\*minor\*\*/);
+    // Every site, not only the first: no store-load line rates `major` as its primary level.
+    expect(read("review-frontend")).not.toMatch(/store\.(loadX|loadData)\(\)[^\n]*— \*\*major\*\*/);
+    // Backend security-shaped rows defer to the attack-vector rule: no unconditional primary blocker, in bold or backticks.
+    expect(read("review-backend")).not.toMatch(/(NOT NULL|raw SQL|stack trace|auth guard)[^\n(|]*— (\*\*|`)blocker(\*\*|`)/i);
+    expect(read("review-performance")).not.toMatch(/load time is `info` at most/);
+    expect(read("review-performance")).toMatch(/every CLI command start/);
   });
 
   test("ui-ux finishes a code-mode review when no render is supplied (AC6)", () => {
-    expect(read("review-ui-ux")).not.toMatch(/No render supplied[^\n]*return `NEEDS_CONTEXT`/);
+    const text = read("review-ui-ux");
+    const start = text.indexOf("**No render supplied**");
+    expect(start).toBeGreaterThan(-1);
+    const bullet = text.slice(start, text.indexOf("\n\n", start));
+    expect(bullet).toMatch(/finish the code-mode review/);
+    expect(bullet).not.toMatch(/NEEDS_CONTEXT/);
   });
 
   test("the input schema declares known_findings once (AC1)", () => {

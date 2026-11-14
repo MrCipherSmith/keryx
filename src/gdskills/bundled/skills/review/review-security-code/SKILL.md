@@ -13,7 +13,7 @@ triggers:
   - "OWASP review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -214,9 +214,9 @@ boundary is the trigger-and-outcome test.
 ### Security-specific law
 
 1. **A finding that claims attacker impact MUST state the attack vector.** Name the
-   attacker action, the entry point, and the impact; none → `info`. A weakness with
-   a named trigger and a wrong outcome but no attacker gain is `major` by the
-   trigger-and-outcome test. This does not generalise (a style reviewer has no attacker), so it stays here.
+   attacker action, the entry point, and the impact. With no vector the attacker
+   claim is dropped and the finding is rated by trigger and outcome: `major` with
+   both named, else `info`. This does not generalise (a style reviewer has no attacker), so it stays here.
 
 ---
 
@@ -328,7 +328,7 @@ Stop and re-read these rules if you are thinking:
 | "MD5 is used for caching keys, not passwords — it's fine" | State it as INFO, but do not silently skip it; it often drifts |
 | "I'll downgrade to minor to avoid friction" | Severity reflects real risk, not social dynamics |
 | "The code uses an ORM so SQL injection is not possible" | ORMs have raw-query escape hatches; verify parameterization |
-| "No attack vector found — I'll call it major anyway" | An attacker-impact claim with no vector is `info`, per the security-specific law |
+| "No attack vector found — I'll call it major anyway" | Without a vector the attacker claim is dropped, not the finding: it is `major` only with a named trigger and wrong outcome, else `info` (security-specific law) |
 | "It's a security finding, so it's a blocker" | `blocker` is the four shapes in **Severity (canonical)**. An unreachable weakness is `info` (shared law 1) however alarming its name; a reachable one short of shape 3 is `major` |
 | "It's outside the diff but the pattern is clearly wrong" | Only flag changed code; flag legacy via INFO with note to track separately |
 

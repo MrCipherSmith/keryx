@@ -14,7 +14,7 @@ triggers:
   - "review --hierarchical"
 metadata:
   author: "MrCipherSmith"
-  version: "1.15.0"
+  version: "1.16.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -1313,8 +1313,8 @@ inventing a fifth level to express it would put us back where we started.
 3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
-`review-security-code` carries a fifth — every security finding states its attack
-vector — which does not generalise and stays there.
+`review-security-code` carries a fifth — a finding that claims attacker impact states its vector; one without a vector
+is rated by trigger and outcome — which does not generalise and stays there.
 
 ## Finding Format
 

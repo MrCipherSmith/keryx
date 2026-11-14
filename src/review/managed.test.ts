@@ -318,6 +318,70 @@ test("ingest accepts a major whose class_scope has `sites: []` and a method", as
   expect(findings).toContain('"id": "F-001"');
   expect(findings).toContain('"class_scope"');
   expect(findings).toContain('"sites": []');
+  const parsed = JSON.parse(findings) as Array<{ class_scope?: unknown }>;
+  expect(parsed[0]?.class_scope).toEqual({
+    sites: [],
+    enumeration_method: "rg createManagedReviewPackage across src; found none",
+  });
+});
+
+describe("class_scope keys are line-anchored and the method does not cross into the next bullet", () => {
+  const REFUSED = /do not enumerate their class/;
+  test("blank method followed by a `- **Fix**:` bullet is refused", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    sites: []",
+        "    enumeration_method:",
+        "  - **Fix**: add the coverage",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
+
+  test("the same with non-empty sites is refused", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    sites: [\"src/a.ts:1\"]",
+        "    enumeration_method:",
+        "  - **Fix**: add the coverage",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
+
+  test("no sites key with a valid method is refused", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    enumeration_method: \"rg across src\"",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
+
+  test("a method that mentions \"sites:\" in prose does not supply the sites key", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    enumeration_method: \"rg across src, call sites: none found\"",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
 });
 
 test("ingest refuses a major with `sites: []` and a blank enumeration_method", async () => {

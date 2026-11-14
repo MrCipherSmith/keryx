@@ -11,7 +11,7 @@ triggers:
   - "check N+1"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -129,7 +129,7 @@ render frame, a file in a tree walk or a command start, not a request handler.
 - [ ] `Object.keys().reduce()` or similar aggregation recalculated on every render instead of being derived in store or memoized
 - [ ] Recursive computation without memoization called in a loop
 
-**Hot path requirement:** An expensive computation is only a `major` finding if it runs at render time or in a tight loop. A one-time computation at load time is `info` at most.
+**Hot path requirement:** An expensive computation is a `major` finding when it runs at render time, in a tight loop, or on every CLI command start (a hot path, Part 0). Run once per page load or server start, it is `info` at most; anywhere else off a hot path, `minor` at most.
 
 ### 4. Missing Database Indexes
 
@@ -140,7 +140,7 @@ Detectable from query patterns in changed code (not from DB schema directly):
 - [ ] `LIKE '%term%'` — prefix wildcard prevents index use; flag as info with suggestion to use full-text search
 - [ ] Foreign key column used in JOIN without an index (common ORM footgun)
 
-**Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If the schema is not in the payload, it is `info`: say that reading the schema would settle it.
+**Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If the schema is not in the payload, it is `info`: say that reading the schema would settle it. Schema shown with no index and the table shown large (its size named): `major`. Schema shown, size not: `minor`.
 
 ### 5. Memory Leaks
 

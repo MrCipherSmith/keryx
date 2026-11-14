@@ -162,13 +162,18 @@ describe("the two finding schemas do not drift apart", () => {
       properties: Object.fromEntries(
         Object.entries(s.properties as Record<string, any>).map(([k, v]) => [
           k,
-          { type: v.type, minItems: v.minItems, minLength: v.minLength, items: v.items },
+          { type: v.type, minItems: v.minItems, minLength: v.minLength, pattern: v.pattern, items: v.items },
         ]),
       ),
     });
     expect(shape(bundledFinding.properties.class_scope)).toEqual(
       shape(strict.properties.class_scope),
     );
+  });
+
+  test("both refuse a whitespace-only enumeration_method (pattern \\S)", () => {
+    expect(strict.properties.class_scope.properties.enumeration_method.pattern).toBe("\\S");
+    expect(bundledFinding.properties.class_scope.properties.enumeration_method.pattern).toBe("\\S");
   });
 
   test("both make it conditional on the same severities", () => {

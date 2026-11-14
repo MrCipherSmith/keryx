@@ -2532,9 +2532,20 @@ function parseClassScope(block: string): ReviewFindingClassScope | null {
   if (start === -1) {
     return null;
   }
-  const rest = lines.slice(start).join("\n");
-  const sitesMatch = rest.match(/\bsites\b\s*[:=]\s*([\s\S]*?)(?=\benumeration_method\b|$)/i);
-  const methodMatch = rest.match(/\benumeration_method\b\s*[:=]\s*([\s\S]*?)(?=\n\s*\n|$)/i);
+  // The first line is cut down to what follows the `class_scope` label so an inline
+  // `class_scope: sites: [...] enumeration_method: "..."` still reads; every later key
+  // must open its line (after indent, a list marker or bold). Prose such as "call sites:"
+  // inside a method is therefore never read as the `sites` key.
+  const first = (lines[start] ?? "").replace(/^.*?class[_ ]scope(?:\*\*|`)?[ \t]*[:=]?[ \t]*/i, "");
+  const rest = [first, ...lines.slice(start + 1)].join("\n");
+  const sitesMatch = rest.match(
+    /(?:^|\n)[ \t]*(?:[-*+][ \t]+)?(?:\*\*|`)?sites(?:\*\*|`)?[ \t]*[:=]([\s\S]*?)(?=[ \t\n](?:\*\*|`)?enumeration_method\b|$)/i,
+  );
+  // After the colon only `[ \t]`: a blank value must not take the next line. Indented
+  // continuation lines belong to the value; a new bullet or `label:` line does not.
+  const methodMatch = rest.match(
+    /(?:(?:^|\n)[ \t]*(?:[-*+][ \t]+)?(?:\*\*|`)?|(?<=["'`\];,][ \t]+))enumeration_method(?:\*\*|`)?[ \t]*[:=][ \t]*([^\n]*(?:\n[ \t]+(?=\S)(?![-*+][ \t]|\*\*|\w+[ \t]*:)[^\n]*)*)/i,
+  );
   const method = unquote(methodMatch?.[1]?.replace(/\s+/g, " ").trim() ?? "");
   // An explicit `sites` key that parses to [] is a negative enumeration ("looked, found none") and is valid; only a
   // missing key or a blank method means the class was never enumerated.

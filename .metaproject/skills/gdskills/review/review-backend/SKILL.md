@@ -15,7 +15,7 @@ triggers:
   - "review NestJS"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "nestjs,prisma"
@@ -96,12 +96,11 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 **Guards and roles**
 - Protected endpoints have `@UseGuards(...)` with appropriate guard(s)
-- Role-based access uses `@Roles(...)` decorator with a roles guard — missing guard on an endpoint that should be protected is a **blocker**
+- Role-based access uses `@Roles(...)` decorator with a roles guard — a missing guard on an endpoint that should be protected is rated by the auth-guard row of the conditions table
 - Public endpoints explicitly marked with `@Public()` or equivalent decorator, not just left unguarded
 
 **Controller responsibilities**
-- Controllers are thin: no business logic, no direct ORM calls, no computation
-- Controller methods do: parse input → delegate to service → return response
+- Controllers are thin: no business logic, no direct ORM calls, no computation; a method does parse input → delegate to service → return response
 - If business logic is in a controller method, flag it per the controller row of the conditions table (`minor`: "move to service layer")
 
 **Service layer**
@@ -207,7 +206,8 @@ is, and a condition that cannot name one is not a `blocker`.
 |---|---|---|
 | Missing DTO validation on an endpoint accepting user input | `blocker` with an attack vector stated (input, entry point, impact — `review-security-code` law); `major` with a named malformed input and wrong outcome; else `info` | Exploitable vulnerability only when the vector is shown |
 | String interpolation in raw SQL query | `blocker` with an attack vector stated (input, entry point, impact); `major` with a named input and wrong outcome; else `info` | Exploitable vulnerability only when the vector is shown |
-| Leaking stack trace / raw ORM error to API response | `blocker` with an attack vector stated (what is disclosed, to whom); `minor` when the leak is shown but no gain is; else `info` | Information disclosure only when the vector is shown |
+| Leaking stack trace / raw ORM error to API response | `blocker` with an attack vector stated (what is disclosed, to whom, through which entry point); `major` when the leak is shown reaching a response; else `info` | Exploitable vulnerability only when the vector is shown; a shown leak is a wrong outcome |
+| Missing auth guard on an endpoint that should be protected | `blocker` with an attack vector stated (caller, entry point, impact); `major` with a named caller and the wrong outcome it gets; else `info` | Exploitable vulnerability only when the vector is shown |
 | `REQUEST`-scoped provider injected into a `Singleton` | `blocker` | Data corruption — one request's state is served to another |
 | Unhandled promise rejection in a controller method | `blocker` | Crash |
 | `NOT NULL` column added without a default to a populated table | `major` — the migration fails on deploy against existing rows; `blocker` only where the tool shown truncates or backfills wrong values | Data loss only when rows are shown destroyed or wrong. Same rating as `review-highload` |
