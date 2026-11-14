@@ -8,29 +8,11 @@ import { Button } from "../../components/ui";
 import { useDraft } from "../../state/drafts";
 import type { WorkAdapter } from "./adapter";
 import { mergeWorkCache, requestWorkRefresh, workAttentionKey, workSnapshotKey } from "./cache";
-import { buildAnswers, type QuickStartRequest } from "./quick-contract";
-import {
-  emptyQuickDraft,
-  QuickStartDialog,
-  type QuickDraft,
-  type QuickPhase,
-} from "./quick-start-dialog";
+import type { QuickStartRequest } from "./quick-contract";
+import { quickStartRequest, type QuickDraft } from "./quick-request";
+import { emptyQuickDraft, QuickStartDialog, type QuickPhase } from "./quick-start-dialog";
 
-/** The wire request for a draft: skipped and blank questions are recorded as skipped, never as empty answers. */
-export function quickStartRequest(draft: QuickDraft): QuickStartRequest {
-  const answered = Object.fromEntries(
-    Object.entries(draft.answers).filter(([id]) => draft.skipped[id] !== true),
-  );
-  return {
-    mode: draft.mode,
-    description: draft.description.trim(),
-    answers: [...buildAnswers(draft.mode, answered)],
-    criteria: draft.criteria
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0),
-  };
-}
+export { quickStartRequest };
 
 type Pending = { id: string; request: QuickStartRequest };
 

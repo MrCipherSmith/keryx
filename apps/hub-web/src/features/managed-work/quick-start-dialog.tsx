@@ -1,16 +1,11 @@
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Field, Input, Notice, Textarea } from "../../components/ui";
-import { QUICK_MODES, questionsFor, type QuickModeId } from "./quick-contract";
+import { QUICK_MODES, questionsFor } from "./quick-contract";
+import type { QuickDraft } from "./quick-request";
 import "./quick-start.css";
 
-export type QuickDraft = {
-  mode: QuickModeId;
-  description: string;
-  answers: Record<string, string>;
-  skipped: Record<string, boolean>;
-  criteria: string;
-};
+export type { QuickDraft };
 export const emptyQuickDraft: QuickDraft = {
   mode: "task",
   description: "",
