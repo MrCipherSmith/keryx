@@ -145,7 +145,7 @@ const CEILINGS_BY_KEY = {
   "review/code-learned-review": 283,
   "review/review-architecture": 373,
   "review/review-backend": 361,
-  "review/review-clean-code": 538,
+  "review/review-clean-code": 220,
   "review/review-core-boundaries": 158,
   "review/review-degradation": 191,
   "review/review-flow-graph": 183,
