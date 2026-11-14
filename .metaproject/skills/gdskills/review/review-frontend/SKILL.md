@@ -286,7 +286,7 @@ Flags:
 - Public async action doing API/IO directly instead of delegating to private — **minor** (layer-violation rule; **major** only with a named defect)
 - State mutation after `await` outside `runInAction` — **major**, or **blocker** where the interleaving can corrupt persisted state (frontend law 1)
 - Missing `try/catch/finally` on private async method owning loading flags — **major**
-- `catch (err: any)` instead of `catch (err: unknown)` — **minor**
+- `catch (err: any)` — rated by `.metaproject/rules/core/error-handling.mdc` (**Review severities**)
 
 #### B7. Inter-Store Callbacks and Internal Handlers
 
@@ -354,7 +354,6 @@ Flags:
 - `!` non-null assertion without justification comment — **minor**
 - Props interface without `I` prefix — **minor**
 - Store state or public API left to an inferred object-literal type — **minor**
-- `catch (err: any)` — **minor**
 
 ---
 

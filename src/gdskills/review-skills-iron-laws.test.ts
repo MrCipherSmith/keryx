@@ -251,11 +251,6 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
           "`blocker` **if** the interleaving can corrupt or lose data; otherwise `major`",
         skills: ["review-logic", "review-highload"],
       },
-      {
-        clause:
-          "`major` — `blocker` only if the caller then persists or returns wrong data",
-        skills: ["review-logic", "review-clean-code"],
-      },
     ];
     const drifted: string[] = [];
     for (const { clause, skills } of shared) {
@@ -266,6 +261,22 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
       }
     }
     expect(drifted).toEqual([]);
+  });
+
+  test("failure-path severities live once, in error-handling.mdc, and the reviewers that rate them cite it", () => {
+    // A clause two reviewers shared verbatim still drifted from the writer's rule.
+    // The severities now live in the rule the implementer loads; a reviewer that
+    // restates one is the second ruling this guards against.
+    const rule = readFileSync(path.join(import.meta.dir, "bundled", "rules", "core", "error-handling.mdc"), "utf8");
+    const clause = "`major` — `blocker` only if the caller then persists or returns wrong data";
+    expect(normalise(rule)).toContain(normalise("## Review severities"));
+    expect(normalise(rule)).toContain(normalise(clause));
+    const raters = ["review-clean-code", "review-logic", "review-backend", "review-frontend"];
+    for (const name of raters) {
+      const text = read(name);
+      expect(text).toContain("error-handling.mdc");
+      expect(normalise(text)).not.toContain(normalise(clause));
+    }
   });
 
   test("a layer violation is rated the same, `minor` by default, in both reviewers that rate it", () => {

@@ -128,8 +128,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 - Missing pagination on a list endpoint flagged as `major` when no obvious bound exists
 
 **Error handling**
-- Async controller methods must have error handling: either `try/catch` or a global exception filter
-- Unhandled promise rejections (async method without try/catch, no global filter) — **blocker**
+- Unhandled promise rejections are rated by `.metaproject/rules/core/error-handling.mdc` (**Review severities**): a rejection Nest's exception layer answers with an error response is not a crash; rate that response
 - Exception messages must not leak internal details (stack traces, ORM error strings) to the HTTP response — leaking is rated by the stack-trace row of the conditions table
 - NestJS built-in exceptions (`NotFoundException`, `BadRequestException`, etc.) preferred over generic `Error`
 
@@ -209,7 +208,6 @@ is, and a condition that cannot name one is not a `blocker`.
 | Leaking stack trace / raw ORM error to API response | `blocker` with an attack vector stated (what is disclosed, to whom, through which entry point); `major` when the leak is shown reaching a response; else `info` | Exploitable vulnerability only when the vector is shown; a shown leak is a wrong outcome |
 | Missing auth guard on an endpoint that should be protected | `blocker` with an attack vector stated (caller, entry point, impact); `major` with a named caller and the wrong outcome it gets; else `info` | Exploitable vulnerability only when the vector is shown |
 | `REQUEST`-scoped provider injected into a `Singleton` | `blocker` | Data corruption — one request's state is served to another |
-| Unhandled promise rejection in a controller method | `blocker` | Crash |
 | `NOT NULL` column added without a default to a populated table | `major` — the migration fails on deploy against existing rows; `blocker` only where the tool shown truncates or backfills wrong values | Data loss only when rows are shown destroyed or wrong. Same rating as `review-highload` |
 | N+1 query (relation loaded in a loop) | `major` with the reachable loop size or call frequency named; else `info` | Cost stated with its frequency; degradation, not an outage |
 | Missing transaction on a multi-step atomic mutation | `major` — `blocker` where a partial write corrupts persisted state | The outcome decides |

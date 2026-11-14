@@ -1,5 +1,5 @@
 ---
-description: "Error handling standard shared by code writers and the code-quality reviewer: failure is observable, carries context, keeps its cause, and is never signalled by a value a caller can mistake for success. Use when implementing functions that can fail, calling external APIs, handling async operations, or reviewing that code."
+description: "Error handling standard shared by code writers and reviewers, with the severities reviewers use: failure is observable, carries context, keeps its cause, and is never signalled by a value a caller can mistake for success. Use when implementing functions that can fail, calling external APIs, handling async operations, or reviewing that code."
 alwaysApply: false
 ---
 
@@ -59,7 +59,7 @@ catch { /* best effort: a leftover temp file is swept by the next run */ }
 ```
 
 ### Rule 4: No unhandled promise rejections
-See `async-patterns.mdc` Rule 4.
+Every promise is awaited inside a `try/catch` or has a `.catch()`; a fire-and-forget call handles its own rejection. Examples are in `async-patterns.mdc` Rule 4.
 
 ### Rule 5: Keep the cause
 When catching and rethrowing, pass the original as `cause`. Do not both log and rethrow the same error in one `catch`: whoever handles it logs it.
@@ -74,6 +74,21 @@ catch (e) { throw new DatabaseError("write failed", { cause: e }); }
 
 ### Rule 6: Assertions guard invariants, not recoverable input
 Do not throw from an `assert` on input a caller can legitimately send. Validate it and fail per Rule 1.
+
+---
+
+## Review severities (shared with reviewers)
+
+`review-clean-code`, `review-logic`, `review-backend` and `review-frontend` rate failure paths by this table and keep only framework-specific rows of their own (a NestJS exception type, a MobX store's `try/catch/finally`). Change a row here, never in a reviewer.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| `catch` that hides a failure (Rule 3) | the caller then proceeds as if it succeeded | `major` — `blocker` only if the caller then persists or returns wrong data | a correct fallback with a comment giving the reason |
+| Failure returned as `null` / `false` / `-1` / `[]` (Rule 1) | a caller can read it as a valid result | `major` with that caller named, else `minor` | a type that makes absence explicit and is checked |
+| Rethrow without `cause`; message without operation or input (Rules 2, 5) | at a module boundary / any new message | `minor` | a throw that is not a `Result`; a plain contextual `Error` inside a module |
+| Log and rethrow in one `catch` (Rule 5) | always | `minor` | — |
+| Unhandled promise rejection (Rule 4) | it reaches the process | `blocker` (crash) | a rejection a framework's exception layer turns into an error response: rate that response instead |
+| `catch (err: any)` in TypeScript | always | `minor` | `catch (err: unknown)` |
 
 ---
 
