@@ -245,12 +245,11 @@ conditions land under that rubric, not a second rubric.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
-| Unhandled promise rejection reaching the process | `blocker` | Crash |
+| Unhandled rejection; swallowed error hiding a failed operation | per `.metaproject/rules/core/error-handling.mdc` **Review severities** — read it before the diff | One table for writers and every reviewer |
 | Corrupted or lost persisted/returned data | `blocker` | Data loss or corruption |
 | Unimplemented acceptance criterion | `blocker` | Named shape 4 |
 | Race condition on shared mutable state | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | The outcome decides, not the word "race" |
 | Silent wrong result on a named input | `major` | Trigger and outcome are both named |
-| Swallowed error that hides a failed operation | `major` — `blocker` only if the caller then persists or returns wrong data | Silent failure is wrong behaviour; corruption is a different shape |
 | Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
 | Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
 | Non-null assertion without a comment | `minor` | Behaves correctly today; the cost is to the reader |

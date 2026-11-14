@@ -95,10 +95,7 @@ a named site, a threshold crossed by this change, a cost someone will pay.
 
 | Signal | A finding when | Default | Not a finding |
 |---|---|---|---|
-| `catch` that hides a failure | the caller then proceeds as if it succeeded | `major` — `blocker` only if the caller then persists or returns wrong data | a correct fallback with a comment giving the reason |
-| Failure returned as `null` / `false` / `-1` / `[]` | a caller can read it as a valid result | `major` with that caller named, else `minor` | a type that makes absence explicit and is checked |
-| Rethrow without `cause`; message without operation or input | at a module boundary / any new message | `minor` | a throw that is not a `Result`; a plain contextual `Error` inside a module |
-| Log and rethrow in one `catch` | always | `minor` | — |
+| Failure paths: a hiding `catch`, failure as a value, lost `cause`, log-and-rethrow | per `error-handling.mdc` **Review severities** | as there | as there |
 | Override that throws "not supported" or rejects base input | a named call site reaches it through the base type | `major`, or `blocker` on the crash/corruption outcome; else `minor` | — |
 | Constructor doing I/O or async work | always | `minor`; `major` only with a named defect it causes | — |
 | Function length | over 40 lines **and** two separable jobs or mixed abstraction levels | `minor` (name the jobs) | a long linear table, serializer, test or one-level sequence |
