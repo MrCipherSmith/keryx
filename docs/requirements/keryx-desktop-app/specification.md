@@ -76,7 +76,16 @@ apps/desktop/                shell project (Tauri or Electron, decision D1); sep
 | Visual QA | Panel | List with artifact path (a terminal cannot show the image; stated, not hidden) |
 | Solo status | Tray, window title | Status line |
 
-## 6. Data contracts (planned, to be reconciled with the existing work model in Phase 0)
+## 6. Data contracts (reconciled with the code by the Phase 0 evidence pass, flow 492)
+
+Evidence, with references taken on 2026-11-14:
+
+- The work module stores **no stage and no finding**. It has `Attempt.state` (draft, running, blocked, submitted, failed, cancelled, accepted, changes-requested, rejected, withdrawn), `executionOutcome` (none, active, known-terminal, unknown), `attempt.report` events (progress, blocked, failed, cancel-request, cancel-confirmed) and `EvidenceRecord` (`criterionIds`, `result`, `source`, `method`, `sourceRunId`). `WorkEvent.type` is a closed enum (`src/hub/work/model.ts`, `domain.ts`).
+- The stage record below is therefore a **derived projection, new**: it is computed from attempt and evidence events, not stored.
+- Findings live in the review-orchestrator log and the review round, not in the work module. The finding anchor below is a **derived projection, new**, read from that log.
+- The only mutation surface is `WorkCommand` (`src/hub/work/model.ts:31`): `{operationId, expectedVersions, command, payload}`. `operationId` is the idempotency key (200 characters at most, per project and actor); the same id with a different request digest gives 409 `idempotency-conflict` (`src/hub/work/http.ts:234`). Quick start composes `flow.create` (its `specification` may be null), `intent.create` and `flow.approve-and-start`. Criteria are frozen by the human-only `requirements.approve` or `flow.approve-and-start` (`domain.ts:76`, `model.ts:20-30`).
+- A specification is a `DocumentRef` (`documentId`, `version`, `contentDigest`). Documents enter a project through the machine connector's `importDocuments` (`src/hub/connector.ts:186`, driven by `src/hub/client-command.ts:93`) and the project event `documents-imported` (`src/hub/domain.ts:178`). Quick start does not import: it creates the Flow with `specification: null`.
+- The `flow.create` payload fields are `title, problem, expectedOutcome, scope, outOfScope, ownerId, specification, criteria[{criterionId, text, waivable}]`.
 
 **Stage record** (derived from run events):
 
