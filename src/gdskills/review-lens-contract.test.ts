@@ -78,7 +78,14 @@ describe("review lens contract (flow 490)", () => {
     // Every site, not only the first: no store-load line rates `major` as its primary level.
     expect(read("review-frontend")).not.toMatch(/store\.(loadX|loadData)\(\)[^\n]*— \*\*major\*\*/);
     // Backend security-shaped rows defer to the attack-vector rule: no unconditional primary blocker, in bold or backticks.
-    expect(read("review-backend")).not.toMatch(/(NOT NULL|raw SQL|stack trace|auth guard)[^\n(|]*— (\*\*|`)blocker(\*\*|`)/i);
+    // Backend: the security-shaped table rows carry the attack-vector ladder, and no inline guard line sets its own blocker.
+    const backend = read("review-backend");
+    for (const row of ["Leaking stack trace", "Missing auth guard"]) {
+      const line = backend.split("\n").find((text) => text.startsWith(`| ${row}`)) ?? "";
+      expect(line).toMatch(/\| `blocker` with an attack vector stated[^|]*`major`[^|]*else `info` \|/);
+    }
+    expect(backend).not.toMatch(/guard[^\n|]*\*\*blocker\*\*/i);
+    expect(backend).not.toMatch(/NOT NULL[^\n(|]*— (\*\*|`)blocker(\*\*|`)/i);
     expect(read("review-performance")).not.toMatch(/load time is `info` at most/);
     expect(read("review-performance")).toMatch(/every CLI command start/);
   });

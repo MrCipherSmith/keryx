@@ -11,7 +11,7 @@ triggers:
   - "check N+1"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -129,7 +129,7 @@ render frame, a file in a tree walk or a command start, not a request handler.
 - [ ] `Object.keys().reduce()` or similar aggregation recalculated on every render instead of being derived in store or memoized
 - [ ] Recursive computation without memoization called in a loop
 
-**Hot path requirement:** An expensive computation is a `major` finding when it runs at render time, in a tight loop, or on every CLI command start (a hot path, Part 0). Run once per page load or server start, it is `info` at most; anywhere else off a hot path, `minor` at most.
+**Hot path requirement:** An expensive computation is a `major` finding when it runs at render time, in a tight loop, or on every CLI command start (a hot path, Part 0). Once per page load is a path you can name: rate it by the table (`major` with its cost and frequency stated, else `minor`). Once per process (server start, a build) is `info` at most.
 
 ### 4. Missing Database Indexes
 

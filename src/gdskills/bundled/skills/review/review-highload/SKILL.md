@@ -19,7 +19,7 @@ triggers:
   - "review distributed"
 metadata:
   author: "MrCipherSmith"
-  version: "1.3.0"
+  version: "1.4.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -368,7 +368,7 @@ that evidence the finding drops to the row's fallback level, and without a concr
 |---|---|---|
 | Race condition on shared mutable state, including a lost update to a shared state file | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | Same wording as `review-logic`, deliberately: the outcome decides, not the word "race" |
 | Check-then-act with no unique constraint or lock; non-idempotent retry; event handler with no deduplication; scheduled job or session work with no lock | `blocker` when the evidence shows the duplicate or lost write persisted (shape 2); otherwise `major` | The concurrent or retried path must exist in the code, not be assumed |
-| Per-user data cached under a key not scoped to the user | `blocker` when the evidence shows a second user served the first user's entry (shape 2; shape 3 too when an attacker can steer it); `major` when the key is shown shared but no second reader is shown on a concrete path; `info` when nobody can be shown to reach it | The evidence shows both readers |
+| Per-user data cached under a key not scoped to the user | `blocker` when the evidence shows a second user served the first user's entry (shape 2; shape 3 too when an attacker can steer it); `major` when a second user's request path to the key is named (trigger) but serving the wrong entry is not shown; `info` when no second reader's path is named | Blocker needs both readers shown; major needs the second reader's path named |
 | `NOT NULL` column added without a default to a populated table, or a migration that fails against existing rows | `major`; `blocker` only where truncation or data loss is shown | Same rating as `review-backend` |
 | Query filtering or ordering on a column with no index on a table shown to be large | `major` with the table size named; `minor` when the schema is shown but the size is not; `info` when the schema is not in the payload | Same rule as `review-performance`: reading the schema settles it |
 | Unbounded queue, collection, buffer or fan-out | `blocker` only when the evidence shows the growth reaching exhaustion (shape 1); otherwise `major` with what grows it named | Law 3: the input that grows it is the trigger |

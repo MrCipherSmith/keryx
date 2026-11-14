@@ -13,7 +13,7 @@ triggers:
   - "OWASP review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.3.0"
+  version: "1.4.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -329,7 +329,7 @@ Stop and re-read these rules if you are thinking:
 | "I'll downgrade to minor to avoid friction" | Severity reflects real risk, not social dynamics |
 | "The code uses an ORM so SQL injection is not possible" | ORMs have raw-query escape hatches; verify parameterization |
 | "No attack vector found — I'll call it major anyway" | Without a vector the attacker claim is dropped, not the finding: it is `major` only with a named trigger and wrong outcome, else `info` (security-specific law) |
-| "It's a security finding, so it's a blocker" | `blocker` is the four shapes in **Severity (canonical)**. An unreachable weakness is `info` (shared law 1) however alarming its name; a reachable one short of shape 3 is `major` |
+| "It's a security finding, so it's a blocker" | `blocker` is the four shapes in **Severity (canonical)**. An unreachable weakness is `info` (shared law 1) however alarming its name; a reachable one with a named trigger and wrong outcome, short of shape 3, is `major`; reachable but behaving correctly is hardening (`minor`) |
 | "It's outside the diff but the pattern is clearly wrong" | Only flag changed code; flag legacy via INFO with note to track separately |
 
 ---

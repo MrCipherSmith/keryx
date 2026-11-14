@@ -5,7 +5,7 @@ description: "Use when a frontend review is requested, checking React component 
 triggers: ["frontend review", "component review", "ui review", "review React", "review components"]
 metadata:
   author: "MrCipherSmith"
-  version: "1.4.0"
+  version: "1.5.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "react,mobx"
@@ -460,7 +460,7 @@ This is the correct lifecycle bridge — do not flag it under A3 or B10. Those r
 
 Distinction:
 - `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])` — correct lifecycle bridge — **do not flag**
-- `useEffect(() => { store.loadData(); }, [])` or `useEffect(() => { store.childStore.init(); }, [])` — data trigger, or a child store's lifecycle the parent store owns, run from the component — **minor** (A3 / B10); **major** only with a named defect (trigger and wrong outcome)
+- `useEffect(() => { store.loadData(); }, [])` or `useEffect(() => { store.childStore.init(); }, [])` — data trigger, or a child store's lifecycle the parent store owns, run from the component — **minor** (A3 / B10, regardless of project conventions); **major** only with a named defect (trigger and wrong outcome)
 
 #### D7. JSX and Naming Conventions
 

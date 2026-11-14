@@ -384,6 +384,36 @@ describe("class_scope keys are line-anchored and the method does not cross into 
   });
 });
 
+describe("prose class_scope layouts (review round 3)", () => {
+  const scopeOf = async (scopeLines: string[]) => {
+    const findings = await ingestScopeReport(["## Major Issues", "", "- [F-001] major: Missing managed review coverage.", ...scopeLines, ""]);
+    return (JSON.parse(findings) as Array<{ class_scope?: { sites: string[]; enumeration_method: string } }>)[0]?.class_scope;
+  };
+
+  test.each([
+    ["inline after a period (a committed report's form)", ["  - **class_scope**: sites = [\"src/a.ts:1\", \"src/b.ts:2\"]. enumeration_method: `rg across src`"], ["src/a.ts:1", "src/b.ts:2"], "rg across src"],
+    ["inline bare sites", ["  - class_scope: sites: src/a.ts:1 enumeration_method: rg across src"], ["src/a.ts:1"], "rg across src"],
+    ["brace form", ["  - class_scope: { sites: [\"src/a.ts:1\"], enumeration_method: \"rg across src\" }"], ["src/a.ts:1"], "rg across src"],
+    ["table row", ["  - | class_scope | sites: [\"src/a.ts:1\"] | enumeration_method: rg across src |"], ["src/a.ts:1"], "rg across src"],
+    ["numbered keys", ["  - class_scope:", "    1. sites: [\"src/a.ts:1\"]", "    2. enumeration_method: rg across src"], ["src/a.ts:1"], "rg across src"],
+    ["bold sub-bullets", ["  - class_scope:", "    - **sites**: src/a.ts:1, src/b.ts:2", "    - **enumeration_method**: rg across src"], ["src/a.ts:1", "src/b.ts:2"], "rg across src"],
+    ["quoted method over lines with a label-like continuation", ["  - class_scope:", "    sites: []", "    enumeration_method: \"all callers", "      note: one is dead\""], [], "all callers note: one is dead"],
+  ])("accepts %s", async (_name, scopeLines, sites, method) => {
+    const scope = await scopeOf(scopeLines);
+    expect(scope).toEqual({ sites, enumeration_method: method });
+  });
+
+  test.each([
+    ["an indented prose line", ["  - class_scope:", "    sites: []", "    enumeration_method:", "    Evidence follows here"]],
+    ["an ordered item", ["  - class_scope:", "    sites: []", "    enumeration_method:", "   2. **Fix**: x"]],
+    ["a fence close", ["  - class_scope:", "    ```yaml", "    sites: []", "    enumeration_method:", "    ```"]],
+  ])("refuses a blank method followed by %s", async (_name, scopeLines) => {
+    await expect(ingestScopeReport(["## Major Issues", "", "- [F-001] major: Missing managed review coverage.", ...scopeLines, ""])).rejects.toThrow(
+      /do not enumerate their class/,
+    );
+  });
+});
+
 test("ingest refuses a major with `sites: []` and a blank enumeration_method", async () => {
   await expect(
     ingestScopeReport([

@@ -121,24 +121,26 @@ describe("mergeDuplicates", () => {
   });
 
   test("a canonical that lists its own sites keeps its method over an absorbed member's other listing", () => {
+    // The absorbed lister comes FIRST, so the first scoped member and the first member listing sites both
+    // name it: only the canonical-listed-its-own guard keeps the canonical's method.
     const { findings, merges } = mergeDuplicates([
-      finding({
-        global_id: "r#F-001",
-        severity: "major",
-        class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "canonical: every caller of retry" },
-      }),
       finding({
         id: "F-002",
         global_id: "r#F-002",
         reviewer: "review-regression",
         severity: "minor",
-        class_scope: { sites: ["src/other.ts:3"], enumeration_method: "absorbed: rg attempts" },
+        class_scope: { sites: ["src/other.ts:3"], enumeration_method: "absorbed: listed attempts" },
+      }),
+      finding({
+        global_id: "r#F-001",
+        severity: "major",
+        class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "canonical: every caller of retry" },
       }),
     ]);
     expect(findings).toHaveLength(1);
     expect(merges[0]?.kept).toBe("r#F-001");
     expect(findings[0]?.class_scope?.enumeration_method).toBe("canonical: every caller of retry");
-    expect(findings[0]?.class_scope?.sites).toEqual(["src/retry.ts:10", "src/other.ts:3"]);
+    expect([...(findings[0]?.class_scope?.sites ?? [])].sort()).toEqual(["src/other.ts:3", "src/retry.ts:10"]);
   });
 
   test("a verifier-confirmed severity is canonical over a higher unconfirmed one", () => {

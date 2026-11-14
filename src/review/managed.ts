@@ -2532,27 +2532,72 @@ function parseClassScope(block: string): ReviewFindingClassScope | null {
   if (start === -1) {
     return null;
   }
-  // The first line is cut down to what follows the `class_scope` label so an inline
-  // `class_scope: sites: [...] enumeration_method: "..."` still reads; every later key
-  // must open its line (after indent, a list marker or bold). Prose such as "call sites:"
-  // inside a method is therefore never read as the `sites` key.
-  const first = (lines[start] ?? "").replace(/^.*?class[_ ]scope(?:\*\*|`)?[ \t]*[:=]?[ \t]*/i, "");
-  const rest = [first, ...lines.slice(start + 1)].join("\n");
-  const sitesMatch = rest.match(
-    /(?:^|\n)[ \t]*(?:[-*+][ \t]+)?(?:\*\*|`)?sites(?:\*\*|`)?[ \t]*[:=]([\s\S]*?)(?=[ \t\n](?:\*\*|`)?enumeration_method\b|$)/i,
-  );
-  // After the colon only `[ \t]`: a blank value must not take the next line. Indented
-  // continuation lines belong to the value; a new bullet or `label:` line does not.
-  const methodMatch = rest.match(
-    /(?:(?:^|\n)[ \t]*(?:[-*+][ \t]+)?(?:\*\*|`)?|(?<=["'`\];,][ \t]+))enumeration_method(?:\*\*|`)?[ \t]*[:=][ \t]*([^\n]*(?:\n[ \t]+(?=\S)(?![-*+][ \t]|\*\*|\w+[ \t]*:)[^\n]*)*)/i,
-  );
-  const method = unquote(methodMatch?.[1]?.replace(/\s+/g, " ").trim() ?? "");
-  // An explicit `sites` key that parses to [] is a negative enumeration ("looked, found none") and is valid; only a
-  // missing key or a blank method means the class was never enumerated.
-  if (sitesMatch?.[1] === undefined || method === "") {
+  const scope = lines.slice(start);
+  const method = readEnumerationMethod(scope);
+  if (method === null || method.text === "") {
     return null;
   }
-  return { sites: parseSites(sitesMatch[1]), enumeration_method: method };
+  // `sites` is searched in the block with the method's own text replaced by its key, so prose such as
+  // "call sites:" inside a method is never read as the key, while every layout the old search read
+  // (inline, YAML, bullets, a table row, braces) still reads.
+  const rest = [...scope.slice(0, method.line), `${method.prefix} enumeration_method`, ...scope.slice(method.end + 1)].join("\n");
+  const sitesMatch = rest.match(/\bsites\b(?:\*\*|`)?\s*[:=]\s*([\s\S]*?)(?=(?:\*\*|`)?\benumeration_method\b|$)/i);
+  // An explicit `sites` key that parses to [] is a negative enumeration ("looked, found none") and is valid; only a
+  // missing key or a blank method means the class was never enumerated.
+  if (sitesMatch?.[1] === undefined) {
+    return null;
+  }
+  return { sites: parseSites(sitesMatch[1].replace(/[\s|>]*(?:[-*+]|\d+[.)])?[\s|>]*$/, "")), enumeration_method: method.text };
+}
+
+/**
+ * The `enumeration_method` value. It starts on the key's own line, as every lens example writes it: a
+ * blank value is blank, never the next line. It continues over lines indented deeper than the key (a
+ * wrapped string or a YAML `|`/`>` block), or, when it opens with a quote, up to the closing quote;
+ * a list item, an ordered item or a fence ends it.
+ */
+function readEnumerationMethod(lines: string[]): { text: string; line: number; end: number; prefix: string } | null {
+  for (let line = 0; line < lines.length; line += 1) {
+    const current = lines[line] ?? "";
+    const key = /(^|[^A-Za-z0-9_])(?:\*\*|`)?enumeration_method(?:\*\*|`)?[ \t]*[:=][ \t]*(.*)$/i.exec(current);
+    if (!key) {
+      continue;
+    }
+    const prefix = current.slice(0, key.index + (key[1] ?? "").length);
+    const keyIndent = indentOf(current);
+    // An inline brace or table-row form closes on the key's line: its closer is not part of the method.
+    let first = (key[2] ?? "").trim();
+    if (prefix.includes("{")) first = first.replace(/[ \t]*\}[ \t]*$/, "");
+    if (prefix.includes("|")) first = first.replace(/[ \t]*\|[ \t]*$/, "");
+    const parts = /^[|>][-+]?$/.test(first) ? [] : [first];
+    const quote = /^["'`]/.test(first) ? first[0] : null;
+    let open = quote !== null && !(first.length > 1 && first.trimEnd().replace(/[.;,]$/, "").endsWith(quote));
+    let end = line;
+    if (first !== "" || parts.length === 0) {
+      for (let next = line + 1; next < lines.length; next += 1) {
+        const text = lines[next] ?? "";
+        if (open) {
+          parts.push(text.trim());
+          end = next;
+          if (quote && text.includes(quote)) {
+            open = false;
+          }
+          continue;
+        }
+        if (text.trim() === "" || indentOf(text) <= keyIndent || /^[ \t]*(?:[-*+][ \t]|\d+[.)][ \t]|```)/.test(text)) {
+          break;
+        }
+        parts.push(text.trim());
+        end = next;
+      }
+    }
+    return { text: unquote(parts.join(" ").replace(/\s+/g, " ").trim()), line, end, prefix };
+  }
+  return null;
+}
+
+function indentOf(line: string): number {
+  return (/^[ \t]*/.exec(line)?.[0] ?? "").replace(/\t/g, "  ").length;
 }
 
 function unquote(value: string): string {
