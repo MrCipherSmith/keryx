@@ -32,8 +32,10 @@ describe("review lens contract (flow 490)", () => {
   });
 
   test("no lens runs tests, health checks or a dev server in the reviewed tree (AC2)", () => {
-    const forbidden = [/`keryx test run\b/, /`keryx health run\b/, /\b(npm|bun|pnpm|yarn) (run )?dev\b/];
-    const hits = LENSES.flatMap((name) => forbidden.filter((re) => re.test(read(name))).map((re) => `${name}: ${re.source}`));
+    const forbidden = [/keryx test run\b/, /keryx health run\b/, /\b(npm|bun|pnpm|yarn) (run )?dev\b/, /\b(npm|bun|pnpm|yarn) (run )?test\b/];
+    // The verifier and the one testing reviewer run tests only under `run-tests`, in a scratch copy: they are the named exceptions.
+    const runners = new Set(["review-verifier", "review-testing-practices"]);
+    const hits = LENSES.filter((name) => !runners.has(name)).flatMap((name) => forbidden.filter((re) => re.test(read(name))).map((re) => `${name}: ${re.source}`));
     expect(hits).toEqual([]);
   });
 
@@ -49,9 +51,28 @@ describe("review lens contract (flow 490)", () => {
     expect(read("review-testing-practices")).toContain("keryx review mutate");
     expect(read("review-testing-practices")).not.toMatch(/delete G\s+->\s+run the nearest suite/);
     expect(read("review-verifier")).toContain("keryx review mutate");
-    expect(read("review-verifier")).not.toMatch(/Delete the guarded line and re-run\.?\s*$/m);
+    expect(read("review-verifier")).not.toMatch(/Delete the guarded line and re-run/);
     expect(read("review-degradation")).toMatch(/also write, and never in the reviewed tree/);
     expect(read("review-ui-ux")).toMatch(/never starts? a dev server/i);
+  });
+
+  test("every lens that limits its commands also names the layer commands the orchestrator allows (AC2)", () => {
+    const narrow = LENSES.flatMap((name) => read(name).split("\n").filter((line) => /runs no command/.test(line)).map((line) => ({ name, line })));
+    expect(narrow.length).toBeGreaterThan(0);
+    const stale = narrow.filter(({ line }) => !(line.includes("keryx gdgraph affected") && line.includes("keryx ctx rg") && /never writes in the reviewed tree/.test(line)));
+    expect(stale.map(({ name }) => name)).toEqual([]);
+  });
+
+  test("a lens gives one severity per condition where round 1 found two (AC4)", () => {
+    expect(read("review-security-code")).not.toMatch(/unreachable weakness is `major`/);
+    // The primary level after the dash; a conditional "**major** only with …" in parentheses is allowed.
+    expect(read("review-backend")).not.toMatch(/NOT NULL[^\n(]*— \*\*blocker\*\*/);
+    expect(read("review-frontend")).toMatch(/`any` type in new code — \*\*minor\*\*/);
+    expect(read("review-frontend")).toMatch(/`useEffect` calls `store\.loadX\(\)`[^\n]*? — \*\*minor\*\*/);
+  });
+
+  test("ui-ux finishes a code-mode review when no render is supplied (AC6)", () => {
+    expect(read("review-ui-ux")).not.toMatch(/No render supplied[^\n]*return `NEEDS_CONTEXT`/);
   });
 
   test("the input schema declares known_findings once (AC1)", () => {

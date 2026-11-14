@@ -18,7 +18,7 @@ triggers:
   - "Uncle Bob review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -27,7 +27,7 @@ license: "MIT"
 # Review: Clean Code + SOLID
 
 Specialized reviewer for **Clean Code principles** (Robert C. Martin) and **SOLID** at the
-function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 The goal is not stylistic nitpicking — every finding here points to a concrete
 maintainability, readability, or extensibility problem that will cause friction
@@ -271,7 +271,7 @@ These are the correct uses of comments — do NOT flag:
 
 Flags:
 - `catch` block with empty body or only a comment — **major** when a named failure is hidden from the caller (silent failure; conditions table), else **minor**
-- Returning `null` / `undefined` from a function to signal "not found" in a critical path — **major**
+- Returning `null` / `undefined` from a function to signal "not found" in a critical path — **minor**; **major** only with a named trigger where the caller then produces a wrong outcome
 - Log + rethrow in the same catch block — **minor**
 - Untyped error in catch — **minor**
 

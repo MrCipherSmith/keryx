@@ -1004,7 +1004,7 @@ Review Plan Preview must include an `Optional legacy/profile reviewers` group (e
 | `--testing-practices` | `review-testing-practices` |
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
-| `--layout` / `--ui-ux` | `review-layout` / `review-ui-ux` (UI/UX and AI-slop; live mode too when a URL or dev server is available) |
+| `--layout` / `--ui-ux` | `review-layout` / `review-ui-ux` (UI/UX and AI-slop; live mode too only when the payload supplies a URL or screenshots) |
 | `--pr-contract` | `review-pr-contract` |
 | `--all` | all reviewers above (including `review-highload` and project convention reviewers when local convention docs exist; `review-clean-code` and `review-style` only when the round started with `--style`, and nothing a project lists under `reviewRoles.disabled` in `routing.config.json`); never the legacy/profile reviewers, which stay flag-only |
 | `--verify` | `review-verifier`, started on the first blocker or major and re-run for each later one (`SKILL.detail.md` § "Early verifier"); checks the findings by running something. Delete-only. |

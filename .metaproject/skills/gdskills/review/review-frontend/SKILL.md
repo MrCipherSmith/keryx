@@ -5,7 +5,7 @@ description: "Use when a frontend review is requested, checking React component 
 triggers: ["frontend review", "component review", "ui review", "review React", "review components"]
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "react,mobx"
@@ -17,7 +17,7 @@ license: "MIT"
 
 ## Purpose
 
-Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 This skill consolidates what two earlier profiles (a style one and a MobX store one, both removed) used to split between them, so it is the one reviewer for frontend style, MobX and store changes.
 
@@ -139,7 +139,7 @@ If no CLAUDE.md is found, proceed normally. CLAUDE.md is optional and non-blocki
 
 Flags:
 - Component reads `store.*` or `useLocalObservable` result but is not wrapped in `observer` — **major** (stale UI; not one of the four merge-blocking shapes)
-- `observer` applied inside another HOC wrapper instead of outside — **major**
+- `observer` applied inside another HOC wrapper instead of outside — **minor** (layer-violation rule; **major** only with a named defect it causes)
 
 #### A2. MVVM Boundary (Business Logic in Store, Not Component)
 
@@ -162,7 +162,7 @@ Flags:
 - [ ] Every `useEffect` that creates a subscription, timer, or listener MUST return a cleanup function
 
 Flags:
-- `useEffect` calls `store.loadX()`, or a child store's `init()` that the parent store owns — **major** (`store.onMount()` / `store.onUnmount()` in the bridge form is not this)
+- `useEffect` calls `store.loadX()`, or a child store's `init()` that the parent store owns — **minor** (layer-violation rule, as a direct fetch in a component; **major** only with a named defect; the `onMount()` / `onUnmount()` bridge form is not this)
 - `useEffect` contains `fetch()` or IO — **minor** (API in component; layer-violation rule)
 - `useEffect` contains business logic / state derivation — **minor** (layer-violation rule)
 - `useEffect` creates a subscription/timer/listener with no cleanup return — **major** (memory leak)
@@ -236,8 +236,8 @@ Decision rule for inter-store callbacks: ask "Is this called from JSX or a React
 
 Flags:
 - `public` keyword on any member — **minor** (ESLint `no-public` already fails CI; a reviewer restating a lint rule is not a merge gate)
-- `onChangeX`, `onFireX`, `handleX`, `syncX` without `private` — **major**
-- Missing `private` on internal state or helper methods — **major**
+- `onChangeX`, `onFireX`, `handleX`, `syncX` without `private` — **minor**
+- Missing `private` on internal state or helper methods — **minor**
 - Missing `private readonly` on a private field that is never reassigned (injected dependencies, immutable configuration) — **minor**
 
 #### B4. Observable Collections
@@ -283,7 +283,7 @@ Flags:
 Flags:
 - Public UI method missing `@action.bound` — **major**
 - Public helper method marked `@action.bound` but does not mutate state — **minor**
-- Public async action doing API/IO directly instead of delegating to private — **major**
+- Public async action doing API/IO directly instead of delegating to private — **minor** (layer-violation rule; **major** only with a named defect)
 - State mutation after `await` outside `runInAction` — **major**, or **blocker** where the interleaving can corrupt persisted state (frontend law 1)
 - Missing `try/catch/finally` on private async method owning loading flags — **major**
 - `catch (err: any)` instead of `catch (err: unknown)` — **minor**
@@ -302,8 +302,8 @@ Patterns that MUST be `private` unless called from JSX:
 The test: "Is this method called from JSX or passed as a React event handler prop?" If NO — it is `private`, full stop.
 
 Flags:
-- Public method matching `onChangeX`, `onFireX`, `handleX`, `syncX` naming not called from components — **major**
-- Inter-store callback without `private` — **major**
+- Public method matching `onChangeX`, `onFireX`, `handleX`, `syncX` naming not called from components — **minor**
+- Inter-store callback without `private` — **minor**
 - `@action.bound` on a `private` method that is not passed as a callback reference — **minor**
 
 #### B8. Bidirectional Sync Bounce Protection
@@ -322,7 +322,7 @@ Flags:
 - [ ] Components MUST NOT call APIs directly (fetch, axios, httpClient, service.callX) — even inside `useEffect`
 
 Flags:
-- API call inside a public `@action.bound` method body — **major**
+- API call inside a public `@action.bound` method body — **minor** (layer-violation rule; **major** only with a named defect)
 - API call in a component (hook, handler, useEffect) — **minor** (frontend law 3; layer-violation rule)
 
 #### B10. Lifecycle Initialization and Disposal
@@ -333,7 +333,7 @@ Flags:
 - [ ] Store `dispose()` MUST set `this.disposed = true` before canceling async work
 
 Flags:
-- Component `useEffect` calls `store.loadX()`, or a child store's `init()` / `onMount()` that the parent store owns — **major**. Do not flag the bridge `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])`
+- Component `useEffect` calls `store.loadX()`, or a child store's `init()` / `onMount()` that the parent store owns — **minor** (as above). Do not flag the bridge `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])`
 - Parent store does not call `child.dispose()` in `onUnmount()` / `dispose()` — **major**
 - Missing `disposed` flag in store with async operations — **major**
 
@@ -350,7 +350,7 @@ Flags:
 - [ ] `catch (err: unknown)` — typed error handling, not `catch (err)` or `catch (err: any)`
 
 Flags:
-- `any` type in new code — **major**
+- `any` type in new code — **minor** (**major** only with a named input and the wrong value it lets through)
 - `!` non-null assertion without justification comment — **minor**
 - Props interface without `I` prefix — **minor**
 - Store state or public API left to an inferred object-literal type — **minor**

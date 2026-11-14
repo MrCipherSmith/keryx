@@ -97,6 +97,33 @@ describe("review-finding contract requires class_scope for blocker and major", (
   }
 });
 
+describe("enumeration_method must be a real method", () => {
+  test("a whitespace-only enumeration_method is refused", async () => {
+    const value = finding("major", true);
+    value.class_scope = { sites: [], enumeration_method: "   " };
+    const file = writeFinding(value);
+    try {
+      const result = await validateContractFile(file, "review-finding");
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.path.includes("enumeration_method"))).toBe(true);
+    } finally {
+      rmSync(path.dirname(file), { recursive: true, force: true });
+    }
+  });
+
+  test("an empty sites list with a stated method is accepted", async () => {
+    const value = finding("major", true);
+    value.class_scope = { sites: [], enumeration_method: "rg for the call; found none" };
+    const file = writeFinding(value);
+    try {
+      const result = await validateContractFile(file, "review-finding");
+      expect(result.errors).toEqual([]);
+    } finally {
+      rmSync(path.dirname(file), { recursive: true, force: true });
+    }
+  });
+});
+
 describe("the two finding schemas do not drift apart", () => {
   // The whole reason this flow exists is that a rule applied to one member of a
   // class leaves the others wrong. Two schemas describe a finding; a

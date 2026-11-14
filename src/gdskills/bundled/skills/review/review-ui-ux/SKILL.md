@@ -17,7 +17,7 @@ triggers:
   - "ai slop check"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   origin: "authored"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
@@ -70,10 +70,10 @@ review-ui-ux Progress:
   any other process. Render a supplied URL at **1440**, **768**, **390** px; light and dark when supported.
 - **Both** — preferred whenever the payload supplies a render. Code shows intent; the render
   shows truth (computed contrast, actual fonts, real target sizes).
-- **No render supplied** — review the markup and styles statically (code mode), list the live checks
-  under "Checks not run", and return `NEEDS_CONTEXT` naming what they need (a URL or screenshots of which screens).
+- **No render supplied** — finish the code-mode review (`DONE` / `DONE_WITH_CONCERNS`), list the live checks under
+  "Checks not run" and state the gap in the summary (a URL or screenshots of which screens would close it).
 
-If neither a diff with UI files nor a supplied render exists, return `NEEDS_CONTEXT`.
+If there is neither a diff with UI files nor a supplied render, return `NEEDS_CONTEXT`.
 
 ---
 

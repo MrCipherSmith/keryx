@@ -2535,12 +2535,13 @@ function parseClassScope(block: string): ReviewFindingClassScope | null {
   const rest = lines.slice(start).join("\n");
   const sitesMatch = rest.match(/\bsites\b\s*[:=]\s*([\s\S]*?)(?=\benumeration_method\b|$)/i);
   const methodMatch = rest.match(/\benumeration_method\b\s*[:=]\s*([\s\S]*?)(?=\n\s*\n|$)/i);
-  const sites = sitesMatch?.[1] === undefined ? [] : parseSites(sitesMatch[1]);
   const method = unquote(methodMatch?.[1]?.replace(/\s+/g, " ").trim() ?? "");
-  if (sites.length === 0 || method === "") {
+  // An explicit `sites` key that parses to [] is a negative enumeration ("looked, found none") and is valid; only a
+  // missing key or a blank method means the class was never enumerated.
+  if (sitesMatch?.[1] === undefined || method === "") {
     return null;
   }
-  return { sites, enumeration_method: method };
+  return { sites: parseSites(sitesMatch[1]), enumeration_method: method };
 }
 
 function unquote(value: string): string {

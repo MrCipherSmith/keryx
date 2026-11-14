@@ -105,6 +105,21 @@ describe("mergeDuplicates", () => {
     expect(findings[1]?.id).toBe("F-003");
   });
 
+  test("a negative enumeration merged with a duplicate that lists sites keeps the listing method", () => {
+    const { findings } = mergeDuplicates([
+      finding({ severity: "major", class_scope: { sites: [], enumeration_method: "rg found none" } }),
+      finding({
+        id: "F-002",
+        reviewer: "review-regression",
+        severity: "major",
+        class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "rg attempts" },
+      }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.class_scope?.sites).toEqual(["src/retry.ts:10"]);
+    expect(findings[0]?.class_scope?.enumeration_method).toBe("rg attempts");
+  });
+
   test("a verifier-confirmed severity is canonical over a higher unconfirmed one", () => {
     const { findings, merges } = mergeDuplicates([
       finding({ severity: "minor", verification: { verdict: "confirmed", method: "execution", evidence: "test red", verifier: "review-verifier" } }),

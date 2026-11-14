@@ -16,7 +16,7 @@ triggers:
   - "check these findings"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -114,7 +114,7 @@ bun test src/review/managed.test.ts -t "refuses"     # does the guard actually f
 
 # Finding: "this guard is asserted against a synthetic value, so it cannot fail"
 # Never edit the reviewed tree. Run the deleted-line mutant in a scratch copy (keryx review mutate
-# --spec <file> --test "<cmd>" --package <p>), or ask the orchestrator for a verify-run. Green: CONFIRMED.
+# --spec <mutants.json> --test "<cmd>" --package <p>; the mutants file is research-evidence/mutants.json or one you write), or ask the orchestrator for a verify-run. Green: CONFIRMED.
 
 # Finding: "the type allows undefined here"
 bun run typecheck

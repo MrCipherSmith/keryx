@@ -291,6 +291,49 @@ describe("flow 460: ingest procedure", () => {
   });
 });
 
+async function ingestScopeReport(lines: string[]): Promise<string> {
+  await fresh();
+  await writeFile(path.join(ROOT, "review.md"), lines.join("\n"), "utf8");
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    reviewId: "2026-07-09-empty-sites",
+    target: { kind: "report", ref: "review.md" },
+    reportPath: "review.md",
+    now: new Date("2026-07-09T11:00:00Z"),
+  });
+  return readFile(path.join(ROOT, result.path, "findings.json"), "utf8");
+}
+
+test("ingest accepts a major whose class_scope has `sites: []` and a method", async () => {
+  const findings = await ingestScopeReport([
+    "## Major Issues",
+    "",
+    "- [F-001] major: Missing managed review coverage.",
+    "  - class_scope:",
+    "    sites: []",
+    "    enumeration_method: \"rg createManagedReviewPackage across src; found none\"",
+    "",
+  ]);
+  expect(findings).toContain('"id": "F-001"');
+  expect(findings).toContain('"class_scope"');
+  expect(findings).toContain('"sites": []');
+});
+
+test("ingest refuses a major with `sites: []` and a blank enumeration_method", async () => {
+  await expect(
+    ingestScopeReport([
+      "## Major Issues",
+      "",
+      "- [F-001] major: Missing managed review coverage.",
+      "  - class_scope:",
+      "    sites: []",
+      "    enumeration_method: ",
+      "",
+    ]),
+  ).rejects.toThrow(/do not enumerate their class/);
+});
+
 test("ingest writes classified findings and skill learning decision", async () => {
   await fresh();
   const reportPath = path.join(ROOT, "review.md");

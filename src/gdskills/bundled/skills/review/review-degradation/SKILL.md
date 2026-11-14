@@ -14,7 +14,7 @@ triggers:
   - "degradation against the base branch"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   origin: "authored"
@@ -33,7 +33,7 @@ How this differs from `review-regression`, before anything else:
 
 `review-regression` is untouched by this reviewer and keeps its own screen. Do not re-file its findings; do not widen yours into its question.
 
-Your inputs are the reviewer payload only; session memory and earlier conversation are not inputs. You run no command unless your payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where your host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+Your inputs are the reviewer payload only; session memory and earlier conversation are not inputs. You run no command unless your payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where your host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 ## The one question
 
@@ -65,11 +65,11 @@ minor, major or blocker carries one `evidence_kind`, and `evidence` says what yo
 |---|---|
 | `probe` | you ran the code, or a script against it, on head and on base, and the outputs differ |
 | `consumer-trace` | you followed a consumer of the changed symbol to its effect, file by file |
-| `merge-trace` | two heads were merged outside the reviewed tree (or the merge traced) to show what the second drops |
-| `red-test` | a test, named or written outside the reviewed tree, fails on the head and passes on the base |
+| `merge-trace` | two heads were merged (run: scratch copy, orchestrator, verify-run) or the merge was traced by reading both diffs, to show what the second drops |
+| `red-test` | a test, an existing named one in the tree or one written in a scratch copy, fails on the head and passes on the base |
 | `base-diff` | you read the same path on base and on head and quote both |
 
-`probe` runs code, so it needs `allowed_tools` to include `run-tests`. `red-test` and `merge-trace` also write, and never in the reviewed tree (other reviewers read it at once): they count only when the orchestrator produced them (`keryx review verify-run`) or they ran in a scratch copy (`keryx review mutate`) or a temporary worktree outside the reviewed tree. Otherwise state the trace in prose, labelled unrun.
+`probe` runs code, so it needs `allowed_tools` to include `run-tests`. A run `red-test` or `merge-trace` also write, and never in the reviewed tree (other reviewers read it at once): they count only when the orchestrator produced them (`keryx review verify-run`) or they ran in a scratch copy (`keryx review mutate`). A merge you traced by reading both diffs is `merge-trace` too and a read-only reviewer may file it, saying in `evidence` that it was read, not run; any other unrun trace is stated in prose, labelled unrun.
 Without `run-tests`, `consumer-trace` and `base-diff` are still evidence: a trigger and outcome you
 read in the code is a finding, `major` when a user who reaches it gets a wrong, lost or blocked result.
 A question is for what the code cannot answer (a backend reply, data, timing), not for what you did not run.

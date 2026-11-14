@@ -19,7 +19,7 @@ triggers:
   - "review distributed"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -29,7 +29,7 @@ license: "MIT"
 
 Specialized reviewer for **code that runs concurrently** — under request load, or as several sessions and child processes.
 Focuses on correctness under concurrency, resource contention, back-pressure, failure
-modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 Reviews only changes introduced in the current branch (merge-base to HEAD).
 
@@ -129,7 +129,7 @@ finding here cites that trigger; it needs no request handler and no load profile
 - [ ] Retry loop (spawn, lock acquire, Hub or network call) with no cap and no backoff
 - [ ] Child stdout/stderr or a log accumulated whole in memory (string concatenation, array push) with no cap or ring buffer
 - [ ] AbortController or timeout leaks: timer not cleared on success, a listener added to a long-lived signal per call, a child not killed when the signal aborts, a background task outliving its session
-- [ ] Server-side (e.g. the Hub): per-connection state with no bound, or a broadcast to every socket with no backpressure
+- [ ] Long-running server: per-connection state with no bound, or a broadcast to every socket with no backpressure
 
 ### Part A: Concurrency and Race Conditions
 
@@ -352,25 +352,25 @@ observation is theatre, not rigour.
 - **Severity**: blocker | major | minor | info
 - **File**: path/to/file.ts:line
 - **Pattern**: Concurrency A1 — Shared Mutable State | Resource B1 — Connection Pool | etc.
-- **Failure mode**: what specifically breaks, and the load or concrete trigger that breaks it
+- **Failure mode** (mandatory): what breaks and the trigger that breaks it (OOM at 1k RPS, a lost `flow.json` update from two sessions, duplicate charges on retry)
 - **Fix**: concrete change with reference pattern (exponential backoff, connection pool, distributed lock, etc.)
 - **Patch** (optional): unified diff
 ```
-
-The **Failure mode** line is mandatory for this reviewer — every finding must state the consequence and its trigger (OOM at 1k RPS, a lost `flow.json` update from two sessions, duplicate charges on retry, etc.).
 
 Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
 This reviewer keeps no table of its own; what follows is where its recurring
 conditions land under that rubric, not a second rubric.
 
 Each row names the condition and the evidence the canonical level needs; without
-that evidence the finding drops a row, and without a concrete trigger it is `info`.
+that evidence the finding drops to the row's fallback level, and without a concrete trigger it is `info`.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
 | Race condition on shared mutable state, including a lost update to a shared state file | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | Same wording as `review-logic`, deliberately: the outcome decides, not the word "race" |
 | Check-then-act with no unique constraint or lock; non-idempotent retry; event handler with no deduplication; scheduled job or session work with no lock | `blocker` when the evidence shows the duplicate or lost write persisted (shape 2); otherwise `major` | The concurrent or retried path must exist in the code, not be assumed |
-| Per-user data cached under a key not scoped to the user | `blocker` when two users reach the key (shape 2: returned data wrong); otherwise `major` | The evidence shows both readers |
+| Per-user data cached under a key not scoped to the user | `blocker` only with security shape-3 evidence (entry point, impact) that a second user reaches the key; `major` when reachable without shown impact; `info` when nobody can be shown to reach it | The evidence shows both readers |
+| `NOT NULL` column added without a default to a populated table, or a migration that fails against existing rows | `major`; `blocker` only where truncation or data loss is shown | Same rating as `review-backend` |
+| Query filtering or ordering on a column with no index on a table shown to be large | `major` with the table size named; `info` when the schema is not in the payload | Same rule as `review-performance`: reading the schema settles it |
 | Unbounded queue, collection, buffer or fan-out | `blocker` only when the evidence shows the growth reaching exhaustion (shape 1); otherwise `major` with what grows it named | Law 3: the input that grows it is the trigger |
 | External I/O inside a transaction or under a lock; connection without a pool; unbounded `Promise.all`; retry without cap or backoff; missing timeout; stale lock with no recovery; stampede on a hot key; N+1 on a hot path; long transaction; missing DLQ; blocking I/O on a thread or the event loop other work shares | `major` when the finding names the trigger and the stall, exhaustion or hang it causes; `blocker` only if it shows the crash | Degradation is not one of the four shapes |
 | Backoff without jitter; TTL misconfigured; per-request allocation on a hot path; full-row fetch for one field; undocumented fallback | `minor` | Correct under load; the cost is to whoever tunes it next |
@@ -464,7 +464,7 @@ when no concrete trigger can be named.
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
 | "We don't have high traffic yet, so this is fine" | Correctness under concurrency does not depend on current traffic; a race condition exists at 1 RPS too |
-| "The connection pool defaults are probably fine" | Default pools (5–10 connections) queue at a few hundred concurrent users; always verify |
+| "The connection pool defaults are probably fine" | Default pools (5–10 connections) queue under concurrent use; verify against the trigger the code shows (**No stated load**) |
 | "Retrying this is safe because it's idempotent" | Verify it actually is — most `POST` endpoints are not idempotent by default |
 | "We'll add a circuit breaker later" | "Later" is when the downstream is down; flag it now, at the level the conditions table gives |
 | "The cache invalidation is handled somewhere else" | "Somewhere else" means it will be missed — flag where the write happens with no corresponding invalidation |

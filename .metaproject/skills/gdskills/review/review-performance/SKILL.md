@@ -21,7 +21,7 @@ license: "MIT"
 
 ## Purpose
 
-Finds real, code-level performance problems introduced in the changed code of the current branch. Covers CLI and TUI hot paths, N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+Finds real, code-level performance problems introduced in the changed code of the current branch. Covers CLI and TUI hot paths, N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 This skill focuses on **measurable or high-likelihood bottlenecks** only. Premature optimization, hypothetical slowness, and style preferences are out of scope.
 

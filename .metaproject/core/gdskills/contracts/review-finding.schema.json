@@ -325,6 +325,7 @@
         "enumeration_method": {
           "type": "string",
           "minLength": 1,
+          "pattern": "\\S",
           "description": "How the set was derived: the grep or query run, the source-level guard that enumerates it, or why the list is exhaustive. 'I checked the others' is not a method."
         }
       }
