@@ -53,6 +53,13 @@ const ALLOWED_CONFUSABLE: ReadonlyArray<{ pair: readonly [string, string]; becau
       "Same subject, and both only open a modal: /review lists items needing review and /reviews lists " +
       "managed pull request reviews. Neither acts on open; accepting a proposal in /review needs its own key.",
   },
+  {
+    pair: ["/task", "/tasks"],
+    because:
+      "Different subjects, but neither direction acts on a mistype: /task (meant /tasks) only opens the quick start " +
+      "form, which sends nothing until its Start button is pressed on a described task; /tasks (meant /task) only " +
+      "lists shell tasks, and /tasks kill needs its explicit `kill <task_id>` argument, which /task ignores.",
+  },
 ];
 
 function names(): string[] {

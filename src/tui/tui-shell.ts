@@ -330,6 +330,9 @@ import {
 } from "./theme";
 import { runSettingsCommand, settingsOpenDecision } from "./settings-actions";
 import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings-modal";
+import { isQuickStartCommand, quickStartAcceptedLine, resolveQuickStartSender } from "./quick-start-command";
+import { createQuickStartForm, type QuickStartDraft } from "./quick-start-form";
+import { openQuickStart } from "./quick-start-modal";
 import { buildSettingsRows, type SettingRow } from "./settings-model";
 import { loadSettingsSnapshot } from "./settings-state";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
@@ -9200,6 +9203,34 @@ export async function launchTuiAgentShell(opts: {
         });
     };
 
+    // Flow 492 T11: `/task`. The draft outlives the modal (Esc keeps what was typed) and is dropped once the Hub accepts.
+    let quickStartDraft: QuickStartDraft | undefined;
+    const showQuickStart = (): void => {
+      void resolveQuickStartSender({ cwd: sessionCwd }).then((resolved) => {
+        if (!resolved.ok) {
+          io.onSystem?.(`/task: ${resolved.reason}\n`);
+          return;
+        }
+        const form = createQuickStartForm({
+          send: resolved.send,
+          ...(quickStartDraft === undefined ? {} : { initial: quickStartDraft }),
+          onAccepted: (flowId) => {
+            quickStartDraft = undefined;
+            const line = quickStartAcceptedLine(flowId);
+            chrome.showToast(line);
+            io.onSystem?.(`${line}\n`);
+          },
+        });
+        openQuickStart(otui, chrome, {
+          form,
+          renderer: r,
+          onClosed: () => {
+            if (form.state().phase !== "done") quickStartDraft = form.draft();
+          },
+        });
+      });
+    };
+
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
     const updateModelLabels = (): void => {
       paintSessionHeader();
@@ -10658,6 +10689,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isSettingsCommand(command.name)) {
           showSettings();
+          return;
+        }
+        if (isQuickStartCommand(command.name)) {
+          showQuickStart();
           return;
         }
         if (command.name === "/bus") {
