@@ -11,7 +11,7 @@
   "title": "Desktop app: quick start (web and TUI) and evidence pass",
   "status": "in-progress",
   "createdAt": "2026-11-14T16:08:36.330Z",
-  "updatedAt": "2026-11-14T16:10:53.968Z",
+  "updatedAt": "2026-11-14T17:10:15.788Z",
   "source": {
     "type": "description",
     "ref": null
@@ -104,7 +104,7 @@
       "id": "T5",
       "title": "Evidence report: real field names into spec section 6, confirm document-import handler and actor identity",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -114,13 +114,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Tests for mode table and clarifying templates (AC2, AC3)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -130,13 +131,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Implement quick-modes.ts and clarify.ts",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -146,13 +148,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Tests for quick-start handler: one transaction, replay, conflict, skip record, rollback, human-only (AC4-AC8)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -162,13 +165,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Implement quick-start handler and additive route",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -178,13 +182,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Web: dialog tests, New task dialog, i18n RU/EN, rebuild embedded assets (AC9, AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -194,13 +199,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "TUI: modal tests, /task command, modal, menu entry (AC11)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -210,13 +216,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Surface parity test (AC12)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10",
         "T11"
@@ -227,13 +234,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T12"
       ],
@@ -243,7 +251,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -324,6 +333,51 @@
     {
       "at": "2026-11-14T16:10:53.968Z",
       "event": "started"
+    },
+    {
+      "at": "2026-11-14T16:11:56.241Z",
+      "event": "task-done",
+      "detail": "T5: Evidence report: real field names into spec section 6, confirm document-import handler and actor identity"
+    },
+    {
+      "at": "2026-11-14T16:15:28.714Z",
+      "event": "task-done",
+      "detail": "T6: Tests for mode table and clarifying templates (AC2, AC3)"
+    },
+    {
+      "at": "2026-11-14T16:18:04.846Z",
+      "event": "task-done",
+      "detail": "T7: Implement quick-modes.ts and clarify.ts"
+    },
+    {
+      "at": "2026-11-14T16:27:01.065Z",
+      "event": "task-done",
+      "detail": "T8: Tests for quick-start handler: one transaction, replay, conflict, skip record, rollback, human-only (AC4-AC8)"
+    },
+    {
+      "at": "2026-11-14T16:37:31.312Z",
+      "event": "task-done",
+      "detail": "T9: Implement quick-start handler and additive route"
+    },
+    {
+      "at": "2026-11-14T16:49:12.107Z",
+      "event": "task-done",
+      "detail": "T10: Web: dialog tests, New task dialog, i18n RU/EN, rebuild embedded assets (AC9, AC10)"
+    },
+    {
+      "at": "2026-11-14T16:59:29.380Z",
+      "event": "task-done",
+      "detail": "T11: TUI: modal tests, /task command, modal, menu entry (AC11)"
+    },
+    {
+      "at": "2026-11-14T17:05:06.522Z",
+      "event": "task-done",
+      "detail": "T12: Surface parity test (AC12)"
+    },
+    {
+      "at": "2026-11-14T17:10:15.788Z",
+      "event": "task-done",
+      "detail": "T13: Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)"
     }
   ],
   "acKinds": {

@@ -16,3 +16,13 @@
 - 2026-11-14T16:10:49.083Z - task-done: T1: Collect remaining context
 - 2026-11-14T16:10:49.513Z - frozen: 15 criteria; checksum recorded
 - 2026-11-14T16:10:53.968Z - started
+- 2026-11-14T16:11:56.241Z - task-done: T5: Evidence report: real field names into spec section 6, confirm document-import handler and actor identity
+- 2026-11-14T16:15:28.714Z - task-done: T6: Tests for mode table and clarifying templates (AC2, AC3)
+- 2026-11-14T16:18:04.846Z - task-done: T7: Implement quick-modes.ts and clarify.ts
+- 2026-11-14T16:27:01.065Z - task-done: T8: Tests for quick-start handler: one transaction, replay, conflict, skip record, rollback, human-only (AC4-AC8)
+- 2026-11-14T16:37:31.312Z - task-done: T9: Implement quick-start handler and additive route
+- 2026-11-14T16:49:12.107Z - task-done: T10: Web: dialog tests, New task dialog, i18n RU/EN, rebuild embedded assets (AC9, AC10)
+- 2026-11-14T16:59:29.380Z - task-done: T11: TUI: modal tests, /task command, modal, menu entry (AC11)
+- 2026-11-14T17:05:06.522Z - task-done: T12: Surface parity test (AC12)
+- 2026-11-14T17:10:15.788Z - task-done: T13: Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)
+- 2026-11-14T17:21:40.000Z - operator-answer (first-green gate, poll 381, answered via Helyx): chose "Открыть PR и пустить стандартное ревью (рекомендую)"; no hardening cells selected
