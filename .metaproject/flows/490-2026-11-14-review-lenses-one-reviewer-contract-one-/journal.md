@@ -94,3 +94,4 @@ Notes:
 - **AC3:** frozen AC3 allows ui-ux to run a server only when the payload supplies its URL. The built lens never starts a server and uses a supplied URL or screenshots only, so AC3's clause is met vacuously; AC3 itself is unchanged.
 - **Earlier concern resolved:** the T8 concern that review-frontend still had inline `major` labels was resolved in review-fix commit fdf0df1f2.
 - **Plan steps vs flow task ids:** plan step Tn is flow task T(n+5), so plan T1..T7 are flow T6..T12. Flow T5 is the baseline bench from the plan's quality-guard paragraph. Flow T12 is the after-bench (plan T7), and the repeat ran inside it. The scaffold rows T1..T4 were registered by `flow init`. T1..T3 were marked done before the freeze; that is scaffold bookkeeping and no work was done under them. T4 is this review.
+- 2026-11-14T10:56:43.046Z - task-done: T4: Self-review and prepare draft PR

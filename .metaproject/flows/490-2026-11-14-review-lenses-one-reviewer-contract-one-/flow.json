@@ -11,7 +11,7 @@
   "title": "Review lenses: one reviewer contract, one severity rubric, read-only reviewers",
   "status": "in-progress",
   "createdAt": "2026-11-14T09:10:25.236Z",
-  "updatedAt": "2026-11-14T09:44:30.023Z",
+  "updatedAt": "2026-11-14T10:56:43.046Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,7 +84,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -92,7 +92,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -400,6 +401,11 @@
       "at": "2026-11-14T09:44:30.023Z",
       "event": "task-done",
       "detail": "T12: Recall bench after the edits and comparison with baseline"
+    },
+    {
+      "at": "2026-11-14T10:56:43.046Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
