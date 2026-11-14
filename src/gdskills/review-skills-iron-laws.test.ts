@@ -268,15 +268,16 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     expect(drifted).toEqual([]);
   });
 
-  test("a layer violation is `major` in both reviewers that rate it", () => {
+  test("a layer violation is rated the same, `minor` by default, in both reviewers that rate it", () => {
     // review-frontend called an API call in a component `blocker`;
-    // review-architecture called the same condition `major`.
-    expect(read("review-frontend")).toContain(
-      "- API call in a component (hook, handler, useEffect) — **major**",
-    );
-    expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*blocker\*\*/);
+    // review-architecture called the same condition `major`. Flow 490 applied the
+    // canonical boundary test: a layer violation whose code behaves correctly names a
+    // maintenance cost, not a trigger and a wrong outcome, so it is `minor` unless a
+    // named defect or a stated project rule makes it more.
+    expect(read("review-frontend")).toMatch(/API call in a component \(hook, handler, useEffect\)[^\n]*\*\*minor\*\*/);
+    expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*(blocker|major)\*\*/);
     expect(read("review-architecture")).toMatch(
-      /API\/IO call in a component[\s\S]{0,200}\| `major` \|/,
+      /API\/IO call in a component[\s\S]{0,200}\| `minor`/,
     );
   });
 

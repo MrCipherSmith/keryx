@@ -15,7 +15,7 @@ triggers:
   - "review NestJS"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "nestjs,prisma"
@@ -205,15 +205,15 @@ is, and a condition that cannot name one is not a `blocker`.
 
 | Condition | Severity | Shape |
 |---|---|---|
-| Missing DTO validation on an endpoint accepting user input | `blocker` | Exploitable vulnerability |
+| Missing DTO validation on an endpoint accepting user input | `blocker` with an attack vector stated (input, entry point, impact — `review-security-code` law); `major` with a named malformed input and wrong outcome; else `info` | Exploitable vulnerability only when the vector is shown |
 | String interpolation in raw SQL query | `blocker` | Exploitable vulnerability |
 | Leaking stack trace / raw ORM error to API response | `blocker` | Exploitable vulnerability (information disclosure) |
 | `REQUEST`-scoped provider injected into a `Singleton` | `blocker` | Data corruption — one request's state is served to another |
 | Unhandled promise rejection in a controller method | `blocker` | Crash |
-| `NOT NULL` column added without a default to a populated table | `blocker` | Data loss — the migration fails or truncates |
-| N+1 query (relation loaded in a loop) | `major` (minimum) | Named trigger and outcome; degradation, not an outage. Same rating as `review-highload` |
+| `NOT NULL` column added without a default to a populated table | `major` — the migration fails on deploy against existing rows; `blocker` only where the tool shown truncates or backfills wrong values | Data loss only when rows are shown destroyed or wrong. Same rating as `review-highload` |
+| N+1 query (relation loaded in a loop) | `major` with the reachable loop size or call frequency named; else `info` | Cost stated with its frequency; degradation, not an outage |
 | Missing transaction on a multi-step atomic mutation | `major` — `blocker` where a partial write corrupts persisted state | The outcome decides |
-| Business logic in a controller | `major` | Layer violation. Same rating as `review-architecture` |
+| Business logic in a controller | `minor` — `major` only with a concrete defect it causes (trigger and outcome) or a stated project rule it breaks | Layer violation. Same rating as `review-architecture` |
 | Missing pagination on an unbounded list endpoint | `major` — `blocker` where an attacker-reachable request exhausts memory | Degradation vs. crash/DoS |
 
 ---
@@ -282,7 +282,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ```markdown
 # Backend Review Report
 
-## Verdict: APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES
+<!-- No merge verdict: the orchestrator owns it. A standalone run summarizes findings only. -->
 
 ## Summary
 <2-4 sentences covering what changed, overall backend health, key concerns.>

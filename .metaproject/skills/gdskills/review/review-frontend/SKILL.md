@@ -5,7 +5,7 @@ description: "Use when a frontend review is requested, checking React component 
 triggers: ["frontend review", "component review", "ui review", "review React", "review components"]
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "react,mobx"
@@ -67,9 +67,8 @@ boundary is the trigger-and-outcome test.
 
 ### Frontend / MobX laws
 
-These say what is **always reported**. What severity each carries is the
-conditions table under Finding Format, and it is the canonical rubric applied —
-not a second opinion.
+These say what is **always reported**. Its severity is the conditions table under
+Finding Format — the canonical rubric applied, not a second opinion.
 
 1. **Every observable mutation outside an action or `runInAction` is reported.**
    No exception for "small stores" or "simple assignments".
@@ -150,8 +149,8 @@ Flags:
 - [ ] Computed/derived values MUST be `@computed` getters in the store, not inline derivations in the component body
 
 Flags:
-- `fetch()` / `axios` / `httpClient` call directly in component (hook or handler) — **major** (layer violation; `review-architecture` rates the same condition `major`)
-- Business logic (conditionals, transformations, validation) inside a component event handler instead of a store method — **major**
+- `fetch()` / `axios` / `httpClient` call directly in component (hook or handler) — **minor** (layer violation; **major** only with a named defect it causes or a stated project rule; same as `review-architecture`)
+- Business logic (conditionals, transformations, validation) inside a component event handler instead of a store method — **minor** (layer violation, same condition)
 - Derived value computed inline in component that could be a `@computed` getter — **minor**
 
 #### A3. useEffect Misuse
@@ -164,8 +163,8 @@ Flags:
 
 Flags:
 - `useEffect` calls `store.loadX()`, or a child store's `init()` that the parent store owns — **major** (`store.onMount()` / `store.onUnmount()` in the bridge form is not this)
-- `useEffect` contains `fetch()` or IO — **major** (API in component)
-- `useEffect` contains business logic / state derivation — **major**
+- `useEffect` contains `fetch()` or IO — **minor** (API in component; layer-violation rule)
+- `useEffect` contains business logic / state derivation — **minor** (layer-violation rule)
 - `useEffect` creates a subscription/timer/listener with no cleanup return — **major** (memory leak)
 
 #### A4. Key Props on Lists
@@ -312,8 +311,8 @@ Flags:
 When two stores synchronize state in both directions, at least one direction MUST have an equality guard (`if (newValue !== currentValue)`) before writing to the other store. Without this, changes bounce indefinitely.
 
 Flags:
-- Bidirectional store sync without equality guard — **blocker** (unbounded update loop: the render hangs)
-- Store A writes to Store B in a callback from Store B without `!==` check — **blocker**
+- Bidirectional store sync without equality guard — **blocker** only when a named trigger reaches the loop and it kills the render (crash); **major** for a reachable hang; **info** with no path shown
+- Store A writes to Store B in a callback from Store B without `!==` check — same condition as the line above
 - Truthy guard (`if (value)`) on optional/nullable field instead of equality check in sync logic — **major**
 
 #### B9. API Calls Placement
@@ -324,7 +323,7 @@ Flags:
 
 Flags:
 - API call inside a public `@action.bound` method body — **major**
-- API call in a component (hook, handler, useEffect) — **major** (frontend law 3)
+- API call in a component (hook, handler, useEffect) — **minor** (frontend law 3; layer-violation rule)
 
 #### B10. Lifecycle Initialization and Disposal
 
@@ -563,7 +562,8 @@ conditions land under that rubric, not a second rubric.
 | A render path that throws on an input the change admits | `blocker` | Crash |
 | Missing `observer()` on a component that reads observables | `major` | Named trigger (the observable changes) and named outcome (the UI does not update). Stale UI is not a crash, data loss, vulnerability, or missing acceptance criterion |
 | Observable mutation outside an action or `runInAction` | `major` — `blocker` only where the interleaving can corrupt persisted state | Same wording as `review-logic` and `review-highload` for a race: the outcome decides |
-| API/IO call in a component | `major` | Layer violation. Identical to `review-architecture`'s rule for the same condition, which previously called it `major` while this file called it `blocker` |
+| API/IO call in a component; business logic in a component | `minor` — `major` only with a named defect it causes (trigger and outcome) or a stated project rule | Layer violation: structural. Identical to `review-architecture`'s rule for the same condition |
+| Bidirectional sync without an equality guard | `blocker` when a named trigger reaches the loop and the render dies; `major` for a reachable hang; `info` with no path | The outcome and its reachability decide, not the pattern |
 | `useState` for store-managed state; `useMemo` for a derived store value; a store constructed in the component body | `major` | Named trigger (a re-render) and named outcome (state lost or recreated) |
 | `public` on a class member; `useCallback` around a store method; a store created with `useMemo` instead of `useLocalObservable`; an unprivate inter-store callback | `minor` | The code behaves correctly. A lint rule that fails CI is caught by the machine, not by a reviewer, and the cost is to the next editor |
 | Observation with no concrete bug | `info` | Shared laws 1 and 2 |
@@ -577,13 +577,13 @@ Stop and re-read these rules if you are thinking:
 | Rationalization | Why it's wrong |
 |---|---|
 | "The store is small, no need for full observer wrapping" | Missing `observer()` is reported regardless of store size — frontend law 2. It is `major`, not `blocker`: stale UI is not one of the four shapes |
-| "The mutation happens in a non-async method, so runInAction isn't needed" | Mutations outside action/runInAction are always at least `major` — frontend law 1 |
-| "I'll mark the API call in component as minor to avoid friction" | API in a component is `major`, never `minor` — frontend law 3, and the same severity `review-architecture` gives it |
+| "The mutation happens in a non-async method, so runInAction isn't needed" | Mutations outside action/runInAction are always reported — frontend law 1; the conditions table sets the level |
+| "I'll skip the API call in component to avoid friction" | API in a component is always reported — frontend law 3; `minor` unless a named defect or a stated project rule makes it `major`, as in `review-architecture` |
 | "The `public` keyword is just a style issue, I'll call it minor" | It is `minor` — but still reported. The linter fails CI on it, which is why a reviewer does not need to block merge on it too |
 | "This inter-store callback works fine as public" | Frontend law 5: if it is not called from JSX, it must be `private` |
 | "No spec compliance check needed for this skill" | Correct — this skill covers Stage 2 (code quality) only; spec compliance is handled by the orchestrator or review-logic |
 | "I can suggest adding useCallback everywhere for safety" | With MobX+observer, useCallback is rarely needed and adds noise; only flag when concretely justified |
-| "The bidirectional sync looks fine, no equality guard needed" | Bidirectional sync without equality guard is a blocker — infinite loop risk |
+| "The bidirectional sync looks fine, no equality guard needed" | Bidirectional sync without an equality guard is always reported; its level follows the conditions table (reachability decides) |
 
 ---
 

@@ -15,7 +15,7 @@ triggers:
   - "check readability"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -132,14 +132,13 @@ Naming severity is set by the Style laws below and by the canonical rubric in `r
 - Suggest: `const MAX_RETRY_COUNT = 3;`
 
 **Cyclomatic complexity**
-- Functions with more than 10 decision branches (if/else/switch cases/ternary/loop) — flag as `minor`
-- Suggest splitting into smaller, named functions
+- Functions with more than 10 decision branches (if/else/switch cases/ternary/loop) — flag as `minor`; suggest splitting into smaller, named functions
 
 ---
 
 ### 4. DRY Violations
 
-- Clearly duplicated logic blocks (same or near-identical code in two places within the diff) — flag as `major` if the blocks are non-trivial (>5 lines), `minor` if small
+- Clearly duplicated logic blocks (same or near-identical code in two places within the diff) — flag as `minor`, however large; `review-clean-code` owns the duplication rating (its law 3)
 - Duplicated string literals used in multiple places — flag as `info`; suggest a shared constant
 - Similar switch/if-else trees that could be a lookup map — flag as `minor`
 
@@ -152,7 +151,7 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 - Imports must be grouped (framework/library imports first, then project imports, then relative imports); blank line between groups
 - Imports within a group should be alphabetically sorted (or consistently ordered — match project convention)
 - Barrel imports (`import * as X from '...'`) without reason — flag as `info`
-- Circular imports (visible from import paths) — flag as `major`
+- Circular imports (visible from import paths) — flag as `minor`; `review-architecture` owns the rating, and one that fails at runtime is its finding
 - Re-exporting something that is immediately re-used in the same file — flag as `minor` (unnecessary indirection)
 
 ---
@@ -161,8 +160,8 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 
 **Misleading or outdated comments**
 - Comment describes what the code does but the code has changed — flag as `minor`
-- Comment says "TODO: remove before deploy" and was merged — flag as `major`
-- Comment is actively wrong (incorrect description of behavior) — flag as `major`
+- Comment says "TODO: remove before deploy" and was merged — flag as `minor`
+- Comment is actively wrong (incorrect description of behavior) — flag as `minor` (`review-clean-code` owns comment ratings; a defect the comment caused is that defect's finding)
 
 **Missing JSDoc on public APIs**
 - Public functions/classes exported from a module should have a JSDoc comment describing purpose, params, and return value
@@ -275,14 +274,14 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ```
 
 - `DONE` — no major or above findings (minor/info only or none)
-- `DONE_WITH_CONCERNS` — one or more major findings (actively misleading names, circular imports, non-trivial DRY violations)
+- `DONE_WITH_CONCERNS` — one or more major findings (a name that has produced a named wrong outcome at a call site)
 - `NEEDS_CONTEXT` — project naming convention unclear and no context doc provided; state what is ambiguous
 - `BLOCKED` — cannot access diff; state reason
 
 ```markdown
 # Style Review Report
 
-## Verdict: APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES
+<!-- No merge verdict: the orchestrator owns it. A standalone run summarizes findings only. -->
 
 ## Summary
 <2-3 sentences: overall naming and readability health, notable patterns found.>
@@ -300,7 +299,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 - info: N
 
 ## Major Issues
-<[F-NNN] findings — misleading names, circular imports, significant DRY violations>
+<[F-NNN] findings — names that produced a named wrong outcome>
 
 ## Minor & Info
 <[F-NNN] findings>
@@ -315,7 +314,8 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 | Concern | This skill | Use instead |
 |---------|------------|-------------|
-| Naming, DRY, readability, imports, comments, file length | YES | — |
+| Naming, formatting, readability, imports, file length | YES | — |
+| Duplication, comments, circular imports (reported here at `minor`) | rating owned elsewhere | `review-clean-code` (duplication, comments); `review-architecture` (circular imports) |
 | Logic bugs, incorrect return values | NO | `review-logic` |
 | Architectural layer violations | NO | `review-architecture` |
 | Security vulnerabilities | NO | `review-security-code` |
@@ -350,5 +350,5 @@ If absent, infer conventions from surrounding unchanged code in the same files; 
 | "The naming is a bit odd but I understand it" | Reviewers understand their own code; the next dev won't |
 | "Commented-out code might be needed later" | Git history exists for that; dead comments add noise |
 | "It's only one magic number" | One `42` today becomes twelve untraceable `42`s tomorrow |
-| "DRY violation is minor so I'll skip it" | Non-trivial duplication is `major`; do not understate it |
+| "DRY violation is minor so I'll skip it" | It is `minor` and still reported, once, with every site listed |
 | "The file is 600 lines but it's organized" | Organization doesn't prevent merge conflicts and scroll fatigue |

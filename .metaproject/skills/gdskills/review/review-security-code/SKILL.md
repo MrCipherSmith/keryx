@@ -13,7 +13,7 @@ triggers:
   - "OWASP review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -306,13 +306,13 @@ conditions land under that rubric, not a second rubric.
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
 | Exploitable vulnerability in the current code path, with the attack vector stated | `blocker` | Named shape 3 |
-| A real weakness whose exploitation needs a precondition the diff does not establish — an internal-only endpoint, an authenticated caller, a value not yet attacker-controlled | `major` | Trigger and outcome are named, but the path to exploitation is not complete |
+| A weakness a named trigger reaches in the current code, producing a wrong outcome short of a named attacker impact | `major` | Trigger and outcome are named; not shape 3 |
 | Hardening or defence-in-depth on code that is not currently exploitable | `minor` | The code behaves correctly; the cost is to whoever hardens it later |
-| A pattern with no attack vector in the current code | `info` | Security-specific law, and shared law 1 |
+| A weakness that can be stated but not reached (the precondition — attacker-controlled input, a caller of an internal endpoint — is not shown in the code), or a pattern with no attack vector | `info` | Security-specific law, and shared law 1; say what would settle it |
 
 **"Plausible attack scenario" is not a severity.** A scenario you can state and
-reach is `blocker`; a scenario you can state but cannot reach is `major`; a
-scenario you cannot state is `info`. Being the security reviewer does not raise
+reach is `blocker`; one you can state but cannot reach, or cannot state, is
+`info` (shared law 1). Being the security reviewer does not raise
 any of them — see the canonical rubric on severity being a property of the
 outcome, not of the domain.
 
