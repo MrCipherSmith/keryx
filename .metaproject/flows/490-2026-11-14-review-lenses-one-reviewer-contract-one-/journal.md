@@ -206,3 +206,30 @@ S was measured on c02, c09 and c11 with 3 runs each, against the same truth set,
 - 2026-11-14T14:15:38.931Z - completing
 - 2026-11-14T14:18:23.103Z - completion-attempt-recorded: attempt 1: passed
 - 2026-11-14T14:18:23.104Z - done: completed with exceptions: review:ingested-round: no managed review package exists under `.metaproject/flows/490-2026-11-14-review-lenses-one-reviewer-contract-one-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:terminal-dispositions: no ingested round to read findings from; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:head-commit: no ingested round to compare against the PR head; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:verifier-stats: no ingested round to read verification stats from; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes
+
+## Post-closure: pooled recall drop traced to the restated lens clause, 2026-11-14
+
+**What prompted it.** AC8 was confirmed on a regression-only bench. A later pooled four-lens re-bench of main (logic, regression, security-code, testing-practices) scored base 13.0 against final 11.67. That is -1.33, beyond the -1 tolerance.
+
+**Ablation.** All four arms were judged in one fresh blind batch: 51 judges, the arm key sealed.
+- c01 and c02 were re-run with a private snapshot copy per run. The base testing lens mutates the snapshot in place, and the earlier interleaved runs on those cases read each other's mutations.
+- Arms:
+  - B: base;
+  - F: main;
+  - A1: main without the restated clause "the read-only layer commands the orchestrator lists (...); it never writes in the reviewed tree";
+  - A2: main with testing-practices fully base.
+
+| arm | total (3 reps) | mean | clean c01+c02 | c03+c09+c11 |
+|---|---|---|---|---|
+| B | 13.5 / 12.5 / 13.5 | 13.17 | 6.67 | 6.50 |
+| F | 13.0 / 9.5 / 12.0 | 11.50 | 6.00 | 5.50 |
+| A1 | 13.5 / 13.0 / 13.5 | 13.33 | 6.67 | 6.67 |
+| A2 | 12.5 / 10.5 / 12.0 | 11.67 | 6.17 | 5.50 |
+
+**Reading.**
+- The restated clause is the cause. Removing it recovers base recall: +1.83 over main, against judge noise of about ±0.5, and A1 is at or above F in every rep.
+- The testing-practices mutation-pass rewrite is not the cause (A2 ≈ F). It stays, since the base version mutates the reviewed tree.
+- The drop is not contamination. It reproduces on the clean c01/c02 re-runs.
+- Caveat: on c03, c09 and c11 the B and F runs are from the earlier session, while the A1 runs are new.
+
+**Change.** The clause is removed from every dispatched lens and both mirrors: the four measured lenses carry exactly the measured A1 text, and the other twelve carry the same clause removal, unmeasured. The orchestrator's "Reviewers are read-only" bullet keeps the allowed layer commands and the no-write rule for every dispatch. The contract test now pins that the rule lives there and is not restated in a lens.

@@ -60,13 +60,13 @@ describe("review lens contract (flow 490)", () => {
     expect(read("review-ui-ux")).toMatch(/never starts? a dev server/i);
   });
 
-  test("every lens that limits its commands also names the layer commands the orchestrator allows (AC2)", () => {
-    const narrow = LENSES.flatMap((name) => read(name).split("\n").filter((line) => /\bruns? no command\b|\brun nothing but\b/i.test(line)).map((line) => ({ name, line })));
-    // degradation ("You run no command") and premise ("run nothing but") phrase it differently; both must be caught.
-    expect(narrow.map(({ name }) => name)).toEqual(expect.arrayContaining(["review-degradation", "review-premise", "review-logic"]));
-    const layer = ["keryx gdgraph affected", "keryx test related", "keryx wiki ask", "keryx memory search", "keryx ctx rg"];
-    const stale = narrow.filter(({ line }) => !(layer.every((command) => line.includes(command)) && /never writes? in the reviewed tree/.test(line)));
-    expect(stale.map(({ name }) => name)).toEqual([]);
+  test("the layer-command and no-write rule lives in the orchestrator, not restated in each lens", () => {
+    // A blind pooled bench (flow 490 ablation) measured the restated lens clause at -1.8 recall
+    // (main 11.50 vs the same lenses without it 13.33, base 13.17). The orchestrator's read-only
+    // bullet, checked above, carries the allowed commands and the no-write rule for every dispatch.
+    const restated = LENSES.filter((name) => /read-only layer commands the orchestrator lists|never writes? in the reviewed tree/.test(read(name)));
+    expect(restated).toEqual([]);
+    expect(read("review-orchestrator")).toMatch(/any command that writes in the reviewed tree/);
   });
 
   test("a lens gives one severity per condition where round 1 found two (AC4)", () => {

@@ -28,7 +28,7 @@ license: "MIT"
 
 # Review — Testing Practices
 
-Reviewer for local testing discipline. Read project test guides first when present, then apply the neutral baseline below. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs the tests only when its payload's `allowed_tools` says `run-tests`, within `exec_budget_s`; otherwise it runs no command, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
+Reviewer for local testing discipline. Read project test guides first when present, then apply the neutral baseline below. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs the tests only when its payload's `allowed_tools` says `run-tests`, within `exec_budget_s`; otherwise it runs no command, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 ---
 

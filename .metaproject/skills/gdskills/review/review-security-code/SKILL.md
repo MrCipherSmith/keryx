@@ -23,7 +23,7 @@ license: "MIT"
 
 ## Purpose
 
-Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
+Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 This skill covers **code-level security only**. It does NOT audit npm/bun dependency trees, Docker configurations, or deployment surfaces — use `security-audit` for those.
 

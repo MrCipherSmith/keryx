@@ -26,7 +26,7 @@ license: "MIT"
 
 Focused backend reviewer covering NestJS patterns, REST API design, database access patterns,
 and TypeScript correctness for service-layer code. This skill does NOT duplicate security or
-performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
+performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 ---
 
