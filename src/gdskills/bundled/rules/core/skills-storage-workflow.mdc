@@ -11,6 +11,11 @@ Keep skill definitions consistent across master source and global agent director
 ## Trigger
 Apply when user asks to create, update, or sync a skill.
 
+## Content Standard
+What a skill's text must and must not contain is in `skill-authoring.mdc` — read
+it before writing or trimming skill prose. This rule covers where a skill lives
+and how it is shipped.
+
 ## Mandatory Clarification Step
 Before creating or editing a skill, ask and confirm:
 1. Target location
