@@ -76,19 +76,21 @@ export function workDigest(value: unknown): string { return sha256(canonical(val
 const humanCommands = new Set(['flow.approve-and-start', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'attempt.select', 'review.decide', 'work.cancel', 'legacy.preview', 'legacy.convert']);
 export const supportedWorkCommands = ['flow.create', 'flow.start', 'flow.approve-and-start', 'intent.create', 'revision.propose', 'requirements.approve', 'requirements.amend', 'requirements.resolve-amendment', 'context.create', 'attempt.create', 'attempt.start', 'attempt.report', 'subject.create', 'evidence.record', 'attempt.submit', 'attempt.withdraw', 'attempt.select', 'review.decide', 'flow.submit', 'work.cancel'] as const;
 export function allowedWorkCommands(actor: Principal): string[] { return actor.readOnly ? [] : supportedWorkCommands.filter(c => !humanCommands.has(c) || (actor.kind === 'human' && (actor.role === 'operator' || actor.role === 'reviewer'))); }
-function authorize(actor: Principal, projectId: string, context: WorkContext, write: boolean) {
+export function authorize(actor: Principal, projectId: string, context: WorkContext, write: boolean) {
     if (!context.legacy.projects.some(p => p.id === projectId) || actor.projectIds && !actor.projectIds.includes(projectId))
         fail(404, 'not-found', 'Project not found');
     if (write && actor.readOnly)
         fail(403, 'read-only', 'Read-only principal');
 }
+/** Key of a command's idempotency receipt inside `WorkState.operations`. */
+export function workOperationKey(projectId: string, actorId: string, operationId: string): string { return projectId + ':' + actorId + ':' + operationId; }
 /** Work mutations are staged so even direct callers never see partially failed commands. */
 export function workCommand(state: WorkState, actor: Principal, projectId: string, input: unknown, context: WorkContext): WorkReceipt {
     authorize(actor, projectId, context, true);
     const command = validateWorkCommand(input);
     if (humanCommands.has(command.command) && (actor.kind !== 'human' || !['operator', 'reviewer'].includes(actor.role)))
         fail(403, 'human-required', 'Authorized human decision required');
-    const requestDigest = workDigest(command), key = projectId + ':' + actor.id + ':' + command.operationId, previous = state.operations[key];
+    const requestDigest = workDigest(command), key = workOperationKey(projectId, actor.id, command.operationId), previous = state.operations[key];
     if (previous) {
         if (previous.requestDigest !== requestDigest)
             fail(409, 'idempotency-conflict', 'Operation ID already used with another command');
