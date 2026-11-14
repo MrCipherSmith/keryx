@@ -14,7 +14,9 @@ export type QuickDraft = {
 /** The wire request for a draft: skipped and blank questions are recorded as skipped, never as empty answers. */
 export function quickStartRequest(draft: QuickDraft): QuickStartRequest {
   const answered = Object.fromEntries(
-    Object.entries(draft.answers).filter(([id]) => draft.skipped[id] !== true),
+    Object.entries(draft.answers)
+      .filter(([id]) => draft.skipped[id] !== true)
+      .map(([id, text]) => [id, text.trim()]),
   );
   return {
     mode: draft.mode,

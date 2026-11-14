@@ -138,6 +138,19 @@ describe('quick-start surface parity', () => {
     }
   });
 
+  test('padded answers, description and criteria are stored trimmed on both surfaces', () => {
+    const padded: Scenario = {
+      ...scenario,
+      description: '  ' + scenario.description + '\n',
+      answered: { 'steps-to-reproduce': '  Open reports, press Export \n', 'expected-vs-actual': '\t' },
+      criteria: ['  The export downloads a CSV file  '],
+    };
+    expect(differences(tui(padded), web(padded))).toEqual([]);
+    const body = web(padded) as { answers: { q: string; a: string | null; skipped: boolean }[] };
+    expect(body.answers.find((answer) => answer.q === 'steps-to-reproduce')?.a).toBe('Open reports, press Export');
+    expect(body.answers.find((answer) => answer.q === 'expected-vs-actual')?.skipped).toBe(true);
+  });
+
   describe('the guard bites', () => {
     test('identical bodies report no difference', () => {
       expect(differences(tui(scenario), tui(scenario))).toEqual([]);
