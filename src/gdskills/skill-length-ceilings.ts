@@ -167,7 +167,7 @@ const CEILINGS_BY_KEY = {
   "review/review-premise": 180,
   "review/review-regression": 212,
   "review/review-security-code": 358,
-  "review/review-style": 354,
+  "review/review-style": 352,
   "review/review-testing-practices": 293,
   "review/review-ui-ux": 267,
   "review/review-verifier": 299,
