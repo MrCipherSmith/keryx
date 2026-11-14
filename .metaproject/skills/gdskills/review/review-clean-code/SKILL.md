@@ -31,7 +31,7 @@ project standard applies, where the project departs from the textbook, and how
 to turn what you see into a finding or into silence.
 
 Focus: maintainability of the code this change introduces, at function and class
-level. Inputs are the reviewer payload only; session memory and earlier
+level. Its inputs are the reviewer payload only; session memory and earlier
 conversation are not inputs. It runs no command unless its payload's
 `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and
 `git show` where its host gives a read-only child git (keryx shell does not:
