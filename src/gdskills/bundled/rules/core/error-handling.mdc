@@ -22,6 +22,8 @@ A function that can fail signals the failure in a form the caller cannot mistake
 
 Never signal failure with `null`, `undefined`, `false`, `-1` or an empty collection when a caller could read that value as a valid result.
 
+A language whose norm differs (Rust's `Result`, Go's `(T, error)`) follows its norm; its stack rule states it and overrides this rule for that language.
+
 ```typescript
 // BAD — "not found" and "empty" are the same value to the caller
 function readEntries(path: string): Entry[] {

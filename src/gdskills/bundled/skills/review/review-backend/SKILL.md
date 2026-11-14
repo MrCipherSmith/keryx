@@ -165,7 +165,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 - No `any` in new code — suggest `unknown` with type guards, or correct typed return
 - Public service methods must have explicit return types (`Promise<UserDto>`, not inferred)
-- Service contracts expressed as interfaces (`IUserService`), not just class implementations
+- Interfaces only at an I/O or substitution boundary, named without an `I` prefix (`solid-principles.mdc`, D)
 - No `as any` or unsafe casts (`as unknown as T`) without a comment explaining why
 - `@ts-ignore` / `@ts-expect-error` without explanation comment — flag as `minor`
 

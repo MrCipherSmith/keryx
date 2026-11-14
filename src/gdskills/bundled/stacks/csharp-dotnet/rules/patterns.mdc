@@ -49,9 +49,10 @@ dependency injection, LINQ, and disposal. Applies only to `*.cs` files.
   `Singleton` by capturing it directly — that captures the first
   request's instance for the app's lifetime; resolve it per-use via
   `IServiceScopeFactory`/`IServiceProvider.CreateScope()` instead.
-- Depend on an interface (`IOrderRepository`), not a concrete
-  implementation, at a constructor boundary that DI resolves — this is
-  what makes the type unit-testable without a real database/HTTP call.
+- Depend on an interface (`IOrderRepository`) at an I/O or substitution
+  boundary that DI resolves (repository, external client, clock) — this
+  is what makes the type unit-testable without a real database/HTTP call.
+  A single internal implementation gets no interface.
 - Prefer constructor injection for required dependencies; reserve
   property injection for genuinely optional dependencies with a working
   default, which is uncommon.

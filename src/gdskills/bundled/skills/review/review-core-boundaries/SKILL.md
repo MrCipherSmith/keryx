@@ -120,7 +120,7 @@ conditions land under that rubric.
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
 | A core API change that breaks a named consumer at runtime | `blocker` | Crash at a named call site |
-| Importing feature code into core; adding feature-specific public API to core; inverted dependency | `major` | Named trigger (the import) and named outcome (the cycle or the leak), but structural — not one of the four shapes |
+| Importing feature code into core; adding feature-specific public API to core; inverted dependency | `minor` — `major` only when a concrete defect it causes is named (trigger and outcome) or a stated project rule makes it one | A layer violation. Identical to `review-architecture` for the same condition |
 | A generic helper whose names or types lean on one feature's language | `minor` | Works today; the cost is to the next module that needs it |
 | A blast-radius concern with no named consumer | `info` | Shared law 1 |
 

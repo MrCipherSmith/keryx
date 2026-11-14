@@ -98,7 +98,7 @@ Casing, boolean prefixes and verb names follow the language's published defaults
 - Single-letter names only for loop counters and short array callbacks (`arr.map(x => x.id)`); `let x = fetchUser()` is a finding (`review-clean-code`'s Name row)
 
 **Classes and interfaces**
-- Interface names use `I` prefix: `IUserService`, `IAuthGuard`
+- Interfaces are named without an `I` prefix (`UserService`, not `IUserService`); an `I` prefix the change introduces is a finding
 - Enum members: `UPPER_SNAKE_CASE` or `PascalCase` — whichever the project uses consistently; flag inconsistency
 
 **Files and directories**
@@ -149,8 +149,6 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 
 ### 5. Import Organization
 
-- Imports must be grouped (framework/library imports first, then project imports, then relative imports); blank line between groups
-- Imports within a group should be alphabetically sorted (or consistently ordered — match project convention)
 - Barrel imports (`import * as X from '...'`) without reason — flag as `info`
 - Circular imports (visible from import paths) — flag as `minor`; `review-architecture` owns the rating, and one that fails at runtime is its finding
 - Re-exporting something that is immediately re-used in the same file — flag as `minor` (unnecessary indirection)
@@ -211,7 +209,7 @@ boundary is the trigger-and-outcome test.
 | Style findings are **never** `blocker` | None of the four merge-blocking shapes is reachable from a style observation. This reviewer's finding format omits `blocker` for that reason |
 | A naming issue is `minor`; it reaches `major` only when the name has already produced an observable wrong outcome at a call site you can name | Identical to `review-clean-code` law 2, deliberately: the same condition must not carry two severities |
 | Duplication needs 3+ copies and is `minor`, reported once with every copy listed | Identical to `review-clean-code` law 3 |
-| Never flag issues handled by the project's autoformatter (indentation, trailing spaces, bracket style) | Linter/formatter owns that; double-flagging creates noise |
+| Never flag issues handled by the project's autoformatter or linter (indentation, trailing spaces, bracket style, import grouping and order) | Linter/formatter owns that; double-flagging creates noise |
 | Do not expand scope to architectural or logic concerns | Stay in style lane; hand off to the right reviewer. A circular import that fails at runtime is `review-architecture`'s finding, not a style one |
 
 ---

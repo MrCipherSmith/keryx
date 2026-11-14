@@ -9,7 +9,7 @@ alwaysApply: false
 Enforce correct dependency direction across architectural layers. Business logic must not depend on frameworks, databases, or UI. Changes to infrastructure must not require changes to domain logic.
 
 ## When To Apply
-Apply when creating new modules, services, or features; when deciding where to place a new class or function; when wiring up dependencies between layers.
+Apply to backend code when creating new modules, services, or features; when deciding where to place a new class or function; when wiring up dependencies between layers. Frontend layering (service → store → component, business logic in the store) is `code-style-patterns.mdc`, not this rule.
 
 ---
 

@@ -20,10 +20,10 @@ Narrows `core-common-rules`' stack-agnostic style rules to modern Ruby
   `is_published`); a destructive/bang method that mutates in place or
   raises instead of returning nil ends in `!` and normally has a
   non-bang counterpart (`save!` alongside `save`).
-- Two-space indentation, no tabs; keep a method short enough to read on
-  one screen — a model method past ~10 lines is a signal to extract a
-  private method, a concern, or (per `rules/patterns.mdc`) a service
-  object, not to keep growing in place.
+- Two-space indentation, no tabs.
+- Overrides the `solid-principles.mdc` "Function body length" row for
+  Ruby: a method over 10 lines is the threshold. Extract a private
+  method, a concern, or (per `rules/patterns.mdc`) a service object.
 - Follow the app's own file layout: `app/models`, `app/controllers`,
   `app/jobs`, `app/services` (if the app already has one) — do not
   invent a new top-level directory for one class.

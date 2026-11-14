@@ -40,6 +40,7 @@ Key principles (see canonical source for full detail with examples):
 - Avoid heavy logic in render.
 
 ## Architecture
+Frontend only; backend layering, with a domain layer, is `clean-architecture.mdc`.
 - Service layer: IO/API only.
 - Store layer: business logic and state transitions.
 - Component layer: view rendering.

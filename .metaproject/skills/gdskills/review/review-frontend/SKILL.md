@@ -344,7 +344,7 @@ Flags:
 - [ ] No `any` type in changed code — use `unknown` + type guards or specific types
 - [ ] No `as any` or `as unknown as T` unsafe double-cast without a comment explaining why
 - [ ] No `!` non-null assertion without a comment proving the value cannot be null/undefined at that point
-- [ ] Props interface MUST use `I` prefix: `interface IMyComponentProps { ... }`
+- [ ] Props interface named without an `I` prefix: `interface MyComponentProps { ... }`
 - [ ] Prefer optional chaining (`?.`) and nullish coalescing (`??`) over `!` assertions
 - [ ] A store's state and its public API are typed with explicit interfaces/types, not inferred object literals or `any`
 - [ ] `catch (err: unknown)` — typed error handling, not `catch (err)` or `catch (err: any)`
@@ -352,7 +352,7 @@ Flags:
 Flags:
 - `any` type in new code — **minor** (**major** only with a named input and the wrong value it lets through)
 - `!` non-null assertion without justification comment — **minor**
-- Props interface without `I` prefix — **minor**
+- Props interface with an `I` prefix introduced by the change — **minor**
 - Store state or public API left to an inferred object-literal type — **minor**
 
 ---
